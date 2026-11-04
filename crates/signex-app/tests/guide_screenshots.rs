@@ -118,8 +118,10 @@ fn draw(renderer: &mut iced::Renderer, app: &Signex) -> Vec<u8> {
         },
         iced::mouse::Cursor::Unavailable,
     );
-    let viewport =
-        iced::advanced::graphics::Viewport::with_physical_size(Size::new(WIDTH, HEIGHT), iced::advanced::renderer::Scale::default());
+    let viewport = iced::advanced::graphics::Viewport::with_physical_size(
+        Size::new(WIDTH, HEIGHT),
+        iced::advanced::renderer::Scale::default(),
+    );
     let iced::Renderer::Primary(wgpu_renderer) = renderer else {
         unreachable!("built as Primary")
     };

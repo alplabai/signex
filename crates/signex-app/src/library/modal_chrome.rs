@@ -7,8 +7,8 @@
 //! one definition built on [`crate::styles`] tokens, so a theme change
 //! reaches all of them.
 
-use iced::{Element, Widget};
 use iced::widget::{button, container, text};
+use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 

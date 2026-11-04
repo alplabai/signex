@@ -118,7 +118,9 @@ fn part_action_buttons() -> Vec<(&'static str, PanelMsg)> {
 
 /// A row of buttons for the actions that lead from the selected placed
 /// part into its library (#1301, #1262, #1260).
-pub(super) fn push_part_actions<'a>(c: Column<Element<'a, PanelMsg>>) -> Column<Element<'a, PanelMsg>> {
+pub(super) fn push_part_actions<'a>(
+    c: Column<Element<'a, PanelMsg>>,
+) -> Column<Element<'a, PanelMsg>> {
     // Wrapping row: at a narrow dock width the last button drops to the
     // next line instead of being clipped (#1747).
     let buttons = iced::widget::Row::with_children(part_action_buttons().into_iter().map(

@@ -268,18 +268,18 @@ pub fn form_grid_row(
 
     let pick = iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
         .on_select(move |lbl: &'static str| {
-        // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
-        let mm = GRID_SIZE_LABELS
-            .iter()
-            .chain(GRID_SIZE_LABELS_MIL.iter())
-            .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
-            .find(|(l, _)| **l == lbl)
-            .map(|(_, v)| *v)
-            .unwrap_or(2.54);
-        on_size(mm)
+            // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
+            let mm = GRID_SIZE_LABELS
+                .iter()
+                .chain(GRID_SIZE_LABELS_MIL.iter())
+                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
+                .find(|(l, _)| **l == lbl)
+                .map(|(_, v)| *v)
+                .unwrap_or(2.54);
+            on_size(mm)
         })
-    .text_size(11)
-    .width(Length::Fill);
+        .text_size(11)
+        .width(Length::Fill);
 
     let label_widget = property_label(label.to_string(), label_c);
 
@@ -336,7 +336,7 @@ pub fn form_check_row_shortcut<'a>(
                     .spacing(SP.s),
                 Space::new().width(Length::Fill),
                 text(shortcut_owned)
-                    .size(9)
+                    .size(TS.caption)
                     .color(label_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
@@ -468,7 +468,7 @@ pub fn canvas_font_popup<'a>(
             .spacing(SP.l)
             .align_y(iced::Alignment::Center),
             text("Applies immediately to canvas text rendering.")
-                .size(9)
+                .size(TS.caption)
                 .color(label_c),
         ]
         .spacing(6),

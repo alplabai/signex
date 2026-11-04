@@ -4,9 +4,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use iced::widget::{
-    Widget, button, column, container, pick_list, row, text, text_input,
-};
+use iced::widget::{Widget, button, column, container, pick_list, row, text, text_input};
 use iced::{Element, Length};
 use signex_library::RangeOp;
 use signex_types::quantity::{SiPrefix, Unit};

@@ -254,7 +254,8 @@ impl Signex {
         ]
         .align_y(iced::Alignment::Start);
 
-        let mut body_col: iced::widget::Column<Element<'_, Message>> = column![summary, intro].spacing(10);
+        let mut body_col: iced::widget::Column<Element<'_, Message>> =
+            column![summary, intro].spacing(10);
         if !st.items.is_empty() {
             body_col = body_col.push(Space::new().height(2).boxed());
             body_col = body_col.push(items_col.boxed());

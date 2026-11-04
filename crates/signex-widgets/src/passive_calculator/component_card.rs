@@ -66,9 +66,9 @@ impl<'a> ComponentCard<'a> {
                         index,
                         tolerance,
                     })
-                .text_size(11)
-                .padding([4, 6])
-                .width(105),
+                    .text_size(11)
+                    .padding([4, 6])
+                    .width(105),
             ),
         ]
         .spacing(28)

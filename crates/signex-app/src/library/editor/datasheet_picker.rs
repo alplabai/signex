@@ -1,6 +1,6 @@
 //! Datasheet tab — one card per document on the row (#1231), the
 //! primary first, each with a label, a mode pick_list and a value
-//! control. Standalone Component-Preview tab.
+//! control. Standalone Component-Preview tab, built from the dialog kit.
 //!
 //! Two modes per document:
 //!  * **URL** — plain text input. Sets `DatasheetRef::Url`.
@@ -10,19 +10,22 @@
 //! The mode is derived from the document's `DatasheetRef` variant.
 
 use iced::widget::{
-    Column, Space, Widget, button, column, container, pick_list, row, text, text_input,
+    Column, Space, Widget, column, container, pick_list, row, scrollable, text, text_input,
 };
-use iced::{Border, Element, Length, Theme};
+use iced::{Color, Element, Length};
 use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
+use super::inert::unless_read_only_veiled as veiled;
+use super::kit::{self, SP, TS};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// One-line hint under the section title.
+const INTRO: &str = "The first document is the primary; the schematic opens it.";
+/// Shown when the row has no document.
+const EMPTY_MESSAGE: &str = "No datasheet on this component yet.";
 
 /// Mode picker entries — drives both the visible pick_list and the
 /// inline message routing.
@@ -55,45 +58,47 @@ impl std::fmt::Display for DatasheetMode {
     }
 }
 
-/// Render the Datasheet tab: a short explanation, one card per document
-/// in `state.row.documents()` (the primary first), then "Add document".
+/// Render the Datasheet tab: a titled section with "Add document", then one
+/// card per document in `state.row.documents()` (the primary first). The
+/// whole tab scrolls so a long list never pushes the action off-screen.
+/// On a read-only library the editing controls take `veil` and ignore
+/// input; each row's Open button stays live.
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    read_only: bool,
+    veil: Color,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
     let docs = state.row.documents();
     let count = docs.len();
 
-    let intro = text(
-        "The first document is the primary: it is the one the schematic opens. \
-         A pinned PDF is stored beside the library file, named by its hash, when \
-         you save the row, and a git-backed library commits it with the row. A \
-         library without a local folder (a server library) cannot store PDFs: \
-         use a URL there.",
-    )
-    .size(TS.caption)
-    .color(muted)
-    .width(Length::Fill);
+    let add = veiled(
+        read_only,
+        veil,
+        kit::secondary_button(
+            "Add document",
+            Some(event(&address, DatasheetMsg::Add)),
+            tokens,
+        ),
+    );
+    let header = kit::section_header("Datasheets", Some(add), tokens);
+    let intro = text(INTRO)
+        .size(TS.caption)
+        .color(theme_ext::text_secondary(tokens))
+        .boxed();
 
     let mut list: Column<Element<'a, LibraryMessage>> =
         Column::new().spacing(SP.m).width(Length::Fill);
     if count == 0 {
-        list = list.push(
-            container(
-                text("No datasheet on this component yet.")
-                    .size(TS.body)
-                    .color(muted),
-            )
-            .padding(SP.l)
-            .width(Length::Fill)
-            .style(crate::styles::modal_card(tokens))
-            .boxed(),
-        );
+        list = list.push(kit::card(
+            kit::empty_state(EMPTY_MESSAGE, None, tokens),
+            tokens,
+        ));
     }
     for (index, doc) in docs.into_iter().enumerate() {
         let error = state.datasheet_errors.get(&index).map(String::as_str);
+        let stored = !is_staged_only(state, &doc.source);
         list = list.push(view_document(
             index,
             count,
@@ -101,15 +106,22 @@ pub fn view<'a>(
             error,
             tokens,
             address.clone(),
+            Gate {
+                read_only,
+                veil,
+                stored,
+            },
         ));
     }
 
-    let add = small_button("+ Add document", tokens).on_press(event(&address, DatasheetMsg::Add));
-
-    column![intro, list, add]
-        .spacing(SP.m)
-        .width(Length::Fill)
-        .boxed()
+    scrollable(
+        column![header, intro, list.boxed()]
+            .spacing(SP.m)
+            .width(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
 }
 
 fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
@@ -119,15 +131,6 @@ fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
         row_id: address.row_id,
         msg: EditorMsg::Datasheet(msg),
     }
-}
-
-fn small_button<'a>(
-    label: &'a str,
-    tokens: &'a ThemeTokens,
-) -> iced::widget::Button<'a, LibraryMessage> {
-    button(text(label).size(TS.caption).boxed())
-        .padding([SP.xs, SP.m])
-        .style(crate::styles::outline_button(tokens))
 }
 
 /// The left column of a card's form rows: a muted, fixed-share label so
@@ -151,32 +154,52 @@ fn field_row<'a>(
     .boxed()
 }
 
-/// The role badge in a card header: the primary gets the accent fill.
-fn role_badge<'a>(is_primary: bool, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
-    let (label, fill, fg) = if is_primary {
+/// Whether `source` pins a PDF that is only staged on this editor: picked,
+/// but not written to the library until the row is saved.
+pub(crate) fn is_staged_only(state: &ComponentPreviewState, source: &DatasheetRef) -> bool {
+    matches!(source, DatasheetRef::HashPinned { hash, .. } if state.staged_datasheets.contains_key(hash))
+}
+
+/// What the read-only library and the save state allow on a document card.
+struct Gate {
+    read_only: bool,
+    veil: Color,
+    /// False while the pinned PDF is staged and not yet saved.
+    stored: bool,
+}
+
+/// Role label of the document at `index`: the first one is the primary.
+fn role_label(index: usize) -> &'static str {
+    if index == 0 { "Primary" } else { "Document" }
+}
+
+/// Source label shown as a badge next to the role.
+fn mode_label(mode: DatasheetMode) -> &'static str {
+    match mode {
+        DatasheetMode::Url => "Link",
+        DatasheetMode::PinnedPdf => "PDF",
+    }
+}
+
+/// A role / source badge: the accent fill when `accent`, a hover overlay
+/// otherwise.
+fn pill<'a>(
+    label: &'static str,
+    accent: bool,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let (fill, fg) = if accent {
         (
-            "Primary",
             crate::styles::tokens::accent_fill(tokens),
             crate::styles::tokens::on_accent(tokens),
         )
     } else {
         (
-            "Document",
             crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Hover),
             theme_ext::text_secondary(tokens),
         )
     };
-    container(text(label).size(TS.caption).color(fg))
-        .padding([SP.xs / 2.0, SP.s])
-        .style(move |_: &Theme| container::Style {
-            background: Some(fill.into()),
-            border: Border {
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
+    kit::pill(label.to_string(), fill, fg)
 }
 
 /// One document card: a header with its role and reorder / remove
@@ -188,14 +211,21 @@ fn view_document<'a>(
     error: Option<&'a str>,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    gate: Gate,
 ) -> Element<'a, LibraryMessage> {
     let mode = DatasheetMode::from_ref(Some(&doc.source));
+    let Gate {
+        read_only,
+        veil,
+        stored,
+    } = gate;
+    let can_open = !doc.source.is_empty() && stored;
 
     let mode_address = address.clone();
     let mode_picker = pick_list(Some(mode), DatasheetMode::ALL, ToString::to_string)
         .on_select(move |m| event(&mode_address, DatasheetMsg::SetMode(index, m)))
         .text_size(TS.body)
-    .padding([SP.s, SP.m]);
+        .padding([SP.s, SP.m]);
 
     let label_address = address.clone();
     let label_input = text_input("Datasheet", doc.label.clone())
@@ -206,36 +236,36 @@ fn view_document<'a>(
 
     let mut actions = row![].spacing(SP.s).align_y(iced::Alignment::Center);
     if index > 0 {
-        actions = actions.push(
-            small_button("Make primary", tokens)
-                .on_press(event(&address, DatasheetMsg::Move { from: index, to: 0 })),
-        );
-        actions = actions.push(small_button("Up", tokens).on_press(event(
-            &address,
-            DatasheetMsg::Move {
-                from: index,
-                to: index - 1,
-            },
-        )));
+        let to_top = DatasheetMsg::Move { from: index, to: 0 };
+        actions = actions.push(kit::secondary_button(
+            "Make primary",
+            Some(event(&address, to_top)),
+            tokens,
+        ));
     }
-    if index + 1 < count {
-        actions = actions.push(small_button("Down", tokens).on_press(event(
-            &address,
-            DatasheetMsg::Move {
-                from: index,
-                to: index + 1,
-            },
-        )));
-    }
-    actions = actions.push(
-        small_button("Remove", tokens).on_press(event(&address, DatasheetMsg::Remove(index))),
-    );
+    // Row 1's "up" would repeat "Make primary", so it is disabled there.
+    let move_to = |to: usize| Some(event(&address, DatasheetMsg::Move { from: index, to }));
+    actions = actions.push(kit::reorder_remove(
+        (index > 1).then(|| move_to(index - 1)).flatten(),
+        (index + 1 < count).then(|| move_to(index + 1)).flatten(),
+        event(&address, DatasheetMsg::Remove(index)),
+        tokens,
+    ));
 
+    // Open only reads, so it sits outside the read-only veil.
+    let open = kit::secondary_button(
+        "Open",
+        can_open.then(|| event(&address, DatasheetMsg::Open(index))),
+        tokens,
+    );
     let header = row![
-        role_badge(index == 0, tokens),
+        pill(role_label(index), index == 0, tokens),
+        pill(mode_label(mode), false, tokens),
         Space::new().width(Length::Fill),
-        actions,
+        open,
+        veiled(read_only, veil, actions.boxed()),
     ]
+    .spacing(SP.s)
     .align_y(iced::Alignment::Center);
 
     let (value_label, value_row): (&str, Element<'a, LibraryMessage>) = match mode {
@@ -246,13 +276,18 @@ fn view_document<'a>(
         ),
     };
 
-    let mut body = column![
-        header,
-        field_row("Label", label_input.boxed(), tokens),
-        field_row("Source", mode_picker.boxed(), tokens),
-        field_row(value_label, value_row, tokens),
-    ]
-    .spacing(SP.m);
+    let fields = veiled(
+        read_only,
+        veil,
+        column![
+            field_row("Label", label_input.boxed(), tokens),
+            field_row("Source", mode_picker.boxed(), tokens),
+            field_row(value_label, value_row, tokens),
+        ]
+        .spacing(SP.m)
+        .boxed(),
+    );
+    let mut body = column![header, fields].spacing(SP.m);
     if let Some(reason) = error {
         body = body.push(
             text(reason)
@@ -262,11 +297,7 @@ fn view_document<'a>(
         );
     }
 
-    container(body)
-        .padding(SP.l)
-        .style(crate::styles::modal_card(tokens))
-        .width(Length::Fill)
-        .boxed()
+    kit::card(body.boxed(), tokens)
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -298,9 +329,11 @@ fn view_pinned_input<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let upload_btn = button(container(text("Upload PDF…").size(TS.body)).padding([SP.s, SP.l]))
-        .on_press(event(&address, DatasheetMsg::UploadDialog(index)))
-        .style(crate::styles::accent_button(tokens));
+    let upload_btn = kit::primary_button(
+        "Upload PDF…",
+        Some(event(&address, DatasheetMsg::UploadDialog(index))),
+        tokens,
+    );
 
     let summary: Element<'a, LibraryMessage> = match source {
         DatasheetRef::HashPinned { hash, filename } if !hash.is_empty() => {
@@ -332,6 +365,25 @@ fn view_pinned_input<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_document_is_primary_the_rest_are_plain() {
+        assert_eq!(role_label(0), "Primary");
+        assert_eq!(role_label(1), "Document");
+        assert_eq!(role_label(7), "Document");
+    }
+
+    #[test]
+    fn source_badge_names_link_and_pdf() {
+        assert_eq!(mode_label(DatasheetMode::Url), "Link");
+        assert_eq!(mode_label(DatasheetMode::PinnedPdf), "PDF");
+    }
+
+    #[test]
+    fn intro_is_a_short_single_line_hint() {
+        assert!(INTRO.len() < 80 && !INTRO.contains('\n'));
+        assert!(!EMPTY_MESSAGE.is_empty());
+    }
 
     #[test]
     fn mode_from_ref_url_variant() {

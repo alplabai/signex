@@ -39,11 +39,8 @@ pub struct SelectionList<
     Theme: Catalog + container::Catalog + scrollable::Catalog,
 {
     /// Container for Rendering List.
-    container: Container<
-        'a,
-        Scrollable<'a, Message, List<'a, T, Message, Theme, Renderer>, Theme>,
-        Theme,
-    >,
+    container:
+        Container<'a, Scrollable<'a, Message, List<'a, T, Message, Theme, Renderer>, Theme>, Theme>,
     /// List of Elements to Render.
     options: &'a [T],
     /// Label Font
@@ -508,9 +505,8 @@ mod tests {
         let selection_list = TestSelectionList::new(&options, TestMessage::Selected);
 
         let mut selection_list = selection_list;
-        let mut tree = Tree::new::<TestMessage, iced_widget::Theme, iced_widget::Renderer>(
-            &selection_list,
-        );
+        let mut tree =
+            Tree::new::<TestMessage, iced_widget::Theme, iced_widget::Renderer>(&selection_list);
         Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(
             &mut selection_list,
             &mut tree,

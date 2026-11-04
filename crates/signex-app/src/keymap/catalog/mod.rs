@@ -307,6 +307,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "annotate_schematic_quietly",
     "force_annotate_all_schematics",
     "run_erc",
+    "open_erc_dialog",
     "update_pcb_from_schematic",
 ];
 
@@ -511,6 +512,8 @@ mod tests {
             ("place_net_label", "Net Label"),
             ("open_components_panel", "Component..."),
             ("run_erc", "Electrical Rules Check"),
+            ("open_erc_dialog", "Electrical Rules Check"),
+            ("next_grid", "Cycle Grid Size"),
             ("open_preferences", "Preferences..."),
             ("show_current_command_hotkeys", "Keyboard Shortcuts"),
         ];

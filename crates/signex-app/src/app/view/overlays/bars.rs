@@ -155,9 +155,9 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let card = container(
             column![
-                iced::widget::text("⏸").size(64).color(accent_c),
+                iced::widget::text("⏸").size(TS.banner).color(accent_c),
                 iced::widget::text("Placement Paused")
-                    .size(16)
+                    .size(TS.heading)
                     .color(text_c),
                 iced::widget::text(
                     "Editing properties in the panel. Click Resume to keep placing."
@@ -250,7 +250,8 @@ impl Signex {
             bar_has_selection,
             bar_has_net_colors,
         )
-        .map(Message::ActiveBar).boxed();
+        .map(Message::ActiveBar)
+        .boxed();
         Some(
             column![
                 iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
@@ -285,7 +286,9 @@ impl Signex {
         let bar_items = crate::library::editor::footprint::unified_active_bar::bar_items(
             editor, theme_id, tokens,
         );
-        let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library).boxed();
+        let bar = signex_widgets::active_bar::view(bar_items, tokens)
+            .map(Message::Library)
+            .boxed();
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
@@ -457,7 +460,9 @@ impl Signex {
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
-        let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library).boxed();
+        let bar = signex_widgets::active_bar::view(bar_items, tokens)
+            .map(Message::Library)
+            .boxed();
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + 4.0),

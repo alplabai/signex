@@ -152,11 +152,7 @@ where
         self.title.layout(
             &mut tree.children[0],
             renderer,
-            &limits.shrink(
-                iced_core::Padding::default()
-                    .left(title_x)
-                    .right(title_x),
-            ),
+            &limits.shrink(iced_core::Padding::default().left(title_x).right(title_x)),
         );
         let title_size = tree.children[0].size;
         tree.children[0].translation = iced_core::Vector::new(title_x, 0.0);
@@ -180,8 +176,7 @@ where
             self.width,
             self.height,
             iced_core::Size::new(
-                (content_size.width + border * 2.0)
-                    .max(title_size.width + border * 4.0),
+                (content_size.width + border * 2.0).max(title_size.width + border * 4.0),
                 content_y + content_size.height + border,
             ),
         );

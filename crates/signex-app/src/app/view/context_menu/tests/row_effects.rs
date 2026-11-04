@@ -130,7 +130,11 @@ fn assert_menu_closed(app: &Signex, what: &str) {
 /// The canvas menu's rows for the app's current selection, as
 /// `view_context_menu` builds them.
 fn canvas_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
-    let (selection, project_key) = app.canvas_menu_inputs();
+    let (selection, project_key) = app.canvas_menu_inputs(
+        app.ui_state
+            .main_window_id
+            .expect("the app opens its main window"),
+    );
     let sc = CanvasShortcuts::resolve(|id| app.keymap_shortcut_label(id));
     let tokens = theme_tokens(TID);
     canvas_menu_entries(TID, &tokens, selection, None, project_key, &sc)
@@ -218,7 +222,11 @@ fn settle_answering_clipboard(app: &mut Signex, task: iced::Task<Message>, text:
                     iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Read {
                         channel,
                         ..
-                    }) => assert!(channel.send(Ok(iced::clipboard::Content::Text(text.to_owned()))).is_ok()),
+                    }) => assert!(
+                        channel
+                            .send(Ok(iced::clipboard::Content::Text(text.to_owned())))
+                            .is_ok()
+                    ),
                     _ => {}
                 }
             }

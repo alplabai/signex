@@ -567,7 +567,7 @@ fn build_dimension_input<'a>(
     container(
         iced::widget::row![
             text("mm").size(TS.caption).color(muted),
-            Space::new().width(Length::Fixed(4.0)),
+            Space::new().width(Length::Fixed(SP.s)),
             input,
         ]
         .align_y(iced::Alignment::Center),

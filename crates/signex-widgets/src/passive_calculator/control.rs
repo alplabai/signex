@@ -266,9 +266,9 @@ impl CalculatorControl {
                 "Preferred series",
                 pick_list(Some(state.series), ESeries::ALL, ESeries::to_string)
                     .on_select(CalculatorMessage::SeriesChanged)
-                .text_size(11)
-                .padding([4, 6])
-                .width(SERIES_PICK_W),
+                    .text_size(11)
+                    .padding([4, 6])
+                    .width(SERIES_PICK_W),
             ),
             labeled(
                 "Maximum parts",

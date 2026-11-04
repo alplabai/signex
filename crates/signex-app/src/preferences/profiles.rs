@@ -69,13 +69,13 @@ pub(super) fn content_profiles<'a>(
     tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let header = column![
-        text("Rule Profiles").size(15).style(text_primary),
+        text("Rule Profiles").size(TS.heading).style(text_primary),
         Space::new().height(4),
         text(
             "A profile is a named set of ERC rules. A new project starts with a copy of the \
              default profile. Changes here are saved to the profile's file at once."
         )
-        .size(11)
+        .size(TS.body)
         .style(text_muted),
     ]
     .padding([16, 20]);
@@ -86,7 +86,7 @@ pub(super) fn content_profiles<'a>(
             .push(
                 container(
                     text("Reading the profile library...")
-                        .size(11)
+                        .size(TS.body)
                         .style(text_muted),
                 )
                 .padding([0, 20])
@@ -121,14 +121,14 @@ pub(super) fn content_profiles<'a>(
 
     for problem in &manager.listing.problems {
         body = body.push(
-            container(text(problem.clone()).size(10).style(text_warning))
+            container(text(problem.clone()).size(TS.caption).style(text_warning))
                 .padding([4, 20])
                 .boxed(),
         );
     }
     body = body.push(h_sep()).push(actions_row(manager));
     if let Some((is_error, message)) = &manager.status {
-        let styled = text(message.clone()).size(10);
+        let styled = text(message.clone()).size(TS.caption);
         body = body.push(
             container(if *is_error {
                 styled.style(text_warning)
@@ -164,7 +164,7 @@ pub(super) fn content_profiles<'a>(
                 on_severity: |rule, severity| pane(ProfilesMsg::SeverityChanged(rule, severity)),
                 on_pin_cell: |row, col| pane(ProfilesMsg::PinCellCycled { row, col }),
             });
-            let mut editing = column![text(caption).size(12).style(text_primary)].spacing(8);
+            let mut editing = column![text(caption).size(TS.label).style(text_primary)].spacing(8);
             if editable {
                 editing = editing.push(reset_row(manager, &listed.profile.name));
             }
@@ -172,9 +172,13 @@ pub(super) fn content_profiles<'a>(
         }
         None => {
             body = body.push(
-                container(text("No profile is selected.").size(11).style(text_muted))
-                    .padding([12, 20])
-                    .boxed(),
+                container(
+                    text("No profile is selected.")
+                        .size(TS.body)
+                        .style(text_muted),
+                )
+                .padding([12, 20])
+                .boxed(),
             );
         }
     }
@@ -196,7 +200,7 @@ fn profile_row<'a>(
         format!("{name}  v{version}  ({note})")
     };
     row![
-        button(text(label).size(12))
+        button(text(label).size(TS.label))
             .padding([4, 10])
             .width(Length::Fill)
             .on_press(pane(ProfilesMsg::Selected(name.to_string())))
@@ -214,7 +218,10 @@ fn default_row<'a>(
     is_default: bool,
 ) -> Element<'a, PrefMsg> {
     row![
-        text(label).size(11).style(text_muted).width(Length::Fill),
+        text(label)
+            .size(TS.body)
+            .style(text_muted)
+            .width(Length::Fill),
         default_button(name, is_default),
     ]
     .spacing(8)
@@ -226,11 +233,11 @@ fn default_row<'a>(
 fn default_button<'a>(name: Option<&'a str>, is_default: bool) -> Element<'a, PrefMsg> {
     if is_default {
         return text("Default for new projects")
-            .size(11)
+            .size(TS.body)
             .style(text_primary)
             .boxed();
     }
-    button(text("Use as default").size(11))
+    button(text("Use as default").size(TS.body))
         .padding([4, 10])
         .on_press(pane(ProfilesMsg::DefaultChosen(name.map(str::to_string))))
         .style(secondary_button_style)
@@ -271,7 +278,7 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
     let selected_kind = manager.selected_profile().map(|l| l.kind);
     let named = !manager.name_input.trim().is_empty();
     let action = |label: &'static str, enabled: bool, msg: ProfilesMsg| {
-        button(text(label).size(11))
+        button(text(label).size(TS.body))
             .padding([5, 12])
             .on_press_maybe(enabled.then(|| pane(msg)))
             .style(secondary_button_style)
@@ -297,19 +304,19 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
                     "Delete \"{name}\"? Projects that recorded it keep their rules but can no \
                      longer find it for Update from profile."
                 ))
-                .size(11)
+                .size(TS.body)
                 .style(text_warning)
                 .boxed(),
             )
             .push(
-                button(text("Delete").size(11))
+                button(text("Delete").size(TS.body))
                     .padding([5, 12])
                     .on_press(pane(ProfilesMsg::DeleteConfirmed))
                     .style(danger_button_style)
                     .boxed(),
             )
             .push(
-                button(text("Keep").size(11))
+                button(text("Keep").size(TS.body))
                     .padding([5, 12])
                     .on_press(pane(ProfilesMsg::DeleteCancelled))
                     .style(secondary_button_style)
@@ -327,9 +334,9 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
     container(
         column![
             row![
-                text("Name").size(11).style(text_muted),
+                text("Name").size(TS.body).style(text_muted),
                 text_input("Profile name", &manager.name_input)
-                    .size(12)
+                    .size(TS.label)
                     .on_input(|v| pane(ProfilesMsg::NameInputChanged(v))),
             ]
             .spacing(8)
@@ -349,13 +356,13 @@ fn reset_row<'a>(manager: &'a ProfileManager, name: &'a str) -> Element<'a, Pref
             text(format!(
                 "Put every rule of \"{name}\" back to the Signex Default values?"
             ))
-            .size(11)
+            .size(TS.body)
             .style(text_warning),
-            button(text("Reset").size(11))
+            button(text("Reset").size(TS.body))
                 .padding([5, 12])
                 .on_press(pane(ProfilesMsg::ResetConfirmed))
                 .style(danger_button_style),
-            button(text("Keep").size(11))
+            button(text("Keep").size(TS.body))
                 .padding([5, 12])
                 .on_press(pane(ProfilesMsg::ResetCancelled))
                 .style(secondary_button_style),
@@ -364,7 +371,7 @@ fn reset_row<'a>(manager: &'a ProfileManager, name: &'a str) -> Element<'a, Pref
         .align_y(iced::Alignment::Center)
         .boxed();
     }
-    button(text("Reset to Signex Default").size(11))
+    button(text("Reset to Signex Default").size(TS.body))
         .padding([5, 12])
         .on_press_maybe((!manager.busy).then(|| pane(ProfilesMsg::ResetRequested)))
         .style(secondary_button_style)

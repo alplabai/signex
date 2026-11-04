@@ -61,10 +61,7 @@ where
     /// call [`FlushRow::width`] or [`FlushRow::height`] accordingly.
     #[must_use]
     pub fn from_vec(children: Vec<Column<Element<'a, Message, Theme, Renderer>>>) -> Self {
-        let children = children
-            .into_iter()
-            .map(Widget::_boxed)
-            .collect();
+        let children = children.into_iter().map(Widget::_boxed).collect();
         Self {
             spacing: Pixels::ZERO,
             padding: Padding::ZERO,
@@ -185,9 +182,12 @@ where
 }
 
 impl<'a, Message: 'a, Theme: 'a, Renderer: iced_core::Renderer + 'a>
-    FromIterator<Column<Element<'a, Message, Theme, Renderer>>> for FlushRow<'a, Message, Theme, Renderer>
+    FromIterator<Column<Element<'a, Message, Theme, Renderer>>>
+    for FlushRow<'a, Message, Theme, Renderer>
 {
-    fn from_iter<T: IntoIterator<Item = Column<Element<'a, Message, Theme, Renderer>>>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = Column<Element<'a, Message, Theme, Renderer>>>>(
+        iter: T,
+    ) -> Self {
         Self::with_children(iter)
     }
 }
@@ -362,8 +362,7 @@ where
         viewport: &Rectangle,
     ) {
         if let Some(clipped_viewport) = layout.bounds().intersection(viewport) {
-            for (child, (layout, state)) in self.children.iter().zip(layout.iter(&tree.children))
-            {
+            for (child, (layout, state)) in self.children.iter().zip(layout.iter(&tree.children)) {
                 child.draw(
                     state,
                     renderer,

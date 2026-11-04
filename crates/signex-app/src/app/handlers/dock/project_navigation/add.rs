@@ -295,6 +295,8 @@ impl Signex {
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         if let EntryPatch::Patched(bytes) = patch {
+            self.document_state
+                .note_project_bytes_on_disk(&project_path, bytes.to_vec(), true);
             self.register_project_file(project_id, &path);
             crate::diagnostics::log_info(format!(
                 "Added {name}; the saved project file now lists it."

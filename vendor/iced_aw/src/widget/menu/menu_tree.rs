@@ -321,9 +321,8 @@ where
             viewport.size(),
             scroll_offset,
         );
-        let slice = MenuSlice::from_bounds_rel(lower_bound_rel, upper_bound_rel, tree, |t| {
-            t.translation.y
-        });
+        let slice =
+            MenuSlice::from_bounds_rel(lower_bound_rel, upper_bound_rel, tree, |t| t.translation.y);
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::Menu::layout", "slice: {:?}", slice);
 

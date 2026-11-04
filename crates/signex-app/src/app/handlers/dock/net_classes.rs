@@ -210,6 +210,8 @@ impl super::super::super::Signex {
         let Some(id) = target else {
             return;
         };
+        // The cursor to undo back to is the state before the first edit.
+        document.note_project_clean_state(id);
         let Some(project) = document.projects.iter_mut().find(|p| p.id == id) else {
             return;
         };
@@ -244,8 +246,7 @@ impl super::super::super::Signex {
         }
         document.panel_ctx.net_classes = panel;
         if changed {
-            let project_file = project.path.clone();
-            document.mark_document_dirty_display_only(&project_file);
+            document.sync_project_history_dirty(id, false);
         }
         if let Some(step) = pick_step {
             self.record_net_class_pick(id, step);

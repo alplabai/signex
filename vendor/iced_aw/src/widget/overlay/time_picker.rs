@@ -19,8 +19,8 @@ use crate::{
 };
 use chrono::{Duration, Local, NaiveTime, Timelike};
 use iced_core::{
-    Border, Color, Element, Event, Layout, Length, Overlay, Padding, Pixels, Point,
-    Rectangle, Renderer as _, Shell, Size, Text, Vector, Widget,
+    Border, Color, Element, Event, Layout, Length, Overlay, Padding, Pixels, Point, Rectangle,
+    Renderer as _, Shell, Size, Text, Vector, Widget,
     alignment::{Horizontal, Vertical},
     event, keyboard,
     layout::Limits,
@@ -189,12 +189,7 @@ where
 
     /// The event handling for the clock.
     #[allow(clippy::too_many_lines)]
-    fn on_event_clock(
-        &mut self,
-        event: &Event,
-        layout: Layout,
-        cursor: Cursor,
-    ) -> event::Status {
+    fn on_event_clock(&mut self, event: &Event, layout: Layout, cursor: Cursor) -> event::Status {
         if cursor.is_over(layout.bounds()) {
             self.state.clock_cache_needs_clearance = true;
             self.state.clock_cache.clear();
@@ -379,12 +374,7 @@ where
                 if cursor.is_over(hour.bounds) {
                     self.state.focus = Focus::DigitalHour;
 
-                    calculate_time(
-                        &mut self.state.time,
-                        hour.up,
-                        hour.down,
-                        Duration::hours(1),
-                    )
+                    calculate_time(&mut self.state.time, hour.up, hour.down, Duration::hours(1))
                 } else if cursor.is_over(minute.bounds) {
                     self.state.focus = Focus::DigitalMinute;
 
@@ -1538,9 +1528,7 @@ fn draw_digital_clock<Message, Theme>(
             Text {
                 content: down_content,
                 bounds: Size::new(down_bounds.width, down_bounds.height),
-                size: Pixels(
-                    renderer.text_size().0 + if down_arrow_hovered { 1.0 } else { 0.0 },
-                ),
+                size: Pixels(renderer.text_size().0 + if down_arrow_hovered { 1.0 } else { 0.0 }),
                 font: down_font,
                 align_x: text::Alignment::Center,
                 align_y: Vertical::Center,

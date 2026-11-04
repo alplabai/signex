@@ -86,8 +86,12 @@ impl PreviewReads {
             && state.footprint.is_none()
             && state.row.footprint_ref == Some(r)
         {
-            state.footprint =
-                report_read_failure(result, ResolvedKind::Footprint, &r, "component preview tab");
+            state.set_footprint(report_read_failure(
+                result,
+                ResolvedKind::Footprint,
+                &r,
+                "component preview tab",
+            ));
         }
         if let (Some(r), Some(result)) = (needs.sim, self.sim)
             && state.sim.is_none()
@@ -407,7 +411,7 @@ impl LibraryState {
                 return ReloadApplied::Dropped;
             }
             if let Some(edited) = self.editors.get_mut(&address) {
-                super::preview_rebase::rebase_onto_cascade(&mut edited.row, &row);
+                edited.rebase_onto_cascade(&row);
                 edited.stale_base = false;
             }
             return ReloadApplied::Rebased;

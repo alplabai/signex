@@ -188,13 +188,8 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.underlay.mouse_interaction(
-            &state.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
+        self.underlay
+            .mouse_interaction(&state.children[0], layout, cursor, viewport, renderer)
     }
 
     fn overlay<'b>(
@@ -336,13 +331,15 @@ where
 
         let limits = match self.alignment {
             Alignment::Top => with_max_height(limits, height_above),
-            Alignment::TopStart | Alignment::TopEnd => {
-                with_max_height(limits, (height_above + self.underlay_bounds.height).max(0.0))
-            }
+            Alignment::TopStart | Alignment::TopEnd => with_max_height(
+                limits,
+                (height_above + self.underlay_bounds.height).max(0.0),
+            ),
             Alignment::Bottom => with_max_height(limits, height_below),
-            Alignment::BottomEnd | Alignment::BottomStart => {
-                with_max_height(limits, (height_below + self.underlay_bounds.height).max(0.0))
-            }
+            Alignment::BottomEnd | Alignment::BottomStart => with_max_height(
+                limits,
+                (height_below + self.underlay_bounds.height).max(0.0),
+            ),
             Alignment::Start | Alignment::End => with_max_height(limits, max_height_symmetric),
         };
 
@@ -479,24 +476,14 @@ where
     }
 
     fn mouse_interaction(&self, cursor: Cursor, renderer: &Renderer) -> mouse::Interaction {
-        self.element.mouse_interaction(
-            self.state,
-            self.layout,
-            cursor,
-            &self.viewport,
-            renderer,
-        )
+        self.element
+            .mouse_interaction(self.state, self.layout, cursor, &self.viewport, renderer)
     }
 
     fn operate(&mut self, renderer: &Renderer, operation: &mut dyn widget::Operation) {
         // Operate on the overlay element to expose its children for testing
-        self.element.operate(
-            self.state,
-            self.layout,
-            &self.viewport,
-            renderer,
-            operation,
-        );
+        self.element
+            .operate(self.state, self.layout, &self.viewport, renderer, operation);
     }
 }
 
@@ -762,27 +749,36 @@ mod tests {
 
     #[test]
     fn drop_down_alignment_bottom() {
-        let dropdown =
-            TestDropDown::new(Text::new("Click me").boxed(), Text::new("Dropdown content").boxed(), false)
-                .alignment(Alignment::Bottom);
+        let dropdown = TestDropDown::new(
+            Text::new("Click me").boxed(),
+            Text::new("Dropdown content").boxed(),
+            false,
+        )
+        .alignment(Alignment::Bottom);
 
         assert_eq!(dropdown.alignment, Alignment::Bottom);
     }
 
     #[test]
     fn drop_down_alignment_start() {
-        let dropdown =
-            TestDropDown::new(Text::new("Click me").boxed(), Text::new("Dropdown content").boxed(), false)
-                .alignment(Alignment::Start);
+        let dropdown = TestDropDown::new(
+            Text::new("Click me").boxed(),
+            Text::new("Dropdown content").boxed(),
+            false,
+        )
+        .alignment(Alignment::Start);
 
         assert_eq!(dropdown.alignment, Alignment::Start);
     }
 
     #[test]
     fn drop_down_alignment_end() {
-        let dropdown =
-            TestDropDown::new(Text::new("Click me").boxed(), Text::new("Dropdown content").boxed(), false)
-                .alignment(Alignment::End);
+        let dropdown = TestDropDown::new(
+            Text::new("Click me").boxed(),
+            Text::new("Dropdown content").boxed(),
+            false,
+        )
+        .alignment(Alignment::End);
 
         assert_eq!(dropdown.alignment, Alignment::End);
     }
@@ -881,9 +877,17 @@ mod tests {
 
     #[test]
     fn drop_down_multiple_instances() {
-        let dropdown1 = TestDropDown::new(Text::new("First").boxed(), Text::new("Overlay 1").boxed(), false);
+        let dropdown1 = TestDropDown::new(
+            Text::new("First").boxed(),
+            Text::new("Overlay 1").boxed(),
+            false,
+        );
 
-        let dropdown2 = TestDropDown::new(Text::new("Second").boxed(), Text::new("Overlay 2").boxed(), true);
+        let dropdown2 = TestDropDown::new(
+            Text::new("Second").boxed(),
+            Text::new("Overlay 2").boxed(),
+            true,
+        );
 
         assert!(!dropdown1.expanded);
         assert!(dropdown2.expanded);
@@ -891,13 +895,19 @@ mod tests {
 
     #[test]
     fn drop_down_with_different_message_types() {
-        let dropdown1 =
-            TestDropDown::new(Text::new("Click me").boxed(), Text::new("Dropdown content").boxed(), false)
-                .on_dismiss(TestMessage::Dismiss);
+        let dropdown1 = TestDropDown::new(
+            Text::new("Click me").boxed(),
+            Text::new("Dropdown content").boxed(),
+            false,
+        )
+        .on_dismiss(TestMessage::Dismiss);
 
-        let dropdown2 =
-            TestDropDown::new(Text::new("Click me").boxed(), Text::new("Dropdown content").boxed(), false)
-                .on_dismiss(TestMessage::Select(42));
+        let dropdown2 = TestDropDown::new(
+            Text::new("Click me").boxed(),
+            Text::new("Dropdown content").boxed(),
+            false,
+        )
+        .on_dismiss(TestMessage::Select(42));
 
         assert!(dropdown1.on_dismiss.is_some());
         assert!(dropdown2.on_dismiss.is_some());

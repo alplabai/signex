@@ -94,7 +94,11 @@ pub(super) fn view_symbol_selection<'a>(
 
     // ── ▾ Symbol ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Symbol").size(TS.body).color(primary)).padding([6.0, SP.m]).boxed());
+    col = col.push(
+        container(text("Symbol").size(TS.body).color(primary))
+            .padding([6.0, SP.m])
+            .boxed(),
+    );
     col = col.push(text_field(
         "Design Item ID",
         sym.symbol_name.as_str(),
@@ -135,7 +139,11 @@ pub(super) fn view_symbol_selection<'a>(
 
     // ── ▾ Graphical ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Graphical").size(TS.body).color(primary)).padding([6.0, SP.m]).boxed());
+    col = col.push(
+        container(text("Graphical").size(TS.body).color(primary))
+            .padding([6.0, SP.m])
+            .boxed(),
+    );
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text("Mirrored")
@@ -156,8 +164,11 @@ pub(super) fn view_symbol_selection<'a>(
 
     // ── Local Colors (Fills / Lines / Pins) ──
     col = col.push(super::super::thin_sep(border_c));
-    col =
-        col.push(container(text("Local Colors").size(TS.body).color(primary)).padding([6.0, SP.m]).boxed());
+    col = col.push(
+        container(text("Local Colors").size(TS.body).color(primary))
+            .padding([6.0, SP.m])
+            .boxed(),
+    );
     col = col.push(local_color_field(
         "Fills",
         crate::app::LocalColorSlot::Fill,

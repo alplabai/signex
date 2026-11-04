@@ -322,6 +322,48 @@ fn partners_of_a_child_placed_twice_follow_the_placement() {
 }
 
 #[test]
+fn class_styles_and_names_follow_the_placement_of_a_child_placed_twice() {
+    use signex_types::net_class::NetLineStyle;
+    let mut root = empty_sheet();
+    for (n, y) in [(500u128, 0.0), (501, 20.0)] {
+        let mut cs = child_sheet(
+            if n == 500 { "A" } else { "B" },
+            "c.sch",
+            vec![entry("SIG", pt(0.0, y), 600 + n)],
+        );
+        cs.uuid = id(n);
+        root.child_sheets.push(cs);
+        root.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+    }
+    let mut c = empty_sheet();
+    c.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    c.labels
+        .push(labelled("SIG", pt(0.0, 0.0), LabelType::Hierarchical, 21));
+    let shared = c.wires[0].uuid;
+    let idx = indexed(&root, &[("c.sch", c)]);
+    let via = |n: u128| InstancePath::from_chain(vec![id(n)]);
+
+    let names = crate::placement_net_names(&idx);
+    let (a, b) = (&names[&via(500)][&shared], &names[&via(501)][&shared]);
+    assert_ne!(a, b, "each placement names the shared wire's own net");
+
+    let mut class = NetClass::named("Fast");
+    class.nets.push(b.clone());
+    class.style.line = NetLineStyle::Dashed;
+    let styles = crate::placement_class_styles(&idx, &[class]);
+    assert!(
+        styles[&via(501)].contains_key(&shared),
+        "the styled placement draws the style"
+    );
+    assert!(
+        styles
+            .get(&via(500))
+            .is_none_or(|s| !s.contains_key(&shared)),
+        "the other placement does not inherit it"
+    );
+}
+
+#[test]
 fn a_power_port_is_a_port_and_its_partner_is_the_same_rail_elsewhere() {
     let mut root = root_with_child("a.sch", vec![]);
     add_lib(&mut root, "P");

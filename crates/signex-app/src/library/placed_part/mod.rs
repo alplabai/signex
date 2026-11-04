@@ -8,5 +8,7 @@ mod view;
 /// Shows one document; see [`opener::open`].
 pub type OpenDatasheet = fn(&DatasheetLocation, &str) -> Result<(), String>;
 
-pub use datasheet::{DatasheetLocation, DatasheetTarget, PartSource, datasheet_targets};
+pub use datasheet::{
+    DatasheetLocation, DatasheetTarget, PartSource, datasheet_targets, location_of,
+};
 pub use view::{change_preview_view, datasheet_choice_view};

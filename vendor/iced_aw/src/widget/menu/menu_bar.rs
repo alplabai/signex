@@ -339,13 +339,9 @@ where
         debug!("menu::MenuBar::layout | items_size: {items_size:?}");
 
         let resolved_width = match self.width {
-            Length::Fill
-            | Length::FillPortion(_)
-            | Length::Bounded { .. }
-            | Length::Fluid(_) => items_size
-                .width
-                .min(limits.max.width)
-                .max(limits.min.width),
+            Length::Fill | Length::FillPortion(_) | Length::Bounded { .. } | Length::Fluid(_) => {
+                items_size.width.min(limits.max.width).max(limits.min.width)
+            }
             Length::Fixed(amount) => amount.min(limits.max.width).max(limits.min.width),
             Length::Shrink | Length::Fit => items_size.width,
         };
@@ -358,9 +354,8 @@ where
         let lower_bound_rel = self.padding.left - scroll_offset;
         let upper_bound_rel = lower_bound_rel + resolved_width - self.padding.x();
 
-        let slice = MenuSlice::from_bounds_rel(lower_bound_rel, upper_bound_rel, tree, |n| {
-            n.translation.x
-        });
+        let slice =
+            MenuSlice::from_bounds_rel(lower_bound_rel, upper_bound_rel, tree, |n| n.translation.x);
         #[cfg(feature = "debug_log")]
         debug!("menu::MenuBar::layout | slice: {slice:?}");
 
@@ -778,7 +773,9 @@ mod tests {
 
     type TestMenuBar<'a> = MenuBar<'a, TestMessage, iced_widget::Theme, iced_widget::Renderer>;
 
-    fn text_item(label: &'static str) -> Item<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer> {
+    fn text_item(
+        label: &'static str,
+    ) -> Item<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer> {
         let element: Element<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer> =
             Widget::_boxed(Text::new(label));
         Item::new(element)

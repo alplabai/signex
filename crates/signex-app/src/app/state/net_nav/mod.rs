@@ -58,4 +58,7 @@ pub struct NetNavState {
     /// What the highlight's index refresh last saw, so an update that changed
     /// no connectivity, sheet list or class table does no planning.
     pub refresh_stamp: Option<u64>,
+    /// The stitch the net-class style job and the index job of one project
+    /// share while both are in flight.
+    pub stitch_share: crate::app::stitched_netlist::StitchShare,
 }

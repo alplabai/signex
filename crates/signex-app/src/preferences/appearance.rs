@@ -32,7 +32,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         theme_status,
         ..
     } = v;
-    let mut col: iced::widget::Column<Element<'a, PrefMsg>> = column![].spacing(0).padding([SP.xl, 20.0]);
+    let mut col: iced::widget::Column<Element<'a, PrefMsg>> =
+        column![].spacing(0).padding([SP.xl, 20.0]);
 
     // ── Section: Theme ──
     col = col.push(section_title("Theme"));
@@ -127,7 +128,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // so the row keeps its old height until there is something to say.
     if !theme_status.is_empty() {
         col = col.push(Space::new().height(6).boxed());
-        col = col.push(text(theme_status).size(TS.caption).style(text_muted).boxed());
+        col = col.push(
+            text(theme_status)
+                .size(TS.caption)
+                .style(text_muted)
+                .boxed(),
+        );
     }
 
     // ── Divider ──
@@ -229,7 +235,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::checkbox(draft_pcb_gpu_render)
-                .size(16)
+                .size(TS.heading)
                 .on_toggle(PrefMsg::DraftPcbGpuRender),
         ]
         .align_y(iced::Alignment::Center)

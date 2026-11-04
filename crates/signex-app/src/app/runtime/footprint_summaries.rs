@@ -264,6 +264,7 @@ mod tests {
             over_constraints,
             redundant_constraints: Vec::new(),
             warnings: Vec::new(),
+            redundancy_pending: false,
             jacobian: Vec::new(),
             params,
         };

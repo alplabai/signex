@@ -222,13 +222,8 @@ where
     }
 
     fn mouse_interaction(&self, cursor: mouse::Cursor, renderer: &Renderer) -> mouse::Interaction {
-        self.content.mouse_interaction(
-            self.tree,
-            self.layout,
-            cursor,
-            &self.window,
-            renderer,
-        )
+        self.content
+            .mouse_interaction(self.tree, self.layout, cursor, &self.window, renderer)
     }
 }
 
@@ -248,8 +243,7 @@ mod tests {
         Tree::empty()
     }
 
-    fn create_test_content()
-    -> Element<'static, TestMessage, iced_widget::Theme, ()> {
+    fn create_test_content() -> Element<'static, TestMessage, iced_widget::Theme, ()> {
         Text::new("Test content").boxed()
     }
 
@@ -266,7 +260,8 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(100.0, 100.0);
 
-        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
+        let overlay =
+            ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
         assert_eq!(overlay.layout.bounds().position(), position);
     }
@@ -285,8 +280,15 @@ mod tests {
         let mut state2 = create_test_state();
         let mut state3 = create_test_state();
 
-        let overlay1 =
-            ContextMenuOverlay::new(Point::ORIGIN, WINDOW, &(), &mut tree1, content1, class, &mut state1);
+        let overlay1 = ContextMenuOverlay::new(
+            Point::ORIGIN,
+            WINDOW,
+            &(),
+            &mut tree1,
+            content1,
+            class,
+            &mut state1,
+        );
         let overlay2 = ContextMenuOverlay::new(
             Point::new(500.0, 300.0),
             WINDOW,
@@ -307,8 +309,14 @@ mod tests {
         );
 
         assert_eq!(overlay1.layout.bounds().position(), Point::ORIGIN);
-        assert_eq!(overlay2.layout.bounds().position(), Point::new(500.0, 300.0));
-        assert_eq!(overlay3.layout.bounds().position(), Point::new(1000.0, 800.0));
+        assert_eq!(
+            overlay2.layout.bounds().position(),
+            Point::new(500.0, 300.0)
+        );
+        assert_eq!(
+            overlay3.layout.bounds().position(),
+            Point::new(1000.0, 800.0)
+        );
     }
 
     #[test]
@@ -320,7 +328,8 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(100.0, 100.0);
 
-        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
+        let overlay =
+            ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
         let _overlay_element = overlay.overlay();
 
         // If we get here without panic, the conversion worked
@@ -389,7 +398,8 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(-50.0, -100.0);
 
-        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
+        let overlay =
+            ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
         assert_eq!(overlay.layout.bounds().position().x, -50.0);
         assert_eq!(overlay.layout.bounds().position().y, -100.0);
@@ -404,7 +414,8 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(123.456, 789.012);
 
-        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
+        let overlay =
+            ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
         assert_eq!(overlay.layout.bounds().position().x, 123.456);
         assert_eq!(overlay.layout.bounds().position().y, 789.012);

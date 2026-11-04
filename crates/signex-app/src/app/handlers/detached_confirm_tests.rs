@@ -246,6 +246,7 @@ fn a_lock_closes_the_menus_and_the_palette_behind_it() {
         x: 10.0,
         y: 10.0,
         world: None,
+        window: None,
     });
     let _ = app.sync_detached_modals();
     assert!(app.interaction_state.context_menu.is_some(), "no lock yet");

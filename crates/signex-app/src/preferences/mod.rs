@@ -431,9 +431,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
     .height(MODAL_HEADER_HEIGHT)
     .padding(MODAL_HEADER_PADDING)
     .style(move |theme: &Theme| container::Style {
-        background: Some(Background::Color(
-            theme.palette().background.weak.color,
-        )),
+        background: Some(Background::Color(theme.palette().background.weak.color)),
         border: Border {
             width: 0.0,
             radius: iced::border::Radius::default()
@@ -452,9 +450,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
             .width(1)
             .height(Length::Fill)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(
-                    theme.palette().background.strong.color
-                )),
+                background: Some(Background::Color(theme.palette().background.strong.color)),
                 ..container::Style::default()
             }),
         build_content(v),
@@ -471,9 +467,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
             .width(Length::Fill)
             .height(1)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(
-                    theme.palette().background.strong.color,
-                )),
+                background: Some(Background::Color(theme.palette().background.strong.color)),
                 ..container::Style::default()
             })
             .boxed()
@@ -505,9 +499,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.palette().background.base.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.base.color)),
             border: Border {
                 width: 1.0,
                 radius: MODAL_CORNER_RADIUS.into(),
@@ -537,15 +529,19 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
         if group != last_group {
             last_group = group;
             col = col.push(
-                container(text(group.to_uppercase()).size(9).style(text_muted))
-                    .padding(iced::Padding {
-                        top: 10.0,
-                        right: 12.0,
-                        bottom: 4.0,
-                        left: 12.0,
-                    })
-                    .width(Length::Fill)
-                    .boxed(),
+                container(
+                    text(group.to_uppercase())
+                        .size(TS.caption)
+                        .style(text_muted),
+                )
+                .padding(iced::Padding {
+                    top: 10.0,
+                    right: 12.0,
+                    bottom: 4.0,
+                    left: 12.0,
+                })
+                .width(Length::Fill)
+                .boxed(),
             );
         }
         col = col.push(nav_item(item, active));
@@ -555,9 +551,7 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
         .width(NAV_W)
         .height(Length::Fill)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.palette().background.weak.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.weak.color)),
             ..container::Style::default()
         })
         .boxed()
@@ -677,9 +671,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         .height(Length::Fill)
         .padding(0)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.palette().background.base.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.base.color)),
             ..container::Style::default()
         })
         .boxed()

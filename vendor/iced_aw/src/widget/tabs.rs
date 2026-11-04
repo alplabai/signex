@@ -420,13 +420,9 @@ where
 
         // Tab bar
         let mut mouse_interaction = mouse::Interaction::default();
-        let new_mouse_interaction = self.tab_bar.mouse_interaction(
-            bar_tree,
-            tab_bar_layout,
-            cursor,
-            viewport,
-            renderer,
-        );
+        let new_mouse_interaction =
+            self.tab_bar
+                .mouse_interaction(bar_tree, tab_bar_layout, cursor, viewport, renderer);
 
         if new_mouse_interaction > mouse_interaction {
             mouse_interaction = new_mouse_interaction;

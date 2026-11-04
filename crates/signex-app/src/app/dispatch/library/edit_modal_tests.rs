@@ -308,3 +308,228 @@ fn a_description_with_triple_quotes_is_refused_at_input() {
     assert_eq!(modal.draft.description, "ok");
     assert!(modal.error.is_some());
 }
+
+/// A "generic" class template with a measurement, a number and a text
+/// slot (#1680).
+fn with_slot_template(app: &mut Signex, root: &Path) {
+    use signex_library::{ParamKind, ParamSlot, ParameterTemplate};
+    let slot = |name: &str, kind, unit: Option<&str>| ParamSlot {
+        name: name.into(),
+        kind,
+        unit: unit.map(str::to_string),
+        allow_zero: false,
+        allow_negative: false,
+        display_plus_minus: false,
+    };
+    let template = ParameterTemplate {
+        class: "generic".into(),
+        description: String::new(),
+        required_params: vec![slot("capacitance", ParamKind::Measurement, Some("F"))],
+        optional_params: vec![
+            slot("count", ParamKind::Number, None),
+            slot("note", ParamKind::Text, None),
+        ],
+    };
+    let library_id = app.library.library_at(root).expect("library").library_id;
+    std::sync::Arc::make_mut(&mut app.library.template_registry)
+        .insert_for_library(library_id, template);
+}
+
+fn add_slot(app: &mut Signex, root: &Path, name: &str) {
+    let _ = app.update(edit(
+        root,
+        BrowserEditMsg::AddSlotParam { name: name.into() },
+    ));
+}
+
+fn draft_param(app: &Signex, root: &Path, key: &str) -> Option<signex_library::ParamValue> {
+    app.library.library_browsers[root]
+        .edit_modal
+        .as_ref()
+        .and_then(|m| m.draft.parameters.get(key).cloned())
+}
+
+#[test]
+fn adding_a_template_slot_creates_its_kind_and_unit() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    for name in ["capacitance", "count", "note"] {
+        add_slot(&mut app, &root, name);
+    }
+    assert!(matches!(
+        draft_param(&app, &root, "capacitance"),
+        Some(signex_library::ParamValue::Measurement { unit, .. }) if unit == "F"
+    ));
+    assert!(matches!(
+        draft_param(&app, &root, "count"),
+        Some(signex_library::ParamValue::Number(_))
+    ));
+    assert!(matches!(
+        draft_param(&app, &root, "note"),
+        Some(signex_library::ParamValue::Text(_))
+    ));
+}
+
+#[test]
+fn a_new_slot_row_stores_the_typed_number_in_the_slots_unit() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "capacitance");
+    // The row opens with an empty number field and the slot's unit.
+    assert_eq!(
+        app.library.library_browsers[&root]
+            .edit_modal
+            .as_ref()
+            .and_then(|m| m.param_buf.get("capacitance").cloned()),
+        Some((String::new(), "F".to_string()))
+    );
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetParamValue {
+            key: "capacitance".into(),
+            value: "100".into(),
+        },
+    ));
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::ParamPrefixPicked {
+            key: "capacitance".into(),
+            prefix: signex_types::quantity::SiPrefix::Nano,
+        },
+    ));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+    drop(app.land_pending_refresh(&root));
+    match stored(&app, &root, row_id).parameters.get("capacitance") {
+        Some(signex_library::ParamValue::Measurement { value, unit }) => {
+            assert_eq!(unit, "F");
+            assert!((value - 1.0e-7).abs() < 1.0e-15, "value = {value}");
+        }
+        other => panic!("expected a farad measurement, got {other:?}"),
+    }
+}
+
+#[test]
+fn saving_a_slot_row_left_empty_is_refused() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "capacitance");
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+    let modal = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .expect("modal stays open");
+    assert!(
+        modal
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("capacitance"))
+    );
+    assert!(stored(&app, &root, row_id).parameters.is_empty());
+}
+
+#[test]
+fn saving_a_number_slot_row_left_empty_or_non_numeric_is_refused() {
+    for typed in [None, Some("abc")] {
+        let (mut app, root, row_id) = app_with_browser();
+        with_slot_template(&mut app, &root);
+        open_modal(&mut app, &root, row_id);
+        add_slot(&mut app, &root, "count");
+        if let Some(v) = typed {
+            let _ = app.update(edit(
+                &root,
+                BrowserEditMsg::SetParamValue {
+                    key: "count".into(),
+                    value: v.into(),
+                },
+            ));
+        }
+        let task = app.update(edit(&root, BrowserEditMsg::Save));
+        run_write(&mut app, task);
+        let modal = app.library.library_browsers[&root]
+            .edit_modal
+            .as_ref()
+            .expect("modal stays open");
+        assert!(modal.error.as_deref().is_some_and(|e| e.contains("count")));
+        assert!(stored(&app, &root, row_id).parameters.is_empty());
+    }
+}
+
+#[test]
+fn a_number_slot_row_takes_a_typed_number() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "count");
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetParamValue {
+            key: "count".into(),
+            value: "4".into(),
+        },
+    ));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+    drop(app.land_pending_refresh(&root));
+    assert_eq!(
+        stored(&app, &root, row_id).parameters.get("count"),
+        Some(&signex_library::ParamValue::Number(4.0))
+    );
+}
+
+#[test]
+fn adding_a_slot_shrinks_the_missing_slot_offer() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    let missing = |app: &Signex| -> Vec<String> {
+        let t = app
+            .library
+            .template_registry
+            .resolve(
+                app.library.library_at(&root).expect("library").library_id,
+                "generic",
+            )
+            .expect("template");
+        let m = app.library.library_browsers[&root]
+            .edit_modal
+            .as_ref()
+            .expect("modal");
+        t.missing_slots(&m.draft.parameters)
+            .map(|s| s.name.clone())
+            .collect()
+    };
+    assert_eq!(missing(&app), ["capacitance", "count", "note"]);
+    add_slot(&mut app, &root, "count");
+    assert_eq!(missing(&app), ["capacitance", "note"]);
+}
+
+#[test]
+fn a_slot_the_row_holds_or_the_template_lacks_is_not_added() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "nonesuch");
+    assert!(draft_param(&app, &root, "nonesuch").is_none());
+    add_slot(&mut app, &root, "note");
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetParamValue {
+            key: "note".into(),
+            value: "kept".into(),
+        },
+    ));
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::CommitParam { key: "note".into() },
+    ));
+    add_slot(&mut app, &root, "note");
+    assert_eq!(
+        draft_param(&app, &root, "note"),
+        Some(signex_library::ParamValue::Text("kept".into()))
+    );
+}

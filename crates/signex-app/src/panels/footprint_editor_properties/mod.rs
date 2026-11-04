@@ -239,13 +239,16 @@ fn render_fp_settings_and_hint<'a>(
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<Element<'a, PanelMsg>> {
-    col = col.push(props_section_header(
-        "Settings",
-        "fp_settings",
-        collapsed_sections,
-        primary,
-        border_c,
-    ).boxed());
+    col = col.push(
+        props_section_header(
+            "Settings",
+            "fp_settings",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if !fp_is_collapsed("fp_settings", collapsed_sections) {
         // v0.26-I — auto-courtyard toggle removed. The courtyard is
         // an authored shape (silk / sketch entity), not an auto-
@@ -254,13 +257,9 @@ fn render_fp_settings_and_hint<'a>(
         let _ = fp.auto_fit_courtyard;
     }
 
-    col = col.push(props_section_header(
-        "Hint",
-        "fp_hint",
-        collapsed_sections,
-        primary,
-        border_c,
-    ).boxed());
+    col = col.push(
+        props_section_header("Hint", "fp_hint", collapsed_sections, primary, border_c).boxed(),
+    );
     if !fp_is_collapsed("fp_hint", collapsed_sections) {
         let hint = match fp.mode_kind {
             FootprintModeKind::Pads => "Click a pad to edit its properties.",

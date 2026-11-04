@@ -390,7 +390,8 @@ impl<'a> TreeView<'a> {
 
     /// Build the tree into a scrollable Element.
     pub fn view(self) -> Element<'static, TreeMsg> {
-        let mut col: Column<Element<'static, TreeMsg>> = Column::new().spacing(0.0).width(Length::Fill);
+        let mut col: Column<Element<'static, TreeMsg>> =
+            Column::new().spacing(0.0).width(Length::Fill);
         for node in self.roots {
             col = render_node(
                 col,

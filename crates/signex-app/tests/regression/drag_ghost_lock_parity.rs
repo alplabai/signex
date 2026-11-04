@@ -128,11 +128,12 @@ fn sheet(app: &Signex) -> SchematicSheet {
         .clone()
 }
 
-/// What the ghost shows for dragging `selection` down by `DY`.
+/// What the ghost shows for dragging `selection` down by `DY`, with the
+/// app's Keep Wires setting, as the drop uses it.
 fn ghost(app: &Signex, selection: &[SelectedItem]) -> SchematicSheet {
     let moves: Vec<_> = selection.iter().map(|item| (*item, 0.0, DY)).collect();
     signex_engine::MovePreview::new(&sheet(app))
-        .moved_with(&moves, true, &Default::default())
+        .moved_with(&moves, app.ui_state.move_keeps_wires, &Default::default())
         .0
 }
 
@@ -163,10 +164,16 @@ fn assert_parity(app: &mut Signex, selection: &[SelectedItem]) -> SchematicSheet
     committed
 }
 
-fn logged(needle: &str) -> usize {
+/// Id to pass to `logged`: only entries newer than this are counted, so
+/// parallel tests filling or trimming the shared ring cannot skew a count.
+fn log_mark() -> u64 {
+    diagnostics::newest_entry_id().unwrap_or(0)
+}
+
+fn logged(since: u64, needle: &str) -> usize {
     diagnostics::recent_entries()
         .iter()
-        .filter(|entry| entry.message.contains(needle))
+        .filter(|entry| entry.id > since && entry.message.contains(needle))
         .count()
 }
 
@@ -174,13 +181,27 @@ fn logged(needle: &str) -> usize {
 fn a_wire_on_a_locked_pin_stays_put_on_the_drop_as_the_ghost_shows() {
     let mut rig = rig("RPIN1716A", true, false);
     let needle = "Skipped 1 locked object(s): RPIN1716A";
-    let before = logged(needle);
+    let since = log_mark();
     let start = sheet(&rig.app).wires[0].clone();
 
     let after = assert_parity(&mut rig.app, &[rig.wire]);
 
     assert_eq!(after.wires[0], start, "the wire must not move");
-    assert_eq!(logged(needle), before + 1, "the drop names what it skipped");
+    assert_eq!(logged(since, needle), 1, "the drop names what it skipped");
+}
+
+#[test]
+fn a_wire_on_a_locked_pin_stays_put_with_keep_wires_off() {
+    let mut rig = rig("RPIN1716OFF", true, false);
+    rig.app.ui_state.move_keeps_wires = false;
+    let needle = "Skipped 1 locked object(s): RPIN1716OFF";
+    let since = log_mark();
+    let start = sheet(&rig.app).wires[0].clone();
+
+    let after = assert_parity(&mut rig.app, &[rig.wire]);
+
+    assert_eq!(after.wires[0], start, "the wire must not move");
+    assert_eq!(logged(since, needle), 1, "the drop names what it skipped");
 }
 
 #[test]
@@ -271,7 +292,7 @@ fn rotate_and_mirror_keys_skip_a_wire_on_a_locked_pin_without_an_undo_step() {
         .expect("engine")
         .undo_position();
     let needle = "Skipped 1 locked object(s): RKEYS1716";
-    let logged_before = logged(needle);
+    let since = log_mark();
 
     for token in [
         KeyToken::Space,
@@ -282,7 +303,7 @@ fn rotate_and_mirror_keys_skip_a_wire_on_a_locked_pin_without_an_undo_step() {
     }
 
     assert_nothing_happened(&rig.app, &before, undo, "rotate/mirror keys");
-    assert_eq!(logged(needle), logged_before + 3, "each key names the skip");
+    assert_eq!(logged(since, needle), 3, "each key names the skip");
 }
 
 #[test]
@@ -296,7 +317,7 @@ fn the_move_dialog_skips_a_wire_on_a_locked_pin_without_an_undo_step() {
         .expect("engine")
         .undo_position();
     let needle = "Skipped 1 locked object(s): RDIALOG1716";
-    let logged_before = logged(needle);
+    let since = log_mark();
     rig.app.ui_state.move_selection.dx = "10".to_string();
     rig.app.ui_state.move_selection.dy = "0".to_string();
 
@@ -305,7 +326,7 @@ fn the_move_dialog_skips_a_wire_on_a_locked_pin_without_an_undo_step() {
         .update(Message::MoveSelection(MoveSelectionMsg::Apply));
 
     assert_nothing_happened(&rig.app, &before, undo, "the Move Selection dialog");
-    assert_eq!(logged(needle), logged_before + 1);
+    assert_eq!(logged(since, needle), 1);
 }
 
 #[test]
@@ -331,9 +352,11 @@ fn the_ghost_names_each_kind_of_hold_in_its_own_words() {
     assert_eq!(held, ["RHOLD1716W (a wire attached to it is locked)"]);
 
     let _ = diagnostics::init_logging();
+    let since = log_mark();
     diagnostics::log_locked_holds(&held);
     assert_eq!(
         logged(
+            since,
             "Will not move when dropped: RHOLD1716W (a wire attached to it is locked); \
              unlock the locked object in Properties to move it"
         ),

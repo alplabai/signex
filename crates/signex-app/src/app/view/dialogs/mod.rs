@@ -48,7 +48,7 @@ pub(crate) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
     left: 16.0,
 };
 /// Title text size in the modal header.
-pub(crate) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
+pub(crate) const MODAL_HEADER_TITLE_SIZE: f32 = crate::styles::TypeScale::DEFAULT.title;
 /// Close-X hit-box width — same width the chrome close uses
 /// (`view/chrome/buttons.rs::windows_button`).
 pub(crate) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;

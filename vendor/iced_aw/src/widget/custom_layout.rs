@@ -3,11 +3,7 @@
 use iced_core::{Length, Rectangle, Widget, widget::Meta};
 
 #[allow(unused_imports)]
-pub use iced_core::{
-    Renderer,
-    layout::Limits,
-    widget::Tree,
-};
+pub use iced_core::{Renderer, layout::Limits, widget::Tree};
 
 type LayoutFn<'a, Message, Theme, Renderer> = Box<
     dyn Fn(
@@ -39,8 +35,7 @@ impl<'b, Message, Theme, Renderer: iced_core::Renderer> CustomLayout<'b, Message
             &mut Tree,
             &Renderer,
             &Limits,
-        )
-        + 'static,
+        ) + 'static,
     ) -> Self {
         Self {
             elements,
@@ -96,8 +91,7 @@ impl<Message, Theme, Renderer: iced_core::Renderer> Widget<Message, Theme, Rende
             .iter()
             .zip(layout.iter(&tree.children))
             .for_each(|(element, (layout, state))| {
-                element
-                    .draw(state, renderer, theme, style, layout, cursor, viewport);
+                element.draw(state, renderer, theme, style, layout, cursor, viewport);
             });
     }
 

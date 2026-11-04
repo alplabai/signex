@@ -110,13 +110,13 @@ pub fn view<'a>(
         .find(|p| p.key == edit.draft.class.as_str())
         .cloned();
     let class_picker = pick_list(selected_class, class_picks, ClassPick::to_string)
-    .on_select({
-        let send = send.clone();
-        move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
-    })
-    .placeholder("Select class…")
-    .padding(6)
-    .text_size(12);
+        .on_select({
+            let send = send.clone();
+            move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
+        })
+        .placeholder("Select class…")
+        .padding(6)
+        .text_size(12);
 
     let selected_state = LIFECYCLE_OPTIONS
         .iter()

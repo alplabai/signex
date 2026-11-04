@@ -46,13 +46,13 @@ pub fn view_symbol<'a>(
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
 
     let body = column![toolbar, canvas_widget]
-        .spacing(6)
+        .spacing(SP.s)
         .width(Length::Fill)
         .height(Length::Fill);
 
     let status_line = view_symbol_status(editor, panel_ctx, display, path);
 
-    let outer = column![body, Space::new().height(4), status_line]
+    let outer = column![body, Space::new().height(SP.s), status_line]
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill);
@@ -79,7 +79,6 @@ fn view_symbol_status<'a>(
     let tokens = &panel_ctx.tokens;
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let unit = display.unit;
     let coord_text = match editor.cursor_mm {
@@ -99,22 +98,22 @@ fn view_symbol_status<'a>(
         "Grid: OFF"
     };
     let grid_toggle = button(text(grid_vis_label).size(TS.body).color(text_c))
-        .padding([SP.xs, 6.0])
+        .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
         })
-        .style(symbol_tool_button_style(false, border));
+        .style(symbol_tool_button_style(false, tokens));
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
     let grid_cycle = button(text(grid_size_label).size(TS.body).color(muted))
-        .padding([SP.xs, 6.0])
+        .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
         })
-        .style(symbol_tool_button_style(false, border));
+        .style(symbol_tool_button_style(false, tokens));
 
     // A copy of a stock symbol can be made again from the editor (#813).
     let copy_again: Element<'a, LibraryMessage> = if editor.file.copied_from.is_some() {
@@ -188,38 +187,37 @@ fn view_symbol_toolbar<'a>(
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
     let path = editor.path.clone();
 
     // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
     let btn = |label: &'static str, msg: PrimitiveEdit| {
         button(text(label).size(TS.body).color(text_c))
-            .padding([SP.s, 10.0])
+            .padding([SP.s, SP.l])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
                 msg,
             })
-            .style(symbol_tool_button_style(false, border))
+            .style(symbol_tool_button_style(false, tokens))
     };
 
     let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
     let active_part = editor.active_part;
 
     let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
-    let body_controls = body_toolbar(editor, &path, text_c, border);
+    let body_controls = body_toolbar(editor, &path, text_c, tokens);
 
     container(
         row![
             btn("Fit", PrimitiveEdit::Symbol(SymbolEditorMsg::Fit)),
             Space::new().width(Length::Fill),
             body_controls,
-            Space::new().width(12),
+            Space::new().width(SP.l),
             btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
             text(format!("Part {active_part} / {max_part}"))
                 .size(TS.body)
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
-            Space::new().width(6),
+            Space::new().width(SP.s),
             // Add-unit (+) / remove-unit (−), wired to NewPart /
             // RemovePart, which add a part and call `delete_unit`
             // (real delete, refusing to remove the only part).
@@ -228,13 +226,13 @@ fn view_symbol_toolbar<'a>(
                 "\u{2212}",
                 PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)
             ),
-            Space::new().width(8),
+            Space::new().width(SP.m),
             btn(save_label, PrimitiveEdit::Save),
         ]
-        .spacing(6)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 10])
+    .padding([SP.m, SP.l])
     .style(crate::styles::tab_bar_strip(tokens))
     .boxed()
 }
@@ -245,7 +243,7 @@ fn body_toolbar<'a>(
     editor: &SymbolDocument,
     path: &std::path::Path,
     text_c: iced::Color,
-    border: iced::Color,
+    tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     use signex_types::schematic::BodyStyle;
     let send = |msg: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
@@ -253,14 +251,14 @@ fn body_toolbar<'a>(
         msg: PrimitiveEdit::Symbol(msg),
     };
     let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
-        button(text(label).size(11).color(text_c))
-            .padding([4, 10])
+        button(text(label).size(TS.body).color(text_c))
+            .padding([SP.s, SP.m])
             .on_press(send(msg))
-            .style(symbol_tool_button_style(active, border))
+            .style(symbol_tool_button_style(active, tokens))
     };
     let view = editor.view();
     row![
-        text("Body").size(11).color(text_c),
+        text("Body").size(TS.body).color(text_c),
         button_for(
             "Normal",
             view.body == BodyStyle::Normal,
@@ -282,24 +280,36 @@ fn body_toolbar<'a>(
             SymbolEditorMsg::SelectionBodyAssigned(view.body_tag()),
         ),
     ]
-    .spacing(6)
+    .spacing(SP.s)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
 
 fn symbol_tool_button_style(
     active: bool,
-    border: iced::Color,
-) -> impl Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style {
-    move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(if active {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+    tokens: &signex_types::theme::ThemeTokens,
+) -> impl Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style + use<> {
+    use crate::styles::tokens::{Overlay, overlay};
+    let resting = overlay(
+        tokens,
+        if active {
+            Overlay::Pressed
         } else {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.02)
+            Overlay::Faint
+        },
+    );
+    let hover = overlay(tokens, Overlay::Hover);
+    let pressed = overlay(tokens, Overlay::Pressed);
+    let border = theme_ext::border_color(tokens);
+    move |_: &Theme, status| iced::widget::button::Style {
+        background: Some(iced::Background::Color(match status {
+            iced::widget::button::Status::Hovered => hover,
+            iced::widget::button::Status::Pressed => pressed,
+            _ => resting,
         })),
         border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
+            width: crate::styles::HAIRLINE,
+            radius: crate::styles::RADIUS.into(),
             color: border,
             ..Border::default()
         },

@@ -1,218 +1,206 @@
-//! Small graphical footprint preview: pads, courtyard, silkscreen and fab
-//! outlines of a `.snxfpt`, fitted to the box. View-only.
+//! Footprint preview: the footprint editor's own rendering (backdrop, grid,
+//! origin, silk, courtyard, pads with holes) over a read-only
+//! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
+//! first show. Shared by the Components panel and the Component Preview
+//! dialog. Left-drag pans; Ctrl+wheel zooms (a plain wheel scrolls the
+//! panel around it).
 
-use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
-use iced::{Color, Point, Radians, Rectangle, Renderer, Size, Theme, Vector, mouse};
-use signex_library::primitive::{Footprint, FpGraphic, FpGraphicKind, PadShape};
+use iced::widget::canvas::{self, Action, Cache, Geometry};
+use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
 
-/// Share of the box the drawing fills, so pads keep a margin.
-const FILL: f64 = 0.88;
-/// Pads thinner than this many pixels get no number.
-const MIN_LABELLED_PAD: f32 = 9.0;
-/// Stroke width of outlines without their own width.
-const HAIRLINE: f32 = 1.0;
+use crate::canvas::Camera;
+use crate::library::editor::footprint::canvas::{
+    BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
+    draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk,
+};
+use crate::library::editor::footprint::state::SnapOptions;
 
-pub struct FootprintPreview {
-    footprint: Footprint,
-    pad: Color,
-    silk: Color,
-    outline: Color,
-    text: Color,
+/// Lowest zoom of the preview, px per mm: low enough to fit a large part
+/// into the small details box.
+const MIN_PREVIEW_SCALE: f32 = 0.5;
+
+pub struct FootprintPreview<'a> {
+    model: &'a PreviewFootprint,
+    /// Per-wheel-notch zoom factor.
+    zoom_step: f32,
 }
 
-impl FootprintPreview {
-    pub fn new(footprint: Footprint, pad: Color, silk: Color, outline: Color, text: Color) -> Self {
+impl<'a> FootprintPreview<'a> {
+    pub fn new(model: &'a PreviewFootprint) -> Self {
         Self {
-            footprint,
-            pad,
-            silk,
-            outline,
-            text,
+            model,
+            zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
         }
-    }
-
-    /// Footprint-local bounding box `(min, max)` in mm of everything drawn.
-    fn bounds(&self) -> Option<([f64; 2], [f64; 2])> {
-        let fp = &self.footprint;
-        let mut points: Vec<[f64; 2]> = Vec::new();
-        for pad in &fp.pads {
-            let r = pad.size[0].max(pad.size[1]) / 2.0;
-            points.push([pad.position[0] - r, pad.position[1] - r]);
-            points.push([pad.position[0] + r, pad.position[1] + r]);
-        }
-        points.extend(fp.courtyard.points.iter().copied());
-        for g in fp.silk_f.iter().chain(&fp.fab_f) {
-            graphic_points(g, &mut points);
-        }
-        let first = *points.first()?;
-        Some(points.iter().fold((first, first), |(lo, hi), p| {
-            (
-                [lo[0].min(p[0]), lo[1].min(p[1])],
-                [hi[0].max(p[0]), hi[1].max(p[1])],
-            )
-        }))
     }
 }
 
-fn graphic_points(g: &FpGraphic, out: &mut Vec<[f64; 2]>) {
-    match &g.kind {
-        FpGraphicKind::Line { from, to } | FpGraphicKind::Rectangle { from, to } => {
-            out.extend([*from, *to]);
-        }
-        FpGraphicKind::Circle { center, radius } | FpGraphicKind::Arc { center, radius, .. } => {
-            out.push([center[0] - radius, center[1] - radius]);
-            out.push([center[0] + radius, center[1] + radius]);
-        }
-        FpGraphicKind::Polygon { vertices } => out.extend(vertices.iter().copied()),
-        FpGraphicKind::Text { position, .. } => out.push(*position),
+/// The preview's own camera and geometry cache (widget state).
+#[derive(Default)]
+pub struct PreviewState {
+    camera: FootprintCanvasState,
+    /// The footprint the camera was fitted for.
+    fitted_for: Option<(uuid::Uuid, i64)>,
+    /// Last cursor position while a drag-pan is running.
+    pan_from: Option<Point>,
+    /// Ctrl state from the last modifiers event; the wheel zooms with it.
+    ctrl_held: bool,
+    cache: Cache,
+}
+
+impl PreviewState {
+    /// Current view scale, px per mm.
+    #[cfg(test)]
+    pub fn scale(&self) -> f32 {
+        self.camera.scale
+    }
+
+    /// Current view offset, px.
+    #[cfg(test)]
+    pub fn offset(&self) -> Point {
+        self.camera.offset
+    }
+
+    fn is_fitted_for(&self, model: &PreviewFootprint) -> bool {
+        self.fitted_for == Some(model.key()) && self.camera.did_initial_fit
     }
 }
 
-impl<M> canvas::Program<M> for FootprintPreview {
-    type State = ();
+/// A camera fitted to the model's bbox in `viewport`, or the origin
+/// centred for an empty footprint.
+pub(crate) fn fitted_camera(model: &PreviewFootprint, viewport: Rectangle) -> FootprintCanvasState {
+    let mut camera = FootprintCanvasState::default();
+    match model.bbox_mm() {
+        Some(bbox) => camera.fit_to_bounds_min(bbox, viewport, MIN_PREVIEW_SCALE),
+        None => camera.offset = Point::new(viewport.width / 2.0, viewport.height / 2.0),
+    }
+    camera.did_initial_fit = true;
+    camera
+}
+
+impl<M> canvas::Program<M> for FootprintPreview<'_> {
+    type State = PreviewState;
+
+    fn update(
+        &self,
+        state: &mut PreviewState,
+        event: &iced::Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<Action<M>> {
+        let size_ok = bounds.width > 0.0 && bounds.height > 0.0;
+        if !state.is_fitted_for(self.model) && size_ok {
+            state.camera = fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()));
+            state.fitted_for = Some(self.model.key());
+            state.pan_from = None;
+            state.cache.clear();
+        }
+        if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) = event {
+            state.ctrl_held = mods.control();
+            return None;
+        }
+        let iced::Event::Mouse(event) = event else {
+            return None;
+        };
+        match event {
+            mouse::Event::WheelScrolled { delta } => {
+                // Only Ctrl+wheel zooms; a plain wheel scrolls the panel.
+                if !state.ctrl_held {
+                    return None;
+                }
+                let anchor = cursor.position_in(bounds)?;
+                let lines = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => *y,
+                    mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
+                };
+                let factor = Camera::zoom_factor_for_scroll(self.zoom_step, lines);
+                if lines == 0.0 || !factor.is_finite() || factor == 1.0 {
+                    return None;
+                }
+                state.camera.zoom_about(anchor, factor, MIN_PREVIEW_SCALE);
+                state.cache.clear();
+                Some(Action::request_redraw().and_capture())
+            }
+            mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                cursor.position_in(bounds)?;
+                state.pan_from = cursor.position();
+                Some(Action::capture())
+            }
+            mouse::Event::CursorMoved { position } => {
+                let last = state.pan_from?;
+                state
+                    .camera
+                    .pan_by(Vector::new(position.x - last.x, position.y - last.y));
+                state.pan_from = Some(*position);
+                state.cache.clear();
+                Some(Action::request_redraw().and_capture())
+            }
+            mouse::Event::ButtonReleased(_) => {
+                state.pan_from.take()?;
+                Some(Action::capture())
+            }
+            mouse::Event::CursorLeft => {
+                state.pan_from = None;
+                None
+            }
+            _ => None,
+        }
+    }
 
     fn draw(
         &self,
-        _state: &(),
+        state: &PreviewState,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let Some((lo, hi)) = self.bounds() else {
-            return vec![frame.into_geometry()];
+        // Until `update` has fitted this footprint, draw the fitted view
+        // without caching it against the stale camera.
+        let fitted = state.is_fitted_for(self.model);
+        if !fitted {
+            state.cache.clear();
+        }
+        let camera = if fitted {
+            FootprintCanvasState::with_view(state.camera.scale, state.camera.offset)
+        } else {
+            fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()))
         };
-        let span = [(hi[0] - lo[0]).max(1e-6), (hi[1] - lo[1]).max(1e-6)];
-        let scale =
-            (f64::from(bounds.width) / span[0]).min(f64::from(bounds.height) / span[1]) * FILL;
-        let mid = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
-        let centre = Point::new(bounds.width / 2.0, bounds.height / 2.0);
-        // Footprint space is y-down, like the canvas.
-        let to_px = |p: [f64; 2]| {
-            Point::new(
-                centre.x + ((p[0] - mid[0]) * scale) as f32,
-                centre.y + ((p[1] - mid[1]) * scale) as f32,
-            )
-        };
-        let px = |mm: f64| (mm * scale) as f32;
+        let snap = SnapOptions::default();
+        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
+            let area = Rectangle::new(Point::ORIGIN, bounds.size());
+            let look = BackdropLook {
+                bg: BACKDROP_BG,
+                grid: BACKDROP_GRID,
+                sketch: false,
+                snap: &snap,
+            };
+            draw_backdrop(frame, &camera, area, look);
+            draw_origin(frame, &camera, false);
+            let layers = self.model.layer_input();
+            draw_fab(frame, &camera, self.model.fab_f());
+            draw_silk(frame, &camera, &layers);
+            draw_courtyard(frame, &camera, &layers);
+            draw_pads(frame, &camera, &layers);
+        });
+        vec![geometry]
+    }
 
-        let courtyard = &self.footprint.courtyard.points;
-        if courtyard.len() > 1 {
-            let path = Path::new(|b| {
-                b.move_to(to_px(courtyard[0]));
-                for p in &courtyard[1..] {
-                    b.line_to(to_px(*p));
-                }
-                b.close();
-            });
-            frame.stroke(
-                &path,
-                Stroke::default()
-                    .with_color(self.outline)
-                    .with_width(HAIRLINE),
-            );
+    fn mouse_interaction(
+        &self,
+        state: &PreviewState,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if state.pan_from.is_some() {
+            mouse::Interaction::Grabbing
+        } else if cursor.is_over(bounds) {
+            mouse::Interaction::Grab
+        } else {
+            mouse::Interaction::None
         }
-        for (group, color) in [
-            (&self.footprint.fab_f, self.outline),
-            (&self.footprint.silk_f, self.silk),
-        ] {
-            for g in group {
-                draw_graphic(&mut frame, g, color, &to_px, &px);
-            }
-        }
-        for pad in &self.footprint.pads {
-            let size = Size::new(px(pad.size[0]), px(pad.size[1]));
-            let at = to_px(pad.position);
-            let colour = self.pad;
-            frame.with_save(|f| {
-                f.translate(Vector::new(at.x, at.y));
-                f.rotate(Radians(pad.rotation.to_radians() as f32));
-                let top_left = Point::new(-size.width / 2.0, -size.height / 2.0);
-                let short = size.width.min(size.height);
-                let path = match &pad.shape {
-                    PadShape::Round => Path::circle(Point::ORIGIN, short / 2.0),
-                    PadShape::Oval => Path::rounded_rectangle(top_left, size, (short / 2.0).into()),
-                    PadShape::RoundRect { radius_ratio } => Path::rounded_rectangle(
-                        top_left,
-                        size,
-                        (short * *radius_ratio as f32).into(),
-                    ),
-                    _ => Path::rectangle(top_left, size),
-                };
-                f.fill(&path, colour);
-            });
-            if size.width.min(size.height) >= MIN_LABELLED_PAD {
-                frame.fill_text(canvas::Text {
-                    content: pad.number.clone(),
-                    position: at,
-                    color: self.text,
-                    size: (size.height.min(size.width) * 0.6).into(),
-                    align_x: iced::alignment::Horizontal::Center.into(),
-                    align_y: iced::alignment::Vertical::Center,
-                    ..canvas::Text::default()
-                });
-            }
-        }
-        vec![frame.into_geometry()]
     }
 }
 
-fn draw_graphic(
-    frame: &mut Frame,
-    g: &FpGraphic,
-    color: Color,
-    to_px: &dyn Fn([f64; 2]) -> Point,
-    px: &dyn Fn(f64) -> f32,
-) {
-    let width = if g.stroke_width > 0.0 {
-        px(g.stroke_width).max(HAIRLINE)
-    } else {
-        HAIRLINE
-    };
-    let stroke = || Stroke::default().with_color(color).with_width(width);
-    match &g.kind {
-        FpGraphicKind::Line { from, to } => {
-            frame.stroke(&Path::line(to_px(*from), to_px(*to)), stroke());
-        }
-        FpGraphicKind::Rectangle { from, to } => {
-            let (a, b) = (to_px(*from), to_px(*to));
-            let path = Path::rectangle(
-                Point::new(a.x.min(b.x), a.y.min(b.y)),
-                Size::new((a.x - b.x).abs(), (a.y - b.y).abs()),
-            );
-            frame.stroke(&path, stroke());
-        }
-        FpGraphicKind::Circle { center, radius } => {
-            frame.stroke(&Path::circle(to_px(*center), px(*radius)), stroke());
-        }
-        FpGraphicKind::Arc {
-            center,
-            radius,
-            start_deg,
-            end_deg,
-        } => {
-            let sweep = FpGraphicKind::arc_sweep_deg(*start_deg, *end_deg);
-            let path = Path::new(|b| {
-                b.arc(canvas::path::Arc {
-                    center: to_px(*center),
-                    radius: px(*radius),
-                    start_angle: Radians(start_deg.to_radians() as f32),
-                    end_angle: Radians((start_deg + sweep).to_radians() as f32),
-                });
-            });
-            frame.stroke(&path, stroke());
-        }
-        FpGraphicKind::Polygon { vertices } if vertices.len() > 1 => {
-            let path = Path::new(|b| {
-                b.move_to(to_px(vertices[0]));
-                for v in &vertices[1..] {
-                    b.line_to(to_px(*v));
-                }
-                b.close();
-            });
-            frame.stroke(&path, stroke());
-        }
-        FpGraphicKind::Polygon { .. } | FpGraphicKind::Text { .. } => {}
-    }
-}
+#[cfg(test)]
+#[path = "footprint_canvas_tests.rs"]
+mod tests;

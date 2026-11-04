@@ -5,8 +5,8 @@
 //! ([`SiPrefix::all_for`]) and is hidden for units that take none
 //! (`%`, `ppm/C`, `V/us`, `AWG`).
 
-use iced::{Element, Widget as _};
 use iced::widget::pick_list;
+use iced::{Element, Widget as _};
 use signex_types::quantity::{SiPrefix, Unit};
 
 /// One picker entry. Shown with the unit glyph (`kΩ`, `µF`) so the picker

@@ -1001,6 +1001,7 @@ fn uncovered_pdf_characters_are_named_in_the_export_warning() {
 
 mod case_probe;
 mod class_picker;
+mod class_shared;
 mod class_styles;
 mod protel_hierarchy;
 

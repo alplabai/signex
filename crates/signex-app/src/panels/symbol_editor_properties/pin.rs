@@ -44,11 +44,13 @@ fn view_pin_symbol_picker<'a>(
         options.to_vec(),
         |(label, _): &(&'static str, K)| label.to_string(),
     )
-    .on_select(move |(_, value): (&'static str, K)| PanelMsg::SymEditorSetPinSymbol {
-        pin_idx,
-        slot,
-        value,
-    })
+    .on_select(
+        move |(_, value): (&'static str, K)| PanelMsg::SymEditorSetPinSymbol {
+            pin_idx,
+            slot,
+            value,
+        },
+    )
     .padding([SP.xs, SP.s])
     .text_size(10);
     container(
@@ -384,8 +386,7 @@ pub(super) fn view_pin_selection<'a>(
 
     // ── IEEE Symbols (Inside / Inside Edge / Outside Edge / Outside) ──
     col = col.push(super::super::thin_sep(border_c));
-    col =
-        col.push(
+    col = col.push(
         container(text("Symbols").size(TS.caption).color(primary))
             .padding([SP.s, SP.m])
             .boxed(),

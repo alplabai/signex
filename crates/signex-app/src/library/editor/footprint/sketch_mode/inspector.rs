@@ -63,16 +63,16 @@ pub fn view<'a>(
     container(
         row![
             container(dof)
-                .padding([6, 10])
+                .padding([SP.m, SP.l])
                 .width(Length::FillPortion(1)),
             container(params)
-                .padding([6, 10])
+                .padding([SP.m, SP.l])
                 .width(Length::FillPortion(2)),
             container(role)
-                .padding([6, 10])
+                .padding([SP.m, SP.l])
                 .width(Length::FillPortion(2)),
             container(warnings)
-                .padding([6, 10])
+                .padding([SP.m, SP.l])
                 .width(Length::FillPortion(2)),
         ]
         .spacing(SP.m),
@@ -173,7 +173,7 @@ fn view_params<'a>(
                             ),
                         }),
                 ]
-                .spacing(6)
+                .spacing(SP.m)
                 .align_y(iced::Alignment::Center);
                 col = col.push(row.boxed());
             }
@@ -200,12 +200,12 @@ fn view_warnings<'a>(
         col = col.push(text("(none)").size(TS.caption).color(muted).boxed());
     } else {
         for w in editor.state.solve_warnings.iter().take(8) {
-            col = col.push(text(w).size(9.0).color(muted).boxed());
+            col = col.push(text(w).size(TS.caption).color(muted).boxed());
         }
         if editor.state.solve_warnings.len() > 8 {
             col = col.push(
                 text(format!("… +{} more", editor.state.solve_warnings.len() - 8))
-                    .size(9.0)
+                    .size(TS.caption)
                     .color(muted)
                     .boxed(),
             );
@@ -278,9 +278,9 @@ fn view_role<'a>(
             path: path.clone(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetRole { id, role: new_role }),
         })
-    .text_size(11.0)
-    .padding([3.0, SP.m])
-    .width(Length::Fill);
+        .text_size(TS.body)
+        .padding([SP.s, SP.m])
+        .width(Length::Fill);
 
     col = col.push(dropdown.boxed());
 
@@ -291,7 +291,7 @@ fn view_role<'a>(
     if !is_point {
         col = col.push(
             text("Pad role applies to Points only")
-                .size(9.0)
+                .size(TS.caption)
                 .color(muted)
                 .boxed(),
         );

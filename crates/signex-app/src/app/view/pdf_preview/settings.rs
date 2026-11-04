@@ -175,20 +175,17 @@ impl Signex {
         let mut variant_options: Vec<String> = vec!["Base".to_string()];
         variant_options.extend(preview.variants.clone());
         variant_options.dedup();
-        let variant_picker = iced::widget::pick_list(
-            Some(variant_label),
-            variant_options,
-            |s: &String| s.clone(),
-        )
-        .on_select(|s: String| {
-            if s.eq_ignore_ascii_case("Base") {
-                Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
-            } else {
-                Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
-            }
-        })
-        .text_size(11)
-        .width(220);
+        let variant_picker =
+            iced::widget::pick_list(Some(variant_label), variant_options, |s: &String| s.clone())
+                .on_select(|s: String| {
+                    if s.eq_ignore_ascii_case("Base") {
+                        Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
+                    } else {
+                        Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
+                    }
+                })
+                .text_size(11)
+                .width(220);
 
         let labelled_check = |label: &'static str,
                               value: bool,

@@ -14,8 +14,7 @@ use iced_core::{
     mouse::{self, Cursor},
     overlay, renderer,
     widget::{
-        Operation,
-        Meta,
+        Meta, Operation,
         tree::{self, Tag, Tree},
     },
 };
@@ -218,7 +217,8 @@ where
     }
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
-        self.underlay.layout(&mut tree.children[0], renderer, limits);
+        self.underlay
+            .layout(&mut tree.children[0], renderer, limits);
 
         tree.size = tree.children[0].size;
     }
@@ -285,8 +285,13 @@ where
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        self.underlay
-            .operate(&mut state.children[0], layout, viewport, renderer, operation);
+        self.underlay.operate(
+            &mut state.children[0],
+            layout,
+            viewport,
+            renderer,
+            operation,
+        );
     }
 
     fn overlay<'b>(

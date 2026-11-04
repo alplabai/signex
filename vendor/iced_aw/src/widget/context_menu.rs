@@ -193,7 +193,13 @@ where
             let mut content = (self.overlay)();
             state.children[1].diff(&mut content);
 
-            content.operate(&mut state.children[1], layout, viewport, renderer, operation);
+            content.operate(
+                &mut state.children[1],
+                layout,
+                viewport,
+                renderer,
+                operation,
+            );
         } else {
             self.underlay.operate(
                 &mut state.children[0],
@@ -245,13 +251,8 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.underlay.mouse_interaction(
-            &state.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
+        self.underlay
+            .mouse_interaction(&state.children[0], layout, cursor, viewport, renderer)
     }
 
     fn overlay<'b>(

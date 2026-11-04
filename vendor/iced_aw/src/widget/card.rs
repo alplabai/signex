@@ -450,11 +450,13 @@ where
         let children: Vec<_> = layout.iter(&state.children).collect();
 
         let is_mouse_over_close = self.close_button.is_some()
-            && children.get(close_button_tree_index).is_some_and(|(layout, _)| {
-                layout
-                    .bounds()
-                    .contains(cursor.position().unwrap_or_default())
-            });
+            && children
+                .get(close_button_tree_index)
+                .is_some_and(|(layout, _)| {
+                    layout
+                        .bounds()
+                        .contains(cursor.position().unwrap_or_default())
+                });
 
         let mouse_interaction = if is_mouse_over_close {
             mouse::Interaction::Pointer
@@ -466,20 +468,14 @@ where
         let (body_layout, body_tree) = &children[1];
 
         mouse_interaction
-            .max(self.head.mouse_interaction(
-                head_tree,
-                *head_layout,
-                cursor,
-                viewport,
-                renderer,
-            ))
-            .max(self.body.mouse_interaction(
-                body_tree,
-                *body_layout,
-                cursor,
-                viewport,
-                renderer,
-            ))
+            .max(
+                self.head
+                    .mouse_interaction(head_tree, *head_layout, cursor, viewport, renderer),
+            )
+            .max(
+                self.body
+                    .mouse_interaction(body_tree, *body_layout, cursor, viewport, renderer),
+            )
             .max(
                 self.foot
                     .as_ref()

@@ -136,6 +136,11 @@ pub struct BoardUnknown {
     /// writer would drop content this build has no field for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub newer_minor_source: Option<String>,
+    /// What loading changed to make the board usable (a repeated uuid
+    /// re-minted or dropped, #1886). Never written. The document that opens
+    /// the board takes it once ([`PcbBoard::take_load_repairs`]).
+    #[serde(skip)]
+    pub load_repairs: Vec<super::SheetLoadRepair>,
 }
 
 impl BoardUnknown {

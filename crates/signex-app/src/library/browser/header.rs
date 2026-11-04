@@ -37,10 +37,12 @@ pub(super) fn view_header<'a>(
         LifecycleFilter::ALL,
         |f: &LifecycleFilter| f.to_string(),
     )
-    .on_select(move |f: LifecycleFilter| LibraryMessage::BrowserSetLifecycleFilter {
-        library_path: library_for_lc.clone(),
-        filter: f,
-    })
+    .on_select(
+        move |f: LifecycleFilter| LibraryMessage::BrowserSetLifecycleFilter {
+            library_path: library_for_lc.clone(),
+            filter: f,
+        },
+    )
     .placeholder("Lifecycle")
     .padding(SP.s)
     .text_size(BROWSER_TEXT_SIZE);

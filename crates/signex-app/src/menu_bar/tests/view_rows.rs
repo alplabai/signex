@@ -93,8 +93,8 @@ fn cycle_grid_size_steps_the_snap_grid_and_the_linked_visible_grid() {
 }
 
 #[test]
-fn cycle_grid_size_is_greyed_in_a_symbol_editor() {
-    assert!(!row_is_live(&symbol_editor_app(), "View/Cycle Grid Size"));
+fn cycle_grid_size_runs_next_grid_so_it_follows_that_commands_gate() {
+    assert!(row_is_live(&symbol_editor_app(), "View/Cycle Grid Size"));
     assert!(row_is_live(&one_symbol_selected(), "View/Cycle Grid Size"));
 }
 

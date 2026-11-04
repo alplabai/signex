@@ -110,10 +110,7 @@ where
             .style(move |_theme: &iced::Theme| container::Style {
                 background: bg,
                 text_color: Some(primary),
-                border: Border::default()
-                    .width(1.0)
-                    .rounded(3.0)
-                    .color(border),
+                border: Border::default().width(1.0).rounded(3.0).color(border),
                 ..container::Style::default()
             });
         col = col.push(card.boxed());
@@ -135,10 +132,7 @@ where
         .style(move |_theme: &iced::Theme| container::Style {
             background: bg,
             text_color: Some(muted),
-            border: Border::default()
-                .width(1.0)
-                .rounded(3.0)
-                .color(border),
+            border: Border::default().width(1.0).rounded(3.0).color(border),
             ..container::Style::default()
         })
         .boxed()

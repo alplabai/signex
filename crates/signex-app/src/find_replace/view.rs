@@ -87,8 +87,8 @@ fn build<'a>(
 
     let mut form = column![query_row, scope_row].spacing(10);
     if state.replace_mode {
-        form = form.push(
-            Widget::boxed(row![
+        form = form.push(Widget::boxed(
+            row![
                 text("Replace")
                     .size(TS.body)
                     .color(text_secondary)
@@ -100,8 +100,8 @@ fn build<'a>(
                     .width(Length::Fill),
             ]
             .align_y(iced::Alignment::Center)
-            .spacing(10)),
-        );
+            .spacing(10),
+        ));
     }
     let count = if state.replace_job.is_some() {
         "Replacing...".to_string()

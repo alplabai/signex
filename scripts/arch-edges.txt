@@ -4,6 +4,7 @@ chrome-catalog -> signex-types
 chrome-catalog -> signex-widgets
 signex-3d-model-importer -> signex-sketch
 signex-3d-model-importer -> signex-types
+signex-app -> iced_aw
 signex-app -> signex-bake
 signex-app -> signex-engine
 signex-app -> signex-erc
@@ -38,4 +39,5 @@ signex-renderer -> signex-3d-model-importer
 signex-renderer -> signex-gfx
 signex-renderer -> signex-types
 signex-sketch -> signex-types
+signex-widgets -> iced_aw
 signex-widgets -> signex-types

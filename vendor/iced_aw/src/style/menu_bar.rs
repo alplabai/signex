@@ -126,10 +126,7 @@ mod tests {
         assert_eq!(style.menu_shadow.offset, Vector::ZERO);
 
         // Verify shadow color has transparency
-        if let Background::Color(color) = style.bar_background {
-            // Just verify it exists
-            let _ = color;
-        }
+        assert!(matches!(style.bar_background, Background::Color(_)));
     }
 
     #[test]

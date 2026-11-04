@@ -1,6 +1,8 @@
 //! Dock rendering: region tab strips, collapsed rails, and floating panels.
 
-use iced::widget::{Column, Space, Widget, button, canvas, column, container, mouse_area, row, svg, text};
+use iced::widget::{
+    Column, Space, Widget, button, canvas, column, container, mouse_area, row, svg, text,
+};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
 use super::types::*;
@@ -54,12 +56,14 @@ impl DockArea {
             let arrow = button(text("<").size(TS.caption))
                 .padding([SP.s, SP.s])
                 .style(button::text);
-            tab_row = tab_row.push(if can_scroll_left {
-                arrow.on_press(DockMessage::TabScroll(position, -1))
-            } else {
-                arrow
-            }
-            .boxed());
+            tab_row = tab_row.push(
+                if can_scroll_left {
+                    arrow.on_press(DockMessage::TabScroll(position, -1))
+                } else {
+                    arrow
+                }
+                .boxed(),
+            );
         }
 
         // Last visible panel index drives the `is_last` flag so
@@ -134,12 +138,15 @@ impl DockArea {
                     .wrapping(iced::widget::text::Wrapping::None),
             )
             .padding([SP.s, 10.0]);
-            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(inner.boxed(), pill_style))
-                .on_enter(DockMessage::TabHoverEnter(position, i))
-                .on_exit(DockMessage::TabHoverExit(position, i))
-                .on_press(DockMessage::TabDragStart(position, i))
-                .on_release(DockMessage::TabClick(position, i))
-                .on_right_press(DockMessage::TabContextMenuRequested(position, i));
+            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(
+                inner.boxed(),
+                pill_style,
+            ))
+            .on_enter(DockMessage::TabHoverEnter(position, i))
+            .on_exit(DockMessage::TabHoverExit(position, i))
+            .on_press(DockMessage::TabDragStart(position, i))
+            .on_release(DockMessage::TabClick(position, i))
+            .on_right_press(DockMessage::TabContextMenuRequested(position, i));
 
             tab_row = tab_row.push(tab.boxed());
         }
@@ -149,12 +156,14 @@ impl DockArea {
             let arrow = button(text(">").size(TS.caption))
                 .padding([SP.s, SP.s])
                 .style(button::text);
-            tab_row = tab_row.push(if can_scroll_right {
-                arrow.on_press(DockMessage::TabScroll(position, 1))
-            } else {
-                arrow
-            }
-            .boxed());
+            tab_row = tab_row.push(
+                if can_scroll_right {
+                    arrow.on_press(DockMessage::TabScroll(position, 1))
+                } else {
+                    arrow
+                }
+                .boxed(),
+            );
         }
 
         // Collapse button (SVG icon)
@@ -388,16 +397,12 @@ impl DockArea {
             .on_release(DockMessage::FloatingDragEnd(idx));
 
         let content: Element<'a, DockMessage> = match kind {
-            PanelKind::Library => {
-                crate::library::panel::view(library, &ctx.tokens)
-                    .map(DockMessage::Library)
-                    .boxed()
-            }
-            PanelKind::Components => {
-                panels::components_panel::view(library, ctx, &ctx.tokens)
-                    .map(DockMessage::Library)
-                    .boxed()
-            }
+            PanelKind::Library => crate::library::panel::view(library, &ctx.tokens)
+                .map(DockMessage::Library)
+                .boxed(),
+            PanelKind::Components => panels::components_panel::view(library, ctx, &ctx.tokens)
+                .map(DockMessage::Library)
+                .boxed(),
             _ => panels::view_panel(kind, ctx)
                 .map(DockMessage::Panel)
                 .boxed(),
@@ -420,7 +425,7 @@ impl DockArea {
 }
 
 /// Font size for collapsed rail labels — every other dimension derives from this.
-const RAIL_FONT_SIZE: f32 = 12.0;
+const RAIL_FONT_SIZE: f32 = TS.label;
 /// Canvas width = text line-height after 90° rotation ≈ 1.5 × font size.
 const RAIL_CANVAS_W: f32 = RAIL_FONT_SIZE * 1.5;
 

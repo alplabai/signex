@@ -211,7 +211,6 @@ where
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         self.underlay
-            
             .layout(&mut tree.children[0], renderer, limits);
 
         tree.size = tree.children[0].size;
@@ -246,13 +245,8 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.underlay.mouse_interaction(
-            &state.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
+        self.underlay
+            .mouse_interaction(&state.children[0], layout, cursor, viewport, renderer)
     }
 
     fn operate(

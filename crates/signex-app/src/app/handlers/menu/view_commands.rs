@@ -6,8 +6,8 @@ use crate::panels::PanelMsg;
 use super::super::super::*;
 
 impl Signex {
-    /// Step the grid to the next preset — shared by View > Cycle Grid Size,
-    /// `UiMsg::GridCycle` and the `next_grid` command (#791).
+    /// Step the grid to the next preset — shared by `UiMsg::GridCycle` and the
+    /// `next_grid` command, which View > Cycle Grid Size runs (#791).
     ///
     /// Same preset list as the grid pickers. The snap grid (the size the
     /// status bar shows) steps; the visible grid follows it unless the user
@@ -42,7 +42,6 @@ impl Signex {
 
     pub(super) fn handle_menu_view_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
         match msg {
-            MenuMessage::CycleGrid => Some(self.cycle_grid_size(true)),
             MenuMessage::ZoomIn | MenuMessage::ZoomOut => {
                 let zoom_in = matches!(msg, MenuMessage::ZoomIn);
                 let step = self.ui_state.effective_zoom_step();

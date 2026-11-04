@@ -227,12 +227,7 @@ pub(crate) fn shaped_buffer(
 ) -> cryoglyph::Buffer {
     let mut buffer = cryoglyph::Buffer::new(font_system, metrics);
     buffer.set_size(Some(viewport_px[0]), Some(viewport_px[1]));
-    buffer.set_text(
-        &item.content,
-        attrs,
-        cryoglyph::Shaping::Advanced,
-        None,
-    );
+    buffer.set_text(&item.content, attrs, cryoglyph::Shaping::Advanced, None);
     buffer.shape_until_scroll(font_system, false);
 
     // Alignment is a no-op for a lone line or when every line is equally wide.

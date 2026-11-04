@@ -50,9 +50,7 @@ const RGBA_STEP: i16 = 1;
 pub struct ColorPickerOverlay<'a, 'b, Message, Theme>
 where
     Message: Clone,
-    Theme: style::color_picker::Catalog
-        + iced_widget::button::Catalog
-        + iced_widget::text::Catalog,
+    Theme: style::color_picker::Catalog + iced_widget::button::Catalog + iced_widget::text::Catalog,
     'b: 'a,
 {
     /// The state of the [`ColorPickerOverlay`].
@@ -1003,10 +1001,8 @@ where
     // Buttons
     let buttons_y = block2_origin.y + rgba_size.height + hex_height + PADDING.top + 2.0 * SPACING.0;
 
-    let cancel = Layout::new(cancel_size).move_to(Point::new(
-        block2_origin.x + PADDING.left,
-        buttons_y,
-    ));
+    let cancel =
+        Layout::new(cancel_size).move_to(Point::new(block2_origin.x + PADDING.left, buttons_y));
     let submit = Layout::new(submit_size).move_to(Point::new(
         block2_origin.x + rgba_size.width - submit_size.width + PADDING.left,
         buttons_y,
@@ -1282,67 +1278,66 @@ fn hsv_color<Message, Theme>(
         hue_style_state = hue_style_state.max(StyleState::Hovered);
     }
 
-    let geometry =
-        color_picker
-            .state
-            .hue_canvas_cache
-            .draw(renderer, hue_bounds.size(), |frame| {
-                let column_count = frame.width() as u16;
+    let geometry = color_picker
+        .state
+        .hue_canvas_cache
+        .draw(renderer, hue_bounds.size(), |frame| {
+            let column_count = frame.width() as u16;
 
-                for column in 0..column_count {
-                    let hue = (f32::from(column) * 360.0 / frame.width()) as u16;
+            for column in 0..column_count {
+                let hue = (f32::from(column) * 360.0 / frame.width()) as u16;
 
-                    let hsv_color = Hsv::from_hsv(hue, 1.0, 1.0);
-                    let stroke = Stroke {
-                        style: canvas::Style::Solid(hsv_color.into()),
-                        width: 1.0,
-                        line_cap: LineCap::Round,
-                        ..Stroke::default()
-                    };
-
-                    frame.stroke(
-                        &Path::line(
-                            Point::new(f32::from(column), 0.0),
-                            Point::new(f32::from(column), frame.height()),
-                        ),
-                        stroke,
-                    );
-                }
-
+                let hsv_color = Hsv::from_hsv(hue, 1.0, 1.0);
                 let stroke = Stroke {
-                    style: canvas::Style::Solid(Color::BLACK),
-                    width: 3.0,
-                    line_cap: LineCap::Round,
-                    ..Stroke::default()
-                };
-
-                let column = f32::from(hsv_color.hue) * frame.width() / 360.0;
-
-                frame.stroke(
-                    &Path::line(Point::new(column, 0.0), Point::new(column, frame.height())),
-                    stroke,
-                );
-
-                let stroke = Stroke {
-                    style: canvas::Style::Solid(
-                        style_sheet
-                            .get(&hue_style_state)
-                            .expect("Style Sheet not found.")
-                            .bar_border_color,
-                    ),
-                    width: 2.0,
+                    style: canvas::Style::Solid(hsv_color.into()),
+                    width: 1.0,
                     line_cap: LineCap::Round,
                     ..Stroke::default()
                 };
 
                 frame.stroke(
-                    &Path::rectangle(
-                        Point::new(0.0, 0.0),
-                        Size::new(frame.size().width, frame.size().height),
+                    &Path::line(
+                        Point::new(f32::from(column), 0.0),
+                        Point::new(f32::from(column), frame.height()),
                     ),
                     stroke,
                 );
-            });
+            }
+
+            let stroke = Stroke {
+                style: canvas::Style::Solid(Color::BLACK),
+                width: 3.0,
+                line_cap: LineCap::Round,
+                ..Stroke::default()
+            };
+
+            let column = f32::from(hsv_color.hue) * frame.width() / 360.0;
+
+            frame.stroke(
+                &Path::line(Point::new(column, 0.0), Point::new(column, frame.height())),
+                stroke,
+            );
+
+            let stroke = Stroke {
+                style: canvas::Style::Solid(
+                    style_sheet
+                        .get(&hue_style_state)
+                        .expect("Style Sheet not found.")
+                        .bar_border_color,
+                ),
+                width: 2.0,
+                line_cap: LineCap::Round,
+                ..Stroke::default()
+            };
+
+            frame.stroke(
+                &Path::rectangle(
+                    Point::new(0.0, 0.0),
+                    Size::new(frame.size().width, frame.size().height),
+                ),
+                stroke,
+            );
+        });
 
     let translation = Vector::new(hue_bounds.x, hue_bounds.y);
     renderer.with_translation(translation, |renderer| {
@@ -1386,10 +1381,7 @@ fn rgba_color(
                 ellipsis: text::Ellipsis::None,
                 hint_factor: renderer.hint_factor(),
             },
-            Point::new(
-                label_bounds.center_x(),
-                label_bounds.center_y(),
-            ),
+            Point::new(label_bounds.center_x(), label_bounds.center_y()),
             style.text_color,
             label_bounds,
         );
@@ -1474,10 +1466,7 @@ fn rgba_color(
                 ellipsis: text::Ellipsis::None,
                 hint_factor: renderer.hint_factor(),
             },
-            Point::new(
-                value_bounds.center_x(),
-                value_bounds.center_y(),
-            ),
+            Point::new(value_bounds.center_x(), value_bounds.center_y()),
             style.text_color,
             value_bounds,
         );

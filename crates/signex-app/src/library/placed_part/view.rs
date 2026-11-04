@@ -171,17 +171,17 @@ fn flat_button<'a>(
             .boxed(),
     )
     .on_press(message)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(bg)),
-            text_color: fg,
-            border: Border {
-                width: if primary { 0.0 } else { 1.0 },
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(bg)),
+        text_color: fg,
+        border: Border {
+            width: if primary { 0.0 } else { 1.0 },
+            radius: 3.0.into(),
+            color: border,
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    })
 }
 
 /// Step two of Change Component: what the replacement does to the pins.

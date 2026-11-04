@@ -79,10 +79,10 @@ impl Signex {
             .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))
             .on_submit(create.clone())
             .padding([6, 8])
-            .size(12)
+            .size(TS.label)
             .width(Length::Fill);
         let note: Element<'_, Message> = match &confirm.error {
-            Some(error) => text(error.clone()).size(11).color(error_c).boxed(),
+            Some(error) => text(error.clone()).size(TS.body).color(error_c).boxed(),
             None => Space::new().height(0).boxed(),
         };
         let confirm_button: Element<'_, Message> = if confirm.exists {
@@ -104,13 +104,13 @@ impl Signex {
                             "Sheet '{}' has no file yet. Where should it be created?",
                             confirm.name
                         ))
-                        .size(11)
+                        .size(TS.body)
                         .color(text_muted),
                         iced::widget::tooltip(
                             text(format!("Relative to {folder}"))
-                                .size(10)
+                                .size(TS.caption)
                                 .color(text_muted),
-                            text(full_folder).size(10),
+                            text(full_folder).size(TS.caption),
                             iced::widget::tooltip::Position::Bottom,
                         ),
                         row![

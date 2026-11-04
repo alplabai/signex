@@ -209,7 +209,7 @@ impl LibraryState {
                         && state.row.footprint_ref == Some(item.reference) =>
                 {
                     if let Some(fresh) = reresolve(*result, item.kind, &item.reference) {
-                        state.footprint = fresh;
+                        state.set_footprint(fresh);
                     }
                 }
                 _ => {}

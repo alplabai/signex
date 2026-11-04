@@ -23,7 +23,13 @@ pub(in crate::format) mod kind {
     pub const BUS_ENTRY: &str = "bus entry";
     pub const DRAWING: &str = "drawing";
     pub const NO_ERC_DIRECTIVE: &str = "no-ERC directive";
-    /// The sheet's own id, which no object may take.
+    pub const FOOTPRINT: &str = "footprint";
+    pub const PAD: &str = "pad";
+    pub const TRACK: &str = "track";
+    pub const VIA: &str = "via";
+    pub const ZONE: &str = "zone";
+    pub const BOARD_TEXT: &str = "board text";
+    /// The document's own id (sheet or board), which no object may take.
     pub const SHEET: &str = "sheet";
 }
 
@@ -50,7 +56,7 @@ pub enum SheetLoadRepair {
         /// What the first holder of `old` is: another kind means the entries
         /// keyed by `old` belonged to this object, not to the holder.
         holder: &'static str,
-        /// The sheet symbol a sheet pin belongs to.
+        /// The sheet symbol a sheet pin, or the footprint a pad, belongs to.
         owner: Option<String>,
     },
     /// Two pins of one symbol shared an id; the later pin got a new one.
@@ -87,11 +93,19 @@ impl SheetLoadRepair {
                 old,
                 new,
                 owner,
-                ..
+                holder,
             } => {
                 let mut text = format!("{} repeated uuid {old}; new uuid {new}", object.label());
                 if let Some(owner) = owner {
-                    text.push_str(&format!(" on sheet symbol {owner}"));
+                    let noun = if object.kind == kind::PAD {
+                        kind::FOOTPRINT
+                    } else {
+                        kind::SHEET_SYMBOL
+                    };
+                    text.push_str(&format!(" on {noun} {owner}"));
+                }
+                if *holder == kind::SHEET {
+                    text.push_str(" (the document's own id)");
                 }
                 if object.kind == kind::SHEET_SYMBOL {
                     text.push_str("; re-annotate its placed designators");

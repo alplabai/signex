@@ -437,6 +437,10 @@ impl Signex {
         // Preferences previews it on the canvas immediately, which is
         // what the `PrefMsg::DraftTheme` arm used to push by hand.
         let colors = self.canvas_colors_for(self.ui_state.preferences_draft_theme);
+        let placement = self
+            .document_state
+            .sheet_path_for_window(window, &self.ui_state)
+            .and_then(|path| self.shown_placement(path));
         crate::canvas::CanvasViewPrefs {
             grid_visible: self.ui_state.grid_visible,
             theme_bg: crate::render_config::to_iced(&colors.background),
@@ -455,10 +459,13 @@ impl Signex {
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             current_tool: self.interaction_state.current_tool,
-            window_width: self.ui_state.window_size.0,
+            window_width: self.ui_state.size_of_window(window).0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
-            wire_class_styles: self.ui_state.net_class_styles.styles(),
-            wire_class_revision: self.ui_state.net_class_styles.revision(),
+            wire_class_styles: self.ui_state.net_class_styles.styles_in(placement.as_ref()),
+            wire_class_revision: self
+                .ui_state
+                .net_class_styles
+                .revision_in(placement.as_ref()),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),

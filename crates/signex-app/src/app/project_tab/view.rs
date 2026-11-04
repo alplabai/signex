@@ -19,7 +19,8 @@ fn section_list<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let (ts, sp) = (TypeScale::default(), Spacing::default());
-    let mut list: iced::widget::Column<Element<'a, Message>> = column![].spacing(sp.xs).padding([sp.l, sp.m]);
+    let mut list: iced::widget::Column<Element<'a, Message>> =
+        column![].spacing(sp.xs).padding([sp.l, sp.m]);
     for section in ProjectSection::ALL {
         let label = text(section.label()).size(ts.label);
         let entry = button(label)

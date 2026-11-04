@@ -7,8 +7,8 @@
 
 use super::*;
 
-use iced::Widget as _;
 use super::items::{dd_command, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
+use iced::Widget as _;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 

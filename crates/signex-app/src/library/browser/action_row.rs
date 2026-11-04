@@ -169,14 +169,12 @@ pub(super) fn view_action_row<'a>(
     .spacing(0)
     .align_y(iced::Alignment::Center);
     if read_only {
-        actions = actions
-            .push(Space::new().width(SP.m).boxed())
-            .push(
-                text("This library ships with Signex and is not editable.")
-                    .size(BROWSER_HEADER_SIZE)
-                    .color(muted)
-                    .boxed(),
-            );
+        actions = actions.push(Space::new().width(SP.m).boxed()).push(
+            text("This library ships with Signex and is not editable.")
+                .size(BROWSER_HEADER_SIZE)
+                .color(muted)
+                .boxed(),
+        );
     }
     container(actions).padding([SP.s, SP.s]).boxed()
 }

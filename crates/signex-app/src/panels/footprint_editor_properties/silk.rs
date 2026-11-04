@@ -5,9 +5,10 @@ use iced::{Color, Element, Length, Widget};
 
 use super::super::{PanelMsg, SilkKindGeometry};
 use super::pad::pad_input_row;
-use crate::styles::Spacing;
+use crate::styles::{Spacing, TypeScale};
 
 const SP: Spacing = Spacing::DEFAULT;
+const TS: TypeScale = TypeScale::DEFAULT;
 
 /// The editable rows for one silk kind's own geometry.
 pub(super) fn silk_geometry_rows<'a>(
@@ -102,7 +103,7 @@ pub(super) fn silk_geometry_rows<'a>(
             col = col.push(
                 container(
                     text("Use Sketch mode for parametric editing")
-                        .size(9)
+                        .size(TS.caption)
                         .color(muted),
                 )
                 .padding([SP.s, SP.m])

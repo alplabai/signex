@@ -70,7 +70,9 @@ pub(super) fn conflict_row<'a>(row: &ConflictRowView) -> Element<'a, PanelMsg> {
             .width(Length::Fill)
             .on_press(PanelMsg::FpEditorSelectSketchEntity { id })
             .style(|theme: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(theme.palette().danger.base.color.scale_alpha(0.06))),
+                background: Some(Background::Color(
+                    theme.palette().danger.base.color.scale_alpha(0.06),
+                )),
                 ..iced::widget::button::Style::default()
             })
             .boxed(),

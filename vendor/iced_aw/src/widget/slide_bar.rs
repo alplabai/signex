@@ -3,8 +3,7 @@
 //! *This API requires the following crate features to be activated: `quad`*
 
 use iced_core::{
-    Border, Color, Element, Event, Layout, Length, Point, Rectangle, Shadow, Shell,
-    Size, Widget,
+    Border, Color, Element, Event, Layout, Length, Point, Rectangle, Shadow, Shell, Size, Widget,
     layout::Limits,
     mouse::{self, Cursor},
     renderer, touch,

@@ -40,8 +40,8 @@ pub fn view_footprint<'a>(
     // change rounds out the Altium look on the canvas chrome itself.
     // Symbol (schematic) canvas stays theme-driven — Altium's
     // schematic editor uses a different (cream-ish) palette.
-    let bg = iced::Color::BLACK;
-    let grid = iced::Color::from_rgba(0.32, 0.36, 0.55, 1.0);
+    let bg = crate::library::editor::footprint::canvas::BACKDROP_BG;
+    let grid = crate::library::editor::footprint::canvas::BACKDROP_GRID;
 
     let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
     let footer = view_footprint_footer(editor, tokens);
@@ -139,7 +139,7 @@ fn view_footprint_top_strip<'a>(
                     .color(label_color)
                     .align_x(iced::alignment::Horizontal::Center),
             )
-            .padding([5, 14])
+            .padding([SP.s, SP.xl])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
@@ -154,7 +154,7 @@ fn view_footprint_top_strip<'a>(
                 },
                 border: Border {
                     width: 1.0,
-                    radius: 3.0.into(),
+                    radius: crate::styles::RADIUS.into(),
                     color: if active { accent } else { border },
                     ..Border::default()
                 },
@@ -166,7 +166,7 @@ fn view_footprint_top_strip<'a>(
     let mode = editor.state.mode;
     let mode_segments = row![
         text("Mode").size(TS.body).color(muted),
-        Space::new().width(6),
+        Space::new().width(SP.m),
         mode_segment(
             "Pads",
             EditorMode::Normal,
@@ -188,7 +188,7 @@ fn view_footprint_top_strip<'a>(
             .size(TS.body)
             .color(text_c),
     )
-    .padding([5.0, SP.l])
+    .padding([SP.s, SP.l])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -199,7 +199,7 @@ fn view_footprint_top_strip<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
             ..Border::default()
         },
@@ -214,7 +214,7 @@ fn view_footprint_top_strip<'a>(
         "Auto-fit Courtyard"
     };
     let auto_fit_btn = button(text(auto_fit_label).size(TS.body).color(text_c))
-        .padding([5.0, SP.l])
+        .padding([SP.s, SP.l])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
@@ -225,7 +225,7 @@ fn view_footprint_top_strip<'a>(
             ))),
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: crate::styles::RADIUS.into(),
                 color: border,
                 ..Border::default()
             },
@@ -250,14 +250,14 @@ fn view_footprint_top_strip<'a>(
         Space::new().width(Length::Fill),
         copy_again,
         auto_fit_btn,
-        Space::new().width(8),
+        Space::new().width(SP.m),
         save_btn,
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center);
 
     container(row_widget)
-        .padding([6, 10])
+        .padding([SP.m, SP.l])
         .style(crate::styles::tab_bar_strip(tokens))
         .boxed()
 }
@@ -293,8 +293,8 @@ fn view_footprint_layers_strip<'a>(
         let pill = button(
             row![
                 container(text("").size(TS.caption))
-                    .width(Length::Fixed(8.0))
-                    .height(Length::Fixed(8.0))
+                    .width(Length::Fixed(SP.m))
+                    .height(Length::Fixed(SP.m))
                     .style(move |_: &Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(swatch)),
                         border: Border {
@@ -307,10 +307,10 @@ fn view_footprint_layers_strip<'a>(
                     }),
                 text(layer.label()).size(TS.caption).color(label_color),
             ]
-            .spacing(5)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([3, 7])
+        .padding([SP.s, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: toggle_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleLayer(layer_standard)),
@@ -348,7 +348,7 @@ fn view_footprint_layers_strip<'a>(
                 .scroller_width(0),
         )),
     )
-    .padding([SP.s, 10.0])
+    .padding([SP.s, SP.l])
     .width(Length::Fill)
     .style(crate::styles::tab_bar_strip(tokens))
     .boxed()
@@ -372,12 +372,12 @@ fn view_footprint_sketch_toolbar<'a>(
     let exit_btn = button(
         row![
             text("\u{2715}").size(TS.body).color(text_c),
-            Space::new().width(4),
+            Space::new().width(SP.s),
             text("Exit Sketch").size(TS.body).color(text_c),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([SP.s, 10.0])
+    .padding([SP.s, SP.l])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: exit_path,
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(EditorMode::Normal)),
@@ -388,7 +388,7 @@ fn view_footprint_sketch_toolbar<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: iced::Color { a: 0.6, ..accent },
             ..Border::default()
         },
@@ -401,7 +401,7 @@ fn view_footprint_sketch_toolbar<'a>(
             .size(TS.body)
             .color(text_c),
     )
-    .padding([SP.s, 10.0])
+    .padding([SP.s, SP.l])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -412,7 +412,7 @@ fn view_footprint_sketch_toolbar<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
             ..Border::default()
         },
@@ -427,14 +427,14 @@ fn view_footprint_sketch_toolbar<'a>(
             .color(muted),
         Space::new().width(Length::Fill),
         save_btn,
-        Space::new().width(8),
+        Space::new().width(SP.m),
         exit_btn,
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center);
 
     container(row_widget)
-        .padding([6, 10])
+        .padding([SP.m, SP.l])
         .style(crate::styles::tab_bar_strip(tokens))
         .boxed()
 }
@@ -455,7 +455,7 @@ fn view_footprint_toolbar<'a>(
     let auto_fit_on = editor.state.auto_fit_courtyard;
 
     let mut row_widget = row![text("Layers:").size(TS.body).color(muted)]
-        .spacing(6)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center);
 
     for layer in FpLayer::ORDER {
@@ -467,8 +467,8 @@ fn view_footprint_toolbar<'a>(
         let pill = button(
             row![
                 container(text("").size(TS.body))
-                    .width(Length::Fixed(8.0))
-                    .height(Length::Fixed(8.0))
+                    .width(Length::Fixed(SP.m))
+                    .height(Length::Fixed(SP.m))
                     .style(move |_: &Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(swatch)),
                         border: Border {
@@ -481,10 +481,10 @@ fn view_footprint_toolbar<'a>(
                     }),
                 text(layer.label()).size(TS.body).color(label_color),
             ]
-            .spacing(6)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
         )
-        .padding([3.0, SP.m])
+        .padding([SP.s, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: toggle_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleLayer(layer_standard)),
@@ -501,7 +501,7 @@ fn view_footprint_toolbar<'a>(
             },
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: crate::styles::RADIUS.into(),
                 color: if on {
                     swatch
                 } else {
@@ -521,7 +521,7 @@ fn view_footprint_toolbar<'a>(
         "Auto-fit Courtyard"
     };
     let auto_fit_btn = button(text(auto_fit_label).size(TS.body).color(text_c))
-        .padding([3.0, SP.m])
+        .padding([SP.s, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
@@ -532,7 +532,7 @@ fn view_footprint_toolbar<'a>(
             ))),
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: crate::styles::RADIUS.into(),
                 color: border,
                 ..Border::default()
             },
@@ -545,7 +545,7 @@ fn view_footprint_toolbar<'a>(
             .size(TS.body)
             .color(text_c),
     )
-    .padding([3.0, SP.m])
+    .padding([SP.s, SP.m])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -556,7 +556,7 @@ fn view_footprint_toolbar<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
             ..Border::default()
         },
@@ -573,7 +573,7 @@ fn view_footprint_toolbar<'a>(
         let path = editor.path.clone();
         let label_color = if active { text_c } else { muted };
         button(text(label).size(TS.body).color(label_color))
-            .padding([3.0, SP.m])
+            .padding([SP.s, SP.m])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
@@ -590,7 +590,7 @@ fn view_footprint_toolbar<'a>(
                 },
                 border: Border {
                     width: 1.0,
-                    radius: 3.0.into(),
+                    radius: crate::styles::RADIUS.into(),
                     color: border,
                     ..Border::default()
                 },
@@ -631,13 +631,13 @@ fn view_footprint_toolbar<'a>(
     row_widget = row_widget
         .push(Space::new().width(Length::Fill).boxed())
         .push(mode_row.boxed())
-        .push(Space::new().width(8).boxed())
+        .push(Space::new().width(SP.m).boxed())
         .push(auto_fit_btn.boxed())
-        .push(Space::new().width(8).boxed())
+        .push(Space::new().width(SP.m).boxed())
         .push(save_btn.boxed());
 
     container(row_widget)
-        .padding([6, 10])
+        .padding([SP.m, SP.l])
         .style(crate::styles::tab_bar_strip(tokens))
         .boxed()
 }
@@ -763,12 +763,12 @@ fn view_footprint_footer<'a>(
     container(
         row![
             text(cursor_label).size(TS.body).color(muted),
-            Space::new().width(20),
+            Space::new().width(SP.xl + SP.s),
             text(selected_label).size(TS.body).color(text_c),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6.0, SP.l])
+    .padding([SP.m, SP.l])
     .style(crate::styles::modal_footer_strip(tokens))
     .width(Length::Fill)
     .boxed()

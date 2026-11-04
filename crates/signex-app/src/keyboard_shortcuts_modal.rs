@@ -148,7 +148,7 @@ fn build<'a>(
         body = body.push(
             container(
                 text(title_case(category).to_uppercase())
-                    .size(9)
+                    .size(TS.caption)
                     .color(text_secondary),
             )
             .padding(iced::Padding {

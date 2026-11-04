@@ -29,13 +29,16 @@ pub(super) fn view_pad_stack_check<'a>(
         primary, border, ..
     } = palette;
     let warn = Color::from_rgba(1.00, 0.75, 0.30, 1.00);
-    col = col.push(props_section_header(
-        "Pad stack check",
-        "fp_pad_stack_check",
-        collapsed_sections,
-        primary,
-        border,
-    ).boxed());
+    col = col.push(
+        props_section_header(
+            "Pad stack check",
+            "fp_pad_stack_check",
+            collapsed_sections,
+            primary,
+            border,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pad_stack_check", collapsed_sections) {
         return col;
     }

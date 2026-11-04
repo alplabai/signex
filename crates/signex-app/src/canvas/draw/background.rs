@@ -1,5 +1,7 @@
 use signex_output::template::{FontStyle, FramePrimitive, FrameTextAnchor};
 
+use iced::advanced::graphics::geometry::Renderer as GeometryRenderer;
+
 use super::super::*;
 
 impl SchematicCanvas<'_> {
@@ -10,55 +12,77 @@ impl SchematicCanvas<'_> {
         renderer: &Renderer,
         bounds: Rectangle,
     ) -> canvas::Geometry {
-        let cam = self.camera();
+        // The background follows the camera, and a pure hover must not rebuild
+        // it, so the cache is keyed on the camera as the content layer is.
+        let key = {
+            let cam = self.camera();
+            (cam.offset.x, cam.offset.y, cam.scale)
+        };
+        if self.bg_cache_camera.get() != Some(key) {
+            self.bg_cache.clear();
+            self.bg_cache_camera.set(Some(key));
+        }
         self.bg_cache.draw(renderer, bounds.size(), |frame| {
-            // Fill background
-            frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.prefs.theme_bg);
-
-            // Draw paper rectangle using active paper size.
-            let paper_tl = cam.world_to_screen(iced::Point::new(0.0, 0.0), bounds);
-            let paper_br = cam.world_to_screen(
-                iced::Point::new(self.paper_width_mm, self.paper_height_mm),
-                bounds,
-            );
-            let paper_w = paper_br.x - paper_tl.x;
-            let paper_h = paper_br.y - paper_tl.y;
-
-            if paper_w > 0.0 && paper_h > 0.0 {
-                frame.fill_rectangle(
-                    paper_tl,
-                    iced::Size::new(paper_w, paper_h),
-                    self.prefs.theme_paper,
-                );
-
-                // Paper border
-                let border = canvas::Path::rectangle(paper_tl, iced::Size::new(paper_w, paper_h));
-                frame.stroke(
-                    &border,
-                    canvas::Stroke::default()
-                        .with_color(self.prefs.theme_grid)
-                        .with_width(1.0),
-                );
-            }
-
-            // Draw grid — use visible_grid_mm so snap and visual grid are independent
-            if self.prefs.grid_visible {
-                grid::draw_grid(
-                    frame,
-                    &cam,
-                    self.prefs.visible_grid_mm as f32,
-                    bounds,
-                    self.prefs.theme_grid,
-                    self.paper_width_mm,
-                    self.paper_height_mm,
-                    self.prefs.grid_style,
-                    self.prefs.device_px_per_logical_px,
-                );
-            }
-
-            let frame_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
-            self.draw_sheet_frame(frame, &cam, bounds, frame_color);
+            #[cfg(test)]
+            self.bg_tessellations.set(self.bg_tessellations.get() + 1);
+            self.paint_background(frame, bounds)
         })
+    }
+
+    /// The background's draw calls, in paint order: backdrop, paper, border,
+    /// grid, sheet frame. Generic over the renderer so a test can replay it
+    /// on a bare wgpu frame and read the mesh order back.
+    pub(in crate::canvas) fn paint_background<R: GeometryRenderer>(
+        &self,
+        frame: &mut canvas::Frame<R>,
+        bounds: Rectangle,
+    ) {
+        let cam = self.camera();
+        frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.prefs.theme_bg);
+
+        // Draw paper rectangle using active paper size.
+        let paper_tl = cam.world_to_screen(iced::Point::new(0.0, 0.0), bounds);
+        let paper_br = cam.world_to_screen(
+            iced::Point::new(self.paper_width_mm, self.paper_height_mm),
+            bounds,
+        );
+        let paper_w = paper_br.x - paper_tl.x;
+        let paper_h = paper_br.y - paper_tl.y;
+
+        if paper_w > 0.0 && paper_h > 0.0 {
+            frame.fill_rectangle(
+                paper_tl,
+                iced::Size::new(paper_w, paper_h),
+                self.prefs.theme_paper,
+            );
+
+            // Paper border
+            let border = canvas::Path::rectangle(paper_tl, iced::Size::new(paper_w, paper_h));
+            frame.stroke(
+                &border,
+                canvas::Stroke::default()
+                    .with_color(self.prefs.theme_grid)
+                    .with_width(1.0),
+            );
+        }
+
+        // Draw grid — use visible_grid_mm so snap and visual grid are independent
+        if self.prefs.grid_visible {
+            grid::draw_grid(
+                frame,
+                &cam,
+                self.prefs.visible_grid_mm as f32,
+                bounds,
+                self.prefs.theme_grid,
+                self.paper_width_mm,
+                self.paper_height_mm,
+                self.prefs.grid_style,
+                self.prefs.device_px_per_logical_px,
+            );
+        }
+
+        let frame_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
+        self.draw_sheet_frame(frame, &cam, bounds, frame_color);
     }
 
     /// A sheet-frame line of `width_mm` between screen points: the stroke
@@ -93,9 +117,9 @@ impl SchematicCanvas<'_> {
 
     /// Draw the lowered sheet frame (#1079): the same primitives the PDF draws,
     /// mapped from sheet mm to screen pixels.
-    fn draw_sheet_frame(
+    fn draw_sheet_frame<R: GeometryRenderer>(
         &self,
-        frame: &mut canvas::Frame,
+        frame: &mut canvas::Frame<R>,
         cam: &Camera,
         bounds: Rectangle,
         color: Color,
@@ -103,17 +127,18 @@ impl SchematicCanvas<'_> {
         let primitives = &self.sheet_frame;
         let at = |x: f64, y: f64| cam.world_to_screen(iced::Point::new(x as f32, y as f32), bounds);
         // Frame lines follow the stroke law and the whole-pixel snap (#1858).
-        let line = |frame: &mut canvas::Frame, from: (f64, f64), to: (f64, f64), width_mm: f64| {
-            let (p0, p1, width) =
-                self.sheet_frame_line(at(from.0, from.1), at(to.0, to.1), width_mm, cam.scale);
-            frame.stroke(
-                &canvas::Path::line(p0, p1),
-                canvas::Stroke::default()
-                    .with_color(color)
-                    .with_width(width)
-                    .with_line_cap(canvas::LineCap::Square),
-            );
-        };
+        let line =
+            |frame: &mut canvas::Frame<R>, from: (f64, f64), to: (f64, f64), width_mm: f64| {
+                let (p0, p1, width) =
+                    self.sheet_frame_line(at(from.0, from.1), at(to.0, to.1), width_mm, cam.scale);
+                frame.stroke(
+                    &canvas::Path::line(p0, p1),
+                    canvas::Stroke::default()
+                        .with_color(color)
+                        .with_width(width)
+                        .with_line_cap(canvas::LineCap::Square),
+                );
+            };
         for primitive in primitives {
             match primitive {
                 FramePrimitive::Line { from, to, width_mm } => line(frame, *from, *to, *width_mm),

@@ -22,9 +22,8 @@
 #![allow(clippy::use_self)]
 
 use iced_core::{
-    Alignment, Element, Length, Padding, Pixels, Size, Vector, Widget,
-    layout::Limits,
-    renderer, widget,
+    Alignment, Element, Length, Padding, Pixels, Size, Vector, Widget, layout::Limits, renderer,
+    widget,
 };
 
 /// The main axis of a flex layout.
@@ -196,10 +195,9 @@ where
         let (x, y) = axis.pack(main, pad.1);
 
         let alignment = match axis {
-            Axis::Vertical => {
-                tree.size
-                    .align(Size::new(cross, 0.0), align_items, Alignment::Start)
-            }
+            Axis::Vertical => tree
+                .size
+                .align(Size::new(cross, 0.0), align_items, Alignment::Start),
         };
 
         tree.translation = Vector::new(x, y) + alignment;

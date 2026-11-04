@@ -11,8 +11,7 @@ use iced_core::{
     renderer, touch,
     widget::text::{LineHeight, Wrapping},
     widget::{
-        Tree,
-        Meta,
+        Meta, Tree,
         tree::{State, Tag},
     },
 };
@@ -297,7 +296,6 @@ where
         renderer: &Renderer,
         operation: &mut dyn iced_core::widget::Operation,
     ) {
-
         // Expose all option text for testing by creating virtual Text widgets
         // Create a layout for each text option
         let bounds = layout.bounds();

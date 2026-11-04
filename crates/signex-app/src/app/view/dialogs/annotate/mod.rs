@@ -222,7 +222,8 @@ impl Signex {
         ]
         .spacing(0);
         for name in &param_names {
-            param_rows = param_rows.push((row![
+            param_rows = param_rows.push(
+                (row![
                     row![
                         check_pip(false, border_c),
                         Space::new().width(6),
@@ -235,15 +236,20 @@ impl Signex {
                         .width(Length::FillPortion(1)),
                 ]
                 .padding([3.0, SP.m])
-                .align_y(iced::Alignment::Center)).boxed());
+                .align_y(iced::Alignment::Center))
+                .boxed(),
+            );
         }
         if param_names.is_empty() {
-            param_rows = param_rows.push((container(
+            param_rows = param_rows.push(
+                (container(
                     text("No custom parameters on any symbol yet.")
                         .size(TS.body)
                         .color(text_muted),
                 )
-                .padding([10.0, SP.m])).boxed());
+                .padding([10.0, SP.m]))
+                .boxed(),
+            );
         }
 
         let matching = column![
@@ -285,7 +291,8 @@ impl Signex {
             let is_active = Some(&tab.title) == active_title.as_ref();
             let row_color = if is_active { text_c } else { text_muted };
             let suffix_placeholder = if is_active { "" } else { "—" };
-            sheet_rows = sheet_rows.push((row![
+            sheet_rows = sheet_rows.push(
+                (row![
                     row![
                         check_pip(is_active, border_c),
                         Space::new().width(6),
@@ -316,15 +323,20 @@ impl Signex {
                     .width(Length::FillPortion(2)),
                 ]
                 .padding([3.0, SP.m])
-                .align_y(iced::Alignment::Center)).boxed());
+                .align_y(iced::Alignment::Center))
+                .boxed(),
+            );
         }
         if self.document_state.tabs.is_empty() {
-            sheet_rows = sheet_rows.push((container(
+            sheet_rows = sheet_rows.push(
+                (container(
                     text("No schematic tab open.")
                         .size(TS.body)
                         .color(text_muted),
                 )
-                .padding([6.0, SP.m])).boxed());
+                .padding([6.0, SP.m]))
+                .boxed(),
+            );
         }
 
         let sheets_table = column![
@@ -407,7 +419,8 @@ impl Signex {
         let mut rows_col: iced::widget::Column<Element<'_, Message>> =
             column![].spacing(0).width(Length::Fill);
         if proposed.is_empty() {
-            rows_col = rows_col.push((container(
+            rows_col = rows_col.push(
+                (container(
                     text(if self.ui_state.annotate_preview.loading {
                         "Loading project sheets…"
                     } else if self.ui_state.annotate_preview.load_failed {
@@ -418,7 +431,9 @@ impl Signex {
                     .size(TS.body)
                     .color(text_muted),
                 )
-                .padding([10.0, SP.l])).boxed());
+                .padding([10.0, SP.l]))
+                .boxed(),
+            );
         } else {
             for entry in proposed {
                 let is_locked = locked_set.contains(&entry.uuid);
@@ -466,7 +481,8 @@ impl Signex {
                     ..button::Style::default()
                 })
                 .boxed();
-                rows_col = rows_col.push((row![
+                rows_col = rows_col.push(
+                    (row![
                         container(lock_btn)
                             .width(Length::Fixed(42.0))
                             .padding([0.0, 6.0]),
@@ -484,7 +500,9 @@ impl Signex {
                             .width(Length::FillPortion(3)),
                     ]
                     .align_y(iced::Alignment::Center)
-                    .padding([SP.xs, SP.m])).boxed());
+                    .padding([SP.xs, SP.m]))
+                    .boxed(),
+                );
             }
         }
 

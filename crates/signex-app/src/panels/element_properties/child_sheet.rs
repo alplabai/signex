@@ -4,8 +4,8 @@
 //! `element_properties` module.
 
 use super::super::*;
-use iced::Widget;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -52,90 +52,92 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     // ── Properties (editable identity, read-only geometry) ──
     col = col.push(
         collapsible_section(
-        "sel_child_sheet_props",
-        "Properties",
-        &ctx.collapsed_sections,
-        muted,
-        border_c,
-        move || {
-            let mut c: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(child_sheet_text_row(
-                "Name",
-                &name,
-                border_c,
-                muted,
-                move |s| PanelMsg::ChildSheetNameTyping(id, s),
-                PanelMsg::CommitChildSheetName(id),
-            ));
-            c = c.push(child_sheet_text_row(
-                "File",
-                &filename,
-                border_c,
-                muted,
-                move |s| PanelMsg::ChildSheetFileTyping(id, s),
-                PanelMsg::CommitChildSheetFile(id),
-            ));
-            c = c.push(prop_kv_row("Position", &position, muted, primary));
-            c = c.push(prop_kv_row("Size", &size, muted, primary));
-            c
-        },
-    )
+            "sel_child_sheet_props",
+            "Properties",
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                let mut c: Column<Element<'a, PanelMsg>> =
+                    Column::new().spacing(0).width(Length::Fill);
+                c = c.push(child_sheet_text_row(
+                    "Name",
+                    &name,
+                    border_c,
+                    muted,
+                    move |s| PanelMsg::ChildSheetNameTyping(id, s),
+                    PanelMsg::CommitChildSheetName(id),
+                ));
+                c = c.push(child_sheet_text_row(
+                    "File",
+                    &filename,
+                    border_c,
+                    muted,
+                    move |s| PanelMsg::ChildSheetFileTyping(id, s),
+                    PanelMsg::CommitChildSheetFile(id),
+                ));
+                c = c.push(prop_kv_row("Position", &position, muted, primary));
+                c = c.push(prop_kv_row("Size", &size, muted, primary));
+                c
+            },
+        )
         .boxed(),
     );
 
     // ── Style (editable) ──
     col = col.push(
         collapsible_section(
-        "sel_child_sheet_style",
-        "Style",
-        &ctx.collapsed_sections,
-        muted,
-        border_c,
-        move || {
-            let mut c: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(child_sheet_color_row(
-                "Border Colour",
-                id,
-                stroke_color,
-                border_picker_open,
-                border_advanced_open,
-                palette,
-                /* is_border */ true,
-            ));
-            c = c.push(child_sheet_color_row(
-                "Fill Colour",
-                id,
-                fill_color,
-                fill_picker_open,
-                fill_advanced_open,
-                palette,
-                /* is_border */ false,
-            ));
-            c = c.push(child_sheet_stroke_width_row(
-                id,
-                stroke_width,
-                stroke_width_buf,
-                muted,
-                border_c,
-            ));
-            c = c.push(
-                container(
-                    iced::widget::button(
-                        text("Reset to Default")
-                            .size(TS.caption)
-                            .color(Color::from_rgb(0.92, 0.92, 0.94)),
+            "sel_child_sheet_style",
+            "Style",
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                let mut c: Column<Element<'a, PanelMsg>> =
+                    Column::new().spacing(0).width(Length::Fill);
+                c = c.push(child_sheet_color_row(
+                    "Border Colour",
+                    id,
+                    stroke_color,
+                    border_picker_open,
+                    border_advanced_open,
+                    palette,
+                    /* is_border */ true,
+                ));
+                c = c.push(child_sheet_color_row(
+                    "Fill Colour",
+                    id,
+                    fill_color,
+                    fill_picker_open,
+                    fill_advanced_open,
+                    palette,
+                    /* is_border */ false,
+                ));
+                c = c.push(child_sheet_stroke_width_row(
+                    id,
+                    stroke_width,
+                    stroke_width_buf,
+                    muted,
+                    border_c,
+                ));
+                c = c.push(
+                    container(
+                        iced::widget::button(
+                            text("Reset to Default")
+                                .size(TS.caption)
+                                .color(Color::from_rgb(0.92, 0.92, 0.94)),
+                        )
+                        .padding([SP.s, 10.0])
+                        .on_press(PanelMsg::ResetChildSheetStyle(id))
+                        .style(iced::widget::button::secondary),
                     )
-                    .padding([SP.s, 10.0])
-                    .on_press(PanelMsg::ResetChildSheetStyle(id))
-                    .style(iced::widget::button::secondary),
-                )
-                .padding([6.0, SP.m])
-                .width(Length::Fill)
-                .boxed(),
-            );
-            c
-        },
-    )
+                    .padding([6.0, SP.m])
+                    .width(Length::Fill)
+                    .boxed(),
+                );
+                c
+            },
+        )
         .boxed(),
     );
 

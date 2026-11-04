@@ -365,14 +365,14 @@ impl Signex {
                 windowed,
             )
             .map(Message::Library)
-                    .boxed(),
+            .boxed(),
             ModalId::LibraryDocumentOptions => crate::library::document_options::view(
                 lib.document_options.as_ref()?,
                 tokens,
                 windowed,
             )
             .map(Message::Library)
-                    .boxed(),
+            .boxed(),
             ModalId::LibraryCreateOptions => {
                 crate::library::create_options::view(lib.create_options.as_ref()?, tokens, windowed)
                     .map(Message::Library)
@@ -390,7 +390,7 @@ impl Signex {
                 windowed,
             )
             .map(Message::Library)
-                    .boxed(),
+            .boxed(),
             ModalId::LibraryRecovery => {
                 crate::library::recovery::view(lib.recovery.as_ref()?, tokens, windowed)
                     .map(Message::Library)
@@ -402,7 +402,7 @@ impl Signex {
                 windowed,
             )
             .map(Message::Library)
-                    .boxed(),
+            .boxed(),
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
                 let classes = self.row_classes_for(path);
@@ -411,7 +411,7 @@ impl Signex {
                     path, edit, tokens, windowed, classes, template,
                 )
                 .map(Message::Library)
-                    .boxed()
+                .boxed()
             }
             ModalId::LibraryDeleteConfirm => {
                 let (path, confirm) = self.browser_modal(owner, |b| b.delete_confirm.as_ref())?;

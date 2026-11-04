@@ -397,4 +397,40 @@ mod repair_tests {
         let _ = app.handle_disk_reload_finished(path.clone(), stamp, Ok(Box::new(reloaded)));
         assert!(app.document_state.is_document_dirty(&path));
     }
+
+    #[test]
+    fn a_repaired_board_disk_conflict_reload_stays_modified() {
+        let _ = crate::diagnostics::init_logging();
+        let repaired_board = || {
+            let text = "format = \"snxpcb/1\"
+pcb_id = \"00000000-0000-0000-0000-000000000009\"
+";
+            let mut board = signex_types::format::SnxPcb::parse(text)
+                .expect("parses")
+                .board;
+            board
+                .unknown
+                .load_repairs
+                .push(signex_types::format::SheetLoadRepair::CopyDropped {
+                    object: signex_types::format::RepairedObject {
+                        kind: "track",
+                        name: String::new(),
+                        position: 2,
+                    },
+                    uuid: uuid::Uuid::from_u128(7),
+                });
+            board
+        };
+        let mut app = app_workspace("/w/proj", &[]);
+        let path = std::path::PathBuf::from("/w/proj/disk_reload_repair.snxpcb");
+        app.open_pcb_tab(path.clone(), "disk_reload_repair".into(), repaired_board());
+        app.document_state.mark_document_clean(&path);
+        let stamp = app.edit_stamp(&path);
+        let reloaded = ReloadedFile {
+            document: RestoreJobDocument::Pcb(Box::new(repaired_board())),
+            hash: crate::persist::ContentHash::of(b""),
+        };
+        let _ = app.handle_disk_reload_finished(path.clone(), stamp, Ok(Box::new(reloaded)));
+        assert!(app.document_state.is_document_dirty(&path));
+    }
 }

@@ -355,6 +355,16 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "open_erc_dialog",
+        category: "validation",
+        label: "Open electrical rules check dialog",
+        menu_label: Some("Electrical Rules Check"),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "open_parameter_manager",
         category: "design",
         label: "Open Parameter Manager",

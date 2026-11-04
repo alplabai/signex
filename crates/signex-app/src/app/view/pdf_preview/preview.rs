@@ -16,8 +16,8 @@ impl Signex {
         preview: &'a crate::app::state::PreviewState,
     ) -> Element<'a, Message> {
         use iced::widget::{
-            Space, Widget as _, button, checkbox, column, container, image, mouse_area, row, scrollable, text,
-            text_input,
+            Space, Widget as _, button, checkbox, column, container, image, mouse_area, row,
+            scrollable, text, text_input,
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
@@ -179,7 +179,8 @@ impl Signex {
         .padding([SP.m, 14.0]);
 
         // Thumb rail.
-        let mut thumbs: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.s).padding(SP.m);
+        let mut thumbs: iced::widget::Column<Element<'_, Message>> =
+            column![].spacing(SP.s).padding(SP.m);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
             // A page not drawn yet shows an empty frame: it is rasterised when
@@ -265,7 +266,10 @@ impl Signex {
             // pixels and let the user pan around.
             // Until the selected page is drawn the viewport stays blank white.
             let img_el: Element<'_, Message> = match selected_page.handle() {
-                None => Space::new().width(Length::Fill).height(Length::Fill).boxed(),
+                None => Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .boxed(),
                 Some(handle) if zoom <= 1.0 => image(handle.clone())
                     .content_fit(iced::ContentFit::Contain)
                     .width(Length::Fill)

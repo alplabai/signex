@@ -211,7 +211,11 @@ pub(super) fn submenu_launcher(
             row = row.push(iced::widget::svg(handle).width(20).height(20).boxed());
         }
         None => {
-            row = row.push(iced::widget::Space::new().width(iced::Length::Fixed(20.0)).boxed());
+            row = row.push(
+                iced::widget::Space::new()
+                    .width(iced::Length::Fixed(20.0))
+                    .boxed(),
+            );
         }
     }
     row = row

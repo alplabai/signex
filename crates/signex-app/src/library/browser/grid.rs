@@ -112,7 +112,8 @@ pub(super) fn view_grid<'a>(
             })
     };
 
-    let mut col: Column<Element<'a, LibraryMessage>> = column![header_row].spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, LibraryMessage>> =
+        column![header_row].spacing(0).width(Length::Fill);
 
     if rows.is_empty() {
         col = col.push(
@@ -123,7 +124,7 @@ pub(super) fn view_grid<'a>(
                     .color(muted),
             )
             .padding([SP.l, 6.0])
-        .boxed(),
+            .boxed(),
         );
     } else {
         // Window: only the rows near the viewport get widgets; spacers of
@@ -135,7 +136,7 @@ pub(super) fn view_grid<'a>(
                 Space::new()
                     .height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT))
                     .boxed(),
-                );
+            );
         }
         for r in &rows[window.clone()] {
             #[cfg(test)]
@@ -209,7 +210,7 @@ pub(super) fn view_grid<'a>(
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
-                    .boxed(),
+                        .boxed(),
                     );
                     continue;
                 }
@@ -226,7 +227,7 @@ pub(super) fn view_grid<'a>(
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
-                    .boxed(),
+                        .boxed(),
                     );
                     continue;
                 }
@@ -245,7 +246,7 @@ pub(super) fn view_grid<'a>(
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
-                    .boxed(),
+                        .boxed(),
                     );
                     continue;
                 }
@@ -280,7 +281,7 @@ pub(super) fn view_grid<'a>(
                             container(unbound_pick_button(label, kind, address, tokens))
                                 .padding([SP.xs, SP.xs])
                                 .width(Length::Fixed(c.width))
-                        .boxed(),
+                                .boxed(),
                         );
                         continue;
                     }
@@ -305,7 +306,7 @@ pub(super) fn view_grid<'a>(
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
-                    .boxed(),
+                        .boxed(),
                     );
                     continue;
                 }
@@ -323,7 +324,7 @@ pub(super) fn view_grid<'a>(
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
-                    .boxed(),
+                        .boxed(),
                     );
                     continue;
                 }
@@ -357,7 +358,7 @@ pub(super) fn view_grid<'a>(
                         container(cell)
                             .padding([2, 2])
                             .width(Length::Fixed(c.width))
-                    .boxed(),
+                            .boxed(),
                     );
                     continue;
                 }
@@ -394,7 +395,7 @@ pub(super) fn view_grid<'a>(
                     container(input)
                         .padding([SP.xs, SP.xs])
                         .width(Length::Fixed(c.width))
-                .boxed(),
+                        .boxed(),
                 );
             }
 

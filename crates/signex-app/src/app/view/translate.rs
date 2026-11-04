@@ -69,9 +69,7 @@ where
 
     fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         // Child gets the full parent limits — no shrinkage like Pin does.
-        self.content
-            
-            .layout(&mut tree.children[0], renderer, limits);
+        self.content.layout(&mut tree.children[0], renderer, limits);
 
         tree.children[0].translation = self.offset;
         tree.size = limits.resolve(Length::Fill, Length::Fill, tree.children[0].size);
@@ -86,13 +84,8 @@ where
         operation: &mut dyn widget::Operation,
     ) {
         if let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() {
-            self.content.operate(
-                child_tree,
-                child_layout,
-                viewport,
-                renderer,
-                operation,
-            );
+            self.content
+                .operate(child_tree, child_layout, viewport, renderer, operation);
         }
     }
 
@@ -131,13 +124,8 @@ where
             .iter(&tree.children)
             .next()
             .map(|(child_layout, child_tree)| {
-                self.content.mouse_interaction(
-                    child_tree,
-                    child_layout,
-                    cursor,
-                    viewport,
-                    renderer,
-                )
+                self.content
+                    .mouse_interaction(child_tree, child_layout, cursor, viewport, renderer)
             })
             .unwrap_or_default()
     }

@@ -58,7 +58,8 @@ impl Signex {
                 is_last,
                 accent_position: AccentPosition::Bottom,
             };
-            let inner = container(text(label).size(TS.label).color(label_color)).padding([6, 18])
+            let inner = container(text(label).size(TS.label).color(label_color))
+                .padding([6, 18])
                 .boxed();
             mouse_area(TabPill::new(inner, style))
                 .on_press(Message::PrintPreview(PrintPreviewMsg::SetTab(this)))

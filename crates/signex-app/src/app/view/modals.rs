@@ -25,7 +25,10 @@ impl Signex {
         let ms = &self.ui_state.move_selection;
         let selection_count = self.interaction_state.active_canvas().selected.len();
 
-        let field = |label: &'static str, value: &str, msg: fn(String) -> Message| -> Element<'static, Message> {
+        let field = |label: &'static str,
+                     value: &str,
+                     msg: fn(String) -> Message|
+         -> Element<'static, Message> {
             let value = value.to_owned();
             column![
                 text(label).size(TS.caption).color(text_muted),
@@ -224,36 +227,35 @@ impl Signex {
                     let r_c = *r;
                     let g_c = *g;
                     let b_c = *b;
-                    swatches =
-                        swatches.push(
-                            button(container(Space::new().width(14).height(14)).style(
-                                move |_: &iced::Theme| container::Style {
-                                    background: Some(iced::Background::Color(swatch_color)),
-                                    border: iced::Border {
-                                        width: border_w,
-                                        radius: 2.0.into(),
-                                        color: text_c,
-                                        ..iced::Border::default()
-                                    },
-                                    ..container::Style::default()
+                    swatches = swatches.push(
+                        button(container(Space::new().width(14).height(14)).style(
+                            move |_: &iced::Theme| container::Style {
+                                background: Some(iced::Background::Color(swatch_color)),
+                                border: iced::Border {
+                                    width: border_w,
+                                    radius: 2.0.into(),
+                                    color: text_c,
+                                    ..iced::Border::default()
                                 },
-                            ))
-                            .on_press(Message::NetColor(NetColorMsg::Set {
-                                net: net_copy.clone(),
-                                color: Some(signex_types::theme::Color {
-                                    r: r_c,
-                                    g: g_c,
-                                    b: b_c,
-                                    a: 255,
-                                }),
-                            }))
-                            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                                border: iced::Border::default(),
-                                ..iced::widget::button::Style::default()
-                            })
-                            .boxed(),
-                        );
+                                ..container::Style::default()
+                            },
+                        ))
+                        .on_press(Message::NetColor(NetColorMsg::Set {
+                            net: net_copy.clone(),
+                            color: Some(signex_types::theme::Color {
+                                r: r_c,
+                                g: g_c,
+                                b: b_c,
+                                a: 255,
+                            }),
+                        }))
+                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                            border: iced::Border::default(),
+                            ..iced::widget::button::Style::default()
+                        })
+                        .boxed(),
+                    );
                 }
                 // Clear-override button
                 let net_clear = net.clone();
@@ -568,7 +570,9 @@ impl Signex {
         // card are captured and DON'T fall through to the dismiss
         // layer sitting beneath. Without this, clicking on the card's
         // background / between swatches closes the picker.
-        let card_capturing = iced::widget::mouse_area(card).on_press(Message::noop()).boxed();
+        let card_capturing = iced::widget::mouse_area(card)
+            .on_press(Message::noop())
+            .boxed();
         super::view::translate::Translate::new(card_capturing, (x, y)).into()
     }
 }

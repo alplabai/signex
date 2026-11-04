@@ -454,14 +454,10 @@ where
         }
 
         #[cfg(feature = "debug_log")]
-        debug!(target:"menu::MenuBarOverlay::update", "returning | shell.is_layout_invalid(): {:?}", shell.is_layout_invalid());
+        debug!(target:"menu::MenuBarOverlay::update", "returning | shell.invalidation(): {:?}", shell.invalidation());
     }
 
-    fn mouse_interaction(
-        &self,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
+    fn mouse_interaction(&self, cursor: mouse::Cursor, renderer: &Renderer) -> mouse::Interaction {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::mouse_interaction", "");
 
@@ -522,11 +518,7 @@ where
         )
     }
 
-    fn operate(
-        &mut self,
-        renderer: &Renderer,
-        operation: &mut dyn Operation,
-    ) {
+    fn operate(&mut self, renderer: &Renderer, operation: &mut dyn Operation) {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::operate", "");
 

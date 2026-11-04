@@ -33,7 +33,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 // every submenu launcher visually aligned across the whole app
 // (canvas right-click, project-tree right-click, File/Edit/View menu).
 const SUBMENU_ARROW: &str = "›";
-const SUBMENU_ARROW_SIZE: f32 = 18.0;
+const SUBMENU_ARROW_SIZE: f32 = crate::styles::chrome_px(18.0);
 
 /// Chrome strip search bar width in pixels — the widest it ever gets;
 /// `chrome_search_bar_geometry` shrinks it below this on narrow windows.
@@ -477,7 +477,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let hint = iced::widget::container(
             iced::widget::text("A dialog is open: click to show it, Esc to cancel")
-                .size(12)
+                .size(TS.label)
                 .color(crate::styles::ti(tokens.text_secondary)),
         )
         .width(Length::Fill)
@@ -651,13 +651,8 @@ impl Signex {
             let base = if is_main {
                 base
             } else {
-                base.map(move |msg| match msg {
-                    Message::CanvasEvent(event) => {
-                        Message::CanvasEventInWindow { window_id, event }
-                    }
-                    other => other,
-                })
-                .boxed()
+                base.map(move |msg| overlay_id::scope_canvas_message(window_id, msg))
+                    .boxed()
             };
             // A sheet from a newer Signex is read-only: say so on the canvas
             // (#1402), in the main and in undocked windows alike.

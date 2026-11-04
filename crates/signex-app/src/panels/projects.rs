@@ -317,7 +317,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         column![
             text("No project open").size(TS.body).color(muted),
-            text("").size(4),
+            text("").size(TS.micro),
             text("File > Open to begin").size(TS.caption).color(muted),
         ]
         .spacing(SP.xs)
@@ -351,7 +351,8 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 // ─── Navigator Panel ──────────────────────────────────────────
 
 pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(section_title("Sheets", &ctx.tokens).boxed());
     col = col.push(separator(&ctx.tokens).boxed());
 

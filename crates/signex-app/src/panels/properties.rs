@@ -306,14 +306,17 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if tab == 0 {
         col = col.push(view_properties_general(ctx, muted, primary, border_c).boxed());
     } else {
-        col = col.push(view_properties_parameters(
-            muted,
-            primary,
-            border_c,
-            crate::styles::ti(ctx.tokens.selection),
-            crate::styles::ti(ctx.tokens.accent),
-            crate::styles::ti(ctx.tokens.hover),
-        ).boxed());
+        col = col.push(
+            view_properties_parameters(
+                muted,
+                primary,
+                border_c,
+                crate::styles::ti(ctx.tokens.selection),
+                crate::styles::ti(ctx.tokens.accent),
+                crate::styles::ti(ctx.tokens.hover),
+            )
+            .boxed(),
+        );
     }
 
     // ── Status: Nothing selected ──
@@ -382,40 +385,43 @@ fn view_pre_placement<'a>(
     );
 
     // ── Location ──
-    col = col.push(collapsible_section(
-        "preplace_location",
-        "Location",
-        &ctx.collapsed_sections,
-        primary,
-        border_c,
-        move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(form_input_row(
-                "(X/Y)", &pos_str, muted, input_bg, input_bdr,
-            ));
-            let rotation_opts: Vec<String> = vec![
-                "0 Degrees".into(),
-                "90 Degrees".into(),
-                "180 Degrees".into(),
-                "270 Degrees".into(),
-            ];
-            c = c.push(form_pick_row(
-                "Rotation",
-                rotation_opts,
-                rot_label.clone(),
-                |s| {
-                    let deg = s
-                        .split_whitespace()
-                        .next()
-                        .and_then(|n| n.parse::<f64>().ok())
-                        .unwrap_or(0.0);
-                    PanelMsg::SetPrePlacementRotation(deg)
-                },
-                muted,
-            ));
-            c
-        },
-    ).boxed());
+    col = col.push(
+        collapsible_section(
+            "preplace_location",
+            "Location",
+            &ctx.collapsed_sections,
+            primary,
+            border_c,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = c.push(form_input_row(
+                    "(X/Y)", &pos_str, muted, input_bg, input_bdr,
+                ));
+                let rotation_opts: Vec<String> = vec![
+                    "0 Degrees".into(),
+                    "90 Degrees".into(),
+                    "180 Degrees".into(),
+                    "270 Degrees".into(),
+                ];
+                c = c.push(form_pick_row(
+                    "Rotation",
+                    rotation_opts,
+                    rot_label.clone(),
+                    |s| {
+                        let deg = s
+                            .split_whitespace()
+                            .next()
+                            .and_then(|n| n.parse::<f64>().ok())
+                            .unwrap_or(0.0);
+                        PanelMsg::SetPrePlacementRotation(deg)
+                    },
+                    muted,
+                ));
+                c
+            },
+        )
+        .boxed(),
+    );
 
     // ── Properties (kind-specific) ──
     let text_label_for_kind = match kind {
@@ -441,67 +447,71 @@ fn view_pre_placement<'a>(
     );
 
     if show_text_field || show_text_styling {
-        col = col.push(collapsible_section(
-            "preplace_props",
-            "Properties",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                if show_text_field {
-                    c = c.push(form_edit_row(
-                        text_label_for_kind,
-                        &label_text,
-                        muted,
-                        PanelMsg::SetPrePlacementText,
-                    ));
-                }
-                if show_designator {
-                    c = c.push(form_edit_row(
-                        "Designator",
-                        &designator,
-                        muted,
-                        PanelMsg::SetPrePlacementDesignator,
-                    ));
-                }
-                if show_text_styling {
-                    let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
-                    c = c.push(form_pick_row(
-                        "Font",
-                        font_opts,
-                        font.clone(),
-                        PanelMsg::SetPrePlacementFont,
-                        muted,
-                    ));
-                    let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                        .iter()
-                        .map(|n| n.to_string())
-                        .collect();
-                    c = c.push(form_pick_row(
-                        "Font Size",
-                        size_opts,
-                        font_size_pt.to_string(),
-                        |s| PanelMsg::SetPrePlacementFontSize(s.parse().unwrap_or(10)),
-                        muted,
-                    ));
-                    c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                    c = c.push(form_label("Justification", muted));
-                    c = c.push(
-                        container(preplacement_justification_grid(
-                            justify_h,
-                            input_bg,
-                            input_bdr,
-                            primary,
-                            ctx.theme_id,
-                        ))
-                        .padding([SP.s, SP.m])
-                        .boxed(),
-                    );
-                }
-                c
-            },
-        ).boxed());
+        col = col.push(
+            collapsible_section(
+                "preplace_props",
+                "Properties",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    if show_text_field {
+                        c = c.push(form_edit_row(
+                            text_label_for_kind,
+                            &label_text,
+                            muted,
+                            PanelMsg::SetPrePlacementText,
+                        ));
+                    }
+                    if show_designator {
+                        c = c.push(form_edit_row(
+                            "Designator",
+                            &designator,
+                            muted,
+                            PanelMsg::SetPrePlacementDesignator,
+                        ));
+                    }
+                    if show_text_styling {
+                        let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
+                        c = c.push(form_pick_row(
+                            "Font",
+                            font_opts,
+                            font.clone(),
+                            PanelMsg::SetPrePlacementFont,
+                            muted,
+                        ));
+                        let size_opts: Vec<String> =
+                            [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                                .iter()
+                                .map(|n| n.to_string())
+                                .collect();
+                        c = c.push(form_pick_row(
+                            "Font Size",
+                            size_opts,
+                            font_size_pt.to_string(),
+                            |s| PanelMsg::SetPrePlacementFontSize(s.parse().unwrap_or(10)),
+                            muted,
+                        ));
+                        c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
+                        c = c.push(form_label("Justification", muted));
+                        c = c.push(
+                            container(preplacement_justification_grid(
+                                justify_h,
+                                input_bg,
+                                input_bdr,
+                                primary,
+                                ctx.theme_id,
+                            ))
+                            .padding([SP.s, SP.m])
+                            .boxed(),
+                        );
+                    }
+                    c
+                },
+            )
+            .boxed(),
+        );
     } else if matches!(
         kind,
         PrePlacementKind::Line
@@ -516,27 +526,30 @@ fn view_pre_placement<'a>(
         let fill = pp.shape_fill;
         let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
         let numeric_draft = ctx.numeric_draft.as_ref();
-        col = col.push(collapsible_section(
-            "preplace_shape",
-            "Properties",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_edit_row_f64(
-                    "Width (mm)",
-                    width,
-                    crate::panels::NumericFieldKey::ShapeWidth,
-                    numeric_draft,
-                    muted,
-                ));
-                if show_fill {
-                    c = c.push(shape_fill_row(fill, muted, border_c));
-                }
-                c
-            },
-        ).boxed());
+        col = col.push(
+            collapsible_section(
+                "preplace_shape",
+                "Properties",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_edit_row_f64(
+                        "Width (mm)",
+                        width,
+                        crate::panels::NumericFieldKey::ShapeWidth,
+                        numeric_draft,
+                        muted,
+                    ));
+                    if show_fill {
+                        c = c.push(shape_fill_row(fill, muted, border_c));
+                    }
+                    c
+                },
+            )
+            .boxed(),
+        );
     } else {
         col = col.push(
             container(

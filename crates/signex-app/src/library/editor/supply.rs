@@ -1,6 +1,5 @@
-//! Supply tab — primary MPN + ranked alternates + distributor listings
-//! editor. Retargeted to `ComponentRow` (DBLib model) per
-//! `v0.9-refactor-2-plan.md` §11.4.
+//! Supply tab — manufacturer-part grid (primary + alternates) and a
+//! distributor-listing grid, built from the shared dialog kit.
 //!
 //! The shape this view edits:
 //!
@@ -8,33 +7,22 @@
 //! - `state.row.alternates`         : `Vec<ManufacturerPart>` — AVL.
 //! - `state.row.supply`             : `Vec<DistributorListing>` — sourcing rows.
 //!
-//! Layout is three muted-header sections:
-//!
-//! 1. **Primary MPN** — 4-row form (Manufacturer / MPN / Status / Notes).
-//! 2. **Alternates** — one inline row per alternate (manufacturer, MPN,
-//!    status pick_list, notes, remove [×]) plus a `+ Add Alternate`
-//!    trigger.
-//! 3. **Distributor Listings** — table-like rows (distributor pick_list,
-//!    sku, url, remove [×]) plus a `+ Add Listing` trigger.
-//!
-//! Every value mutation flows through `EditorMsg::Supply*` → the
-//! library dispatcher's `dispatch/library/` handlers, which write to the
-//! editor's draft row and mark it dirty.
+//! Two grids: **Manufacturer parts** (Role / Manufacturer / MPN / Status /
+//! Notes, the primary row first and marked) and **Distributor listings**
+//! (Distributor / SKU / Link). Every value mutation flows through
+//! `EditorMsg::Supply*` → the library dispatcher's `dispatch/library/`
+//! handlers, which write to the editor's draft row and mark it dirty.
 
-use iced::widget::{
-    Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
-use iced::{Border, Element, Length, Theme, Widget};
+use iced::widget::{column, pick_list, scrollable, text, text_input};
+use iced::{Element, Length, Widget};
 use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+use super::kit::{self, SP, TS};
+use super::params::editor_event;
 
 const STATUS_OPTS: [AlternateStatus; 4] = [
     AlternateStatus::Primary,
@@ -103,138 +91,174 @@ pub(crate) fn distributor_source_to_string(s: DistributorSource) -> String {
     distributor_label(s).to_string()
 }
 
+const PART_COLS: [(&str, Length); 6] = [
+    ("Role", Length::FillPortion(2)),
+    ("Manufacturer", Length::FillPortion(4)),
+    ("MPN", Length::FillPortion(4)),
+    ("Status", Length::FillPortion(3)),
+    ("Notes", Length::FillPortion(4)),
+    ("", Length::FillPortion(2)),
+];
+
+const LISTING_COLS: [(&str, Length); 4] = [
+    ("Distributor", Length::FillPortion(3)),
+    ("SKU", Length::FillPortion(4)),
+    ("Link", Length::FillPortion(6)),
+    ("", Length::FillPortion(2)),
+];
+
+/// Role cell text: the primary part, or `Alt n` (1-based) for an alternate.
+fn role_label(alternate_idx: Option<usize>) -> String {
+    match alternate_idx {
+        None => "Primary".to_string(),
+        Some(i) => format!("Alt {}", i + 1),
+    }
+}
+
+/// Empty-state text for the alternates / listings grids.
+fn empty_text(listings: bool) -> &'static str {
+    if listings {
+        "No distributor listings yet."
+    } else {
+        "No alternates yet."
+    }
+}
+
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let body = column![
-        section_header("Primary MPN", tokens),
-        Space::new().height(6),
-        primary_form(state, tokens, &address),
-        Space::new().height(14),
-        section_header("Alternates", tokens),
-        Space::new().height(6),
-        alternates_section(state, tokens, &address),
-        Space::new().height(14),
-        section_header("Distributor Listings", tokens),
-        Space::new().height(6),
+        parts_section(state, tokens, &address),
         listings_section(state, tokens, &address),
     ]
-    .spacing(0)
+    .spacing(SP.xl)
     .width(Length::Fill);
 
-    container(scrollable(body).width(Length::Fill).height(Length::Fill))
-        .padding(14)
-        .style(crate::styles::modal_card(tokens))
+    scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
         .boxed()
 }
 
-fn section_header<'a>(label: &'a str, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    text(label).size(TS.body).color(muted).boxed()
+// ─────────────────────────── Cell builders ─────────────────────────────
+
+fn input<'a>(
+    placeholder: &'a str,
+    value: &'a str,
+    address: &EditorAddress,
+    make: impl Fn(String) -> EditorMsg + 'a,
+) -> Element<'a, LibraryMessage> {
+    let address = address.clone();
+    text_input(placeholder, value)
+        .on_input(move |s| editor_event(&address, make(s)))
+        .padding([SP.s, SP.m])
+        .size(TS.label)
+        .boxed()
 }
 
-// ─────────────────────────── Primary MPN form ──────────────────────────
-
-fn primary_form<'a>(
-    state: &'a ComponentPreviewState,
-    tokens: &'a ThemeTokens,
+fn status_picker<'a>(
+    current: AlternateStatus,
     address: &EditorAddress,
+    make: impl Fn(AlternateStatus) -> EditorMsg + 'a,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let primary = &state.row.primary_mpn;
-    let notes_str = primary.notes.clone().unwrap_or_default();
-
-    let mfg_field = labelled_input(
-        "Manufacturer",
-        primary.manufacturer.clone(),
-        "Texas Instruments",
-        EditorMsg::SupplyPrimarySetManufacturer,
-        tokens,
-        address,
-    );
-    let mpn_field = labelled_input(
-        "MPN",
-        primary.mpn.clone(),
-        "LM358MX",
-        EditorMsg::SupplyPrimarySetMpn,
-        tokens,
-        address,
-    );
-
-    let lib_path = address.library_path.clone();
-    let table = address.table.clone();
-    let row_id = address.row_id;
-    let status_picker = pick_list(Some(primary.status), STATUS_OPTS, status_label)
-        .on_select(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path.clone(),
-            table: table.clone(),
-            row_id,
-            msg: EditorMsg::SupplyPrimarySetStatus(s),
-        })
-        .text_size(12.0)
-    .padding([SP.s, SP.m]);
-    let status_block: Element<'a, LibraryMessage> =
-        column![text("Status").size(TS.caption).color(muted), status_picker,]
-            .spacing(SP.s)
-            .boxed();
-
-    let notes_field = labelled_input(
-        "Notes",
-        notes_str,
-        "preferred vendor / lead-time / etc.",
-        EditorMsg::SupplyPrimarySetNotes,
-        tokens,
-        address,
-    );
-
-    column![
-        mfg_field,
-        Space::new().height(8),
-        mpn_field,
-        Space::new().height(8),
-        status_block,
-        Space::new().height(8),
-        notes_field,
-    ]
-    .spacing(0)
-    .width(Length::Fill)
-    .boxed()
+    let address = address.clone();
+    pick_list(Some(current), STATUS_OPTS, status_label)
+        .on_select(move |s| editor_event(&address, make(s)))
+        .text_size(TS.label)
+        .padding([SP.s, SP.m])
+        .width(Length::Fill)
+        .boxed()
 }
 
-// ────────────────────────── Alternates section ─────────────────────────
-
-fn alternates_section<'a>(
-    state: &'a ComponentPreviewState,
-    tokens: &'a ThemeTokens,
-    address: &EditorAddress,
+fn role_cell<'a>(
+    label: String,
+    primary: bool,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let mut col: iced::widget::Column<Element<'a, LibraryMessage>> = column![].spacing(6);
-    if state.row.alternates.is_empty() {
-        col = col.push(
-            text("No alternates yet — click \u{2009}+ Add Alternate\u{2009} to start.")
-                .size(TS.body)
-                .color(muted)
-                .boxed(),
-        );
+    let color = if primary {
+        theme_ext::accent(tokens)
     } else {
-        for (idx, alt) in state.row.alternates.iter().enumerate() {
-            col = col.push(alternate_row(idx, alt, tokens, address));
-        }
+        theme_ext::text_secondary(tokens)
+    };
+    text(label).size(TS.body).color(color).boxed()
+}
+
+fn blank<'a>() -> Element<'a, LibraryMessage> {
+    text("").size(TS.body).boxed()
+}
+
+// ─────────────────────── Manufacturer parts grid ───────────────────────
+
+fn parts_section<'a>(
+    state: &'a ComponentPreviewState,
+    tokens: &'a ThemeTokens,
+    address: &EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    let add = kit::primary_button(
+        "Add alternate",
+        Some(editor_event(address, EditorMsg::SupplyAlternateAdd)),
+        tokens,
+    );
+    let primary = &state.row.primary_mpn;
+    let [role_w, mfg_w, mpn_w, status_w, notes_w, action_w] = PART_COLS.map(|(_, w)| w);
+
+    let primary_row = kit::table_row(
+        vec![
+            (role_cell(role_label(None), true, tokens), role_w),
+            (
+                input(
+                    "Texas Instruments",
+                    &primary.manufacturer,
+                    address,
+                    EditorMsg::SupplyPrimarySetManufacturer,
+                ),
+                mfg_w,
+            ),
+            (
+                input(
+                    "LM358MX",
+                    &primary.mpn,
+                    address,
+                    EditorMsg::SupplyPrimarySetMpn,
+                ),
+                mpn_w,
+            ),
+            (
+                status_picker(primary.status, address, EditorMsg::SupplyPrimarySetStatus),
+                status_w,
+            ),
+            (
+                input(
+                    "Preferred vendor, lead time",
+                    primary.notes.as_deref().unwrap_or(""),
+                    address,
+                    EditorMsg::SupplyPrimarySetNotes,
+                ),
+                notes_w,
+            ),
+            (blank(), action_w),
+        ],
+        0,
+        None,
+        tokens,
+    );
+
+    let mut grid = column![kit::table_header(&PART_COLS, tokens), primary_row];
+    for (idx, alt) in state.row.alternates.iter().enumerate() {
+        grid = grid.push(alternate_row(idx, alt, tokens, address));
+    }
+    if state.row.alternates.is_empty() {
+        grid = grid.push(kit::empty_state(empty_text(false), None, tokens));
     }
 
-    col = col.push(Space::new().height(2).boxed());
-    col = col.push(add_button(
-        "+ Add Alternate",
-        EditorMsg::SupplyAlternateAdd,
-        tokens,
-        address,
-    ));
-    col.boxed()
+    column![
+        kit::section_header("Manufacturer parts", Some(add), tokens),
+        kit::card(grid.boxed(), tokens),
+    ]
+    .spacing(SP.m)
+    .boxed()
 }
 
 fn alternate_row<'a>(
@@ -243,98 +267,53 @@ fn alternate_row<'a>(
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
-
-    let lib_path_for_mfg = address.library_path.clone();
-    let table_for_mfg = address.table.clone();
-    let row_id = address.row_id;
-    let mfg_input = text_input("Manufacturer", &alt.manufacturer)
-        .padding([SP.s, SP.m])
-        .size(TS.label)
-        .width(Length::FillPortion(3))
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_mfg.clone(),
-            table: table_for_mfg.clone(),
-            row_id,
-            msg: EditorMsg::SupplyAlternateSetManufacturer { idx, value: s },
-        });
-
-    let lib_path_for_mpn = address.library_path.clone();
-    let table_for_mpn = address.table.clone();
-    let mpn_input = text_input("MPN", &alt.mpn)
-        .padding([SP.s, SP.m])
-        .size(TS.label)
-        .width(Length::FillPortion(3))
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_mpn.clone(),
-            table: table_for_mpn.clone(),
-            row_id,
-            msg: EditorMsg::SupplyAlternateSetMpn { idx, value: s },
-        });
-
-    let lib_path_for_status = address.library_path.clone();
-    let table_for_status = address.table.clone();
-    let status_picker = pick_list(Some(alt.status), STATUS_OPTS, status_label)
-        .on_select(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_status.clone(),
-            table: table_for_status.clone(),
-            row_id,
-            msg: EditorMsg::SupplyAlternateSetStatus { idx, value: s },
-        })
-        .text_size(12.0)
-        .padding([SP.s, SP.m])
-        .width(Length::Fixed(140.0));
-
-    let lib_path_for_notes = address.library_path.clone();
-    let table_for_notes = address.table.clone();
-    let notes_value = alt.notes.clone().unwrap_or_default();
-    let notes_input = text_input("notes", notes_value)
-        .padding([SP.s, SP.m])
-        .size(TS.label)
-        .width(Length::FillPortion(4))
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_notes.clone(),
-            table: table_for_notes.clone(),
-            row_id,
-            msg: EditorMsg::SupplyAlternateSetNotes { idx, value: s },
-        });
-
-    let remove = remove_button(
-        EditorMsg::SupplyAlternateRemove { idx },
-        text_c,
-        border,
-        address,
-    );
-
-    container(
-        row![
-            mfg_input,
-            Space::new().width(6),
-            mpn_input,
-            Space::new().width(6),
-            status_picker,
-            Space::new().width(6),
-            notes_input,
-            Space::new().width(6),
-            remove,
-        ]
-        .align_y(iced::Alignment::Center)
-        .padding([3.0, SP.s]),
+    let [role_w, mfg_w, mpn_w, status_w, notes_w, action_w] = PART_COLS.map(|(_, w)| w);
+    kit::table_row(
+        vec![
+            (role_cell(role_label(Some(idx)), false, tokens), role_w),
+            (
+                input("Manufacturer", &alt.manufacturer, address, move |value| {
+                    EditorMsg::SupplyAlternateSetManufacturer { idx, value }
+                }),
+                mfg_w,
+            ),
+            (
+                input("MPN", &alt.mpn, address, move |value| {
+                    EditorMsg::SupplyAlternateSetMpn { idx, value }
+                }),
+                mpn_w,
+            ),
+            (
+                status_picker(alt.status, address, move |value| {
+                    EditorMsg::SupplyAlternateSetStatus { idx, value }
+                }),
+                status_w,
+            ),
+            (
+                input(
+                    "Notes",
+                    alt.notes.as_deref().unwrap_or(""),
+                    address,
+                    move |value| EditorMsg::SupplyAlternateSetNotes { idx, value },
+                ),
+                notes_w,
+            ),
+            (
+                kit::danger_button(
+                    "Remove",
+                    Some(editor_event(
+                        address,
+                        EditorMsg::SupplyAlternateRemove { idx },
+                    )),
+                    tokens,
+                ),
+                action_w,
+            ),
+        ],
+        idx + 1,
+        None,
+        tokens,
     )
-    .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.02,
-        ))),
-        border: Border {
-            width: 1.0,
-            radius: 2.0.into(),
-            color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-            ..Default::default()
-        },
-        ..Default::default()
-    })
-    .boxed()
 }
 
 // ──────────────────────── Distributor listings ─────────────────────────
@@ -344,74 +323,31 @@ fn listings_section<'a>(
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-
-    let header = row![
-        text("Distributor")
-            .size(TS.caption)
-            .color(muted)
-            .width(Length::Fixed(160.0)),
-        Space::new().width(6),
-        text("SKU")
-            .size(TS.caption)
-            .color(muted)
-            .width(Length::FillPortion(3)),
-        Space::new().width(6),
-        text("URL")
-            .size(TS.caption)
-            .color(muted)
-            .width(Length::FillPortion(5)),
-        Space::new().width(6),
-        text("").size(TS.caption).width(Length::Fixed(28.0)),
-    ]
-    .padding([SP.xs, SP.s]);
-
-    let mut rows = column![header].spacing(SP.s);
+    let add = kit::primary_button(
+        "Add listing",
+        Some(editor_event(address, EditorMsg::SupplyListingAdd)),
+        tokens,
+    );
+    let mut grid = column![kit::table_header(&LISTING_COLS, tokens)];
+    for (idx, listing) in state.row.supply.iter().enumerate() {
+        grid = grid.push(listing_row(
+            idx,
+            listing.distributor.as_str(),
+            listing.sku.as_str(),
+            listing.url.as_deref().unwrap_or(""),
+            tokens,
+            address,
+        ));
+    }
     if state.row.supply.is_empty() {
-        rows = rows.push(
-            text("No distributor listings yet.")
-                .size(TS.body)
-                .color(muted)
-                .boxed(),
-        );
-    } else {
-        for (idx, listing) in state.row.supply.iter().enumerate() {
-            rows = rows.push(listing_row(
-                idx,
-                listing.distributor.as_str(),
-                listing.sku.as_str(),
-                listing.url.as_deref().unwrap_or(""),
-                tokens,
-                address,
-            ));
-        }
+        grid = grid.push(kit::empty_state(empty_text(true), None, tokens));
     }
 
-    let table_card = container(rows)
-        .padding(6)
-        .width(Length::Fill)
-        .style(move |_: &Theme| iced::widget::container::Style {
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-
     column![
-        table_card,
-        Space::new().height(6),
-        add_button(
-            "+ Add Listing",
-            EditorMsg::SupplyListingAdd,
-            tokens,
-            address
-        ),
+        kit::section_header("Distributor listings", Some(add), tokens),
+        kit::card(grid.boxed(), tokens),
     ]
-    .spacing(0)
+    .spacing(SP.m)
     .boxed()
 }
 
@@ -423,179 +359,94 @@ fn listing_row<'a>(
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
-
-    let lib_path_for_dist = address.library_path.clone();
-    let table_for_dist = address.table.clone();
-    let row_id = address.row_id;
+    let [dist_w, sku_w, url_w, action_w] = LISTING_COLS.map(|(_, w)| w);
+    let picker_address = address.clone();
     let distributor_picker = pick_list(
         Some(distributor_from_label(distributor_str)),
         DISTRIBUTOR_OPTS,
         distributor_pick_label,
     )
-    .on_select(move |s| LibraryMessage::EditorEvent {
-        library_path: lib_path_for_dist.clone(),
-        table: table_for_dist.clone(),
-        row_id,
-        msg: EditorMsg::SupplyListingSetDistributor { idx, value: s },
+    .on_select(move |value| {
+        editor_event(
+            &picker_address,
+            EditorMsg::SupplyListingSetDistributor { idx, value },
+        )
     })
-    .text_size(12.0)
+    .text_size(TS.label)
     .padding([SP.s, SP.m])
-    .width(Length::Fixed(160.0));
+    .width(Length::Fill);
 
-    let lib_path_for_sku = address.library_path.clone();
-    let table_for_sku = address.table.clone();
-    let sku_input = text_input("296-1395-1-ND", sku)
-        .padding([SP.s, SP.m])
-        .size(TS.label)
-        .width(Length::FillPortion(3))
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_sku.clone(),
-            table: table_for_sku.clone(),
-            row_id,
-            msg: EditorMsg::SupplyListingSetSku { idx, value: s },
-        });
-
-    let lib_path_for_url = address.library_path.clone();
-    let table_for_url = address.table.clone();
-    let url_input = text_input("https://www.distributor.com/...", url)
-        .padding([SP.s, SP.m])
-        .size(TS.label)
-        .width(Length::FillPortion(5))
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_url.clone(),
-            table: table_for_url.clone(),
-            row_id,
-            msg: EditorMsg::SupplyListingSetUrl { idx, value: s },
-        });
-
-    let remove = remove_button(
-        EditorMsg::SupplyListingRemove { idx },
-        text_c,
-        border,
-        address,
-    );
-
-    row![
-        distributor_picker,
-        Space::new().width(6),
-        sku_input,
-        Space::new().width(6),
-        url_input,
-        Space::new().width(6),
-        remove,
-    ]
-    .align_y(iced::Alignment::Center)
-    .padding([SP.xs, SP.s])
-    .boxed()
-}
-
-// ─────────────────────────── Shared widgets ────────────────────────────
-
-fn labelled_input<'a>(
-    label: &'static str,
-    value: String,
-    placeholder: &'static str,
-    msg: fn(String) -> EditorMsg,
-    tokens: &'a ThemeTokens,
-    address: &EditorAddress,
-) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let lib_path = address.library_path.clone();
-    let table = address.table.clone();
-    let row_id = address.row_id;
-    column![
-        text(label).size(TS.caption).color(muted),
-        text_input(placeholder, value)
-            .on_input(move |s| LibraryMessage::EditorEvent {
-                library_path: lib_path.clone(),
-                table: table.clone(),
-                row_id,
-                msg: msg(s),
-            })
-            .padding([SP.s, SP.m])
-            .size(TS.label),
-    ]
-    .spacing(SP.s)
-    .width(Length::Fill)
-    .boxed()
-}
-
-fn add_button<'a>(
-    label: &'static str,
-    msg: EditorMsg,
-    tokens: &'a ThemeTokens,
-    address: &EditorAddress,
-) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
-    button(container(text(label).size(TS.body).color(text_c)).padding([SP.s, SP.l]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: address.library_path.clone(),
-            table: address.table.clone(),
-            row_id: address.row_id,
-            msg,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Default::default()
-                },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .boxed()
-}
-
-fn remove_button<'a>(
-    msg: EditorMsg,
-    text_c: iced::Color,
-    border: iced::Color,
-    address: &EditorAddress,
-) -> Element<'a, LibraryMessage> {
-    button(
-        container(text("\u{00D7}".to_string()).size(TS.title).color(text_c)).padding([0.0, SP.m]),
+    kit::table_row(
+        vec![
+            (distributor_picker.boxed(), dist_w),
+            (
+                input("296-1395-1-ND", sku, address, move |value| {
+                    EditorMsg::SupplyListingSetSku { idx, value }
+                }),
+                sku_w,
+            ),
+            (
+                input(
+                    "https://www.distributor.com/...",
+                    url,
+                    address,
+                    move |value| EditorMsg::SupplyListingSetUrl { idx, value },
+                ),
+                url_w,
+            ),
+            (
+                kit::danger_button(
+                    "Remove",
+                    Some(editor_event(
+                        address,
+                        EditorMsg::SupplyListingRemove { idx },
+                    )),
+                    tokens,
+                ),
+                action_w,
+            ),
+        ],
+        idx,
+        None,
+        tokens,
     )
-    .on_press(LibraryMessage::EditorEvent {
-        library_path: address.library_path.clone(),
-        table: address.table.clone(),
-        row_id: address.row_id,
-        msg,
-    })
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-            )),
-            _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-        };
-        iced::widget::button::Style {
-            background: bg,
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Default::default()
-            },
-            ..iced::widget::button::Style::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn role_labels_mark_primary_and_number_alternates() {
+        assert_eq!(role_label(None), "Primary");
+        assert_eq!(role_label(Some(0)), "Alt 1");
+        assert_eq!(role_label(Some(2)), "Alt 3");
+    }
+
+    #[test]
+    fn empty_state_text_has_no_glyph_hacks() {
+        for listings in [false, true] {
+            let t = empty_text(listings);
+            assert!(t.is_ascii() && !t.contains('+'), "{t}");
         }
-    })
-    .boxed()
+    }
+
+    #[test]
+    fn grids_have_issue_columns_and_a_trailing_action() {
+        let titles: Vec<&str> = PART_COLS.iter().map(|c| c.0).collect();
+        assert_eq!(
+            &titles[..5],
+            ["Role", "Manufacturer", "MPN", "Status", "Notes"]
+        );
+        assert_eq!(titles[5], "");
+        let titles: Vec<&str> = LISTING_COLS.iter().map(|c| c.0).collect();
+        assert_eq!(&titles[..3], ["Distributor", "SKU", "Link"]);
+    }
+
+    #[test]
+    fn distributor_labels_round_trip() {
+        for d in DISTRIBUTOR_OPTS {
+            assert_eq!(distributor_from_label(distributor_label(d)), d);
+        }
+    }
 }

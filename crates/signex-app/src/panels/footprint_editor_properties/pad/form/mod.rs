@@ -335,13 +335,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         border: border_c,
         ..
     } = palette;
-    col = col.push(props_section_header(
-        "Properties",
-        "fp_pad_properties",
-        collapsed_sections,
-        primary,
-        border_c,
-    ).boxed());
+    col = col.push(
+        props_section_header(
+            "Properties",
+            "fp_pad_properties",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pad_properties", collapsed_sections) {
         return col;
     }
@@ -465,13 +468,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
         border: border_c,
         ..
     } = palette;
-    col = col.push(props_section_header(
-        "Pad Features",
-        "fp_pad_features",
-        collapsed_sections,
-        primary,
-        border_c,
-    ).boxed());
+    col = col.push(
+        props_section_header(
+            "Pad Features",
+            "fp_pad_features",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pad_features", collapsed_sections) {
         return col;
     }
@@ -493,7 +499,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     ));
 
     col = col.push(
-        container(text("Testpoint").size(9).color(muted))
+        container(text("Testpoint").size(TS.caption).color(muted))
             .padding([SP.m, SP.m])
             .width(Length::Fill)
             .boxed(),

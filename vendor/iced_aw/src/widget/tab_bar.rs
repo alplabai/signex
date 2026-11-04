@@ -409,11 +409,7 @@ where
         M: 'b,
     {
         let icon = |icon: &char| -> Element<'b, M, Theme, Renderer> {
-            boxed(layout_icon::<Theme>(
-                icon,
-                self.icon_size + 1.0,
-                self.font,
-            ))
+            boxed(layout_icon::<Theme>(icon, self.icon_size + 1.0, self.font))
         };
         let label = |text: &'b str| -> Element<'b, M, Theme, Renderer> {
             boxed(layout_text::<Theme>(
@@ -431,9 +427,7 @@ where
 
         for tab_label in &self.tab_labels {
             let column: Column<Element<'b, M, Theme, Renderer>> = match tab_label {
-                TabLabel::Icon(ch) => shrink_column()
-                    .align_x(Alignment::Center)
-                    .push(icon(ch)),
+                TabLabel::Icon(ch) => shrink_column().align_x(Alignment::Center).push(icon(ch)),
 
                 TabLabel::Text(text) => shrink_column()
                     .padding(5.0)
@@ -464,10 +458,7 @@ where
                             ));
                         }
                         Position::Bottom => {
-                            column = column
-                                .height(Length::Fill)
-                                .push(label(text))
-                                .push(icon(ch));
+                            column = column.height(Length::Fill).push(label(text)).push(icon(ch));
                         }
                     }
 

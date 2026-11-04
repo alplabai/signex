@@ -114,9 +114,7 @@ pub(super) fn section_title<'a>(title: &str) -> Element<'a, PrefMsg> {
             .width(Length::Fill)
             .height(1)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(
-                    theme.palette().background.strong.color
-                )),
+                background: Some(Background::Color(theme.palette().background.strong.color)),
                 ..container::Style::default()
             }),
     ]
@@ -129,9 +127,7 @@ pub(super) fn h_sep<'a>() -> Element<'a, PrefMsg> {
         .width(Length::Fill)
         .height(1)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.palette().background.strong.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.strong.color)),
             ..container::Style::default()
         })
         .boxed()

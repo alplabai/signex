@@ -1,9 +1,4 @@
-use iced_core::{
-    Padding, Rectangle, Shell, Size,
-    layout::Layout,
-    mouse, renderer,
-    widget::Tree,
-};
+use iced_core::{Padding, Rectangle, Shell, Size, layout::Layout, mouse, renderer, widget::Tree};
 
 use super::menu_bar::{GlobalState, MenuBarTask};
 use super::menu_tree::{Item, MenuState};
@@ -237,12 +232,7 @@ pub(super) fn try_open_menu<'a, Message, Theme: Catalog, Renderer: renderer::Ren
 /// This function assumes that a mouse::Event::ButtonPressed(mouse::Button::Left) event has occurred,
 /// make sure to check the event before calling this function.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn schedule_close_on_click<
-    'a,
-    Message,
-    Theme: Catalog,
-    Renderer: renderer::Renderer,
->(
+pub(super) fn schedule_close_on_click<'a, Message, Theme: Catalog, Renderer: renderer::Renderer>(
     global_state: &mut GlobalState,
     global_parameters: &GlobalParameters<'_, Theme>,
     slice: MenuSlice,

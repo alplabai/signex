@@ -19,6 +19,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
+use signex_types::net_class::NetClassStyle;
+use uuid::Uuid;
 
 use crate::app::contracts::{Message, UiMsg};
 use crate::app::project_sheets::{self, OpenSheets};
@@ -27,6 +29,7 @@ use crate::app::state::net_class_styles::{
 };
 use crate::app::state::project_case::fold_of;
 use crate::app::state::{DocumentState, ProjectId};
+use crate::app::stitched_netlist::StitchSlot;
 
 use super::Signex;
 
@@ -43,7 +46,11 @@ pub(in crate::app) struct PlannedProject {
 struct ProjectJob {
     project: ProjectId,
     key: ProjectKey,
+    /// The request number the answer is stamped with.
+    seq: u64,
     project_dir: PathBuf,
+    /// Shared with the net index job of the same project and key.
+    stitch: StitchSlot,
 }
 
 /// A planned background resolution. [`ClassStyleJob::run`] does the disk
@@ -75,29 +82,43 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
     let ProjectJob {
         project,
         key,
+        seq,
         project_dir,
+        stitch,
     } = job;
     let mut resolved = ResolvedProject {
         project,
         key,
+        seq,
         styles: Default::default(),
         nets: Default::default(),
+        placed_styles: Default::default(),
+        placed_nets: Default::default(),
         warnings: Vec::new(),
     };
     if resolved.key.classes.is_empty() {
         return resolved;
     }
-    let stitched = crate::app::stitched_netlist::stitched_project_netlist_from(
-        open,
-        &resolved.key.pages,
-        &resolved.key.root,
-        resolved.key.fold,
-        Some(project_dir),
-    );
-    resolved.warnings = stitched.warnings;
-    if let Some(netlist) = stitched.netlist {
-        resolved.styles = signex_net::element_class_styles(&netlist, &resolved.key.classes);
-        resolved.nets = signex_net::element_net_names(&netlist);
+    let stitched = stitch.get_or_init(|| {
+        crate::app::stitched_netlist::stitched_index_from(
+            open,
+            &resolved.key.pages,
+            &resolved.key.root,
+            resolved.key.fold,
+            Some(project_dir),
+        )
+    });
+    resolved.warnings = stitched.warnings.clone();
+    if let Some(netlist) = &stitched.netlist {
+        resolved.styles = signex_net::element_class_styles(netlist, &resolved.key.classes);
+        resolved.nets = signex_net::element_net_names(netlist, &resolved.key.classes);
+    }
+    // The per-placement maps read the index: it is what knows which net a
+    // shared element is on in each placement, so the style job needs it and
+    // the net index job of the same inputs reads it for free.
+    if let Some(index) = &stitched.index {
+        resolved.placed_styles = signex_net::placement_class_styles(index, &resolved.key.classes);
+        resolved.placed_nets = signex_net::placement_net_names(index);
     }
     resolved
 }
@@ -198,10 +219,17 @@ impl Signex {
             if !project.key.classes.is_empty() {
                 snapshot_paths.extend(project.open_paths);
             }
+            let stitch = self
+                .document_state
+                .net_nav
+                .stitch_share
+                .claim(project.project, &project.key);
             jobs.push(ProjectJob {
                 project: project.project,
+                seq: cache.request_seq(project.project),
                 key: project.key,
                 project_dir: project.project_dir,
+                stitch,
             });
         }
         if pruned {
@@ -295,6 +323,16 @@ impl Signex {
         if applied.styles_changed || applied.nets_changed {
             self.refresh_panel_ctx();
         }
+    }
+
+    /// The class styles the active sheet draws and hit-tests with.
+    pub(crate) fn active_class_styles(&self) -> &std::collections::HashMap<Uuid, NetClassStyle> {
+        let placement = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.shown_placement(path));
+        self.ui_state.net_class_styles.styles_in(placement.as_ref())
     }
 
     fn clear_schematic_content_caches(&mut self) {

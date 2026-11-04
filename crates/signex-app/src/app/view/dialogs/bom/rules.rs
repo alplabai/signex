@@ -35,7 +35,12 @@ impl Signex {
         let mut issues: Column<Element<'_, Message>> = Column::new().spacing(SP.xs);
         let report = &preview.validation_report;
         if report.issues.is_empty() {
-            issues = issues.push(text("No issues found.").size(TS.body).color(text_muted).boxed());
+            issues = issues.push(
+                text("No issues found.")
+                    .size(TS.body)
+                    .color(text_muted)
+                    .boxed(),
+            );
         }
         for (severity, heading) in [
             (BomIssueSeverity::Error, "Errors"),
@@ -111,9 +116,9 @@ fn rule_row<'a>(
         Color::from_rgba(1.0, 1.0, 1.0, 0.04)
     };
     let inner = if on {
-        text("\u{2713}").size(9).color(Color::WHITE)
+        text("\u{2713}").size(TS.caption).color(Color::WHITE)
     } else {
-        text(" ").size(9)
+        text(" ").size(TS.caption)
     };
     let pip = container(inner)
         .width(14)

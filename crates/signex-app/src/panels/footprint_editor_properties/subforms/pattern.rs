@@ -39,13 +39,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     };
     let array_id = arr.array_id;
 
-    col = col.push(props_section_header(
-        "Pattern",
-        "fp_pattern",
-        collapsed_sections,
-        primary,
-        border_c,
-    ).boxed());
+    col = col.push(
+        props_section_header(
+            "Pattern",
+            "fp_pattern",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pattern", collapsed_sections) {
         return col;
     }
@@ -210,7 +213,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     .spacing(SP.xs)
                     .padding([0.0, SP.m]);
                 for j in 0..ny {
-                    let mut grid_row = iced::widget::Row::<Element<'a, PanelMsg>>::new().spacing(SP.xs);
+                    let mut grid_row =
+                        iced::widget::Row::<Element<'a, PanelMsg>>::new().spacing(SP.xs);
                     for i in 0..nx {
                         let suppressed = suppressed_instances
                             .iter()

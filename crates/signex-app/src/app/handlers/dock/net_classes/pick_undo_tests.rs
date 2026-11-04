@@ -89,6 +89,12 @@ fn undo_reverts_the_pick_and_leaves_the_sheet_alone() {
     assert!(nets(&app).is_empty(), "the pick is reverted");
     assert_eq!(symbol_x(&app), moved_x, "the earlier sheet edit stays");
     assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.projects[0].path),
+        "undoing the only project edit lands back on the file's content (#1854)"
+    );
+    app.handle_redo_requested();
+    assert!(
         app.document_state
             .is_document_dirty(&app.document_state.projects[0].path)
     );

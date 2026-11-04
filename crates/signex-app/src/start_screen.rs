@@ -23,7 +23,7 @@ use crate::menu_bar::MenuMessage;
 use crate::styles;
 
 /// Base text size every other measure on this screen is derived from.
-const BASE: f32 = 12.0;
+const BASE: f32 = crate::styles::TypeScale::DEFAULT.body;
 
 /// How many recent projects the start screen lists (File ▸ Open Recent
 /// keeps more).
@@ -207,10 +207,7 @@ pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
     region(tokens, content.boxed())
 }
 
-fn region<'a>(
-    tokens: &'a ThemeTokens,
-    content: Element<'a, Message>,
-) -> Element<'a, Message> {
+fn region<'a>(tokens: &'a ThemeTokens, content: Element<'a, Message>) -> Element<'a, Message> {
     container(content)
         .center(Length::Fill)
         .style(styles::panel_region(tokens))

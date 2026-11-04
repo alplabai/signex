@@ -61,8 +61,8 @@ pub fn collapsible_section_header<'a>(
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    col = col.push(
-        Widget::boxed(iced::widget::button(
+    col = col.push(Widget::boxed(
+        iced::widget::button(
             container(
                 row![
                     svg(chevron_handle)
@@ -92,8 +92,8 @@ pub fn collapsible_section_header<'a>(
                 border: Border::default(),
                 ..iced::widget::button::Style::default()
             }
-        })),
-    );
+        }),
+    ));
     col = col.push(thin_sep(border_c));
     col
 }
@@ -143,14 +143,16 @@ pub fn prop_kv_row<'a>(
 
 pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
     text(title.to_uppercase())
-        .size(9)
+        .size(TS.caption)
         .color(theme_ext::text_secondary(tokens))
 }
 
 pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
     // Use a cached static string instead of allocating on every render
     const SEP: &str = "──────────────────────────────";
-    text(SEP).size(4).color(theme_ext::border_color(tokens))
+    text(SEP)
+        .size(TS.micro)
+        .color(theme_ext::border_color(tokens))
 }
 
 pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, PanelMsg> {
@@ -159,7 +161,7 @@ pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a,
             section_title(title, &ctx.tokens),
             separator(&ctx.tokens),
             text(crate::active_bar::PLANNED_TOOLTIP)
-                .size(10)
+                .size(TS.caption)
                 .color(theme_ext::text_primary(&ctx.tokens)),
             text(desc.to_string())
                 .size(TS.caption)

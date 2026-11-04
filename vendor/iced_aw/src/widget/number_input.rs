@@ -515,7 +515,12 @@ impl Operation for FocusProbe {
         operate(self);
     }
 
-    fn focusable(&mut self, _id: Option<&widget::Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+    fn focusable(
+        &mut self,
+        _id: Option<&widget::Id>,
+        _bounds: Rectangle,
+        state: &mut dyn Focusable,
+    ) {
         self.focused = state.is_focused();
     }
 }
@@ -704,7 +709,13 @@ where
                 };
 
                 // Operate on the modifier element to expose button text
-                element.operate(modifier_tree, modifier_layout, viewport, renderer, operation);
+                element.operate(
+                    modifier_tree,
+                    modifier_layout,
+                    viewport,
+                    renderer,
+                    operation,
+                );
             }
         });
     }
@@ -725,8 +736,7 @@ where
         } = tree;
 
         let mut layouts = layout.iter_mut(children);
-        let (content_layout, content_tree) =
-            layouts.next().expect("fail to get content layout");
+        let (content_layout, content_tree) = layouts.next().expect("fail to get content layout");
         let (modifier_layout, modifier_tree) =
             layouts.next().expect("fail to get modifiers layout");
         let mut mod_children = modifier_layout.iter(&modifier_tree.children);

@@ -19,6 +19,9 @@ impl Signex {
             return;
         };
         let pn = state.row.internal_pn.to_string();
+        // One undo step, so the saved position cannot name a row that
+        // already holds the alternate.
+        let scope = state.begin_edit();
         let default = resolve(
             &self.library.set,
             &state.row.symbol_ref,
@@ -36,6 +39,7 @@ impl Signex {
             Ok(()) => {
                 state.alternate_error = None;
                 state.mark_dirty();
+                state.finish_edit(scope);
             }
             Err(why) => {
                 crate::diagnostics::log_warning(format!(

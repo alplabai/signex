@@ -14,6 +14,12 @@ const SP: Spacing = Spacing::DEFAULT;
 
 pub const STATUS_BAR_HORIZONTAL_PADDING: f32 = SP.m;
 
+/// Height of the bar: the tallest row item is a button holding one `body`
+/// line (iced's default 1.3 relative line height) plus 1 px padding above
+/// and below, inside the container's vertical `SP.xs` padding. A layout
+/// probe in `canvas_region` ties it to the laid-out bar.
+pub const STATUS_BAR_HEIGHT: f32 = TS.body * 1.3 + 2.0 + 2.0 * SP.xs;
+
 /// Format a one-line breakdown of the active canvas selection.
 /// Returns `None` when the selection is empty (status bar omits the segment).
 fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
@@ -116,7 +122,12 @@ pub fn view<'a>(
     // the drag behaviour (#1266).
     if let Some(activity) = activity {
         bar = bar.push(sep().boxed());
-        bar = bar.push(text(activity.to_owned()).size(TS.body).color(muted_c).boxed());
+        bar = bar.push(
+            text(activity.to_owned())
+                .size(TS.body)
+                .color(muted_c)
+                .boxed(),
+        );
     }
     if let Some(summary) = selection_summary(selected) {
         bar = bar.push(sep().boxed());

@@ -43,6 +43,7 @@ mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 mod window_scales;
+mod window_sizes;
 mod window_tab;
 
 pub use case_fold::CaseFold;
@@ -135,6 +136,9 @@ pub struct MoveSelectionState {
     pub open: bool,
     pub dx: String,
     pub dy: String,
+    /// The sheet the dialog was opened on: Apply moves that sheet's
+    /// selection, not whichever sheet the main window shows (#1910).
+    pub sheet: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1033,14 +1037,22 @@ impl DocumentState {
         window_id: iced::window::Id,
         ui: &UiState,
     ) -> Option<&signex_engine::Engine> {
-        let target_path = if ui.main_window_id == Some(window_id) {
-            self.active_path.as_ref()?
-        } else {
-            match ui.windows.get(&window_id)? {
-                WindowKind::UndockedTab { path, .. } => path,
-                _ => return None,
-            }
-        };
-        self.engines.get(target_path)
+        self.engines.get(self.sheet_path_for_window(window_id, ui)?)
+    }
+
+    /// The sheet a window shows: the active one for the main window, the tab's
+    /// own for an undocked one.
+    pub fn sheet_path_for_window<'a>(
+        &'a self,
+        window_id: iced::window::Id,
+        ui: &'a UiState,
+    ) -> Option<&'a std::path::PathBuf> {
+        if ui.main_window_id == Some(window_id) {
+            return self.active_path.as_ref();
+        }
+        match ui.windows.get(&window_id)? {
+            WindowKind::UndockedTab { path, .. } => Some(path),
+            _ => None,
+        }
     }
 }

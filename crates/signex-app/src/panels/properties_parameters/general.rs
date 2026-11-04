@@ -38,10 +38,8 @@ pub fn view_custom_selection_filters_section<'a>(
     let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
     let muted_c = muted;
     let primary_c = primary;
-    Column::new()
-        .spacing(0)
-        .width(Length::Fill)
-        .push(collapsible_section(
+    Column::new().spacing(0).width(Length::Fill).push(
+        collapsible_section(
             "prop_sel_filter",
             "Custom Selection Filters",
             collapsed_sections,
@@ -129,14 +127,18 @@ pub fn view_custom_selection_filters_section<'a>(
                     ));
                 }
                 c = c.push(
-                    container(column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()].spacing(SP.s))
-                        .padding([6.0, SP.m])
-                        .boxed(),
+                    container(
+                        column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()]
+                            .spacing(SP.s),
+                    )
+                    .padding([6.0, SP.m])
+                    .boxed(),
                 );
                 c
             },
         )
-        .boxed())
+        .boxed(),
+    )
 }
 
 pub fn view_properties_general<'a>(
@@ -160,13 +162,15 @@ pub fn view_properties_general<'a>(
     // Custom Selection Filters — shared widget reused by the Footprint
     // editor's Properties panel so both editors render the EXACT same
     // chrome (tabs, chips, name input, accent border).
-    col = col.push(view_custom_selection_filters_section(
-        ctx.custom_filter_presets.clone(),
-        ctx.active_custom_filter_tab,
-        &ctx.collapsed_sections,
-        palette,
-    )
-    .boxed());
+    col = col.push(
+        view_custom_selection_filters_section(
+            ctx.custom_filter_presets.clone(),
+            ctx.active_custom_filter_tab,
+            &ctx.collapsed_sections,
+            palette,
+        )
+        .boxed(),
+    );
 
     // General (collapsible)
     {
@@ -182,114 +186,116 @@ pub fn view_properties_general<'a>(
         let canvas_font_italic = ctx.canvas_font_italic;
         let canvas_font_popup_open = ctx.canvas_font_popup_open;
         let sheet_color = ctx.sheet_color;
-        col = col.push(collapsible_section(
-            "prop_general",
-            "General",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c: Column<Element<'a, PanelMsg>> =
-                    Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_label("Units", muted));
-                c = c.push(
-                    container(
-                        row![
-                            seg_btn(
-                                "mm",
-                                unit == Unit::Mm,
-                                PanelMsg::SetUnit(Unit::Mm),
-                                input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
-                                input_bdr
-                            ),
-                            seg_btn(
-                                "mils",
-                                unit == Unit::Mil,
-                                PanelMsg::SetUnit(Unit::Mil),
-                                input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
-                                input_bdr
-                            ),
-                        ]
-                        .spacing(0.0)
-                        .width(Length::Fill),
-                    )
-                    .padding([SP.xs, SP.m])
-                    .boxed(),
-                );
-                // Altium-style: Visible Grid and Snap Grid are independent
-                c = c.push(form_grid_row(
-                    "Visible Grid",
-                    visible_grid_mm,
-                    unit,
-                    false,
-                    PanelMsg::SetVisibleGridSize,
-                    muted,
-                    grid_visible,
-                    PanelMsg::ToggleGrid,
-                ));
-                c = c.push(form_grid_row(
-                    "Snap Grid",
-                    grid_size_mm,
-                    unit,
-                    true,
-                    PanelMsg::SetGridSize,
-                    muted,
-                    snap_enabled,
-                    PanelMsg::ToggleSnap,
-                ));
-                c = c.push(form_check_row_shortcut(
-                    "Snap to Hotspots",
-                    snap_hotspots,
-                    PanelMsg::ToggleSnapHotspots,
-                    "Shift+E",
-                    muted,
-                ));
-                c = c.push(form_font_link_row(
-                    "Canvas Font",
-                    &canvas_font_name,
-                    canvas_font_size,
-                    canvas_font_bold,
-                    canvas_font_italic,
-                    muted,
-                ));
-                if canvas_font_popup_open {
+        col = col.push(
+            collapsible_section(
+                "prop_general",
+                "General",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c: Column<Element<'a, PanelMsg>> =
+                        Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_label("Units", muted));
                     c = c.push(
-                        container(canvas_font_popup(
-                            &canvas_font_name,
-                            canvas_font_size,
-                            canvas_font_bold,
-                            canvas_font_italic,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ))
-                        .padding(iced::Padding {
-                            top: 0.0,
-                            right: 16.0,
-                            bottom: 4.0,
-                            left: 8.0,
-                        })
+                        container(
+                            row![
+                                seg_btn(
+                                    "mm",
+                                    unit == Unit::Mm,
+                                    PanelMsg::SetUnit(Unit::Mm),
+                                    input_bg,
+                                    primary,
+                                    muted,
+                                    seg_hover,
+                                    input_bdr
+                                ),
+                                seg_btn(
+                                    "mils",
+                                    unit == Unit::Mil,
+                                    PanelMsg::SetUnit(Unit::Mil),
+                                    input_bg,
+                                    primary,
+                                    muted,
+                                    seg_hover,
+                                    input_bdr
+                                ),
+                            ]
+                            .spacing(0.0)
+                            .width(Length::Fill),
+                        )
+                        .padding([SP.xs, SP.m])
                         .boxed(),
                     );
-                }
-                let sheet_colors: Vec<SheetColor> = SheetColor::ALL.to_vec();
-                c = c.push(form_pick_row(
-                    "Sheet Color",
-                    sheet_colors,
-                    sheet_color,
-                    PanelMsg::SetSheetColor,
-                    muted,
-                ));
-                c
-            },
-        )
-        .boxed());
+                    // Altium-style: Visible Grid and Snap Grid are independent
+                    c = c.push(form_grid_row(
+                        "Visible Grid",
+                        visible_grid_mm,
+                        unit,
+                        false,
+                        PanelMsg::SetVisibleGridSize,
+                        muted,
+                        grid_visible,
+                        PanelMsg::ToggleGrid,
+                    ));
+                    c = c.push(form_grid_row(
+                        "Snap Grid",
+                        grid_size_mm,
+                        unit,
+                        true,
+                        PanelMsg::SetGridSize,
+                        muted,
+                        snap_enabled,
+                        PanelMsg::ToggleSnap,
+                    ));
+                    c = c.push(form_check_row_shortcut(
+                        "Snap to Hotspots",
+                        snap_hotspots,
+                        PanelMsg::ToggleSnapHotspots,
+                        "Shift+E",
+                        muted,
+                    ));
+                    c = c.push(form_font_link_row(
+                        "Canvas Font",
+                        &canvas_font_name,
+                        canvas_font_size,
+                        canvas_font_bold,
+                        canvas_font_italic,
+                        muted,
+                    ));
+                    if canvas_font_popup_open {
+                        c = c.push(
+                            container(canvas_font_popup(
+                                &canvas_font_name,
+                                canvas_font_size,
+                                canvas_font_bold,
+                                canvas_font_italic,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ))
+                            .padding(iced::Padding {
+                                top: 0.0,
+                                right: 16.0,
+                                bottom: 4.0,
+                                left: 8.0,
+                            })
+                            .boxed(),
+                        );
+                    }
+                    let sheet_colors: Vec<SheetColor> = SheetColor::ALL.to_vec();
+                    c = c.push(form_pick_row(
+                        "Sheet Color",
+                        sheet_colors,
+                        sheet_color,
+                        PanelMsg::SetSheetColor,
+                        muted,
+                    ));
+                    c
+                },
+            )
+            .boxed(),
+        );
     }
 
     // Page Options (collapsible)
@@ -299,187 +305,191 @@ pub fn view_properties_general<'a>(
         let sheet_frame = ctx.sheet_frame;
         let origin = ctx.page_origin;
         let document_font = ctx.document_font_family.clone();
-        col = col.push(collapsible_section(
-            "prop_page_opts",
-            "Page Options",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c: Column<Element<'a, PanelMsg>> =
-                    Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_label("Formatting and Size", muted));
-                c = c.push(
-                    container(
-                        row![
-                            seg_btn(
-                                "Template",
-                                format_mode == PageFormatMode::Template,
-                                PanelMsg::SetPageFormatMode(PageFormatMode::Template),
-                                input_bg,
-                                primary,
+        col = col.push(
+            collapsible_section(
+                "prop_page_opts",
+                "Page Options",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c: Column<Element<'a, PanelMsg>> =
+                        Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_label("Formatting and Size", muted));
+                    c = c.push(
+                        container(
+                            row![
+                                seg_btn(
+                                    "Template",
+                                    format_mode == PageFormatMode::Template,
+                                    PanelMsg::SetPageFormatMode(PageFormatMode::Template),
+                                    input_bg,
+                                    primary,
+                                    muted,
+                                    seg_hover,
+                                    input_bdr,
+                                ),
+                                seg_btn(
+                                    "Standard",
+                                    format_mode == PageFormatMode::Standard,
+                                    PanelMsg::SetPageFormatMode(PageFormatMode::Standard),
+                                    input_bg,
+                                    primary,
+                                    muted,
+                                    seg_hover,
+                                    input_bdr,
+                                ),
+                                seg_btn(
+                                    "Custom",
+                                    format_mode == PageFormatMode::Custom,
+                                    PanelMsg::SetPageFormatMode(PageFormatMode::Custom),
+                                    input_bg,
+                                    primary,
+                                    muted,
+                                    seg_hover,
+                                    input_bdr,
+                                ),
+                            ]
+                            .spacing(0.0)
+                            .width(Length::Fill),
+                        )
+                        .padding([SP.xs, SP.m])
+                        .boxed(),
+                    );
+                    let (sheet_size, orientation) = SheetSize::parse(&paper_size);
+                    // Standard + Template modes share the size picker. Custom mode
+                    // replaces it with width/height inputs; both write the sheet's
+                    // own size through the engine, so the canvas, the PDF and the
+                    // saved file agree.
+                    match format_mode {
+                        PageFormatMode::Standard | PageFormatMode::Template => {
+                            let paper_options = paper_size_options();
+                            c = c.push(form_pick_row(
+                                "Paper",
+                                paper_options,
+                                SheetSize::parse(&paper_size)
+                                    .0
+                                    .token(SheetOrientation::Landscape),
+                                PanelMsg::SetPaperSize,
                                 muted,
-                                seg_hover,
-                                input_bdr,
-                            ),
-                            seg_btn(
-                                "Standard",
-                                format_mode == PageFormatMode::Standard,
-                                PanelMsg::SetPageFormatMode(PageFormatMode::Standard),
-                                input_bg,
-                                primary,
+                            ));
+                            if matches!(format_mode, PageFormatMode::Template) {
+                                c = c.push(
+                                    container(
+                                        text("Template: using A-series defaults")
+                                            .size(TS.caption)
+                                            .color(muted),
+                                    )
+                                    .padding([0.0, SP.m])
+                                    .boxed(),
+                                );
+                            }
+                        }
+                        PageFormatMode::Custom => {
+                            let (w, h) = paper_dimensions(&paper_size);
+                            c = c.push(form_mm_edit_row(
+                                "Width",
+                                w,
+                                ctx.paper_edge_drafts
+                                    .iter()
+                                    .find(|d| {
+                                        d.edge == PaperEdge::Width
+                                            && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
+                                    })
+                                    .map(|d| d.text.as_str()),
+                                PaperEdge::Width,
                                 muted,
-                                seg_hover,
-                                input_bdr,
-                            ),
-                            seg_btn(
-                                "Custom",
-                                format_mode == PageFormatMode::Custom,
-                                PanelMsg::SetPageFormatMode(PageFormatMode::Custom),
                                 input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
                                 input_bdr,
-                            ),
-                        ]
-                        .spacing(0.0)
-                        .width(Length::Fill),
-                    )
-                    .padding([SP.xs, SP.m])
-                    .boxed(),
-                );
-                let (sheet_size, orientation) = SheetSize::parse(&paper_size);
-                // Standard + Template modes share the size picker. Custom mode
-                // replaces it with width/height inputs; both write the sheet's
-                // own size through the engine, so the canvas, the PDF and the
-                // saved file agree.
-                match format_mode {
-                    PageFormatMode::Standard | PageFormatMode::Template => {
-                        let paper_options = paper_size_options();
-                        c = c.push(form_pick_row(
-                            "Paper",
-                            paper_options,
-                            SheetSize::parse(&paper_size)
-                                .0
-                                .token(SheetOrientation::Landscape),
-                            PanelMsg::SetPaperSize,
-                            muted,
-                        ));
-                        if matches!(format_mode, PageFormatMode::Template) {
-                            c = c.push(
-                                container(
-                                    text("Template: using A-series defaults")
-                                        .size(TS.caption)
-                                        .color(muted),
-                                )
-                                .padding([0.0, SP.m])
-                                .boxed(),
-                            );
+                            ));
+                            c = c.push(form_mm_edit_row(
+                                "Height",
+                                h,
+                                ctx.paper_edge_drafts
+                                    .iter()
+                                    .find(|d| {
+                                        d.edge == PaperEdge::Height
+                                            && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
+                                    })
+                                    .map(|d| d.text.as_str()),
+                                PaperEdge::Height,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
                         }
                     }
-                    PageFormatMode::Custom => {
-                        let (w, h) = paper_dimensions(&paper_size);
-                        c = c.push(form_mm_edit_row(
-                            "Width",
-                            w,
-                            ctx.paper_edge_drafts
-                                .iter()
-                                .find(|d| {
-                                    d.edge == PaperEdge::Width
-                                        && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
-                                })
-                                .map(|d| d.text.as_str()),
-                            PaperEdge::Width,
+                    if sheet_size.is_recognized() {
+                        c = c.push(form_pick_row(
+                            "Orientation",
+                            vec![SheetOrientation::Landscape, SheetOrientation::Portrait],
+                            orientation,
+                            PanelMsg::SetSheetOrientation,
                             muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_mm_edit_row(
-                            "Height",
-                            h,
-                            ctx.paper_edge_drafts
-                                .iter()
-                                .find(|d| {
-                                    d.edge == PaperEdge::Height
-                                        && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
-                                })
-                                .map(|d| d.text.as_str()),
-                            PaperEdge::Height,
-                            muted,
-                            input_bg,
-                            input_bdr,
                         ));
                     }
-                }
-                if sheet_size.is_recognized() {
+                    let (w, h) = paper_dimensions(&paper_size);
+                    let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
+                    c = c.push(
+                        container(text(dims).size(TS.caption).color(muted))
+                            .padding([3.0, SP.m])
+                            .boxed(),
+                    );
+                    c = c.push(form_label("Border and Zones", muted));
+                    c = c.push(form_check_row(
+                        "Show Border",
+                        sheet_frame.show_border,
+                        PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(
+                            !sheet_frame.show_border,
+                        )),
+                        muted,
+                        panel_bg,
+                    ));
+                    c = c.push(form_check_row(
+                        "Show Title Block",
+                        sheet_frame.show_title_block,
+                        PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
+                            !sheet_frame.show_title_block,
+                        )),
+                        muted,
+                        panel_bg,
+                    ));
+                    let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
                     c = c.push(form_pick_row(
-                        "Orientation",
-                        vec![SheetOrientation::Landscape, SheetOrientation::Portrait],
-                        orientation,
-                        PanelMsg::SetSheetOrientation,
+                        "Vertical",
+                        zone_counts.clone(),
+                        sheet_frame.vertical_zones,
+                        |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
                         muted,
                     ));
-                }
-                let (w, h) = paper_dimensions(&paper_size);
-                let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
-                c = c.push(
-                    container(text(dims).size(TS.caption).color(muted))
-                        .padding([3.0, SP.m])
-                        .boxed(),
-                );
-                c = c.push(form_label("Border and Zones", muted));
-                c = c.push(form_check_row(
-                    "Show Border",
-                    sheet_frame.show_border,
-                    PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(!sheet_frame.show_border)),
-                    muted,
-                    panel_bg,
-                ));
-                c = c.push(form_check_row(
-                    "Show Title Block",
-                    sheet_frame.show_title_block,
-                    PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
-                        !sheet_frame.show_title_block,
-                    )),
-                    muted,
-                    panel_bg,
-                ));
-                let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
-                c = c.push(form_pick_row(
-                    "Vertical",
-                    zone_counts.clone(),
-                    sheet_frame.vertical_zones,
-                    |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
-                    muted,
-                ));
-                c = c.push(form_pick_row(
-                    "Horizontal",
-                    zone_counts,
-                    sheet_frame.horizontal_zones,
-                    |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
-                    muted,
-                ));
-                let origin_opts: Vec<PageOrigin> =
-                    vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
-                c = c.push(form_pick_row(
-                    "Origin",
-                    origin_opts,
-                    origin,
-                    PanelMsg::SetPageOrigin,
-                    muted,
-                ));
-                c = c.push(form_label("Text", muted));
-                c = c.push(crate::panels::element_properties::font_family_row(
-                    "Default Font",
-                    document_font.as_deref(),
-                    muted,
-                    PanelMsg::SetDocumentFontFamily,
-                ));
-                c
-            },
-        )
-        .boxed());
+                    c = c.push(form_pick_row(
+                        "Horizontal",
+                        zone_counts,
+                        sheet_frame.horizontal_zones,
+                        |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
+                        muted,
+                    ));
+                    let origin_opts: Vec<PageOrigin> =
+                        vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
+                    c = c.push(form_pick_row(
+                        "Origin",
+                        origin_opts,
+                        origin,
+                        PanelMsg::SetPageOrigin,
+                        muted,
+                    ));
+                    c = c.push(form_label("Text", muted));
+                    c = c.push(crate::panels::element_properties::font_family_row(
+                        "Default Font",
+                        document_font.as_deref(),
+                        muted,
+                        PanelMsg::SetDocumentFontFamily,
+                    ));
+                    c
+                },
+            )
+            .boxed(),
+        );
     }
 
     // Title Block (collapsible, #1080)

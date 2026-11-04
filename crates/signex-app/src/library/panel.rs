@@ -2,8 +2,8 @@
 //!
 //! The per-library row grid lives in the main-window Library Browser
 //! tab (see [`crate::library::browser`]). Here each open library is a
-//! row whose ▸ expands it to list its components (#1895): one click
-//! highlights a component, a double click opens it. `[Open]` opens the
+//! row whose ▸ expands it to list its tables and, under each, its
+//! components (#1895): one click highlights a component, a double click opens it. `[Open]` opens the
 //! library's browser tab.
 //!
 //! Shape:
@@ -34,7 +34,7 @@ use super::state::LibraryState;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-const LIB_PANEL_TEXT_SIZE: f32 = 11.0;
+const LIB_PANEL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 const LIB_PANEL_ROW_PADDING: u16 = 4;
 
 /// Render the Library left-dock panel.
@@ -165,25 +165,42 @@ fn library_row<'a>(
         .boxed()
 }
 
-/// The components of an expanded library, one indented row each, tables
-/// by name and rows in stored order.
+/// The tree of an expanded library: each table as an indented header
+/// with its components one level further in, tables by name and rows in
+/// stored order.
 fn component_rows<'a>(
     lib: &'a super::state::OpenLibrary,
     state: &'a LibraryState,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
-    let mut tables: Vec<&String> = lib.tables.keys().collect();
-    tables.sort();
+    let tables = lib.panel_tables();
     let mut list: Column<Element<'a, LibraryMessage>> = column![].spacing(0).width(Length::Fill);
-    let mut any = false;
-    for table in tables {
-        // Stored order, as the Library Browser shows it: no per-frame sort.
-        for r in &lib.tables[table] {
-            any = true;
+    if tables.is_empty() {
+        list = list.push(
+            container(
+                text("No tables in this library.")
+                    .size(LIB_PANEL_TEXT_SIZE)
+                    .color(muted),
+            )
+            .padding([SP.xs, SP.xl])
+            .boxed(),
+        );
+    }
+    for (table, rows) in tables {
+        list = list.push(
+            container(
+                text(format!("{table}  ({})", rows.len()))
+                    .size(LIB_PANEL_TEXT_SIZE)
+                    .color(muted),
+            )
+            .padding([SP.xs, SP.xl])
+            .boxed(),
+        );
+        for r in rows {
             let key = super::state::ComponentsPanelRowKey {
                 library_path: lib.root.clone(),
-                table: table.clone(),
+                table: table.to_owned(),
                 row_id: signex_library::RowId::from_uuid(r.row_id),
             };
             let selected = state.panel_selected.as_ref() == Some(&key);
@@ -202,17 +219,6 @@ fn component_rows<'a>(
                 .boxed(),
             );
         }
-    }
-    if !any {
-        list = list.push(
-            container(
-                text("No components in this library.")
-                    .size(LIB_PANEL_TEXT_SIZE)
-                    .color(muted),
-            )
-            .padding([SP.xs, SP.xl * 2.0])
-            .boxed(),
-        );
     }
     list.boxed()
 }

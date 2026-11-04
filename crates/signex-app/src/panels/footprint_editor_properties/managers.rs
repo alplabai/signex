@@ -64,8 +64,8 @@ pub(super) fn render_grid_manager<'a>(
             container(text("(no grids)").size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
                 .width(Length::Fill)
-        .boxed(),
-    );
+                .boxed(),
+        );
     } else {
         for (idx, g) in fp.grids.iter().enumerate() {
             let is_active = idx == active_idx;
@@ -123,8 +123,8 @@ pub(super) fn render_grid_manager<'a>(
                     background: Some(iced::Background::Color(row_bg)),
                     ..Default::default()
                 })
-        .boxed(),
-    );
+                .boxed(),
+            );
         }
     }
     // Action footer — Add / Properties / Delete using primary

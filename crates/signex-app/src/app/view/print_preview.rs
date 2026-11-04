@@ -47,7 +47,7 @@ impl Signex {
 
         let body = column![
             row![
-                text("\u{26A0}").size(24).color(err_red),
+                text("\u{26A0}").size(TS.glyph).color(err_red),
                 iced::widget::Space::new().width(10),
                 text(notice.title.clone()).size(TS.heading).color(text_c),
             ]
@@ -184,7 +184,7 @@ impl Signex {
 
         let body = column![
             row![
-                text("\u{26A0}").size(24).color(warn),
+                text("\u{26A0}").size(TS.glyph).color(warn),
                 iced::widget::Space::new().width(10),
                 text("Netlist is incomplete").size(TS.heading).color(text_c),
             ]

@@ -1,96 +1,145 @@
-//! Backdrop layers — background fill + fine/coarse grid, Altium-style
-//! guide lines, and the origin crosshair. Drawn first (bottom of the
-//! z-stack). Extracted verbatim from `Program::draw`.
+//! Backdrop layers: background fill + fine/coarse grid, guide lines and
+//! the origin crosshair. Drawn first (bottom of the z-stack). The fill,
+//! grid and origin are free functions so the Components-panel preview
+//! paints the same backdrop as the editor.
 
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle};
 
 use super::super::{FootprintCanvas, FootprintCanvasState};
 use super::grid::{draw_grid, draw_grid_dots};
+use crate::library::editor::footprint::state::{
+    EditorMode, GridDisplay as Gd, GuideAxis, SnapOptions,
+};
+
+/// Footprint canvas background: Altium-PCB black regardless of app theme.
+pub(crate) const BACKDROP_BG: Color = Color::BLACK;
+/// Footprint canvas grid colour (dark navy).
+pub(crate) const BACKDROP_GRID: Color = Color {
+    r: 0.32,
+    g: 0.36,
+    b: 0.55,
+    a: 1.0,
+};
+
+/// What the backdrop needs: colours, sketch-mode look and grid options.
+#[derive(Clone, Copy)]
+pub(crate) struct BackdropLook<'a> {
+    pub bg: Color,
+    pub grid: Color,
+    /// Sketch mode flips to a white canvas + single mid-grey grid.
+    pub sketch: bool,
+    pub snap: &'a SnapOptions,
+}
+
+/// Background fill + fine/coarse grid.
+pub(crate) fn draw_backdrop(
+    frame: &mut canvas::Frame,
+    cam: &FootprintCanvasState,
+    bounds: Rectangle,
+    look: BackdropLook<'_>,
+) {
+    let bg = if look.sketch { Color::WHITE } else { look.bg };
+    let grid = if look.sketch {
+        Color::from_rgba(0.55, 0.55, 0.55, 1.0)
+    } else {
+        look.grid
+    };
+    frame.fill_rectangle(Point::ORIGIN, bounds.size(), bg);
+
+    let fine_step = (look.snap.grid_step_mm as f32) * cam.scale;
+    let coarse_step = fine_step * look.snap.coarse_multiplier.max(1) as f32;
+    let (fine_alpha, coarse_alpha) = if look.sketch {
+        (0.50, 0.55)
+    } else {
+        (0.10, 0.30)
+    };
+    // Fine pass only when each cell is at least 6 px wide.
+    if fine_step >= 6.0 {
+        let color = Color {
+            a: fine_alpha,
+            ..grid
+        };
+        let style = look.snap.fine_grid_display;
+        paint_grid(frame, bounds, cam.offset, fine_step, color, style);
+    }
+    // Sketch mode shows only the fine grid.
+    if !look.sketch && coarse_step >= 8.0 {
+        let color = Color {
+            a: coarse_alpha,
+            ..grid
+        };
+        let style = look.snap.coarse_grid_display;
+        paint_grid(frame, bounds, cam.offset, coarse_step, color, style);
+    }
+}
+
+fn paint_grid(
+    frame: &mut canvas::Frame,
+    bounds: Rectangle,
+    offset: Point,
+    step: f32,
+    color: Color,
+    style: Gd,
+) {
+    match style {
+        Gd::Lines => draw_grid(frame, bounds, offset, step, color),
+        Gd::Dots => draw_grid_dots(frame, bounds, offset, step, color),
+        Gd::Hidden => {}
+    }
+}
+
+/// Origin crosshair: yellow on the dark canvas, slate on the sketch canvas.
+pub(crate) fn draw_origin(frame: &mut canvas::Frame, cam: &FootprintCanvasState, sketch: bool) {
+    let origin = cam.world_to_screen((0.0, 0.0));
+    let color = if sketch {
+        Color::from_rgba(0.20, 0.25, 0.32, 0.85)
+    } else {
+        Color::from_rgba(1.0, 0.95, 0.30, 0.85)
+    };
+    let arms = [
+        (
+            Point::new(origin.x - 8.0, origin.y),
+            Point::new(origin.x + 8.0, origin.y),
+        ),
+        (
+            Point::new(origin.x, origin.y - 8.0),
+            Point::new(origin.x, origin.y + 8.0),
+        ),
+    ];
+    for (a, b) in arms {
+        frame.stroke(
+            &Path::line(a, b),
+            Stroke::default().with_width(1.5).with_color(color),
+        );
+    }
+}
 
 impl FootprintCanvas<'_> {
-    /// Background fill + fine/coarse grid. Sketch mode flips to a
-    /// Fusion-style white canvas + single mid-grey grid; Pads mode
-    /// keeps the dark theme + 2-tier grid.
+    /// Background fill + grid for the editor's current mode and options.
     pub(in crate::library::editor::footprint::canvas) fn draw_background_and_grid(
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
         bounds: Rectangle,
     ) {
-        use crate::library::editor::footprint::state::EditorMode;
-        let in_sketch = matches!(self.state.mode, EditorMode::Sketch);
-        let bg = if in_sketch {
-            Color::WHITE
-        } else {
-            self.bg_color
+        let look = BackdropLook {
+            bg: self.bg_color,
+            grid: self.grid_color,
+            sketch: matches!(self.state.mode, EditorMode::Sketch),
+            snap: &self.state.snap_options,
         };
-        // v0.27 — Fusion-style sketch grid: darker base (0.55 grey) so
-        // it reads cleanly against the white canvas.
-        let grid = if in_sketch {
-            Color::from_rgba(0.55, 0.55, 0.55, 1.0)
-        } else {
-            self.grid_color
-        };
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), bg);
-
-        // v0.18.19 — fine + coarse grid display follows the Cartesian
-        // Grid Editor's per-style picker.
-        use crate::library::editor::footprint::state::GridDisplay as Gd;
-        let fine_step = (self.state.snap_options.grid_step_mm as f32) * cstate.scale;
-        let multiplier = self.state.snap_options.coarse_multiplier.max(1) as f32;
-        let coarse_step = fine_step * multiplier;
-        let fine_style = self.state.snap_options.fine_grid_display;
-        let coarse_style = self.state.snap_options.coarse_grid_display;
-        // Fine pass only when each cell is at least 6 px wide.
-        let (fine_alpha, coarse_alpha) = if in_sketch {
-            (0.50, 0.55)
-        } else {
-            (0.10, 0.30)
-        };
-        if fine_step >= 6.0 {
-            let fine_color = Color {
-                a: fine_alpha,
-                ..grid
-            };
-            match fine_style {
-                Gd::Lines => {
-                    draw_grid(frame, bounds, cstate.offset, fine_step, fine_color);
-                }
-                Gd::Dots => {
-                    draw_grid_dots(frame, bounds, cstate.offset, fine_step, fine_color);
-                }
-                Gd::Hidden => {}
-            }
-        }
-        // v0.27 — Fusion-style sketch grid uses ONLY a single fine grid
-        // (no coarse overlay); Pads mode keeps the 2-tier grid.
-        if !in_sketch && coarse_step >= 8.0 {
-            let coarse_color = Color {
-                a: coarse_alpha,
-                ..grid
-            };
-            match coarse_style {
-                Gd::Lines => {
-                    draw_grid(frame, bounds, cstate.offset, coarse_step, coarse_color);
-                }
-                Gd::Dots => {
-                    draw_grid_dots(frame, bounds, cstate.offset, coarse_step, coarse_color);
-                }
-                Gd::Hidden => {}
-            }
-        }
+        draw_backdrop(frame, cstate, bounds, look);
     }
 
-    /// v0.18.20 — Altium-style guide lines. Each enabled guide is a
-    /// full-bleed dashed cyan line at its world coordinate.
+    /// Altium-style guide lines: each enabled guide is a full-bleed
+    /// dashed cyan line at its world coordinate.
     pub(in crate::library::editor::footprint::canvas) fn draw_guides(
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
         bounds: Rectangle,
     ) {
-        use crate::library::editor::footprint::state::GuideAxis;
         let guide_color = Color::from_rgba(0.30, 0.85, 0.95, 0.55);
         let dash_segments: &[f32] = &[6.0, 4.0];
         for g in self.state.guides.iter().filter(|g| g.enabled) {
@@ -124,33 +173,12 @@ impl FootprintCanvas<'_> {
         }
     }
 
-    /// Origin crosshair — Altium yellow on the dark Pads canvas, slate
-    /// grey on the Fusion-style white sketch canvas.
+    /// Origin crosshair for the editor's current mode.
     pub(in crate::library::editor::footprint::canvas) fn draw_origin_crosshair(
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        use crate::library::editor::footprint::state::EditorMode;
-        let origin = cstate.world_to_screen((0.0, 0.0));
-        let origin_color = if matches!(self.state.mode, EditorMode::Sketch) {
-            Color::from_rgba(0.20, 0.25, 0.32, 0.85)
-        } else {
-            Color::from_rgba(1.0, 0.95, 0.30, 0.85)
-        };
-        frame.stroke(
-            &Path::line(
-                Point::new(origin.x - 8.0, origin.y),
-                Point::new(origin.x + 8.0, origin.y),
-            ),
-            Stroke::default().with_width(1.5).with_color(origin_color),
-        );
-        frame.stroke(
-            &Path::line(
-                Point::new(origin.x, origin.y - 8.0),
-                Point::new(origin.x, origin.y + 8.0),
-            ),
-            Stroke::default().with_width(1.5).with_color(origin_color),
-        );
+        draw_origin(frame, cstate, matches!(self.state.mode, EditorMode::Sketch));
     }
 }

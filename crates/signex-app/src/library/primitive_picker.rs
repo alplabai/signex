@@ -304,7 +304,11 @@ pub fn view<'a>(
         });
     }
     if window.end < items.len() {
-        list_col = list_col.push(Space::new().height((items.len() - window.end) as f32 * ROW_H).boxed());
+        list_col = list_col.push(
+            Space::new()
+                .height((items.len() - window.end) as f32 * ROW_H)
+                .boxed(),
+        );
     }
 
     if total_visible == 0 {

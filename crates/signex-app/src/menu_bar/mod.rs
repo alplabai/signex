@@ -97,9 +97,7 @@ pub enum MenuMessage {
     NoOp,
     /// A row that carries a command id: runs the id through
     /// [`crate::app::Signex::dispatch_command`], like its shortcut and the
-    /// palette do, so one id has one behaviour on every surface. Only a row
-    /// whose action is not that command keeps a message of its own (View ▸
-    /// Cycle Grid Size, Design ▸ Electrical Rules Check).
+    /// palette do, so one id has one behaviour on every surface.
     Command(AppCommandId),
     /// Help ▸ About Signex.
     OpenAbout,
@@ -173,7 +171,6 @@ pub enum MenuMessage {
     // View
     ZoomIn,
     ZoomOut,
-    CycleGrid,
     OpenProjectsPanel,
     OpenComponentsPanel,
     OpenNavigatorPanel,
@@ -193,7 +190,6 @@ pub enum MenuMessage {
     AnnotateResetDuplicates,
     AnnotateBack,
     AnnotateSheets,
-    Erc,
     // Tools
     /// Tools ▸ Passive Network Calculator — opens the in-app
     /// resistor/capacitor/inductor calculator modal. Not an OS window
@@ -318,9 +314,9 @@ const DROPDOWN_WIDTH: f32 = 240.0;
 /// at the same pixel height and would otherwise look shrunken next to the
 /// label. Exposed as constants so every menu row pulls from the same
 /// scale — no `size(11)`/`size(12)`/`size(14)` sprinkled around.
-const MENU_LABEL_SIZE: f32 = 12.0;
-const MENU_SHORTCUT_SIZE: f32 = 11.0;
-const MENU_CHEVRON_SIZE: f32 = 18.0;
+const MENU_LABEL_SIZE: f32 = crate::styles::TypeScale::DEFAULT.label;
+const MENU_SHORTCUT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
+const MENU_CHEVRON_SIZE: f32 = crate::styles::chrome_px(18.0);
 
 /// Approximate visible width of the menu bar in pixels. Includes the
 /// Signex wordmark on the left, plus the sum of root button widths
@@ -399,12 +395,12 @@ pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
-/// Menu path of the Run ERC command, built from the same command label and
-/// menu the Design menu uses so a message naming it cannot drift.
-pub(crate) fn run_erc_menu_path() -> String {
+/// Menu path of the Electrical Rules Check row, built from the label and menu
+/// the Design menu uses, so a message naming it cannot drift.
+pub(crate) fn erc_menu_path() -> String {
     format!(
         "Design ▸ {}",
-        cmd_label("run_erc", "Electrical Rules Check")
+        cmd_label("open_erc_dialog", "Electrical Rules Check")
     )
 }
 
@@ -438,7 +434,6 @@ pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Elem
             .width(Length::Fill)
             .style(styles::toolbar_strip(tokens)),
     )
-        
 }
 
 /// Perceptual-luminance test used to pick the white/black wordmark and

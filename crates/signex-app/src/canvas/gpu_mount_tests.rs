@@ -149,8 +149,13 @@ fn render_at(gpu: &mut Gpu, element: Element<'_, crate::app::Message>, dpi: f32)
         iced::mouse::Cursor::Unavailable,
     );
     let (width, height) = ((WIDTH as f32 * dpi) as u32, (HEIGHT as f32 * dpi) as u32);
-    let viewport =
-        iced::advanced::graphics::Viewport::with_physical_size(Size::new(width, height), iced::advanced::renderer::Scale { window: dpi, application: 1.0 });
+    let viewport = iced::advanced::graphics::Viewport::with_physical_size(
+        Size::new(width, height),
+        iced::advanced::renderer::Scale {
+            window: dpi,
+            application: 1.0,
+        },
+    );
     let iced::Renderer::Primary(wgpu_renderer) = &mut gpu.renderer else {
         unreachable!("built as Primary above")
     };

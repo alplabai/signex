@@ -16,7 +16,7 @@ cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only
 cycle_unit	view	Cycle display unit	-	General	-	-	Always	-
 cycle_snap_grid_backward	view	Cycle backward through snap grids	-	General	-	-	Always	gui_only
 cycle_selection_mode	select	Cycle selection mode	-	General	-	-	Always	-
-cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	Cycle Grid Size	General	-	-	Always	gui_only
+cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	-	General	-	-	Always	gui_only
 cycle_wire_bus_graphic_mode	interactive	Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees	-	General	-	-	Always	gui_only
 cycle_wiring_mode	interactive	Change wiring mode while dragging connected electrical objects	-	General	-	-	Always	gui_only
 delete_selection	edit	Delete selection	Delete	General	-	-	RequiresSelection	mutates_doc,undoable
@@ -46,7 +46,7 @@ move_object	modify	Move object	Move	General	-	-	Always	gui_only,mutates_doc,undo
 move_selection	modify	Move selection	Move Selection	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
 new_document	file	New	New Project	General	-	-	Always	-
 next_document_tab	window	Next open document tab	-	General	-	-	Always	gui_only
-next_grid	view	Next grid	-	General	-	-	Always	gui_only
+next_grid	view	Next grid	Cycle Grid Size	General	-	-	Always	gui_only
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only
 open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	gui_only
 open_document	file	Open document	Open...	General	-	-	Always	-
@@ -134,6 +134,7 @@ place_wire_to_bus_entry	place	Place wire-to-bus entry	-	Schematic	-	-	RequiresDo
 previous_highlighted_net_item	select	Previous item on highlighted net	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
 previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
 run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	-
+open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	-
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	-
 reset_schematic_designators	design	Reset schematic designators	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable
 sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only

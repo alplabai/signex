@@ -70,6 +70,15 @@
     clippy::let_unit_value,
     clippy::float_cmp
 )]
+#![expect(
+    clippy::collapsible_match,
+    clippy::elidable_lifetime_names,
+    clippy::type_complexity,
+    clippy::redundant_closure_for_method_calls,
+    clippy::assign_op_pattern,
+    clippy::explicit_counter_loop,
+    reason = "vendored upstream iced_aw code, kept close to upstream to ease future syncs"
+)]
 
 pub mod widget;
 #[deprecated(since = "0.9.4", note = "use `widget` instead")]
@@ -174,7 +183,9 @@ pub const ICED_AW_FONT_BYTES: &[u8] = include_bytes!("../font.ttf");
 /// Font type to use in text widgets.
 pub const ICED_AW_FONT: Font = Font::new("iced_aw");
 
-/// Icon helpers for the embedded font (hand written; the former
+/// Icon helpers for the embedded font.
+///
+/// Hand written; the former
 /// `generate_icon_functions!` macro reads files relative to the workspace root
 /// and emits code relying on the removed `Renderer::Font` associated type).
 pub mod iced_aw_font {

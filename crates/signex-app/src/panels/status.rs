@@ -81,7 +81,8 @@ pub(crate) fn erc_severity_text(tokens: &ThemeTokens, focused: bool, severity: C
 }
 
 pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
             section_title("ERC", &ctx.tokens),
@@ -104,7 +105,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .on_press(PanelMsg::ClearErc)
             .style(crate::styles::menu_item(&ctx.tokens)),
         ]
-        .align_y(iced::Alignment::Center).boxed(),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
     col = col.push(separator(&ctx.tokens).boxed());
 
@@ -112,14 +114,16 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             text("Running…")
                 .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)).boxed(),
+                .color(theme_ext::text_secondary(&ctx.tokens))
+                .boxed(),
         );
     }
     if ctx.erc_results_stale {
         col = col.push(
             text(STALE_RESULTS_NOTICE)
                 .size(TS.caption)
-                .color(theme_ext::warning_color(&ctx.tokens)).boxed(),
+                .color(theme_ext::warning_color(&ctx.tokens))
+                .boxed(),
         );
     }
     if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
@@ -130,13 +134,15 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 "No ERC diagnostics yet"
             })
             .size(TS.caption)
-            .color(theme_ext::text_secondary(&ctx.tokens)).boxed(),
+            .color(theme_ext::text_secondary(&ctx.tokens))
+            .boxed(),
         );
         if !ctx.erc_results_stale {
             col = col.push(
                 text("Run ERC to populate project-wide diagnostics")
-                    .size(9)
-                    .color(theme_ext::text_secondary(&ctx.tokens)).boxed(),
+                    .size(TS.caption)
+                    .color(theme_ext::text_secondary(&ctx.tokens))
+                    .boxed(),
             );
         }
         return col
@@ -193,7 +199,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .style(crate::styles::menu_item(&ctx.tokens)),
             Space::new().width(4).height(Length::Shrink),
             text(focus_label)
-                .size(9)
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
             Space::new().width(4).height(Length::Shrink),
             iced::widget::button(text(">").size(TS.body))
@@ -201,7 +207,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .on_press(PanelMsg::FocusNextErcDiagnostic)
                 .style(crate::styles::menu_item(&ctx.tokens)),
         ]
-        .align_y(iced::Alignment::Center).boxed(),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
 
     for v in &ctx.erc_diagnostics {
@@ -238,19 +245,19 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             row![
                 iced::widget::button(
                     row![
-                        text(sev_label).size(9).color(sev_color),
+                        text(sev_label).size(TS.caption).color(sev_color),
                         Space::new().width(4).height(Length::Shrink),
-                        text(v.rule_label.clone()).size(9).color(label_c),
+                        text(v.rule_label.clone()).size(TS.caption).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
-                        text(v.message.clone()).size(9).color(detail_c),
+                        text(v.message.clone()).size(TS.caption).color(detail_c),
                         Space::new().width(6).height(Length::Shrink),
                         iced::widget::tooltip(
                             text(location_label(&v.sheet_name, v.world_x, v.world_y))
-                                .size(9)
+                                .size(TS.caption)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(detail_c),
                             iced::widget::container(
-                                text(v.sheet_path.display().to_string()).size(9),
+                                text(v.sheet_path.display().to_string()).size(TS.caption),
                             )
                             .padding([SP.xs, 6.0]),
                             iced::widget::tooltip::Position::Top,
@@ -276,7 +283,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 Space::new().width(6).height(Length::Shrink),
                 iced::widget::button(
                     text(quick_fix_label)
-                        .size(9)
+                        .size(TS.caption)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])
@@ -286,7 +293,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 super::erc_waivers::waive_chip(v, &ctx.tokens),
             ]
             .align_y(iced::Alignment::Center)
-            .width(Length::Fill).boxed(),
+            .width(Length::Fill)
+            .boxed(),
         );
         if let Some(editor) = super::erc_waivers::waive_editor(v, ctx) {
             col = col.push(editor);
@@ -321,7 +329,7 @@ fn waive_chip<'a>(
         Space::new().width(6).height(Length::Shrink),
         iced::widget::button(
             text("Waive net")
-                .size(9)
+                .size(TS.caption)
                 .color(theme_ext::text_primary(tokens))
         )
         .padding([SP.xs, SP.m])
@@ -347,7 +355,8 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(
         text(format!("{} waived", ctx.erc_waivers.len()))
             .size(TS.caption)
-            .color(muted).boxed(),
+            .color(muted)
+            .boxed(),
     );
     for w in &ctx.erc_waivers {
         let note = match w.hidden {
@@ -358,12 +367,12 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             row![
                 text(format!("{}  net {}  ({note})", w.rule_id, w.net))
-                    .size(9)
+                    .size(TS.caption)
                     .color(muted),
                 Space::new().width(Length::Fill).height(Length::Shrink),
                 iced::widget::button(
                     text("Restore")
-                        .size(9)
+                        .size(TS.caption)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])
@@ -375,7 +384,8 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .style(crate::styles::menu_item(&ctx.tokens)),
             ]
             .align_y(iced::Alignment::Center)
-            .width(Length::Fill).boxed(),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
     col.boxed()
@@ -384,7 +394,8 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 // ─── Messages Panel ───────────────────────────────────────────
 
 pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
             section_title("Messages", &ctx.tokens),
@@ -393,7 +404,8 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
-        .align_y(iced::Alignment::Center).boxed(),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
     col = col.push(separator(&ctx.tokens).boxed());
 
@@ -401,12 +413,14 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             text("No runtime messages yet")
                 .size(TS.caption)
-                .color(theme_ext::success_color(&ctx.tokens)).boxed(),
+                .color(theme_ext::success_color(&ctx.tokens))
+                .boxed(),
         );
         col = col.push(
             text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
-                .size(9)
-                .color(theme_ext::text_secondary(&ctx.tokens)).boxed(),
+                .size(TS.caption)
+                .color(theme_ext::text_secondary(&ctx.tokens))
+                .boxed(),
         );
     } else {
         // Table header — mirrors Altium's Messages panel with fixed
@@ -446,7 +460,8 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .style(move |_theme: &Theme| iced::widget::container::Style {
                 background: Some(Background::Color(header_bg)),
                 ..iced::widget::container::Style::default()
-            }).boxed(),
+            })
+            .boxed(),
         );
         let separator = |bg: Color| -> Element<'a, PanelMsg> {
             container(Space::new())
@@ -497,7 +512,8 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .style(move |_theme: &Theme| iced::widget::container::Style {
                     background: Some(Background::Color(bg)),
                     ..iced::widget::container::Style::default()
-                }).boxed(),
+                })
+                .boxed(),
             );
             // One-pixel horizontal rule between rows — no right / left
             // borders so the table reads as a stack of records with

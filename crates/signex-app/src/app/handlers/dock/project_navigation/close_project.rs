@@ -301,6 +301,7 @@ impl Signex {
             self.document_state
                 .instance_note_scopes
                 .remove(&closed_path);
+            self.document_state.forget_project_saved_state(&closed_path);
         }
 
         // A pricing walk keeps running: closing a project does not unmount its

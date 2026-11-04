@@ -169,8 +169,7 @@ where
             .shrink(padding);
 
         let child = &mut tree.children[0];
-        self.content
-            .layout(child, renderer, &limits.loose());
+        self.content.layout(child, renderer, &limits.loose());
         let content_size = child.size;
         let size = limits.resolve(self.width, self.height, content_size);
 
@@ -231,13 +230,8 @@ where
             .next()
             .expect("widget: Layout should have a children layout for a badge.");
 
-        self.content.mouse_interaction(
-            child_tree,
-            child_layout,
-            cursor,
-            viewport,
-            renderer,
-        )
+        self.content
+            .mouse_interaction(child_tree, child_layout, cursor, viewport, renderer)
     }
 
     fn draw(
@@ -396,9 +390,7 @@ mod tests {
 
     #[test]
     fn badge_size_method_returns_correct_size() {
-        let badge = TestBadge::new(content("Test"))
-            .width(100)
-            .height(50);
+        let badge = TestBadge::new(content("Test")).width(100).height(50);
 
         let size = Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::size(&badge);
         assert_eq!(size.width, Length::Fixed(100.0));
@@ -457,8 +449,7 @@ mod tests {
 
     #[test]
     fn badge_length_fillportion() {
-        let badge =
-            TestBadge::new(content("Test")).width(Length::FillPortion(3));
+        let badge = TestBadge::new(content("Test")).width(Length::FillPortion(3));
 
         assert_eq!(badge.width, Length::FillPortion(3));
     }

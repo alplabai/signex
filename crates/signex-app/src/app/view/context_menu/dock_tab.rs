@@ -3,9 +3,9 @@
 
 use super::*;
 
-use iced::Widget as _;
 use super::items::dd_msg;
 use crate::dock::{DockMessage, DockTabAction, PanelPosition};
+use iced::Widget as _;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Pure row data for the menu of a tab docked in `from`. The region it is

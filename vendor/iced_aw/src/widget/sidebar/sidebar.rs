@@ -559,7 +559,9 @@ where
                             let (tab_layout, tab_tree) = column_layout
                                 .iter(&column_tree.children)
                                 .nth(new_selected)
-                                .expect("widget: Layout should have a tab layout at the selected index");
+                                .expect(
+                                    "widget: Layout should have a tab layout at the selected index",
+                                );
                             let (cross_layout, _) = tab_layout
                                 .iter(&tab_tree.children)
                                 .nth(1)
@@ -1526,18 +1528,21 @@ where
 
         // Sidebar
         let mut mouse_interaction = mouse::Interaction::default();
-        let new_mouse_interaction =
-            self.sidebar
-                .mouse_interaction(sidebar_tree, sidebar_layout, cursor, viewport, renderer);
+        let new_mouse_interaction = self.sidebar.mouse_interaction(
+            sidebar_tree,
+            sidebar_layout,
+            cursor,
+            viewport,
+            renderer,
+        );
         if new_mouse_interaction > mouse_interaction {
             mouse_interaction = new_mouse_interaction;
         }
 
         // Tab content
         if let Some(element) = self.tabs.get(idx)
-            && let Some((layout, tree)) = tab_content_layout
-                .iter(&tab_content_tree.children)
-                .nth(idx)
+            && let Some((layout, tree)) =
+                tab_content_layout.iter(&tab_content_tree.children).nth(idx)
         {
             let new_mouse_interaction =
                 element.mouse_interaction(tree, layout, cursor, viewport, renderer);
@@ -1579,9 +1584,8 @@ where
         );
 
         if let Some(element) = self.tabs.get(idx)
-            && let Some((layout, tree)) = tab_content_layout
-                .iter(&tab_content_tree.children)
-                .nth(idx)
+            && let Some((layout, tree)) =
+                tab_content_layout.iter(&tab_content_tree.children).nth(idx)
         {
             element.draw(tree, renderer, theme, style, layout, cursor, viewport);
         }
@@ -1601,7 +1605,8 @@ where
         let Some(element) = self.tabs.get_mut(idx) else {
             return Vec::new();
         };
-        let Some((tab_content_layout, tab_content_tree)) = layout.iter_mut(&mut state.children).nth(1)
+        let Some((tab_content_layout, tab_content_tree)) =
+            layout.iter_mut(&mut state.children).nth(1)
         else {
             return Vec::new();
         };
