@@ -21,6 +21,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_font,
         draft_grid_style,
         draft_pcb_gpu_render,
+        draft_antialiasing,
         draft_symbol_grid_size_mm,
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
@@ -237,6 +238,33 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             iced::widget::checkbox(draft_pcb_gpu_render)
                 .size(TS.heading)
                 .on_toggle(PrefMsg::DraftPcbGpuRender),
+        ]
+        .align_y(iced::Alignment::Center)
+        .boxed(),
+    );
+    col = col.push(Space::new().height(20).boxed());
+
+    // ── Section: Rendering ──
+    col = col.push(h_sep());
+    col = col.push(Space::new().height(16).boxed());
+    col = col.push(section_title("Rendering"));
+    col = col.push(Space::new().height(10).boxed());
+    col = col.push(
+        row![
+            column![
+                text("Anti-aliasing (MSAA 4x)")
+                    .size(TS.label)
+                    .style(text_primary),
+                text("Smooth the edges of canvas shapes. Applies after restart.")
+                    .size(TS.caption)
+                    .style(text_muted),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::checkbox(draft_antialiasing)
+                .size(TS.heading)
+                .on_toggle(PrefMsg::DraftAntialiasing),
         ]
         .align_y(iced::Alignment::Center)
         .boxed(),

@@ -224,6 +224,7 @@ impl Signex {
                 draft_font: &ui.preferences_draft_font,
                 draft_grid_style: ui.preferences_draft_grid_style,
                 draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
+                draft_antialiasing: ui.preferences_draft_antialiasing,
                 draft_annotate_undo: ui.preferences_draft_annotate_undo,
                 draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
                 draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,

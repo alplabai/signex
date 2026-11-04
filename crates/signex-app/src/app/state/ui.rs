@@ -232,6 +232,11 @@ pub struct UiState {
     pub pcb_gpu_render: bool,
     /// Draft mirror of [`Self::pcb_gpu_render`] for Preferences cancel/discard.
     pub preferences_draft_pcb_gpu_render: bool,
+    /// Anti-aliasing (MSAA 4x on canvas meshes), saved; iced reads it when
+    /// the window system starts, so a change applies after a restart.
+    pub antialiasing: bool,
+    /// Draft mirror of [`Self::antialiasing`].
+    pub preferences_draft_antialiasing: bool,
     /// Default symbol-editor grid size (mm) — used when a library is
     /// first opened. Changed from Preferences ▸ Appearance ▸ Symbol Editor.
     ///
@@ -645,6 +650,7 @@ impl UiState {
             || self.preferences_draft_font != self.ui_font_name
             || self.preferences_draft_grid_style != self.grid_style
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
+            || self.preferences_draft_antialiasing != self.antialiasing
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
             || self.preferences_draft_net_hover_enabled != self.net_hover_enabled

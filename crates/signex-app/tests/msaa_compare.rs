@@ -143,6 +143,8 @@ fn zoom_to(app: &mut Signex, percent: f64) {
 fn msaa_off_and_on() {
     let out = PathBuf::from(std::env::var("MSAA_OUT").expect("MSAA_OUT directory"));
     std::fs::create_dir_all(&out).expect("out dir");
+    // `MSAA_SUFFIX=-snapped` writes a second set next to an earlier one.
+    let suffix = std::env::var("MSAA_SUFFIX").unwrap_or_default();
     for (label, aa) in [("off", None), ("msaa4", Some(Antialiasing::MSAAx4))] {
         let Some((mut renderer, adapter)) = gpu(aa) else {
             eprintln!("no wgpu adapter: skipping");
@@ -169,7 +171,7 @@ fn msaa_off_and_on() {
                     "{label} {theme_name} {zoom} ({shown:.0}%): {per_frame:?} best of 20 (build+draw+readback)"
                 );
                 image::save_buffer(
-                    out.join(format!("{label}-{theme_name}-{zoom}.png")),
+                    out.join(format!("{label}{suffix}-{theme_name}-{zoom}.png")),
                     &rgba,
                     WIDTH,
                     HEIGHT,
@@ -180,27 +182,38 @@ fn msaa_off_and_on() {
         }
     }
     // Pixel difference inside the canvas area, and a 4x montage (off | on) of
-    // a patch around the circuit, for the eye.
-    for theme in ["dark", "light"] {
-        for zoom in ["fit", "200pct", "max"] {
-            let off = image::open(out.join(format!("off-{theme}-{zoom}.png")))
-                .expect("off png")
-                .to_rgba8();
-            let on = image::open(out.join(format!("msaa4-{theme}-{zoom}.png")))
-                .expect("on png")
-                .to_rgba8();
-            let mut differing = 0_u32;
-            let mut total = 0_u32;
-            for y in 67..550 {
-                for x in 246..1055 {
-                    total += 1;
-                    let (a, b) = (off.get_pixel(x, y), on.get_pixel(x, y));
-                    if (0..3).any(|c| a[c].abs_diff(b[c]) > 8) {
-                        differing += 1;
-                    }
+    // a patch around the circuit, for the eye. Off is compared from this run
+    // and, when it exists, from the earlier run without the suffix.
+    let differing = |a: &image::RgbaImage, b: &image::RgbaImage| {
+        let mut count = 0_u32;
+        for y in 67..550 {
+            for x in 246..1055 {
+                let (p, q) = (a.get_pixel(x, y), b.get_pixel(x, y));
+                if (0..3).any(|c| p[c].abs_diff(q[c]) > 8) {
+                    count += 1;
                 }
             }
-            eprintln!("{theme} {zoom}: {differing} of {total} canvas pixels differ by more than 8");
+        }
+        count
+    };
+    for theme in ["dark", "light"] {
+        for zoom in ["fit", "200pct", "max"] {
+            let load = |name: String| image::open(out.join(name)).map(|i| i.to_rgba8());
+            let off = load(format!("off{suffix}-{theme}-{zoom}.png")).expect("off png");
+            let on = load(format!("msaa4{suffix}-{theme}-{zoom}.png")).expect("on png");
+            let total = 483 * 809;
+            eprintln!(
+                "{theme} {zoom}: msaa vs off (same run) {} of {total} canvas pixels differ by more than 8",
+                differing(&off, &on)
+            );
+            if !suffix.is_empty()
+                && let Ok(original) = load(format!("off-{theme}-{zoom}.png"))
+            {
+                eprintln!(
+                    "{theme} {zoom}: msaa vs the earlier unsnapped off {} differ",
+                    differing(&original, &on)
+                );
+            }
             let (x0, y0, w, h, k) = (400_u32, 300_u32, 120_u32, 80_u32, 4_u32);
             let mut montage = image::RgbaImage::new(w * k * 2 + 10, h * k);
             for (side, img) in [(0, &off), (1, &on)] {
@@ -215,7 +228,7 @@ fn msaa_off_and_on() {
                 }
             }
             montage
-                .save(out.join(format!("compare-{theme}-{zoom}.png")))
+                .save(out.join(format!("compare{suffix}-{theme}-{zoom}.png")))
                 .expect("montage");
         }
     }

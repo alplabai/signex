@@ -539,6 +539,37 @@ pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// Anti-aliasing (MSAA 4x on canvas meshes)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Read the anti-aliasing toggle. On unless the file says otherwise, so an
+/// old `prefs.json` without the key, a missing file and a malformed value all
+/// read as on. iced fixes it when the window system starts, so a change
+/// applies after a restart.
+pub fn read_antialiasing_pref() -> bool {
+    read_antialiasing_pref_at(&prefs_path())
+}
+
+pub fn read_antialiasing_pref_at(path: &Path) -> bool {
+    read_antialiasing_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_antialiasing_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["antialiasing"].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_antialiasing_pref(enabled: bool) {
+    write_antialiasing_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_antialiasing_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "antialiasing", |prefs| {
+        prefs.insert("antialiasing".to_string(), serde_json::Value::Bool(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // PCB GPU render (experimental)
 // ──────────────────────────────────────────────────────────────────────
 
@@ -811,6 +842,30 @@ mod tests {
             crate::feature_flags::PCB_GPU_RENDER_DEFAULT,
             "an unrelated prefs file must not disturb the default"
         );
+    }
+
+    /// Anti-aliasing is a preference that defaults to on: a missing file, a
+    /// file without the key and a value that is not a bool all read as on.
+    #[test]
+    fn an_absent_antialiasing_key_defaults_to_on() {
+        let (_dir, empty) = temp_prefs("{}");
+        assert!(read_antialiasing_pref_at(&empty));
+        let (_dir, other) = temp_prefs(r#"{"theme": "nord"}"#);
+        assert!(read_antialiasing_pref_at(&other));
+        let (_dir, wrong) = temp_prefs(r#"{"antialiasing": "yes"}"#);
+        assert!(read_antialiasing_pref_at(&wrong));
+        assert!(read_antialiasing_pref_from(None));
+    }
+
+    #[test]
+    fn a_saved_antialiasing_value_round_trips() {
+        let (_dir, path) = temp_prefs(r#"{"theme": "nord"}"#);
+        write_antialiasing_pref_at(&path, false);
+        assert!(!read_antialiasing_pref_at(&path));
+        write_antialiasing_pref_at(&path, true);
+        assert!(read_antialiasing_pref_at(&path));
+        let json = read_prefs_json(&path).expect("prefs");
+        assert_eq!(json["theme"], "nord", "other keys are kept");
     }
 }
 

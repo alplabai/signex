@@ -105,6 +105,7 @@ impl Signex {
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
         self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
+        self.ui_state.preferences_draft_antialiasing = self.ui_state.antialiasing;
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
@@ -307,6 +308,7 @@ impl Signex {
                 self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
+                self.ui_state.antialiasing = self.ui_state.preferences_draft_antialiasing;
                 self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
                 self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
@@ -541,6 +543,12 @@ impl Signex {
             }
             PrefMsg::DraftWindowControlsPlacement(placement) => {
                 self.ui_state.preferences_draft_window_controls_placement = placement;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftAntialiasing(enabled) => {
+                // No live preview: iced fixes it at start. Saved on Save,
+                // read at the next launch.
+                self.ui_state.preferences_draft_antialiasing = enabled;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftPcbGpuRender(enabled) => {

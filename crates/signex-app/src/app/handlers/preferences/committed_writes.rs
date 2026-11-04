@@ -16,6 +16,7 @@ impl Signex {
         let drag_direction = ui.drag_direction_select;
         let net_hover = ui.net_hover_enabled;
         let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
+        let antialiasing = ui.antialiasing;
         let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
             ui.grid_style,
             ui.annotate_undo,
@@ -63,6 +64,9 @@ impl Signex {
             }),
             write("autosave_enabled", move || {
                 crate::fonts::write_autosave_enabled_pref(autosave)
+            }),
+            write("antialiasing", move || {
+                crate::fonts::write_antialiasing_pref(antialiasing)
             }),
             write("pcb_gpu_render", move || {
                 crate::fonts::write_pcb_gpu_render_pref(gpu)
