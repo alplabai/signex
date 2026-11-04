@@ -314,7 +314,7 @@ fn caller_width_replaces_the_monospace_estimate() {
     let (anchor, size) = ((10.0, 5.0), 2.0);
     let estimate = text_aabb("abcd", size, anchor, 0.0, HAlign::Left, VAlign::Top);
     let same = text_aabb_with_width(
-        text_height_mm(size) * 0.6 * 4.0,
+        crate::font::default_face_width_mm("abcd", text_height_mm(size)),
         size,
         anchor,
         0.0,

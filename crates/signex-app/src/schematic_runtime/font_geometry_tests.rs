@@ -107,14 +107,14 @@ fn the_sheet_default_family_sizes_labels_that_name_none() {
 }
 
 #[test]
-fn iosevka_geometry_is_the_monospace_estimate_it_always_was() {
+fn iosevka_geometry_is_the_shaped_advance() {
     roboto_em();
     let flag = label(LabelType::Global, None);
     let em = em_mm(&flag);
-    let want = TEXT.chars().count() as f64 * em * 0.58 + 2.0 * em * 0.325;
-    // Both `em_mm` and the geometry's own estimate divide by the face's
-    // cap-height ratio; the tolerance only absorbs the different
-    // order of float operations between the two sums.
+    let advance_em =
+        f64::from(crate::fonts::measure::shaped_advance_em(TEXT, "Iosevka").expect("measurer"));
+    let want = advance_em * em + 2.0 * em * 0.325;
+    // The tolerance only absorbs the different order of float operations.
     assert!((flag_body_width(&flag, None) - want).abs() < 1e-6);
     assert_eq!(
         flag_body_width(&label(LabelType::Global, Some("Iosevka")), None),
@@ -169,4 +169,20 @@ fn a_flag_is_as_tall_as_its_capitals_say_in_every_face() {
         "{roboto}"
     );
     assert!(roboto > iosevka, "Roboto's capitals fill less of its em");
+}
+
+/// #2023 - a default-face box is as wide as the shaped advance, not a 0.6 em
+/// guess.
+#[test]
+fn default_face_box_width_is_the_shaped_advance() {
+    use signex_types::schematic::text_aabb;
+    roboto_em();
+    for text in ["R101", "SYSTEM_RESET_REQUEST_N", "10k"] {
+        let size = 1.27;
+        let advance_em =
+            f64::from(crate::fonts::measure::shaped_advance_em(text, "Iosevka").expect("measurer"));
+        let want = advance_em * size / f64::from(signex_types::font::mm_per_em(None));
+        let b = text_aabb(text, size, (0.0, 0.0), 0.0, HAlign::Left, VAlign::Top);
+        assert!((b.max_x - b.min_x - want).abs() < 1e-6, "{text}");
+    }
 }

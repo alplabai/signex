@@ -407,7 +407,8 @@ pub fn text_height_mm(font_size: f64) -> f64 {
 }
 
 /// Box of `text` anchored at `anchor` with the given justification, rotated
-/// with the text about the anchor (Y-down). Glyphs are estimated at 0.6 em.
+/// with the text about the anchor (Y-down). The width is the default face's
+/// shaped advance ([`crate::font::default_face_width_mm`]).
 pub fn text_aabb(
     text: &str,
     font_size: f64,
@@ -416,8 +417,7 @@ pub fn text_aabb(
     h_align: HAlign,
     v_align: VAlign,
 ) -> Aabb {
-    let chars = text.chars().count().max(1) as f64;
-    let w = text_height_mm(font_size) * 0.6 * chars;
+    let w = crate::font::default_face_width_mm(text, text_height_mm(font_size));
     text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
 }
 

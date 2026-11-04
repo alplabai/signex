@@ -40,6 +40,31 @@ pub fn set_cap_height_resolver(resolver: CapHeightResolver) {
     let _ = CAP_HEIGHT_RESOLVER.set(resolver);
 }
 
+/// Shaped width in em of a text in a family, `None` when the shaper is not
+/// ready yet.
+pub type AdvanceResolver = fn(&str, &str) -> Option<f32>;
+
+static ADVANCE_RESOLVER: OnceLock<AdvanceResolver> = OnceLock::new();
+
+/// Register the text shaper (#2023). Like the cap-height reader, the app
+/// owns the font system; this crate only asks. First registration wins.
+pub fn set_advance_resolver(resolver: AdvanceResolver) {
+    let _ = ADVANCE_RESOLVER.set(resolver);
+}
+
+/// Shaped width of `text` in em in `family` (`None` is the bundled default),
+/// or `None` before a shaper is registered.
+pub fn shaped_advance_em(text: &str, family: Option<&str>) -> Option<f32> {
+    let name = family.map_or(BUNDLED_DEFAULT_FAMILY, str::trim);
+    ADVANCE_RESOLVER
+        .get()
+        .and_then(|resolve| resolve(text, name))
+}
+
+/// Em advance per character of the bundled default face, which is monospace.
+/// Stands in for the shaper until it is ready.
+const BUNDLED_DEFAULT_ADVANCE_EM: f32 = 0.5;
+
 /// Millimetres of cap height per em for `family` (`None` is the bundled
 /// default). Bundled faces use their measured ratio; a system family uses
 /// the registered resolver's reading; anything else keeps
@@ -57,6 +82,15 @@ pub fn mm_per_em(family: Option<&str>) -> f32 {
         .and_then(|resolve| resolve(name))
         .filter(|ratio| ratio.is_finite() && *ratio > 0.0)
         .unwrap_or(FALLBACK_MM_PER_EM)
+}
+
+/// Width in mm of `text` in the bundled default face at cap height
+/// `size_mm`: the shaped advance, or the monospace advance before the shaper
+/// is ready.
+pub fn default_face_width_mm(text: &str, size_mm: f64) -> f64 {
+    let em = shaped_advance_em(text, None)
+        .unwrap_or_else(|| text.chars().count().max(1) as f32 * BUNDLED_DEFAULT_ADVANCE_EM);
+    f64::from(em) * size_mm / f64::from(mm_per_em(None))
 }
 
 /// Cap-height ratio of the bundled `family`, for tests that pin the table.

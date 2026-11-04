@@ -859,9 +859,13 @@ fn drawn_text_aabb(
     h_align: HAlign,
     v_align: VAlign,
 ) -> Aabb {
-    let chars = text.chars().count().max(1) as f64;
     let h = text_height_mm(font_size);
-    let w = text_width::text_width_mm(text, family, h, h * 0.6 * chars);
+    let w = text_width::text_width_mm(
+        text,
+        family,
+        h,
+        signex_types::font::default_face_width_mm(text, h),
+    );
     text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
 }
 

@@ -23,6 +23,7 @@ const CACHE_CAP: usize = 8192;
 pub fn install_blocking() {
     MEASURER.get_or_init(|| Mutex::new(TextMeasurer::new(&super::bundled::BUNDLED_FONTS, true)));
     signex_types::font::set_cap_height_resolver(cap_height_per_em);
+    signex_types::font::set_advance_resolver(shaped_advance_em);
 }
 
 /// Cap height over em of an installed family, read once per family from the
@@ -74,4 +75,5 @@ pub fn shaped_advance_em(text: &str, family: &str) -> Option<f32> {
 pub fn install_hermetic() {
     MEASURER.get_or_init(|| Mutex::new(TextMeasurer::new(&super::bundled::BUNDLED_FONTS, false)));
     signex_types::font::set_cap_height_resolver(cap_height_per_em);
+    signex_types::font::set_advance_resolver(shaped_advance_em);
 }
