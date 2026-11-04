@@ -174,6 +174,8 @@ fn an_unreadable_row_refuses_the_edit() {
     );
 }
 
+/// Guard, not a regression test: it passes without the #1939 fix too. It
+/// keeps the refusal from growing to cover a plain first write.
 #[test]
 fn a_row_that_is_not_stored_yet_is_a_plain_first_write() {
     let mut f = fixture(Read::NotFound);
@@ -183,6 +185,9 @@ fn a_row_that_is_not_stored_yet_is_a_plain_first_write() {
     assert_eq!(f.writes.lock().unwrap().len(), 1);
 }
 
+/// Guard, not a regression test: the version bump worked before #1939 when
+/// the read succeeded; this pins it beside the refusal that now covers the
+/// failing read.
 #[test]
 fn a_changed_manufacturer_moves_the_row_version_on_write() {
     let mut f = fixture(Read::Row);

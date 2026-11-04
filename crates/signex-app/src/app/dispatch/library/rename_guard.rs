@@ -32,6 +32,38 @@ impl Signex {
         )
     }
 
+    /// Why a symbol or footprint editor edit cannot apply now, or `None`.
+    /// While a library rename or delete runs, an edit to a primitive inside
+    /// that library is refused rather than kept and reported afterwards
+    /// (#1939): the editor stays as it was, so nothing is lost. View-only
+    /// events (cursor, pan, zoom, menus, selection) still go through.
+    pub(super) fn primitive_edit_refusal(&self, msg: &LibraryMessage) -> Option<String> {
+        let LibraryMessage::PrimitiveEditorEvent { path, msg } = msg else {
+            return None;
+        };
+        let ops = &self.document_state.pending_path_ops;
+        if !ops.library_rename_running() || ops.blocking_write(path).is_none() {
+            return None;
+        }
+        let edits = match msg {
+            PrimitiveEdit::Save => true,
+            PrimitiveEdit::Symbol(m) => !symbol_msg_is_view_only(m),
+            PrimitiveEdit::Footprint(m) => !footprint_msg_is_view_only(m),
+        };
+        if !edits {
+            return None;
+        }
+        let library = self
+            .library
+            .write_target_library(path, self.identity_fold_for(path))
+            .map(|lib| lib.display_name.clone())
+            .unwrap_or_else(|| path.display().to_string());
+        Some(format!(
+            "Library {library} is being renamed or deleted, so this edit was not applied. \
+             Try again once it finishes."
+        ))
+    }
+
     /// Git or copy work running off the update loop that writes into the
     /// library at `root`: a queued library edit (#893), a datasheet PDF store,
     /// a "Commit now", or a stock copy (its target is not tracked, so any copy
@@ -58,6 +90,50 @@ impl Signex {
                 || any_root_under(self.library.committing_roots(), root, fold)
                 || !self.library.stock_copies_in_flight.is_empty())
     }
+}
+
+/// Symbol editor events that change no document state.
+fn symbol_msg_is_view_only(msg: &SymbolEditorMsg) -> bool {
+    use SymbolEditorMsg as S;
+    matches!(
+        msg,
+        S::Pan { .. }
+            | S::Zoom { .. }
+            | S::Fit
+            | S::ViewportMeasured { .. }
+            | S::CursorAt { .. }
+            | S::Select(_)
+            | S::Deselect
+            | S::ToggleActiveBarMenu(_)
+            | S::CloseActiveBarMenu
+            | S::ToggleSelectionFilter(_)
+            | S::ShowContextMenu { .. }
+            | S::CloseContextMenu
+            | S::ContextMenuOpenSubmenu(_)
+    )
+}
+
+/// Footprint editor events that change no document state.
+fn footprint_msg_is_view_only(msg: &FootprintEditorMsg) -> bool {
+    use FootprintEditorMsg as F;
+    matches!(
+        msg,
+        F::CursorAt { .. }
+            | F::ViewScaleChanged { .. }
+            | F::FitConsumed { .. }
+            | F::SelectPad(_)
+            | F::SelectPads(_)
+            | F::SelectSilkF(_)
+            | F::ToggleLayer(_)
+            | F::ToggleSelectionFilter(_)
+            | F::ToggleActiveBarMenu(_)
+            | F::CloseActiveBarMenu
+            | F::ShowContextMenu { .. }
+            | F::CloseContextMenu
+            | F::ContextMenuOpenSubmenu(_)
+            | F::ActiveBarSelectAll
+            | F::ActiveBarClearSelection
+    )
 }
 
 /// One of `roots` is `path` or lies under it, compared under `fold` so a case
@@ -180,6 +256,58 @@ mod tests {
             crate::diagnostics::recent_entries()
                 .iter()
                 .any(|e| Some(e.id) > since && e.message.contains("library change was not applied"))
+        );
+    }
+
+    fn symbol_edit(path: &str, msg: SymbolEditorMsg) -> crate::app::Message {
+        crate::app::Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.into(),
+            msg: PrimitiveEdit::Symbol(msg),
+        })
+    }
+
+    /// #1939: an editor edit during a library rename is refused, not kept and
+    /// reported afterwards. The editor stays as it was and Messages names the
+    /// library; a view-only event still goes through.
+    #[test]
+    fn a_symbol_edit_during_a_library_rename_is_refused_and_logged() {
+        let _ = crate::diagnostics::init_logging();
+        let mut app = app_with_library_rename();
+        let path = std::path::PathBuf::from("/w/a.snxlib/symbols/r.snxsym");
+        let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
+        app.document_state.symbol_editors.insert(
+            path.clone(),
+            crate::app::SymbolDocument::new(path.clone(), file),
+        );
+        let pins =
+            |app: &Signex| format!("{:?}", app.document_state.symbol_editors[&path].snapshot());
+        let before = pins(&app);
+        let since = crate::diagnostics::newest_entry_id();
+
+        let p = path.to_string_lossy().into_owned();
+        let _task = app.update(symbol_edit(&p, SymbolEditorMsg::AddPin { x: 1.0, y: 2.0 }));
+
+        assert_eq!(pins(&app), before, "the editor is unchanged");
+        assert!(!app.document_state.symbol_editors[&path].is_dirty());
+        assert!(
+            crate::diagnostics::recent_entries().iter().any(|e| {
+                Some(e.id) > since
+                    && e.message.contains("a.snxlib")
+                    && e.message.contains("edit was not applied")
+            }),
+            "Messages names the library"
+        );
+
+        // A pan is view-only and is not refused.
+        assert!(
+            app.primitive_edit_refusal(&match symbol_edit(
+                &p,
+                SymbolEditorMsg::Pan { dx: 1.0, dy: 1.0 },
+            ) {
+                crate::app::Message::Library(m) => m,
+                _ => unreachable!(),
+            })
+            .is_none()
         );
     }
 

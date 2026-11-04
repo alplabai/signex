@@ -410,6 +410,9 @@ fn a_folder_with_a_project_file_keeps_its_primitives() {
     assert!(f.dir.join("symbols/a.snxsym").exists());
 }
 
+/// Guard for the report path: the editor dispatch now refuses edits during a
+/// library delete (#1939), so this state is only reachable by dirtying the
+/// editor directly, and the test passes without the report's own fix.
 #[test]
 fn an_editor_dirtied_while_the_delete_ran_is_reported_not_dropped_silently() {
     let _ = crate::diagnostics::init_logging();

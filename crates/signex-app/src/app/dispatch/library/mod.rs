@@ -106,6 +106,11 @@ impl Signex {
                 Some(crate::app::state::ErrorNotice::library_change(refusal));
             return self.finish_update();
         }
+        if let Some(refusal) = self.primitive_edit_refusal(&msg) {
+            crate::diagnostics::log_warning(&refusal);
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        }
         let per_event = matches!(
             &msg,
             LibraryMessage::EditorEvent { .. }
