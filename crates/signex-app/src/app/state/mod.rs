@@ -486,6 +486,9 @@ pub struct DocumentState {
     /// The panel context of each undocked document window, so its dock
     /// panels show and edit that window's sheet (#1966).
     pub window_panel_ctx: std::collections::HashMap<iced::window::Id, crate::panels::PanelContext>,
+    /// What each window context was last built from; see `window_ctx_key`.
+    pub(crate) window_panel_ctx_keys:
+        std::collections::HashMap<iced::window::Id, crate::app::runtime::WindowCtxKey>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.

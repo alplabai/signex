@@ -466,7 +466,7 @@ impl Signex {
                 // short-circuits on `windows.remove -> None` and the
                 // canvas cache + selection leak.
                 self.ui_state.windows.remove(&id);
-                self.document_state.window_panel_ctx.remove(&id);
+                self.retire_window_panel_ctx(id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 iced::window::close(id)

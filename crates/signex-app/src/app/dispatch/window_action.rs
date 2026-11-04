@@ -36,29 +36,97 @@ pub(super) fn tag_followup(window: iced::window::Id, message: Message) -> Messag
     })
 }
 
-/// A dock message that is not run against the window's sheet: the dock layout
-/// is shared, and anything that opens, selects or closes a document would load
-/// it into the window's swapped canvas. Those run on the main window. Panel
-/// edits of the sheet, and the Components row press that stamps its window,
-/// are scoped.
-fn dock_message_stays_on_main(message: &crate::dock::DockMessage) -> bool {
+/// Whether a dock message edits the sheet an undocked window shows, so it
+/// runs in the window's swap. This is an allow-list: everything else (the
+/// dock layout, Projects, Navigator, ERC focus and quick fixes, History
+/// restore, library rows, anything that opens or activates a document, and
+/// any variant added later) runs on the main window, where the swap cannot
+/// load one sheet into another's canvas or write one sheet's history over
+/// another sheet. The Components row press is scoped to stamp its window.
+fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
     use crate::dock::DockMessage;
     use crate::library::LibraryMessage;
-    use crate::panels::PanelMsg;
+    use crate::panels::PanelMsg as P;
     use signex_widgets::tree_view::TreeMsg;
     match message {
-        // Expanding a row only changes the window's own tree.
-        DockMessage::Panel(PanelMsg::Tree(TreeMsg::Toggle(_))) => false,
-        DockMessage::Panel(
-            PanelMsg::Tree(_) | PanelMsg::Navigator(_) | PanelMsg::PlacedPartAction(_),
-        ) => true,
-        DockMessage::Panel(_) => false,
         DockMessage::Library(
             LibraryMessage::ComponentsPanelRowPressed(_)
             | LibraryMessage::ComponentsPanelRowRightClicked(_),
-        ) => false,
-        _ => true,
+        ) => true,
+        // Expanding a row only changes the window's own tree.
+        DockMessage::Panel(P::Tree(TreeMsg::Toggle(_))) => true,
+        DockMessage::Panel(panel) => matches!(
+            panel,
+            P::PropertiesTab(_)
+                | P::ToggleSection(_)
+                | P::EditSymbolDesignator(..)
+                | P::EditSymbolValue(..)
+                | P::EditSymbolFootprint(..)
+                | P::SwitchSymbolChoice(..)
+                | P::ToggleSymbolMirrorX(_)
+                | P::ToggleSymbolMirrorY(_)
+                | P::ToggleSymbolLocked(_)
+                | P::ToggleItemLocked(..)
+                | P::ToggleSymbolDnp(_)
+                | P::SymbolBodyStylePicked(..)
+                | P::EditSymbolRotation(..)
+                | P::EditSymbolValueFontSizePt(..)
+                | P::EditPowerPortStyle { .. }
+                | P::EditLabelText(..)
+                | P::EditLabelJustifyH(..)
+                | P::EditLabelDirection(..)
+                | P::EditLabelRotation(..)
+                | P::EditLabelFontSizePt(..)
+                | P::EditTextNoteText(..)
+                | P::EditTextFontFamily(..)
+                | P::SetDocumentFontFamily(_)
+                | P::SetPageFormatMode(_)
+                | P::SetPaperSize(_)
+                | P::SetSheetOrientation(_)
+                | P::SetPageOrigin(_)
+                | P::SetSheetColor(_)
+                | P::EditSheetFrame(..)
+                | P::CustomPaperEdgeTyping(..)
+                | P::CommitCustomPaperEdge(..)
+                | P::TitleBlockTyping(..)
+                | P::CommitTitleBlockField(..)
+                | P::NumericFieldTyped(..)
+                | P::NumericFieldSubmitted(..)
+                | P::UpdateDrawingEdit(..)
+                | P::DrawingFieldTyping(..)
+                | P::MultiEdit(..)
+        ),
+        _ => false,
     }
+}
+
+/// Whether the message a command resolved to opens, activates or steps to
+/// another sheet, or clears every canvas's caches: it runs on the main
+/// window, never inside a window's swap (which would show the other sheet in
+/// the window's canvas while the window keeps its own path).
+fn command_stays_on_main(message: &Message) -> bool {
+    use crate::app::{NetNavMsg, UiMsg};
+    use crate::menu_bar::MenuMessage;
+    matches!(
+        message,
+        Message::Menu(
+            MenuMessage::AscendToParentSheet
+                | MenuMessage::NextSheet
+                | MenuMessage::PreviousSheet
+                | MenuMessage::NewProject
+                | MenuMessage::OpenProject
+                | MenuMessage::OpenRecentProject(_)
+                | MenuMessage::OpenSampleProject
+        ) | Message::Ui(
+            UiMsg::GridToggle
+                | UiMsg::NetNav(
+                    NetNavMsg::PartnerJumpRequested
+                        | NetNavMsg::SheetBackRequested
+                        | NetNavMsg::SheetForwardRequested
+                        | NetNavMsg::HighlightStepRequested { .. }
+                )
+        )
+    )
 }
 
 impl Signex {
@@ -83,7 +151,7 @@ impl Signex {
                 Message::CanvasEventInWindow { .. }
                     | Message::Window(WindowMsg::ActionTakenInWindow { .. })
             )
-            || matches!(&message, Message::Dock(dock) if dock_message_stays_on_main(dock))
+            || matches!(&message, Message::Dock(dock) if !dock_message_edits_shown_sheet(dock))
         {
             return message;
         }
@@ -105,7 +173,13 @@ impl Signex {
             return self.update(message);
         }
         if !self.is_document_window(window) {
+            crate::diagnostics::log_warning(
+                "An action for a window that has closed was dropped; repeat it in the window that shows the sheet.",
+            );
             return Task::none();
+        }
+        if command_stays_on_main(&message) {
+            return self.update(message);
         }
         let task = self.run_in_window_document(window, |app| app.update(message));
         task.map(move |followup| tag_followup(window, followup))
@@ -115,7 +189,7 @@ impl Signex {
     /// Selection, a menu or a Components drag stamped with its id would
     /// otherwise stay open where nothing paints them.
     pub(crate) fn close_surfaces_of_window(&mut self, window: iced::window::Id) {
-        self.document_state.window_panel_ctx.remove(&window);
+        self.retire_window_panel_ctx(window);
         let stamped = Some(window);
         if self.ui_state.find_replace.window == stamped {
             self.ui_state.find_replace.open = false;

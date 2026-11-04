@@ -17,6 +17,7 @@ mod sheet_tree;
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 mod window_panel_ctx;
+pub(crate) use window_panel_ctx::WindowCtxKey;
 
 impl Signex {
     /// Copy the UI-state grid/unit/snap fields into the panel context.

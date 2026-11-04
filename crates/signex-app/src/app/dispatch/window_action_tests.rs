@@ -57,12 +57,18 @@ fn fixture() -> Fixture {
 }
 
 /// [`fixture`] on `app`, with the two sheets in `dir`.
-fn fixture_in(mut app: Signex, dir: &Path) -> Fixture {
+fn fixture_in(app: Signex, dir: &Path) -> Fixture {
+    fixture_in_dirs(app, dir, dir)
+}
+
+/// [`fixture`] on `app`, with the main sheet in `main_dir` and the window's
+/// in `window_dir`.
+fn fixture_in_dirs(mut app: Signex, main_dir: &Path, window_dir: &Path) -> Fixture {
     app.ui_state.first_run_tour_open = false;
     let main = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(main);
-    let main_path = dir.join("a.snxsch");
-    let window_path = dir.join("b.snxsch");
+    let main_path = main_dir.join("a.snxsch");
+    let window_path = window_dir.join("b.snxsch");
     let empty =
         signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
     app.document_state.engines.insert(main_path.clone(), empty);
@@ -639,4 +645,99 @@ fn opening_a_sheet_from_an_undocked_windows_projects_panel_runs_on_the_main_wind
         "the window's canvas was loaded with another sheet"
     );
     assert!(f.app.interaction_state.canvas.selected.is_empty());
+}
+
+fn third_sheet(f: &mut Fixture) -> PathBuf {
+    let path = PathBuf::from("c.snxsch");
+    let engine = signex_engine::Engine::new(Default::default()).unwrap();
+    f.app.document_state.engines.insert(path.clone(), engine);
+    f.app.document_state.tabs.push(tab(&path));
+    path
+}
+
+fn wires_shown_in(app: &Signex, window: iced::window::Id) -> Option<usize> {
+    app.interaction_state
+        .canvas_for_window(window)
+        .active_render_cache()
+        .map(|cache| cache.snapshot().wires.len())
+}
+
+#[test]
+fn stepping_sheets_from_an_undocked_window_never_loads_another_sheet_into_it() {
+    for id in ["next_sheet", "previous_sheet"] {
+        let mut f = fixture();
+        third_sheet(&mut f);
+        let command = crate::keymap::AppCommandId::new(id).unwrap();
+        let (outcome, _task) = f.app.dispatch_command_reporting(
+            &command,
+            crate::app::command::CommandArgs::none(),
+            Some(f.window),
+        );
+        assert!(
+            matches!(outcome, crate::app::command::CommandOutcome::Ran),
+            "{id} did not run: {outcome:?}"
+        );
+        assert_eq!(
+            wires_shown_in(&f.app, f.window),
+            Some(1),
+            "{id}: the window's canvas shows another sheet"
+        );
+        let shown = &f.app.ui_state.windows[&f.window];
+        assert!(matches!(shown, WindowKind::UndockedTab { path, .. } if *path == f.window_path));
+    }
+}
+
+#[test]
+fn history_restore_and_erc_focus_from_an_undocked_window_run_on_the_main_window() {
+    let f = fixture();
+    for message in [
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+        crate::panels::PanelMsg::HistoryRestoreCancelled,
+        crate::panels::PanelMsg::FocusErcViolation(0),
+        crate::panels::PanelMsg::FocusNextErcDiagnostic,
+        crate::panels::PanelMsg::FocusPrevErcDiagnostic,
+        crate::panels::PanelMsg::FpLibraryOpenSibling(PathBuf::from("x.snxfpt")),
+        crate::panels::PanelMsg::SchLibrarySelectSymbol(0),
+    ] {
+        let sent = f.app.scope_to_window(f.window, dock(message.clone()));
+        assert!(
+            !is_scoped(&sent, f.window),
+            "{message:?} would run inside the window's swap"
+        );
+    }
+}
+
+#[test]
+fn a_window_refresh_leaves_the_main_windows_navigator_on_the_main_project() {
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir_a.path().to_string_lossy(),
+        &["a.snxsch"],
+    );
+    let mut f = fixture_in_dirs(app, dir_a.path(), dir_b.path());
+    let mut second = f.app.document_state.projects[0].clone();
+    second.id = f.app.document_state.mint_project_id();
+    second.path = dir_b.path().join("ProjectB.snxprj");
+    second.data.name = "ProjectB".into();
+    second.data.dir = dir_b.path().to_string_lossy().into_owned();
+    second.data.schematic_root = Some("b.snxsch".into());
+    second.data.sheets[0].filename = "b.snxsch".into();
+    f.app.document_state.projects.push(second);
+
+    f.app.refresh_panel_ctx();
+
+    let wanted = f
+        .app
+        .document_state
+        .navigator_job
+        .wanted_fingerprint()
+        .unwrap_or_default();
+    let root =
+        |dir: &tempfile::TempDir, name: &str| format!("root {}", dir.path().join(name).display());
+    assert!(
+        wanted.contains(&root(&dir_a, "a.snxsch")),
+        "the Navigator was retargeted: {wanted}"
+    );
+    assert!(!wanted.contains(&root(&dir_b, "b.snxsch")));
 }

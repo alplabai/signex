@@ -524,9 +524,17 @@ impl Signex {
         }));
         self.interaction_state.acting_window = saved_acting;
         std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
-        self.document_state
-            .window_panel_ctx
-            .insert(window_id, swapped_ctx);
+        // The handler may have closed the window (Close Document): its
+        // context and canvas are then dropped, not put back, and the drafts
+        // typed in it move to the main context.
+        let window_alive = self.ui_state.windows.contains_key(&window_id);
+        if window_alive {
+            self.document_state
+                .window_panel_ctx
+                .insert(window_id, swapped_ctx);
+        } else {
+            self.document_state.panel_ctx.take_drafts_from(swapped_ctx);
+        }
 
         // Always-run cleanup (runs on success, error return, or panic
         // via resume_unwind below): swap the canvases back and restore
@@ -534,12 +542,16 @@ impl Signex {
         // main slot) returns to the HashMap; the main canvas (held in
         // `swapped_canvas`) returns to the main slot.
         std::mem::swap(&mut self.interaction_state.canvas, &mut swapped_canvas);
-        self.interaction_state
-            .canvases
-            .insert(window_id, swapped_canvas);
+        if window_alive {
+            self.interaction_state
+                .canvases
+                .insert(window_id, swapped_canvas);
+        }
         if let Some(mut pcb) = swapped_pcb {
             std::mem::swap(&mut self.interaction_state.pcb_canvas, &mut pcb);
-            self.interaction_state.pcb_canvases.insert(window_id, pcb);
+            if window_alive {
+                self.interaction_state.pcb_canvases.insert(window_id, pcb);
+            }
         }
         if retargeted_tab.is_some() {
             let tabs = &self.document_state.tabs;
