@@ -45,9 +45,29 @@ pub fn apply_sketch_edit(
 /// The warnings in `current` that were not in the previous solve's set,
 /// remembering `current` as the new set. A drag re-solves every frame
 /// with the same warnings; only a change in the set reaches the log.
-pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String>) -> Vec<String> {
+pub(in crate::library::editor::footprint) fn take_unlogged_warnings(
+    current: &[String],
+    logged: &mut Vec<String>,
+) -> Vec<String> {
     let keyed: Vec<(String, String)> = current.iter().map(|w| (w.clone(), w.clone())).collect();
     take_unlogged_keyed(&keyed, logged)
+}
+
+/// [`take_unlogged_warnings`] for a bake: a skipped redundancy pass is
+/// reported by the off-thread answer, not the solve, so the bake's reset
+/// must not make an already-logged skip look new when the next answer
+/// repeats it. `redundancy::apply` forgets it once a pass completes.
+pub(in crate::library::editor::footprint) fn take_unlogged_bake_warnings(
+    current: &[String],
+    logged: &mut Vec<String>,
+) -> Vec<String> {
+    let skip = signex_sketch::solver::REDUNDANCY_SKIPPED.to_string();
+    let skip_was_logged = logged.contains(&skip);
+    let fresh = take_unlogged_warnings(current, logged);
+    if skip_was_logged && !logged.contains(&skip) {
+        logged.push(skip);
+    }
+    fresh
 }
 
 /// [`take_unlogged_warnings`] over `(key, text)` pairs: the set comparison
@@ -512,8 +532,12 @@ pub(super) fn solve_and_bake(
     // also runs the DOF analysis, which the budget does not bound: 14 ms at
     // n = 254, and for an already-converged sketch 92 ms at n = 574
     // (under-constrained) or 400 to 520 ms at n = 510 (fully constrained).
-    // A converged sketch is never refused for its size, so it still bakes.
-    match state.sketch_solver.solve(sketch, &resolved) {
+    // The redundancy pass is left out and runs off-thread (#1685). A
+    // converged sketch is never refused for its size, so it still bakes.
+    match state
+        .sketch_solver
+        .solve_deferring_redundancy(sketch, &resolved)
+    {
         Ok(out) => bake_solution(state, footprint, &resolved, out)?,
         Err(e) => return Err(discard_failed_solve(state, e)),
     }
