@@ -52,7 +52,7 @@ View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	01100000	cmd:zoom_
 View/Fit All	item	Fit All	zoom_to_fit	Home	ZoomFit	01100100	cmd:zoom_to_fit
 View/---	separator	-	-	-	-	-	-
 View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
-View/Cycle Grid Size	item	Cycle Grid Size	cycle_snap_grid_forward	G	CycleGrid	01100000	cyclegrid
+View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
 View/---	separator	-	-	-	-	-	-
 View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
@@ -86,7 +86,7 @@ Design/Annotation/---	separator	-	-	-	-	-	-
 Design/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
 Design/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
 Design/---	separator	-	-	-	-	-	-
-Design/Electrical Rules Check	item	Electrical Rules Check	run_erc	F8	Erc	01001000	cmd:run_erc
+Design/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/---	separator	-	-	-	-	-	-
 Design/Generate BOM	item	Generate BOM	-	-	ExportBom	01000000	sch

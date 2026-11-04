@@ -108,13 +108,6 @@ pub(crate) fn disabled_reason(
         .map(super::needs::Needs::reason)
 }
 
-/// View ▸ Cycle Grid Size: the menu row sends `MenuMessage::CycleGrid`,
-/// which steps the schematic / PCB grid, not the command its label is
-/// taken from.
-pub(crate) fn cycle_grid_menu_enabled(ctx: &CommandContext) -> bool {
-    ctx.has_schematic || ctx.has_pcb
-}
-
 /// Tools ▸ New Part: the handler acts only on a `.snxsym` editor tab.
 pub(crate) fn new_part_menu_enabled(ctx: &CommandContext) -> bool {
     ctx.has_symbol_editor

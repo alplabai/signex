@@ -70,9 +70,7 @@ fn refusal_names_the_real_menu_path() {
     let _ = app.update(Message::Menu(MenuMessage::ExportErcReport));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(
-        notice
-            .detail
-            .contains(&crate::menu_bar::run_erc_menu_path()),
+        notice.detail.contains(&crate::menu_bar::erc_menu_path()),
         "{}",
         notice.detail
     );

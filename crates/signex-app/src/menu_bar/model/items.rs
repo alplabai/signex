@@ -114,23 +114,6 @@ pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
     )
 }
 
-/// A row that takes its label and shortcut from a command but whose action
-/// is something else, with its own enablement rule. Only where the command
-/// of that id does not do what the row does (docs/MENU_BAR.md#own-action).
-pub(super) fn cmd_item_own_action(
-    ctx: &MenuContext,
-    cmd: Cmd,
-    action: MenuMessage,
-    is_enabled: bool,
-) -> MenuEntry {
-    command_row(
-        ctx,
-        cmd,
-        cmd_label(cmd.id, cmd.label),
-        live(action, is_enabled),
-    )
-}
-
 pub(super) fn submenu(title: &str, entries: Vec<MenuEntry>) -> MenuEntry {
     MenuEntry::Submenu(menu(title, entries))
 }

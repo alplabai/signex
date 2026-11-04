@@ -42,7 +42,6 @@ impl Signex {
                 );
                 Some(Task::none())
             }
-            MenuMessage::Erc => Some(self.update(Message::Erc(ErcMsg::OpenDialog))),
             _ => None,
         }
     }
