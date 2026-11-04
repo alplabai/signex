@@ -32,7 +32,6 @@ iced_aw = { version = "0.13.0", features = ["full"] }
 
 <div align="center">
 
-  ![Badge showcase](./images/showcase/badge.png)
 </div>
 
 Please take a look into our examples on how to use badges.
@@ -43,7 +42,6 @@ Enable this widget with the feature `badge`.
 
 <div align="center">
 
-![Card showcase](./images/showcase/card.png)
 </div>
 
 Please take a look into our examples on how to use cards.
@@ -54,7 +52,6 @@ Enable this widget with the feature `card`.
 
 <div align="center">
 
-![Color Picker showcase](./images/showcase/color_picker.png)
 </div>
 
 Please take a look into our examples on how to use color pickers.
@@ -65,7 +62,6 @@ Enable this widget with the feature `color_picker`.
 
 <div align="center">
 
-  ![Date Picker showcase](./images/showcase/date_picker.png)
 </div>
 
 Please take a look into our examples on how to use date pickers.
@@ -78,7 +74,6 @@ Just like TextInput, but only for numbers.
 
 <div align="center">
 
-![NumberInput showcase](./images/showcase/number_input.png)
 </div>
 
 Please take a look into our examples on how to use number inputs.
@@ -93,7 +88,6 @@ A selection space to show any options passed in.
 
 <div align="center">
 
-![SelectionList showcase](./images/showcase/selection_list.gif)
 </div>
 
 Enable this widget with the feature `selection_list`.
@@ -102,7 +96,6 @@ Enable this widget with the feature `selection_list`.
 
 <div align="center">
 
-![Tabs showcase](./images/showcase/tabs_example.gif)
 </div>
 
 Please take a look into our examples on how to use TabBars and Tabs.
@@ -113,7 +106,6 @@ Enable TabBars with the feature `tab_bar` and Tabs with `tabs`.
 
 <div align="center">
 
-![Modal showcase](./images/showcase/time_picker.png)
 </div>
 
 Please take a look into our examples on how to use time pickers.
@@ -124,7 +116,6 @@ Enable this widget with the feature `time_picker`.
 
 <div align="center">
 
-![Menu showcase](./images/showcase/menu.gif)
 </div>
 
 Please take a look into our examples on how to use menus.
@@ -151,7 +142,6 @@ See the example [here](./examples/drop_down.rs)
 
 <div align="center">
 
-![Modal showcase](./images/showcase/sidebar.png)
 </div>
 
 Please take a look into our examples on how to use Sidebar.
@@ -169,5 +159,4 @@ A frame with a title.
 
 <div align="center">
 
-![LabeledFrame showcase](./images/showcase/labeled_frame.png)
 </div>
