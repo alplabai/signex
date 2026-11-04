@@ -370,7 +370,7 @@ impl Signex {
         if self.document_state.active_path.as_deref() == Some(target.sheet.as_path()) {
             return None;
         }
-        self.undocked_schematic_window(&target.sheet)
+        self.undocked_canvas_window(&target.sheet)
     }
 
     /// The sheet of `target`, if it is still the active one on the engine

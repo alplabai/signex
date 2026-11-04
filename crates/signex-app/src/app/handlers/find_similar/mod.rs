@@ -34,7 +34,7 @@ impl Signex {
                 .as_ref()
                 .and_then(|s| s.origin.clone())
             && self.document_state.active_path.as_ref() != Some(&origin)
-            && let Some(window) = self.undocked_schematic_window(&origin)
+            && let Some(window) = self.undocked_canvas_window(&origin)
         {
             return self.run_in_window_document(window, |app| app.handle_find_similar_message(msg));
         }

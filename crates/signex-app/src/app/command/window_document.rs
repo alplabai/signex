@@ -222,6 +222,17 @@ impl Signex {
             .then_some(window)
     }
 
+    /// The undocked window showing `path` that has a canvas to run a
+    /// follow-up on. A window whose canvas is not there yet (or is gone)
+    /// cannot take it, and `run_in_window` would drop it without a word.
+    pub(crate) fn undocked_canvas_window(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<iced::window::Id> {
+        self.undocked_schematic_window(path)
+            .filter(|window| self.interaction_state.canvases.contains_key(window))
+    }
+
     /// `window` when it is an undocked window, `None` for the main window or
     /// an unknown id: the owner an overlay records when it opens (#1910).
     pub(crate) fn overlay_owner(&self, window: iced::window::Id) -> Option<iced::window::Id> {

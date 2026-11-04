@@ -378,7 +378,7 @@ impl Signex {
         if let Some(sheet) = self.ui_state.move_selection.sheet.clone()
             && self.document_state.active_path.as_ref() != Some(&sheet)
         {
-            if let Some(window) = self.undocked_schematic_window(&sheet) {
+            if let Some(window) = self.undocked_canvas_window(&sheet) {
                 return self
                     .run_in_window_document(window, |app| app.handle_move_selection_apply());
             }
