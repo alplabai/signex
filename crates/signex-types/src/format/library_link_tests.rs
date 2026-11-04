@@ -175,3 +175,170 @@ fn a_non_string_link_id_loads_as_no_link() {
         (None, None)
     );
 }
+
+// ---------------------------------------------------------------------------
+// The value stamp (#2004 item 7): `[extras.symbols.<uuid>.library_stamp]`.
+// ---------------------------------------------------------------------------
+
+use crate::schematic::RowStamp;
+
+/// A stamp with a value, an empty value ("the row offered nothing") and an
+/// absent one (unknown).
+fn stamped(n: u128) -> Symbol {
+    Symbol {
+        library_stamp: Some(RowStamp {
+            footprint: Some("SOIC-8".into()),
+            manufacturer: Some(String::new()),
+            mpn: None,
+            ..RowStamp::new(Uuid::from_u128(0x2000 + n))
+        }),
+        ..linked(n)
+    }
+}
+
+fn stamp_of(sheet: &SchematicSheet) -> Option<RowStamp> {
+    sheet.symbols[0].library_stamp.clone()
+}
+
+#[test]
+fn a_value_stamp_round_trips_byte_identical_and_keeps_absent_apart_from_empty() {
+    let text = write(&sheet(vec![stamped(1), unlinked(2)]));
+    assert!(text.contains("[extras.symbols.00000000-0000-0000-0000-000000000001.library_stamp]"));
+    assert!(text.contains("footprint = \"SOIC-8\""), "{text}");
+    assert!(
+        text.contains("manufacturer = \"\""),
+        "empty is a value:\n{text}"
+    );
+    assert!(!text.contains("mpn ="), "absent stays absent:\n{text}");
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert_eq!(stamp_of(&back), stamped(1).library_stamp);
+    assert_eq!(write(&back), text, "the encoding must be stable");
+}
+
+#[test]
+fn a_symbol_whose_only_extra_is_the_stamp_is_not_dropped() {
+    let only = Symbol {
+        uuid: Uuid::from_u128(5),
+        reference: "R5".into(),
+        library_stamp: Some(RowStamp::new(Uuid::from_u128(0x2005))),
+        ..Default::default()
+    };
+    let text = write(&sheet(vec![only.clone()]));
+    assert!(text.contains(".library_stamp]"), "{text}");
+    assert_eq!(
+        stamp_of(&SnxSchematic::parse(&text).unwrap().sheet),
+        only.library_stamp
+    );
+}
+
+#[test]
+fn a_file_with_a_version_and_no_stamp_loads_with_none_and_resaves_identical() {
+    let back = SnxSchematic::parse(WRITTEN).unwrap().sheet;
+    assert_eq!(stamp_of(&back), None);
+    assert_eq!(back.symbols[0].library_version, "1.0.2");
+    assert_eq!(write(&back), WRITTEN);
+}
+
+const STAMP_WRITTEN: &str =
+    include_str!("../../tests/fixtures/library_link/written_with_value_stamp.snxsch");
+const STAMP_RESAVED: &str =
+    include_str!("../../tests/fixtures/library_link/value_stamp_resaved_by_older_build.snxsch");
+
+#[test]
+fn this_build_writes_the_value_stamp_fixture_bytes() {
+    assert_eq!(write(&sheet(vec![stamped(1), unlinked(2)])), STAMP_WRITTEN);
+}
+
+/// A build without the field (trunk before #2004) kept the table as unknown
+/// keys and re-saved it; the stamp is still there, byte for byte.
+#[test]
+fn an_older_build_resave_keeps_the_value_stamp() {
+    let back = SnxSchematic::parse(STAMP_RESAVED).unwrap().sheet;
+    assert_eq!(stamp_of(&back), stamped(1).library_stamp);
+    assert_eq!(write(&back), STAMP_WRITTEN, "no byte churn either way");
+}
+
+fn stamp_text(edit: impl Fn(String) -> String) -> String {
+    edit(write(&sheet(vec![stamped(1)])))
+}
+
+/// Counts the warnings of target `signex::format` raised while `f` runs.
+fn format_warnings<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Count(AtomicUsize);
+    impl tracing::Subscriber for Count {
+        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            let meta = event.metadata();
+            if meta.target() == "signex::format" && *meta.level() == tracing::Level::WARN {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        fn enter(&self, _: &tracing::span::Id) {}
+        fn exit(&self, _: &tracing::span::Id) {}
+    }
+    let count = std::sync::Arc::new(Count(AtomicUsize::new(0)));
+    let out = tracing::subscriber::with_default(std::sync::Arc::clone(&count), f);
+    (out, count.0.load(Ordering::Relaxed))
+}
+
+#[test]
+fn a_malformed_value_stamp_loads_as_none_with_a_warning_and_the_sheet_opens() {
+    // The stamp is the last table, so its `row_id` is the last one.
+    let bad_row = stamp_text(|t| {
+        let at = t.rfind("row_id = \"").unwrap();
+        let end = at + t[at..].find('\n').unwrap();
+        format!("{}row_id = \"nope\"{}", &t[..at], &t[end..])
+    });
+    let wrong_type = stamp_text(|t| t.replace("footprint = \"SOIC-8\"", "footprint = 7"));
+    for text in [bad_row, wrong_type] {
+        let (back, warnings) = format_warnings(|| SnxSchematic::parse(&text));
+        let back = back
+            .expect("a malformed stamp must not fail the sheet")
+            .sheet;
+        assert_eq!(back.symbols.len(), 1);
+        assert_eq!(stamp_of(&back), None, "{text}");
+        assert_eq!(
+            back.symbols[0].library_version, "1.0.2",
+            "the link survives"
+        );
+        assert_eq!(warnings, 1, "{text}");
+    }
+}
+
+#[test]
+fn a_key_a_later_build_adds_to_the_stamp_survives_a_save() {
+    let text = stamp_text(|t| {
+        t.replace("[extras.symbols.00000000-0000-0000-0000-000000000001.library_stamp]\n", "[extras.symbols.00000000-0000-0000-0000-000000000001.library_stamp]\ndatasheet = \"sheet.pdf\"\n")
+    });
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert!(stamp_of(&back).is_some());
+    assert!(write(&back).contains("datasheet = \"sheet.pdf\""));
+}
+
+/// Regenerates the value-stamp fixtures with a build from before #2004; see
+/// `regenerate_link_fixtures` for the `resave` binary:
+/// `OLDER_BUILD_RESAVE=<binary> cargo test -p signex-types regenerate_stamp_fixtures -- --ignored`
+#[test]
+#[ignore = "writes fixtures; needs a build of an older signex-types"]
+fn regenerate_stamp_fixtures() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/library_link");
+    let tool = std::env::var("OLDER_BUILD_RESAVE").expect("OLDER_BUILD_RESAVE");
+    let written = format!("{dir}/written_with_value_stamp.snxsch");
+    std::fs::write(&written, write(&sheet(vec![stamped(1), unlinked(2)]))).unwrap();
+    let status = std::process::Command::new(tool)
+        .args([
+            &written,
+            &format!("{dir}/value_stamp_resaved_by_older_build.snxsch"),
+        ])
+        .status()
+        .unwrap();
+    assert!(status.success());
+}

@@ -386,6 +386,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         library_id: extras.library_id,
         row_id: extras.row_id,
         library_version: extras.library_version,
+        library_stamp: extras.library_stamp,
         instances: extras.instances,
         unknown,
         unknown_columns: row.unknown_columns,

@@ -18,6 +18,10 @@ pub struct ComponentReplacement {
     pub library_id: Option<Uuid>,
     pub row_id: Option<Uuid>,
     pub library_version: String,
+    /// The row values the new part starts in agreement with. The old part's
+    /// stamp describes another row, so it is always replaced; a part with no
+    /// library identity keeps none.
+    pub stamp: Option<signex_types::schematic::RowStamp>,
     pub value: String,
     /// The part's own footprint, datasheet and identity fields. They
     /// replace the placed part's: the old part's footprint is not the new
@@ -332,6 +336,7 @@ impl Engine {
             next.library_id = replacement.library_id;
             next.row_id = replacement.row_id;
             next.library_version = replacement.library_version.clone();
+            next.library_stamp = replacement.library_id.and(replacement.stamp.clone());
             next.value = replacement.value.clone();
             next.footprint = replacement.footprint.clone();
             next.datasheet = replacement.datasheet.clone();

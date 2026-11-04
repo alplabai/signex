@@ -12,8 +12,8 @@ use crate::library::drift::{
     ApplyInput, SymbolRead, SymbolsRead, VERSION_NOT_STAMPED, apply_input, rebound_row_warning,
     row_binds_lib_id,
 };
-use crate::library::part_sync::PartSync;
-use signex_types::schematic::LibSymbol;
+use crate::library::part_sync::{Choices, ConflictView, PartSync};
+use signex_types::schematic::{LibSymbol, LinkStamp};
 
 // ─────────────────────────────────────────────────────────────────────
 // Stage 16 — Library Updates Available scan + apply (§3.5)
@@ -189,25 +189,46 @@ impl Signex {
             let blocked = group
                 .iter()
                 .find_map(|(s, r)| blocker(s, r.as_ref(), &lib_id));
+            // Built once per `lib_id`: the stamps, the opened library and
+            // each row's footprint name serve every instance of it.
+            let mut sync_check = self.part_sync_check(&schematic_path, &lib_id);
             if team {
-                team_entries.extend(stale.into_iter().map(|(s, r)| team_entry(s.clone(), r)));
+                for (symbol, row) in stale {
+                    let eval = sync_check
+                        .as_mut()
+                        .and_then(|check| check.eval(symbol.uuid, &row.row));
+                    let conflicts = eval.map(|e| e.conflicts()).unwrap_or_default();
+                    team_entries.push(team_entry(symbol.clone(), row, conflicts));
+                }
             } else if let Some(why) = blocked {
                 crate::diagnostics::log_warning(why);
                 any_failed = true;
             } else {
-                // Built once per `lib_id`: the stamps, the opened library and
-                // each row's footprint name serve every instance of it.
-                let mut sync_check = self.part_sync_check(&schematic_path, &lib_id);
                 for (symbol, row) in stale {
+                    let eval = sync_check
+                        .as_mut()
+                        .and_then(|check| check.eval(symbol.uuid, &row.row));
                     // A part that does not hold its row's footprint /
                     // Manufacturer / MPN yet keeps its old stamp: restamping
-                    // would read as "row unchanged" and hide that drift.
-                    let restamp = !sync_check
-                        .as_mut()
-                        .is_some_and(|check| check.pending(symbol.uuid, &row.row));
+                    // would read as "row unchanged" and hide that drift. A
+                    // part whose value and row's both moved is the user's
+                    // to settle, in the modal (#2004).
+                    let version = row.row.version.clone();
+                    let link = match (&sync_check, &eval) {
+                        (None, _) => Some(LinkStamp::version(version)),
+                        (Some(_), None) => None,
+                        (Some(_), Some(eval)) => (!eval.is_flagged()).then(|| LinkStamp {
+                            version,
+                            values: eval.settle(false, &Choices::new()).values,
+                        }),
+                    };
+                    let conflicts = eval.map(|e| e.conflicts()).unwrap_or_default();
+                    if !conflicts.is_empty() {
+                        team_entries.push(team_entry(symbol.clone(), row, conflicts));
+                    }
                     any_failed |= !self.collect_personal_update(
                         symbol.clone(),
-                        restamp.then_some(row.row.version.as_str()),
+                        link,
                         &mut read_cache,
                         &mut personal_apply,
                     );
@@ -401,7 +422,7 @@ impl Signex {
     fn collect_personal_update(
         &self,
         symbol: PlacedLibrarySymbol,
-        latest_version: Option<&str>,
+        link: Option<LinkStamp>,
         read_cache: &mut std::collections::HashMap<String, Result<LibSymbol, String>>,
         queue: &mut PersonalUpdates,
     ) -> bool {
@@ -413,8 +434,8 @@ impl Signex {
                 let entry = queue
                     .entry(symbol.lib_id.clone())
                     .or_insert_with(|| (fresh.clone(), Vec::new()));
-                if let Some(version) = latest_version {
-                    entry.1.push((symbol.uuid, version.to_string()));
+                if let Some(link) = link {
+                    entry.1.push((symbol.uuid, link));
                 }
                 true
             }
@@ -571,7 +592,8 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    let lines: Vec<String> = r.part_syncs.iter().map(PartSync::describe).collect();
+                    let lines: Vec<String> =
+                        r.part_syncs.iter().flat_map(PartSync::lines).collect();
                     let landed = self.adopt_library_symbol(
                         sheet,
                         &r.lib_id,
@@ -611,7 +633,7 @@ impl Signex {
         sheet: &std::path::Path,
         lib_id: &str,
         fresh: LibSymbol,
-        stamps: Vec<(uuid::Uuid, String)>,
+        stamps: Vec<(uuid::Uuid, LinkStamp)>,
         part_syncs: Vec<PartSync>,
         record_history: bool,
     ) -> bool {
@@ -720,7 +742,8 @@ struct InstanceRow {
 
 /// Per `lib_id`: the library's symbol and the `(placed symbol, version)`
 /// stamps to apply with it.
-type PersonalUpdates = std::collections::BTreeMap<String, (LibSymbol, Vec<(uuid::Uuid, String)>)>;
+type PersonalUpdates =
+    std::collections::BTreeMap<String, (LibSymbol, Vec<(uuid::Uuid, LinkStamp)>)>;
 
 /// A placed instance with its row (`None`: unreadable).
 type Instance = (PlacedLibrarySymbol, Option<InstanceRow>);
@@ -776,6 +799,7 @@ fn blocker(
 fn team_entry(
     symbol: PlacedLibrarySymbol,
     stale: &InstanceRow,
+    conflicts: Vec<ConflictView>,
 ) -> crate::library::updates_dialog::LibraryUpdateEntry {
     let bump_kind =
         crate::library::updates_dialog::classify_bump(&symbol.version, &stale.row.version);
@@ -791,5 +815,9 @@ fn team_entry(
         latest_version: stale.row.version.clone(),
         bump_kind,
         selected: false,
+        conflicts: conflicts
+            .into_iter()
+            .map(crate::library::updates_dialog::ConflictChoice::new)
+            .collect(),
     }
 }

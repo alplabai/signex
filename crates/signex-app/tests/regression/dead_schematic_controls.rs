@@ -46,6 +46,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
         library_id: None,
         row_id: None,
         library_version: String::new(),
+        library_stamp: None,
     }
 }
 

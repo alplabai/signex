@@ -20,7 +20,8 @@ use signex_library::LibraryError;
 use signex_types::schematic::LibSymbol;
 use uuid::Uuid;
 
-use super::part_sync::{PartIdentity, PartSync};
+use super::part_sync::{Choices, PartEval, PartIdentity, PartSync, RowOffer};
+use signex_types::schematic::{LinkStamp, RowStamp};
 
 mod check;
 pub(crate) use check::PartSyncCheck;
@@ -199,7 +200,7 @@ fn drifted_parts(
         };
         match read_row(opened, stamp.row_id) {
             RowRead::Found(row) if row_binds_lib_id(&row, lib_id) => {
-                if part_sync_of(stamp, opened, &row, libs).is_some() {
+                if eval_part(stamp, opened, &row, libs).is_flagged() {
                     drifted.insert(lib_id.clone());
                 }
             }
@@ -287,9 +288,15 @@ pub struct ApplyStamp {
     /// The footprint, manufacturer and MPN the placed symbol holds, to
     /// compare with its row (#1867).
     pub have: PartIdentity,
-    /// The row version the instance was stamped with. A row still at it has
-    /// not moved, so a differing field is the user's own override.
+    /// The row version the instance was stamped with. A part with no value
+    /// stamp whose row is still at it has not moved, so a differing field is
+    /// the user's own override.
     pub stamped_version: String,
+    /// The part's value stamp when it describes its row; none for a part
+    /// that predates the stamp or whose stamp is of another row.
+    pub stamp: Option<RowStamp>,
+    /// The user's answers to the part's conflicts (the modal's Apply).
+    pub choices: Choices,
 }
 
 /// Everything the off-thread apply read needs, built on the UI thread from
@@ -336,6 +343,8 @@ fn stamp_of(
         approved_version: approved.get(&s.uuid).cloned(),
         have: PartIdentity::of_symbol(s),
         stamped_version: s.library_version.clone(),
+        stamp: s.valid_stamp().cloned(),
+        choices: Choices::new(),
     })
 }
 
@@ -367,16 +376,22 @@ pub fn apply_input(
         .iter()
         .map(|e| (e.symbol_uuid, e.latest_version.clone()))
         .collect();
+    let mut wanted: Vec<(String, Vec<ApplyStamp>)> = lib_ids
+        .into_iter()
+        .map(|id| (id.to_string(), instance_stamps(doc, id, &approved)))
+        .collect();
+    for w in wanted.iter_mut().flat_map(|(_, stamps)| stamps.iter_mut()) {
+        if let Some(entry) = state.entries.iter().find(|e| e.symbol_uuid == w.symbol) {
+            w.choices = entry.choices();
+        }
+    }
     Some(ApplyInput {
         sheet: state.schematic_path.clone(),
         engine_instance: state.engine_instance,
         any_unchecked: state.entries.iter().any(|e| !e.selected),
         scan_failed: state.scan_failed,
         tracks_pending: true,
-        wanted: lib_ids
-            .into_iter()
-            .map(|id| (id.to_string(), instance_stamps(doc, id, &approved)))
-            .collect(),
+        wanted,
     })
 }
 
@@ -386,7 +401,7 @@ pub fn apply_input(
 pub struct SymbolRead {
     pub lib_id: String,
     pub symbol: Result<LibSymbol, String>,
-    pub stamps: Vec<(Uuid, String)>,
+    pub stamps: Vec<(Uuid, LinkStamp)>,
     /// One line per instance whose version is not stamped, saying why.
     pub skipped: Vec<String>,
     /// Instances whose footprint, manufacturer or MPN differs from their row
@@ -493,7 +508,7 @@ fn stamp_or_reason(
     lib_id: &str,
     libraries: &mut HashMap<Uuid, Opened>,
     libs: &[MountedLibrary],
-) -> Result<((Uuid, String), Option<PartSync>), NoStamp> {
+) -> Result<((Uuid, LinkStamp), Option<PartSync>), NoStamp> {
     let nothing = VERSION_NOT_STAMPED;
     let (reference, row) = (&w.reference, w.row_id);
     let opened = libraries
@@ -512,8 +527,12 @@ fn stamp_or_reason(
                 r.version
             ))),
             _ => {
-                let sync = part_sync_of(w, opened, &r, libs);
-                Ok(((w.symbol, r.version), sync))
+                let settled = eval_part(w, opened, &r, libs).settle(true, &w.choices);
+                let link = LinkStamp {
+                    version: r.version,
+                    values: settled.values,
+                };
+                Ok(((w.symbol, link), settled.sync))
             }
         },
         RowRead::Found(_) => Err(why(rebound_row_warning(reference, row, lib_id, nothing))),
@@ -526,56 +545,48 @@ fn stamp_or_reason(
     }
 }
 
-/// The sync for `w` when its row's footprint, manufacturer or MPN differs.
-fn part_sync_of(
+/// `w` decided against what its row offers now.
+fn eval_part(
     w: &ApplyStamp,
     opened: &OpenedLibrary,
     row: &signex_library::ComponentRow,
     libs: &[MountedLibrary],
-) -> Option<PartSync> {
-    part_sync_against(w, &row_identity(opened, row, libs), row)
+) -> PartEval {
+    eval_against(w, &row_offer(opened, row, libs), row)
 }
 
-/// [`part_sync_of`] against the identity `want` already read off `row`.
-fn part_sync_against(
-    w: &ApplyStamp,
-    want: &PartIdentity,
-    row: &signex_library::ComponentRow,
-) -> Option<PartSync> {
-    let mut change = w.have.changes_to(want);
-    // A row that has not moved since the stamp leaves a differing value as
-    // the user's override; a field the part holds nothing in is no override.
-    // No stamp (empty) counts as moved.
-    if !w.stamped_version.is_empty() && w.stamped_version == row.version {
-        change = change.only_empty_in(&w.have);
-    }
-    (!change.is_empty()).then(|| PartSync {
-        symbol: w.symbol,
-        reference: w.reference.clone(),
-        have: w.have.clone(),
-        change,
-    })
+/// [`eval_part`] against the offer already read off `row`.
+fn eval_against(w: &ApplyStamp, offer: &RowOffer, row: &signex_library::ComponentRow) -> PartEval {
+    let unmoved = !w.stamped_version.is_empty() && w.stamped_version == row.version;
+    PartEval::new(
+        w.symbol,
+        &w.reference,
+        w.have.clone(),
+        w.stamp.as_ref(),
+        unmoved,
+        offer,
+    )
 }
 
-fn row_identity(
+fn row_offer(
     opened: &OpenedLibrary,
     row: &signex_library::ComponentRow,
     libs: &[MountedLibrary],
-) -> PartIdentity {
+) -> RowOffer {
     let open: Vec<(Uuid, PathBuf)> = libs.iter().map(|l| (l.id, l.path.clone())).collect();
-    // Unreadable reads as "no footprint on offer", which never flags drift;
-    // the placement-time warning would repeat on every pass.
-    let footprint = super::place::read_footprint_name(&opened.adapter, row, &open)
-        .unwrap_or_else(|why| {
-            tracing::debug!(target: "signex::library", pn = %row.internal_pn, %why, "drift: footprint unreadable");
-            String::new()
-        });
-    PartIdentity::of_row(row, footprint)
+    // An unreadable footprint is not "no footprint": the field is unknown and
+    // never flags, nor does it write a base (the placement-time warning
+    // would repeat on every pass).
+    let footprint = super::place::read_footprint_name(&opened.adapter, row, &open);
+    if let Err(why) = &footprint {
+        tracing::debug!(target: "signex::library", pn = %row.internal_pn, %why, "drift: footprint unreadable");
+    }
+    RowOffer::of_row(row, footprint)
 }
 
 /// What the stamp decisions of one `lib_id` came to.
 struct Decided {
-    stamps: Vec<(Uuid, String)>,
+    stamps: Vec<(Uuid, LinkStamp)>,
     part_syncs: Vec<PartSync>,
     skipped: Vec<String>,
     /// "U1 moved to X since you approved Y" per approved instance whose row

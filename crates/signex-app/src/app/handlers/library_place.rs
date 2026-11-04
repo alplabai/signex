@@ -311,6 +311,7 @@ fn placed_symbol(
         library_id: Some(resolved.library_id),
         row_id: Some(resolved.row_id),
         library_version: resolved.library_version.clone(),
+        library_stamp: Some(resolved.stamp.clone()),
         footprint: resolved.footprint.clone(),
         fields: crate::library::part_sync::identity_fields(&resolved.fields),
         ..Default::default()

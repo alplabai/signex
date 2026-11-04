@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use super::unknown::UnknownFields;
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
-use crate::schematic::{Junction, SchematicSheet, Symbol};
+use crate::schematic::{Junction, RowStamp, SchematicSheet, Symbol};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub(in crate::format) struct SchExtrasRaw {
@@ -151,6 +151,15 @@ pub(in crate::format) struct SymbolExtras {
         skip_serializing_if = "Option::is_none"
     )]
     pub(in crate::format) row_id: Option<Uuid>,
+    /// The row values the part last agreed with, a sub-table (#2004). Only
+    /// its `None` is skipped: an empty value is a value. A table that is not
+    /// a stamp loads as none and is reported (`lenient_stamp`).
+    #[serde(
+        default,
+        deserialize_with = "lenient_stamp",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(in crate::format) library_stamp: Option<RowStamp>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -184,6 +193,7 @@ impl Default for SymbolExtras {
             library_id: None,
             row_id: None,
             library_version: String::new(),
+            library_stamp: None,
             unknown: UnknownFields::default(),
         }
     }
@@ -219,6 +229,7 @@ impl SymbolExtras {
             && self.library_id.is_none()
             && self.row_id.is_none()
             && self.library_version.is_empty()
+            && self.library_stamp.is_none()
             && self.unknown.is_empty()
     }
 
@@ -258,6 +269,7 @@ impl SymbolExtras {
             library_id: s.library_id,
             row_id: s.row_id,
             library_version: s.library_version.clone(),
+            library_stamp: s.library_stamp.clone(),
             unknown: {
                 // A chosen body owns the key; a preserved unreadable value
                 // must not be written beside it.
@@ -461,6 +473,29 @@ where
         );
     }
     Ok(parsed)
+}
+
+/// Deserialize the value stamp, mapping a table that is not one (a wrong
+/// type, a `row_id` that is not a UUID) to `None` and reporting it: a
+/// malformed stamp must never make a sheet unopenable.
+fn lenient_stamp<'de, D>(de: D) -> Result<Option<RowStamp>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Some(value) = Option::<toml::Value>::deserialize(de)? else {
+        return Ok(None);
+    };
+    match value.clone().try_into::<RowStamp>() {
+        Ok(stamp) => Ok(Some(stamp)),
+        Err(error) => {
+            tracing::warn!(
+                target: "signex::format",
+                "[extras.symbols] library_stamp = {value} is not a value stamp ({error}); \
+                 the symbol loads without one"
+            );
+            Ok(None)
+        }
+    }
 }
 
 fn default_true() -> bool {

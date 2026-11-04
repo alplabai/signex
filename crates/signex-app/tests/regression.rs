@@ -401,6 +401,8 @@ mod library_row_documents;
 mod library_link_reopen;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
+#[path = "regression/library_value_stamp.rs"]
+mod library_value_stamp;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]
