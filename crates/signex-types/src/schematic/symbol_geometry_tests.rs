@@ -312,9 +312,9 @@ fn arc_polyline_runs_start_to_end_through_the_bulge() {
 #[test]
 fn caller_width_replaces_the_monospace_estimate() {
     let (anchor, size) = ((10.0, 5.0), 2.0);
-    let estimate = text_aabb("abcd", size, anchor, 0.0, HAlign::Left, VAlign::Top);
+    let estimate = text_aabb("abcd", size, anchor, 0.0, HAlign::Left, VAlign::Top, None);
     let same = text_aabb_with_width(
-        crate::font::default_face_width_mm("abcd", text_height_mm(size)),
+        crate::font::family_width_mm("abcd", None, text_height_mm(size)),
         size,
         anchor,
         0.0,

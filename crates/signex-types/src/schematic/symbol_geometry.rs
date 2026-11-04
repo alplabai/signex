@@ -302,13 +302,19 @@ fn sample_bezier(p0: Point, c1: Point, c2: Point, p3: Point) -> Vec<Point> {
 /// World box enclosing every primitive, strokes included; `None` when the
 /// list is empty.
 pub fn primitives_bounds(primitives: &[SymbolPrimitive]) -> Option<Aabb> {
+    primitives_bounds_in(primitives, None)
+}
+
+/// [`primitives_bounds`] with the symbol's text measured in `family`, the
+/// resolved face it draws in (the sheet default font).
+pub fn primitives_bounds_in(primitives: &[SymbolPrimitive], family: Option<&str>) -> Option<Aabb> {
     primitives
         .iter()
-        .filter_map(primitive_bounds)
+        .filter_map(|p| primitive_bounds(p, family))
         .reduce(|a, b| a.union(&b))
 }
 
-fn primitive_bounds(primitive: &SymbolPrimitive) -> Option<Aabb> {
+fn primitive_bounds(primitive: &SymbolPrimitive, family: Option<&str>) -> Option<Aabb> {
     match primitive {
         SymbolPrimitive::Path { points, width, .. } => {
             points_bounds(points).map(|b| b.expand(width * 0.5))
@@ -340,6 +346,7 @@ fn primitive_bounds(primitive: &SymbolPrimitive) -> Option<Aabb> {
             *rotation_deg,
             *h_align,
             *v_align,
+            family,
         )),
         SymbolPrimitive::Pin { tip, body, .. } => points_bounds(&[*tip, *body]),
     }
@@ -407,8 +414,9 @@ pub fn text_height_mm(font_size: f64) -> f64 {
 }
 
 /// Box of `text` anchored at `anchor` with the given justification, rotated
-/// with the text about the anchor (Y-down). The width is the default face's
-/// shaped advance ([`crate::font::default_face_width_mm`]).
+/// with the text about the anchor (Y-down). The width is the shaped advance
+/// in `family`, the resolved face the text draws in (`None` is the bundled
+/// default; see [`crate::font::family_width_mm`]).
 pub fn text_aabb(
     text: &str,
     font_size: f64,
@@ -416,8 +424,9 @@ pub fn text_aabb(
     rotation_deg: f64,
     h_align: HAlign,
     v_align: VAlign,
+    family: Option<&str>,
 ) -> Aabb {
-    let w = crate::font::default_face_width_mm(text, text_height_mm(font_size));
+    let w = crate::font::family_width_mm(text, family, text_height_mm(font_size));
     text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
 }
 

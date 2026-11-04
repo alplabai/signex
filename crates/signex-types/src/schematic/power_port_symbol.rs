@@ -414,6 +414,7 @@ mod tests {
                 0.0,
                 value.justify_h,
                 value.justify_v,
+                None,
             );
             let overlaps = text.min_x < head.max_x
                 && text.max_x > head.min_x

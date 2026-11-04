@@ -84,13 +84,15 @@ pub fn mm_per_em(family: Option<&str>) -> f32 {
         .unwrap_or(FALLBACK_MM_PER_EM)
 }
 
-/// Width in mm of `text` in the bundled default face at cap height
-/// `size_mm`: the shaped advance, or the monospace advance before the shaper
-/// is ready.
-pub fn default_face_width_mm(text: &str, size_mm: f64) -> f64 {
-    let em = shaped_advance_em(text, None)
+/// Width in mm of `text` at cap height `size_mm` in `family`: the shaped
+/// advance, or a monospace advance before the shaper is ready. `family` is the
+/// RESOLVED face (`None` is the bundled default): an uninstalled family is
+/// resolved by the caller to the face the renderer substitutes, so the box
+/// matches the drawn glyphs.
+pub fn family_width_mm(text: &str, family: Option<&str>, size_mm: f64) -> f64 {
+    let em = shaped_advance_em(text, family)
         .unwrap_or_else(|| text.chars().count().max(1) as f32 * BUNDLED_DEFAULT_ADVANCE_EM);
-    f64::from(em) * size_mm / f64::from(mm_per_em(None))
+    f64::from(em) * size_mm / f64::from(mm_per_em(family))
 }
 
 /// Cap-height ratio of the bundled `family`, for tests that pin the table.

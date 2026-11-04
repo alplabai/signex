@@ -153,6 +153,10 @@ mod tests {
                     rotation,
                     h,
                     v,
+                    signex_types::font::requested_family(
+                        prop.font_family.as_deref(),
+                        sheet.font_family.as_deref(),
+                    ),
                 );
                 assert!(
                     touches(&text).is_none(),
@@ -170,6 +174,10 @@ mod tests {
                 label.rotation,
                 label.justify,
                 label.justify_v,
+                signex_types::font::requested_family(
+                    label.font_family.as_deref(),
+                    sheet.font_family.as_deref(),
+                ),
             );
             assert!(
                 touches(&text).is_none(),

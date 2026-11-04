@@ -16,7 +16,7 @@ use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, DrawingPlacement, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet,
     SelectedItem, SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
-    field_effective_style, text_aabb_with_width, text_height_mm,
+    field_effective_style, text_aabb,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -32,7 +32,6 @@ mod snapshot;
 mod symbol;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 pub mod text;
-mod text_width;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
@@ -297,7 +296,7 @@ pub fn draw_power_port_preview(
 
     // The body is the placed port's own lowering, so the ghost shows the
     // shape the click will commit.
-    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol);
+    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol, None);
     let mut wires = Vec::new();
     let mut arcs = Vec::new();
     let mut polygons = Vec::new();
@@ -848,8 +847,7 @@ fn text_prop_aabb(
     )
 }
 
-/// `text_aabb` for a text drawn in `family`: the box geometry is the shared
-/// `signex_types` one, only the width is measured in the drawn face.
+/// `text_aabb` for a text drawn in `family` (the resolved face).
 fn drawn_text_aabb(
     text: &str,
     family: Option<&str>,
@@ -859,14 +857,15 @@ fn drawn_text_aabb(
     h_align: HAlign,
     v_align: VAlign,
 ) -> Aabb {
-    let h = text_height_mm(font_size);
-    let w = text_width::text_width_mm(
+    text_aabb(
         text,
+        font_size,
+        anchor,
+        rotation_deg,
+        h_align,
+        v_align,
         family,
-        h,
-        signex_types::font::default_face_width_mm(text, h),
-    );
-    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
+    )
 }
 
 fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {

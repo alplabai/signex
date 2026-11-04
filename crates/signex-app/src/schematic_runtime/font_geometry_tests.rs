@@ -142,6 +142,7 @@ fn default_face_text_box_is_the_shared_types_box() {
         90.0,
         HAlign::Center,
         VAlign::Bottom,
+        None,
     );
     assert_eq!(
         (got.min_x, got.min_y, got.max_x, got.max_y),
@@ -182,7 +183,105 @@ fn default_face_box_width_is_the_shaped_advance() {
         let advance_em =
             f64::from(crate::fonts::measure::shaped_advance_em(text, "Iosevka").expect("measurer"));
         let want = advance_em * size / f64::from(signex_types::font::mm_per_em(None));
-        let b = text_aabb(text, size, (0.0, 0.0), 0.0, HAlign::Left, VAlign::Top);
+        let b = text_aabb(text, size, (0.0, 0.0), 0.0, HAlign::Left, VAlign::Top, None);
         assert!((b.max_x - b.min_x - want).abs() < 1e-6, "{text}");
     }
+}
+
+fn note(font_family: Option<&str>) -> TextNote {
+    TextNote {
+        uuid: uuid::Uuid::now_v7(),
+        text: TEXT.into(),
+        position: Point::new(10.0, 10.0),
+        rotation: 0.0,
+        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+        font_family: font_family.map(str::to_string),
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Top,
+        locked: false,
+    }
+}
+
+fn width_in(family: Option<&str>) -> f64 {
+    let b = text_aabb(
+        TEXT,
+        signex_types::schematic::SCHEMATIC_TEXT_MM,
+        (0.0, 0.0),
+        0.0,
+        HAlign::Left,
+        VAlign::Top,
+        family,
+    );
+    b.max_x - b.min_x
+}
+
+/// #2023 - a text in a non-default family gets that family's width.
+#[test]
+fn a_non_default_family_gets_its_own_width() {
+    let em = roboto_em();
+    let size = signex_types::schematic::SCHEMATIC_TEXT_MM;
+    let want = em * size / f64::from(signex_types::font::mm_per_em(Some("Roboto")));
+    assert!((width_in(Some("Roboto")) - want).abs() < 1e-6);
+    assert!(
+        (width_in(Some("Roboto")) - width_in(None)).abs() > 0.5,
+        "Roboto and Iosevka measure differently"
+    );
+}
+
+/// An uninstalled family resolves to the face the renderer substitutes (the
+/// bundled default), so its box is the default face's box.
+#[test]
+fn a_missing_family_is_boxed_in_the_face_that_draws() {
+    roboto_em();
+    let resolved = resolve_family(Some("No Such Face 9f2"), None);
+    assert!(resolved.is_none(), "the renderer substitutes the default");
+    assert_eq!(width_in(resolved.as_deref()), width_in(None));
+}
+
+fn note_right_edge(sheet: &SchematicSheet) -> f64 {
+    note_aabb(&sheet.text_notes[0], sheet.font_family.as_deref()).max_x
+}
+
+/// Changing the sheet default font re-measures every item without a font of
+/// its own, at once, for the selection box and hit testing alike, and undo
+/// and redo put the old and new boxes back.
+#[test]
+fn the_document_default_font_remeasures_unfonted_items_through_undo_and_redo() {
+    roboto_em();
+    let mut sheet = SchematicSheet::default();
+    sheet.text_notes.push(note(None));
+    let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+    let edge = |engine: &signex_engine::Engine| note_right_edge(engine.document());
+    let hit_at = |engine: &signex_engine::Engine, x: f64| {
+        hit_test::hit_test(engine.document(), &Default::default(), x, 10.1).is_some()
+    };
+
+    let default_edge = edge(&engine);
+    let (iosevka, roboto) = (width_in(None), width_in(Some("Roboto")));
+    assert!((default_edge - (10.0 + iosevka)).abs() < 1e-6);
+
+    engine
+        .execute(signex_engine::Command::SetDocumentFontFamily {
+            font_family: Some("Roboto".into()),
+        })
+        .expect("set default font");
+    let roboto_edge = edge(&engine);
+    assert!(
+        (roboto_edge - (10.0 + roboto)).abs() < 1e-6,
+        "new width at once"
+    );
+    let (inside_only_wider, past_both) = (
+        10.0 + iosevka.max(roboto) - 0.05,
+        10.0 + iosevka.max(roboto) + 0.5,
+    );
+    assert_eq!(hit_at(&engine, inside_only_wider), roboto >= iosevka);
+    assert!(!hit_at(&engine, past_both));
+
+    engine.undo().expect("undo");
+    assert!((edge(&engine) - default_edge).abs() < 1e-6, "undo");
+    assert_eq!(hit_at(&engine, inside_only_wider), iosevka >= roboto);
+
+    engine.redo().expect("redo");
+    assert!((edge(&engine) - roboto_edge).abs() < 1e-6, "redo");
+    assert_eq!(hit_at(&engine, inside_only_wider), roboto >= iosevka);
 }

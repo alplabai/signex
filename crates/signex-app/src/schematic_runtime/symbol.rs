@@ -6,7 +6,7 @@ use super::snapshot::{ArcStroke, push_arc};
 use super::*;
 use signex_types::schematic::{
     LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SymbolPrimitive, arc_polyline, lower_pin_labels,
-    lower_placed_symbol, primitives_bounds,
+    lower_placed_symbol, primitives_bounds, primitives_bounds_in,
 };
 
 /// Half extents of the box a symbol gets when its library graphics are
@@ -26,7 +26,12 @@ pub(super) fn symbol_geometry(
     snapshot: &SchematicRenderSnapshot,
     symbol: &Symbol,
 ) -> (Vec<SymbolPrimitive>, Aabb) {
-    symbol_geometry_of(snapshot.lib_symbols.get(&symbol.lib_id), symbol)
+    let family = resolve_family(None, snapshot.font_family.as_deref());
+    symbol_geometry_of(
+        snapshot.lib_symbols.get(&symbol.lib_id),
+        symbol,
+        family.as_deref(),
+    )
 }
 
 /// `symbol_geometry` for a symbol whose library entry is already in hand (or
@@ -34,9 +39,10 @@ pub(super) fn symbol_geometry(
 pub(super) fn symbol_geometry_of(
     lib: Option<&LibSymbol>,
     symbol: &Symbol,
+    family: Option<&str>,
 ) -> (Vec<SymbolPrimitive>, Aabb) {
     let primitives = lower_placed_symbol(lib, symbol);
-    match primitives_bounds(&primitives) {
+    match primitives_bounds_in(&primitives, family) {
         Some(bbox) => (primitives, bbox),
         None => (Vec::new(), fallback_box(symbol)),
     }
