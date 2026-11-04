@@ -288,7 +288,7 @@ impl Signex {
         | crate::app::TabKind::FootprintEditor(ref p) = closing_kind
             && !(park_dirty && self.document_state.is_document_dirty(p))
         {
-            self.warn_if_cascade_owed(p);
+            self.keep_owed_cascade(p);
             self.document_state.symbol_editors.remove(p);
             if self
                 .library

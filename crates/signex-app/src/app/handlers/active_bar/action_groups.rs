@@ -74,7 +74,7 @@ impl Signex {
                     "Text Frame"
                 };
                 crate::diagnostics::log_info(format!(
-                    "{default_text}: bounded text box (text_box) lands in v0.7 — placing a plain text note for now",
+                    "{default_text}: bounded text box (text_box) cannot be placed yet — placing a plain text note for now",
                 ));
                 let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
                 self.interaction_state.active_canvas_mut().ghost_text =

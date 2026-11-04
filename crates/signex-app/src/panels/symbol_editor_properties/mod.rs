@@ -112,11 +112,9 @@ pub(super) fn view_symbol_editor_properties<'a>(
     col = col.push(super::thin_sep(border_c));
     col = col.push(
         container(
-            text(
-                "Click on the canvas to select. Drawing tools (rectangle, line, arc) land in v0.9 phase 3c.",
-            )
-            .size(TS.caption)
-            .color(muted),
+            text("Click on the canvas to select.")
+                .size(TS.caption)
+                .color(muted),
         )
         .padding([6.0, SP.m])
         .boxed(),

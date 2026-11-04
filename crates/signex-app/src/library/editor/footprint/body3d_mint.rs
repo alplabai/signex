@@ -1,6 +1,6 @@
 //! Minimal 3D-body mint helpers. No wgpu — the CPU preview3d pane reads
 //! `Footprint::body_3d` directly, so populating it is immediately visible.
-//! Real interactive 3D manipulation stays deferred (v2.x,
+//! Real interactive 3D manipulation stays deferred (3D Viewer plan,
 //! docs/internal/docs/PCB_3D_RENDER_PLAN.md).
 
 use signex_library::primitive::footprint::{Body3D, BodyShape, Footprint};

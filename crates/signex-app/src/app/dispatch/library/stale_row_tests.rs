@@ -440,6 +440,7 @@ fn primitive_saved_with_cascade(
             commit_message: "Save symbol S".into(),
             cascaded_rows: rows,
             cascade_owed: Vec::new(),
+            cascaded_elsewhere: Vec::new(),
         }),
     }
 }
