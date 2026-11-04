@@ -326,6 +326,39 @@ impl PartSync {
             .collect()
     }
 
+    /// This update checked against the part as it is now (#2070): the worker
+    /// decided against `have`, captured when the user clicked. A field the
+    /// user edited since is not rewritten; the edit stays and a line says so.
+    pub fn revalidated(mut self, live: &PartIdentity) -> Self {
+        let edited = |field: StampField| {
+            self.have.get(field) != live.get(field)
+                || (field == StampField::Mpn && self.have.mpn_key != live.mpn_key)
+        };
+        let skip: Vec<StampField> = StampField::ALL
+            .iter()
+            .copied()
+            .filter(|&field| edited(field))
+            .collect();
+        for field in skip {
+            let slot = match field {
+                StampField::Footprint => &mut self.change.footprint,
+                StampField::Manufacturer => &mut self.change.manufacturer,
+                StampField::Mpn => &mut self.change.mpn,
+            };
+            if let Some(theirs) = slot.take() {
+                self.kept.push(format!(
+                    "{}: kept your {} {:?}; it changed while the update ran (library {:?})",
+                    self.reference,
+                    field.label(),
+                    live.get(field),
+                    theirs
+                ));
+            }
+        }
+        self.have = live.clone();
+        self
+    }
+
     /// The field the new MPN goes into: the alias the part already uses.
     fn mpn_key(&self) -> &str {
         if self.have.mpn_key.is_empty() {
@@ -523,6 +556,28 @@ mod tests {
         let silent = eval.settle(false, &Choices::new());
         assert!(silent.sync.is_none());
         assert_eq!(silent.values.mpn.as_deref(), Some("OLD"));
+    }
+
+    #[test]
+    fn a_field_edited_since_the_capture_is_kept_and_named() {
+        let eval = PartEval::of_symbol(
+            &part("", "Acme", "OLD"),
+            Some(&stamp("OLD")),
+            false,
+            &offer(Some("SOIC-8"), "Acme", "NEW"),
+        );
+        let sync = eval
+            .settle(true, &Choices::new())
+            .sync
+            .expect("two follows");
+        let live = PartIdentity::of_symbol(&part("", "Acme", "EDITED"));
+        let sync = sync.revalidated(&live);
+        assert_eq!(sync.change.mpn, None, "the edited MPN is not rewritten");
+        assert_eq!(sync.change.footprint.as_deref(), Some("SOIC-8"));
+        assert_eq!(
+            sync.kept,
+            ["U1: kept your MPN \"EDITED\"; it changed while the update ran (library \"NEW\")"]
+        );
     }
 
     #[test]

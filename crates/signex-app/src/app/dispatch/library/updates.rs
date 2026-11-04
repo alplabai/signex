@@ -605,16 +605,10 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    let lines: Vec<String> =
-                        r.part_syncs.iter().flat_map(PartSync::lines).collect();
-                    let landed = self.adopt_library_symbol(
-                        sheet,
-                        &r.lib_id,
-                        fresh,
-                        r.stamps,
-                        r.part_syncs,
-                        true,
-                    );
+                    let part_syncs = self.revalidated_part_syncs(sheet, r.part_syncs);
+                    let lines: Vec<String> = part_syncs.iter().flat_map(PartSync::lines).collect();
+                    let landed = self
+                        .adopt_library_symbol(sheet, &r.lib_id, fresh, r.stamps, part_syncs, true);
                     if landed {
                         lines.iter().for_each(crate::diagnostics::log_info);
                     }
@@ -632,6 +626,27 @@ impl Signex {
             }
         }
         all_applied
+    }
+
+    /// The worker decided each part against the values captured at Apply;
+    /// check them against the parts as they are now, so an edit made while
+    /// the worker ran is never overwritten (#2070). A part no longer on the
+    /// sheet loses its sync.
+    fn revalidated_part_syncs(
+        &self,
+        sheet: &std::path::Path,
+        syncs: Vec<PartSync>,
+    ) -> Vec<PartSync> {
+        let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
+            return syncs;
+        };
+        syncs
+            .into_iter()
+            .filter_map(|sync| {
+                let live = doc.symbols.iter().find(|s| s.uuid == sync.symbol)?;
+                Some(sync.revalidated(&crate::library::part_sync::PartIdentity::of_symbol(live)))
+            })
+            .collect()
     }
 
     /// Adopt `fresh` as the embedded copy of `lib_id` on `sheet` and stamp

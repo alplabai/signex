@@ -29,7 +29,7 @@ fn version(app: &Signex) -> String {
 }
 
 /// Make the placed symbol look stale by version, as after a library bump.
-fn make_version_stale(app: &mut Signex) {
+pub(crate) fn make_version_stale(app: &mut Signex) {
     let engine = app.document_state.active_engine_mut().unwrap();
     let mut d = engine.document().clone();
     d.symbols[0].library_version = "0.0.1".into();
@@ -69,12 +69,12 @@ fn wire_pin_1(app: &mut Signex) {
         .unwrap();
 }
 
-fn scan(app: &mut Signex) {
+pub(crate) fn scan(app: &mut Signex) {
     let sheet = app.document_state.active_path.clone().unwrap();
     app.scan_library_updates_for_open_schematic(sheet);
 }
 
-fn team_fixture() -> Fixture {
+pub(crate) fn team_fixture() -> Fixture {
     let f = fixture();
     to_team(&f);
     f
@@ -91,7 +91,7 @@ fn to_team(f: &Fixture) {
 }
 
 /// Click Apply in the modal and return the handler's own `Task`.
-fn click_apply(app: &mut Signex) -> iced::Task<Message> {
+pub(crate) fn click_apply(app: &mut Signex) -> iced::Task<Message> {
     app.update(Message::Library(LibraryMessage::LibraryUpdatesApply))
 }
 
@@ -125,7 +125,7 @@ fn deliver(app: &mut Signex, read: SymbolsRead) {
     )));
 }
 
-fn select_all_updates(app: &mut Signex) {
+pub(crate) fn select_all_updates(app: &mut Signex) {
     for e in &mut app.library.library_updates.as_mut().unwrap().entries {
         e.selected = true;
     }
@@ -605,7 +605,7 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
 // ---- #950 round 4: map key, scan failure, open identity, apply-time rows ----
 
 /// Edit row `f.row_id` in place.
-fn edit_row(f: &Fixture, edit: impl FnOnce(&mut signex_library::ComponentRow)) {
+pub(crate) fn edit_row(f: &Fixture, edit: impl FnOnce(&mut signex_library::ComponentRow)) {
     use signex_library::adapter::LibraryAdapter as _;
     let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(&f.snxlib).unwrap();
     let mut row = adapter
