@@ -295,8 +295,8 @@ pub enum UiMsg {
     DragStart(DragTarget),
     /// Layout drag moved to window-space (x, y).
     DragMove(f32, f32),
-    /// Layout drag released.
-    DragEnd,
+    /// Layout drag released in the given window.
+    DragEnd(iced::window::Id),
     /// Main-window content resized (width, height) in logical px.
     WindowResized(f32, f32),
     /// Status-bar request (unit / grid / snap toggles, panel list,

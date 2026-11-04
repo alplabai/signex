@@ -25,6 +25,9 @@ impl Signex {
         // v0.9 Library — bubbled from the Library dock panel via
         // DockMessage::Library(LibraryMessage). Re-dispatch through
         // the library subsystem.
+        if let DockMessage::ScopedToWindow(window, inner) = msg {
+            return self.handle_dock_message_in_window(window, *inner);
+        }
         if let DockMessage::Library(lib_msg) = msg.clone() {
             return self.dispatch_library_message(lib_msg);
         }

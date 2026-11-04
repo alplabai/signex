@@ -474,6 +474,8 @@ impl Signex {
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
+                window_panel_ctx: std::collections::HashMap::new(),
+                window_panel_ctx_keys: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
                     sym_count: 0,
@@ -627,6 +629,7 @@ impl Signex {
                 last_tree_click: Default::default(),
                 active_bar_menu: None,
                 active_bar_menu_window: None,
+                acting_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
                     .copied()
