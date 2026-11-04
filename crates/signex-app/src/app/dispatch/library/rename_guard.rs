@@ -41,10 +41,6 @@ impl Signex {
         let LibraryMessage::PrimitiveEditorEvent { path, msg } = msg else {
             return None;
         };
-        let ops = &self.document_state.pending_path_ops;
-        if !ops.library_rename_running() || ops.blocking_write(path).is_none() {
-            return None;
-        }
         let edits = match msg {
             PrimitiveEdit::Save => true,
             PrimitiveEdit::Footprint(m) if footprint_msg_is_completion(m) => false,
@@ -52,6 +48,17 @@ impl Signex {
             PrimitiveEdit::Footprint(m) => !footprint_msg_is_view_only(m),
         };
         if !edits {
+            return None;
+        }
+        self.editor_edit_refusal(path)
+    }
+
+    /// The one "may the editor at `path` be edited now" check, shared by the
+    /// editor message stream, undo/redo and the Properties panel so a command
+    /// behaves the same from every surface.
+    pub(crate) fn editor_edit_refusal(&self, path: &std::path::Path) -> Option<String> {
+        let ops = &self.document_state.pending_path_ops;
+        if !ops.library_rename_running() || ops.blocking_write(path).is_none() {
             return None;
         }
         let library = self
@@ -63,6 +70,19 @@ impl Signex {
             "Library {library} is being renamed or deleted, so this edit was not applied. \
              Try again once it finishes."
         ))
+    }
+
+    /// `editor_edit_refusal` for a mutation site outside the message stream:
+    /// logs the refusal (once per run of identical lines) and says whether
+    /// the edit may go ahead.
+    pub(crate) fn editor_edit_allowed(&self, path: &std::path::Path) -> bool {
+        match self.editor_edit_refusal(path) {
+            Some(refusal) => {
+                log_refusal_once(&refusal);
+                false
+            }
+            None => true,
+        }
     }
 
     /// Git or copy work running off the update loop that writes into the
@@ -112,6 +132,17 @@ fn symbol_msg_is_view_only(msg: &SymbolEditorMsg) -> bool {
             | S::CloseContextMenu
             | S::ContextMenuOpenSubmenu(_)
     )
+}
+
+/// Log `refusal` unless it is already the newest Messages line: a drag
+/// refuses on every tick.
+pub(crate) fn log_refusal_once(refusal: &str) {
+    let repeated = crate::diagnostics::recent_entries()
+        .last()
+        .is_some_and(|e| e.message == refusal);
+    if !repeated {
+        crate::diagnostics::log_warning(refusal);
+    }
 }
 
 /// Footprint editor answers to earlier async work. Dropping one strands the
@@ -343,6 +374,76 @@ mod tests {
         assert!(
             app.primitive_edit_refusal(&msg).is_none(),
             "a completion must land, or the solve slot stays in flight"
+        );
+    }
+
+    /// An app with a symbol editor open as the active tab and one undoable
+    /// edit made, then a library rename started.
+    fn app_with_symbol_edited_then_rename() -> (Signex, std::path::PathBuf) {
+        let (mut app, _task) = Signex::new();
+        let path = std::path::PathBuf::from("/w/a.snxlib/symbols/r.snxsym");
+        let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
+        app.document_state.symbol_editors.insert(
+            path.clone(),
+            crate::app::SymbolDocument::new(path.clone(), file),
+        );
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "r".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::SymbolEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        let p = path.to_string_lossy().into_owned();
+        let _ = app.update(symbol_edit(&p, SymbolEditorMsg::AddPin { x: 1.0, y: 2.0 }));
+        assert!(app.document_state.symbol_editors[&path].is_dirty());
+        app.document_state.pending_path_ops.begin(
+            PathOpKind::RenameLibrary,
+            vec!["/w/a.snxlib".into(), "/w/b.snxlib".into()],
+            CaseFold::PRESERVE,
+        );
+        (app, path)
+    }
+
+    fn symbol_state(app: &Signex, path: &std::path::Path) -> String {
+        format!("{:?}", app.document_state.symbol_editors[path].snapshot())
+    }
+
+    /// Ctrl+Z reaches the editor outside the message stream, so it carries
+    /// its own refusal: same command, same answer from every surface.
+    #[test]
+    fn ctrl_z_on_an_editor_during_a_library_rename_is_refused() {
+        let (mut app, path) = app_with_symbol_edited_then_rename();
+        let before = symbol_state(&app, &path);
+
+        let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Undo));
+
+        assert_eq!(symbol_state(&app, &path), before, "the editor is unchanged");
+        // Once the rename ends, the same Ctrl+Z undoes the edit.
+        app.document_state.pending_path_ops = Default::default();
+        let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Undo));
+        assert_ne!(symbol_state(&app, &path), before);
+    }
+
+    #[test]
+    fn a_properties_panel_edit_during_a_library_rename_is_refused() {
+        let (mut app, path) = app_with_symbol_edited_then_rename();
+        let before = symbol_state(&app, &path);
+
+        let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::SymEditorSetSymbolName("Renamed".into()),
+        )));
+
+        assert_eq!(symbol_state(&app, &path), before, "the editor is unchanged");
+        app.document_state.pending_path_ops = Default::default();
+        let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::SymEditorSetSymbolName("Renamed".into()),
+        )));
+        assert_ne!(
+            symbol_state(&app, &path),
+            before,
+            "the edit works unguarded"
         );
     }
 

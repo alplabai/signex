@@ -53,6 +53,10 @@ the read would skip the version bump with no word of it
 A Component Preview edited while its library's delete runs is reported in
 Messages ("unsaved edits ... were discarded"), not kept. When the file was
 already gone, the line says so ("already gone from disk") instead of claiming a
-delete, because the unmount drops the editor either way. Refusing editor edits
-while `library_rename_running()` would keep them; that needs a product
-decision (#1939 item 3).
+delete, because the unmount drops the editor either way. Symbol and footprint editor edits in that library are refused while
+`library_rename_running()` (#1939). This is a product decision made by the
+maintainer on 2026-11-04 in the #1939 thread; before it, a rename kept dirty
+drafts by moving them to the new path (`rekey_library_documents`) and only a
+delete lost them. One check, `editor_edit_refusal`, serves the editor message
+stream, undo/redo and the Properties panel. The Component Preview
+(`LibraryMessage::EditorEvent`) is still not guarded (#1939 item 3).

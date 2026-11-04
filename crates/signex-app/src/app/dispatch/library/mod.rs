@@ -108,13 +108,7 @@ impl Signex {
             return self.finish_update();
         }
         if let Some(refusal) = self.primitive_edit_refusal(&msg) {
-            // A drag refuses on every tick: log the same line once in a row.
-            let repeated = crate::diagnostics::recent_entries()
-                .last()
-                .is_some_and(|e| e.message == refusal);
-            if !repeated {
-                crate::diagnostics::log_warning(&refusal);
-            }
+            rename_guard::log_refusal_once(&refusal);
             self.sync_diagnostics_panel_ctx();
             return Task::none();
         }
