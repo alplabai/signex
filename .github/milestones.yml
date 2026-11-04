@@ -77,6 +77,14 @@
   description: "Newton-LM constraint solver + footprint pad-bake, Apache-clean. Shipped 2026-05-31."
   state: closed
 
+- title: "Command Registry & Symbol Units"
+  description: "Command Registry — one addressable action system for menus, keybindings, CLI and plugins — plus the symbol multi-unit tail. Shipped in 1.0.0-rc.1."
+  state: closed
+  # Was "PCB Outline & Pours", inherited from the internal specs' v0.18
+  # band. The issues actually assigned here are the command-registry epic
+  # (#278) and symbol multi-unit (#289).
+  aliases: ["v0.16.0 — PCB Outline & Pours", "v0.16.0 — Command Registry & Symbol Units"]
+
 # ─────────────── release train ───────────────
 # Near-term, concrete. Derived from the ISSUE TRACKER, not from the
 # internal specs — the specs describe work that has largely already
@@ -98,14 +106,6 @@
   # the milestone was created. v0.14.0's own CHANGELOG names its only
   # v0.15 deferral as Break Track / Drag Track End.
   aliases: ["v0.15.0 — Footprint Editor Parity"]
-
-- title: "Command Registry & Symbol Units"
-  description: "Command Registry — one addressable action system for menus, keybindings, CLI and plugins — plus the symbol multi-unit tail."
-  state: open
-  # Was "PCB Outline & Pours", inherited from the internal specs' v0.18
-  # band. The issues actually assigned here are the command-registry epic
-  # (#278) and symbol multi-unit (#289).
-  aliases: ["v0.16.0 — PCB Outline & Pours", "v0.16.0 — Command Registry & Symbol Units"]
 
 # ─────────────── gates and planned releases ───────────────
 # Strategic. Undated by policy — see docs/ROADMAP.md §"What this does

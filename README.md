@@ -343,7 +343,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Symbol & Library — clean-room schematic renderer, unified Active Bar in symbol editor, `.snxsym` TOML envelope | v0.13 | Done |
 | Footprint Editor — `.snxfpt` pad + parametric-sketch editor, Newton-LM solver (19 constraints), Align/Distribute/Move/Fill/Text tooling | v0.14 | Done |
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
-| Command Registry & Symbol Units | Planned | In progress |
+| Command Registry & Symbol Units | Done | Shipped in 1.0.0-rc.1 |
 | **Community Preview** — schematic-only editor | **Gate** | `v1.0.0-rc.1` shipped 2026-10-29 (last SemVer tag); next release is CalVer |
 | PCB Viewer — GPU rendering, layers, cross-probe | **Gate** | |
 | PCB Routing + DRC + Output | Planned | |
