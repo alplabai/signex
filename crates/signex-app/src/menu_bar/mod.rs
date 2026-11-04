@@ -305,6 +305,10 @@ impl Default for MenuContext<'_> {
 
 // ─── Constants ────────────────────────────────────────────────
 
+/// An independent design constant, matched to the window chrome strip (title
+/// bar buttons, tab strip offsets), not derived from a text line: the menu
+/// labels are `MENU_LABEL_SIZE` and their line at `TEXT_LINE_HEIGHT` is about
+/// 18 px, centred in the strip, so they fit and cannot clip.
 pub const MENU_BAR_HEIGHT: f32 = 36.0;
 const DROPDOWN_WIDTH: f32 = 240.0;
 

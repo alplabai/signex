@@ -25,6 +25,10 @@ pub(super) const BROWSER_ROW_HEIGHT: f32 = {
 };
 /// Height of the header row, which scrolls with the rows and so offsets
 /// them from the top of the scrollable content.
+///
+/// An independent design constant, not derived from a text line: the header
+/// cells hold `BROWSER_TEXT_SIZE` text, whose line at `TEXT_LINE_HEIGHT` is
+/// about 16.5 px, centred in the 28 px strip, so it fits and cannot clip.
 pub(super) const BROWSER_HEADER_HEIGHT: f32 = 28.0;
 /// Rows built beyond each edge of the viewport, so a fast wheel flick shows
 /// content before the next scroll message arrives.

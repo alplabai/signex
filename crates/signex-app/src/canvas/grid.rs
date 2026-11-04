@@ -84,9 +84,14 @@ pub fn draw_grid<R: GeometryRenderer>(
     else {
         return;
     };
-    // No `Frame::with_clip` here: iced_wgpu pastes a clipped draft's meshes
-    // ahead of the parent's pending buffer, which put the grid under the
-    // paper fill (#1993). Every glyph and line stays inside `paper_bounds`.
+    // No `Frame::with_clip` here: every glyph and line is already kept inside
+    // `paper_bounds` by construction, so a clip layer adds nothing. (With
+    // iced 0.14's iced_wgpu this was also needed for correctness: a clipped
+    // draft's meshes were pasted ahead of the parent's pending buffer, which
+    // put the grid under the paper fill, #1993. The alplabai/iced fork keeps
+    // draw order in `Frame::paste`, sealing the parent's pending shapes below
+    // the pasted section, and clips images and text in a child frame too,
+    // fork issue #18, so `with_clip` would now be safe if ever wanted.)
     draw_grid_within(
         frame,
         camera,

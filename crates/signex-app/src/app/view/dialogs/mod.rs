@@ -34,6 +34,11 @@ mod widgets;
 /// rename modals; 28 keeps the header tight relative to the body.
 /// Close-X follows the same height so there's no empty strip below
 /// the button.
+///
+/// An independent design constant, not derived from a text line: the title
+/// is `TypeScale::title` (about 14 px) and its line box at the fork's 1.375
+/// (`TEXT_LINE_HEIGHT`) is about 19.5 px, centred in the strip with zero
+/// vertical padding, so it fits with room to spare and cannot clip.
 pub(crate) const MODAL_HEADER_HEIGHT: f32 = 28.0;
 /// Asymmetric padding inside the modal header strip: zero on the right
 /// so the close-X sits flush against the rounded corner (its own

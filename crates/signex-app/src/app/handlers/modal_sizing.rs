@@ -8,15 +8,31 @@ use crate::app::state::{ModalId, Signex};
 
 /// The most a list area grows to before it scrolls, in logical pixels.
 pub(crate) const LIST_MAX_HEIGHT: f32 = 160.0;
-/// Height of one row of a dirty-document list.
-const ROW_HEIGHT: f32 = 22.5;
+/// Round up to a whole pixel (const-friendly), as `BROWSER_ROW_HEIGHT` does.
+const fn ceil_px(v: f32) -> f32 {
+    let whole = v as u32 as f32;
+    if whole < v { whole + 1.0 } else { whole }
+}
+/// Height of one row of a dirty-document list: one `body` text line
+/// (`TEXT_LINE_HEIGHT`, 1.375 in the iced fork) plus the row's `SP.s` padding
+/// above and below (`dirty_entry_rows`), rounded up to a whole pixel.
+const ROW_HEIGHT: f32 = ceil_px(
+    crate::styles::TypeScale::DEFAULT.body * crate::styles::TEXT_LINE_HEIGHT
+        + 2.0 * crate::styles::Spacing::DEFAULT.s,
+);
 /// Window height of a list dialog with an empty list: title area, message,
 /// footer buttons and their padding.
 const LIST_DIALOG_BASE: f32 = 112.0;
 /// One extra note line (kept documents, refresh notice, blocked discard).
 const NOTE_HEIGHT: f32 = 32.0;
-/// Height of one line of message text, and the lines shown before it scrolls.
-const MESSAGE_LINE: f32 = 16.0;
+/// Height of one line of message text (`label` size, as `view_error_notice`
+/// sets it): one text line at `TEXT_LINE_HEIGHT`, rounded up to a whole pixel.
+const MESSAGE_LINE: f32 =
+    ceil_px(crate::styles::TypeScale::DEFAULT.label * crate::styles::TEXT_LINE_HEIGHT);
+/// Height of one line of the netlist prompt's detail text (`body` size).
+const DETAIL_LINE: f32 =
+    ceil_px(crate::styles::TypeScale::DEFAULT.body * crate::styles::TEXT_LINE_HEIGHT);
+/// The most message text shown before it scrolls.
 const MESSAGE_MAX: f32 = 200.0;
 
 fn list_height(rows: usize) -> f32 {
@@ -69,7 +85,7 @@ impl Signex {
                 .as_ref()
                 .map(|p| {
                     let lines = wrapped_lines(&p.messages.join("\n"), 70) as f32;
-                    262.0 + (lines * 14.0).min(120.0)
+                    262.0 + (lines * DETAIL_LINE).min(120.0)
                 }),
             _ => None,
         };
