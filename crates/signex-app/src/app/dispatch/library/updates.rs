@@ -195,11 +195,16 @@ impl Signex {
                 crate::diagnostics::log_warning(why);
                 any_failed = true;
             } else {
+                // Built once per `lib_id`: the stamps, the opened library and
+                // each row's footprint name serve every instance of it.
+                let mut sync_check = self.part_sync_check(&schematic_path, &lib_id);
                 for (symbol, row) in stale {
                     // A part that does not hold its row's footprint /
                     // Manufacturer / MPN yet keeps its old stamp: restamping
                     // would read as "row unchanged" and hide that drift.
-                    let restamp = !self.has_pending_part_sync(&schematic_path, symbol, row);
+                    let restamp = !sync_check
+                        .as_mut()
+                        .is_some_and(|check| check.pending(symbol.uuid, &row.row));
                     any_failed |= !self.collect_personal_update(
                         symbol.clone(),
                         restamp.then_some(row.row.version.as_str()),
@@ -375,28 +380,20 @@ impl Signex {
         })
     }
 
-    /// Whether `symbol` differs from `row` in footprint, Manufacturer or MPN,
-    /// which only "Update from library" may rewrite.
-    fn has_pending_part_sync(
+    /// A check of the parts of `lib_id` on `sheet` against their rows: where
+    /// they differ in footprint, Manufacturer or MPN, only "Update from
+    /// library" may rewrite them. `None` when the sheet is not open.
+    fn part_sync_check(
         &self,
         sheet: &std::path::Path,
-        symbol: &PlacedLibrarySymbol,
-        row: &InstanceRow,
-    ) -> bool {
-        let Some(engine) = self.document_state.engines.get(sheet) else {
-            return false;
-        };
-        let stamps = crate::library::drift::instance_stamps(
+        lib_id: &str,
+    ) -> Option<crate::library::drift::PartSyncCheck> {
+        let engine = self.document_state.engines.get(sheet)?;
+        Some(crate::library::drift::PartSyncCheck::new(
             engine.document(),
-            &symbol.lib_id,
-            &std::collections::HashMap::new(),
-        );
-        stamps
-            .iter()
-            .find(|w| w.symbol == symbol.uuid)
-            .is_some_and(|w| {
-                crate::library::drift::part_sync_pending(w, &row.row, &self.mounted_libraries())
-            })
+            lib_id,
+            self.mounted_libraries(),
+        ))
     }
 
     /// Queue `symbol` for the silent Personal-mode update, reading the

@@ -40,6 +40,10 @@ impl Signex {
                 crate::app::TabKind::FootprintEditor(p) => Some(p.clone()),
                 _ => None,
             })?;
+        // Refused while the editor's library is being deleted.
+        if !self.editor_edit_allowed(&path) {
+            return None;
+        }
         self.document_state.footprint_editors.get_mut(&path)
     }
 
