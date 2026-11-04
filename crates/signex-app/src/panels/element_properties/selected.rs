@@ -534,8 +534,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get("Justify H");
-            let justify_v = get("Justify V");
+            let justify_h = get(signex_engine::info_keys::JUSTIFY_H);
+            let justify_v = get(signex_engine::info_keys::JUSTIFY_V);
             let visible = get("Visible");
             let fields_autoplaced = get("Fields Autoplaced");
             let font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
@@ -645,7 +645,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");
-            let justify_h_str = get("Justify H");
+            let justify_h_str = get(signex_engine::info_keys::JUSTIFY_H);
             let label_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             // Parse numeric values for edit controls (with fallbacks).
@@ -790,8 +790,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get("Justify H");
-            let justify_v = get("Justify V");
+            let justify_h = get(signex_engine::info_keys::JUSTIFY_H);
+            let justify_v = get(signex_engine::info_keys::JUSTIFY_V);
             let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             if let Some(id) = uuid {
