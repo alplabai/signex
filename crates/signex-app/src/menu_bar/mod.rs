@@ -395,9 +395,9 @@ pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
-/// Menu path of the Electrical Rules Check row, built from the same command label and
-/// menu the Design menu uses so a message naming it cannot drift.
-pub(crate) fn run_erc_menu_path() -> String {
+/// Menu path of the Electrical Rules Check row, built from the label and menu
+/// the Design menu uses, so a message naming it cannot drift.
+pub(crate) fn erc_menu_path() -> String {
     format!(
         "Design ▸ {}",
         cmd_label("open_erc_dialog", "Electrical Rules Check")

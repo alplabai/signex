@@ -170,9 +170,10 @@ use super::MenuMessage;
 use super::model::{ItemState, Menu, MenuEntry, menu_bar_model};
 
 /// Every row that carries a command id publishes `Command(id)` (#1922), and
-/// the fixture still names the row by the message it sent before. This maps
-/// the id back to that name, so the fixture stays byte-for-byte what it was
-/// and still pins which row runs which command.
+/// the fixture names each row by a stable message-like name: the message it
+/// sent before, or a new name for a row added since (`OpenErcDialog`, #1991).
+/// This maps the id back to that name, so the fixture stays stable and still
+/// pins which row runs which command.
 const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_document", "NewProject"),
     ("open_document", "OpenProject"),

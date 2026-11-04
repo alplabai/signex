@@ -136,10 +136,10 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 **View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps
 the grid backward on a schematic too. In the Classic profile `N` / `Shift+N`
-cycle it on a schematic. The menu item runs `next_grid`, so it works on a schematic and a PCB in either profile. **View ▸ Zoom In** and
-**Zoom Out** zoom about the centre of the view. `PageUp` / `PageDown` (Altium
-profile) or `F1` / `F2` (Classic profile) and the scroll wheel zoom about the
-pointer.
+cycle it on a schematic. The menu item runs `next_grid`, so it works on a
+schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
+zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
+`F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
 
 ## 5. Place a symbol
 

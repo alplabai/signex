@@ -128,11 +128,12 @@ fn sheet(app: &Signex) -> SchematicSheet {
         .clone()
 }
 
-/// What the ghost shows for dragging `selection` down by `DY`.
+/// What the ghost shows for dragging `selection` down by `DY`, with the
+/// app's Keep Wires setting, as the drop uses it.
 fn ghost(app: &Signex, selection: &[SelectedItem]) -> SchematicSheet {
     let moves: Vec<_> = selection.iter().map(|item| (*item, 0.0, DY)).collect();
     signex_engine::MovePreview::new(&sheet(app))
-        .moved_with(&moves, true, &Default::default())
+        .moved_with(&moves, app.ui_state.move_keeps_wires, &Default::default())
         .0
 }
 
