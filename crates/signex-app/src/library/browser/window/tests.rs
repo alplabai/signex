@@ -553,7 +553,9 @@ fn a_focused_cell_editor_never_appears_on_another_row_after_a_shift() {
         let range = visible_rows(shifted, 10_000);
         let mut element = grid_element(&state, &root, shifted, &tokens, &mut browser);
         tree.diff(&mut element);
+        let mut rows_seen = std::collections::BTreeSet::new();
         each_input(&mut element, &mut tree, &mut |row, input| {
+            rows_seen.insert(row);
             let i = range.start + row;
             if i != focused_row {
                 assert!(
@@ -563,6 +565,13 @@ fn a_focused_cell_editor_never_appears_on_another_row_after_a_shift() {
                 );
             }
         });
+        assert_eq!(
+            rows_seen.len(),
+            range.len(),
+            "visited {} rows of {} after a {step}-row shift",
+            rows_seen.len(),
+            range.len()
+        );
     }
 }
 
