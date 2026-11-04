@@ -761,4 +761,36 @@ mod tests {
             crate::renderer_scene_canvas::MIN_RADIUS_PX
         );
     }
+
+    #[test]
+    fn sheet_text_is_its_true_size_at_every_zoom_on_both_paths() {
+        use signex_gfx::primitive::text::text_px_in;
+        let em_mm = 1.27 / signex_types::font::mm_per_em(None);
+        for scale in [1.75_f32, 60.0] {
+            let expected = em_mm * scale;
+            let cpu = crate::schematic_runtime::schematic_draw_options(
+                &crate::schematic_runtime::ScreenTransform {
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                    scale,
+                    device_px_per_logical_px: 1.0,
+                },
+            );
+            assert!(
+                (cpu.text_px_for_test(1.27) - expected).abs() < 1e-3,
+                "cpu {scale}"
+            );
+            for dpi in [1.0_f32, 2.0] {
+                let p = SchematicSurface::TEXT_SIZE;
+                let policy = TextSizePolicy::new(p.min_px * dpi, p.max_px * dpi);
+                let gpu = text_px_in(1.27, scale * dpi, policy, None);
+                assert!((gpu - expected * dpi).abs() < 1e-3, "gpu {scale}@{dpi}");
+            }
+        }
+    }
+
+    #[test]
+    fn pcb_surface_keeps_its_readability_clamp() {
+        assert_eq!(PcbSurface::TEXT_SIZE, TextSizePolicy::new(6.0, 64.0));
+    }
 }

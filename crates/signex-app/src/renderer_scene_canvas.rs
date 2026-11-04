@@ -160,6 +160,11 @@ impl SceneDrawOptions {
         (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
     }
 
+    #[cfg(test)]
+    pub(crate) fn text_px_for_test(self, size_mm: f32) -> f32 {
+        self.text_px(size_mm, None)
+    }
+
     fn text_px(self, size_mm: f32, family: Option<&str>) -> f32 {
         signex_gfx::primitive::text::text_px_in(
             size_mm,
@@ -565,12 +570,18 @@ fn draw_text_items<'a, F>(
             continue;
         }
 
+        let size_px = options.text_px(text.size_mm, text.family.as_deref());
+        if size_px * options.device_px_per_logical_px
+            < signex_gfx::primitive::text::MIN_VISIBLE_TEXT_DEVICE_PX
+        {
+            continue;
+        }
         let position = world_to_screen(text.position);
         let draw_text = canvas::Text {
             content: text.content.clone(),
             position: Point::ORIGIN,
             color: color_from_rgba(text.color),
-            size: iced::Pixels(options.text_px(text.size_mm, text.family.as_deref())),
+            size: iced::Pixels(size_px),
             line_height: iced::widget::text::LineHeight::Relative(
                 signex_gfx::primitive::text::LINE_HEIGHT_EM,
             ),

@@ -13,8 +13,7 @@ use signex_types::theme::CanvasColors;
 
 use crate::render_config::to_iced;
 use crate::schematic_runtime::{
-    SCHEMATIC_TEXT_SIZE, SceneOverrides, ScreenTransform, build_schematic_scene, draw_built_scene,
-    symbol_bounds,
+    SceneOverrides, ScreenTransform, build_schematic_scene, draw_built_scene_with, symbol_bounds,
 };
 
 /// Share of the box the symbol's extent fills; the rest is margin.
@@ -26,6 +25,9 @@ const TEXT_MARGIN_EM: f32 = 2.0;
 const TEXT_HEIGHT_MM: f32 = 1.27;
 /// The most a small part is magnified, in text heights at the max text size.
 const MAX_SCALE_TEXT_HEIGHTS: f32 = 4.0;
+/// The preview is a thumbnail, so its text keeps a readability clamp the sheet no longer has.
+const PREVIEW_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
 
 /// What the cached scene was built from; a change drops the cache.
 type Shown = (LibSymbol, CanvasColors);
@@ -69,12 +71,12 @@ fn preview_sheet(lib: &LibSymbol) -> (SchematicSheet, Symbol) {
 
 /// The margin kept free on each side of the extent along one axis, px.
 fn fit_margin(side: f32) -> f32 {
-    (side * (1.0 - FILL_RATIO) / 2.0).max(SCHEMATIC_TEXT_SIZE.min_px * TEXT_MARGIN_EM)
+    (side * (1.0 - FILL_RATIO) / 2.0).max(PREVIEW_TEXT_SIZE.min_px * TEXT_MARGIN_EM)
 }
 
 /// The largest scale, px per mm, a preview zooms to.
 fn max_scale() -> f32 {
-    SCHEMATIC_TEXT_SIZE.max_px / (TEXT_HEIGHT_MM * MAX_SCALE_TEXT_HEIGHTS)
+    PREVIEW_TEXT_SIZE.max_px / (TEXT_HEIGHT_MM * MAX_SCALE_TEXT_HEIGHTS)
 }
 
 /// The transform that centres `extent` in `size` and scales it to fit.
@@ -131,7 +133,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
                 None,
                 SceneOverrides::default(),
             ) {
-                draw_built_scene(frame, &scene, &transform);
+                draw_built_scene_with(frame, &scene, &transform, PREVIEW_TEXT_SIZE);
             }
         });
         vec![geometry]
@@ -228,10 +230,16 @@ mod tests {
         let transform = fit_transform(extent, size, UNSCALED);
         let low = transform.world_to_screen((extent.min_x, extent.min_y));
         let high = transform.world_to_screen((extent.max_x, extent.max_y));
-        let room = SCHEMATIC_TEXT_SIZE.min_px * TEXT_MARGIN_EM;
+        let room = PREVIEW_TEXT_SIZE.min_px * TEXT_MARGIN_EM;
         assert!(low.x >= room - 1e-3 && low.y >= room - 1e-3, "{low:?}");
         assert!(high.x <= size.width - room + 1e-3, "{high:?}");
         assert!(high.y <= size.height - room + 1e-3, "{high:?}");
+    }
+
+    #[test]
+    fn the_preview_keeps_its_text_clamp() {
+        assert_eq!(PREVIEW_TEXT_SIZE.min_px, 6.0);
+        assert_eq!(PREVIEW_TEXT_SIZE.max_px, 64.0);
     }
 
     #[test]

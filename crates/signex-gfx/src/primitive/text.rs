@@ -31,10 +31,17 @@ pub struct TextSizePolicy {
 }
 
 impl TextSizePolicy {
+    /// True size at every zoom: no floor, no ceiling.
+    pub const UNCLAMPED: Self = Self::new(0.0, f32::INFINITY);
+
     pub const fn new(min_px: f32, max_px: f32) -> Self {
         Self { min_px, max_px }
     }
 }
+
+/// Text whose em is under this many device pixels is not drawn: it cannot be
+/// seen and a zero-size glyph run is not worth shaping.
+pub const MIN_VISIBLE_TEXT_DEVICE_PX: f32 = 0.5;
 
 /// Rendered em size in logical pixels for `size_mm` at `scale_px_per_mm`.
 ///

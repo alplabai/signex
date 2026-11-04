@@ -455,21 +455,28 @@ pub fn build_schematic_scene(
     Some(scene)
 }
 
-/// Readability limits on schematic text, in logical pixels. The one source for
-/// the CPU replay below and for `scene_shader::SchematicSurface`, so the two
-/// paths clamp glyphs identically.
+/// Sheet text is its true size at every zoom, no on-screen clamp (#2022, docs/DECISIONS.md).
+/// The one source for the CPU replay below and `scene_shader::SchematicSurface`.
 pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
-    signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
+    signex_gfx::primitive::text::TextSizePolicy::UNCLAMPED;
 
 /// The replay options of the schematic CPU path at `transform`.
 pub fn schematic_draw_options(
     transform: &ScreenTransform,
 ) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    schematic_draw_options_with(transform, SCHEMATIC_TEXT_SIZE)
+}
+
+/// [`schematic_draw_options`] with a surface's own text limits.
+pub(crate) fn schematic_draw_options_with(
+    transform: &ScreenTransform,
+    text_size: signex_gfx::primitive::text::TextSizePolicy,
+) -> crate::renderer_scene_canvas::SceneDrawOptions {
     crate::renderer_scene_canvas::SceneDrawOptions {
         scale_px_per_mm: transform.scale,
         device_px_per_logical_px: transform.device_px_per_logical_px,
-        text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
-        text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
+        text_min_px: text_size.min_px,
+        text_max_px: text_size.max_px,
     }
 }
 
@@ -479,11 +486,21 @@ pub(crate) fn draw_built_scene(
     scene: &Scene,
     transform: &ScreenTransform,
 ) {
+    draw_built_scene_with(frame, scene, transform, SCHEMATIC_TEXT_SIZE);
+}
+
+/// [`draw_built_scene`] with a surface's own text limits.
+pub(crate) fn draw_built_scene_with(
+    frame: &mut canvas::Frame,
+    scene: &Scene,
+    transform: &ScreenTransform,
+    text_size: signex_gfx::primitive::text::TextSizePolicy,
+) {
     crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        schematic_draw_options(transform),
+        schematic_draw_options_with(transform, text_size),
     );
 }
 
