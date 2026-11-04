@@ -8,7 +8,7 @@ mod footprint_ctx;
 mod footprint_summaries;
 mod history;
 mod label_class_pick;
-mod navigator_ctx;
+pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;

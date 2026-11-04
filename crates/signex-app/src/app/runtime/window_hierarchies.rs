@@ -50,7 +50,9 @@ impl Signex {
                 fold,
             });
         }
-        self.document_state.window_hierarchies.want(requests);
+        self.document_state
+            .window_hierarchies
+            .want(requests, navigator_root.as_slice());
     }
 
     /// Start the assemblies `want_window_hierarchies` asked for.
@@ -103,7 +105,8 @@ impl Signex {
         if applied {
             self.refresh_window_designators();
         }
-        Task::batch(self.start_window_hierarchy_assemblies())
+        // `update` starts any follow-up assembly once this message is handled.
+        Task::none()
     }
 
     /// Run the wanted window assemblies inline, as the Tasks would. For
@@ -133,25 +136,21 @@ impl Signex {
 
     /// The hierarchy that describes the project owning the sheet at `path`,
     /// and whether it is current (nothing is rebuilding it):
-    /// - the Navigator's, for the focused sheet while it holds that sheet's
-    ///   own project;
+    /// - the Navigator's while it holds that sheet's own project;
     /// - else the one assembled for the undocked windows;
     /// - for a sheet no project owns, the Navigator's when it is focused.
     pub(crate) fn hierarchy_describing(&self, path: &Path) -> Option<(&SheetHierarchy, bool)> {
         let ds = &self.document_state;
-        let navigator = ds
-            .panel_ctx
-            .navigator
-            .hierarchy
-            .as_ref()
-            .filter(|_| ds.active_path.as_deref() == Some(path));
+        let navigator = ds.panel_ctx.navigator.hierarchy.as_ref();
         let Some(owner_root) = ds.document_project(path).and_then(project_root_sheet_path) else {
-            return navigator.map(|h| (h, self.navigator_is_settled()));
+            return navigator
+                .filter(|_| ds.active_path.as_deref() == Some(path))
+                .map(|h| (h, self.navigator_is_settled()));
         };
         let navigator_is_owners = |h: &&SheetHierarchy| {
             h.root
                 .as_ref()
-                .is_none_or(|node| node.is_at(&owner_root, h.fold))
+                .is_some_and(|node| node.is_at(&owner_root, h.fold))
         };
         match navigator.filter(navigator_is_owners) {
             Some(h) => Some((h, self.navigator_is_settled())),
@@ -160,5 +159,31 @@ impl Signex {
                 .hierarchy_of(&owner_root)
                 .map(|h| (h, ds.window_hierarchies.is_settled(&owner_root))),
         }
+    }
+
+    /// Why a designator write on the sheet at `path` that resolved no
+    /// placement must not fall back to the shared `reference`, if it must not:
+    /// the sheet belongs to a project whose hierarchy is being read (or could
+    /// not be), so the sheet may be placed more than once. Nothing is refused
+    /// for a loose sheet, a project with no root sheet (no hierarchy will
+    /// come), or the root sheet itself (always the root chain).
+    pub(crate) fn designator_write_refusal(&self, path: &Path) -> Option<&'static str> {
+        let ds = &self.document_state;
+        let project = ds.document_project(path)?;
+        let root = project_root_sheet_path(project)?;
+        let key = |p: &Path| crate::app::sheet_hierarchy::sheet_path_key(p, project.case_fold);
+        if key(path) == key(&root) || self.hierarchy_describing(path).is_some() {
+            return None;
+        }
+        let exhausted = if ds.navigator_job.wanted_root() == Some(root.as_path()) {
+            ds.navigator_job.is_exhausted()
+        } else {
+            ds.window_hierarchies.is_exhausted(&root)?
+        };
+        Some(if exhausted {
+            "the sheet's project could not be read, so it is not known which placement this              is, and writing the shared reference could rename every placement of the sheet"
+        } else {
+            "the sheet's project is still being read to tell which placement this is, and              writing the shared reference could rename every placement of the sheet; try              again in a moment"
+        })
     }
 }

@@ -150,7 +150,7 @@ impl Signex {
     /// - with no placement shown (or the root chain), `reference`, except on
     ///   a project's sheet whose hierarchy is not known yet: it may be placed
     ///   more than once, so the edit is refused and the Messages panel says
-    ///   why (#2021).
+    ///   why (`designator_write_refusal`, #2021).
     pub(crate) fn designator_edit_commands(
         &self,
         symbol: uuid::Uuid,
@@ -163,12 +163,9 @@ impl Signex {
             return Vec::new();
         };
         if let Some(path) = active.filter(|_| placement.is_none())
-            && self.document_state.document_project(path).is_some()
-            && self.hierarchy_describing(path).is_none()
+            && let Some(why) = self.designator_write_refusal(path)
         {
-            crate::diagnostics::log_warning(
-                "Designator edit refused: this sheet's project has not yet been read to                  tell which placement it is, and writing the shared reference would                  rename every placement of the sheet. Try again in a moment.",
-            );
+            crate::diagnostics::log_warning(format!("Designator edit refused: {why}."));
             return Vec::new();
         }
         signex_engine::designator_commands(

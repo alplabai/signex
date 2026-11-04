@@ -51,11 +51,27 @@ impl Signex {
 
         let scope = self.active_designator_scope();
         let path = self.document_state.active_path.clone();
-        let matches: Vec<FindMatch> = self
+        let mut hits = self
             .document_state
             .active_engine()
             .map(|engine| signex_engine::scan_sheet(engine.document(), &query, &scope))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // With no placement known, a designator hit would write the shared
+        // reference of a sheet that may be placed more than once (#2021).
+        if let Some(why) = path
+            .as_deref()
+            .filter(|_| scope.placements.is_empty())
+            .and_then(|p| self.designator_write_refusal(p))
+        {
+            let before = hits.len();
+            hits.retain(|hit| hit.kind != signex_engine::FindKind::Designator);
+            if hits.len() != before {
+                crate::diagnostics::log_warning(format!(
+                    "Find/Replace skipped this sheet's designators: {why}."
+                ));
+            }
+        }
+        let matches: Vec<FindMatch> = hits
             .into_iter()
             .map(|hit| FindMatch {
                 sheet: path.clone(),
