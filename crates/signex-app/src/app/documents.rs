@@ -919,8 +919,8 @@ impl FootprintDocument {
         // steps are collapsed to one solved step when its result lands.
         self.state.sketch_solve.supersede();
         // A redundancy pass owed to the sketch that was replaced would pair
-        // the restored sketch with the old solved state. A re-solve that
-        // follows owes its own.
+        // the restored sketch with the old solved state. Restoring does not
+        // re-solve; the next edit's solve owes its own.
         self.state.sketch_solve.clear_redundancy_owed();
     }
 

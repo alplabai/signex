@@ -53,6 +53,23 @@ pub(in crate::library::editor::footprint) fn take_unlogged_warnings(
     take_unlogged_keyed(&keyed, logged)
 }
 
+/// [`take_unlogged_warnings`] for a bake: a skipped redundancy pass is
+/// reported by the off-thread answer, not the solve, so the bake's reset
+/// must not make an already-logged skip look new when the next answer
+/// repeats it. `redundancy::apply` forgets it once a pass completes.
+pub(in crate::library::editor::footprint) fn take_unlogged_bake_warnings(
+    current: &[String],
+    logged: &mut Vec<String>,
+) -> Vec<String> {
+    let skip = signex_sketch::solver::REDUNDANCY_SKIPPED.to_string();
+    let skip_was_logged = logged.contains(&skip);
+    let fresh = take_unlogged_warnings(current, logged);
+    if skip_was_logged && !logged.contains(&skip) {
+        logged.push(skip);
+    }
+    fresh
+}
+
 /// [`take_unlogged_warnings`] over `(key, text)` pairs: the set comparison
 /// uses the key, the returned warnings are the text.
 pub(super) fn take_unlogged_keyed(

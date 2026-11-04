@@ -158,3 +158,39 @@ fn a_redundancy_pass_that_did_not_complete_marks_nothing_redundant() {
     assert!(!editor.state.sketch_solve.is_redundancy_running());
     assert!(!editor.state.sketch_solve.is_redundancy_owed());
 }
+
+#[test]
+fn a_skipped_pass_is_not_logged_again_on_the_next_edit() {
+    use signex_sketch::solver::{REDUNDANCY_SKIPPED, RedundancyReport};
+    let skipped = |editor: &crate::app::FootprintDocument| FootprintEditorMsg::RedundancyChecked {
+        instance: editor.state.sketch_solve.instance(),
+        generation: editor.state.sketch_solve.generation(),
+        footprint_idx: editor.active_idx,
+        report: Ok(std::sync::Arc::new(RedundancyReport {
+            redundant_constraints: Vec::new(),
+            warnings: vec![REDUNDANCY_SKIPPED.to_string()],
+        })),
+    };
+    let (mut editor, path, _) = editor_with_a_redundant_constraint();
+    apply_footprint_primitive_edit(&mut editor, inline_edit());
+    let _task = dispatch_redundancy(&mut editor, &path);
+    let answer = skipped(&editor);
+    apply_footprint_primitive_edit(&mut editor, answer);
+    assert!(
+        editor
+            .state
+            .logged_solve_warnings
+            .contains(&REDUNDANCY_SKIPPED.to_string())
+    );
+
+    // Another edit of the same sketch, whose pass will skip again.
+    apply_footprint_primitive_edit(&mut editor, inline_edit());
+
+    assert!(
+        editor
+            .state
+            .logged_solve_warnings
+            .contains(&REDUNDANCY_SKIPPED.to_string()),
+        "the bake forgot the logged skip, so the next skipped answer logs it again"
+    );
+}

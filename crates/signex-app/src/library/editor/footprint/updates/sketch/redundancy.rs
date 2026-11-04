@@ -8,6 +8,7 @@
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_dispatch::take_unlogged_warnings;
 use crate::library::messages::FootprintEditorMsg;
+use signex_sketch::solver::REDUNDANCY_SKIPPED;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
     editor: &mut FootprintDocument,
@@ -46,6 +47,13 @@ pub(in crate::library::editor::footprint::updates) fn apply(
         if !editor.state.solve_warnings.contains(warning) {
             editor.state.solve_warnings.push(warning.clone());
         }
+    }
+    // A pass that completed ends the skip: a later skip is news again.
+    if !report.warnings.iter().any(|w| w == REDUNDANCY_SKIPPED) {
+        editor
+            .state
+            .logged_solve_warnings
+            .retain(|w| w != REDUNDANCY_SKIPPED);
     }
     // The Messages panel, like every other solve warning (the bake does the same).
     for warning in take_unlogged_warnings(

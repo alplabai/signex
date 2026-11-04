@@ -16,7 +16,7 @@ use signex_sketch::{SketchError, SolveError};
 use signex_sketch::baked_kinds::BakedKind;
 
 use super::sketch_bake_fields::BakedFields;
-use super::sketch_dispatch::take_unlogged_warnings;
+use super::sketch_dispatch::take_unlogged_bake_warnings;
 use super::state::FootprintEditorState;
 
 /// Bake a successful solve into `footprint` and record it as the editor's
@@ -112,7 +112,7 @@ pub(super) fn bake_solution_with(
         // feature) are failures the user must be able to see:
         // the inspector strip is not the Messages panel.
         for warning in
-            take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+            take_unlogged_bake_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
         {
             crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
         }
@@ -165,7 +165,7 @@ pub(super) fn bake_solution_with(
         let remaps = BakedFields::clear_owned(footprint, &mut state.solve_warnings);
         state.remap_silk_selection(&remaps);
         for warning in
-            take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+            take_unlogged_bake_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
         {
             crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
         }
