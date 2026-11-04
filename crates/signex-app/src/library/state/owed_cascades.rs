@@ -31,6 +31,11 @@ impl OwedCascades {
         self.by_file.get(file).map_or(&[], Vec::as_slice)
     }
 
+    /// The files that owe something.
+    pub fn files(&self) -> impl Iterator<Item = &Path> {
+        self.by_file.keys().map(PathBuf::as_path)
+    }
+
     /// What `file` owes, forgetting it.
     pub fn take(&mut self, file: &Path) -> Vec<Uuid> {
         self.by_file.remove(file).unwrap_or_default()

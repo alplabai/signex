@@ -179,6 +179,37 @@ impl Signex {
         self.rebase_dirty_editors_blocking(root, rows);
     }
 
+    /// A library the cascade wrote rows into: reload its caches and re-run
+    /// the drift check, as for the library saved in, so the next poll finds
+    /// its stamp already observed and does not report our write (#2004).
+    pub(in crate::app::dispatch::library) fn refresh_cascaded_library(
+        &mut self,
+        root: &std::path::Path,
+        rows: &[RowId],
+    ) -> iced::Task<crate::app::Message> {
+        self.library.drift.check_pending = true;
+        iced::Task::batch([
+            self.refresh_library_task(root, crate::library::refresh::RefreshFollowUp::Nothing),
+            self.refresh_editors_in_library(root, rows),
+        ])
+    }
+
+    /// [`Self::refresh_cascaded_library`] on this thread.
+    pub(in crate::app::dispatch::library) fn refresh_cascaded_library_blocking(
+        &mut self,
+        root: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        if let Err(error) = self.library.refresh_components(root) {
+            crate::diagnostics::log_warning(format!(
+                "[library] refresh of {} failed ({error}); its cache may be stale",
+                root.display()
+            ));
+        }
+        self.library.drift.check_pending = true;
+        self.refresh_editors_in_library_blocking(root, rows);
+    }
+
     /// A place in the write order of every open library except the one the
     /// save goes through, for the cascade into their rows (#2004). Only a
     /// Merge save cascades.
@@ -195,7 +226,7 @@ impl Signex {
             .open_libraries
             .iter()
             .map(|lib| lib.root.clone())
-            .filter(|root| Some(root.as_path()) != target)
+            .filter(|root| Some(root.as_path()) != target && !self.library.is_read_only(root))
             .collect();
         roots
             .into_iter()

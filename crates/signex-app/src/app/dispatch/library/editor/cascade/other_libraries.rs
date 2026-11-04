@@ -38,9 +38,10 @@ fn library_name(root: &Path) -> String {
 
 /// Move the rows of every `others` library that bind a saved primitive of
 /// library `primitive_library`. Rows moved are added to `outcome`; a library
-/// a retry can still bring up to date makes the whole cascade owed. A library
-/// that cannot be opened is reported but not owed: whether it binds anything
-/// is unknown, and an unrelated broken mount must not keep the editor unsaved.
+/// a retry can still bring up to date makes the whole cascade owed, and so
+/// does one that fails to open for a reason a retry can clear. One that
+/// cannot be opened for good is reported but not owed: an unrelated broken
+/// mount must not keep the editor unsaved.
 pub(super) fn cascade_into(
     primitive_library: Uuid,
     kind: SavedKind,
@@ -66,12 +67,19 @@ pub(super) fn cascade_into(
         let adapter = match LocalGitAdapter::open(other.root) {
             Ok(adapter) => adapter,
             Err(e) => {
-                lines.push((
-                    Level::Warn,
-                    cut(format!(
+                // The same decision the saved library's own open makes: a
+                // failure a retry can clear is owed, a permanent one dropped.
+                let text = if signex_library::retry_cannot_fix(&e) {
+                    format!(
                         "Library {name} could not be opened ({e}); its rows that use {label} were not checked"
-                    )),
-                ));
+                    )
+                } else {
+                    outcome.owed = saved.iter().map(|p| p.uuid).collect();
+                    format!(
+                        "Library {name} could not be opened ({e}); save again to update its rows that use {label}"
+                    )
+                };
+                lines.push((Level::Warn, cut(text)));
                 continue;
             }
         };

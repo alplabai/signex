@@ -727,7 +727,11 @@ fn warned(stem: &str) -> Option<String> {
     crate::diagnostics::recent_entries()
         .into_iter()
         .map(|e| e.message)
-        .find(|m| m.contains(&format!("Re-bind the rows of {stem} by hand")))
+        .find(|m| {
+            m.contains(&format!(
+                "{stem} was restored from history, so its pending row updates are void"
+            ))
+        })
 }
 
 #[test]

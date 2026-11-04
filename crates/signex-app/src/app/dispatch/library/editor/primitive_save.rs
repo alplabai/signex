@@ -422,14 +422,14 @@ impl Signex {
                 tasks.push(self.refresh_primitive_cache_for(path));
                 tasks.push(self.refresh_editors_after_cascade(path, &written.cascaded_rows));
                 for (root, rows) in &written.cascaded_elsewhere {
-                    tasks.push(self.refresh_editors_in_library(root, rows));
+                    tasks.push(self.refresh_cascaded_library(root, rows));
                 }
             }
             PostSaveRefresh::Inline => {
                 self.refresh_primitive_cache_blocking(path);
                 self.refresh_editors_after_cascade_blocking(path, &written.cascaded_rows);
                 for (root, rows) in &written.cascaded_elsewhere {
-                    self.refresh_editors_in_library_blocking(root, rows);
+                    self.refresh_cascaded_library_blocking(root, rows);
                 }
             }
         }
@@ -453,6 +453,7 @@ impl Signex {
                  so the open document was left as it is",
                 path.display()
             ));
+            self.pay_debt_of_replacement(path, &written.cascade_owed);
         } else {
             self.settle_saved_editor(path, written.file, &written.versions, &written.cascade_owed);
             crate::diagnostics::log_info(format!("[{label}] Wrote {}", path.display()));
@@ -521,6 +522,30 @@ impl Signex {
         }
     }
 
+    /// The write finished for an editor that was replaced meanwhile. If the
+    /// replacement was handed the debt this write paid ([`Self::seed_owed_cascade`]),
+    /// drop what is paid, and let it read clean when that debt was all that
+    /// kept it unsaved. Edits it holds stay unsaved (#2004).
+    fn pay_debt_of_replacement(&mut self, path: &std::path::Path, still_owed: &[uuid::Uuid]) {
+        let document = &mut self.document_state;
+        let settled = if let Some(editor) = document.symbol_editors.get_mut(path) {
+            let owed = !editor.cascade_owed.is_empty();
+            editor.cascade_owed.retain(|id| still_owed.contains(id));
+            owed && editor.cascade_owed.is_empty()
+                && editor.file.changed_since(&editor.baseline).is_empty()
+        } else if let Some(editor) = document.footprint_editors.get_mut(path) {
+            let owed = !editor.cascade_owed.is_empty();
+            editor.cascade_owed.retain(|id| still_owed.contains(id));
+            owed && editor.cascade_owed.is_empty()
+                && editor.file.changed_since(&editor.baseline).is_empty()
+        } else {
+            false
+        };
+        if settled {
+            self.mark_primitive_clean(path);
+        }
+    }
+
     /// An editor that owes row updates is closed: the file keeps owing them,
     /// and its next save carries them out (#2004).
     pub(crate) fn keep_owed_cascade(&mut self, path: &std::path::Path) {
@@ -545,7 +570,48 @@ impl Signex {
             |n| n.to_string_lossy().into_owned(),
         );
         let line = format!(
-            "Rows that use {name} still await their update; the next save of it moves them"
+            "Rows that use {name} still await their update; the next save of it moves them, \
+             but only while Signex stays open"
+        );
+        crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
+    }
+
+    /// At quit: name the files whose rows still await an update, since the
+    /// record does not survive the process (#2004).
+    pub(crate) fn warn_owed_cascades_at_quit(&self) {
+        let document = &self.document_state;
+        let mut files: Vec<&std::path::Path> = self.library.owed_cascades.files().collect();
+        files.extend(
+            document
+                .symbol_editors
+                .iter()
+                .filter(|(_, e)| !e.cascade_owed.is_empty())
+                .map(|(path, _)| path.as_path()),
+        );
+        files.extend(
+            document
+                .footprint_editors
+                .iter()
+                .filter(|(_, e)| !e.cascade_owed.is_empty())
+                .map(|(path, _)| path.as_path()),
+        );
+        files.sort();
+        files.dedup();
+        if files.is_empty() {
+            return;
+        }
+        let names: Vec<String> = files
+            .iter()
+            .map(|p| {
+                p.file_stem().map_or_else(
+                    || p.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        let line = format!(
+            "Quit with rows still awaiting an update from: {}; save those files again to move them",
+            names.join(", ")
         );
         crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
     }
@@ -569,8 +635,10 @@ impl Signex {
         self.mark_primitive_owes_cascade(path);
     }
 
-    /// Say so when an editor that still owes row updates is dropped or
-    /// replaced: they are lost, and the user has to re-bind by hand.
+    /// Say so when a History restore replaces an editor that still owes row
+    /// updates: the restored file is not the one they were owed for, so they
+    /// are dropped and the user has to re-bind by hand. (Closing an editor
+    /// keeps the debt instead: [`Self::keep_owed_cascade`].)
     pub(crate) fn warn_if_cascade_owed(&self, path: &std::path::Path) {
         let document = &self.document_state;
         let owes = document
@@ -591,8 +659,12 @@ impl Signex {
             || path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let line =
-            format!("Re-bind the rows of {name} by hand; its pending row updates were discarded");
+        // A restore replaces the file, so what the old editor owed no longer
+        // describes it: unlike a close, nothing is kept (#2004).
+        let line = format!(
+            "{name} was restored from history, so its pending row updates are void; \
+             re-bind the rows that use it by hand"
+        );
         crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
     }
 

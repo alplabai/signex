@@ -98,15 +98,18 @@ impl PrimitiveWrite {
     /// [`Self::run`] on the UI thread: gives up when the turn does not come
     /// within `limit`, writing nothing.
     pub(super) fn run_within(self, limit: std::time::Duration) -> Result<PrimitiveWritten, String> {
+        // One deadline for every turn this save waits on, not `limit` each.
+        let deadline = std::time::Instant::now() + limit;
+        let left = move || deadline.saturating_duration_since(std::time::Instant::now());
         if let Some(turn) = &self.turn
-            && !turn.wait_within(limit)
+            && !turn.wait_within(left())
         {
             return Err(format!(
                 "{}: the library is still busy reading; the save was not made, try again",
                 self.path.display()
             ));
         }
-        self.write(&|turn| turn.wait_within(limit))
+        self.write(&|turn| turn.wait_within(left()))
     }
 
     /// `wait` takes an other library's place in its write order: `false` when
