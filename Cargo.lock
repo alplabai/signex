@@ -2367,7 +2367,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "bitflags 2.11.1",
  "bytes",
@@ -2417,7 +2417,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -2448,7 +2448,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "futures",
  "iced_core",
@@ -2462,7 +2462,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -2482,7 +2482,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -2491,7 +2491,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -2503,7 +2503,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "bytes",
  "iced_core",
@@ -2514,7 +2514,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -2531,7 +2531,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -2551,7 +2551,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
@@ -2565,7 +2565,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=7bca0de2edbffe010e6d9388b1fc4f7c30289692#7bca0de2edbffe010e6d9388b1fc4f7c30289692"
+source = "git+https://github.com/alplabai/iced?rev=108a717b18c49c91d780d6e03fd0d2f2ec8b40ae#108a717b18c49c91d780d6e03fd0d2f2ec8b40ae"
 dependencies = [
  "arboard",
  "iced_debug",
