@@ -261,7 +261,7 @@ impl Signex {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
-                owed: editor.cascade_owed.clone(),
+                owed: with_kept(&editor.cascade_owed, self.library.owed_cascades.of(path)),
             };
             self.document_state.keep_document_dirty_until_saved(path);
             return Ok(snapshot);
@@ -296,7 +296,7 @@ impl Signex {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
-                owed: editor.cascade_owed.clone(),
+                owed: with_kept(&editor.cascade_owed, self.library.owed_cascades.of(path)),
             };
             self.document_state.keep_document_dirty_until_saved(path);
             return Ok(snapshot);
@@ -438,6 +438,10 @@ impl Signex {
         // landed, but its baseline, versions and dirty state are not this
         // save's to set, and "Save X" would mislabel what is committed.
         let edited_in_place = self.primitive_save_generation(path) == Some(generation);
+        // What the write still owes follows the file, not the editor.
+        self.library
+            .owed_cascades
+            .set(path, if edited_in_place { &[] } else { &written.cascade_owed });
         if !edited_in_place {
             crate::diagnostics::log_info(format!(
                 "[{label}] Wrote {}; the editor it was saved from is no longer open, \
@@ -510,6 +514,54 @@ impl Signex {
             Some(true) => self.document_state.release_save_hold(path),
             None => {}
         }
+    }
+
+    /// An editor that owes row updates is closed: the file keeps owing them,
+    /// and its next save carries them out (#2004).
+    pub(crate) fn keep_owed_cascade(&mut self, path: &std::path::Path) {
+        let document = &self.document_state;
+        let owed = document
+            .symbol_editors
+            .get(path)
+            .map(|e| e.cascade_owed.clone())
+            .or_else(|| {
+                document
+                    .footprint_editors
+                    .get(path)
+                    .map(|e| e.cascade_owed.clone())
+            })
+            .unwrap_or_default();
+        if owed.is_empty() {
+            return;
+        }
+        self.library.owed_cascades.set(path, &owed);
+        let name = path.file_stem().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        let line = format!(
+            "Rows that use {name} still await their update; the next save of it moves them"
+        );
+        crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
+    }
+
+    /// A reopened editor takes back the row updates its file still owes, and
+    /// is unsaved until a save moves them (#2004).
+    pub(crate) fn seed_owed_cascade(&mut self, path: &std::path::Path) {
+        let owed = self.library.owed_cascades.take(path);
+        if owed.is_empty() {
+            return;
+        }
+        let document = &mut self.document_state;
+        if let Some(editor) = document.symbol_editors.get_mut(path) {
+            editor.cascade_owed = owed;
+        } else if let Some(editor) = document.footprint_editors.get_mut(path) {
+            editor.cascade_owed = owed;
+        } else {
+            self.library.owed_cascades.set(path, &owed);
+            return;
+        }
+        self.mark_primitive_owes_cascade(path);
     }
 
     /// Say so when an editor that still owes row updates is dropped or
@@ -637,6 +689,13 @@ impl Signex {
             ),
         }
     }
+}
+
+/// What the editor owes plus what the file kept after an editor of it closed.
+fn with_kept(editor: &[uuid::Uuid], kept: &[uuid::Uuid]) -> Vec<uuid::Uuid> {
+    let mut all = editor.to_vec();
+    all.extend(kept.iter().filter(|id| !editor.contains(id)));
+    all
 }
 
 /// `path` spelled under the mounted library's own folder, when the library

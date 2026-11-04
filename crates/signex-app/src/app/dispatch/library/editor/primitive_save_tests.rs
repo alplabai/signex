@@ -731,14 +731,18 @@ fn warned(stem: &str) -> Option<String> {
 }
 
 #[test]
-fn dont_save_on_an_editor_that_owes_rows_says_the_rows_are_not_updated() {
+fn dont_save_on_an_editor_that_owes_rows_says_the_rows_are_kept_for_the_next_save() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = owing(dir.path(), "OwedDontSave");
     let _ = app.close_tab_now(0);
     assert!(!app.document_state.symbol_editors.contains_key(&path));
-    let line = warned("OwedDontSave").expect("the discard is reported");
+    assert_eq!(app.library.owed_cascades.of(&path).len(), 1);
+    let line = crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .find(|m| m.contains("Rows that use OwedDontSave still await"))
+        .expect("the kept debt is reported");
     assert!(line.len() <= 157, "{line}");
-    assert!(line.contains("pending row updates were discarded"));
 }
 
 #[test]

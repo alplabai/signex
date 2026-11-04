@@ -670,6 +670,9 @@ pub struct LibraryState {
     /// The write order of each library (#893): library mutations run on
     /// workers, one library at a time, in the order the user made them.
     pub writes: super::writes::LibraryWrites,
+    /// Row updates a primitive file's save still owes, outliving its editor
+    /// (#2004).
+    pub owed_cascades: owed_cascades::OwedCascades,
     /// Libraries whose close waits for their writes to finish.
     pub closing: std::collections::HashSet<PathBuf>,
     /// Libraries unmounted since the last `finish_update`, which drains
@@ -925,6 +928,7 @@ mod id_precedence;
 mod methods;
 mod missing_queue;
 mod new_library_defaults;
+pub mod owed_cascades;
 mod panel_rows;
 #[cfg(test)]
 mod panel_rows_tests;
