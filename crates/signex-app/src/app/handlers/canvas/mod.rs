@@ -337,6 +337,9 @@ impl Signex {
     /// canvas double-click reaches here through `descend_through_sheet_symbol`.
     /// `true` when the sheet is now the focused tab.
     pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) -> bool {
+        if self.sheet_switch_refused_in_window("Opening a sheet") {
+            return false;
+        }
         let path = self.resolve_held_spelling_now(path);
         if !path.exists() {
             crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
@@ -382,6 +385,9 @@ impl Signex {
     /// parked without a tab (#1135). `false` when no document holds the file.
     /// Touches no file.
     pub(crate) fn focus_open_sheet(&mut self, path: &std::path::Path) -> bool {
+        if self.sheet_switch_refused_in_window("Switching to a sheet") {
+            return false;
+        }
         if let Some(index) = self
             .document_state
             .tabs

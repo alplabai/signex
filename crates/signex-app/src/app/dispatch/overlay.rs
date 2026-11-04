@@ -97,6 +97,14 @@ impl Signex {
             ProjectMsg::NavigatorAssembled(generation, assembly) => {
                 self.handle_navigator_assembled(generation, assembly)
             }
+            ProjectMsg::DescendRequested {
+                symbol,
+                path,
+                placement,
+            } => {
+                let task = self.descend_to_child_sheet(symbol, path, placement);
+                Task::batch([task, self.finish_update()])
+            }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::Tab(msg) => {
                 self.dispatch_project_tab_message(msg);

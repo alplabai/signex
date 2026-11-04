@@ -177,8 +177,12 @@ impl Signex {
         for project in &document.projects {
             let data = &project.data;
             (project.id, &data.name, &data.dir).hash(&mut hasher);
-            data.sheets.len().hash(&mut hasher);
-            data.net_classes.len().hash(&mut hasher);
+            for sheet in &data.sheets {
+                (&sheet.name, &sheet.filename).hash(&mut hasher);
+            }
+            for class in &data.net_classes {
+                format!("{class:?}").hash(&mut hasher);
+            }
             data.parameters.hash(&mut hasher);
         }
         // Order-independent: the set of dirty documents.

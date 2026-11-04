@@ -627,6 +627,14 @@ pub enum ProjectMsg {
         u64,
         Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
     ),
+    /// A descent through a sheet symbol that an undocked window started: the
+    /// window cannot switch sheets inside its swap, so the open runs here, on
+    /// the main window, for the child the window's sheet references (#1966).
+    DescendRequested {
+        symbol: uuid::Uuid,
+        path: std::path::PathBuf,
+        placement: Option<signex_types::schematic::InstancePath>,
+    },
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while any document is dirty. Reuses `ProjectCloseChoice`.

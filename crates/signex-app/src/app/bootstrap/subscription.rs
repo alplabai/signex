@@ -743,24 +743,26 @@ impl Signex {
                 _ => Message::noop(),
             })
         } else if drag_active {
-            iced::event::listen_with(|event, _status, window| {
-                Some(match event {
+            // Like `listen()`: only events no widget captured. `listen_with`
+            // is used for the window the button was released in.
+            iced::event::listen_with(|event, status, window| {
+                if status == iced::event::Status::Captured {
+                    return None;
+                }
+                match event {
                     iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                        Message::Ui(UiMsg::DragMove(position.x, position.y))
+                        Some(Message::Ui(UiMsg::DragMove(position.x, position.y)))
                     }
                     iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                         iced::mouse::Button::Left,
-                    )) => Message::Ui(UiMsg::DragEnd(window)),
+                    )) => Some(Message::Ui(UiMsg::DragEnd(window))),
                     iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                         iced::mouse::Button::Left,
-                    )) => Message::ContextMenu(ContextMenuMsg::Close),
-                    // Window::Resized intentionally omitted — the
-                    // `window::resize_events()` subscription below carries
-                    // the window id so we can drop non-main resizes. If
-                    // we also forwarded the raw event here, a detached
-                    // modal's resize would clobber the main window's size.
-                    _ => Message::noop(),
-                })
+                    )) => Some(Message::ContextMenu(ContextMenuMsg::Close)),
+                    // Window::Resized is carried, with its id, by the
+                    // `window::resize_events()` subscription below.
+                    _ => None,
+                }
             })
         } else {
             // Always track the cursor so `last_mouse_pos` is fresh when the

@@ -77,23 +77,60 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
 }
 
 /// Whether the message a command resolved to edits the sheet an undocked
-/// window shows, so it runs in the window's swap. An allow-list: sheet edits,
-/// selection, tools, in-place text edits, the Active Bar and the view zoom.
+/// window shows, so it runs in the window's swap. An explicit allow-list of
+/// variants (never a whole enum): sheet edits, selection, tools, in-place text
+/// edits, Active Bar actions and the view zoom.
 /// Everything else (sheet stepping, project opens, net jumps, Find with
 /// Project scope, Annotate, ERC, export, app-wide toggles, and any message
 /// added later) runs on the main window, where it cannot load one sheet into
 /// another's canvas.
 fn command_edits_shown_sheet(message: &Message) -> bool {
+    use crate::active_bar::ActiveBarMsg;
+    use crate::app::selection_request::SelectionRequest as Sel;
+    use crate::app::{EditMsg, TextEditMsg, ToolMessage};
     use crate::menu_bar::MenuMessage;
-    matches!(
-        message,
-        Message::Edit(_)
-            | Message::Selection(_)
-            | Message::Tool(_)
-            | Message::TextEdit(_)
-            | Message::ActiveBar(_)
-            | Message::Menu(MenuMessage::ZoomIn | MenuMessage::ZoomOut)
-    )
+    match message {
+        Message::Edit(edit) => matches!(
+            edit,
+            EditMsg::DeleteSelected
+                | EditMsg::Redo
+                | EditMsg::RotateSelectedClockwise
+                | EditMsg::RotateSelectedCounterclockwise
+                | EditMsg::MirrorSelectedX
+                | EditMsg::MirrorSelectedY
+                | EditMsg::Copy
+                | EditMsg::Cut
+                | EditMsg::Paste
+                | EditMsg::SmartPaste
+                | EditMsg::Duplicate
+                | EditMsg::RepeatLastItem
+                | EditMsg::RubberStampCopy
+                | EditMsg::PasteArrayRequested
+        ),
+        Message::Selection(selection) => matches!(
+            selection,
+            Sel::SelectAll
+                | Sel::ClearAll
+                | Sel::StoreSlot { .. }
+                | Sel::RecallSlot { .. }
+                | Sel::SelectConnected { .. }
+                | Sel::CycleMode
+                | Sel::LassoCommit
+        ),
+        Message::Tool(tool) => matches!(
+            tool,
+            ToolMessage::SelectTool(_)
+                | ToolMessage::PrePlacementTab
+                | ToolMessage::ResumePlacement
+                | ToolMessage::CycleDrawMode
+                | ToolMessage::CancelDrawing
+                | ToolMessage::RemoveLastVertex
+        ),
+        Message::ActiveBar(ActiveBarMsg::Action(_)) => true,
+        Message::TextEdit(TextEditMsg::Requested(_)) => true,
+        Message::Menu(menu) => matches!(menu, MenuMessage::ZoomIn | MenuMessage::ZoomOut),
+        _ => false,
+    }
 }
 
 /// Tag a pick from the Components row menu of the undocked `window` so it
@@ -115,6 +152,22 @@ pub(in crate::app) fn scope_row_menu_message(
 }
 
 impl Signex {
+    /// The one guard for everything that changes which sheet is shown (a tab
+    /// switch, a sheet open, a document read). Inside an undocked window's
+    /// swap the window's canvas is in the main slot, so a switch would load
+    /// another sheet into it while the window keeps its own path. Such a call
+    /// is refused with a Messages line; a descent through a sheet symbol is
+    /// queued to the main window instead (`ProjectMsg::DescendRequested`).
+    pub(crate) fn sheet_switch_refused_in_window(&self, what: &str) -> bool {
+        if self.interaction_state.acting_window.is_none() {
+            return false;
+        }
+        crate::diagnostics::log_warning(format!(
+            "{what} was not done from inside an undocked window; do it in the main window."
+        ));
+        true
+    }
+
     /// Whether `window` is an undocked tab window with a canvas of its own,
     /// so an action from it can run against the document it shows.
     pub(crate) fn is_document_window(&self, window: iced::window::Id) -> bool {

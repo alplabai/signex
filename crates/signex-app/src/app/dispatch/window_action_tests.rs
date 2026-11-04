@@ -598,15 +598,19 @@ fn a_row_menu_opened_in_an_undocked_window_paints_there_only_and_its_picks_are_s
     let _ = f.app.update(right_click);
     assert!(has(&f.app, f.window, "Edit Component"));
     assert!(!has(&f.app, f.main, "Edit Component"));
-    let pick = crate::app::dispatch::window_action::scope_row_menu_message(
-        f.window,
-        Message::Library(
-            crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(
-                crate::library::state::ComponentsRowAction::Place,
-            ),
-        ),
+    // Press the painted "Edit Component" entry in the window.
+    let clicked =
+        crate::layout_probe::messages_on_click(f.app.view(f.window), SIZE, "Edit Component");
+    let picked = clicked.iter().find(|m| {
+        matches!(
+            m,
+            Message::Dock(crate::dock::DockMessage::ScopedToWindow(w, _)) if *w == f.window
+        )
+    });
+    assert!(
+        picked.is_some(),
+        "the pick was not scoped to the window: {clicked:?}"
     );
-    assert!(is_scoped(&pick, f.window));
 }
 
 fn pressed_row(f: &mut Fixture) {
@@ -686,4 +690,157 @@ fn a_title_block_draft_typed_in_a_window_survives_its_reattach_in_the_main_conte
             .title_block_drafts
             .contains(&draft)
     );
+}
+
+/// Main shows `other`; `top`, which places `child` twice, is in an undocked
+/// window with its first sheet symbol selected. `child` is open as a tab
+/// when `open_child`.
+struct Descent {
+    app: Signex,
+    window: iced::window::Id,
+    top: PathBuf,
+    child: PathBuf,
+    _dir: tempfile::TempDir,
+}
+
+fn descent_fixture(open_child: bool) -> Descent {
+    use crate::app::handlers::menu::export::tests::current_placement::{
+        PLACEMENT_A, placed_twice_on_disk,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    if open_child {
+        assert!(app.open_or_focus_sheet_path(child.clone()));
+    }
+    crate::app::runtime::sheet_tree_tests::write_sheet(dir.path(), "other.snxsch", &[]);
+    assert!(app.open_or_focus_sheet_path(dir.path().join("other.snxsch")));
+    app.ui_state.first_run_tour_open = false;
+    app.ui_state.main_window_id = Some(iced::window::Id::unique());
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path: top.clone(),
+            title: "top".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    slot.set_render_cache(Some(
+        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+            app.document_state.engines[&top].document(),
+        ),
+    ));
+    slot.selected = vec![SelectedItem::new(
+        uuid::Uuid::from_u128(PLACEMENT_A),
+        SelectedKind::ChildSheet,
+    )];
+    app.interaction_state.canvases.insert(window, slot);
+    Descent {
+        app,
+        window,
+        top,
+        child,
+        _dir: dir,
+    }
+}
+
+fn window_still_shows_top(d: &Descent) {
+    let shown = d
+        .app
+        .interaction_state
+        .canvas_for_window(d.window)
+        .active_render_cache()
+        .map(|cache| cache.snapshot().child_sheets.len());
+    assert_eq!(
+        shown,
+        Some(2),
+        "the window's canvas no longer shows its sheet"
+    );
+    assert!(matches!(
+        &d.app.ui_state.windows[&d.window],
+        WindowKind::UndockedTab { path, .. } if *path == d.top
+    ));
+}
+
+fn enter_in_window(d: &mut Descent) {
+    let command = crate::keymap::AppCommandId::new("placement_accept").unwrap();
+    let (_outcome, task) = d.app.dispatch_command_reporting(
+        &command,
+        crate::app::command::CommandArgs::none(),
+        Some(d.window),
+    );
+    crate::app::path_ops::settle_task(&mut d.app, task);
+}
+
+#[test]
+fn enter_on_a_sheet_symbol_in_a_window_descends_on_the_main_window_child_open() {
+    let mut d = descent_fixture(true);
+    enter_in_window(&mut d);
+    window_still_shows_top(&d);
+    assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
+}
+
+#[test]
+fn enter_on_a_sheet_symbol_in_a_window_descends_on_the_main_window_child_not_open() {
+    let mut d = descent_fixture(false);
+    let command = crate::keymap::AppCommandId::new("placement_accept").unwrap();
+    let (_outcome, task) = d.app.dispatch_command_reporting(
+        &command,
+        crate::app::command::CommandArgs::none(),
+        Some(d.window),
+    );
+    // Nothing was read for the window: no descent waits with the window's
+    // sheet as its parent.
+    assert!(d.app.ui_state.pending_descents.is_empty());
+    crate::app::path_ops::settle_task(&mut d.app, task);
+    window_still_shows_top(&d);
+    assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
+    assert!(d.app.ui_state.pending_descents.is_empty());
+}
+
+#[test]
+fn a_double_click_on_a_sheet_symbol_in_a_window_descends_on_the_main_window() {
+    let mut d = descent_fixture(true);
+    let task = d.app.update(Message::CanvasEventInWindow {
+        window_id: d.window,
+        event: crate::canvas::CanvasEvent::DoubleClicked {
+            world_x: 5.0,
+            world_y: 5.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
+        },
+    });
+    crate::app::path_ops::settle_task(&mut d.app, task);
+    window_still_shows_top(&d);
+    assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
+}
+
+#[test]
+fn find_next_with_project_scope_from_a_window_opens_the_hit_on_the_main_window() {
+    let mut d = descent_fixture(false);
+    let hit = signex_engine::FindHit {
+        kind: signex_engine::FindKind::NetLabel,
+        item: SelectedItem::new(uuid::Uuid::from_u128(77), SelectedKind::Label),
+        target: signex_engine::TextTarget::Label(uuid::Uuid::from_u128(77)),
+        text: "CHILD_NET".into(),
+        placement: None,
+        single: true,
+        position: Point::new(1.0, 1.0),
+    };
+    let find = &mut d.app.ui_state.find_replace;
+    find.scope = crate::find_replace::FindScope::Project;
+    find.matches = vec![crate::find_replace::FindMatch {
+        sheet: Some(d.child.clone()),
+        hit,
+        placement_label: None,
+    }];
+    let command = crate::keymap::AppCommandId::new("find_next").unwrap();
+    let (_outcome, task) = d.app.dispatch_command_reporting(
+        &command,
+        crate::app::command::CommandArgs::none(),
+        Some(d.window),
+    );
+    crate::app::path_ops::settle_task(&mut d.app, task);
+    window_still_shows_top(&d);
+    assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
 }

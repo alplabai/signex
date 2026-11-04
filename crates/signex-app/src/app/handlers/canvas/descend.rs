@@ -44,6 +44,34 @@ impl Signex {
         // Record under the spelling the tab is held at (#1149), not the
         // spelling the hierarchy resolved.
         let path = self.resolve_held_spelling_now(path);
+        // An undocked window cannot switch sheets inside its swap. Its sheet
+        // symbol and placement are resolved here, against the window's sheet;
+        // the open itself is queued to run on the main window afterwards.
+        if self.interaction_state.acting_window.is_some() {
+            if !path.exists() {
+                crate::diagnostics::log_warning(format!(
+                    "The sheet {} is missing; open its parent sheet in the main window to create it.",
+                    path.display()
+                ));
+                return Task::none();
+            }
+            return Task::done(Message::Project(ProjectMsg::DescendRequested {
+                symbol: sheet_symbol,
+                path,
+                placement,
+            }));
+        }
+        self.descend_to_child_sheet(sheet_symbol, path, placement)
+    }
+
+    /// The rest of a descent once the child's path and placement are known:
+    /// focus the sheet if it is open, else read it on a worker.
+    pub(crate) fn descend_to_child_sheet(
+        &mut self,
+        sheet_symbol: Uuid,
+        path: PathBuf,
+        placement: Option<InstancePath>,
+    ) -> Task<Message> {
         if self.focus_open_sheet(&path) {
             self.record_descent_placement(path, placement);
             return Task::none();
