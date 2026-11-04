@@ -114,14 +114,14 @@ fn cycle_grid_steps_snap_and_linked_visible_grid_through_the_presets() {
     app.ui_state.grid_size_mm = 1.27;
     app.ui_state.visible_grid_mm = 1.27;
 
-    let _ = app.update(Message::Menu(MenuMessage::CycleGrid));
+    let _ = app.update(crate::menu_support::menu_row("next_grid"));
     assert_eq!(app.ui_state.grid_size_mm, 2.54);
     assert_eq!(app.ui_state.visible_grid_mm, 2.54);
 
     // Wraps from the last preset back to the first.
     app.ui_state.grid_size_mm = 5.08;
     app.ui_state.visible_grid_mm = 5.08;
-    let _ = app.update(Message::Menu(MenuMessage::CycleGrid));
+    let _ = app.update(crate::menu_support::menu_row("next_grid"));
     assert_eq!(app.ui_state.grid_size_mm, 0.635);
     assert_eq!(app.ui_state.visible_grid_mm, 0.635);
 }
@@ -143,7 +143,7 @@ fn cycle_grid_from_a_non_preset_size_lands_on_the_first_preset() {
     app.ui_state.grid_size_mm = 0.5;
     app.ui_state.visible_grid_mm = 0.5;
 
-    let _ = app.update(Message::Menu(MenuMessage::CycleGrid));
+    let _ = app.update(crate::menu_support::menu_row("next_grid"));
     assert_eq!(app.ui_state.grid_size_mm, 0.635);
 }
 
@@ -153,7 +153,7 @@ fn cycle_grid_leaves_a_deliberately_different_visible_grid_alone() {
     app.ui_state.grid_size_mm = 1.27;
     app.ui_state.visible_grid_mm = 5.08;
 
-    let _ = app.update(Message::Menu(MenuMessage::CycleGrid));
+    let _ = app.update(crate::menu_support::menu_row("next_grid"));
     assert_eq!(app.ui_state.grid_size_mm, 2.54);
     assert_eq!(app.ui_state.visible_grid_mm, 5.08);
 }

@@ -38,19 +38,17 @@ greyed row's is `Disabled`. The golden fixture still names each such row by the
 message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
 the id back to that name.
 
-## Rows with their own action {#own-action}
+## Rows that name a different command {#own-action}
 
-Two rows take their label and shortcut from a command but do something else, so
-they keep a `MenuMessage` of their own (`cmd_item_own_action`) and their own
-gate:
+Every row that carries a command id runs that id; no row keeps an action of its
+own. Two rows point at an id other than the one their key suggests (#1991):
 
-- View ▸ Cycle Grid Size (`cycle_snap_grid_forward`): the id opens the footprint
-  editor's grid picker (and is enabled only there); the row steps the schematic
-  or PCB grid.
-- Design ▸ Electrical Rules Check (`run_erc`): F8 runs ERC at once; the row opens
-  the ERC dialog to choose the rules first.
-
-Whether each should run its id instead is the maintainers' decision (#1991).
+- View ▸ Cycle Grid Size runs `next_grid`, which steps the snap grid (the `N`
+  key in the Classic profile). `cycle_snap_grid_forward` (`G` in the Altium
+  profile) still opens the footprint editor's grid picker.
+- Design ▸ Electrical Rules Check runs `open_erc_dialog`, which opens the ERC
+  dialog to choose the rules. `run_erc` (F8) runs ERC at once. The row shows no
+  key, as `open_erc_dialog` has no default binding.
 
 ## File ▸ Library {#file-library}
 
