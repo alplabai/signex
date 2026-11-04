@@ -5,8 +5,8 @@ use iced::widget::operation;
 
 use super::super::*;
 use crate::app::command_palette::{
-    COMMAND_PALETTE_INPUT_ID, COMMAND_PALETTE_WINDOW_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, catalog_stamp,
-    rank_results,
+    COMMAND_PALETTE_INPUT_ID, COMMAND_PALETTE_WINDOW_INPUT_ID, CommandAction, MAX_RESULTS,
+    build_catalog, catalog_stamp, rank_results,
 };
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 

@@ -34,9 +34,11 @@ impl Signex {
             .copied()
             .filter(|w| self.is_document_window(*w))
             .collect();
-        Task::batch(windows.into_iter().map(|window| {
-            self.run_in_window(window, false, |app| app.refresh_history_panel())
-        }))
+        Task::batch(
+            windows
+                .into_iter()
+                .map(|window| self.run_in_window(window, false, |app| app.refresh_history_panel())),
+        )
     }
 
     /// Idle-cursor-move variant of [`Self::refresh_history_panel`]: only
