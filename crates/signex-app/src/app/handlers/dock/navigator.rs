@@ -119,9 +119,10 @@ impl Signex {
     /// Read from the cached Navigator hierarchy, never from disk. A file
     /// instantiated from several parents has several; the placement the tab
     /// was entered by names one, else the first by path is taken. The root,
-    /// and a sheet nothing references, have no parent, and a hierarchy still
-    /// being rebuilt may describe an earlier project: both are said in the
-    /// Messages panel, not silently ignored.
+    /// a sheet nothing references, and a project whose hierarchy is not
+    /// cached are said in the Messages panel, not silently ignored. This only
+    /// reads, so a hierarchy mid-rebuild is used as cached; a stale placement
+    /// is rejected by `parent_through`.
     pub(crate) fn ascend_to_parent_sheet(&mut self) -> Task<Message> {
         let Some(active) = self.active_tab_path() else {
             crate::diagnostics::log_warning("Up Hierarchy: no sheet is focused");
@@ -133,15 +134,15 @@ impl Signex {
             );
             return Task::none();
         }
-        if !self.navigator_is_settled() {
-            crate::diagnostics::log_warning(
-                "Up Hierarchy: the project hierarchy is still being read; try again in a moment",
-            );
-            return Task::none();
-        }
         let step = {
             let navigator = &self.document_state.panel_ctx.navigator;
             let Some(hierarchy) = navigator.hierarchy.as_ref() else {
+                let wording = if self.document_state.navigator_job.is_exhausted() {
+                    "the project hierarchy could not be read"
+                } else {
+                    "the project hierarchy has not been read yet"
+                };
+                crate::diagnostics::log_warning(format!("Up Hierarchy: {wording}"));
                 return Task::none();
             };
             // A recorded placement names the exact sheet symbol the user came
@@ -463,27 +464,22 @@ mod tests {
     }
 
     #[test]
-    fn ascend_refuses_while_the_hierarchy_is_being_rebuilt() {
-        let _ = crate::diagnostics::init_logging();
+    fn ascend_right_after_descending_does_not_wait_for_the_rebuild() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let (mut app, [_, mid, leaf]) = three_level_project(&dir, &[]);
-        app.open_or_focus_sheet_path(leaf);
-        app.settle_hierarchy();
-        // Opening a tab changes what the Navigator is built from.
-        app.open_or_focus_sheet_path(mid.clone());
+        let (mut app, [root, mid, _]) = three_level_project(&dir, &[]);
+        app.open_or_focus_sheet_path(root.clone());
         app.refresh_panel_ctx();
+        app.settle_navigator();
+
+        double_click(&mut app, &[0, 0]);
+        app.refresh_panel_ctx();
+        assert_eq!(active_tab(&app), Some(mid), "descended into Mid");
         assert!(!app.navigator_is_settled(), "precondition: rebuild pending");
-        let since = crate::diagnostics::newest_entry_id();
 
         let task = app.ascend_to_parent_sheet();
         crate::app::handlers::canvas::sheet_open_tests::finish_read(&mut app, task);
 
-        assert_eq!(active_tab(&app), Some(mid), "no sheet was opened");
-        assert!(
-            crate::diagnostics::recent_entries()
-                .iter()
-                .any(|e| Some(e.id) > since && e.message.contains("still being read"))
-        );
+        assert_eq!(active_tab(&app), Some(root));
     }
 
     #[test]

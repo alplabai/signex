@@ -513,3 +513,16 @@ fn changing_the_component_of_a_free_unit_is_refused_while_a_sibling_unit_is_lock
     assert_eq!(format!("{:?}", engine.document()), before);
     assert!(engine.undo().is_ok_and(|undone| undone.is_none()));
 }
+
+#[test]
+fn a_part_is_edit_locked_from_every_unit_when_one_unit_is_locked() {
+    let part = engine_with_a_locked_second_unit();
+    assert!(
+        part.part_edit_locked(id(1)),
+        "the free unit of a locked part"
+    );
+    assert!(part.part_edit_locked(id(2)), "the locked unit");
+    assert!(!part.part_edit_locked(id(9)), "an unknown id");
+    assert!(!engine().part_edit_locked(id(2)), "an unlocked single unit");
+    assert!(engine().part_edit_locked(id(1)), "a locked single unit");
+}

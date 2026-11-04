@@ -134,4 +134,41 @@ mod tests {
             .collect();
         assert_eq!(labels, ["Place", "Edit Component"]);
     }
+
+    /// The opened menu, laid out, shows each row's label on one line at its
+    /// natural width (#2043): the box must not collapse to rows without text.
+    #[test]
+    fn the_open_menu_lays_out_every_row_label_at_its_natural_width() {
+        use crate::layout_probe::{find, lay_out_texts, natural};
+        use crate::library::state::{ComponentsPanelRowKey, ComponentsRowMenu};
+
+        let (mut app, _boot) = Signex::new();
+        app.library.components_panel.row_menu = Some(ComponentsRowMenu {
+            key: ComponentsPanelRowKey {
+                library_path: "lib.snxlib".into(),
+                table: "t".into(),
+                row_id: signex_library::RowId::from_uuid(uuid::Uuid::from_u128(1)),
+            },
+            x: 100.0,
+            y: 100.0,
+        });
+        let mut overlay = app.components_row_context_menu_overlay();
+        assert_eq!(overlay.len(), 2, "backdrop and menu");
+        let menu = overlay.remove(1);
+        let texts = lay_out_texts(menu, iced::Size::new(1400.0, 900.0));
+
+        for label in ["Place", "Edit Component"] {
+            let alone = natural::<()>(
+                iced::widget::text(label)
+                    .size(crate::styles::TypeScale::DEFAULT.body)
+                    .boxed(),
+                label,
+            );
+            let laid = find(&texts, label).bounds;
+            assert!(
+                laid.width >= alone.width - 0.5 && laid.height >= alone.height - 0.5,
+                "{label} laid out at {laid:?}, natural {alone:?}"
+            );
+        }
+    }
 }

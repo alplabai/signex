@@ -192,13 +192,20 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
 }
 
 impl Engine {
-    /// Whether the placed symbol `id` is locked; `false` for an unknown id.
+    /// Whether an edit of the part `id` belongs to is refused by a lock. A
+    /// part is edited as a whole, so one locked unit locks every unit. Decided
+    /// by the lock rule itself, with a footprint edit as the probe.
     #[must_use]
-    pub fn symbol_locked(&self, id: Uuid) -> bool {
-        self.document
-            .symbols
-            .iter()
-            .any(|s| s.uuid == id && s.locked)
+    pub fn part_edit_locked(&self, id: Uuid) -> bool {
+        crate::exec::change_component::placed_unit_ids(&self.document, id)
+            .into_iter()
+            .any(|unit| {
+                let probe = Command::UpdateSymbolFootprint {
+                    symbol_id: unit,
+                    footprint: String::new(),
+                };
+                self.locked_item_refusal(&probe).is_some()
+            })
     }
 
     /// The lock of a wire, label, text note or drawing, `None` for any other

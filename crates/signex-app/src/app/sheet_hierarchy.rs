@@ -282,7 +282,9 @@ impl SheetHierarchy {
 
     /// Up Hierarchy for a sheet entered by no recorded placement: of the
     /// sheets that place `active`, the one whose path sorts first, so the
-    /// answer is repeatable. `None` for a page the walk starts at.
+    /// answer is repeatable. `None` for a page the walk starts at. The
+    /// parent comes from the capped walk ([`MAX_NODES`], [`MAX_DEPTH`]), so a
+    /// sheet beyond the cap has none, as in enablement.
     pub fn first_parent_of(&self, active: &Path) -> Option<ParentStep> {
         let key = normalised_key(active, self.fold);
         let occurrences = self.occurrences();

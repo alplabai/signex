@@ -180,6 +180,29 @@ pub fn identity_fields(fields: &[(String, String)]) -> HashMap<String, String> {
         .collect()
 }
 
+/// Drop the part syncs of locked parts, and their version stamps, so the
+/// lock-exempt library replace cannot restamp a part whose footprint / MPN
+/// the lock kept (that would hide the drift). A part is held whole: one locked
+/// unit holds back every unit's sync and stamp. Returns the stamps and syncs
+/// left and the references held back.
+pub fn hold_back_locked(
+    engine: &signex_engine::Engine,
+    stamps: Vec<(Uuid, String)>,
+    part_syncs: Vec<PartSync>,
+) -> (Vec<(Uuid, String)>, Vec<PartSync>, Vec<String>) {
+    let (held, kept): (Vec<PartSync>, Vec<PartSync>) = part_syncs
+        .into_iter()
+        .partition(|p| engine.part_edit_locked(p.symbol));
+    let stamps = stamps
+        .into_iter()
+        .filter(|(id, _)| !engine.part_edit_locked(*id))
+        .collect();
+    let mut references: Vec<String> = held.into_iter().map(|p| p.reference).collect();
+    references.sort();
+    references.dedup();
+    (stamps, kept, references)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,5 +275,68 @@ mod tests {
         let stamped = identity_fields(&fields);
         assert_eq!(stamped.len(), 1);
         assert_eq!(stamped[MPN_FIELD], "X");
+    }
+
+    /// U1A (unit 1, free) and U1B (unit 2, locked), and R1 (free), as the
+    /// engine sees them.
+    fn two_unit_engine(locked_unit: u32) -> signex_engine::Engine {
+        use signex_types::schematic::{Point, SchematicSheet};
+        let symbol = |n: u128, reference: &str, unit: u32| Symbol {
+            uuid: Uuid::from_u128(n),
+            reference: reference.into(),
+            lib_id: "L:U".into(),
+            position: Point::new(10.0 * n as f64, 10.0),
+            unit,
+            locked: unit == locked_unit,
+            ..Default::default()
+        };
+        let sheet = SchematicSheet {
+            symbols: vec![symbol(1, "U1", 1), symbol(2, "U1", 2), symbol(3, "R1", 3)],
+            ..Default::default()
+        };
+        signex_engine::Engine::new(sheet).expect("engine")
+    }
+
+    fn footprint_sync(n: u128, reference: &str) -> PartSync {
+        let have = id("", "", "");
+        PartSync {
+            symbol: Uuid::from_u128(n),
+            reference: reference.into(),
+            change: have.changes_to(&id("SOIC-8", "", "")),
+            have,
+        }
+    }
+
+    #[test]
+    fn one_locked_unit_holds_back_every_unit_sync_and_stamp_of_its_part() {
+        let engine = two_unit_engine(2);
+        let stamps = vec![
+            (Uuid::from_u128(1), "2".to_owned()),
+            (Uuid::from_u128(2), "2".to_owned()),
+            (Uuid::from_u128(3), "2".to_owned()),
+        ];
+        let syncs = vec![footprint_sync(1, "U1"), footprint_sync(2, "U1")];
+
+        let (stamps, syncs, held) = hold_back_locked(&engine, stamps, syncs);
+
+        assert!(syncs.is_empty(), "neither unit changes");
+        assert_eq!(held, ["U1"]);
+        let stamped: Vec<Uuid> = stamps.into_iter().map(|(id, _)| id).collect();
+        assert_eq!(
+            stamped,
+            [Uuid::from_u128(3)],
+            "only the free part is stamped"
+        );
+    }
+
+    #[test]
+    fn an_unlocked_part_is_not_held_back() {
+        let engine = two_unit_engine(9);
+        let (stamps, syncs, held) = hold_back_locked(
+            &engine,
+            vec![(Uuid::from_u128(1), "2".to_owned())],
+            vec![footprint_sync(1, "U1")],
+        );
+        assert_eq!((stamps.len(), syncs.len(), held.len()), (1, 1, 0));
     }
 }

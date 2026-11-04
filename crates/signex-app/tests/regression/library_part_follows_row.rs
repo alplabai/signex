@@ -275,6 +275,17 @@ fn a_mount_rescan_after_a_row_footprint_edit_keeps_the_drift() {
 
 #[test]
 fn update_from_library_keeps_a_locked_part_drifted_and_updates_the_rest() {
+    locked_part_update(false);
+}
+
+/// The same click, but another tab is showing when the library read lands:
+/// the update goes through the parked-sheet path.
+#[test]
+fn update_from_library_keeps_a_locked_part_on_a_background_sheet() {
+    locked_part_update(true);
+}
+
+fn locked_part_update(background: bool) {
     let _ = signex_app::diagnostics::init_logging();
     let f = fixture();
     bind_footprint(&f, "SOIC-8");
@@ -305,7 +316,18 @@ fn update_from_library_keeps_a_locked_part_drifted_and_updates_the_rest() {
     select_first(&mut app);
     check_drift(&mut app);
     assert!(is_drifted(&app));
-    click_update(&mut app, locked);
+    if background {
+        let task = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
+            signex_app::panels::PanelMsg::UpdateSymbolFromLibrary(locked),
+        )));
+        app.document_state.active_path = Some(std::path::PathBuf::from("elsewhere.snxsch"));
+        for message in crate::library_symbol_drift::run_task(task) {
+            let _ = app.update(message);
+        }
+        app.document_state.active_path = Some(path.clone());
+    } else {
+        click_update(&mut app, locked);
+    }
 
     let part = |app: &Signex, id| {
         doc(app)

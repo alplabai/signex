@@ -572,7 +572,11 @@ impl Signex {
             match r.symbol {
                 Ok(fresh) => {
                     let (stamps, part_syncs, held) = match self.document_state.engines.get(sheet) {
-                        Some(engine) => hold_back_locked(engine, r.stamps, r.part_syncs),
+                        Some(engine) => crate::library::part_sync::hold_back_locked(
+                            engine,
+                            r.stamps,
+                            r.part_syncs,
+                        ),
                         None => (r.stamps, r.part_syncs, Vec::new()),
                     };
                     for reference in &held {
@@ -699,28 +703,6 @@ impl Signex {
             }
         }
     }
-}
-
-/// Drop the part syncs of locked symbols, and their version stamps, so the
-/// lock-exempt library replace cannot restamp a part whose footprint / MPN
-/// the lock kept (that would hide the drift). Returns the stamps and syncs
-/// left and the references held back.
-fn hold_back_locked(
-    engine: &signex_engine::Engine,
-    stamps: Vec<(uuid::Uuid, String)>,
-    part_syncs: Vec<PartSync>,
-) -> (Vec<(uuid::Uuid, String)>, Vec<PartSync>, Vec<String>) {
-    let (held, kept): (Vec<PartSync>, Vec<PartSync>) = part_syncs
-        .into_iter()
-        .partition(|p| engine.symbol_locked(p.symbol));
-    let stamps = stamps
-        .into_iter()
-        .filter(|(id, _)| !held.iter().any(|p| p.symbol == *id))
-        .collect();
-    let mut references: Vec<String> = held.into_iter().map(|p| p.reference).collect();
-    references.sort();
-    references.dedup();
-    (stamps, kept, references)
 }
 
 /// A library-backed symbol placed on the sheet being scanned.
