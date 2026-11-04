@@ -176,7 +176,12 @@ fn closing_an_editor_that_owes_rows_keeps_the_debt_for_the_next_save() {
     owing_editor(&mut t);
     let uuid = symbol_uuid(&t);
     let _ = t.app.close_tab_now(0);
-    assert!(!t.app.document_state.symbol_editors.contains_key(&t.symbol_path));
+    assert!(
+        !t.app
+            .document_state
+            .symbol_editors
+            .contains_key(&t.symbol_path)
+    );
 
     let file = SymbolFile::from_bytes(&std::fs::read(&t.symbol_path).unwrap()).unwrap();
     let pin = file.symbols[0].version.clone();
@@ -184,14 +189,22 @@ fn closing_an_editor_that_owes_rows_keeps_the_debt_for_the_next_save() {
     t.app.open_symbol_editor_tab(t.symbol_path.clone(), file);
 
     let editor = &t.app.document_state.symbol_editors[&t.symbol_path];
-    assert_eq!(editor.cascade_owed, vec![uuid], "the reopened editor owes it");
+    assert_eq!(
+        editor.cascade_owed,
+        vec![uuid],
+        "the reopened editor owes it"
+    );
     assert!(editor.is_dirty(), "and reads unsaved until it is paid");
     let task = t
         .app
         .save_primitive_tab_at(&t.symbol_path.clone())
         .expect("starts");
     settle(&mut t.app, task);
-    assert_eq!(far_row(&t).symbol_version, pin, "the next save moved the row");
+    assert_eq!(
+        far_row(&t).symbol_version,
+        pin,
+        "the next save moved the row"
+    );
     let editor = &t.app.document_state.symbol_editors[&t.symbol_path];
     assert!(editor.cascade_owed.is_empty(), "nothing is owed any more");
 }

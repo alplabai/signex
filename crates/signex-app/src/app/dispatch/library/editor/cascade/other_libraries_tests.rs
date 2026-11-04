@@ -13,8 +13,10 @@ const TABLE: &str = "generics";
 
 fn library(dir: &Path, name: &str, mode: WorkflowMode) -> (LocalGitAdapter, PathBuf, Uuid) {
     let library_id = Uuid::now_v7();
-    let mut workflow = WorkflowConfig::default();
-    workflow.mode = mode;
+    let workflow = WorkflowConfig {
+        mode,
+        ..WorkflowConfig::default()
+    };
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id,
@@ -132,7 +134,10 @@ fn a_released_row_of_a_team_library_follows_the_in_library_rule() {
             .footprint_version,
         "0.0.2"
     );
-    assert_eq!(outcome.bumped_elsewhere, vec![(w.other.clone(), vec![open])]);
+    assert_eq!(
+        outcome.bumped_elsewhere,
+        vec![(w.other.clone(), vec![open])]
+    );
 }
 
 #[test]

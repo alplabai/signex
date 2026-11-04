@@ -22,13 +22,13 @@ the user's click.
   so it reads "the row changed since this part took its fields", and Update /
   Apply then offers the row's footprint, Manufacturer and MPN over a
   deliberate per-part value.
-- **A footprint rename in another library.** Renaming a footprint moves the
-  version of the rows of its own library that bind it. A row of a different
-  library that binds the footprint keeps its version, so parts placed from it
-  are not flagged (`app/dispatch/library/editor/cascade.rs`).
-- **A cascade still owed after a failed save.** The rows a failed save could
-  not move stay unbumped until the next successful save of that primitive,
-  which runs the cascade again.
+- **A cascade that cannot finish.** The rows a save could not move (a
+  failed write, a library still busy) stay owed per file in memory
+  (`library/state/owed_cascades.rs`). The next save of that primitive, or the
+  editor reopened after a close, carries them out, whether or not the editor
+  that saved is still open. The record is not written to disk: a restart
+  drops it, because keeping it would need a new on-disk record. Rows left
+  behind that way are still at the old version until the file is saved again.
 - **A cleared field is filled again.** An empty field is not an override: if
   the user blanks Manufacturer, MPN or the footprint on one part, Update /
   Apply fills it from the row. A value the row leaves empty never clears the

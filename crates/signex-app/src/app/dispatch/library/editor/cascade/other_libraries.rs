@@ -91,7 +91,9 @@ pub(super) fn cascade_into(
         );
         crate::library::held_back::report_held_back(&name, &adapter as &dyn LibraryAdapter);
         if !bumped.is_empty() {
-            outcome.bumped_elsewhere.push((other.root.to_path_buf(), bumped));
+            outcome
+                .bumped_elsewhere
+                .push((other.root.to_path_buf(), bumped));
         }
         if owed {
             outcome.owed = saved.iter().map(|p| p.uuid).collect();

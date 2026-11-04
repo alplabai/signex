@@ -439,9 +439,14 @@ impl Signex {
         // save's to set, and "Save X" would mislabel what is committed.
         let edited_in_place = self.primitive_save_generation(path) == Some(generation);
         // What the write still owes follows the file, not the editor.
-        self.library
-            .owed_cascades
-            .set(path, if edited_in_place { &[] } else { &written.cascade_owed });
+        self.library.owed_cascades.set(
+            path,
+            if edited_in_place {
+                &[]
+            } else {
+                &written.cascade_owed
+            },
+        );
         if !edited_in_place {
             crate::diagnostics::log_info(format!(
                 "[{label}] Wrote {}; the editor it was saved from is no longer open, \

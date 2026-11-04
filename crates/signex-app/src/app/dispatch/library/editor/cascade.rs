@@ -33,8 +33,8 @@
 //!   reports as changed, and a Save As never does.
 
 use super::container_save::ContainerWrite;
-pub(super) use other_libraries::OtherLibrary;
 use crate::app::Signex;
+pub(super) use other_libraries::OtherLibrary;
 use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_library::{
     CascadeKind, CascadeReport, FootprintFile, LibraryError, PrimitiveSave, RowId, SymbolFile,
@@ -670,9 +670,9 @@ fn failed_rows_line(report: &CascadeReport) -> String {
     line
 }
 
-mod other_libraries;
 #[cfg(test)]
 mod ledger_tests;
+mod other_libraries;
 #[cfg(test)]
 mod other_libraries_tests;
 
