@@ -29,7 +29,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use signex_types::schematic::{InstancePath, Point, SchematicSheet};
+use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
 
 use crate::app::project_sheets::{lexically_normalize, resolve_child_reference};
@@ -262,6 +262,55 @@ impl SheetHierarchy {
         }
         Some(InstancePath::from_chain(chain))
     }
+
+    /// Up Hierarchy through the placement the sheet at `active` was entered
+    /// by. `None` when the hierarchy no longer holds that placement at
+    /// `active`, so a stale record never names a parent.
+    pub fn parent_through(&self, placement: &InstancePath, active: &Path) -> Option<ParentStep> {
+        let symbol = *placement.chain().last()?;
+        let up = placement.parent()?;
+        let here = self.sheet_path_at(placement)?;
+        if normalised_key(&here, self.fold) != normalised_key(active, self.fold) {
+            return None;
+        }
+        Some(ParentStep {
+            parent: self.sheet_path_at(&up)?,
+            symbol,
+            placement: up,
+        })
+    }
+
+    /// Up Hierarchy for a sheet entered by no recorded placement: of the
+    /// sheets that place `active`, the one whose path sorts first, so the
+    /// answer is repeatable. `None` for a page the walk starts at.
+    pub fn first_parent_of(&self, active: &Path) -> Option<ParentStep> {
+        let key = normalised_key(active, self.fold);
+        let occurrences = self.occurrences();
+        occurrences
+            .iter()
+            .filter(|(_, node)| normalised_key(&node.path, self.fold) == key)
+            .filter_map(|(placement, _)| {
+                let symbol = *placement.chain().last()?;
+                let up = placement.parent()?;
+                let (_, parent) = occurrences.iter().find(|(chain, _)| *chain == up)?;
+                Some(ParentStep {
+                    parent: parent.path.clone(),
+                    symbol,
+                    placement: up,
+                })
+            })
+            .min_by_key(|step| normalised_key(&step.parent, self.fold))
+    }
+}
+
+/// The sheet Up Hierarchy opens, read from the hierarchy alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParentStep {
+    pub parent: PathBuf,
+    /// The sheet symbol on `parent` that places the sheet just left.
+    pub symbol: Uuid,
+    /// The parent's own placement, one level up the occurrence chain.
+    pub placement: InstancePath,
 }
 
 /// What the builder looks sheets up in, keyed on the normalised path.
@@ -431,80 +480,6 @@ fn expand(
     }
 }
 
-/// The sheet that references `child`, when it has one.
-///
-/// A file instantiated from several parents has several; the answer is the
-/// one whose path sorts first, so "ascend" is repeatable instead of depending
-/// on hash-map iteration order. `None` for the root (nothing references it)
-/// and for a sheet no loaded sheet references. References are resolved with
-/// the shared [`resolve_child_reference`], so a refused reference never makes
-/// a sheet anyone's parent.
-pub(crate) fn parent_sheet(
-    sheets: &HashMap<PathBuf, SchematicSheet>,
-    child: &Path,
-    fold: CaseFold,
-) -> Option<PathBuf> {
-    let child_key = normalised_key(child, fold);
-    let mut candidates: Vec<(&PathBuf, &SchematicSheet)> = sheets.iter().collect();
-    candidates.sort_by_key(|(path, _)| path_key_with(path, fold));
-    candidates
-        .into_iter()
-        .filter(|(path, _)| normalised_key(path, fold) != child_key)
-        .find(|(path, sheet)| {
-            let dir = path.parent().unwrap_or_else(|| Path::new(""));
-            sheet.child_sheets.iter().any(|cs| {
-                resolve_child_reference(dir, &cs.filename)
-                    .is_some_and(|resolved| normalised_key(&resolved, fold) == child_key)
-            })
-        })
-        .map(|(path, _)| path.clone())
-}
-
-/// The sheet symbol on `parent` that references `child`: its uuid and centre,
-/// for landing the view on it after going up a level.
-pub(crate) fn symbol_referencing(
-    sheets: &HashMap<PathBuf, SchematicSheet>,
-    parent: &Path,
-    child: &Path,
-    fold: CaseFold,
-) -> Option<(Uuid, Point)> {
-    let child_key = normalised_key(child, fold);
-    let dir = parent.parent().unwrap_or_else(|| Path::new(""));
-    sheets
-        .get(parent)?
-        .child_sheets
-        .iter()
-        .find(|cs| {
-            resolve_child_reference(dir, &cs.filename)
-                .is_some_and(|resolved| normalised_key(&resolved, fold) == child_key)
-        })
-        .map(|cs| (cs.uuid, symbol_centre(cs)))
-}
-
-/// The centre of a sheet symbol's body.
-pub(crate) fn symbol_centre(symbol: &signex_types::schematic::ChildSheet) -> Point {
-    Point::new(
-        symbol.position.x + symbol.size.0 / 2.0,
-        symbol.position.y + symbol.size.1 / 2.0,
-    )
-}
-
-/// The sheet whose symbol `placed_as` is, when exactly one holds it. A copied
-/// parent file carries the same symbol uuids as the original, so a uuid held by
-/// several sheets names no particular parent: `None`, and the caller falls back
-/// to [`parent_sheet`] without claiming a placement.
-pub(crate) fn parent_sheet_placing(
-    sheets: &HashMap<PathBuf, SchematicSheet>,
-    placed_as: Uuid,
-) -> Option<PathBuf> {
-    let mut holders = sheets
-        .iter()
-        .filter(|(_, sheet)| sheet.child_sheets.iter().any(|cs| cs.uuid == placed_as))
-        .map(|(path, _)| path);
-    let only = holders.next()?;
-    holders.next().is_none().then(|| only.clone())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -574,14 +549,66 @@ mod tests {
         assert_eq!(adc.kind, SheetNodeKind::Present);
     }
 
+    /// Give every sheet symbol its own uuid, as a real project has.
+    fn numbered(mut sheets: HashMap<PathBuf, SchematicSheet>) -> HashMap<PathBuf, SchematicSheet> {
+        let mut next = 1u128;
+        let mut paths: Vec<PathBuf> = sheets.keys().cloned().collect();
+        paths.sort();
+        for path in paths {
+            for cs in &mut sheets.get_mut(&path).expect("key").child_sheets {
+                cs.uuid = Uuid::from_u128(next);
+                next += 1;
+            }
+        }
+        sheets
+    }
+
+    fn hierarchy_of(sheets: &HashMap<PathBuf, SchematicSheet>) -> SheetHierarchy {
+        build_sheet_hierarchy(
+            sheets,
+            &[],
+            &p("root.snxsch"),
+            &[],
+            CaseFold::host_default(),
+        )
+    }
+
     #[test]
-    fn a_symbol_uuid_held_by_two_sheets_names_no_parent() {
+    fn the_parent_step_comes_from_the_hierarchy_alone() {
+        let sheets = numbered(three_level());
+        let h = hierarchy_of(&sheets);
+        let mcu_symbol = sheets[&p("root.snxsch")].child_sheets[1].uuid;
+        let adc_symbol = sheets[&p("mcu.snxsch")].child_sheets[0].uuid;
+
+        let step = h
+            .first_parent_of(&p("adc.snxsch"))
+            .expect("adc has a parent");
+        assert_eq!(step.parent, p("mcu.snxsch"));
+        assert_eq!(step.symbol, adc_symbol);
+        assert_eq!(step.placement, InstancePath::from_chain(vec![mcu_symbol]));
+        assert!(h.first_parent_of(&p("root.snxsch")).is_none());
+
+        let entered = InstancePath::from_chain(vec![mcu_symbol, adc_symbol]);
+        assert_eq!(h.parent_through(&entered, &p("adc.snxsch")), Some(step));
+        assert!(h.parent_through(&entered, &p("power.snxsch")).is_none());
+    }
+
+    #[test]
+    fn several_parents_pick_the_first_by_path() {
         let mut sheets = HashMap::new();
-        sheets.insert(p("a"), sheet(&[("X", "x.snxsch")]));
-        let held = sheets[&p("a")].child_sheets[0].uuid;
-        assert_eq!(parent_sheet_placing(&sheets, held), Some(p("a")));
-        sheets.insert(p("copy"), sheets[&p("a")].clone());
-        assert_eq!(parent_sheet_placing(&sheets, held), None);
+        sheets.insert(
+            p("root.snxsch"),
+            sheet(&[("B", "b.snxsch"), ("A", "a.snxsch")]),
+        );
+        sheets.insert(p("b.snxsch"), sheet(&[("S", "shared.snxsch")]));
+        sheets.insert(p("a.snxsch"), sheet(&[("S", "shared.snxsch")]));
+        sheets.insert(p("shared.snxsch"), sheet(&[]));
+        let h = hierarchy_of(&numbered(sheets));
+
+        assert_eq!(
+            h.first_parent_of(&p("shared.snxsch")).map(|s| s.parent),
+            Some(p("a.snxsch"))
+        );
     }
 
     #[test]
@@ -659,38 +686,6 @@ mod tests {
         let tree = build(&sheets, &p("l0.snxsch"));
 
         assert!(count(&tree) <= 2 * MAX_NODES + 2);
-    }
-
-    #[test]
-    fn parent_is_the_referencing_sheet() {
-        let sheets = three_level();
-        assert_eq!(
-            parent_sheet(&sheets, &p("adc.snxsch"), CaseFold::host_default()),
-            Some(p("mcu.snxsch"))
-        );
-        assert_eq!(
-            parent_sheet(&sheets, &p("mcu.snxsch"), CaseFold::host_default()),
-            Some(p("root.snxsch"))
-        );
-        assert_eq!(
-            parent_sheet(&sheets, &p("root.snxsch"), CaseFold::host_default()),
-            None
-        );
-    }
-
-    #[test]
-    fn multiple_parents_pick_the_first_by_path_every_time() {
-        let mut sheets = HashMap::new();
-        sheets.insert(p("b.snxsch"), sheet(&[("S", "shared.snxsch")]));
-        sheets.insert(p("a.snxsch"), sheet(&[("S", "shared.snxsch")]));
-        sheets.insert(p("shared.snxsch"), sheet(&[]));
-
-        for _ in 0..8 {
-            assert_eq!(
-                parent_sheet(&sheets, &p("shared.snxsch"), CaseFold::host_default()),
-                Some(p("a.snxsch"))
-            );
-        }
     }
 
     #[test]
@@ -810,18 +805,6 @@ mod tests {
             Some(SheetNodeKind::Present)
         );
         assert_eq!(h.node_at(&[0, 1, 0]).map(|n| n.name.as_str()), Some("ADC"));
-    }
-
-    #[test]
-    fn parent_lookup_resolves_dot_dot_references() {
-        let mut sheets = HashMap::new();
-        sheets.insert(p("root.snxsch"), sheet(&[("X", "sub/../x.snxsch")]));
-        sheets.insert(p("x.snxsch"), sheet(&[]));
-
-        assert_eq!(
-            parent_sheet(&sheets, &p("x.snxsch"), CaseFold::host_default()),
-            Some(p("root.snxsch"))
-        );
     }
 
     #[test]

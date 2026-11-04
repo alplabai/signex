@@ -36,6 +36,11 @@ pub enum AfterOpen {
         y: f64,
         item: Option<SelectedItem>,
     },
+    /// Centre on the sheet symbol `symbol` of the sheet just opened and select
+    /// it; its position is read from that sheet, not from the caller.
+    FocusSymbol {
+        symbol: Uuid,
+    },
     /// Search reveal: select `item` at the position it has now.
     Reveal {
         item: Option<SelectedItem>,
@@ -228,6 +233,7 @@ impl Signex {
         match open.then {
             AfterOpen::Nothing => Task::none(),
             AfterOpen::FocusAt { x, y, item } => self.handle_focus_at(x, y, item),
+            AfterOpen::FocusSymbol { symbol } => self.focus_sheet_symbol(path, symbol),
             AfterOpen::Reveal { item } => self.reveal_item_on_active_sheet(path, item),
             AfterOpen::OfferCreate { symbol } => {
                 self.open_create_child_sheet_dialog(symbol, true);
@@ -239,6 +245,33 @@ impl Signex {
                 Task::none()
             }
         }
+    }
+
+    /// Centre the view on the sheet symbol `symbol` of the focused sheet.
+    fn focus_sheet_symbol(&mut self, path: &Path, symbol: Uuid) -> Task<Message> {
+        let centre = self.document_state.active_engine().and_then(|engine| {
+            let found = engine
+                .document()
+                .child_sheets
+                .iter()
+                .find(|cs| cs.uuid == symbol)?;
+            Some((
+                found.position.x + found.size.0 / 2.0,
+                found.position.y + found.size.1 / 2.0,
+            ))
+        });
+        let Some((x, y)) = centre else {
+            crate::diagnostics::log_info(format!(
+                "Up Hierarchy: the sheet symbol is no longer on {}.",
+                path.display()
+            ));
+            return Task::none();
+        };
+        let item = signex_types::schematic::SelectedItem::new(
+            symbol,
+            signex_types::schematic::SelectedKind::ChildSheet,
+        );
+        self.handle_focus_at(x, y, Some(item))
     }
 
     /// The pending open for `path`, only when it waits for read `generation`.
