@@ -76,22 +76,6 @@ pub(crate) fn answer_request(app: &mut Signex, request: PasteRequest, text: Opti
     }));
 }
 
-/// What a `Task` asked the runtime to do, without a runtime to do it.
-pub(crate) fn actions(task: iced::Task<Message>) -> Vec<iced_runtime::Action<Message>> {
-    use futures::StreamExt;
-    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
-        return Vec::new();
-    };
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    runtime.block_on(async {
-        let mut out = Vec::new();
-        while let Some(action) = stream.next().await {
-            out.push(action);
-        }
-        out
-    })
-}
-
 /// The text a task writes to the system clipboard, if it writes any. Reading
 /// stops at the write: the fork's write action waits for an answer that needs
 /// a window, so draining the whole stream would never end.

@@ -135,7 +135,8 @@ impl SvgRenderContext {
                 style: SvgStyle {
                     stroke_rgb: Some(palette.bus),
                     fill_rgb: None,
-                    stroke_width: (0.3 * xform.mm_to_unit) as f32,
+                    stroke_width: (signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM
+                        * xform.mm_to_unit) as f32,
                 },
             });
         }
@@ -155,7 +156,8 @@ impl SvgRenderContext {
                 style: SvgStyle {
                     stroke_rgb: Some(palette.bus_entry),
                     fill_rgb: None,
-                    stroke_width: (0.2 * xform.mm_to_unit) as f32,
+                    stroke_width: (signex_types::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+                        * xform.mm_to_unit) as f32,
                 },
             });
         }

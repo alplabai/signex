@@ -222,10 +222,10 @@ fn every_live_row_does_something() {
     assert_eq!(inert, known, "live rows whose click does nothing");
 }
 
-/// Every command id a row carries resolves to a catalog command, and a row
-/// that does not run its id is one of the two known exceptions.
+/// Every command id a row carries resolves to a catalog command, and every
+/// such row runs that id (#1991 removed the last two own-action rows).
 #[test]
-fn command_rows_name_real_commands_and_only_two_rows_keep_their_own_action() {
+fn command_rows_name_real_commands_and_every_one_runs_its_id() {
     let app = one_symbol_selected();
     let mut own_action = Vec::new();
     for (path, item) in all_rows(&app, None) {
@@ -244,9 +244,9 @@ fn command_rows_name_real_commands_and_only_two_rows_keep_their_own_action() {
             own_action.push(path);
         }
     }
-    assert_eq!(
-        own_action,
-        ["View/Cycle Grid Size", "Design/Electrical Rules Check"]
+    assert!(
+        own_action.is_empty(),
+        "rows not running their id: {own_action:?}"
     );
 }
 

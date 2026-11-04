@@ -43,11 +43,12 @@ mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 mod window_scales;
+mod window_sizes;
 mod window_tab;
 
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
-pub use interaction::InteractionState;
+pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
 pub use pdf_page_setup::PageSetupInputs;
@@ -135,6 +136,9 @@ pub struct MoveSelectionState {
     pub open: bool,
     pub dx: String,
     pub dy: String,
+    /// The sheet the dialog was opened on: Apply moves that sheet's
+    /// selection, not whichever sheet the main window shows (#1910).
+    pub sheet: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

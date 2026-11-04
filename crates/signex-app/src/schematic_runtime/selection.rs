@@ -13,16 +13,15 @@ pub fn selection_bounds(
         .reduce(|a, b| a.union(&b))
 }
 
-pub fn draw_selection_overlay(
-    frame: &mut canvas::Frame,
+/// The selection overlay: an outline in the theme's selection colour, no fill.
+pub(super) fn selection_overlay_inputs(
     snapshot: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     transform: &ScreenTransform,
     colors: &CanvasColors,
     designators: &Designators,
-) {
-    let stroke = Color::from_rgba(0.95, 0.95, 1.0, 0.95);
-    let fill = Color::from_rgba(0.65, 0.72, 1.0, 0.12);
+) -> OverlayInputs {
+    let stroke = to_iced(&colors.selection);
     let mut overlays = OverlayInputs::default();
 
     for bbox in selected_aabbs(snapshot, selected, designators)
@@ -47,15 +46,6 @@ pub fn draw_selection_overlay(
                     signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_RADIUS_PX,
                     transform.scale,
                 ) as f32,
-                stroke_width_mm: 0.0,
-                color: to_rgba(fill),
-            });
-            overlays.snap_circles.push(OverlayCircleInput {
-                center,
-                radius_mm: screen_px_to_world_mm(
-                    signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_RADIUS_PX,
-                    transform.scale,
-                ) as f32,
                 stroke_width_mm: screen_px_to_world_mm(
                     signex_types::schematic::SCHEMATIC_SELECTION_MARKER_OUTLINE_PX,
                     transform.scale,
@@ -70,7 +60,7 @@ pub fn draw_selection_overlay(
                     [bbox.max_x as f32, bbox.max_y as f32],
                     [bbox.min_x as f32, bbox.max_y as f32],
                 ],
-                fill_color: to_rgba(fill),
+                fill_color: [0.0; 4],
                 stroke_color: Some(to_rgba(stroke)),
                 stroke_width_mm: screen_px_to_world_mm(
                     signex_types::schematic::SCHEMATIC_SELECTION_RECT_OUTLINE_PX,
@@ -80,6 +70,18 @@ pub fn draw_selection_overlay(
         }
     }
 
+    overlays
+}
+
+pub fn draw_selection_overlay(
+    frame: &mut canvas::Frame,
+    snapshot: &SchematicRenderSnapshot,
+    selected: &[SelectedItem],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    designators: &Designators,
+) {
+    let overlays = selection_overlay_inputs(snapshot, selected, transform, colors, designators);
     if overlays.preview_lines.is_empty()
         && overlays.ghost_polygons.is_empty()
         && overlays.lasso_lines.is_empty()
@@ -112,4 +114,56 @@ pub fn draw_selection_overlay(
         DirtyFlags::OVERLAY,
         transform,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::Wire;
+    use signex_types::theme::{ThemeId, canvas_colors};
+
+    fn overlay_for(scale: f32, colors: &CanvasColors) -> OverlayInputs {
+        let wire = Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(4.0, 0.0),
+            ..Wire::default()
+        };
+        let selected = [SelectedItem::new(wire.uuid, SelectedKind::Wire)];
+        let sheet = SchematicSheet {
+            wires: vec![wire],
+            ..SchematicSheet::default()
+        };
+        let transform = ScreenTransform {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale,
+            device_px_per_logical_px: 1.0,
+        };
+        selection_overlay_inputs(&sheet, &selected, &transform, colors, &Designators::new())
+    }
+
+    #[test]
+    fn selection_is_an_outline_in_the_theme_selection_colour() {
+        for &id in ThemeId::BUILTINS {
+            let colors = canvas_colors(id);
+            let want = to_rgba(to_iced(&colors.selection));
+            // A box at 20 px/mm, and a marker-sized one at 0.1 px/mm.
+            for scale in [20.0, 0.1] {
+                let overlays = overlay_for(scale, &colors);
+                assert!(
+                    !overlays.ghost_polygons.is_empty() || !overlays.snap_circles.is_empty(),
+                    "{id:?} @ {scale}: nothing drawn"
+                );
+                for poly in &overlays.ghost_polygons {
+                    assert_eq!(poly.fill_color[3], 0.0, "{id:?}: selection box is filled");
+                    assert_eq!(poly.stroke_color, Some(want), "{id:?}");
+                }
+                for circle in &overlays.snap_circles {
+                    assert!(circle.stroke_width_mm > 0.0, "{id:?}: filled marker disc");
+                    assert_eq!(circle.color, want, "{id:?}");
+                }
+            }
+        }
+    }
 }

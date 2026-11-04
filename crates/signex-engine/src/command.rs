@@ -522,6 +522,21 @@ impl Command {
         )
     }
 
+    /// Whether this command acts on a selection, the shape lock pruning
+    /// (`Engine::without_locked`) filters item by item.
+    #[must_use]
+    pub fn is_selection_command(&self) -> bool {
+        matches!(
+            self,
+            Self::MoveSelection { .. }
+                | Self::MoveEach { .. }
+                | Self::RotateSelection { .. }
+                | Self::MirrorSelection { .. }
+                | Self::TransformSelection { .. }
+                | Self::DeleteSelection { .. }
+        )
+    }
+
     pub fn kind(&self) -> CommandKind {
         match self {
             Command::ReplaceDocument { .. } => CommandKind::ReplaceDocument,

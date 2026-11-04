@@ -8,6 +8,7 @@ use crate::app::command_palette::{
     COMMAND_PALETTE_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, catalog_stamp,
     rank_results,
 };
+use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
 impl Signex {
     pub(super) fn dispatch_command_palette_message(
@@ -154,28 +155,30 @@ impl Signex {
     /// row never opens a different file, and a missing item opens the sheet
     /// and says so. Nothing in any document is changed.
     ///
-    /// Opening a sheet nobody holds goes through the normal open path, which
-    /// reads that one file on the UI thread, exactly as descending into a
-    /// child sheet does.
+    /// A sheet nobody holds is read on a worker; the item is selected when it
+    /// arrives.
     fn reveal_in_project(
         &mut self,
         path: std::path::PathBuf,
         placement: Option<signex_types::schematic::InstancePath>,
         select: Option<signex_types::schematic::SelectedItem>,
     ) -> Task<Message> {
-        self.open_sheet_with_placement(path.clone(), placement);
-        let opened = self.resolve_held_spelling(path.clone());
-        if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
-            crate::diagnostics::log_warning(format!(
-                "Search: could not open {}; the list may be out of date.",
-                path.display()
-            ));
-            return Task::none();
-        }
+        self.open_sheet(
+            path,
+            SheetOpen::at(placement).then(AfterOpen::Reveal { item: select }),
+        )
+    }
+
+    /// Select `item` where it is now on the sheet at `path`, which is showing
+    /// (not where it was when the index was built).
+    pub(crate) fn reveal_item_on_active_sheet(
+        &mut self,
+        path: &std::path::Path,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) -> Task<Message> {
         let Some(item) = select else {
             return Task::none();
         };
-        // Where the symbol is now, not where it was when the index was built.
         let position = self.document_state.active_engine().and_then(|engine| {
             engine
                 .document()

@@ -188,6 +188,25 @@ impl Turn {
         &self.gate.own
     }
 
+    /// [`Self::wait`], giving up after `limit`. `true` when it is this turn's
+    /// time to run.
+    pub fn wait_within(&self, limit: Duration) -> bool {
+        let deadline = Instant::now() + limit;
+        let mut state = self.gate.lock();
+        while state.serving != self.ticket {
+            let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                return false;
+            };
+            state = self
+                .gate
+                .changed
+                .wait_timeout(state, left)
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .0;
+        }
+        true
+    }
+
     /// Block until every earlier turn is released.
     pub fn wait(&self) {
         let mut state = self.gate.lock();
@@ -418,6 +437,17 @@ mod tests {
         assert_eq!(writes.pending_writes(root), 1);
         drop(write);
         assert_eq!(writes.pending_writes(root), 0);
+    }
+
+    #[test]
+    fn a_turn_stops_waiting_at_its_limit_and_runs_once_it_is_up() {
+        let mut writes = LibraryWrites::default();
+        let root = Path::new("a.snxlib");
+        let read = writes.read_turn(root);
+        let write = writes.turn(root);
+        assert!(!write.wait_within(Duration::from_millis(20)));
+        drop(read);
+        assert!(write.wait_within(Duration::from_millis(20)));
     }
 
     #[test]

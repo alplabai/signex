@@ -10,7 +10,7 @@ pub(crate) mod symbol_canvas;
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
-use signex_library::primitive::Footprint;
+use crate::library::editor::footprint::canvas::PreviewFootprint;
 use signex_types::schematic::LibSymbol;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -34,7 +34,8 @@ pub struct ComponentDetails {
     /// The row binds a footprint (it may still have failed to read).
     pub has_footprint_ref: bool,
     pub symbol: Option<LibSymbol>,
-    pub footprint: Option<Footprint>,
+    /// The editor's model of the footprint, built once at load.
+    pub footprint: Option<PreviewFootprint>,
     /// `(name, value)` of every row parameter.
     pub parameters: Vec<(String, String)>,
     /// Why the symbol or footprint is missing, one line each.
@@ -205,13 +206,7 @@ pub fn view<'a>(
     }
     col = col.push(match &d.footprint {
         Some(fp) => {
-            let program = footprint_canvas::FootprintPreview::new(
-                fp.clone(),
-                theme_ext::accent(tokens),
-                primary,
-                muted,
-                primary,
-            );
+            let program = footprint_canvas::FootprintPreview::new(fp);
             let canvas = iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(PREVIEW_HEIGHT);

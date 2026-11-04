@@ -108,13 +108,6 @@ pub(crate) fn disabled_reason(
         .map(super::needs::Needs::reason)
 }
 
-/// View ▸ Cycle Grid Size: the menu row sends `MenuMessage::CycleGrid`,
-/// which steps the schematic / PCB grid, not the command its label is
-/// taken from.
-pub(crate) fn cycle_grid_menu_enabled(ctx: &CommandContext) -> bool {
-    ctx.has_schematic || ctx.has_pcb
-}
-
 /// Tools ▸ New Part: the handler acts only on a `.snxsym` editor tab.
 pub(crate) fn new_part_menu_enabled(ctx: &CommandContext) -> bool {
     ctx.has_symbol_editor
@@ -179,6 +172,8 @@ impl Signex {
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
         let (can_undo, can_redo) = if self.erc_dialog_takes_input(window) {
             self.rules_history_available()
+        } else if let Some(address) = self.window_component_editor(window) {
+            self.component_history_of(&address)
         } else if let Some(path) = self.undocked_tab_path(window) {
             // Undo / Redo there step that window's document (#1546), so
             // its menu rows grey by that document's history (#1550).
@@ -359,6 +354,7 @@ impl Signex {
                 .map_or((false, false), |e| {
                     (!e.history.is_empty(), !e.redo.is_empty())
                 }),
+            Some(TabKind::ComponentEditor(tab)) => self.component_history_available(tab),
             Some(TabKind::Project(project_id)) => self.project_tab_history_available(*project_id),
             _ => {
                 let engine = path.and_then(|p| document.engines.get(p));

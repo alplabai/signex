@@ -97,9 +97,7 @@ pub enum MenuMessage {
     NoOp,
     /// A row that carries a command id: runs the id through
     /// [`crate::app::Signex::dispatch_command`], like its shortcut and the
-    /// palette do, so one id has one behaviour on every surface. Only a row
-    /// whose action is not that command keeps a message of its own (View ▸
-    /// Cycle Grid Size, Design ▸ Electrical Rules Check).
+    /// palette do, so one id has one behaviour on every surface.
     Command(AppCommandId),
     /// Help ▸ About Signex.
     OpenAbout,
@@ -173,7 +171,6 @@ pub enum MenuMessage {
     // View
     ZoomIn,
     ZoomOut,
-    CycleGrid,
     OpenProjectsPanel,
     OpenComponentsPanel,
     OpenNavigatorPanel,
@@ -193,7 +190,6 @@ pub enum MenuMessage {
     AnnotateResetDuplicates,
     AnnotateBack,
     AnnotateSheets,
-    Erc,
     // Tools
     /// Tools ▸ Passive Network Calculator — opens the in-app
     /// resistor/capacitor/inductor calculator modal. Not an OS window
@@ -399,12 +395,12 @@ pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
-/// Menu path of the Run ERC command, built from the same command label and
-/// menu the Design menu uses so a message naming it cannot drift.
-pub(crate) fn run_erc_menu_path() -> String {
+/// Menu path of the Electrical Rules Check row, built from the label and menu
+/// the Design menu uses, so a message naming it cannot drift.
+pub(crate) fn erc_menu_path() -> String {
     format!(
         "Design ▸ {}",
-        cmd_label("run_erc", "Electrical Rules Check")
+        cmd_label("open_erc_dialog", "Electrical Rules Check")
     )
 }
 

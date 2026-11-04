@@ -130,7 +130,11 @@ fn assert_menu_closed(app: &Signex, what: &str) {
 /// The canvas menu's rows for the app's current selection, as
 /// `view_context_menu` builds them.
 fn canvas_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
-    let (selection, project_key) = app.canvas_menu_inputs();
+    let (selection, project_key) = app.canvas_menu_inputs(
+        app.ui_state
+            .main_window_id
+            .expect("the app opens its main window"),
+    );
     let sc = CanvasShortcuts::resolve(|id| app.keymap_shortcut_label(id));
     let tokens = theme_tokens(TID);
     canvas_menu_entries(TID, &tokens, selection, None, project_key, &sc)
@@ -840,7 +844,7 @@ fn open_and_create_child_sheet_rows_start_the_descent_through_the_symbol() {
         let (mut app, _tmp, child_path) = app_with_sheet_symbol(Some(sheet_of(Vec::new())));
         let _ = press(&mut app, id);
         assert!(
-            app.ui_state.pending_descents.contains_key(&child_path),
+            app.ui_state.pending_sheet_opens.contains_key(&child_path),
             "{id}: no descent started"
         );
         assert_menu_closed(&app, id);

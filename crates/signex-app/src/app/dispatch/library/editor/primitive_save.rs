@@ -28,6 +28,9 @@ enum PostSaveRefresh<'a> {
     Inline,
 }
 
+/// How long the blocking save waits for the reads queued ahead of it.
+const BLOCKING_SAVE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
 impl Signex {
     /// Write the primitive at `path` back to disk as JSON: snapshot the
     /// editor now, return the task that does the blocking write. The
@@ -118,6 +121,17 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
     ) -> anyhow::Result<()> {
+        self.save_primitive_tab_blocking_within(path, BLOCKING_SAVE_WAIT)
+    }
+
+    /// [`Self::save_primitive_tab_blocking`] waiting at most `limit` for the
+    /// reads ahead of it. A save that cannot get its turn in time is refused,
+    /// never written out of order (#1756).
+    pub(crate) fn save_primitive_tab_blocking_within(
+        &mut self,
+        path: &std::path::Path,
+        limit: std::time::Duration,
+    ) -> anyhow::Result<()> {
         // This write runs on the UI thread, so it cannot wait for a library
         // write a worker still has: refuse instead of freezing the window.
         if let Some(library) = self
@@ -134,7 +148,7 @@ impl Signex {
             self.prepare_primitive_save(path, ContainerWrite::Merge)?;
         let result = {
             let _in_flight = guard;
-            write.run()
+            write.run_within(limit)
         };
         let failure = result.as_ref().err().cloned();
         // This save covers whatever a follow-up would have written, and an

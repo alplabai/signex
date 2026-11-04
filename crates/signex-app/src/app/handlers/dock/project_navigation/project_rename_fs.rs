@@ -241,6 +241,17 @@ fn is_autosaved_document(path: &Path) -> bool {
     })
 }
 
+/// Move only the `.snxprj`: `from` becomes `to`, unless another project file
+/// already holds that name. Checked here, on the worker, right before the
+/// move; a case-only rename on a case-insensitive volume finds the project
+/// itself at the new name, which is not a collision.
+pub(crate) fn rename_project_file_on_disk(from: &Path, to: &Path) -> Result<(), String> {
+    if to.exists() && !same_path_on_disk(from, to) {
+        return Err("A project with that name already exists.".to_string());
+    }
+    std::fs::rename(from, to).map_err(|e| e.to_string())
+}
+
 /// Move the project on disk: first the `.snxprj` inside its folder, then the
 /// folder. If the folder cannot move (a file open elsewhere, a permission),
 /// the `.snxprj` is put back, so a failure leaves the disk as it was. Both

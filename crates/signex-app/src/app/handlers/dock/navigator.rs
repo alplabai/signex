@@ -5,6 +5,7 @@ use iced::Task;
 use signex_widgets::tree_view::{TreeMsg, resolve_path, toggle};
 
 use super::super::super::*;
+use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 use crate::app::project_sheets::assemble_project_sheets;
 use crate::app::sheet_hierarchy::{
     SheetNodeKind, parent_sheet, parent_sheet_placing, symbol_centre, symbol_referencing,
@@ -44,7 +45,7 @@ impl Signex {
             TreeMsg::Select(key) => {
                 let tree = &self.document_state.panel_ctx.navigator.tree;
                 if let Some(path) = resolve_path(tree, key) {
-                    self.navigator_row_clicked(&path);
+                    return Some(self.navigator_row_clicked(&path));
                 }
             }
             // No context menu is defined for sheet rows.
@@ -55,15 +56,15 @@ impl Signex {
 
     /// Single click highlights the row; a second click on it within 500 ms
     /// opens (or focuses) that sheet — the Projects tree's rule.
-    fn navigator_row_clicked(&mut self, path: &[usize]) {
+    fn navigator_row_clicked(&mut self, path: &[usize]) -> Task<Message> {
         // A row of the previous hierarchy would record a placement the project
         // may no longer have; the click is ignored until the rebuild lands.
         if !self.navigator_is_settled() {
-            return;
+            return Task::none();
         }
         let navigator = &mut self.document_state.panel_ctx.navigator;
         let Some(node) = navigator.node_at(path) else {
-            return;
+            return Task::none();
         };
         let placement = navigator
             .hierarchy
@@ -84,7 +85,7 @@ impl Signex {
             .map(|parent| parent.path.clone());
         navigator.selected = Some(path.to_vec());
         if !navigator.register_click(path, std::time::Instant::now()) {
-            return;
+            return Task::none();
         }
         match kind {
             SheetNodeKind::Present => self.open_sheet_with_placement(sheet_path, placement),
@@ -94,26 +95,38 @@ impl Signex {
                     sheet_path.display()
                 ));
                 // Offer to create it, as the canvas does.
-                if let (Some(symbol), Some(parent)) = (symbol, parent_path)
-                    && (self.active_tab_path().as_deref() == Some(parent.as_path())
-                        || self.open_or_focus_sheet_path(parent))
-                {
+                let (Some(symbol), Some(parent)) = (symbol, parent_path) else {
+                    return Task::none();
+                };
+                if self.active_tab_path().as_deref() == Some(parent.as_path()) {
                     self.open_create_child_sheet_dialog(symbol, true);
+                    return Task::none();
                 }
+                self.open_sheet(
+                    parent,
+                    SheetOpen::plain().then(AfterOpen::OfferCreate { symbol }),
+                )
             }
-            SheetNodeKind::Unreadable => crate::diagnostics::log_warning(format!(
-                "Sheet '{label}' cannot be opened: {} is unreadable ({})",
-                sheet_path.display(),
-                detail.as_deref().unwrap_or("no reason recorded")
-            )),
-            SheetNodeKind::Rejected => crate::diagnostics::log_warning(format!(
-                "Sheet '{label}' cannot be opened: its reference '{}' points outside the sheet's folder",
-                sheet_path.display()
-            )),
+            SheetNodeKind::Unreadable => {
+                crate::diagnostics::log_warning(format!(
+                    "Sheet '{label}' cannot be opened: {} is unreadable ({})",
+                    sheet_path.display(),
+                    detail.as_deref().unwrap_or("no reason recorded")
+                ));
+                Task::none()
+            }
+            SheetNodeKind::Rejected => {
+                crate::diagnostics::log_warning(format!(
+                    "Sheet '{label}' cannot be opened: its reference '{}' points outside the sheet's folder",
+                    sheet_path.display()
+                ));
+                Task::none()
+            }
             SheetNodeKind::Cycle | SheetNodeKind::Truncated => {
                 crate::diagnostics::log_warning(format!(
                     "Sheet '{label}' is not expanded here; open it from its first occurrence"
                 ));
+                Task::none()
             }
         }
     }
@@ -124,16 +137,16 @@ impl Signex {
     /// path is taken (see [`parent_sheet`]). The root, and a sheet nothing
     /// references, have no parent — said in the Messages panel, not silently
     /// ignored.
-    pub(crate) fn ascend_to_parent_sheet(&mut self) {
+    pub(crate) fn ascend_to_parent_sheet(&mut self) -> Task<Message> {
         let Some(active) = self.active_tab_path() else {
             crate::diagnostics::log_warning("Up Hierarchy: no sheet is focused");
-            return;
+            return Task::none();
         };
         let Some((root, pages, fold)) = self.navigator_project_scope() else {
             crate::diagnostics::log_warning(
                 "Up Hierarchy: the focused sheet is not part of a loaded project",
             );
-            return;
+            return Task::none();
         };
         let set = assemble_project_sheets(&self.document_state, &pages, &root, fold);
         // A recorded placement names the exact sheet symbol the user came
@@ -151,40 +164,38 @@ impl Signex {
                 placement.parent(),
             ))
         });
-        let (parent, symbol) = match placed_parent {
+        let (parent, symbol, open) = match placed_parent {
             Some((parent, placement)) => {
                 let symbol = came_through
                     .as_ref()
                     .and_then(|(symbol, _)| symbol_on(&set.sheets, &parent, *symbol));
-                self.open_sheet_with_placement(parent.clone(), placement);
-                (parent, symbol)
+                (parent, symbol, SheetOpen::at(placement))
             }
             None => match parent_sheet(&set.sheets, &active, fold) {
                 Some(parent) => {
                     let symbol = symbol_referencing(&set.sheets, &parent, &active, fold);
-                    self.open_or_focus_sheet_path(parent.clone());
-                    (parent, symbol)
+                    (parent, symbol, SheetOpen::plain())
                 }
                 None => {
                     crate::diagnostics::log_warning(format!(
                         "{} has no parent sheet: it is the project root or no sheet references it",
                         active.display()
                     ));
-                    return;
+                    return Task::none();
                 }
             },
         };
-        // Land on the sheet symbol that instantiates the sheet just left.
-        let arrived = self.resolve_held_spelling(parent);
-        if let Some((symbol, centre)) = symbol
-            && self.document_state.active_path.as_deref() == Some(arrived.as_path())
-        {
-            let item = signex_types::schematic::SelectedItem::new(
+        // Land on the sheet symbol that instantiates the sheet just left, once
+        // the parent is showing.
+        let then = symbol.map_or(AfterOpen::Nothing, |(symbol, centre)| AfterOpen::FocusAt {
+            x: centre.x,
+            y: centre.y,
+            item: Some(signex_types::schematic::SelectedItem::new(
                 symbol,
                 signex_types::schematic::SelectedKind::ChildSheet,
-            );
-            self.focus_world_point(centre.x, centre.y, Some(item));
-        }
+            )),
+        });
+        self.open_sheet(parent, open.then(then))
     }
 }
 
@@ -282,7 +293,7 @@ mod tests {
         app.settle_navigator();
         let select = PanelMsg::Navigator(TreeMsg::Select(key_at(&app, &[0, 0])));
 
-        let _ = app.handle_dock_navigator_panel_message(&select);
+        click(&mut app, &select);
         assert!(
             app.document_state.tabs.is_empty(),
             "one click opens nothing"
@@ -292,7 +303,7 @@ mod tests {
             Some(vec![0, 0])
         );
 
-        let _ = app.handle_dock_navigator_panel_message(&select);
+        click(&mut app, &select);
         assert_eq!(active_tab(&app), Some(mid));
     }
 
@@ -302,11 +313,11 @@ mod tests {
         let (mut app, [root, mid, leaf]) = three_level_project(&dir, &[]);
         app.open_or_focus_sheet_path(leaf);
 
-        app.ascend_to_parent_sheet();
+        app.ascend_settled();
         assert_eq!(active_tab(&app), Some(mid));
-        app.ascend_to_parent_sheet();
+        app.ascend_settled();
         assert_eq!(active_tab(&app), Some(root.clone()));
-        app.ascend_to_parent_sheet();
+        app.ascend_settled();
         assert_eq!(active_tab(&app), Some(root), "the root has no parent");
     }
 
@@ -315,9 +326,16 @@ mod tests {
             .expect("row exists")
     }
 
+    /// Send a Navigator message and finish the sheet read it starts.
+    fn click(app: &mut Signex, message: &PanelMsg) {
+        if let Some(task) = app.handle_dock_navigator_panel_message(message) {
+            crate::app::handlers::canvas::sheet_open_tests::finish_read(app, task);
+        }
+    }
+
     fn double_click(app: &mut Signex, path: &[usize]) {
         let select = PanelMsg::Navigator(TreeMsg::Select(key_at(app, path)));
-        let _ = app.handle_dock_navigator_panel_message(&select);
+        click(app, &select);
         // A future memo instant saturates `duration_since` to zero, so the
         // second click is inside the window however loaded the machine is.
         app.document_state
@@ -325,7 +343,7 @@ mod tests {
             .navigator
             .last_click
             .restamp(std::time::Instant::now() + std::time::Duration::from_secs(3600));
-        let _ = app.handle_dock_navigator_panel_message(&select);
+        click(app, &select);
     }
 
     #[test]
@@ -455,7 +473,7 @@ mod tests {
     #[test]
     fn up_hierarchy_outside_a_project_says_so() {
         let mut app = app_workspace("/nowhere", &[]);
-        app.ascend_to_parent_sheet();
+        app.ascend_settled();
         assert!(app.document_state.tabs.is_empty());
     }
 }

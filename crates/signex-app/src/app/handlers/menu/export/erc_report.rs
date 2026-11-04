@@ -191,7 +191,7 @@ impl Signex {
         self.refuse_export(format!(
             "Cannot export the ERC report: ERC has not been run. \
                  Run ERC ({}) first, then export.",
-            crate::menu_bar::run_erc_menu_path()
+            crate::menu_bar::erc_menu_path()
         ));
     }
 

@@ -21,6 +21,7 @@
 //! * the **Distributor APIs settings** panel
 //!   (`settings/distributor_apis.rs`).
 
+pub mod alternate_reads;
 pub mod bom_prices;
 pub mod browser;
 pub mod close_prompt;

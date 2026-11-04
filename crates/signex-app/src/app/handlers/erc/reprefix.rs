@@ -7,6 +7,9 @@
 //! confirm. Confirm re-plans against the state of ITS moment and runs the plan
 //! as one Incremental annotate pass with a re-prefix map: one undo group
 //! across every sheet, with unopened sheets parked dirty and unsaved.
+//!
+//! Neither step reads a sheet in `update` (#1756): both ask a worker for the
+//! project's sheets first, see `reprefix_job`.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -17,28 +20,27 @@ use signex_types::designator::DesignatorStandard;
 
 use super::super::super::*;
 use super::annotate::read_only_sheets;
-use super::annotate_pass::AnnotatePass;
-use super::reprefix_confirm::ReprefixConfirm;
+use super::annotate_job::PassKind;
 use super::reprefix_plan::{
     PartChange, PlanInput, PlanSheet, ReprefixPlan, SkipReason, plan_reprefix,
 };
 use crate::library::reprefix_lookup::{ReprefixLookup, ReprefixLookupJob};
 
-const LABEL: &str = "Re-prefix to standard";
+pub(super) const LABEL: &str = "Re-prefix to standard";
 /// Parts named per Messages line; the rest are counted, not dropped silently.
 const NAMED_PER_LINE: usize = 40;
 
 impl Signex {
     /// The `.snxprj` path of the active project: the identity a lookup
     /// result is checked against.
-    fn active_project_path(&self) -> Option<PathBuf> {
+    pub(super) fn active_project_path(&self) -> Option<PathBuf> {
         self.document_state
             .active_document_project()
             .map(|p| p.path.clone())
     }
 
     /// The project's standard, or `None` after saying why there is none.
-    fn reprefix_standard(&self) -> Option<DesignatorStandard> {
+    pub(super) fn reprefix_standard(&self) -> Option<DesignatorStandard> {
         let project = self.document_state.active_document_project();
         if project.is_some_and(|p| p.data.has_unreadable_annotation()) {
             crate::diagnostics::log_warning(format!(
@@ -135,22 +137,11 @@ impl Signex {
         for problem in &lookup.problems {
             crate::diagnostics::log_warning(problem);
         }
-        let Some(standard) = self.reprefix_standard() else {
-            return Task::none();
-        };
-        let plan = self.plan_for(standard, lookup);
-        report_plan(&plan);
-        if plan.changes.is_empty() {
+        if self.reprefix_standard().is_none() {
             return Task::none();
         }
-        self.ui_state.reprefix_confirm = Some(ReprefixConfirm::from_plan(
-            generation,
-            lookup.project.clone(),
-            Arc::new(lookup.clone()),
-            standard,
-            &plan,
-        ));
-        self.handle_detach_modal(super::super::super::state::ModalId::ReprefixConfirm)
+        // The plan needs the project's sheets: a worker reads them.
+        self.start_reprefix_plan_read(generation, Arc::new(lookup.clone()))
     }
 
     /// Cancel or Esc on the confirm: nothing changes.
@@ -164,6 +155,16 @@ impl Signex {
     /// Confirm: re-plan against the state of now, and apply it unless it no
     /// longer matches what the user was shown.
     pub(crate) fn handle_reprefix_confirmed(&mut self) -> Task<Message> {
+        // A run already going would refuse this one: keep the list open so
+        // Confirm can be pressed again, rather than discarding it.
+        if self.ui_state.reprefix_confirm.is_some() && self.ui_state.annotate_runs.is_running() {
+            self.refuse_run(
+                LABEL,
+                "another Annotate or Reset Duplicate Designators run is still going. \
+                 Press Confirm again once it has finished.",
+            );
+            return Task::none();
+        }
         let Some(confirm) = self.ui_state.reprefix_confirm.take() else {
             return Task::none();
         };
@@ -177,61 +178,17 @@ impl Signex {
             ));
             return close;
         }
-        let Some(standard) = self.reprefix_standard() else {
-            return close;
-        };
-        let plan = self.plan_for(standard, &confirm.lookup);
-        let targets = plan.targets();
-        if targets.is_empty() {
-            crate::diagnostics::log_info(format!(
-                "{LABEL}: nothing is left to re-prefix; the project changed since the list \
-                 was shown."
-            ));
+        if self.reprefix_standard().is_none() {
             return close;
         }
-        if targets != confirm.shown {
-            // Changed under the user's eyes: show the new list, apply nothing.
-            crate::diagnostics::log_warning(format!(
-                "{LABEL}: the project changed while the list was open, so nothing was applied. \
-                 Review the updated list."
-            ));
-            self.ui_state.reprefix_confirm = Some(ReprefixConfirm::from_plan(
-                confirm.generation,
-                confirm.project,
-                confirm.lookup,
-                standard,
-                &plan,
-            ));
-            return Task::batch([
-                close,
-                self.handle_detach_modal(super::super::super::state::ModalId::ReprefixConfirm),
-            ]);
-        }
-        let groups_before = self.document_state.next_undo_group;
-        let pass = self.annotate_project(AnnotatePass {
-            mode: signex_engine::AnnotateMode::Incremental,
-            reprefix: Some(&targets),
-            label: LABEL,
-        });
-        // A run that was rolled back or changed nothing records no group; its
-        // own message already said so, so the follow-up lines would mislead.
-        if self.document_state.next_undo_group > groups_before
-            && self.last_undo_group_record().is_some()
-        {
-            crate::diagnostics::log_info(format!(
-                "{LABEL}: PCB references are not updated; the board keeps the old designators \
-                 until it is synchronised, the same as Annotate."
-            ));
-            self.report_split_parts(&plan.changes);
-            self.report_undo_sheets();
-        }
-        // The pass parked unopened sheets; the preview must re-read them.
-        self.invalidate_annotate_preview();
-        Task::batch([close, pass, self.refresh_annotate_preview()])
+        // The sheets are read, re-planned and applied by `apply_reprefix` once
+        // the worker answers.
+        let run = self.begin_run(PassKind::Reprefix, Some(confirm));
+        Task::batch([close, run])
     }
 
     /// The sheets of the newest undo group, when its run recorded any.
-    fn last_undo_group_record(&self) -> Option<&crate::app::UndoGroupSheets> {
+    pub(super) fn last_undo_group_record(&self) -> Option<&crate::app::UndoGroupSheets> {
         let last = self.document_state.next_undo_group.checked_sub(1)?;
         self.document_state
             .undo_groups
@@ -241,7 +198,7 @@ impl Signex {
     /// Say where Ctrl+Z undoes the run: only on the sheets it changed. When the
     /// active sheet is not one of them (it had nothing to re-prefix), Ctrl+Z
     /// there would undo an unrelated edit, so the user is told to switch first.
-    fn report_undo_sheets(&self) {
+    pub(super) fn report_undo_sheets(&self) {
         let Some(record) = self.last_undo_group_record() else {
             return;
         };
@@ -266,7 +223,7 @@ impl Signex {
     /// Name every part whose units ended up under different prefixes (a sheet
     /// that failed mid-pass is rolled back whole, and its parts are then only
     /// half converted).
-    fn report_split_parts(&self, changes: &[PartChange]) {
+    pub(super) fn report_split_parts(&self, changes: &[PartChange]) {
         let by_uuid: std::collections::HashMap<uuid::Uuid, &str> = self
             .document_state
             .engines
@@ -293,18 +250,15 @@ impl Signex {
     }
 
     /// The plan over the project as it is now.
-    fn plan_for(&self, standard: DesignatorStandard, lookup: &ReprefixLookup) -> ReprefixPlan {
-        let (_pages, set) =
-            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
-        if !set.unreadable.is_empty() {
-            crate::diagnostics::log_warning(format!(
-                "{LABEL}: {} sheet(s) could not be read and are left alone.",
-                set.unreadable.len()
-            ));
-        }
-        let read_only = read_only_sheets(&self.document_state, &set);
+    pub(super) fn plan_for(
+        &self,
+        standard: DesignatorStandard,
+        lookup: &ReprefixLookup,
+        set: &crate::app::project_sheets::ProjectSheetSet,
+    ) -> ReprefixPlan {
+        let read_only = read_only_sheets(&self.document_state, set);
         let ordered: Vec<PathBuf> = crate::app::project_sheets::ordered_project_sheet_paths(
-            &set,
+            set,
             self.document_state.active_path.as_deref(),
         );
         let no_lib_symbols = std::collections::HashMap::new();
@@ -336,7 +290,7 @@ impl Signex {
 
 /// Everything a plan found that the user must hear about: refused overrides,
 /// one line per skip reason, and the counts.
-fn report_plan(plan: &ReprefixPlan) {
+pub(super) fn report_plan(plan: &ReprefixPlan) {
     for invalid in plan.invalid_overrides.values() {
         crate::diagnostics::log_warning(format!(
             "{LABEL}: the designator prefix override {:?} of library row {} is ignored: {}.",

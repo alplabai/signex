@@ -2,13 +2,10 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_own_action, item, item_if, panel_item, stub, submenu,
-    unavailable,
+    cmd, cmd_item, cmd_item_gated, item, item_if, panel_item, stub, submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
-use crate::app::command::enablement::{
-    cycle_grid_menu_enabled, new_part_menu_enabled, remove_part_menu_enabled,
-};
+use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
 
@@ -172,14 +169,7 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             ctx,
             cmd("toggle_visible_grid", "Toggle Grid", "Shift+Ctrl+G"),
         ),
-        // The id opens the footprint editor's grid picker; this row steps the
-        // schematic / PCB grid, so it keeps its own action and gate.
-        cmd_item_own_action(
-            ctx,
-            cmd("cycle_snap_grid_forward", "Cycle Grid Size", "G"),
-            MenuMessage::CycleGrid,
-            cycle_grid_menu_enabled(&ctx.commands),
-        ),
+        cmd_item_gated(ctx, cmd("next_grid", "Cycle Grid Size", "")),
         cmd_item_gated(
             ctx,
             cmd("toggle_auto_focus", "AutoFocus (dim unselected)", "F9"),
@@ -251,13 +241,8 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         submenu("Annotation", annotation(ctx)),
         SEP,
-        // F8 runs ERC at once; this row opens the ERC dialog to pick rules.
-        cmd_item_own_action(
-            ctx,
-            cmd("run_erc", "Electrical Rules Check", "F8"),
-            MenuMessage::Erc,
-            enabled(ctx, "run_erc"),
-        ),
+        // F8 (`run_erc`) runs ERC at once; this row opens the dialog.
+        cmd_item_gated(ctx, cmd("open_erc_dialog", "Electrical Rules Check", "")),
         cmd_item_gated(
             ctx,
             cmd("open_parameter_manager", "Parameter Manager...", ""),

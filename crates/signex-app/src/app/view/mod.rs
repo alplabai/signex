@@ -651,13 +651,8 @@ impl Signex {
             let base = if is_main {
                 base
             } else {
-                base.map(move |msg| match msg {
-                    Message::CanvasEvent(event) => {
-                        Message::CanvasEventInWindow { window_id, event }
-                    }
-                    other => other,
-                })
-                .boxed()
+                base.map(move |msg| overlay_id::scope_canvas_message(window_id, msg))
+                    .boxed()
             };
             // A sheet from a newer Signex is read-only: say so on the canvas
             // (#1402), in the main and in undocked windows alike.

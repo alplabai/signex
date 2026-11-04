@@ -356,7 +356,7 @@ impl Signex {
         doc.engines.retain(|p, _| !is_discarded(p));
         doc.symbol_editors.retain(|p, _| !is_discarded(p));
         doc.footprint_editors.retain(|p, _| !is_discarded(p));
-        doc.mark_documents_clean_where(is_discarded);
+        doc.discard_documents_where(is_discarded);
         crate::diagnostics::log_warning(format!(
             "Excluded {display_name} from the project: discarded {} unsaved document(s)",
             docs.len()

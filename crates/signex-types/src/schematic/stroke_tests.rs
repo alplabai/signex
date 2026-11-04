@@ -19,6 +19,26 @@ fn wire_pin_body_ratio_is_the_same_at_every_zoom_above_the_floor() {
 }
 
 #[test]
+fn a_wire_width_is_one_value_for_the_canvas_and_the_exports() {
+    // Default: no own width, or a class width of 0.
+    assert_eq!(wire_stroke_mm(0.0, None), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
+    assert_eq!(
+        wire_stroke_mm(0.0, Some(0.0)),
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    );
+    // A class width of 0 is unset: the wire keeps its own.
+    assert_eq!(wire_stroke_mm(0.3, Some(0.0)), 0.3);
+    assert_eq!(
+        wire_stroke_mm(f64::NAN, None),
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    );
+    // Explicit widths keep their value, down to the floor.
+    assert_eq!(wire_stroke_mm(0.5, None), 0.5);
+    assert_eq!(wire_stroke_mm(0.5, Some(0.8)), 0.8);
+    assert_eq!(wire_stroke_mm(0.1, None), SCHEMATIC_RENDER_MIN_STROKE_MM);
+}
+
+#[test]
 fn the_floor_is_one_value_for_every_kind() {
     let scale = SCHEMATIC_ZOOM_100_SCALE * 0.25;
     let floored: Vec<f32> = [

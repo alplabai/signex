@@ -266,6 +266,7 @@ impl Signex {
                     .is_some_and(|editor| editor.dirty);
             if !parked {
                 self.library.editors.remove(&address);
+                self.library.alternate_generations.remove(&address);
             }
         }
         // Standalone primitive editor tabs — drop the per-tab editor

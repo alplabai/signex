@@ -80,7 +80,7 @@ pub fn build_renderer_snapshot(
             id: renderer_id(entry.uuid),
             p0: [entry.position.x as f32, entry.position.y as f32],
             p1: [end.x as f32, end.y as f32],
-            width_mm: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
+            width_mm: drawn_wire_width_mm(&signex_types::schematic::Wire::default(), None) as f32,
             explicit_color: Some(to_rgba(focus_color(
                 to_iced(&colors.wire),
                 focus_set,

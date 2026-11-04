@@ -105,6 +105,7 @@ impl Default for LibraryState {
             refresh_generation_counter: 0,
             preview_generations: HashMap::new(),
             editor_reload_generations: HashMap::new(),
+            alternate_generations: HashMap::new(),
             tab_resolve_generations: HashMap::new(),
             row_summary_job: Default::default(),
             refresh_in_flight: HashMap::new(),
@@ -139,6 +140,17 @@ impl LibraryState {
     /// Look up an open library by its on-disk root path.
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)
+    }
+
+    /// The open library whose directory holds `path`. A library nested inside
+    /// another one's directory owns the paths under it, so the innermost
+    /// match wins: its write order is the one a write there must take a turn
+    /// on (#1756).
+    pub fn library_containing(&self, path: &Path) -> Option<&OpenLibrary> {
+        self.open_libraries
+            .iter()
+            .filter(|lib| lib.root_dir().is_some_and(|dir| path.starts_with(dir)))
+            .max_by_key(|lib| lib.root_dir().map_or(0, |dir| dir.components().count()))
     }
 
     /// On-disk file of the primitive `r` names, looked up in the open

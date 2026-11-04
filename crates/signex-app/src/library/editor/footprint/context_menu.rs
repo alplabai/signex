@@ -336,7 +336,7 @@ pub fn view_context_menu<'a>(
     let card_bg = ti(tokens.panel_bg);
     let border_c = ti(tokens.border);
     let card = container(column(items).spacing(0))
-        .padding(Padding::from([4u16, 0u16]))
+        .padding(Padding::from([SP.s, 0.0]))
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(card_bg)),
             border: Border {
@@ -413,7 +413,7 @@ fn item_indented<'a>(
     let hover_c = ti(tokens.hover);
     button(
         row![
-            iced::widget::Space::new().width(16),
+            iced::widget::Space::new().width(SP.xl),
             text(label.to_string()).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
             text(shortcut.to_string()).size(TS.caption).color(secondary),
@@ -506,8 +506,8 @@ fn item_submenu_header<'a>(
 
 fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
     let c = ti(tokens.border);
-    container(iced::widget::Space::new().height(1))
-        .padding(Padding::from([4u16, 0u16]))
+    container(iced::widget::Space::new().height(crate::styles::HAIRLINE))
+        .padding(Padding::from([SP.s, 0.0]))
         .width(MENU_WIDTH)
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(c)),

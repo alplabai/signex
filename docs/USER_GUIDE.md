@@ -136,10 +136,10 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 **View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps
 the grid backward on a schematic too. In the Classic profile `N` / `Shift+N`
-cycle it on a schematic. The menu item always works. **View ▸ Zoom In** and
-**Zoom Out** zoom about the centre of the view. `PageUp` / `PageDown` (Altium
-profile) or `F1` / `F2` (Classic profile) and the scroll wheel zoom about the
-pointer.
+cycle it on a schematic. The menu item runs `next_grid`, so it works on a
+schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
+zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
+`F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
 
 ## 5. Place a symbol
 
@@ -417,7 +417,9 @@ as one undo step: **Ctrl+Z** on any sheet the run changed undoes it on all of
 them (the Messages panel names those sheets; on a sheet the run did not change,
 Ctrl+Z undoes your previous edit instead). Sheets that are not open are loaded
 in memory and stay unsaved like any edited sheet: nothing is written to disk
-until you save, and undo reverts them too. If one sheet cannot be converted the
+until you save, and undo reverts them too. If a sheet cannot be read, the run stops
+before anything changes and the Messages panel names that sheet; fix it and
+press the button again. If one sheet cannot be converted while numbering, the
 whole run is undone and cannot be redone.
 
 The component class comes from the library row the part was placed from, which

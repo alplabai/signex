@@ -63,7 +63,7 @@ pub fn view<'a>(
             row_id: shape_addr.row_id,
             msg: EditorMsg::SetBodyShape(s),
         })
-        .text_size(11.0)
+        .text_size(TS.body)
         .padding([SP.s, SP.m]);
 
     // Numeric inputs — height_mm / offset_z_mm.
@@ -115,19 +115,20 @@ pub fn view<'a>(
 
     let body_col = column![
         header,
-        Space::new().height(8),
+        Space::new().height(SP.m).boxed(),
         labeled_field("Shape", shape_picker.boxed(), muted),
-        Space::new().height(6),
+        Space::new().height(SP.m).boxed(),
         labeled_field("Height (mm)", height_input.boxed(), muted),
-        Space::new().height(6),
+        Space::new().height(SP.m).boxed(),
         labeled_field("Offset Z (mm)", offset_input.boxed(), muted),
-        Space::new().height(8),
+        Space::new().height(SP.m).boxed(),
         top_row,
-        Space::new().height(6),
+        Space::new().height(SP.m).boxed(),
         side_row,
     ]
     .spacing(0)
-    .width(Length::Fill);
+    .width(Length::Fill)
+    .boxed();
 
     container(body_col)
         .padding(SP.l)
@@ -142,8 +143,8 @@ fn labeled_field<'a>(
     muted: iced::Color,
 ) -> Element<'a, LibraryMessage> {
     column![
-        text(label).size(TS.caption).color(muted),
-        Space::new().height(2),
+        text(label).size(TS.caption).color(muted).boxed(),
+        Space::new().height(SP.xs).boxed(),
         field,
     ]
     .spacing(0)
@@ -198,7 +199,7 @@ fn color_row<'a>(
     };
 
     let cycle_btn =
-        button(container(text("Cycle").size(TS.caption).color(text_c)).padding([3.0, SP.m]))
+        button(container(text("Cycle").size(TS.caption).color(text_c)).padding([SP.s, SP.m]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: address.library_path,
                 table: address.table.clone(),
@@ -216,10 +217,10 @@ fn color_row<'a>(
 
     column![
         text(label).size(TS.caption).color(muted),
-        Space::new().height(2),
+        Space::new().height(SP.xs),
         row![
             preview_swatch,
-            Space::new().width(8),
+            Space::new().width(SP.m),
             text(hex).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
             cycle_btn,

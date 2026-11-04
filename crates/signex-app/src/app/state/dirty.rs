@@ -12,21 +12,33 @@
 //!   library manifest) is a path in [`DirtyDocuments`], whether or not a
 //!   tab shows it, so a parked engine stays marked after its tab closed;
 //! - a Component editor keeps its flag in `LibraryState.editors`, keyed by
-//!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`.
+//!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`. The flag
+//!   follows a row undo history with a saved position (`RowHistory`, #1854),
+//!   so Undo back to the saved row reads clean. The close, quit and reopen gates
+//!   read that flag; a half-typed value in an edit buffer counts as unsaved
+//!   only for the reload and rebase decisions (`has_unsaved_edits`);
+//! - a `.snxprj` folds its General, rules and net-class histories under one
+//!   saved cursor, the bytes the file holds (`dirty/project_history.rs`,
+//!   #1854): a history step reads clean when the project encodes to them and
+//!   nothing outside the histories marked it.
 //!
 //! Tabs, the title bar count, the quit and close gates, Save All and the
 //! project tree all ask [`DocumentState::is_document_dirty`] or one of its
 //! siblings, and every write goes through [`DocumentState::mark_document_dirty`],
 //! [`DocumentState::mark_history_edit_dirty`], [`DocumentState::sync_history_dirty`],
 //! [`DocumentState::mark_document_clean`], [`DocumentState::clear_document_dirty`]
-//! or [`DocumentState::rekey_document_dirty`].
-//! The set's contents are private to this module, so the compiler keeps it that way. Rationale and the
-//! failures the old three-way mirror caused: docs/DIRTY_STATE.md.
+//! or [`DocumentState::rekey_document_dirty`] (a project also has
+//! `note_project_clean_state` and `sync_project_history_dirty`). The set's
+//! contents are private to this module, so the compiler keeps it that way.
+//! Rationale and the failures the old three-way mirror caused:
+//! docs/DIRTY_STATE.md.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::DocumentState;
+
+mod project_history;
 
 /// The paths of documents with unsaved edits that no editor draft holds.
 #[derive(Debug, Default)]
@@ -37,6 +49,9 @@ pub(crate) struct DirtyDocuments {
     /// restore). Undoing back to the engine's save point cannot clear these:
     /// only a save does.
     external: HashSet<PathBuf>,
+    /// A `.snxprj`'s saved cursor: the bytes it encodes to when it equals the
+    /// file (`project_history.rs`). Absent means unknown, so it stays dirty.
+    project_saved: project_history::ProjectSavedBytes,
 }
 
 impl DocumentState {
@@ -201,6 +216,7 @@ impl DocumentState {
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
+        self.record_project_saved_state(path);
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.mark_saved();
         }
@@ -222,6 +238,7 @@ impl DocumentState {
     pub fn clear_document_dirty(&mut self, path: &Path) {
         self.dirty_docs.paths.remove(path);
         self.dirty_docs.external.remove(path);
+        self.dirty_docs.project_saved.remove(path);
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.set_dirty(false);
         }
@@ -243,6 +260,20 @@ impl DocumentState {
         }
     }
 
+    /// Drop the dirty marks of every dirty document whose path satisfies
+    /// `matches` without recording any saved state: a discard (excluded or
+    /// deleted documents) wrote nothing, so no later undo may read clean.
+    pub fn discard_documents_where(&mut self, matches: impl Fn(&Path) -> bool) {
+        let hit: Vec<PathBuf> = self
+            .dirty_document_paths()
+            .into_iter()
+            .filter(|path| matches(path))
+            .collect();
+        for path in hit {
+            self.clear_document_dirty(&path);
+        }
+    }
+
     /// Move `from`'s stored dirty mark to `to` (a Save As or a rename re-keyed
     /// the document). Returns whether `from` was dirty. A draft's flag
     /// travels with its editor, which the caller re-keys; this moves the rest.
@@ -251,6 +282,8 @@ impl DocumentState {
         if was_dirty {
             self.dirty_docs.paths.insert(to.to_path_buf());
         }
+        // The cursor names the old file's bytes: unknown at the new key.
+        self.dirty_docs.project_saved.remove(from);
         if self.dirty_docs.external.remove(from) {
             self.dirty_docs.external.insert(to.to_path_buf());
         }

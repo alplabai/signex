@@ -12,8 +12,7 @@ fn via(n: u128) -> InstancePath {
 #[test]
 fn the_highlight_is_bright_only_in_the_placement_it_was_made_in() {
     let (mut p, child) = placed_twice();
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_B)));
     p.select(TWICE_LABEL, SelectedKind::Label);
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
     assert!(
@@ -21,14 +20,13 @@ fn the_highlight_is_bright_only_in_the_placement_it_was_made_in() {
         "bright in B"
     );
 
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_A)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_A)));
     assert!(
         p.bright().is_some_and(|s| s.is_empty()),
         "A's copy is on A/SIG, not B/SIG: everything dims"
     );
 
-    p.app.open_sheet_with_placement(child, Some(via(TWICE_B)));
+    p.app.open_placed_settled(child, Some(via(TWICE_B)));
     assert!(
         p.bright().is_some_and(|s| s.contains(&id(TWICE_LABEL))),
         "bright again in B"
@@ -38,12 +36,10 @@ fn the_highlight_is_bright_only_in_the_placement_it_was_made_in() {
 #[test]
 fn stepping_to_a_member_of_another_placement_switches_to_it() {
     let (mut p, child) = placed_twice();
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_B)));
     p.select(TWICE_LABEL, SelectedKind::Label);
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_A)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_A)));
 
     // The last member of B/SIG is the label on the child, in placement B.
     p.send_settled(NetNavMsg::HighlightStepRequested { forward: false });
@@ -58,8 +54,7 @@ fn stepping_to_a_member_of_another_placement_switches_to_it() {
 #[test]
 fn the_highlight_stays_on_its_own_placements_net_after_an_edit() {
     let (mut p, child) = placed_twice();
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_B)));
     p.select(TWICE_LABEL, SelectedKind::Label);
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
 
@@ -78,10 +73,9 @@ fn the_highlight_stays_on_its_own_placements_net_after_an_edit() {
         .as_ref()
         .map(|h| h.name.clone());
     assert!(name.is_some_and(|n| n.starts_with("B/")), "still B's net");
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_A)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_A)));
     assert!(p.bright().is_some_and(|s| s.is_empty()), "A stays dim");
-    p.app.open_sheet_with_placement(child, Some(via(TWICE_B)));
+    p.app.open_placed_settled(child, Some(via(TWICE_B)));
     assert!(p.bright().is_some_and(|s| s.contains(&id(TWICE_LABEL))));
 }
 
@@ -100,7 +94,7 @@ fn highlight_name(p: &Project) -> Option<String> {
 #[test]
 fn a_directly_opened_tab_highlights_in_the_placement_the_designators_show() {
     let (mut p, child) = placed_twice_b_first();
-    p.app.open_sheet_with_placement(child, None);
+    p.app.open_placed_settled(child, None);
     p.select(TWICE_X, SelectedKind::Label);
 
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
@@ -124,7 +118,7 @@ fn a_net_only_b_reaches_is_dim_on_a_directly_opened_tab_showing_a() {
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
     assert_eq!(highlight_name(&p).as_deref(), Some("B/SIG"));
 
-    p.app.open_sheet_with_placement(child, None);
+    p.app.open_placed_settled(child, None);
 
     assert!(
         p.bright().is_some_and(|s| s.is_empty()),
@@ -135,8 +129,7 @@ fn a_net_only_b_reaches_is_dim_on_a_directly_opened_tab_showing_a() {
 #[test]
 fn a_recorded_placement_whose_sheet_symbol_is_gone_follows_the_default() {
     let (mut p, child) = placed_twice();
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_B)));
     p.focus(&p.root.clone());
     p.select(TWICE_B, SelectedKind::ChildSheet);
     let _task = p.app.update(crate::app::Message::Edit(
@@ -162,8 +155,7 @@ fn a_recorded_placement_whose_sheet_symbol_is_gone_follows_the_default() {
 #[test]
 fn renaming_the_highlighted_net_keeps_it_on_its_own_placement() {
     let (mut p, child) = placed_twice();
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_B)));
     p.select(TWICE_LABEL, SelectedKind::Label);
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
 
@@ -181,13 +173,12 @@ fn renaming_the_highlighted_net_keeps_it_on_its_own_placement() {
         "{:?}",
         highlight_name(&p)
     );
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_A)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_A)));
     assert!(
         p.bright().is_some_and(|s| s.is_empty()),
         "A's renamed net is not the highlight"
     );
-    p.app.open_sheet_with_placement(child, Some(via(TWICE_B)));
+    p.app.open_placed_settled(child, Some(via(TWICE_B)));
     assert!(p.bright().is_some_and(|s| s.contains(&id(TWICE_LABEL))));
 }
 
@@ -215,14 +206,13 @@ fn a_partner_jump_lands_in_the_placement_of_its_own_net() {
 #[test]
 fn a_lap_does_not_carry_over_to_another_placement_of_the_same_file() {
     let (mut p, child) = placed_twice();
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_B)));
     p.select(TWICE_LABEL, SelectedKind::Label);
     p.send_settled(NetNavMsg::PartnerJumpRequested); // to B's entry on root
     p.send_settled(NetNavMsg::PartnerJumpRequested); // back to the label (child via B)
     assert_eq!(p.active(), Some(child.clone()));
 
-    p.app.open_sheet_with_placement(child, Some(via(TWICE_A)));
+    p.app.open_placed_settled(child, Some(via(TWICE_A)));
     p.select(TWICE_LABEL, SelectedKind::Label);
     p.send_settled(NetNavMsg::PartnerJumpRequested);
 
@@ -236,8 +226,7 @@ fn a_lap_does_not_carry_over_to_another_placement_of_the_same_file() {
 #[test]
 fn an_unfocused_window_reads_the_placement_its_designators_show() {
     let (mut p, child) = placed_twice();
-    p.app
-        .open_sheet_with_placement(child.clone(), Some(via(TWICE_B)));
+    p.app.open_placed_settled(child.clone(), Some(via(TWICE_B)));
     // B's sheet symbol is deleted while the child's window stays on B.
     p.focus(&p.root.clone());
     p.select(TWICE_B, SelectedKind::ChildSheet);

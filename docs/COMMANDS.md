@@ -177,6 +177,7 @@ shrink.
 | `next_sheet` | Next sheet | navigation | — | `PageDown` |
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
+| `open_erc_dialog` | Open electrical rules check dialog | validation | — | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |

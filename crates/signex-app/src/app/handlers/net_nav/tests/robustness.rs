@@ -98,7 +98,7 @@ fn a_successful_resolve_moves_the_anchor_to_a_member_that_still_exists() {
 fn hover_and_partners_follow_the_placement_the_tab_was_entered_through() {
     let (mut p, child) = placed_twice();
     let via_b = InstancePath::from_chain(vec![id(TWICE_B)]);
-    p.app.open_sheet_with_placement(child.clone(), Some(via_b));
+    p.app.open_placed_settled(child.clone(), Some(via_b));
     assert_eq!(p.active(), Some(child));
 
     p.app.observe_net_hover(
