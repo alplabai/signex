@@ -75,7 +75,8 @@ impl TextMeasurer {
     }
 }
 
-/// One drawing command of a glyph outline, in pixels, y down.
+/// One drawing command of a glyph outline, in em (the face's units divided
+/// by its units per em), y down.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OutlineCmd {
     Move([f32; 2]),
@@ -85,37 +86,41 @@ pub enum OutlineCmd {
     Close,
 }
 
-/// The outlines of one shaped text: every glyph's contours positioned in the
-/// text box (origin at its top-left), and the box size.
+/// A font face, as the font database names it.
+pub use cryoglyph::fontdb::ID as FaceId;
+
+/// A shaped glyph: which outline, and where its baseline origin sits.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlacedGlyph {
+    pub face: FaceId,
+    pub glyph_id: u16,
+    /// Baseline origin in px at the size the text was shaped at, relative to
+    /// the top-left of its box.
+    pub origin_px: [f32; 2],
+}
+
+/// A text shaped for drawing as outlines: its box and its glyphs in order.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct TextOutlines {
+pub struct ShapedGlyphs {
     pub size_px: [f32; 2],
-    /// The outline of each glyph, in text order. Glyph by glyph so a caller
-    /// never relates the contours of one glyph to another's.
-    pub glyphs: Vec<Vec<OutlineCmd>>,
-    /// The caps below stopped the conversion; the glyphs after it are missing.
+    pub glyphs: Vec<PlacedGlyph>,
+    /// [`MAX_OUTLINE_GLYPHS`] stopped the list; the glyphs after it are missing.
     pub truncated: bool,
 }
 
-/// Most glyphs outlined per text, and most drawing commands over all of
-/// them. Far above any real label; a string past them is data meant to cost,
-/// and the rest of it is left out.
+/// Most glyphs shaped for outline drawing per text. Far above any real label;
+/// a longer string is data meant to cost, and the rest of it is left out.
 pub const MAX_OUTLINE_GLYPHS: usize = 512;
-pub const MAX_OUTLINE_CMDS: usize = 60_000;
 
-/// Collects a `ttf_parser` outline at a glyph's position and scale.
+/// Collects a `ttf_parser` outline in em, y down.
 struct GlyphPath<'a> {
     cmds: &'a mut Vec<OutlineCmd>,
-    origin: [f32; 2],
     scale: f32,
 }
 
 impl GlyphPath<'_> {
     fn at(&self, x: f32, y: f32) -> [f32; 2] {
-        [
-            self.origin[0] + x * self.scale,
-            self.origin[1] - y * self.scale,
-        ]
+        [x * self.scale, -y * self.scale]
     }
 }
 
@@ -142,16 +147,15 @@ impl ttf_parser::OutlineBuilder for GlyphPath<'_> {
 }
 
 impl TextMeasurer {
-    /// `text` shaped in `family` at `px` em with `line_height_em` lines, as
-    /// filled glyph outlines. For text too large for a glyph atlas; single
-    /// line per source line, no wrapping.
-    pub fn outlines(
+    /// `text` shaped in `family` at `px` em with `line_height_em` lines: its
+    /// box and the glyphs to draw. One line per source line, no wrapping.
+    pub fn shape_glyphs(
         &mut self,
         text: &str,
         family: &str,
         px: f32,
         line_height_em: f32,
-    ) -> TextOutlines {
+    ) -> ShapedGlyphs {
         let item = TextItem {
             content: text.to_string(),
             family: Some(family.into()),
@@ -167,48 +171,51 @@ impl TextMeasurer {
             [NO_WRAP_PX, NO_WRAP_PX],
         );
         let size_px = measure_text_bounds_px(&buffer);
-        let mut glyphs: Vec<Vec<OutlineCmd>> = Vec::new();
-        let mut total = 0;
+        let mut glyphs = Vec::new();
         let mut truncated = false;
         'runs: for run in buffer.layout_runs() {
             for glyph in run.glyphs {
-                if glyphs.len() >= MAX_OUTLINE_GLYPHS || total >= MAX_OUTLINE_CMDS {
+                if glyphs.len() >= MAX_OUTLINE_GLYPHS {
                     truncated = true;
                     break 'runs;
                 }
-                let mut cmds = Vec::new();
-                let origin = [
-                    glyph.x + glyph.x_offset * glyph.font_size,
-                    run.line_y + glyph.y - glyph.y_offset * glyph.font_size,
-                ];
-                self.font_system
-                    .db()
-                    .with_face_data(glyph.font_id, |data, index| {
-                        let Ok(face) = ttf_parser::Face::parse(data, index) else {
-                            return;
-                        };
-                        let upem = f32::from(face.units_per_em());
-                        if upem <= 0.0 {
-                            return;
-                        }
-                        let mut path = GlyphPath {
-                            cmds: &mut cmds,
-                            origin,
-                            scale: glyph.font_size / upem,
-                        };
-                        face.outline_glyph(ttf_parser::GlyphId(glyph.glyph_id), &mut path);
-                    });
-                total += cmds.len();
-                if !cmds.is_empty() {
-                    glyphs.push(cmds);
-                }
+                glyphs.push(PlacedGlyph {
+                    face: glyph.font_id,
+                    glyph_id: glyph.glyph_id,
+                    origin_px: [
+                        glyph.x + glyph.x_offset * glyph.font_size,
+                        run.line_y + glyph.y - glyph.y_offset * glyph.font_size,
+                    ],
+                });
             }
         }
-        TextOutlines {
+        ShapedGlyphs {
             size_px,
             glyphs,
             truncated,
         }
+    }
+
+    /// The outline of one glyph at 1 em, y down; empty for a glyph with none
+    /// (a space) or a face that is gone. Winding tells outer contours from
+    /// counters, so a NonZero fill leaves the counters empty.
+    pub fn glyph_outline(&self, face: FaceId, glyph_id: u16) -> Vec<OutlineCmd> {
+        let mut cmds = Vec::new();
+        self.font_system.db().with_face_data(face, |data, index| {
+            let Ok(parsed) = ttf_parser::Face::parse(data, index) else {
+                return;
+            };
+            let upem = f32::from(parsed.units_per_em());
+            if upem <= 0.0 {
+                return;
+            }
+            let mut path = GlyphPath {
+                cmds: &mut cmds,
+                scale: 1.0 / upem,
+            };
+            parsed.outline_glyph(ttf_parser::GlyphId(glyph_id), &mut path);
+        });
+        cmds
     }
 }
 
@@ -249,26 +256,35 @@ mod tests {
         assert!((narrow - wide).abs() < 1e-3, "{narrow} vs {wide}");
     }
 
-    /// Oversize text is drawn from outlines: an `H` has contours inside its
-    /// text box, scaled with the em.
+    /// Oversize text is drawn from per-glyph outlines at 1 em: "8" is one
+    /// glyph with a closed outline, "88" two placements of it.
     #[test]
-    fn outlines_fill_the_text_box_and_scale_with_the_em() {
+    fn glyphs_are_shaped_and_outlined_at_one_em() {
         let mut m = measurer();
-        let small = m.outlines("H", "Iosevka", 100.0, 1.2);
-        let large = m.outlines("H", "Iosevka", 5000.0, 1.2);
-        assert!(small.glyphs.len() == 1 && small.glyphs[0].contains(&OutlineCmd::Close));
-        assert!((large.size_px[0] / small.size_px[0] - 50.0).abs() < 0.5);
-        let max_x = |o: &TextOutlines| {
-            o.glyphs
-                .iter()
-                .flatten()
-                .filter_map(|c| match c {
-                    OutlineCmd::Move(p) | OutlineCmd::Line(p) => Some(p[0]),
-                    _ => None,
-                })
-                .fold(0.0_f32, f32::max)
-        };
-        assert!(max_x(&large) > 0.0 && max_x(&large) <= large.size_px[0] + 1.0);
+        let one = m.shape_glyphs("8", "Iosevka", 1000.0, 1.2);
+        let two = m.shape_glyphs("88", "Iosevka", 1000.0, 1.2);
+        assert_eq!(one.glyphs.len(), 1);
+        assert_eq!(two.glyphs.len(), 2);
+        assert_eq!(two.glyphs[0].glyph_id, two.glyphs[1].glyph_id);
+        assert!((two.size_px[0] - 2.0 * one.size_px[0]).abs() < 1.0);
+        let outline = m.glyph_outline(one.glyphs[0].face, one.glyphs[0].glyph_id);
+        assert!(outline.contains(&OutlineCmd::Close));
+        let extent = outline
+            .iter()
+            .filter_map(|c| match c {
+                OutlineCmd::Move(p) | OutlineCmd::Line(p) => Some(p[0].abs().max(p[1].abs())),
+                _ => None,
+            })
+            .fold(0.0_f32, f32::max);
+        assert!(extent > 0.1 && extent < 2.0, "em units, got {extent}");
+    }
+
+    #[test]
+    fn a_huge_string_is_cut_at_the_glyph_cap() {
+        let mut m = measurer();
+        let shaped = m.shape_glyphs(&"8@B".repeat(5000), "Iosevka", 100.0, 1.2);
+        assert_eq!(shaped.glyphs.len(), MAX_OUTLINE_GLYPHS);
+        assert!(shaped.truncated);
     }
 
     /// Sheet text is never wrapped at the viewport: one line stays one line
@@ -276,7 +292,7 @@ mod tests {
     #[test]
     fn long_text_at_a_huge_size_stays_on_one_line() {
         let mut m = measurer();
-        let o = m.outlines("A long note that must not wrap", "Iosevka", 2000.0, 1.2);
+        let o = m.shape_glyphs("A long note that must not wrap", "Iosevka", 2000.0, 1.2);
         assert!((o.size_px[1] - 2000.0 * 1.2).abs() < 1.0, "{:?}", o.size_px);
     }
 
