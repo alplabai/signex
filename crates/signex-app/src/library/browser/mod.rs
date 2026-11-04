@@ -52,8 +52,8 @@ pub(crate) use window::{OVERSCAN_ROWS, visible_range};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-const BROWSER_TEXT_SIZE: f32 = 11.0;
-const BROWSER_HEADER_SIZE: f32 = 10.0;
+const BROWSER_TEXT_SIZE: f32 = TS.body;
+const BROWSER_HEADER_SIZE: f32 = TS.caption;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row
 /// lifecycle indicator dot (Stage 18). The header row uses an empty

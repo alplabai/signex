@@ -50,7 +50,7 @@ pub(super) fn view_empty_state<'a>(
     let card = container(
         column![
             text(format!("{}.snxlib", lib.display_name))
-                .size(15)
+                .size(TS.heading)
                 .color(text_c),
             Space::new().height(4),
             text("No components — Add Component to begin")

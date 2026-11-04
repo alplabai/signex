@@ -10,8 +10,8 @@ pub(super) const CHROME_TOP: f32 =
     crate::menu_bar::MENU_BAR_HEIGHT + CHROME_SEPARATOR + crate::tab_bar::TAB_STRIP_HEIGHT;
 const CHROME_SEPARATOR: f32 = 1.0;
 /// Room taken by the status bar under the docks; its height follows its
-/// content, so this is the measured default.
-const STATUS_BAR: f32 = 24.0;
+/// content; a probe test ties it to the laid-out bar.
+const STATUS_BAR: f32 = crate::status_bar::STATUS_BAR_HEIGHT;
 /// Resize handle drawn beside an open dock.
 const HANDLE: f32 = 5.0;
 /// A collapsed dock keeps this strip.
@@ -113,6 +113,38 @@ pub(in crate::app) fn world_to_window(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The canvas must end where the status bar begins: the reserved
+    /// height may not fall short of the real bar (the canvas would reach
+    /// into it) nor overshoot it by a visible gap.
+    #[test]
+    fn status_bar_reservation_matches_the_laid_out_bar() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let bar = crate::status_bar::view(
+            0.0,
+            0.0,
+            true,
+            true,
+            100.0,
+            signex_types::coord::Unit::Mm,
+            &crate::app::Tool::Select,
+            1.27,
+            &[],
+            &tokens,
+            0,
+            None,
+            None,
+        );
+        let real = crate::layout_probe::root_size::<crate::app::StatusBarRequest>(
+            bar,
+            iced::Size::new(1400.0, 900.0),
+        )
+        .height;
+        assert!(
+            (STATUS_BAR - real).abs() < 0.5,
+            "reserved {STATUS_BAR} px but the status bar lays out {real} px"
+        );
+    }
 
     fn dock(size: f32) -> DockExtent {
         DockExtent {

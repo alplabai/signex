@@ -21,9 +21,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// dialog's parameter list and sheet table.
 pub(super) fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
     let inner = if on {
-        text("✓").size(9).color(Color::WHITE)
+        text("✓").size(TS.caption).color(Color::WHITE)
     } else {
-        text(" ").size(9).color(Color::WHITE)
+        text(" ").size(TS.caption).color(Color::WHITE)
     };
     let bg = if on {
         Color::from_rgb(0.00, 0.47, 0.84)
@@ -105,7 +105,7 @@ pub(super) fn order_preview(
     };
     container(
         column![
-            text("Preview").size(9).color(text_muted),
+            text("Preview").size(TS.caption).color(text_muted),
             Space::new().height(2),
             row![cell(slots.0), Space::new().width(4), cell(slots.1),].spacing(0),
             Space::new().height(4),

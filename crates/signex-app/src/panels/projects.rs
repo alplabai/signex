@@ -316,7 +316,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         column![
             text("No project open").size(TS.body).color(muted),
-            text("").size(4),
+            text("").size(TS.micro),
             text("File > Open to begin").size(TS.caption).color(muted),
         ]
         .spacing(SP.xs)

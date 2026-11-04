@@ -60,7 +60,7 @@ fn silk_delete_msg(fp: &Footprint, idx: usize) -> Option<FootprintEditorMsg> {
 const MENU_WIDTH: f32 = 220.0;
 const ROW_PAD_X: u16 = 12;
 const ROW_PAD_Y: u16 = 5;
-const FONT_SIZE: f32 = 11.0;
+const FONT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 
 /// Build the right-click context menu card for the active footprint
 /// editor. Returns `None` when the menu is closed.
