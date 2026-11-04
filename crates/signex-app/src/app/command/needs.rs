@@ -72,9 +72,7 @@ impl Needs {
             Self::Canvas => ctx.has_schematic || ctx.has_pcb,
             Self::FitTarget => ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas,
             // The keystroke opens the footprint editor's grid picker and does
-            // nothing elsewhere. The View menu row shares the label but
-            // cycles the schematic / PCB grid; see
-            // [`super::enablement::cycle_grid_menu_enabled`].
+            // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
         }
     }
@@ -157,7 +155,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "break_wire"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager" => Needs::Schematic,
-        "run_erc" => Needs::Sheets,
+        "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,

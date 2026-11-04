@@ -68,15 +68,9 @@ impl Signex {
     }
 
     /// Find & Replace dialog.
-    pub(in crate::app::view) fn find_replace_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn find_replace_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
-        if !ui.find_replace.open
-            || self.modal_detached(crate::app::state::ModalId::FindReplace)
-            || !self.belongs_to_window(ui.find_replace.window, window_id)
-        {
+        if !ui.find_replace.open || self.modal_detached(crate::app::state::ModalId::FindReplace) {
             return None;
         }
         Some(
@@ -87,14 +81,8 @@ impl Signex {
 
     /// Find Similar Objects dialog (#1257). In-window only: it has no
     /// detached form.
-    pub(in crate::app::view) fn find_similar_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn find_similar_overlay(&self) -> Option<Element<'_, Message>> {
         let state = self.ui_state.find_similar.as_ref()?;
-        if !self.window_shows_sheet(window_id, state.origin.as_deref()) {
-            return None;
-        }
         Some(
             crate::find_similar::view(state, &self.document_state.panel_ctx.tokens).map(|msg| {
                 Message::Selection(
@@ -105,14 +93,8 @@ impl Signex {
     }
 
     /// Paste Array dialog (#1264). In-window only: it has no detached form.
-    pub(in crate::app::view) fn paste_array_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn paste_array_overlay(&self) -> Option<Element<'_, Message>> {
         let state = self.ui_state.paste_array.as_ref()?;
-        if !self.window_shows_sheet(window_id, state.origin.as_deref()) {
-            return None;
-        }
         Some(
             crate::paste_array::view(state, &self.document_state.panel_ctx.tokens)
                 .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg))),

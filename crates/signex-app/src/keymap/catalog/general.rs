@@ -181,7 +181,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         // The key opens the snap-grid picker (Altium's G popup, footprint
         // editor only); it does not step through sizes (#525).
         label: "Open the snap grid picker (footprint editor)",
-        menu_label: Some("Cycle Grid Size"),
+        menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -481,7 +481,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         id: "next_grid",
         category: "view",
         label: "Next grid",
-        menu_label: None,
+        menu_label: Some("Cycle Grid Size"),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,

@@ -112,6 +112,10 @@ pub struct ComponentPreviewState {
     /// Resolved Footprint — `None` when no footprint is bound or the
     /// ref is missing.
     pub footprint: Option<Footprint>,
+    /// The editor's model of `footprint`, built when it is set so the
+    /// preview does not rebuild pad models per draw. Set through
+    /// [`Self::set_footprint`].
+    footprint_preview: Option<crate::library::editor::footprint::canvas::PreviewFootprint>,
     /// Resolved SimModel — `None` when the Simulation tab hasn't been
     /// visited yet or no sim is bound.
     pub sim: Option<SimModel>,
@@ -204,9 +208,30 @@ pub struct ComponentPreviewState {
     /// field it touched, and from wherever it came. View-only events never
     /// bump it.
     pub edit_epoch: u64,
+    /// Undo / redo of `row` with its saved position (#1854): `dirty` follows
+    /// it (see [`Self::sync_dirty`]).
+    pub history: RowHistory,
+    /// Bumped by every [`Self::mark_dirty`], so `finish_edit` can tell an
+    /// inline edit dirtied the preview.
+    pub(super) dirty_marks: u64,
 }
 
 impl ComponentPreviewState {
+    /// Replace the resolved footprint and rebuild its preview model.
+    pub fn set_footprint(&mut self, footprint: Option<Footprint>) {
+        self.footprint_preview = footprint
+            .as_ref()
+            .map(crate::library::editor::footprint::canvas::PreviewFootprint::build);
+        self.footprint = footprint;
+    }
+
+    /// The editor's model of the resolved footprint, if any.
+    pub fn footprint_preview(
+        &self,
+    ) -> Option<&crate::library::editor::footprint::canvas::PreviewFootprint> {
+        self.footprint_preview.as_ref()
+    }
+
     /// Build a preview state from a freshly-loaded row.
     pub fn from_row(library_path: PathBuf, table: String, row: ComponentRow) -> Self {
         Self {
@@ -215,6 +240,7 @@ impl ComponentPreviewState {
             row,
             symbol: None,
             footprint: None,
+            footprint_preview: None,
             sim: None,
             sim_body: None,
             active_tab: PreviewTab::Preview,
@@ -236,6 +262,8 @@ impl ComponentPreviewState {
             saving_batch: None,
             binding_primitive: false,
             edit_epoch: 0,
+            history: RowHistory::at_start(),
+            dirty_marks: 0,
         }
     }
 
@@ -292,6 +320,10 @@ impl ComponentPreviewState {
         if let Some(saving) = &self.saving_row {
             keep.extend(self.staged_assets_pinned_by(saving));
         }
+        // An undo or redo can pin a replaced PDF again.
+        for row in self.history.rows() {
+            keep.extend(self.staged_assets_pinned_by(row));
+        }
         self.staged_datasheets
             .retain(|hash, _| keep.iter().any(|a| &a.hash == hash));
     }
@@ -300,6 +332,7 @@ impl ComponentPreviewState {
     /// planned before this (a reload) no longer describes it.
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+        self.dirty_marks += 1;
         self.note_edit();
     }
 

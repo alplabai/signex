@@ -289,30 +289,57 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
     }
 }
 
+/// Tag the Active Bar and context-menu messages of overlay `layers` painted
+/// in the undocked window `owner`, so `update` runs them against the sheet
+/// that window shows (#1910). `None` (the main window) leaves them as is.
+fn scoped_to_window<'a>(
+    layers: impl IntoIterator<Item = Element<'a, Message>>,
+    owner: Option<iced::window::Id>,
+) -> Vec<Element<'a, Message>> {
+    layers
+        .into_iter()
+        .map(|layer| match owner {
+            None => layer,
+            Some(window) => layer.map(move |message| scope_overlay_message(window, message)),
+        })
+        .collect()
+}
+
+/// Tag an Active Bar or context-menu `message` with the undocked `window`
+/// that sent it; anything else passes through (#1910).
+pub(crate) fn scope_overlay_message(window: iced::window::Id, message: Message) -> Message {
+    match message {
+        Message::ActiveBar(inner) => Message::ActiveBar(
+            crate::active_bar::ActiveBarMsg::ScopedToWindow(window, Box::new(inner)),
+        ),
+        Message::ContextMenu(inner) => {
+            Message::ContextMenu(ContextMenuMsg::ScopedToWindow(window, Box::new(inner)))
+        }
+        other => other,
+    }
+}
+
+/// Remap what an undocked window's canvas emits: canvas events carry the
+/// window, a right-click opens the menu for that window's sheet, and an
+/// Active Bar button pressed on the canvas (right-press, #1509) acts there
+/// (#1910).
+pub(crate) fn scope_canvas_message(window_id: iced::window::Id, message: Message) -> Message {
+    match message {
+        Message::CanvasEvent(event) => Message::CanvasEventInWindow { window_id, event },
+        show @ Message::ContextMenu(ContextMenuMsg::Show(..)) => {
+            scope_overlay_message(window_id, show)
+        }
+        bar @ Message::ActiveBar(_) => scope_overlay_message(window_id, bar),
+        other => other,
+    }
+}
+
 pub(crate) fn visible(has_blocking_modal: bool) -> &'static [OverlayId] {
     if has_blocking_modal {
         &PAINT_ORDER[..PRE_BLOCKING]
     } else {
         &PAINT_ORDER
     }
-}
-
-/// Overlays whose buttons act on a document: in an undocked window their
-/// messages run against the sheet that window shows (#1910, #1966).
-pub(crate) fn acts_on_window_document(id: OverlayId) -> bool {
-    matches!(
-        id,
-        OverlayId::PlacementPaused
-            | OverlayId::SchematicActiveBar
-            | OverlayId::TextEdit
-            | OverlayId::ActiveBarMenu
-            | OverlayId::ContextMenu
-            | OverlayId::ComponentsRowContextMenu
-            | OverlayId::GridPicker
-            | OverlayId::FindReplace
-            | OverlayId::FindSimilar
-            | OverlayId::PasteArray
-    )
 }
 
 impl Signex {
@@ -339,9 +366,10 @@ impl Signex {
             OverlayId::BomPreview => layers.extend(self.bom_preview_overlay()),
             OverlayId::NetColorCustom => layers.extend(self.net_color_custom_overlay()),
             OverlayId::PlacementPaused => layers.extend(self.placement_paused_overlay(window_id)),
-            OverlayId::SchematicActiveBar => {
-                layers.extend(self.schematic_active_bar_overlay(window_id))
-            }
+            OverlayId::SchematicActiveBar => layers.extend(scoped_to_window(
+                self.schematic_active_bar_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
             OverlayId::FootprintActiveBar => {
                 layers.extend(self.footprint_active_bar_overlay(window_id))
             }
@@ -357,14 +385,20 @@ impl Signex {
                 layers.extend(self.symbol_context_menu_overlay(window_id))
             }
             OverlayId::TextEdit => layers.extend(self.text_edit_overlay(window_id)),
-            OverlayId::ActiveBarMenu => layers.extend(self.active_bar_menu_overlay(window_id)),
-            OverlayId::ContextMenu => layers.extend(self.context_menu_overlay(window_id)),
-            OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay(window_id)),
+            OverlayId::ActiveBarMenu => layers.extend(scoped_to_window(
+                self.active_bar_menu_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
+            OverlayId::ContextMenu => layers.extend(scoped_to_window(
+                self.context_menu_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
+            OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay()),
             OverlayId::ProjectTreeContextMenu => {
-                layers.extend(self.project_tree_context_menu_overlay(window_id))
+                layers.extend(self.project_tree_context_menu_overlay())
             }
             OverlayId::ComponentsRowContextMenu => {
-                layers.extend(self.components_row_context_menu_overlay(window_id))
+                layers.extend(self.components_row_context_menu_overlay())
             }
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
@@ -374,9 +408,9 @@ impl Signex {
             }
             OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay(window_id)),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
-            OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
-            OverlayId::FindSimilar => layers.extend(self.find_similar_overlay(window_id)),
-            OverlayId::PasteArray => layers.extend(self.paste_array_overlay(window_id)),
+            OverlayId::FindReplace => layers.extend(self.find_replace_overlay()),
+            OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
+            OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),

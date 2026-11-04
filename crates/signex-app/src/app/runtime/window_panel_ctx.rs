@@ -159,7 +159,7 @@ impl Signex {
             revision,
             self.document_state.sheet_edit_epoch,
             self.document_state.documents_epoch,
-            self.library.data_version as u64,
+            self.library.data_version,
             self.document_state.tabs.len(),
             self.document_state.projects.len(),
             self.ui_state.erc_running,

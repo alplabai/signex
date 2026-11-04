@@ -109,15 +109,43 @@ pub fn parse_toml_finite<T: serde::de::DeserializeOwned>(text: &str) -> Result<T
     // Deserialise from the text first: the `Value` deserializer hands a
     // datetime to serde as a plain string, which a flattened unknown-fields
     // bag would keep as a string (#1875). The text path keeps it typed, but
-    // then a known `String` field holding a bare datetime (`date = 2026-10-01`)
-    // is a schema error; that file opens through the `Value` path, as before.
-    match toml::from_str::<T>(text) {
-        Ok(parsed) => Ok(parsed),
-        Err(from_text) => value
-            .try_into()
-            .map_err(|_| TomlFiniteError::Toml(from_text)),
+    // a known `String` field holding a bare datetime (`date = 2026-10-01`)
+    // is a schema error pointing at that datetime. Quote just that datetime
+    // and retry, so bag datetimes elsewhere in the file stay typed (#1890).
+    let mut text = std::borrow::Cow::Borrowed(text);
+    let mut first_err = None;
+    for _ in 0..MAX_DATETIME_REQUOTES {
+        let err = match toml::from_str::<T>(&text) {
+            Ok(parsed) => return Ok(parsed),
+            Err(err) => err,
+        };
+        let quoted = err.span().and_then(|span| {
+            let lit = text.get(span.clone())?;
+            lit.parse::<toml::value::Datetime>().ok()?;
+            Some(format!(
+                "{}\"{lit}\"{}",
+                &text[..span.start],
+                &text[span.end..]
+            ))
+        });
+        first_err.get_or_insert(err);
+        match quoted {
+            Some(next) => text = std::borrow::Cow::Owned(next),
+            None => break,
+        }
     }
+    // Not a datetime-in-String problem (or too many): the `Value` path,
+    // which turns every datetime into a string, still opens the file.
+    value
+        .try_into()
+        .map_err(|_| TomlFiniteError::Toml(first_err.expect("loop ran at least once")))
 }
+
+/// Upper bound on datetime-in-`String` retries; each one is a full parse.
+// ponytail: past this ceiling the `Value` fallback stringifies bag datetimes
+// again (#1875 symptom); requote every datetime span in one pass if files
+// ever carry that many.
+const MAX_DATETIME_REQUOTES: usize = 64;
 
 /// Key path (`extras.board.outline[0].x`) of the first NaN or infinite
 /// float in `tree`, or `None` when every float is finite.
@@ -303,5 +331,47 @@ v = nan
     fn a_datetime_in_a_flattened_bag_stays_a_datetime() {
         let holder: Holder = parse_toml_finite("when = 1979-05-27T07:32:00Z\n").unwrap();
         assert!(holder.rest["when"].is_datetime());
+    }
+
+    #[test]
+    fn known_string_datetime_does_not_stringify_the_bag() {
+        let holder: Holder = parse_toml_finite(
+            "date = 2026-10-01
+when = 1979-05-27T07:32:00Z
+",
+        )
+        .unwrap();
+        assert_eq!(holder.date, "2026-10-01");
+        assert!(holder.rest["when"].is_datetime());
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Nested {
+        #[serde(default)]
+        meta: Meta,
+        #[serde(default)]
+        tags: Vec<String>,
+        #[serde(flatten)]
+        rest: std::collections::BTreeMap<String, toml::Value>,
+    }
+    #[derive(Default, serde::Deserialize)]
+    struct Meta {
+        #[serde(default)]
+        date: String,
+    }
+
+    #[test]
+    fn nested_and_array_known_string_datetimes_keep_the_bag_typed() {
+        let n: Nested = parse_toml_finite(
+            "tags = [2026-10-01, 2026-10-02]
+when = 1979-05-27T07:32:00Z
+[meta]
+date = 2026-10-03
+",
+        )
+        .unwrap();
+        assert_eq!(n.meta.date, "2026-10-03");
+        assert_eq!(n.tags, ["2026-10-01", "2026-10-02"]);
+        assert!(n.rest["when"].is_datetime());
     }
 }

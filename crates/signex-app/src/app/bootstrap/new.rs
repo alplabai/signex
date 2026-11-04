@@ -271,6 +271,7 @@ impl Signex {
                 bottom_height: crate::app::state::DEFAULT_BOTTOM_PANEL_HEIGHT,
                 window_size: (1400.0, 900.0),
                 window_os_scales: std::collections::HashMap::new(),
+                undocked_window_sizes: std::collections::HashMap::new(),
                 panel_list_open: false,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
@@ -622,7 +623,7 @@ impl Signex {
                 last_mouse_pos: (0.0, 0.0),
                 last_tree_click: Default::default(),
                 active_bar_menu: None,
-                menu_window: None,
+                active_bar_menu_window: None,
                 acting_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()

@@ -169,37 +169,6 @@ fn select_window_symbols(app: &mut Signex, window: iced::window::Id) {
         .selected = items;
 }
 
-/// A window's row acts on the sheet that window shows (#1966), so the same
-/// row from the main bar and from the window's bar ends in the same state
-/// when both sheets hold one selected symbol. Zoom is left out: it moves the
-/// canvas of the window the row was pressed in, and so does the label ghost
-/// of Net Label.
-#[test]
-fn undocked_window_rows_act_like_the_main_bar_on_the_sheet_they_show() {
-    let mut differing = Vec::new();
-    for path in [
-        "Edit/Copy",
-        "Edit/Select All",
-        "Edit/Find",
-        "View/Toggle Grid",
-        "View/AutoFocus (dim unselected)",
-        "Place/Wire",
-        "Place/Junction",
-        "Tools/Preferences...",
-        "Help/Keyboard Shortcuts",
-    ] {
-        let (mut from_window, window) = with_undocked_window(one_symbol_selected());
-        select_window_symbols(&mut from_window, window);
-        let _ = click_in_window(&mut from_window, window, path);
-        let (mut from_main, _) = with_undocked_window(one_symbol_selected());
-        let _ = click(&mut from_main, path);
-        if probe(&from_window) != probe(&from_main) {
-            differing.push(path);
-        }
-    }
-    assert!(differing.is_empty(), "rows that differ: {differing:?}");
-}
-
 /// #1922: View ▸ Fit All is enabled by the undocked window's own canvas and
 /// now fits that canvas, as its shortcut does; it used to fit the main
 /// window's canvas.

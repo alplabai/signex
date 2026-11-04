@@ -142,7 +142,6 @@ impl Signex {
     ) -> Task<Message> {
         let (x, y) = self.interaction_state.last_mouse_pos;
         self.close_all_context_menus();
-        self.interaction_state.menu_window = self.interaction_state.acting_window;
         let panel = &mut self.library.components_panel;
         panel.drag = None;
         panel.row_menu = Some(crate::library::state::ComponentsRowMenu {

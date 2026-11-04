@@ -103,13 +103,12 @@ pub struct InteractionState {
     /// clicks ourselves at the app layer.
     pub last_tree_click: crate::double_click::DoubleClick<signex_widgets::tree_view::TreeKey>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
-    /// The undocked window the open canvas, Active Bar, tab or project-tree
-    /// menu belongs to; `None` is the main window. Stamped when the menu
-    /// opens, so it paints only there and acts on that window's document.
-    pub menu_window: Option<iced::window::Id>,
-    /// The undocked window whose action is running right now (set by
-    /// `run_in_window`, `None` outside it and for the main window). Handlers
-    /// that open a window-bound surface stamp it.
+    /// The undocked window `active_bar_menu` was opened in; `None` for the
+    /// main window. Only that window paints the dropdown (#1910).
+    pub active_bar_menu_window: Option<iced::window::Id>,
+    /// The undocked window whose action is running inside `run_in_window`;
+    /// `None` for the main window. Stamps what the action opens (a Components
+    /// drag) and keeps the app-wide refreshes on the main window.
     pub acting_window: Option<iced::window::Id>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at

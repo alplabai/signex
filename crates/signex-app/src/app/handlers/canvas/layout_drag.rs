@@ -106,7 +106,14 @@ impl Signex {
                         ),
                     ),
                 };
-                let new_val = new_val.round();
+                // Panel sizes snap to whole px. The components split stays in exact
+                // logical px: its bounds are not integral, so rounding could land
+                // outside the clamp.
+                let new_val = if matches!(target, DragTarget::ComponentsSplit) {
+                    new_val
+                } else {
+                    new_val.round()
+                };
                 if (current - new_val).abs() >= 1.0 {
                     match target {
                         DragTarget::LeftPanel => self.ui_state.left_width = new_val,

@@ -15,7 +15,7 @@ pub(super) fn content_component_classes<'a>(
 ) -> Element<'a, PrefMsg> {
     let header = column![
         text("Default Component Classes")
-            .size(15)
+            .size(TS.heading)
             .style(text_primary),
         text(
             "Seeds the class registry of newly-created libraries. \

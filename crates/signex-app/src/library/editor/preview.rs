@@ -1,30 +1,28 @@
-//! Preview tab — read-only Symbol + Footprint render side-by-side,
-//! inline Pin Map subsection, Where-Used footer line.
+//! Preview tab — header, read-only Symbol + Footprint panes, Pin Map
+//! table, Alternate symbols and a Where-Used line, all built from the
+//! shared dialog kit ([`super::kit`]).
 //!
 //! The Preview surface is purely read-only for primitives;
 //! right-click on either render → context menu fires
 //! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
 //! to open the standalone `.snxsym` / `.snxfpt` document tab.
-//!
-//! The Symbol render uses a minimal preview canvas — no pan/zoom, no
-//! drag/drop, just an auto-fit body rectangle + pin stubs. Same for
-//! the Footprint render: pad outlines on a flat board with no input
-//! capture.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Border, Element, Length, Theme};
-use signex_library::{Footprint, Symbol, SymbolGraphicKind};
+use iced::widget::{Space, column, container, row, scrollable, text};
+use iced::{Element, Length};
+use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
+use super::kit::{self, SP, TS};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// Height of the Symbol / Footprint panes: twenty body lines.
+const PREVIEW_PANE_HEIGHT: f32 = TS.body * 20.0;
 
-const PREVIEW_PANE_HEIGHT: f32 = 220.0;
+/// Shown in the header for a manufacturer / MPN the row does not carry.
+const NOT_SET: &str = "Not set";
+const NO_DESCRIPTION: &str = "No description";
 
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
@@ -34,9 +32,10 @@ pub fn view<'a>(
     device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    let read_only = library_state.is_read_only(&state.library_path);
+    let veil = super::read_only_veil(tokens);
     let body = column![
-        header_row(state, tokens),
-        Space::new().height(10),
+        header_row(&state.row, tokens),
         render_panes(
             state,
             library_state,
@@ -44,57 +43,127 @@ pub fn view<'a>(
             canvas_colors,
             device_px_per_logical_px,
             &address,
-            library_state.is_read_only(&state.library_path),
+            read_only,
         ),
-        Space::new().height(10),
-        super::inert::unless_read_only(
-            library_state.is_read_only(&state.library_path),
+        super::inert::unless_read_only_veiled(
+            read_only,
+            veil,
             pin_map_subsection(state, tokens, &address),
         ),
-        Space::new().height(10),
-        super::inert::unless_read_only(
-            library_state.is_read_only(&state.library_path),
+        super::inert::unless_read_only_veiled(
+            read_only,
+            veil,
             super::alternate_symbols::view(state, tokens, &address),
         ),
-        Space::new().height(10),
         where_used_footer(state, library_state, tokens),
     ]
-    .spacing(0)
+    .spacing(SP.l)
     .width(Length::Fill);
 
-    container(scrollable(body).width(Length::Fill).height(Length::Fill))
-        .padding(14)
-        .style(crate::styles::modal_card(tokens))
+    scrollable(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .into()
 }
 
-fn header_row<'a>(
-    state: &'a ComponentPreviewState,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+/// Manufacturer and MPN as shown in the header; a blank one reads "Not set".
+fn mpn_fields(manufacturer: &str, mpn: &str) -> (String, String) {
+    let or_not_set = |v: &str| {
+        let v = v.trim();
+        if v.is_empty() { NOT_SET } else { v }.to_string()
+    };
+    (or_not_set(manufacturer), or_not_set(mpn))
+}
+
+fn description_text(description: &str) -> &str {
+    let d = description.trim();
+    if d.is_empty() { NO_DESCRIPTION } else { d }
+}
+
+/// The texts the Preview header card shows. The part number, class and
+/// state are the shell header's (`editor::view_header`), not repeated here.
+struct HeaderTexts {
+    description: String,
+    manufacturer: String,
+    mpn: String,
+}
+
+fn header_texts(row_data: &ComponentRow) -> HeaderTexts {
+    let (manufacturer, mpn) = mpn_fields(
+        &row_data.primary_mpn.manufacturer,
+        &row_data.primary_mpn.mpn,
+    );
+    HeaderTexts {
+        description: description_text(&row_data.description).to_string(),
+        manufacturer,
+        mpn,
+    }
+}
+
+fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
+    let HeaderTexts {
+        description,
+        manufacturer,
+        mpn,
+    } = header_texts(row_data);
+    let description_color = if row_data.description.trim().is_empty() {
+        muted
+    } else {
+        text_c
+    };
 
-    row![
-        text(state.row.internal_pn.as_str()).size(15).color(text_c),
-        Space::new().width(12),
-        text(format!("class: {}", state.row.class.as_str()))
-            .size(TS.body)
-            .color(muted),
-        Space::new().width(12),
-        text(format!("{:?}", state.row.state))
-            .size(TS.body)
-            .color(muted),
-        Space::new().width(Length::Fill),
-        text(format!(
-            "MPN: {} / {}",
-            state.row.primary_mpn.manufacturer, state.row.primary_mpn.mpn
-        ))
-        .size(TS.body)
-        .color(muted),
-    ]
-    .align_y(iced::Alignment::Center)
-    .into()
+    let identity = column![text(description).size(TS.body).color(description_color)]
+        .width(Length::FillPortion(3));
+
+    let labelled = |label: &'static str, value: String| {
+        let value_color = if value == NOT_SET { muted } else { text_c };
+        row![
+            text(label).size(TS.body).color(muted),
+            text(value).size(TS.body).color(value_color),
+        ]
+        .spacing(SP.m)
+    };
+    let supplier = column![labelled("Manufacturer", manufacturer), labelled("MPN", mpn)]
+        .spacing(SP.xs)
+        .width(Length::FillPortion(2));
+
+    kit::card(
+        row![identity, supplier]
+            .spacing(SP.l)
+            .align_y(iced::Alignment::Start),
+        tokens,
+    )
+}
+
+/// What a pane shows when it has no drawing.
+fn pane_message(kind: PaneKind, unbound: bool) -> &'static str {
+    match (kind, unbound) {
+        (PaneKind::Symbol, true) => "No symbol bound",
+        (PaneKind::Footprint, true) => "No footprint bound",
+        (PaneKind::Symbol, false) => {
+            "The symbol could not be loaded. It may be missing from the open libraries."
+        }
+        (PaneKind::Footprint, false) => {
+            "The footprint could not be loaded. It may be missing from the open libraries."
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum PaneKind {
+    Symbol,
+    Footprint,
+}
+
+fn editor_event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
+    LibraryMessage::EditorEvent {
+        library_path: address.library_path.clone(),
+        table: address.table.clone(),
+        row_id: address.row_id,
+        msg,
+    }
 }
 
 fn render_panes<'a>(
@@ -131,19 +200,20 @@ fn render_panes<'a>(
         };
 
     let (mut footprint_msg, footprint_btn_label): (Option<LibraryMessage>, &'static str) =
-        match state.row.footprint_ref.as_ref() {
-            _ if footprint_unbound => (
+        if footprint_unbound {
+            (
                 Some(LibraryMessage::OpenPrimitivePicker {
                     kind: signex_library::PrimitiveKind::Footprint,
                     target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
                 }),
                 "Pick Footprint",
-            ),
-            _ => (
+            )
+        } else {
+            (
                 footprint_path(state, library_state)
                     .map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
                 "Open Footprint Editor",
-            ),
+            )
         };
 
     if read_only {
@@ -155,8 +225,6 @@ fn render_panes<'a>(
         }
     }
 
-    // A resolved symbol is drawn; the text summary stays the fallback for an
-    // unbound or still-loading one.
     let symbol_drawing = (!symbol_unbound)
         .then_some(state.symbol.as_ref())
         .flatten()
@@ -172,29 +240,19 @@ fn render_panes<'a>(
     let symbol_pane = render_pane(
         "Symbol",
         symbol_drawing,
-        if symbol_unbound {
-            "No symbol bound".to_string()
-        } else {
-            symbol_summary_text(state.symbol.as_ref())
-        },
-        symbol_unbound,
+        pane_message(PaneKind::Symbol, symbol_unbound),
         symbol_msg,
         symbol_btn_label,
         tokens,
     );
     // Drawn with the Components panel's footprint canvas, like the symbol.
     let footprint_drawing = (!footprint_unbound)
-        .then_some(state.footprint.as_ref())
+        .then_some(state.footprint_preview())
         .flatten()
-        .map(|fp| {
-            let primary = theme_ext::text_primary(tokens);
+        .map(|model| {
             let program =
                 crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
-                    fp.clone(),
-                    theme_ext::accent(tokens),
-                    primary,
-                    theme_ext::text_secondary(tokens),
-                    primary,
+                    model,
                 );
             iced::widget::canvas(program)
                 .width(Length::Fill)
@@ -204,26 +262,17 @@ fn render_panes<'a>(
     let footprint_pane = render_pane(
         "Footprint",
         footprint_drawing,
-        if footprint_unbound {
-            "No footprint bound".to_string()
-        } else {
-            footprint_summary_text(state.footprint.as_ref())
-        },
-        footprint_unbound,
+        pane_message(PaneKind::Footprint, footprint_unbound),
         footprint_msg,
         footprint_btn_label,
         tokens,
     );
 
     row![
-        container(symbol_pane)
-            .width(Length::FillPortion(1))
-            .height(Length::Fixed(PREVIEW_PANE_HEIGHT)),
-        Space::new().width(8),
-        container(footprint_pane)
-            .width(Length::FillPortion(1))
-            .height(Length::Fixed(PREVIEW_PANE_HEIGHT)),
+        container(symbol_pane).width(Length::FillPortion(1)),
+        container(footprint_pane).width(Length::FillPortion(1)),
     ]
+    .spacing(SP.m)
     .align_y(iced::Alignment::Start)
     .into()
 }
@@ -231,156 +280,32 @@ fn render_panes<'a>(
 fn render_pane<'a>(
     label: &'a str,
     drawing: Option<Element<'a, LibraryMessage>>,
-    summary: String,
-    unbound: bool,
+    empty_message: &'static str,
     open_msg: Option<LibraryMessage>,
     button_label: &'a str,
-    tokens: &'a ThemeTokens,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = if unbound {
-        theme_ext::warning_color(tokens)
-    } else {
-        theme_ext::text_primary(tokens)
-    };
-    let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-    let pane_fill = crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Faint);
-
-    let header = row![
-        text(label).size(TS.body).color(muted),
-        Space::new().width(Length::Fill),
-        open_btn(button_label, open_msg, tokens),
-    ]
-    .align_y(iced::Alignment::Center);
-
     let content: Element<'a, LibraryMessage> = match drawing {
         Some(drawing) => drawing,
-        None => text(summary).size(TS.body).color(text_c).into(),
+        None => kit::empty_state(empty_message, None, tokens),
     };
-    let body = container(content)
-        .padding(10)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(pane_fill)),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..Default::default()
-        });
-
-    column![header, Space::new().height(6), body]
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
-}
-
-fn symbol_summary_text(sym: Option<&Symbol>) -> String {
-    match sym {
-        None => "Unresolved — symbol primitive not loaded.\n\nLoad happens lazily on tab switch; if this persists, the bound `symbol_ref.uuid` may not exist in any mounted library.".to_string(),
-        Some(sym) => {
-            let body = sym
-                .graphics
-                .iter()
-                .find_map(|g| match &g.kind {
-                    SymbolGraphicKind::Rectangle { from, to } => Some((from, to)),
-                    _ => None,
-                })
-                .map(|(f, t)| format!("body: ({:.2}, {:.2}) → ({:.2}, {:.2}) mm\n", f[0], f[1], t[0], t[1]))
-                .unwrap_or_else(|| "body: <no rectangle graphic>\n".to_string());
-            let pins = sym
-                .pins
-                .iter()
-                .take(8)
-                .map(|p| format!("  pin {}  {}  ({}, {})", p.number, p.name, p.position[0], p.position[1]))
-                .collect::<Vec<_>>()
-                .join("\n");
-            let more = if sym.pins.len() > 8 {
-                format!("\n  … +{} more pins", sym.pins.len() - 8)
-            } else {
-                String::new()
-            };
-            format!(
-                "{}\n{} pins:\n{}{}",
-                body,
-                sym.pins.len(),
-                pins,
-                more,
-            )
-        }
-    }
-}
-
-fn footprint_summary_text(fp: Option<&Footprint>) -> String {
-    match fp {
-        None => "Unresolved — footprint primitive not loaded.\n\nLoad happens lazily on tab switch; if this persists, the bound `footprint_ref.uuid` may not exist in any mounted library.".to_string(),
-        Some(fp) => {
-            let pads = fp
-                .pads
-                .iter()
-                .take(8)
-                .map(|p| format!("  pad {}  ({:.2}, {:.2}) mm", p.number, p.position[0], p.position[1]))
-                .collect::<Vec<_>>()
-                .join("\n");
-            let more = if fp.pads.len() > 8 {
-                format!("\n  … +{} more pads", fp.pads.len() - 8)
-            } else {
-                String::new()
-            };
-            format!(
-                "name: {}\n{} pads:\n{}{}",
-                fp.name,
-                fp.pads.len(),
-                pads,
-                more,
-            )
-        }
-    }
-}
-
-fn open_btn<'a>(
-    label: &'a str,
-    msg: Option<LibraryMessage>,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-
-    let mut btn = button(
-        container(
-            text(label)
-                .size(TS.body)
-                .color(if msg.is_some() { text_c } else { muted }),
-        )
-        .padding([3, 10]),
+    let header = kit::section_header(
+        label,
+        Some(kit::secondary_button(button_label, open_msg, tokens)),
+        tokens,
     );
-    if let Some(m) = msg {
-        btn = btn.on_press(m);
-    }
-    btn.padding(0)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                }
-                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
-            };
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+    column![
+        header,
+        kit::card(
+            container(content)
+                .width(Length::Fill)
+                .height(Length::Fixed(PREVIEW_PANE_HEIGHT)),
+            tokens,
+        ),
+    ]
+    .spacing(SP.s)
+    .width(Length::Fill)
+    .into()
 }
 
 /// The `.snxsym` a row's symbol ref points at, resolved through the
@@ -400,110 +325,134 @@ fn footprint_path(
     library_state.primitive_file(state.row.footprint_ref.as_ref()?, "footprints", "snxfpt")
 }
 
+/// One Pin Map table line: the pad a symbol pin lands on.
+#[derive(Debug, PartialEq, Eq)]
+struct PinLine {
+    number: String,
+    name: String,
+    pad: String,
+    is_override: bool,
+}
+
+/// Table lines for `pins`: a pin's pad is its override, else its own number.
+fn pin_lines<'p>(
+    pins: impl Iterator<Item = (&'p str, &'p str)>,
+    overrides: &[signex_library::PinPadOverride],
+) -> Vec<PinLine> {
+    pins.map(|(number, name)| {
+        let over = overrides.iter().find(|o| o.symbol_pin_number == number);
+        PinLine {
+            number: number.to_string(),
+            name: name.to_string(),
+            pad: over
+                .map(|o| o.footprint_pad_number.clone())
+                .unwrap_or_else(|| number.to_string()),
+            is_override: over.is_some(),
+        }
+    })
+    .collect()
+}
+
 fn pin_map_subsection<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let text_c = theme_ext::text_primary(tokens);
-
-    let mut col = column![
-        text("Pin Map").size(TS.body).color(muted),
-        Space::new().height(6),
-    ]
-    .spacing(0)
-    .width(Length::Fill);
+    let header = kit::section_header("Pin Map", None, tokens);
 
     let Some(sym) = state.symbol.as_ref() else {
-        col = col.push(
-            text("Pin map view requires the symbol to be resolved.")
-                .size(TS.body)
-                .color(muted),
-        );
-        return col.into();
+        return column![
+            header,
+            kit::empty_state("The pin map shows once the symbol is loaded.", None, tokens),
+        ]
+        .into();
     };
-
     if sym.pins.is_empty() {
-        col = col.push(
-            text("Symbol has no pins yet — open the Symbol Editor to add some.")
-                .size(TS.body)
-                .color(muted),
-        );
-        return col.into();
+        return column![
+            header,
+            kit::empty_state(
+                "This symbol has no pins yet. Open the Symbol Editor to add some.",
+                None,
+                tokens,
+            ),
+        ]
+        .into();
     }
 
-    // Header row.
-    col = col.push(
-        row![
-            text("Sym pin")
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(1)),
-            text("Sym name")
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(2)),
-            text("Pad")
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(1)),
-            text("").size(TS.caption).width(Length::FillPortion(1)),
-        ]
-        .align_y(iced::Alignment::Center)
-        .padding([SP.xs, SP.s]),
-    );
+    let muted = theme_ext::text_secondary(tokens);
+    let text_c = theme_ext::text_primary(tokens);
+    let widths = [
+        Length::FillPortion(1),
+        Length::FillPortion(2),
+        Length::FillPortion(2),
+        Length::FillPortion(2),
+    ];
+    let mut table = column![kit::table_header(
+        &[
+            ("Symbol pin", widths[0]),
+            ("Symbol name", widths[1]),
+            ("Pad", widths[2]),
+            ("", widths[3]),
+        ],
+        tokens,
+    )]
+    .width(Length::Fill);
 
-    for pin in &sym.pins {
-        let override_pad = state
-            .row
-            .pin_map_overrides
+    for (index, line) in pin_lines(
+        sym.pins
             .iter()
-            .find(|o| o.symbol_pin_number == pin.number)
-            .map(|o| o.footprint_pad_number.clone())
-            .unwrap_or_else(|| pin.number.clone());
-        let is_override = state
-            .row
-            .pin_map_overrides
-            .iter()
-            .any(|o| o.symbol_pin_number == pin.number);
-
-        let pad_label = if is_override {
-            format!("{} (override)", override_pad)
-        } else {
-            override_pad.clone()
-        };
-
-        col = col.push(
+            .map(|p| (p.number.as_str(), p.name.as_str())),
+        &state.row.pin_map_overrides,
+    )
+    .into_iter()
+    .enumerate()
+    {
+        let pad_cell: Element<'a, LibraryMessage> = if line.is_override {
             row![
-                text(pin.number.clone())
-                    .size(TS.body)
-                    .color(text_c)
-                    .width(Length::FillPortion(1)),
-                text(pin.name.clone())
-                    .size(TS.body)
-                    .color(text_c)
-                    .width(Length::FillPortion(2)),
-                text(pad_label)
-                    .size(TS.body)
-                    .color(text_c)
-                    .width(Length::FillPortion(1)),
-                container(override_action_btn(
-                    pin.number.clone(),
-                    is_override,
-                    tokens,
-                    address,
-                ))
-                .width(Length::FillPortion(1)),
+                text(line.pad.clone()).size(TS.body).color(text_c),
+                text("override").size(TS.caption).color(muted),
             ]
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center)
-            .padding([SP.xs, SP.s]),
+            .into()
+        } else {
+            text(line.pad.clone()).size(TS.body).color(text_c).into()
+        };
+        let label = if line.is_override {
+            "Edit override"
+        } else {
+            "Override"
+        };
+        let action = kit::secondary_button(
+            label,
+            Some(editor_event(
+                address,
+                EditorMsg::PinMapOpenOverrideEdit(line.number.clone()),
+            )),
+            tokens,
         );
+        table = table.push(kit::table_row(
+            vec![
+                (
+                    text(line.number.clone()).size(TS.body).color(text_c).into(),
+                    widths[0],
+                ),
+                (
+                    text(line.name.clone()).size(TS.body).color(text_c).into(),
+                    widths[1],
+                ),
+                (pad_cell, widths[2]),
+                (action, widths[3]),
+            ],
+            index,
+            None,
+            tokens,
+        ));
 
         // Inline override editor for the expanded row.
-        if state.pin_map_state.expanded_row.as_deref() == Some(pin.number.as_str()) {
-            col = col.push(override_editor_row(
-                &pin.number,
+        if state.pin_map_state.expanded_row.as_deref() == Some(line.number.as_str()) {
+            table = table.push(override_editor_row(
+                &line.number,
                 &state.pin_map_state.override_buf,
                 tokens,
                 address,
@@ -511,207 +460,175 @@ fn pin_map_subsection<'a>(
         }
     }
 
-    col.into()
-}
-
-fn override_action_btn<'a>(
-    pin_number: String,
-    is_override: bool,
-    tokens: &'a ThemeTokens,
-    address: &EditorAddress,
-) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-
-    let lib_path = address.library_path.clone();
-    let table = address.table.clone();
-    let row_id = address.row_id;
-
-    let label = if is_override {
-        "[Edit / Remove]"
-    } else {
-        "[Override]"
-    };
-
-    let pin_for_msg = pin_number.clone();
-    button(container(text(label).size(TS.body).color(text_c)).padding([SP.xs, SP.m]))
-        .padding(0)
-        .on_press_with(move || LibraryMessage::EditorEvent {
-            library_path: lib_path.clone(),
-            table: table.clone(),
-            row_id,
-            msg: EditorMsg::PinMapOpenOverrideEdit(pin_for_msg.clone()),
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                }
-                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03),
-            };
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+    column![header, kit::card(table, tokens)].into()
 }
 
 fn override_editor_row<'a>(
     pin_number: &str,
     buf: &str,
-    tokens: &'a ThemeTokens,
+    tokens: &ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
-    let pin_owned = pin_number.to_string();
-    let lib_path_input = address.library_path.clone();
-    let table_input = address.table.clone();
-    let row_id = address.row_id;
-
-    let pin_for_input = pin_owned.clone();
+    let pin_for_input = pin_number.to_string();
+    let address_for_input = address.clone();
     let input = iced::widget::text_input("pad number…", buf)
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_input.clone(),
-            table: table_input.clone(),
-            row_id,
-            msg: EditorMsg::PinMapOverrideBufChanged {
-                pin: pin_for_input.clone(),
-                value: s,
-            },
+        .on_input(move |s| {
+            editor_event(
+                &address_for_input,
+                EditorMsg::PinMapOverrideBufChanged {
+                    pin: pin_for_input.clone(),
+                    value: s,
+                },
+            )
         })
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .width(Length::Fixed(120.0));
+        .width(Length::FillPortion(2));
 
-    let lib_path_save = address.library_path.clone();
-    let table_save = address.table.clone();
-    let pin_for_save = pin_owned.clone();
-    let buf_for_save = buf.to_string();
-    let save_btn =
-        button(container(text("Save").size(TS.body).color(iced::Color::WHITE)).padding([3, 10]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: lib_path_save,
-                table: table_save,
-                row_id,
-                msg: EditorMsg::PinMapAddOverride {
-                    pin: pin_for_save,
-                    pad: buf_for_save,
-                },
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
-
-    let lib_path_cancel = address.library_path.clone();
-    let table_cancel = address.table.clone();
-    let cancel_btn = button(container(text("Cancel").size(TS.body).color(text_c)).padding([3, 10]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: lib_path_cancel,
-            table: table_cancel,
-            row_id,
-            msg: EditorMsg::PinMapCancelOverrideEdit,
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
+    let save = kit::primary_button(
+        "Save",
+        Some(editor_event(
+            address,
+            EditorMsg::PinMapAddOverride {
+                pin: pin_number.to_string(),
+                pad: buf.to_string(),
             },
-            ..iced::widget::button::Style::default()
-        });
-
-    let lib_path_remove = address.library_path.clone();
-    let table_remove = address.table.clone();
-    let pin_for_remove = pin_owned;
-    let remove_btn = button(container(text("Remove").size(TS.body).color(muted)).padding([3, 10]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: lib_path_remove,
-            table: table_remove,
-            row_id,
-            msg: EditorMsg::PinMapRemoveOverride {
-                pin: pin_for_remove,
+        )),
+        tokens,
+    );
+    let cancel = kit::secondary_button(
+        "Cancel",
+        Some(editor_event(address, EditorMsg::PinMapCancelOverrideEdit)),
+        tokens,
+    );
+    let remove = kit::danger_button(
+        "Remove",
+        Some(editor_event(
+            address,
+            EditorMsg::PinMapRemoveOverride {
+                pin: pin_number.to_string(),
             },
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: muted,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        });
+        )),
+        tokens,
+    );
 
     container(
         row![
-            text(format!("override pin {pin_number} → "))
+            text(format!("Override pin {pin_number} →"))
                 .size(TS.body)
                 .color(muted),
             input,
-            Space::new().width(8),
-            save_btn,
-            Space::new().width(4),
-            cancel_btn,
-            Space::new().width(4),
-            remove_btn,
+            Space::new().width(Length::Fill),
+            save,
+            cancel,
+            remove,
         ]
-        .align_y(iced::Alignment::Center)
-        .spacing(0),
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
     )
-    .padding([SP.s, 14.0])
+    .padding([SP.s, SP.m])
     .into()
+}
+
+/// "Used by N sheet(s) in M project(s)."
+fn where_used_label(sheets: usize, projects: usize) -> String {
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
+    format!(
+        "Used by {sheets} sheet{} in {projects} project{}.",
+        plural(sheets),
+        plural(projects),
+    )
 }
 
 fn where_used_footer<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
-    tokens: &'a ThemeTokens,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
     let row_id = signex_library::RowId::from_uuid(state.row.row_id);
     let uses = library_state.where_used_for(row_id);
-    let label = if uses.is_empty() {
-        "Used by 0 sheets in 0 projects.".to_string()
+    let projects = uses
+        .iter()
+        .map(|u| &u.project_path)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    let color = if uses.is_empty() {
+        theme_ext::text_secondary(tokens)
     } else {
-        let project_count = uses
-            .iter()
-            .map(|u| &u.project_path)
-            .collect::<std::collections::BTreeSet<_>>()
-            .len();
-        format!(
-            "Used by {} sheet{} in {} project{}.",
-            uses.len(),
-            if uses.len() == 1 { "" } else { "s" },
-            project_count,
-            if project_count == 1 { "" } else { "s" },
-        )
+        theme_ext::text_primary(tokens)
     };
+    kit::card(
+        text(where_used_label(uses.len(), projects))
+            .size(TS.body)
+            .color(color),
+        tokens,
+    )
+}
 
-    text(label).size(TS.caption).color(muted).into()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_header_card_does_not_repeat_the_shell_identity() {
+        let mut row = crate::library::component_preview::test_row();
+        row.description = "10k resistor".into();
+        let texts = header_texts(&row);
+        let shown = [&texts.description, &texts.manufacturer, &texts.mpn];
+        let pn = row.internal_pn.as_str();
+        assert!(!pn.is_empty());
+        for text in shown {
+            assert!(!text.contains(pn), "{text}");
+            assert!(!text.contains(row.class.as_str()), "{text}");
+        }
+        assert_eq!(texts.description, "10k resistor");
+    }
+
+    #[test]
+    fn blank_manufacturer_and_mpn_read_not_set() {
+        assert_eq!(
+            mpn_fields("", "  "),
+            (NOT_SET.to_string(), NOT_SET.to_string())
+        );
+        assert_eq!(
+            mpn_fields("TI", ""),
+            ("TI".to_string(), NOT_SET.to_string())
+        );
+        assert_eq!(
+            mpn_fields(" TI ", "LM358"),
+            ("TI".to_string(), "LM358".to_string())
+        );
+    }
+
+    #[test]
+    fn blank_description_reads_no_description() {
+        assert_eq!(description_text("  "), NO_DESCRIPTION);
+        assert_eq!(description_text(" 100 nF "), "100 nF");
+    }
+
+    #[test]
+    fn pane_message_is_plain_language() {
+        assert_eq!(pane_message(PaneKind::Symbol, true), "No symbol bound");
+        let missing = pane_message(PaneKind::Footprint, false);
+        assert!(missing.contains("could not be loaded"));
+        assert!(!missing.contains("uuid"));
+    }
+
+    #[test]
+    fn pin_lines_one_per_pin_with_overrides_marked() {
+        let overrides = [signex_library::PinPadOverride::new("2", "B2")];
+        let lines = pin_lines([("1", "IN"), ("2", "OUT")].into_iter(), &overrides);
+        assert_eq!(lines.len(), 2);
+        assert_eq!((lines[0].pad.as_str(), lines[0].is_override), ("1", false));
+        assert_eq!((lines[1].pad.as_str(), lines[1].is_override), ("B2", true));
+    }
+
+    #[test]
+    fn where_used_pluralises() {
+        assert_eq!(where_used_label(0, 0), "Used by 0 sheets in 0 projects.");
+        assert_eq!(where_used_label(1, 1), "Used by 1 sheet in 1 project.");
+        assert_eq!(where_used_label(3, 2), "Used by 3 sheets in 2 projects.");
+    }
 }

@@ -64,7 +64,7 @@ pub fn view<'a>(
             msg: EditorMsg::SetBodyShape(s),
         }
     })
-    .text_size(11)
+    .text_size(TS.body)
     .padding([SP.s, SP.m]);
 
     // Numeric inputs — height_mm / offset_z_mm.
@@ -116,15 +116,15 @@ pub fn view<'a>(
 
     let body_col = column![
         header,
-        Space::new().height(8),
+        Space::new().height(SP.m),
         labeled_field("Shape", shape_picker, muted),
-        Space::new().height(6),
+        Space::new().height(SP.m),
         labeled_field("Height (mm)", height_input, muted),
-        Space::new().height(6),
+        Space::new().height(SP.m),
         labeled_field("Offset Z (mm)", offset_input, muted),
-        Space::new().height(8),
+        Space::new().height(SP.m),
         top_row,
-        Space::new().height(6),
+        Space::new().height(SP.m),
         side_row,
     ]
     .spacing(0)
@@ -144,7 +144,7 @@ fn labeled_field<'a>(
 ) -> Element<'a, LibraryMessage> {
     column![
         text(label).size(TS.caption).color(muted),
-        Space::new().height(2),
+        Space::new().height(SP.xs),
         field.into(),
     ]
     .spacing(0)
@@ -198,7 +198,7 @@ fn color_row<'a>(
     };
 
     let cycle_btn =
-        button(container(text("Cycle").size(TS.caption).color(text_c)).padding([3.0, SP.m]))
+        button(container(text("Cycle").size(TS.caption).color(text_c)).padding([SP.s, SP.m]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: address.library_path,
                 table: address.table.clone(),
@@ -216,10 +216,10 @@ fn color_row<'a>(
 
     column![
         text(label).size(TS.caption).color(muted),
-        Space::new().height(2),
+        Space::new().height(SP.xs),
         row![
             preview_swatch,
-            Space::new().width(8),
+            Space::new().width(SP.m),
             text(hex).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
             cycle_btn,

@@ -424,7 +424,7 @@ impl Signex {
             .document_state
             .dock
             .view_region(pos, self.panel_ctx_for(window_id), &self.library)
-            .map(move |msg| self.scope_to_window(window_id, Message::Dock(msg)));
+            .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
         let width = if !has_panels {
             0.0
         } else if collapsed {
@@ -453,7 +453,7 @@ impl Signex {
             .document_state
             .dock
             .view_region(pos, self.panel_ctx_for(window_id), &self.library)
-            .map(move |msg| self.scope_to_window(window_id, Message::Dock(msg)));
+            .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
         let height = if !has_panels {
             0.0
         } else if collapsed {
@@ -524,7 +524,7 @@ mod layout_tests {
         let texts = lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0));
 
         let label = find(&texts, RESET).bounds;
-        let one_line = natural::<()>(iced::widget::text(RESET).size(11).into(), RESET);
+        let one_line = natural::<()>(iced::widget::text(RESET).size(TS.body).into(), RESET);
         assert!(
             label.height <= one_line.height + 0.5,
             "the button label wraps: {label:?}, one line is {one_line:?}"

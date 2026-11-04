@@ -19,6 +19,7 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
+use crate::library::editor::footprint::sketch_redundancy_task::dispatch_redundancy;
 use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
@@ -39,6 +40,8 @@ mod browser;
 mod commit_pending;
 mod component_preview;
 mod components_panel;
+#[cfg(test)]
+mod datasheet_open_tests;
 mod datasheet_save;
 mod deferred_close;
 mod document_options;
@@ -73,6 +76,8 @@ mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
+#[cfg(test)]
+mod component_save_point_tests;
 #[cfg(test)]
 mod save_all_cascade_tests;
 mod settings;

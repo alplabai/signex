@@ -33,7 +33,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 // every submenu launcher visually aligned across the whole app
 // (canvas right-click, project-tree right-click, File/Edit/View menu).
 const SUBMENU_ARROW: &str = "›";
-const SUBMENU_ARROW_SIZE: f32 = 18.0;
+const SUBMENU_ARROW_SIZE: f32 = crate::styles::chrome_px(18.0);
 
 /// Chrome strip search bar width in pixels — the widest it ever gets;
 /// `chrome_search_bar_geometry` shrinks it below this on narrow windows.
@@ -470,7 +470,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let hint = iced::widget::container(
             iced::widget::text("A dialog is open: click to show it, Esc to cancel")
-                .size(12)
+                .size(TS.label)
                 .color(crate::styles::ti(tokens.text_secondary)),
         )
         .width(Length::Fill)
@@ -639,12 +639,7 @@ impl Signex {
             let base = if is_main {
                 base
             } else {
-                base.map(move |msg| match msg {
-                    Message::CanvasEvent(event) => {
-                        Message::CanvasEventInWindow { window_id, event }
-                    }
-                    other => self.scope_to_window(window_id, other),
-                })
+                base.map(move |msg| overlay_id::scope_canvas_message(window_id, msg))
             };
             // A sheet from a newer Signex is read-only: say so on the canvas
             // (#1402), in the main and in undocked windows alike.
@@ -675,7 +670,7 @@ impl Signex {
                     Message::CanvasEvent(event) => {
                         Message::CanvasEventInWindow { window_id, event }
                     }
-                    other => self.scope_to_window(window_id, other),
+                    other => other,
                 })
             };
             if pcb_canvas.gpu_render {
@@ -754,14 +749,6 @@ impl Signex {
             }
             let first_new = layers.len();
             self.extend_overlay(&mut layers, *id, window_id);
-            // An undocked window's overlay acts on the sheet that window
-            // shows (#1910, #1966).
-            if overlay_id::acts_on_window_document(*id) && self.is_document_window(window_id) {
-                for layer in &mut layers[first_new..] {
-                    let inner = std::mem::replace(layer, iced::widget::Space::new().into());
-                    *layer = inner.map(move |msg| self.scope_to_window(window_id, msg));
-                }
-            }
             // #562 — stop the wheel here rather than let it reach the
             // canvas. Applied per overlay id, not per builder: most
             // builders wrap their card in neither `wrap_modal` nor

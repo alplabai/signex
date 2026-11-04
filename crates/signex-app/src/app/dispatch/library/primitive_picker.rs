@@ -299,12 +299,12 @@ impl Signex {
             }
             PrimitiveKind::Footprint => {
                 state.row.footprint_ref = Some(primitive_ref);
-                state.footprint = report_read_failure(
+                state.set_footprint(report_read_failure(
                     self.library.set.resolve_footprint(&primitive_ref),
                     ResolvedKind::Footprint,
                     &primitive_ref,
                     "primitive pick",
-                );
+                ));
             }
             PrimitiveKind::Sim => {
                 state.row.sim_ref = Some(primitive_ref);
@@ -326,6 +326,8 @@ impl Signex {
         state.binding_primitive = true;
         // The row changed under any reload still being read.
         state.note_edit();
+        // No snapshot holds the resolved primitive: undo cannot cross a bind.
+        state.restart_history();
         let table = address.table.clone();
         let row_id = address.row_id;
         let msg = bind_message(kind);
@@ -365,11 +367,14 @@ impl Signex {
                 }
             }
             Err(failure) => {
-                // Offer "Reload saved version" when the row moved on.
-                if failure.row_changed
-                    && let Some(state) = self.library.editors.get_mut(&address)
-                {
-                    state.stale_base = true;
+                if let Some(state) = self.library.editors.get_mut(&address) {
+                    // The bound row never reached disk: no clean mark holds.
+                    state.history.forget();
+                    state.dirty = true;
+                    // Offer "Reload saved version" when the row moved on.
+                    if failure.row_changed {
+                        state.stale_base = true;
+                    }
                 }
                 crate::diagnostics::log_warning(format!(
                     "Primitive binding for row {} was not saved: {}",

@@ -15,6 +15,9 @@ pub enum DatasheetMsg {
     SetUrl(usize, String),
     /// Live edit of a document's label ("Errata", "App note", …).
     SetLabel(usize, String),
+    /// Open a document in the browser (URL) or the PDF viewer (pinned).
+    /// Allowed on a read-only library: it reads, never edits.
+    Open(usize),
     /// Open the Pinned-PDF upload dialog for a document.
     UploadDialog(usize),
     /// Async result of the Pinned-PDF upload. Boxed: it is the largest

@@ -71,6 +71,13 @@ pub(super) fn remove(state: &mut ComponentPreviewState, name: String) {
 /// dropping the typed text. A buffer whose parameter is no longer a
 /// number / measurement is dead and is discarded.
 pub(crate) fn flush_edit_buffers(state: &mut ComponentPreviewState) -> Result<(), String> {
+    let scope = state.begin_edit();
+    let result = flush_buffers(state);
+    state.finish_edit(scope);
+    result
+}
+
+fn flush_buffers(state: &mut ComponentPreviewState) -> Result<(), String> {
     let mut refused: Option<String> = None;
     let names: Vec<String> = state.params_edit_buf.keys().cloned().collect();
     for name in names {

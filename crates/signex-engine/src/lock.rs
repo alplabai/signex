@@ -411,28 +411,32 @@ impl Engine {
             }
             own.is_none() && on_pin.is_none() && !on_locked_wire
         };
-        let emptied = match &mut cmd {
-            Command::MoveSelection { items, .. }
-            | Command::RotateSelection { items, .. }
-            | Command::MirrorSelection { items, .. }
-            | Command::TransformSelection { items, .. }
-            | Command::DeleteSelection { items } => {
-                items.retain(&mut keep);
-                items.is_empty()
-            }
-            Command::MoveEach { moves, .. } => {
-                moves.retain(|(item, _, _)| keep(item));
-                moves.is_empty()
-            }
-            other => {
-                if let Some(EngineError::ItemLocked { references, .. }) =
-                    self.locked_item_refusal(other)
-                {
-                    skipped = references;
-                    return (None, skipped);
+        let emptied = if cmd.is_selection_command() {
+            match &mut cmd {
+                Command::MoveSelection { items, .. }
+                | Command::RotateSelection { items, .. }
+                | Command::MirrorSelection { items, .. }
+                | Command::TransformSelection { items, .. }
+                | Command::DeleteSelection { items } => {
+                    items.retain(&mut keep);
+                    items.is_empty()
                 }
-                false
+                Command::MoveEach { moves, .. } => {
+                    moves.retain(|(item, _, _)| keep(item));
+                    moves.is_empty()
+                }
+                other => {
+                    debug_assert!(false, "selection command not pruned: {other:?}");
+                    false
+                }
             }
+        } else {
+            if let Some(EngineError::ItemLocked { references, .. }) = self.locked_item_refusal(&cmd)
+            {
+                skipped = references;
+                return (None, skipped);
+            }
+            false
         };
         skipped.sort();
         skipped.dedup();

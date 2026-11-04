@@ -164,17 +164,30 @@ impl Signex {
     }
 
     /// The selection shape and project row key the canvas menu is built
-    /// from; the view and the row-effect tests share it.
-    pub(super) fn canvas_menu_inputs(&self) -> (CanvasSelection, Option<Vec<String>>) {
-        let canvas = self.interaction_state.active_canvas();
+    /// from; the view and the row-effect tests share it. The selection is
+    /// the one of the sheet `window_id` shows (#1910).
+    pub(super) fn canvas_menu_inputs(
+        &self,
+        window_id: iced::window::Id,
+    ) -> (CanvasSelection, Option<Vec<String>>) {
+        let canvas = self.interaction_state.canvas_for_window(window_id);
         let selection = CanvasSelection {
             has_selection: !canvas.selected.is_empty(),
             child_sheet_selected: canvas
                 .selected
                 .iter()
                 .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
-            drawing_selected: !self.selected_drawing_ids().is_empty(),
-            placed_part_selected: self.has_placed_part_selected(),
+            drawing_selected: canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::Drawing),
+            placed_part_selected: self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some_and(|engine| {
+                    crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
+                        .is_some()
+                }),
         };
         // The project row's tree key, the same one the project tree's own
         // menu sends, so the action follows the project if rows reorder.
@@ -185,57 +198,14 @@ impl Signex {
         (selection, project_key)
     }
 
-    /// [`Self::canvas_menu_inputs`] for the sheet the window `window` shows.
-    pub(super) fn canvas_menu_inputs_for(
-        &self,
-        window: iced::window::Id,
-    ) -> (CanvasSelection, Option<Vec<String>>) {
-        if !self.is_document_window(window) {
-            return self.canvas_menu_inputs();
-        }
-        let canvas = self.interaction_state.canvas_for_window(window);
-        let engine = self
-            .document_state
-            .engine_for_window(window, &self.ui_state);
-        let selected = canvas.selected.as_slice();
-        let selection = CanvasSelection {
-            has_selection: !selected.is_empty(),
-            child_sheet_selected: selected
-                .iter()
-                .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
-            drawing_selected: selected
-                .iter()
-                .any(|item| item.kind == signex_types::schematic::SelectedKind::Drawing),
-            placed_part_selected: match (selected, engine) {
-                ([item], Some(engine)) => {
-                    item.kind == signex_types::schematic::SelectedKind::Symbol
-                        && engine
-                            .document()
-                            .symbols
-                            .iter()
-                            .any(|s| s.uuid == item.uuid && !s.is_power)
-                }
-                _ => false,
-            },
-        };
-        let project_key = match self.ui_state.windows.get(&window) {
-            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => {
-                self.document_state.document_project(path)
-            }
-            _ => None,
-        }
-        .map(|p| vec![p.id.to_string()]);
-        (selection, project_key)
-    }
-
     /// Canvas right-click menu. Resolves selection state + shortcut hints
     /// from `self`, then delegates to the pure [`canvas_menu_entries`].
     pub(in crate::app::view) fn view_context_menu(
         &self,
-        window: iced::window::Id,
+        window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
-        let (selection, project_key) = self.canvas_menu_inputs_for(window);
+        let (selection, project_key) = self.canvas_menu_inputs(window_id);
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.

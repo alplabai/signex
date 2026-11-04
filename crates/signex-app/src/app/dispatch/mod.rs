@@ -123,9 +123,6 @@ impl Signex {
     /// minimize / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
-            WindowMsg::ActionTakenInWindow { window, message } => {
-                self.run_action_in_window(window, *message)
-            }
             WindowMsg::WindowResizedFor(id, w, h) => {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
@@ -134,6 +131,8 @@ impl Signex {
                     self.ui_state.window_size = (w, h);
                     return self.main_window_mode_task(id);
                 }
+                // An undocked tab window's own size places its overlays.
+                self.ui_state.set_undocked_window_size(id, (w, h));
                 Task::none()
             }
             WindowMsg::WindowScaleChanged(id, scale) => {
@@ -188,6 +187,8 @@ impl Signex {
                     return self.flush_quit_writes_then(iced::exit());
                 }
                 self.ui_state.forget_window_os_scale(id);
+                self.ui_state.forget_undocked_window_size(id);
+                self.close_overlays_owned_by(id);
                 if self.ui_state.focused_window == Some(id) {
                     self.ui_state.focused_window = None;
                 }
@@ -197,7 +198,6 @@ impl Signex {
                 // reattaching a phantom copy to the main window on the
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
-                self.close_surfaces_of_window(id);
                 let owner = self.ui_state.library_modal_owners.remove(&id);
                 self.ui_state.modal_window_sizes.remove(&id);
                 if let Some(kind) = self.ui_state.windows.remove(&id) {
@@ -465,8 +465,9 @@ impl Signex {
                 // canvas here too — otherwise `SecondaryWindowClosed`
                 // short-circuits on `windows.remove -> None` and the
                 // canvas cache + selection leak.
+                self.close_overlays_owned_by(id);
+                self.ui_state.forget_undocked_window_size(id);
                 self.ui_state.windows.remove(&id);
-                self.retire_window_panel_ctx(id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 iced::window::close(id)

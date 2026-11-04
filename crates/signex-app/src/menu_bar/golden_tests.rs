@@ -10,9 +10,7 @@
 
 use super::{MenuContext, cmd_label, enabled, shortcut_for};
 use crate::app::command::CommandContext;
-use crate::app::command::enablement::{
-    cycle_grid_menu_enabled, new_part_menu_enabled, remove_part_menu_enabled,
-};
+use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
 
 const GOLDEN: &str = include_str!("testdata/menu_bar.golden.tsv");
 const RECENT_GOLDEN: &str = include_str!("testdata/menu_bar_recent.golden.tsv");
@@ -89,7 +87,6 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "project" => ctx.commands.has_open_project,
         "newpart" => new_part_menu_enabled(&ctx.commands),
         "removepart" => remove_part_menu_enabled(&ctx.commands),
-        "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
         "libeditor" => ctx.commands.has_library_editor,
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");
@@ -173,11 +170,10 @@ use super::MenuMessage;
 use super::model::{ItemState, Menu, MenuEntry, menu_bar_model};
 
 /// Every row that carries a command id publishes `Command(id)` (#1922), and
-/// the fixture still names the row by the message it sent before. This maps
-/// the id back to that name, so the fixture stays byte-for-byte what it was
-/// and still pins which row runs which command. The two rows whose action is
-/// not their command (Cycle Grid Size, Electrical Rules Check) keep their
-/// own message and are not listed.
+/// the fixture names each row by a stable message-like name: the message it
+/// sent before, or a new name for a row added since (`OpenErcDialog`, #1991).
+/// This maps the id back to that name, so the fixture stays stable and still
+/// pins which row runs which command.
 const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_document", "NewProject"),
     ("open_document", "OpenProject"),
@@ -207,6 +203,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_components_panel", "PlaceComponent"),
     ("place_power_symbol", "PlacePowerPort"),
     ("place_junction", "PlaceJunction"),
+    ("next_grid", "CycleGrid"),
+    ("open_erc_dialog", "OpenErcDialog"),
     ("open_parameter_manager", "OpenParameterManager"),
     ("annotate_schematic_quietly", "AnnotateQuietly"),
     ("force_annotate_all_schematics", "AnnotateForceAll"),
@@ -341,7 +339,7 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert_eq!(checked, 32, "the Altium profile labels 32 menu rows");
+    assert_eq!(checked, 30, "the Altium profile labels 30 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
