@@ -161,8 +161,13 @@ impl Signex {
             }
         };
         let Some((open, step)) = step else {
+            let reason = if self.navigator_is_settled() {
+                "it is the project root, no sheet references it, or it lies past the hierarchy's size limit"
+            } else {
+                "the project hierarchy is still being read"
+            };
             crate::diagnostics::log_warning(format!(
-                "{} has no parent sheet: it is the project root or no sheet references it",
+                "Up Hierarchy: {} has no parent sheet: {reason}",
                 active.display()
             ));
             return Task::none();

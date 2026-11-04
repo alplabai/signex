@@ -207,17 +207,29 @@ impl SheetHierarchy {
     /// walk order: a child placed twice is two entries, a hierarchical child
     /// no page list names is one.
     pub fn occurrences(&self) -> Vec<(InstancePath, &SheetNode)> {
+        self.occurrences_with_parent()
+            .into_iter()
+            .map(|(placement, node, _)| (placement, node))
+            .collect()
+    }
+
+    /// [`occurrences`](Self::occurrences), each with the node the walk
+    /// reached it from (`None` for a page the walk starts at). The parent is
+    /// taken from the walk, not from the chain: a loose top-level page has
+    /// the root's empty chain, so a chain lookup would name the root.
+    fn occurrences_with_parent(&self) -> Vec<(InstancePath, &SheetNode, Option<&SheetNode>)> {
         fn walk<'a>(
             node: &'a SheetNode,
+            parent: Option<&'a SheetNode>,
             chain: &mut Vec<Uuid>,
-            out: &mut Vec<(InstancePath, &'a SheetNode)>,
+            out: &mut Vec<(InstancePath, &'a SheetNode, Option<&'a SheetNode>)>,
         ) {
             chain.extend(node.placed_as);
             if node.kind == SheetNodeKind::Present {
-                out.push((InstancePath::from_chain(chain.clone()), node));
+                out.push((InstancePath::from_chain(chain.clone()), node, parent));
             }
             for child in &node.children {
-                walk(child, chain, out);
+                walk(child, Some(node), chain, out);
             }
             if node.placed_as.is_some() {
                 chain.pop();
@@ -225,7 +237,7 @@ impl SheetHierarchy {
         }
         let mut out = Vec::new();
         for node in self.top_level() {
-            walk(node, &mut Vec::new(), &mut out);
+            walk(node, None, &mut Vec::new(), &mut out);
         }
         out
     }
@@ -269,12 +281,14 @@ impl SheetHierarchy {
     pub fn parent_through(&self, placement: &InstancePath, active: &Path) -> Option<ParentStep> {
         let symbol = *placement.chain().last()?;
         let up = placement.parent()?;
-        let here = self.sheet_path_at(placement)?;
-        if normalised_key(&here, self.fold) != normalised_key(active, self.fold) {
-            return None;
-        }
+        let key = normalised_key(active, self.fold);
+        let (_, _, parent) = self
+            .occurrences_with_parent()
+            .into_iter()
+            .find(|(chain, _, _)| chain == placement)
+            .filter(|(_, node, _)| normalised_key(&node.path, self.fold) == key)?;
         Some(ParentStep {
-            parent: self.sheet_path_at(&up)?,
+            parent: parent?.path.clone(),
             symbol,
             placement: up,
         })
@@ -287,18 +301,15 @@ impl SheetHierarchy {
     /// sheet beyond the cap has none, as in enablement.
     pub fn first_parent_of(&self, active: &Path) -> Option<ParentStep> {
         let key = normalised_key(active, self.fold);
-        let occurrences = self.occurrences();
-        occurrences
-            .iter()
-            .filter(|(_, node)| normalised_key(&node.path, self.fold) == key)
-            .filter_map(|(placement, _)| {
+        self.occurrences_with_parent()
+            .into_iter()
+            .filter(|(_, node, _)| normalised_key(&node.path, self.fold) == key)
+            .filter_map(|(placement, _, parent)| {
                 let symbol = *placement.chain().last()?;
-                let up = placement.parent()?;
-                let (_, parent) = occurrences.iter().find(|(chain, _)| *chain == up)?;
                 Some(ParentStep {
-                    parent: parent.path.clone(),
+                    parent: parent?.path.clone(),
                     symbol,
-                    placement: up,
+                    placement: placement.parent()?,
                 })
             })
             .min_by_key(|step| normalised_key(&step.parent, self.fold))
@@ -610,6 +621,34 @@ mod tests {
         assert_eq!(
             h.first_parent_of(&p("shared.snxsch")).map(|s| s.parent),
             Some(p("a.snxsch"))
+        );
+    }
+
+    #[test]
+    fn a_child_of_a_loose_page_ascends_to_that_page() {
+        let mut sheets = HashMap::new();
+        sheets.insert(p("root.snxsch"), sheet(&[]));
+        sheets.insert(p("page2.snxsch"), sheet(&[("C", "child.snxsch")]));
+        sheets.insert(p("child.snxsch"), sheet(&[]));
+        let sheets = numbered(sheets);
+        let h = build_sheet_hierarchy(
+            &sheets,
+            &[],
+            &p("root.snxsch"),
+            &[p("page2.snxsch")],
+            CaseFold::host_default(),
+        );
+        let symbol = sheets[&p("page2.snxsch")].child_sheets[0].uuid;
+
+        assert_eq!(
+            h.first_parent_of(&p("child.snxsch")).map(|s| s.parent),
+            Some(p("page2.snxsch"))
+        );
+        let entered = InstancePath::from_chain(vec![symbol]);
+        assert_eq!(
+            h.parent_through(&entered, &p("child.snxsch"))
+                .map(|s| s.parent),
+            Some(p("page2.snxsch"))
         );
     }
 

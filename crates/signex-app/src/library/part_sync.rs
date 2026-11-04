@@ -180,11 +180,13 @@ pub fn identity_fields(fields: &[(String, String)]) -> HashMap<String, String> {
         .collect()
 }
 
-/// Drop the part syncs of locked parts, and their version stamps, so the
-/// lock-exempt library replace cannot restamp a part whose footprint / MPN
-/// the lock kept (that would hide the drift). A part is held whole: one locked
-/// unit holds back every unit's sync and stamp. Returns the stamps and syncs
-/// left and the references held back.
+/// Drop the part syncs of locked parts, and the version stamps of the parts
+/// whose sync was dropped, so the lock-exempt library replace cannot restamp
+/// a part whose footprint / MPN the lock kept (that would hide the drift). A
+/// part is held whole: one locked unit holds back every unit's sync and
+/// stamp. A locked part with nothing to sync keeps its stamp, since nothing
+/// was held back. Returns the stamps and syncs left and the references held
+/// back.
 pub fn hold_back_locked(
     engine: &signex_engine::Engine,
     stamps: Vec<(Uuid, String)>,
@@ -194,9 +196,13 @@ pub fn hold_back_locked(
     let (held, kept): (Vec<PartSync>, Vec<PartSync>) = part_syncs
         .into_iter()
         .partition(|p| locked.contains(&p.symbol));
+    let held_units: std::collections::HashSet<Uuid> = held
+        .iter()
+        .flat_map(|p| signex_engine::placed_unit_ids(engine.document(), p.symbol))
+        .collect();
     let stamps = stamps
         .into_iter()
-        .filter(|(id, _)| !locked.contains(id))
+        .filter(|(id, _)| !held_units.contains(id))
         .collect();
     let mut references: Vec<String> = held.into_iter().map(|p| p.reference).collect();
     references.sort();
@@ -328,6 +334,17 @@ mod tests {
             [Uuid::from_u128(3)],
             "only the free part is stamped"
         );
+    }
+
+    #[test]
+    fn a_locked_part_with_nothing_to_sync_keeps_its_stamp() {
+        let engine = two_unit_engine(2);
+        let (stamps, syncs, held) = hold_back_locked(
+            &engine,
+            vec![(Uuid::from_u128(2), "2".to_owned())],
+            Vec::new(),
+        );
+        assert_eq!((stamps.len(), syncs.len(), held.len()), (1, 0, 0));
     }
 
     #[test]
