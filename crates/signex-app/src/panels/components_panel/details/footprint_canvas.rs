@@ -2,7 +2,8 @@
 //! origin, silk, courtyard, pads with holes) over a read-only
 //! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
 //! first show. Shared by the Components panel and the Component Preview
-//! dialog.
+//! dialog. Left-drag pans; Ctrl+wheel zooms (a plain wheel scrolls the
+//! panel around it).
 
 use iced::widget::canvas::{self, Action, Cache, Geometry};
 use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
@@ -10,7 +11,7 @@ use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
 use crate::canvas::Camera;
 use crate::library::editor::footprint::canvas::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
-    draw_backdrop, draw_courtyard, draw_origin, draw_pads, draw_silk,
+    draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk,
 };
 use crate::library::editor::footprint::state::SnapOptions;
 
@@ -41,6 +42,8 @@ pub struct PreviewState {
     fitted_for: Option<(uuid::Uuid, i64)>,
     /// Last cursor position while a drag-pan is running.
     pan_from: Option<Point>,
+    /// Ctrl state from the last modifiers event; the wheel zooms with it.
+    ctrl_held: bool,
     cache: Cache,
 }
 
@@ -91,11 +94,19 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             state.pan_from = None;
             state.cache.clear();
         }
+        if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) = event {
+            state.ctrl_held = mods.control();
+            return None;
+        }
         let iced::Event::Mouse(event) = event else {
             return None;
         };
         match event {
             mouse::Event::WheelScrolled { delta } => {
+                // Only Ctrl+wheel zooms; a plain wheel scrolls the panel.
+                if !state.ctrl_held {
+                    return None;
+                }
                 let anchor = cursor.position_in(bounds)?;
                 let lines = match delta {
                     mouse::ScrollDelta::Lines { y, .. } => *y,
@@ -109,7 +120,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
-            mouse::Event::ButtonPressed(_) => {
+            mouse::Event::ButtonPressed(mouse::Button::Left) => {
                 cursor.position_in(bounds)?;
                 state.pan_from = cursor.position();
                 Some(Action::capture())
@@ -126,6 +137,10 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             mouse::Event::ButtonReleased(_) => {
                 state.pan_from.take()?;
                 Some(Action::capture())
+            }
+            mouse::Event::CursorLeft => {
+                state.pan_from = None;
+                None
             }
             _ => None,
         }
@@ -162,6 +177,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             draw_backdrop(frame, &camera, area, look);
             draw_origin(frame, &camera, false);
             let layers = self.model.layer_input();
+            draw_fab(frame, &camera, self.model.fab_f());
             draw_silk(frame, &camera, &layers);
             draw_courtyard(frame, &camera, &layers);
             draw_pads(frame, &camera, &layers);

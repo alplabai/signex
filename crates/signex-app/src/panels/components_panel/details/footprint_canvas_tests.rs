@@ -123,6 +123,13 @@ fn first_event(
     let _ = Program::<()>::update(&program, state, &moved, BOX, mouse::Cursor::Unavailable);
 }
 
+fn hold_ctrl(program: &FootprintPreview<'_>, state: &mut PreviewState) {
+    let ctrl = Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+        iced::keyboard::Modifiers::CTRL,
+    ));
+    let _ = Program::<()>::update(program, state, &ctrl, BOX, mouse::Cursor::Unavailable);
+}
+
 fn draw_preview(
     model: &crate::library::editor::footprint::canvas::PreviewFootprint,
     state: &PreviewState,
@@ -246,6 +253,7 @@ fn a_later_resize_does_not_refit_over_the_users_view() {
     let wheel = Event::Mouse(mouse::Event::WheelScrolled {
         delta: mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
     });
+    hold_ctrl(&program, &mut state);
     let _ = Program::<()>::update(&program, &mut state, &wheel, BOX, over);
     let zoomed = state.scale();
     let bigger = Rectangle {
@@ -275,6 +283,7 @@ fn wheel_zooms_about_the_cursor_and_drag_pans() {
         delta: mouse::ScrollDelta::Lines { x: 0.0, y: 2.0 },
     });
     let cursor = mouse::Cursor::Available(anchor);
+    hold_ctrl(&program, &mut state);
     let _ = Program::<()>::update(&program, &mut state, &wheel, BOX, cursor);
     assert!(state.scale() > fitted.0, "scrolling up zooms in");
     let world_after = (
@@ -374,4 +383,95 @@ fn component_preview_dialog_keeps_the_preview_model_in_step() {
     assert_eq!(model.pads().len(), 3);
     state.set_footprint(None);
     assert!(state.footprint_preview().is_none());
+}
+
+fn over_canvas() -> mouse::Cursor {
+    mouse::Cursor::Available(Point::new(100.0, 80.0))
+}
+
+#[test]
+fn a_right_press_is_not_captured_and_starts_no_pan() {
+    let model = preview_of(&fixture());
+    let mut state = show(&model);
+    let program = FootprintPreview::new(&model);
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right));
+    let action = Program::<()>::update(&program, &mut state, &press, BOX, over_canvas());
+    assert!(action.is_none());
+    let before = state.offset();
+    let drag = Event::Mouse(mouse::Event::CursorMoved {
+        position: Point::new(130.0, 80.0),
+    });
+    let _ = Program::<()>::update(&program, &mut state, &drag, BOX, over_canvas());
+    assert_eq!(state.offset(), before);
+}
+
+#[test]
+fn a_plain_wheel_is_left_to_the_panel_and_ctrl_wheel_zooms() {
+    let model = preview_of(&fixture());
+    let mut state = show(&model);
+    let program = FootprintPreview::new(&model);
+    let wheel = Event::Mouse(mouse::Event::WheelScrolled {
+        delta: mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    });
+    let fitted = state.scale();
+    let plain = Program::<()>::update(&program, &mut state, &wheel, BOX, over_canvas());
+    assert!(plain.is_none(), "not captured, so the panel scrolls");
+    assert_eq!(state.scale(), fitted);
+
+    hold_ctrl(&program, &mut state);
+    let zoomed = Program::<()>::update(&program, &mut state, &wheel, BOX, over_canvas());
+    assert!(zoomed.is_some());
+    assert!(state.scale() > fitted);
+}
+
+#[test]
+fn cursor_leaving_ends_a_pan() {
+    let model = preview_of(&fixture());
+    let mut state = show(&model);
+    let program = FootprintPreview::new(&model);
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let _ = Program::<()>::update(&program, &mut state, &press, BOX, over_canvas());
+    let left = Event::Mouse(mouse::Event::CursorLeft);
+    let _ = Program::<()>::update(&program, &mut state, &left, BOX, mouse::Cursor::Unavailable);
+    let before = state.offset();
+    let back = Event::Mouse(mouse::Event::CursorMoved {
+        position: Point::new(150.0, 90.0),
+    });
+    let _ = Program::<()>::update(&program, &mut state, &back, BOX, over_canvas());
+    assert_eq!(state.offset(), before, "no pan without a held button");
+}
+
+#[test]
+fn fab_outline_is_drawn_and_fitted() {
+    let mut fp = fixture();
+    let plain_model = preview_of(&fp);
+    let plain = draw_preview(&plain_model, &show(&plain_model));
+    fp.fab_f.push(FpGraphic {
+        kind: FpGraphicKind::Rectangle {
+            from: [-8.0, -5.0],
+            to: [8.0, 5.0],
+        },
+        stroke_width: 0.1,
+        filled: false,
+        sketch_entity: None,
+    });
+    let model = preview_of(&fp);
+    let drawn = draw_preview(&model, &show(&model));
+    assert_eq!(drawn.paths(), plain.paths() + 1, "one fab stroke");
+    let (min_x, _, max_x, _) = model.bbox_mm().expect("bbox");
+    assert!(min_x <= -8.0 && max_x >= 8.0);
+}
+
+#[test]
+fn small_pads_get_numbers_in_the_preview_but_not_the_editor() {
+    // ~20 mm part in the box: scale well under the editor's 25 px/mm,
+    // pads still over 9 px.
+    let mut fp = fixture();
+    fp.pads[0].position = [-10.0, 0.0];
+    fp.pads[1].position = [10.0, 0.0];
+    let model = preview_of(&fp);
+    let state = show(&model);
+    assert!(state.scale() < 25.0 && 1.2 * state.scale() >= 9.0);
+    assert!(draw_preview(&model, &state).has_text("1"));
+    assert_eq!(draw_editor(&fp, &state).texts(), 1, "silk text only");
 }

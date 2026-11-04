@@ -7,6 +7,7 @@ use iced::{Color, Point};
 
 use super::super::{FootprintCanvas, FootprintCanvasState};
 use super::layers::{LayerInput, draw_courtyard, draw_pads, draw_silk};
+use super::pad::PadLabels;
 
 impl FootprintCanvas<'_> {
     /// The read-only view of the model the shared content layers draw.
@@ -21,6 +22,7 @@ impl FootprintCanvas<'_> {
             selected_pad: self.state.selected_pad,
             selected_pads_extra: &self.state.selected_pads_extra,
             selected_silk_f: self.state.selected_silk_f,
+            pad_labels: PadLabels::Editor,
         }
     }
 

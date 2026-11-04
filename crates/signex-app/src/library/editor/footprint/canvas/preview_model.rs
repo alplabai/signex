@@ -5,9 +5,12 @@
 use signex_library::primitive::Footprint;
 use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
 
-use super::draw::LayerInput;
+use super::draw::{LayerInput, PadLabels};
 use crate::library::editor::footprint::layers::LayerVisibility;
 use crate::library::editor::footprint::state::{CourtyardRect, EditorPad, FootprintEditorState};
+
+/// A preview labels a pad once it is this wide on screen.
+const MIN_LABELLED_PAD_PX: f32 = 9.0;
 
 /// The editor's view of a saved footprint: pad models, silk, the courtyard
 /// the editor would draw, and the bbox the preview fits to.
@@ -18,6 +21,7 @@ pub struct PreviewFootprint {
     pads: Vec<EditorPad>,
     silk_f: Vec<FpGraphic>,
     silk_b: Vec<FpGraphic>,
+    fab_f: Vec<FpGraphic>,
     courtyard_outline: Option<Vec<(f64, f64)>>,
     courtyard_rect: Option<CourtyardRect>,
     bbox_mm: Option<(f64, f64, f64, f64)>,
@@ -47,7 +51,7 @@ impl PreviewFootprint {
         for (x, y) in courtyard_outline.iter().flatten() {
             grow(*x, *y);
         }
-        for g in &fp.silk_f {
+        for g in fp.silk_f.iter().chain(&fp.fab_f) {
             let mut pts = Vec::new();
             graphic_points(g, &mut pts);
             for p in pts {
@@ -63,11 +67,12 @@ impl PreviewFootprint {
             pads: state.pads,
             silk_f: fp.silk_f.clone(),
             silk_b: fp.silk_b.clone(),
+            fab_f: fp.fab_f.clone(),
         }
     }
 
     /// Bounding box `(min_x, min_y, max_x, max_y)` in mm of pads,
-    /// courtyard and front silk; `None` for an empty footprint.
+    /// courtyard, front silk and front fab; `None` for an empty footprint.
     pub fn bbox_mm(&self) -> Option<(f64, f64, f64, f64)> {
         self.bbox_mm
     }
@@ -75,6 +80,11 @@ impl PreviewFootprint {
     /// Pads, in the editor's pad model.
     pub fn pads(&self) -> &[EditorPad] {
         &self.pads
+    }
+
+    /// Front fab graphics.
+    pub(crate) fn fab_f(&self) -> &[FpGraphic] {
+        &self.fab_f
     }
 
     /// Default layers (front side on), nothing selected.
@@ -89,6 +99,7 @@ impl PreviewFootprint {
             selected_pad: None,
             selected_pads_extra: &[],
             selected_silk_f: None,
+            pad_labels: PadLabels::MinPadPx(MIN_LABELLED_PAD_PX),
         }
     }
 }

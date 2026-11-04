@@ -11,7 +11,7 @@ use crate::library::editor::footprint::layers::{FpLayer, LayerVisibility};
 use crate::library::editor::footprint::state::{CourtyardRect, EditorPad};
 
 use super::super::FootprintCanvasState;
-use super::pad::draw_pad;
+use super::pad::{PadLabels, draw_pad};
 use super::silk::draw_silk_graphics;
 
 /// Everything the content layers read. Selection fields are empty/None
@@ -28,6 +28,7 @@ pub(crate) struct LayerInput<'a> {
     pub selected_pad: Option<usize>,
     pub selected_pads_extra: &'a [usize],
     pub selected_silk_f: Option<usize>,
+    pub pad_labels: PadLabels,
 }
 
 /// Silk-front and silk-back graphics.
@@ -38,6 +39,12 @@ pub(crate) fn draw_silk(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i
     if i.visibility.get(FpLayer::BSilks) {
         draw_silk_graphics(frame, cam, i.silk_b, FpLayer::BSilks, None);
     }
+}
+
+/// Front fabrication graphics (previews only; the editor does not show
+/// the fab layer).
+pub(crate) fn draw_fab(frame: &mut canvas::Frame, cam: &FootprintCanvasState, fab_f: &[FpGraphic]) {
+    draw_silk_graphics(frame, cam, fab_f, FpLayer::FFab, None);
 }
 
 /// Courtyard: the outline polygon when present, else the bbox rectangle.
@@ -78,6 +85,6 @@ pub(crate) fn draw_pads(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i
             continue;
         }
         let is_selected = i.selected_pad == Some(idx) || i.selected_pads_extra.contains(&idx);
-        draw_pad(frame, cam, pad, is_selected);
+        draw_pad(frame, cam, pad, is_selected, i.pad_labels);
     }
 }

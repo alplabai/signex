@@ -41,6 +41,7 @@ mod sketch;
 // deeper, re-exported here so consumers name `draw::<item>` rather than
 // reaching into the private renderer submodules.
 pub(crate) use background::{BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_backdrop, draw_origin};
-pub(crate) use layers::{LayerInput, draw_courtyard, draw_pads, draw_silk};
+pub(crate) use layers::{LayerInput, draw_courtyard, draw_fab, draw_pads, draw_silk};
+pub(crate) use pad::PadLabels;
 pub(in crate::library::editor::footprint::canvas) use pad::draw_pads_tool_preview;
 pub(in crate::library::editor::footprint::canvas) use sketch::{ClosedLoop, find_closed_loops};
