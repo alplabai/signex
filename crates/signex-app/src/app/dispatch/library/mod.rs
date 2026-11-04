@@ -262,7 +262,18 @@ impl Signex {
             ),
             LibraryMessage::DesignatorsScanned { generation, result } => {
                 if self.apply_designator_scan(generation, &result) {
-                    self.commit_pending_drop()
+                    // A drop armed from an undocked window commits there.
+                    let window = self
+                        .interaction_state
+                        .placement
+                        .as_ref()
+                        .and_then(|s| self.undocked_window_of_other_sheet(&s.target_sheet));
+                    match window {
+                        Some(window) => {
+                            self.run_in_window_document(window, |app| app.commit_pending_drop())
+                        }
+                        None => self.commit_pending_drop(),
+                    }
                 } else {
                     Task::none()
                 }

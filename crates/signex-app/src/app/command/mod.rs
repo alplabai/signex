@@ -172,6 +172,11 @@ impl Signex {
             {
                 self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
             }
+            // Any other command typed in an undocked document window acts on
+            // the sheet that window shows (#1966).
+            (Some(message), Some(window_id)) if self.is_document_window(window_id) => {
+                self.run_command_in_window(window_id, message)
+            }
             (Some(message), _) => self.dispatch_update(message),
             (None, _) => Task::none(),
         };

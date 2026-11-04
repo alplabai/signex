@@ -414,6 +414,10 @@ mod placement_session;
 #[path = "regression/reprefix_standard.rs"]
 mod reprefix_standard;
 
+// #1966 — a Components row placed from an undocked window lands in its sheet.
+#[path = "regression/components_row_in_window.rs"]
+mod components_row_in_window;
+
 #[path = "regression/canvas_editing_correctness.rs"]
 mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]

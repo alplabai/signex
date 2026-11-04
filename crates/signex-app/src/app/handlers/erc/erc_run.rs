@@ -440,6 +440,9 @@ impl Signex {
     /// when it is open and active afterwards; every `false` has already
     /// logged its reason to the Messages panel.
     pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) -> bool {
+        if self.sheet_switch_refused_in_window("Showing a sheet") {
+            return false;
+        }
         let path = &self.resolve_held_spelling_now(path.to_path_buf());
         if let Some(index) = self
             .document_state

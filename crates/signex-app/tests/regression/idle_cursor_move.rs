@@ -71,7 +71,7 @@ fn active_panel_drag_still_resizes() {
     let _ = app.update(Message::Ui(UiMsg::DragMove(100.0, 0.0)));
     let _ = app.update(Message::Ui(UiMsg::DragMove(160.0, 0.0)));
     assert_eq!(app.ui_state.left_width, (start + 60.0).clamp(100.0, 500.0));
-    let _ = app.update(Message::Ui(UiMsg::DragEnd));
+    let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
     assert!(!app.is_layout_drag_active());
 }
 

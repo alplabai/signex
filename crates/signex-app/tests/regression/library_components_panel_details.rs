@@ -68,7 +68,7 @@ fn drag_row(app: &mut Signex, key: &ComponentsPanelRowKey, from: (f32, f32), to:
     pointer(app, from);
     settle(app, press(key));
     settle(app, Message::Ui(UiMsg::DragMove(to.0, to.1)));
-    settle(app, Message::Ui(UiMsg::DragEnd));
+    settle(app, Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
 }
 
 #[test]
@@ -81,7 +81,10 @@ fn a_click_only_selects_and_a_double_click_places_nothing() {
     for _ in 0..2 {
         pointer(&mut app, at);
         settle(&mut app, press(&key));
-        settle(&mut app, Message::Ui(UiMsg::DragEnd));
+        settle(
+            &mut app,
+            Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())),
+        );
     }
 
     assert_eq!(app.library.components_panel.selected.as_ref(), Some(&key));
@@ -155,7 +158,7 @@ fn dragging_the_divider_changes_and_clamps_the_list_height() {
     let max = app.library.components_panel.list_height;
     assert!(max > start, "dragging down grows the list");
 
-    let _ = app.update(Message::Ui(UiMsg::DragEnd));
+    let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
     pointer(&mut app, (100.0, 0.0));
     assert_eq!(
         app.library.components_panel.list_height, max,
@@ -226,7 +229,10 @@ fn the_drag_label_shows_while_dragging_and_goes_after_release() {
         Message::Ui(UiMsg::DragMove(canvas.0 + 40.0, canvas.1)),
     );
     assert!(shown(&app), "past the threshold the label follows");
-    settle(&mut app, Message::Ui(UiMsg::DragEnd));
+    settle(
+        &mut app,
+        Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())),
+    );
     assert!(!shown(&app) && app.library.components_panel.drag.is_none());
 
     // Esc ends it too.
@@ -240,7 +246,10 @@ fn the_drag_label_shows_while_dragging_and_goes_after_release() {
         window: None,
     }));
     assert!(app.library.components_panel.drag.is_none(), "Esc cancels");
-    settle(&mut app, Message::Ui(UiMsg::DragEnd));
+    settle(
+        &mut app,
+        Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())),
+    );
     assert!(app.interaction_state.placement.is_none());
     assert_eq!(doc(&app).symbols.len(), 1, "only the first drop placed");
 }
@@ -274,7 +283,10 @@ fn the_symbol_ghost_follows_a_row_dragged_over_the_canvas() {
     assert!(doc(&app).symbols.is_empty(), "a ghost places nothing");
 
     // Dropping places the part and takes the ghost away.
-    settle(&mut app, Message::Ui(UiMsg::DragEnd));
+    settle(
+        &mut app,
+        Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())),
+    );
     assert_eq!(doc(&app).symbols.len(), 1);
     assert!(app.placement_ghost_for_window(window).is_none());
 }
@@ -292,7 +304,10 @@ fn the_symbol_ghost_goes_when_the_drag_is_released_off_the_canvas_or_escaped() {
     settle(&mut app, Message::Ui(UiMsg::DragMove(canvas.0, canvas.1)));
     assert!(app.interaction_state.placement.is_some(), "ghost armed");
     pointer(&mut app, (canvas.0, 4.0));
-    settle(&mut app, Message::Ui(UiMsg::DragEnd));
+    settle(
+        &mut app,
+        Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())),
+    );
     assert!(app.interaction_state.placement.is_none(), "ghost gone");
     assert!(doc(&app).symbols.is_empty());
 
@@ -334,7 +349,7 @@ fn a_drop_before_the_read_lands_never_places_the_part_already_on_the_cursor() {
     pointer(&mut app, (20.0 + 40.0, canvas.1));
     // The pointer reaches the canvas; B's read is not run before the release.
     let read = app.update(Message::Ui(UiMsg::DragMove(canvas.0, canvas.1)));
-    let drop = app.update(Message::Ui(UiMsg::DragEnd));
+    let drop = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
     settle_task(&mut app, drop);
     settle_task(&mut app, read);
 
@@ -523,7 +538,10 @@ fn the_details_follow_a_saved_row_and_a_click_retries_after_an_error() {
     ));
     assert!(app.library.components_panel.details.error.is_some());
     settle(&mut app, press(&key));
-    settle(&mut app, Message::Ui(UiMsg::DragEnd));
+    settle(
+        &mut app,
+        Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())),
+    );
     let details = &app.library.components_panel.details;
     assert!(details.error.is_none() && details.loaded.is_some());
 }

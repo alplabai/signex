@@ -129,6 +129,7 @@ impl Signex {
             key: key.clone(),
             start: self.interaction_state.last_mouse_pos,
             started: false,
+            window: None,
             armed: false,
         });
         self.select_components_panel_row(key)
@@ -147,6 +148,7 @@ impl Signex {
             key: key.clone(),
             x,
             y,
+            window: None,
         });
         self.select_components_panel_row(key)
     }
@@ -196,7 +198,10 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .is_some_and(|tab| matches!(tab.kind, crate::app::TabKind::Schematic));
-        on_schematic && self.canvas_bounds().contains(iced::Point::new(x, y))
+        on_schematic
+            && self
+                .canvas_bounds_in(self.interaction_state.acting_window)
+                .contains(iced::Point::new(x, y))
     }
 
     /// A dragged row whose pointer first reaches the schematic canvas reads
@@ -207,7 +212,13 @@ impl Signex {
         let Some(drag) = self.library.components_panel.drag.as_ref() else {
             return Task::none();
         };
-        if !drag.started || drag.armed || !self.pointer_over_schematic_canvas() {
+        // Undocked-window drags skip the ghost: the pointer maths here is the
+        // main window's. Their drop still places on release.
+        if !drag.started
+            || drag.armed
+            || drag.window.is_some()
+            || !self.pointer_over_schematic_canvas()
+        {
             return Task::none();
         }
         let k = drag.key.clone();
@@ -224,7 +235,41 @@ impl Signex {
     /// over the schematic canvas places its part at the ghost; released
     /// anywhere else (or over a tab that is not a schematic), or never
     /// dragged, it places nothing and the ghost goes.
-    pub(crate) fn finish_components_row_drag(&mut self) -> Task<Message> {
+    pub(crate) fn finish_components_row_drag(
+        &mut self,
+        released_in: iced::window::Id,
+    ) -> Task<Message> {
+        let Some(drag) = self.library.components_panel.drag.as_ref() else {
+            return Task::none();
+        };
+        let started_in = drag.window;
+        // The pointer position is in the coordinates of the window it is in,
+        // so a drop counts only in the window the row was pressed in.
+        if self.overlay_owner(released_in) != started_in {
+            let armed = drag.armed;
+            self.library.components_panel.drag = None;
+            if armed {
+                self.cancel_placement_session();
+            }
+            crate::diagnostics::log_info(
+                "A Components drag was released in another window than it started in; nothing was placed.",
+            );
+            return Task::none();
+        }
+        let Some(window) = started_in else {
+            return self.finish_components_row_drag_here();
+        };
+        if self.is_document_window(window) {
+            return self
+                .run_in_window_document(window, |app| app.finish_components_row_drag_here());
+        }
+        // The window the row was pressed in has closed: nothing to drop on.
+        self.library.components_panel.drag = None;
+        Task::none()
+    }
+
+    /// The drop, against the active document of the window this runs in.
+    fn finish_components_row_drag_here(&mut self) -> Task<Message> {
         let Some(drag) = self.library.components_panel.drag.take() else {
             return Task::none();
         };
@@ -238,7 +283,7 @@ impl Signex {
         // Release point in world mm, through the live camera and the canvas
         // rectangle; the snap happens when the part is placed.
         let (x, y) = self.interaction_state.last_mouse_pos;
-        let bounds = self.canvas_bounds();
+        let bounds = self.canvas_bounds_in(self.interaction_state.acting_window);
         let at = self
             .interaction_state
             .active_canvas()
@@ -404,8 +449,9 @@ impl Signex {
         Task::none()
     }
 
-    /// "Place into Schematic" on a Components Panel row — routes through
-    /// the existing place handler.
+    /// "Place into Schematic" on a Components Panel row — the existing place
+    /// handler, run here so a pick from an undocked window's row menu arms on
+    /// that window's sheet (it runs in the window's swap).
     pub(super) fn handle_components_panel_place(
         &mut self,
         library_path: std::path::PathBuf,
@@ -414,11 +460,7 @@ impl Signex {
     ) -> Task<Message> {
         // Same flow as the picker: the part attaches to the cursor.
         self.library.components_panel.row_menu = None;
-        Task::done(Message::Library(LibraryMessage::PlaceLibraryComponent {
-            library_path,
-            table,
-            row_id,
-        }))
+        self.handle_place_library_component(library_path, table, row_id)
     }
 }
 

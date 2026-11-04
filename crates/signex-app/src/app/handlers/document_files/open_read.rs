@@ -13,6 +13,9 @@ impl Signex {
     /// same path (a double click) spawns nothing: its completion opens the
     /// one tab.
     pub(crate) fn begin_document_read(&mut self, path: PathBuf, job: ReadJob) -> Task<Message> {
+        if self.sheet_switch_refused_in_window("Opening a document") {
+            return Task::none();
+        }
         let Some(generation) = self.document_state.pending_opens.begin(path.clone()) else {
             return Task::none();
         };

@@ -743,22 +743,26 @@ impl Signex {
                 _ => Message::noop(),
             })
         } else if drag_active {
-            iced::event::listen().map(|event| match event {
-                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                    Message::Ui(UiMsg::DragMove(position.x, position.y))
+            // Like `listen()`: only events no widget captured. `listen_with`
+            // is used for the window the button was released in.
+            iced::event::listen_with(|event, status, window| {
+                if status == iced::event::Status::Captured {
+                    return None;
                 }
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )) => Message::Ui(UiMsg::DragEnd),
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
-                    iced::mouse::Button::Left,
-                )) => Message::ContextMenu(ContextMenuMsg::Close),
-                // Window::Resized intentionally omitted — the
-                // `window::resize_events()` subscription below carries
-                // the window id so we can drop non-main resizes. If
-                // we also forwarded the raw event here, a detached
-                // modal's resize would clobber the main window's size.
-                _ => Message::noop(),
+                match event {
+                    iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                        Some(Message::Ui(UiMsg::DragMove(position.x, position.y)))
+                    }
+                    iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                        iced::mouse::Button::Left,
+                    )) => Some(Message::Ui(UiMsg::DragEnd(window))),
+                    iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                        iced::mouse::Button::Left,
+                    )) => Some(Message::ContextMenu(ContextMenuMsg::Close)),
+                    // Window::Resized is carried, with its id, by the
+                    // `window::resize_events()` subscription below.
+                    _ => None,
+                }
             })
         } else {
             // Always track the cursor so `last_mouse_pos` is fresh when the

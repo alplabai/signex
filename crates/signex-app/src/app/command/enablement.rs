@@ -186,17 +186,30 @@ impl Signex {
         } else {
             self.history_available(active_kind, document.active_path.as_ref())
         };
-        let has_schematic = document.active_engine().is_some();
+        // A command typed in an undocked sheet window runs against that
+        // window's selection, so it is enabled by it (#1966).
+        let shown_canvas = match window {
+            Some(id) if self.is_document_window(id) => self.interaction_state.canvas_for_window(id),
+            _ => self.interaction_state.active_canvas(),
+        };
+        let main_has_schematic = document.active_engine().is_some();
         let has_symbol_editor = matches!(active_kind, Some(TabKind::SymbolEditor(_)));
         let has_footprint_editor = matches!(active_kind, Some(TabKind::FootprintEditor(_)));
         let own = self.window_document_kind(
             window,
             WindowDocumentKind {
-                is_schematic: has_schematic,
+                is_schematic: main_has_schematic,
                 is_editor: has_symbol_editor || has_footprint_editor,
                 has_file: true,
             },
         );
+        // An undocked sheet window is enabled by the sheet it shows, not by
+        // whatever tab the main window has active.
+        let has_schematic = if window.is_some_and(|id| self.is_document_window(id)) {
+            own.is_schematic
+        } else {
+            main_has_schematic
+        };
         CommandContext {
             has_schematic,
             has_pcb: self.has_active_pcb(),
@@ -206,8 +219,11 @@ impl Signex {
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
             has_symbol_editor,
             has_footprint_editor,
-            has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
-            has_drawing_selection: !self.selected_drawing_ids().is_empty(),
+            has_selection: !shown_canvas.selected.is_empty(),
+            has_drawing_selection: shown_canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::Drawing),
             drawing: self.interaction_state.wire_drawing
                 || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
