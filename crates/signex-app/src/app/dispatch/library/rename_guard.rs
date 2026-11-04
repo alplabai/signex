@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::app::path_ops::PathOpKind;
+use crate::library::messages::DatasheetMsg;
 use crate::library::stock_copy::StockCopyMsg;
 
 impl Signex {
@@ -59,9 +60,18 @@ impl Signex {
     /// editor message stream, undo/redo and the Properties panel so a command
     /// behaves the same from every surface.
     pub(crate) fn editor_edit_refusal(&self, path: &std::path::Path) -> Option<String> {
+        let library = self.deleting_library_name(path)?;
+        Some(format!(
+            "Library {library} is being deleted, so this edit was not applied. \
+             Try again if the delete fails."
+        ))
+    }
+
+    /// Display name of the library at `path` while a delete of it runs. A
+    /// rename keeps edits: the dirty draft moves to the new path with the
+    /// library. Only a delete discards the draft, so only it refuses.
+    fn deleting_library_name(&self, path: &std::path::Path) -> Option<String> {
         let ops = &self.document_state.pending_path_ops;
-        // A rename keeps edits: the dirty draft moves to the new path with
-        // the library. Only a delete discards the draft, so only it refuses.
         if !ops.library_rename_running()
             || !ops
                 .blocking_write(path)
@@ -69,15 +79,38 @@ impl Signex {
         {
             return None;
         }
-        let library = self
-            .library
-            .write_target_library(path, self.identity_fold_for(path))
-            .map(|lib| lib.display_name.clone())
-            .unwrap_or_else(|| path.display().to_string());
-        Some(format!(
-            "Library {library} is being deleted, so this edit was not applied. \
-             Try again if the delete fails."
-        ))
+        Some(
+            self.library
+                .write_target_library(path, self.identity_fold_for(path))
+                .map(|lib| lib.display_name.clone())
+                .unwrap_or_else(|| path.display().to_string()),
+        )
+    }
+
+    /// `editor_edit_refusal` for a Component Preview event: its library is the
+    /// preview's address. View-only events (tabs, selection, edit buffers,
+    /// reload prompts) and answers to earlier async work are not refused.
+    pub(super) fn preview_edit_refusal(
+        &self,
+        address: &EditorAddress,
+        msg: &EditorMsg,
+    ) -> Option<String> {
+        if editor_msg_is_view_only(msg) {
+            return None;
+        }
+        // The answer to a file dialog opened before the delete: name the
+        // dropped pick instead of the generic line.
+        if let EditorMsg::StepAttachResult(pick) = msg {
+            let library = self.deleting_library_name(&address.library_path)?;
+            let file = pick
+                .as_ref()
+                .map_or("The picked file", |(_, name)| name.as_str());
+            return Some(format!(
+                "{file} was not attached: library {library} is being deleted. \
+                 Pick it again if the delete fails."
+            ));
+        }
+        self.editor_edit_refusal(&address.library_path)
     }
 
     /// `editor_edit_refusal` for a mutation site outside the message stream:
@@ -150,6 +183,42 @@ pub(crate) fn log_refusal_once(refusal: &str) {
         .is_some_and(|e| e.message == refusal);
     if !repeated {
         crate::diagnostics::log_warning(refusal);
+    }
+}
+
+/// Component Preview events that change neither the row copy nor the library:
+/// navigation, edit buffers, reload prompts and answers to earlier async work.
+/// Anything not listed counts as an edit, so a new variant is refused by default.
+fn editor_msg_is_view_only(msg: &EditorMsg) -> bool {
+    use EditorMsg as E;
+    match msg {
+        E::SelectTab(_)
+        | E::OpenWhereUsedTab
+        | E::CloseEditor
+        | E::ReloadRequested
+        | E::ReloadConfirmed
+        | E::ReloadCancelled
+        | E::SubmitForReview
+        | E::SubmitForReviewNotesChanged(_)
+        // Wired to nothing in the preview (it only logs), so it writes no row or file.
+        | E::SubmitForReviewConfirm
+        | E::SubmitForReviewCancel
+        | E::SubmitForReviewResult(_)
+        | E::PinMapOpenOverrideEdit(_)
+        | E::PinMapOverrideBufChanged { .. }
+        | E::PinMapCancelOverrideEdit
+        | E::ParamSetNumberBuf { .. }
+        | E::ParamSetMeasurementBuf { .. }
+        | E::ParamNewNameChanged(_) => true,
+        E::Datasheet(d) => matches!(
+            d,
+            DatasheetMsg::Open(_)
+                | DatasheetMsg::UploadResult(_)
+                | DatasheetMsg::AssetsStored { .. }
+        ),
+        E::SimBodyAction(action) => !action.is_edit(),
+        E::Footprint(f) => footprint_msg_is_view_only(f),
+        _ => false,
     }
 }
 

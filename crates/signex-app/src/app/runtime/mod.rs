@@ -8,7 +8,7 @@ mod footprint_ctx;
 mod footprint_summaries;
 mod history;
 mod label_class_pick;
-mod navigator_ctx;
+pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
@@ -17,6 +17,9 @@ mod sheet_tree;
 #[cfg(test)]
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
+mod window_hierarchies;
+#[cfg(test)]
+mod window_placement_tests;
 
 impl Signex {
     /// Copy the UI-state grid/unit/snap fields into the panel context.
