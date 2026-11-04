@@ -24,7 +24,9 @@ impl Signex {
     /// successful blob read + atomic write). The result is applied by
     /// [`Self::handle_history_restore_finished`].
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) -> Task<Message> {
-        let Some(active) = self.document_state.tabs.get(self.document_state.active_tab) else {
+        // Inside an undocked window's swap this is the window's tab, never
+        // main's active one.
+        let Some(active) = self.history_tab() else {
             return Task::none();
         };
         let full_path = active.path.clone();

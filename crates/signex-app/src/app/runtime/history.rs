@@ -2,8 +2,41 @@ use super::super::*;
 
 impl Signex {
     fn history_source_key(&self) -> Option<std::path::PathBuf> {
+        self.history_tab().map(|t| t.path.clone())
+    }
+
+    /// The tab the History panel in the main slots tracks: inside an
+    /// undocked window's swap, the tab of the file that window shows (never
+    /// main's active tab, so a restore cannot reach main's file); otherwise
+    /// the active tab.
+    pub(crate) fn history_tab(&self) -> Option<&crate::app::TabInfo> {
+        use crate::app::state::WindowKind;
         let d = &self.document_state;
-        d.tabs.get(d.active_tab).map(|t| t.path.clone())
+        let Some(window) = self.interaction_state.acting_window else {
+            return d.tabs.get(d.active_tab);
+        };
+        let Some(WindowKind::UndockedTab { path, .. }) = self.ui_state.windows.get(&window) else {
+            return None;
+        };
+        d.tabs.iter().find(|tab| &tab.path == path)
+    }
+
+    /// Re-target the History panel of every undocked document window, each
+    /// in its own swap, so it shows and restores that window's file (#2067).
+    pub(in crate::app) fn refresh_window_histories(&mut self) -> Task<Message> {
+        if self.interaction_state.acting_window.is_some() {
+            return Task::none();
+        }
+        let windows: Vec<iced::window::Id> = self
+            .ui_state
+            .windows
+            .keys()
+            .copied()
+            .filter(|w| self.is_document_window(*w))
+            .collect();
+        Task::batch(windows.into_iter().map(|window| {
+            self.run_in_window(window, false, |app| app.refresh_history_panel())
+        }))
     }
 
     /// Idle-cursor-move variant of [`Self::refresh_history_panel`]: only
@@ -32,6 +65,12 @@ impl Signex {
         &mut self,
         committed: &std::path::Path,
     ) -> Task<Message> {
+        // A window showing the file reloads on the next refresh.
+        for history in self.document_state.window_history.values_mut() {
+            if history.active_path.as_deref() == Some(committed) {
+                history.active_path = None;
+            }
+        }
         if self.document_state.history.active_path.as_deref() != Some(committed) {
             return Task::none();
         }
@@ -91,6 +130,7 @@ impl Signex {
 
         let generation = self.document_state.history.generation;
         let response_path = target.clone();
+        let window = self.interaction_state.acting_window;
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || load_history(&target))
@@ -99,6 +139,7 @@ impl Signex {
             },
             move |result| {
                 Message::Ui(UiMsg::HistoryLoaded {
+                    window,
                     generation,
                     path: response_path.clone(),
                     result,
@@ -188,7 +229,7 @@ fn history_dirty(d: &crate::app::DocumentState, path: &std::path::Path) -> bool 
 /// itself, depending on entry point); whether it is a directory is decided
 /// by [`load_history`], off the UI thread.
 fn history_target(app: &super::super::Signex) -> Option<std::path::PathBuf> {
-    let active = app.document_state.tabs.get(app.document_state.active_tab)?;
+    let active = app.history_tab()?;
     match &active.kind {
         crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
         crate::app::TabKind::ComponentEditor(_) => None,

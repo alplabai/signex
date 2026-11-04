@@ -15,6 +15,9 @@ use super::*;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Width of the command palette card in an undocked window.
+const WINDOW_PALETTE_WIDTH: f32 = 480.0;
+
 mod bars;
 mod modals;
 mod net_hover;
@@ -198,7 +201,7 @@ impl Signex {
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
         use crate::app::command_palette::{CommandSource, MAX_RESULTS};
-        use iced::widget::{Space, button, column, container, row, scrollable, text};
+        use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
         use iced::{Alignment, Background, Border, Color};
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -314,8 +317,30 @@ impl Signex {
         // lays the input out with, so the dropdown reads as an extension
         // of the input rather than a floating popup that happens to be
         // nearby — including after a resize shrinks the bar.
-        let (card_x, card_w) = self.chrome_search_bar_geometry();
-        let card = container(column![body, footer])
+        let in_window = self.ui_state.command_palette.window.is_some();
+        // An undocked window has no chrome bar: its palette carries the
+        // text input at the top of the card.
+        let (card_x, card_w) = if in_window {
+            (16.0, WINDOW_PALETTE_WIDTH)
+        } else {
+            self.chrome_search_bar_geometry()
+        };
+        let input: Element<'_, Message> = if in_window {
+            text_input(
+                "Search files, symbols, commands…",
+                &self.ui_state.command_palette.query,
+            )
+            .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
+            .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(q)))
+            .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
+            .padding(SP.l)
+            .size(TS.body)
+            .width(Length::Fill)
+            .boxed()
+        } else {
+            Space::new().height(0).boxed()
+        };
+        let card = container(column![input, body, footer])
             .width(card_w)
             .height(Length::Fit.max(360.0))
             .padding(0)
@@ -330,7 +355,11 @@ impl Signex {
                 ..container::Style::default()
             });
 
-        let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
+        let y = if in_window {
+            16.0
+        } else {
+            crate::menu_bar::MENU_BAR_HEIGHT + 4.0
+        };
         super::view::translate::Translate::new(card.boxed(), (card_x, y)).boxed()
     }
 

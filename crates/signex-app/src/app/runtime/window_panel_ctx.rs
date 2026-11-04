@@ -291,6 +291,7 @@ impl Signex {
     /// keeping its unsaved drafts in the main window's context.
     pub(crate) fn retire_window_panel_ctx(&mut self, window: iced::window::Id) {
         self.document_state.window_panel_ctx_keys.remove(&window);
+        self.document_state.window_history.remove(&window);
         if let Some(ctx) = self.document_state.window_panel_ctx.remove(&window) {
             self.document_state.panel_ctx.take_drafts_from(ctx);
         }

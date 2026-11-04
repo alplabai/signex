@@ -36,6 +36,27 @@ impl Signex {
         self.refresh_find_matches()
     }
 
+    /// F3 / Shift+F3 pressed in `window`. A Sheet-scope search belongs to the
+    /// window it was opened in; a press in any other window takes it over
+    /// without opening the dialog, the way Find Next in the main window
+    /// searches the sheet with the last query while the dialog is closed.
+    /// A Project-scope list is not tied to a sheet, so it is stepped as it
+    /// is (a hit on another sheet opens on the main window).
+    pub(crate) fn step_find_in_window(
+        &mut self,
+        window: iced::window::Id,
+        step: Message,
+    ) -> Task<Message> {
+        let owner = self.overlay_owner(window);
+        let find = &mut self.ui_state.find_replace;
+        if find.window != owner && find.scope == crate::find_replace::FindScope::Sheet {
+            find.matches.clear();
+            find.selected_index = None;
+            find.window = owner;
+        }
+        self.dispatch_update(step)
+    }
+
     /// A Find message acts on the sheet of the window the dialog was opened
     /// in: it runs in that window's swap. A project scan answer holds no
     /// sheet, so it stays on the main window; a project replace answer applies
