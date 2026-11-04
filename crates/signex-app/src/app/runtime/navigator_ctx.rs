@@ -91,6 +91,7 @@ impl Signex {
     #[doc(hidden)]
     pub fn settle_navigator(&mut self) {
         self.document_state.navigator_job.abandon_running();
+        self.settle_window_hierarchies();
         while let Some((generation, request)) = {
             let applied = self.document_state.panel_ctx.navigator.fingerprint.clone();
             self.document_state.navigator_job.begin(&applied)
@@ -185,6 +186,13 @@ impl Signex {
             .document_state
             .active_document_project()
             .or_else(|| self.document_state.active_loaded_project())?;
+        Self::project_scope_of(project)
+    }
+
+    /// `(root sheet, declared pages, key rules)` of `project`.
+    pub(super) fn project_scope_of(
+        project: &crate::app::state::LoadedProject,
+    ) -> Option<(PathBuf, Vec<PathBuf>, CaseFold)> {
         let root = project_root_sheet_path(project)?;
         let dir = project.dir();
         let pages = project
@@ -196,7 +204,7 @@ impl Signex {
         Some((root, pages, project.case_fold))
     }
 
-    fn navigator_fingerprint(
+    pub(super) fn navigator_fingerprint(
         &self,
         root: &std::path::Path,
         pages: &[PathBuf],
@@ -228,7 +236,7 @@ impl Signex {
 
 /// The blocking half of the assembly: read the closed sheets and build the
 /// occurrence tree. Runs on a worker thread.
-fn assemble_navigator(
+pub(super) fn assemble_navigator(
     open: &crate::app::project_sheets::OpenSheets,
     request: NavigatorRequest,
 ) -> NavigatorAssembly {

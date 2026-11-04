@@ -58,6 +58,8 @@ mod lifecycle;
 mod missing_mount_tests;
 mod new_component;
 mod new_row;
+#[cfg(test)]
+mod preview_delete_guard_tests;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
@@ -110,6 +112,11 @@ impl Signex {
             self.document_state.error_notice =
                 Some(crate::app::state::ErrorNotice::library_change(refusal));
             return self.finish_update();
+        }
+        if let Some(refusal) = self.primitive_edit_refusal(&msg) {
+            rename_guard::log_refusal_once(&refusal);
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
         }
         let per_event = matches!(
             &msg,

@@ -7,6 +7,8 @@
 pub mod gate;
 mod part_version;
 #[cfg(test)]
+mod read_failure_tests;
+#[cfg(test)]
 pub(crate) mod test_support;
 
 pub use gate::{IdleWaiter, LibraryWrites, OwnRevisions, Turn, WriteGate};
@@ -216,7 +218,19 @@ pub fn row_edit_task(
             message,
         } = edit;
         let own_revision = own.of(row_id);
-        let before = adapter.read_row(&table, row_id).ok();
+        // One read serves the version bump and every branch below. A row
+        // that is not there yet is a plain first write; any other failure
+        // would write with no bump and no word of it, so the edit is refused.
+        let (before, missing) = match adapter.read_row(&table, row_id) {
+            Ok(row) => (Some(row), None),
+            Err(error @ LibraryError::NotFound(_)) => (None, Some(error)),
+            Err(error) => {
+                return Err(LibraryError::Backend(format!(
+                    "edit refused: the stored row could not be read to check whether its \
+                     footprint, Manufacturer or MPN changed ({error})"
+                )));
+            }
+        };
         let hash = |row: &mut ComponentRow| -> Result<(), LibraryError> {
             row.content_hash = signex_library::hash_row_content(row)
                 .map_err(|e| LibraryError::Backend(format!("hash row content: {e}")))?;
@@ -225,14 +239,14 @@ pub fn row_edit_task(
         let to_write = match start {
             RowStart::FullOverCascade(row) => {
                 let mut to_write = *row;
-                if let Ok(stored) = adapter.read_row(&table, row_id)
+                if let Some(stored) = &before
                     && own.only_cascaded_since(
                         row_id,
                         to_write.server_revision,
                         stored.server_revision,
                     )
                 {
-                    crate::library::preview_rebase::rebase_onto_cascade(&mut to_write, &stored);
+                    crate::library::preview_rebase::rebase_onto_cascade(&mut to_write, stored);
                     hash(&mut to_write)?;
                     crate::diagnostics::log_info(format!(
                         "Row {row_id} was moved by a symbol or footprint save of this session; \
@@ -245,7 +259,7 @@ pub fn row_edit_task(
                 let mut to_write = *row;
                 if let Some(patch) = patch
                     && let Some(own_revision) = own_revision
-                    && let Ok(mut stored) = adapter.read_row(&table, row_id)
+                    && let Some(mut stored) = before.clone()
                     && stored.server_revision == own_revision
                     && stored.server_revision != to_write.server_revision
                 {
@@ -259,7 +273,11 @@ pub fn row_edit_task(
                 to_write
             }
             RowStart::FromStored { base_revision } => {
-                let mut stored = adapter.read_row(&table, row_id)?;
+                let Some(mut stored) = before.clone() else {
+                    return Err(
+                        missing.unwrap_or_else(|| LibraryError::NotFound(format!("row {row_id}")))
+                    );
+                };
                 if let Some(patch) = patch {
                     patch(&mut stored);
                 }

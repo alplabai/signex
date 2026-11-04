@@ -198,7 +198,8 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+            if self.editor_edit_allowed(&path)
+                && let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
                 && editor.undo()
             {
                 self.refresh_panel_ctx();
@@ -212,9 +213,13 @@ impl Signex {
         // schematic engine. Schematic + PCB tabs continue to use
         // the engine path below.
         if let Some(path) = self.active_footprint_editor_path()
-            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+            && self.document_state.footprint_editors.contains_key(&path)
         {
-            if editor.undo() {
+            let allowed = self.editor_edit_allowed(&path);
+            if allowed
+                && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+                && editor.undo()
+            {
                 self.refresh_panel_ctx();
             }
             return;
@@ -261,7 +266,8 @@ impl Signex {
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
         {
-            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
+            if self.editor_edit_allowed(&path)
+                && let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
                 && editor.redo()
             {
                 self.refresh_panel_ctx();
@@ -271,9 +277,13 @@ impl Signex {
 
         // v0.24 Phase 1 (Track B) — same fork as undo.
         if let Some(path) = self.active_footprint_editor_path()
-            && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+            && self.document_state.footprint_editors.contains_key(&path)
         {
-            if editor.redo() {
+            let allowed = self.editor_edit_allowed(&path);
+            if allowed
+                && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
+                && editor.redo()
+            {
                 self.refresh_panel_ctx();
             }
             return;

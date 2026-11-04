@@ -91,6 +91,20 @@ impl NavigatorJob {
         self.in_flight = None;
     }
 
+    /// A job whose generations start at `base`, so jobs made one after
+    /// another never share a generation.
+    pub fn starting_at(base: u64) -> Self {
+        Self {
+            generation: base,
+            ..Self::default()
+        }
+    }
+
+    /// The root sheet of the project the job currently wants, if any.
+    pub fn wanted_root(&self) -> Option<&std::path::Path> {
+        self.wanted.as_ref().map(|w| w.root.as_path())
+    }
+
     /// The fingerprint the Navigator currently wants, if any.
     pub fn wanted_fingerprint(&self) -> Option<&str> {
         self.wanted.as_ref().map(|w| w.fingerprint.as_str())

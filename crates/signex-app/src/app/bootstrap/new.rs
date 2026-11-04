@@ -442,6 +442,7 @@ impl Signex {
                 project_fs: Default::default(),
                 disk_poll: Default::default(),
                 navigator_job: Default::default(),
+                window_hierarchies: Default::default(),
                 ownership: Default::default(),
                 erc_fallback_noted: Default::default(),
                 profile_drift_noted: Default::default(),

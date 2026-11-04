@@ -8,7 +8,7 @@ mod footprint_ctx;
 mod footprint_summaries;
 mod history;
 mod label_class_pick;
-mod navigator_ctx;
+pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
@@ -17,6 +17,9 @@ mod sheet_tree;
 #[cfg(test)]
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
+mod window_hierarchies;
+#[cfg(test)]
+mod window_placement_tests;
 
 impl Signex {
     /// Copy the UI-state grid/unit/snap fields into the panel context.
@@ -450,6 +453,19 @@ impl Signex {
         self.document_state.panel_ctx.tokens = tokens;
         self.document_state.panel_ctx.theme_id = theme_id;
         self.document_state.panel_ctx.canvas_colors = self.canvas_colors_for(theme_id);
+    }
+
+    /// The schematic's visible grid, for the symbol previews. Read from the
+    /// draft style like `canvas_view_prefs`, so a Preferences live preview
+    /// and a Discard reach the preview at once.
+    pub(crate) fn sheet_grid(
+        &self,
+    ) -> crate::panels::components_panel::details::symbol_canvas::SheetGrid {
+        crate::panels::components_panel::details::symbol_canvas::SheetGrid {
+            visible: self.ui_state.grid_visible,
+            pitch_mm: self.ui_state.visible_grid_mm,
+            style: self.ui_state.preferences_draft_grid_style,
+        }
     }
 
     /// Settings the schematic canvas renders with, read fresh from app
