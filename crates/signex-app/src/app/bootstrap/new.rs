@@ -79,6 +79,7 @@ impl Signex {
         // missing or malformed file reads as `None`, i.e. every default.
         let prefs_json = crate::fonts::load_prefs_json();
         let prefs = prefs_json.as_ref();
+        let (first_run_tour_open, tour_boot) = first_run_tour_boot(prefs);
         // Default panel layout — restored from disk if a previous
         // session persisted one, otherwise seeded with the Altium-ish
         // defaults: Projects + Components + Signal on the left,
@@ -278,7 +279,7 @@ impl Signex {
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
                     crate::fonts::read_recent_projects_from(prefs),
                 ),
-                first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed_from(prefs),
+                first_run_tour_open,
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
                 // #631 — seeded from the saved theme, not hardcoded. This
@@ -709,9 +710,28 @@ impl Signex {
         let boot_task = iced::Task::batch([
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
             mount_task,
+            tour_boot,
         ]);
         (app, boot_task)
     }
+}
+
+/// Whether this launch shows the first-run tour card, and the write that
+/// makes it the only launch that does: the card is shown once, so the pref is
+/// set as soon as it opens, even if the user never closes it (#1994).
+pub(in crate::app) fn first_run_tour_boot(
+    prefs: Option<&serde_json::Value>,
+) -> (bool, iced::Task<Message>) {
+    if crate::fonts::read_first_run_tour_dismissed_from(prefs) {
+        return (false, iced::Task::none());
+    }
+    // Built when the runtime runs the task, not here: the write takes a slot
+    // of the in-flight preference-write count when it is made, and a boot that
+    // only builds the app must not leave that count raised.
+    (
+        true,
+        iced::Task::done(()).then(|()| crate::app::dispatch::dismiss_first_run_tour_task()),
+    )
 }
 
 /// Settings for the main window. Every case is borderless (the custom strip

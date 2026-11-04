@@ -11,17 +11,10 @@ impl Signex {
                 Task::none()
             }
             UiMsg::MenuInWindow { window, msg } => {
-                let Some(command) = msg.window_command() else {
+                let Some(id) = msg.window_command() else {
                     return self.update(Message::Menu(msg));
                 };
-                match crate::keymap::AppCommandId::new(command) {
-                    Ok(id) => self.dispatch_command(
-                        &id,
-                        crate::app::command::CommandArgs::none(),
-                        Some(window),
-                    ),
-                    Err(_) => Task::none(),
-                }
+                self.run_menu_command(&id, Some(window))
             }
             UiMsg::HistoryLoaded {
                 generation,
@@ -66,7 +59,8 @@ impl Signex {
                 let modal_detach = self.check_modal_auto_detach(x, y);
                 let panel_detach = self.check_floating_panel_auto_detach(x, y);
                 let tab_detach = self.check_tab_auto_detach(x, y);
-                let finish = self.finish_update();
+                let arm = self.arm_components_row_drag();
+                let finish = Task::batch([arm, self.finish_update()]);
                 if let Some(modal) = modal_detach {
                     Task::batch([
                         finish,

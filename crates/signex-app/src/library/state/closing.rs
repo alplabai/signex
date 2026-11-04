@@ -3,6 +3,7 @@
 //! library".
 
 use super::*;
+use crate::app::CaseFold;
 
 impl LibraryState {
     /// Libraries whose close was deferred and whose writes are all done.
@@ -24,6 +25,22 @@ impl LibraryState {
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_else(|| root.display().to_string())
             })
+    }
+
+    /// Drop the pending symbol delete held by the library at `root`, when a
+    /// close of it would go ahead now. Call before [`Self::close_library`]:
+    /// the owner of the symbol is looked up while the library is mounted.
+    pub fn drop_symbol_delete_held_by(&mut self, root: &Path, fold: CaseFold) {
+        if self.writes.pending(root) > 0 {
+            return;
+        }
+        let held = self.pending_symbol_delete.as_ref().is_some_and(|d| {
+            self.containing_library_with(&d.path, fold)
+                .is_some_and(|lib| lib.root == root)
+        });
+        if held {
+            self.pending_symbol_delete = None;
+        }
     }
 
     /// Whether a close of the library at `root` waits for its writes.
@@ -54,6 +71,11 @@ impl LibraryState {
     /// every Component Preview editor pointing at it. The dispatcher asks
     /// about dirty editors first (`dirty_editors_for_library`), both when
     /// Close is requested and again when a deferred close comes due.
+    ///
+    /// Callers should call [`Self::drop_symbol_delete_held_by`] first with
+    /// the pending path's own fold. As a backstop, a pending delete this
+    /// library holds under either fold is dropped here too: dropping a
+    /// warning only means Delete must be pressed again.
     pub fn close_library(&mut self, root: &Path) {
         // A pricing walk of this library must not write after it is closed.
         self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
@@ -65,11 +87,8 @@ impl LibraryState {
             return;
         }
         self.closing.remove(root);
-        if self.pending_symbol_delete.as_ref().is_some_and(|d| {
-            self.containing_library(&d.path)
-                .is_some_and(|lib| lib.root == root)
-        }) {
-            self.pending_symbol_delete = None;
+        for fold in [CaseFold::from_probe(true), CaseFold::from_probe(false)] {
+            self.drop_symbol_delete_held_by(root, fold);
         }
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation

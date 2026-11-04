@@ -282,7 +282,7 @@ fn the_undocked_windows_menu_rows_run_against_its_own_document() {
     let window = f.window;
     let task = f.app.update(Message::Ui(crate::app::UiMsg::MenuInWindow {
         window,
-        msg: crate::menu_bar::MenuMessage::Save,
+        msg: crate::menu_bar::MenuMessage::command("save_document"),
     }));
     settle_task(&mut f.app, task);
     assert_ne!(std::fs::read(&f.undocked_path).unwrap(), OLD);
@@ -296,7 +296,10 @@ fn export_pdf_in_an_undocked_window_previews_that_document() {
     let mut f = fixture();
     let window = f.window;
     assert_eq!(
-        crate::menu_bar::MenuMessage::ExportPdf.window_command(),
+        crate::menu_bar::MenuMessage::ExportPdf
+            .window_command()
+            .map(|id| id.as_str().to_string())
+            .as_deref(),
         Some("print")
     );
     let task = f.app.update(Message::Ui(crate::app::UiMsg::MenuInWindow {
