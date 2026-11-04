@@ -5,7 +5,7 @@
 //! straight from `Footprint::body_3d`. The render is intentionally
 //! cheap — a single `iced::widget::Canvas` with no GPU pipeline.
 //!
-//! TODO(v2.x): real 3D pipeline per
+//! TODO(3D Viewer plan): real 3D pipeline per
 //! `docs/internal/docs/PCB_3D_RENDER_PLAN.md` (wgpu Shader widget
 //! + STEP geometry triangulation + lighting model).
 
@@ -229,7 +229,7 @@ impl<'a> canvas::Program<LibraryMessage> for Preview3D<'a> {
 
         // Hint label.
         frame.fill_text(canvas::Text {
-            content: "3D preview (iso) — TODO(v2.x): wgpu pipeline".to_string(),
+            content: "3D preview (iso)".to_string(),
             position: Point::new(8.0, 8.0),
             size: 10.0.into(),
             color: Color::from_rgba(0.85, 0.88, 0.92, 0.55),

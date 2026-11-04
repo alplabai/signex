@@ -118,11 +118,11 @@ fn classic_profile_resolves_rotate_through_the_real_lookup() {
 #[test]
 fn dd_disabled_row_is_passive() {
     // A greyed stub drops its `on_press` and keeps its right-column badge.
-    match dd_disabled(None, "PCB", Some("v2.0")) {
+    match dd_disabled(None, "PCB", Some("PCB Viewer")) {
         DropdownEntry::Item(it) => {
             assert!(it.disabled);
             assert!(it.on_press.is_none());
-            assert_eq!(it.shortcut.as_deref(), Some("v2.0"));
+            assert_eq!(it.shortcut.as_deref(), Some("PCB Viewer"));
         }
         _ => panic!("expected Item"),
     }
