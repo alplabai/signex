@@ -111,6 +111,9 @@ pub enum CommandPaletteMsg {
     /// search bar. Bound to Ctrl+Shift+P. Already open: the highlighted
     /// row resets to 0 and the input is refocused with its text selected.
     Open,
+    /// [`Self::Open`] from a key or menu in the undocked window: its rows and
+    /// the command picked follow that window's sheet (#2037).
+    OpenInWindow(iced::window::Id),
     /// Close the dropdown without executing. Bound to Esc and to
     /// click-outside. Leaves the chrome-strip input visible (it's the
     /// always-on placeholder) but unfocused; query is preserved so a
@@ -295,6 +298,13 @@ pub enum UiMsg {
     DragStart(DragTarget),
     /// Layout drag moved to window-space (x, y).
     DragMove(f32, f32),
+    /// [`Self::DragMove`] while a pointer drag is live, with the window the
+    /// pointer is in: its position is in that window's coordinates (#2037).
+    DragMovedIn {
+        window: iced::window::Id,
+        x: f32,
+        y: f32,
+    },
     /// Layout drag released in the given window.
     DragEnd(iced::window::Id),
     /// Main-window content resized (width, height) in logical px.

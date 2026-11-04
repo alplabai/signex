@@ -538,7 +538,10 @@ impl Signex {
     /// Document-tab right-click menu. Rendered before the project-tree
     /// menu since the two are mutually exclusive. Pushes dismiss then the
     /// clamped menu.
-    pub(super) fn tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn tab_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let ui = &self.ui_state;
@@ -546,6 +549,11 @@ impl Signex {
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
             return self.dock_tab_context_menu_overlay();
         };
+        // Only the main window's tab strip opens this menu, so only the main
+        // window paints it (#2037).
+        if !self.overlay_belongs_to(None, window_id) {
+            return Vec::new();
+        }
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
         // the two visually align.
@@ -606,7 +614,10 @@ impl Signex {
 
     /// Projects-panel tree right-click menu (+ its AddNewToProject
     /// submenu). Pushes dismiss, menu, then the optional submenu.
-    pub(super) fn project_tree_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn project_tree_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let ui = &self.ui_state;
@@ -614,6 +625,10 @@ impl Signex {
         let Some(tree_ctx) = interaction.project_tree_context_menu.as_ref() else {
             return Vec::new();
         };
+        // Only the window whose Projects panel opened the menu paints it.
+        if !self.overlay_belongs_to(tree_ctx.window, window_id) {
+            return Vec::new();
+        }
         let menu = self.view_project_tree_context_menu(tree_ctx);
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look

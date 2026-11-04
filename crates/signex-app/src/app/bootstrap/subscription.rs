@@ -751,7 +751,11 @@ impl Signex {
                 }
                 match event {
                     iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                        Some(Message::Ui(UiMsg::DragMove(position.x, position.y)))
+                        Some(Message::Ui(UiMsg::DragMovedIn {
+                            window,
+                            x: position.x,
+                            y: position.y,
+                        }))
                     }
                     iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                         iced::mouse::Button::Left,

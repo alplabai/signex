@@ -93,6 +93,9 @@ pub struct FindReplaceState {
     /// One line for the dialog when sheets were skipped.
     pub skipped_note: Option<String>,
     pub replace_job: Option<ReplaceJob>,
+    /// The undocked window whose sheet the dialog searches and selects in
+    /// (`None`: the main window's). Set when the dialog opens (#2037).
+    pub window: Option<iced::window::Id>,
 }
 
 #[derive(Debug, Clone)]
