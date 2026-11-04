@@ -46,10 +46,10 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
     None
 }
 
-/// Stroke widths of the grid lines and crosses, in logical px. A line or arm
+/// Fixed widths of the grid lines and crosses, in logical px (not a zoom law). A line or arm
 /// is kept off the paper edge by half of its width (#1940).
-const MINOR_STROKE_PX: f32 = 0.6;
-const MAJOR_STROKE_PX: f32 = 0.5;
+const MINOR_GRID_LINE_PX: f32 = 0.6;
+const MAJOR_GRID_LINE_PX: f32 = 0.5;
 
 /// Draw the grid dots on a canvas frame.
 ///
@@ -204,7 +204,7 @@ fn draw_grid_within<R: GeometryRenderer>(
     }
 
     // Half the thin stroke width, so a cross arm's end stays inside the paper.
-    const GLYPH_EDGE_SLACK: f32 = MINOR_STROKE_PX / 2.0;
+    const GLYPH_EDGE_SLACK: f32 = MINOR_GRID_LINE_PX / 2.0;
 
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
@@ -213,12 +213,12 @@ fn draw_grid_within<R: GeometryRenderer>(
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
     let minor_stroke = canvas::Stroke::default()
         .with_color(dot_color)
-        .with_width(MINOR_STROKE_PX);
+        .with_width(MINOR_GRID_LINE_PX);
 
     // For Lines style we draw full minor grid lines instead of per-cell
     // glyphs and skip the per-point loop below entirely.
     if matches!(style, GridStyle::Lines) {
-        let minor_half = MINOR_STROKE_PX / 2.0;
+        let minor_half = MINOR_GRID_LINE_PX / 2.0;
         let (line_x_left, line_x_right) = (paper_bounds.x, paper_bounds.x + paper_bounds.width);
         let (line_y_top, line_y_bot) = (paper_bounds.y, paper_bounds.y + paper_bounds.height);
         for wx in axis_stops(wx_min, wx_max, minor_mm) {
@@ -293,11 +293,11 @@ fn draw_grid_within<R: GeometryRenderer>(
     };
     let stroke = canvas::Stroke::default()
         .with_color(major_color)
-        .with_width(MAJOR_STROKE_PX);
+        .with_width(MAJOR_GRID_LINE_PX);
 
     let (line_x_left, line_x_right) = (paper_bounds.x, paper_bounds.x + paper_bounds.width);
     let (line_y_top, line_y_bot) = (paper_bounds.y, paper_bounds.y + paper_bounds.height);
-    let major_half = MAJOR_STROKE_PX / 2.0;
+    let major_half = MAJOR_GRID_LINE_PX / 2.0;
 
     for mx in axis_stops(wx_min, wx_max, major_mm) {
         let sx = camera.world_to_screen(Point::new(mx, 0.0), bounds).x;
