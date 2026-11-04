@@ -58,6 +58,8 @@ mod lifecycle;
 mod missing_mount_tests;
 mod new_component;
 mod new_row;
+#[cfg(test)]
+mod preview_delete_guard_tests;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;

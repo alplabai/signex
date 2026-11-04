@@ -634,6 +634,13 @@ pub enum ProjectMsg {
         u64,
         Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
     ),
+    /// The off-thread assembly of the hierarchy of the project (by root sheet)
+    /// an undocked window shows finished (#2021).
+    WindowHierarchyAssembled(
+        std::path::PathBuf,
+        u64,
+        Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
+    ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while any document is dirty. Reuses `ProjectCloseChoice`.

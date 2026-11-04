@@ -59,7 +59,7 @@ fn row_at(revision: u64) -> ComponentRow {
 /// An app with a server-style library whose row is at `stored` revision,
 /// and the user's copy of that row (read at `read`) cached and open in a
 /// dirty Component Preview.
-fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
+pub(super) fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
     let (app, address, _symbol) = app_with_row_and_symbol(stored, read);
     (app, address)
 }
@@ -105,7 +105,7 @@ fn app_with_row_and_symbol(stored: u64, read: u64) -> (Signex, EditorAddress, Sy
     (app, address, symbol)
 }
 
-fn editor<'a>(app: &'a Signex, address: &EditorAddress) -> &'a ComponentPreviewState {
+pub(super) fn editor<'a>(app: &'a Signex, address: &EditorAddress) -> &'a ComponentPreviewState {
     app.library.editors.get(address).expect("editor open")
 }
 
