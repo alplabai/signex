@@ -186,3 +186,18 @@ across two prefixes); the Messages panel and a notice name it. A sheet that
 fails while numbering is rolled back whole by `roll_back_reprefix`. Re-prefix
 writes no file (unopened sheets are parked dirty, #669), so there is no
 half-written disk state to restore.
+
+## Closed-sheet scan (`library/closed_sheets.rs`)
+
+The symbol delete warning (#1903) reads the sheets of the open projects that
+are not open as tabs. It does not walk `child_sheets` itself: the worker calls
+`project_sheets::assemble_from_seeds`, the same walk `ProjectSheetPlan::assemble`
+runs, with the open sheets passed as `skip` (their content is counted from
+memory) and a lookup that stamps each file just before it is read. Only one
+hierarchy walker exists (#1990).
+
+The walk drops nothing silently. `ProjectSheetSet` carries `absent` (not on
+disk), `unreadable` (present but unusable) and `refused` (a reference leaving
+its parent's folder). The assemblers' callers ignore the first and last, as
+before (the stitcher reports `MissingChild`); the scan turns all three into its
+unchecked list, so a failed read never makes a delete look safe.
