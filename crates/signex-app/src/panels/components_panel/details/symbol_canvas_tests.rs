@@ -91,6 +91,7 @@ const BOX: Rectangle = Rectangle {
 };
 
 const DOTS: SheetGrid = SheetGrid {
+    visible: true,
     pitch_mm: 1.27,
     style: GridStyle::Dots,
 };
@@ -282,6 +283,17 @@ fn hold_ctrl(state: &mut PreviewState, p: &SymbolSheetPreview) {
     );
 }
 
+#[test]
+fn the_grid_toggle_hides_the_grid() {
+    let (on, [_, grid_text, _]) = marked_program(DOTS);
+    let (off, _) = marked_program(SheetGrid {
+        visible: false,
+        ..DOTS
+    });
+    assert!(grid_marks(&on, &grid_text).0 > 0, "grid shown when on");
+    assert_eq!(grid_marks(&off, &grid_text).0, 0, "grid hidden when off");
+}
+
 fn shown(p: &SymbolSheetPreview) -> PreviewState {
     let mut state = PreviewState::default();
     event(
@@ -301,7 +313,8 @@ fn the_first_show_fits_the_part_to_the_box() {
     let fitted = p.fitted_camera(BOX.size());
     assert_eq!(state.camera.scale, fitted.scale);
     assert_eq!(state.camera.offset, fitted.offset);
-    assert_eq!(state.fitted_for.as_deref(), Some("L:Body"));
+    assert_eq!(state.fitted_for, Some(p.fit_key()));
+    assert_eq!(p.fit_key().0, "L:Body");
     assert!(state.camera.scale > 0.0);
 }
 
@@ -368,4 +381,34 @@ fn the_cursor_leaving_ends_a_pan() {
         &p,
     );
     assert_eq!(state.camera.offset, before, "the pan is over");
+}
+
+#[test]
+fn an_edited_body_under_the_same_id_refits() {
+    let first = program(body_symbol(), DOTS);
+    let mut state = shown(&first);
+    let mut taller = body_symbol();
+    taller.graphics.push(LibGraphic {
+        unit: 0,
+        body_style: 1,
+        graphic: Graphic::Rectangle {
+            start: Point::new(-5.0, -30.0),
+            end: Point::new(5.0, 30.0),
+            width: 0.0,
+            fill: FillType::Background,
+        },
+    });
+    let second = program(taller, DOTS);
+    assert_eq!(first.lib.id, second.lib.id);
+    event(
+        mouse::Event::CursorMoved {
+            position: iced::Point::new(10.0, 10.0),
+        },
+        &mut state,
+        &second,
+    );
+    let fitted = second.fitted_camera(BOX.size());
+    assert_eq!(state.camera.scale, fitted.scale);
+    assert_eq!(state.fitted_for, Some(second.fit_key()));
+    assert_ne!(first.fit_key(), second.fit_key());
 }

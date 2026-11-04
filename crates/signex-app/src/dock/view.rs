@@ -7,6 +7,7 @@ use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
 use super::types::*;
 use crate::icons;
+use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 use crate::panels::{self, PanelKind};
 use crate::styles::{self, Spacing, TypeScale};
 
@@ -22,11 +23,12 @@ fn svg_icon(handle: svg::Handle) -> iced::widget::Svg<'static> {
 }
 
 impl DockArea {
-    pub fn view_region<'a>(
+    pub(crate) fn view_region<'a>(
         &'a self,
         position: PanelPosition,
         ctx: &'a panels::PanelContext,
         library: &'a crate::library::LibraryState,
+        grid: SheetGrid,
     ) -> Element<'a, DockMessage> {
         let region = match position {
             PanelPosition::Left => &self.left,
@@ -234,7 +236,7 @@ impl DockArea {
                         // library paths are derived from
                         // `ctx.projects[].libraries[].root` so the
                         // dock signature stays narrow.
-                        panels::components_panel::view(library, ctx, &ctx.tokens)
+                        panels::components_panel::view(library, ctx, &ctx.tokens, grid)
                             .map(DockMessage::Library)
                             .boxed()
                     }
@@ -365,11 +367,12 @@ impl DockArea {
     }
 
     /// Render a single floating panel as an overlay element.
-    pub fn view_floating_panel<'a>(
+    pub(crate) fn view_floating_panel<'a>(
         &'a self,
         idx: usize,
         ctx: &'a panels::PanelContext,
         library: &'a crate::library::LibraryState,
+        grid: SheetGrid,
     ) -> Option<Element<'a, DockMessage>> {
         let fp = self.floating.get(idx)?;
         let kind = fp.kind;
@@ -400,9 +403,11 @@ impl DockArea {
             PanelKind::Library => crate::library::panel::view(library, &ctx.tokens)
                 .map(DockMessage::Library)
                 .boxed(),
-            PanelKind::Components => panels::components_panel::view(library, ctx, &ctx.tokens)
-                .map(DockMessage::Library)
-                .boxed(),
+            PanelKind::Components => {
+                panels::components_panel::view(library, ctx, &ctx.tokens, grid)
+                    .map(DockMessage::Library)
+                    .boxed()
+            }
             _ => panels::view_panel(kind, ctx)
                 .map(DockMessage::Panel)
                 .boxed(),

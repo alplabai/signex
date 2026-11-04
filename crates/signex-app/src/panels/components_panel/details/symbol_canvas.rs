@@ -36,6 +36,8 @@ const PLACEMENT_GRID_MM: f64 = 2.54;
 /// The user's visible grid, as the schematic editor draws it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct SheetGrid {
+    /// The schematic's grid toggle; off draws the paper without a grid.
+    pub visible: bool,
     pub pitch_mm: f32,
     pub style: GridStyle,
 }
@@ -46,8 +48,9 @@ type Shown = (LibSymbol, CanvasColors, SheetGrid);
 #[derive(Default)]
 struct PreviewState {
     camera: Camera,
-    /// The symbol (`LibSymbol::id`) the camera was fitted for.
-    fitted_for: Option<String>,
+    /// The symbol the camera was fitted for; an edited or different symbol
+    /// has another key and refits.
+    fitted_for: Option<FitKey>,
     /// Last cursor position while a drag-pan is running.
     pan_from: Option<Point>,
     /// Ctrl state from the last modifiers event; the wheel zooms with it.
@@ -56,9 +59,13 @@ struct PreviewState {
     shown: RefCell<Option<Shown>>,
 }
 
+/// A symbol id plus its body extent in micrometres (min x, min y, max x,
+/// max y), so a changed body refits even under an unchanged id.
+type FitKey = (String, [i64; 4]);
+
 impl PreviewState {
-    fn is_fitted_for(&self, lib: &LibSymbol) -> bool {
-        self.fitted_for.as_deref() == Some(lib.id.as_str())
+    fn is_fitted_for(&self, key: &FitKey) -> bool {
+        self.fitted_for.as_ref() == Some(key)
     }
 }
 
@@ -144,12 +151,28 @@ impl SymbolSheetPreview {
         ))
     }
 
+    /// What the fit is keyed on: the symbol id and its body extent.
+    fn fit_key(&self) -> FitKey {
+        let (sheet, symbol) = preview_sheet(&self.lib);
+        let extent = symbol_bounds(&sheet, &symbol);
+        let um = |mm: f64| (mm * 1000.0).round() as i64;
+        (
+            self.lib.id.clone(),
+            [
+                um(extent.min_x),
+                um(extent.min_y),
+                um(extent.max_x),
+                um(extent.max_y),
+            ],
+        )
+    }
+
     fn paper_look(&self) -> PaperLook {
         PaperLook {
             backdrop: to_iced(&self.colors.background),
             paper: to_iced(&self.colors.paper),
             grid: to_iced(&self.colors.grid),
-            grid_visible: true,
+            grid_visible: self.grid.visible,
             grid_mm: self.grid.pitch_mm,
             grid_style: self.grid.style,
             device_px_per_logical_px: self.device_px_per_logical_px,
@@ -200,9 +223,10 @@ impl canvas::Program<()> for SymbolSheetPreview {
         cursor: mouse::Cursor,
     ) -> Option<Action<()>> {
         let size_ok = bounds.width > 0.0 && bounds.height > 0.0;
-        if !state.is_fitted_for(&self.lib) && size_ok {
+        let key = self.fit_key();
+        if !state.is_fitted_for(&key) && size_ok {
             state.camera = self.fitted_camera(bounds.size());
-            state.fitted_for = Some(self.lib.id.clone());
+            state.fitted_for = Some(key);
             state.pan_from = None;
             state.cache.clear();
         }
@@ -270,7 +294,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
     ) -> Vec<Geometry> {
         // Until `update` has fitted this symbol, draw the fitted view
         // without caching it against the stale camera.
-        let fitted = state.is_fitted_for(&self.lib);
+        let fitted = state.is_fitted_for(&self.fit_key());
         if !fitted {
             state.cache.clear();
         }

@@ -111,9 +111,14 @@ impl Signex {
                 super::state::WindowKind::DetachedPanel(kind) => {
                     let ctx = &self.document_state.panel_ctx;
                     let panel = if *kind == crate::panels::PanelKind::Components {
-                        crate::panels::components_panel::view(&self.library, ctx, &ctx.tokens)
-                            .map(crate::dock::DockMessage::Library)
-                            .boxed()
+                        crate::panels::components_panel::view(
+                            &self.library,
+                            ctx,
+                            &ctx.tokens,
+                            self.sheet_grid(),
+                        )
+                        .map(crate::dock::DockMessage::Library)
+                        .boxed()
                     } else {
                         crate::panels::view_panel(*kind, ctx)
                             .map(crate::dock::DockMessage::Panel)
@@ -146,10 +151,7 @@ impl Signex {
                             &self.library,
                             tokens,
                             &self.document_state.panel_ctx.canvas_colors,
-                            crate::panels::components_panel::details::symbol_canvas::SheetGrid {
-                                pitch_mm: self.document_state.panel_ctx.visible_grid_mm,
-                                style: self.document_state.panel_ctx.grid_style,
-                            },
+                            self.sheet_grid(),
                             self.ui_state.device_px_per_logical_px(window_id),
                             address,
                         )
@@ -529,10 +531,7 @@ impl Signex {
                     &self.library,
                     tokens,
                     &self.document_state.panel_ctx.canvas_colors,
-                    crate::panels::components_panel::details::symbol_canvas::SheetGrid {
-                        pitch_mm: self.document_state.panel_ctx.visible_grid_mm,
-                        style: self.document_state.panel_ctx.grid_style,
-                    },
+                    self.sheet_grid(),
                     self.ui_state.device_px_per_logical_px(window_id),
                     address,
                 )

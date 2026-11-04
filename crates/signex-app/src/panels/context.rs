@@ -45,10 +45,6 @@ pub struct PanelContext {
     pub snap_enabled: bool,
     pub grid_size_mm: f32,
     pub visible_grid_mm: f32,
-    /// Glyph the schematic's visible grid draws: the effective value, with
-    /// the Preferences live preview while the dialog is open. The Components
-    /// panel and Component Preview draw their Symbol grid with it.
-    pub grid_style: crate::render_config::GridStyle,
     /// Glyph the Symbol Editor's visible grid draws. Effective value,
     /// not the saved one: while Preferences is open this carries the
     /// live-preview draft, and Discard pushes the committed
