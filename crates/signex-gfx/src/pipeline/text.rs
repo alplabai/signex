@@ -55,11 +55,6 @@ fn alignment_offset_px(size_px: [f32; 2], h_align: TextHAlign, v_align: TextVAli
     [x, y]
 }
 
-/// The items the glyph atlas can draw; rotated ones belong to the CPU layer.
-fn atlas_drawable(texts: &[TextItem]) -> impl Iterator<Item = &TextItem> {
-    texts.iter().filter(|text| text.is_axis_aligned())
-}
-
 /// Top-left of the glyph run for an axis-aligned item. Rotation is not part of
 /// this maths: a cryoglyph `TextArea` cannot rotate, so rotated items never
 /// reach it (`TextItem::is_axis_aligned`) and are drawn by the CPU canvas layer.
@@ -397,11 +392,9 @@ impl GlyphonTextPipeline {
 
         // Rotated items are the CPU canvas layer's to draw — see
         // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
-        for text in atlas_drawable(texts) {
+        for text in texts {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            if crate::primitive::text::text_raster(font_px, size_policy.atlas_limit_px)
-                != crate::primitive::text::TextRaster::Bitmap
-            {
+            if !text.gpu_stages(font_px, size_policy.atlas_limit_px) {
                 continue;
             }
             let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
@@ -507,9 +500,9 @@ impl GlyphonTextPipeline {
 mod tests {
     use super::TextSizePolicy;
     use super::{
-        alignment_offset_px, anchored_top_left_px, atlas_drawable, attrs_for_item,
-        overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,
-        shaped_buffer, text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
+        alignment_offset_px, anchored_top_left_px, attrs_for_item, overlap_ratio_by_smaller_area,
+        rect_from_top_left_size, rect_intersects_viewport, shaped_buffer, text_position_px,
+        text_size_px, to_glyphon_color, viewport_bounds,
     };
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 
@@ -729,10 +722,10 @@ mod tests {
             v_align: TextVAlign::Top,
             family: None,
         };
-        assert_eq!(atlas_drawable(std::slice::from_ref(&item)).count(), 1);
+        assert!(item.gpu_stages(12.0, f32::INFINITY));
         for angle in [std::f32::consts::FRAC_PI_2, -std::f32::consts::FRAC_PI_2] {
             item.rotation = angle;
-            assert_eq!(atlas_drawable(std::slice::from_ref(&item)).count(), 0);
+            assert!(!item.gpu_stages(12.0, f32::INFINITY));
         }
     }
 

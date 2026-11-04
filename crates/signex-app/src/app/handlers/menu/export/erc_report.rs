@@ -197,6 +197,7 @@ impl Signex {
 
     /// Menu entry: refuse if ERC never ran, otherwise ask where to save.
     pub(crate) fn handle_erc_report_requested(&mut self) -> Task<Message> {
+        self.commit_pending_title_block_drafts();
         if !self.erc_has_been_run() {
             self.refuse_erc_report_before_run();
             return Task::none();

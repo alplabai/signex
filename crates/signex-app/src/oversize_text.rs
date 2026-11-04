@@ -25,9 +25,15 @@ pub(crate) struct OversizeBudget {
 /// A tolerated process-global latch, like the diagnostics ring: this is
 /// written from `canvas::Program::draw`, which takes `&self` and has no
 /// message channel to `update`, and the camera decides what is oversize, so
-/// `update` cannot count it either. It only gates a log line.
+/// `update` cannot count it either. It only gates a log line, and opening a
+/// sheet re-arms it ([`rearm_warning`]).
 pub(crate) static OVERSIZE_WARNINGS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
+
+/// Let the next sheet with too much oversize text warn again.
+pub(crate) fn rearm_warning() {
+    OVERSIZE_WARNINGS.store(0, std::sync::atomic::Ordering::Relaxed);
+}
 
 impl OversizeBudget {
     /// The content to draw for the next oversize text, cut to the length
@@ -142,8 +148,6 @@ mod tests {
         );
         let after = OVERSIZE_WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
         assert!(after > before, "the bound was hit");
-        // One Messages line per run: only the first request logs.
-        assert!(after - before >= 1);
         let short = "R1";
         let mut next_frame = OversizeBudget::default();
         assert_eq!(

@@ -118,6 +118,7 @@ impl Signex {
         rows: &[crate::library::state::EditorAddress],
         next: SaveAllNext,
     ) -> Task<Message> {
+        self.commit_pending_title_block_drafts();
         let dirs = self.loose_parent_dirs(paths);
         let plan = SaveAllPlan {
             context: context.to_string(),

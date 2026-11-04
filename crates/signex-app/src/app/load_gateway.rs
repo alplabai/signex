@@ -487,6 +487,7 @@ impl Signex {
             self.document_state.mark_document_dirty(&scan_path);
         }
         self.note_sheet_focused();
+        crate::oversize_text::rearm_warning();
         // Every schematic open funnels through here; `finish_update` starts
         // the (once per project) per-placement designator note off-thread.
         self.document_state.instance_note_due = true;

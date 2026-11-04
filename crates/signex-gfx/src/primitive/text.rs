@@ -337,6 +337,15 @@ pub struct TextItem {
 }
 
 impl TextItem {
+    /// Whether signex's GPU glyph pipeline stages this item, drawn at an em of
+    /// `device_px` with `atlas_limit_device_px` the largest the atlas takes:
+    /// axis-aligned, and a size [`text_raster`] draws as a bitmap. The one
+    /// rule the pipeline stages by and the canvas overlay leaves to it.
+    pub fn gpu_stages(&self, device_px: f32, atlas_limit_device_px: f32) -> bool {
+        self.is_axis_aligned()
+            && text_raster(device_px, atlas_limit_device_px) == TextRaster::Bitmap
+    }
+
     /// The family this item draws in: its own, else `default`.
     pub fn family_or<'a>(&'a self, default: &'a str) -> &'a str {
         self.family.as_deref().unwrap_or(default)

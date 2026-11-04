@@ -10,6 +10,7 @@ use super::super::super::super::*;
 
 impl Signex {
     pub(crate) fn handle_print_preview_requested(&mut self) -> iced::Task<Message> {
+        self.commit_pending_title_block_drafts();
         if !self.document_state.has_active_engine() {
             log::warn!("Print preview: no active schematic");
             return iced::Task::none();
@@ -224,6 +225,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
+        self.commit_pending_title_block_drafts();
         // The last outcome is stale the moment Export is clicked again, also
         // when validation refuses below.
         if let Some(preview) = self.document_state.preview.as_mut() {

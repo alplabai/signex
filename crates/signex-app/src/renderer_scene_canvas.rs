@@ -573,7 +573,11 @@ pub fn draw_canvas_texts<F>(
 /// Whether signex's GPU glyph pipeline stages `text`: axis-aligned (the atlas
 /// cannot rotate) and within the atlas limit.
 pub(crate) fn gpu_stages_text(text: &TextItem, options: SceneDrawOptions) -> bool {
-    text.is_axis_aligned() && options.text_raster(text) == TextRaster::Bitmap
+    let dpr = options.device_px_per_logical_px;
+    text.gpu_stages(
+        options.text_px(text.size_mm, text.family.as_deref()) * dpr,
+        ATLAS_TEXT_LIMIT_PX * dpr,
+    )
 }
 
 /// Whether the canvas draws `text` of a GPU-mounted scene: everything that is

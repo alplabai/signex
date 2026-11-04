@@ -1,17 +1,18 @@
 //! Renders the Sample Project with iced antialiasing off and on, at Fit All,
 //! about 200 % and the zoom limit, in one dark and one light theme, and times
-//! the draws (#2022 MSAA trial).
+//! the draws (#2022 MSAA trial). A tool, not a test: it needs a GPU adapter.
 //!
 //! ```text
-//! MSAA_OUT=/some/dir cargo test -p signex-app --test msaa_compare -- --ignored --nocapture
+//! MSAA_OUT=/some/dir cargo run -p signex-app --example msaa_compare
+//! MSAA_SUFFIX=-snapped MSAA_OUT=/some/dir cargo run -p signex-app --example msaa_compare
 //! ```
 
 #![allow(
     clippy::let_underscore_must_use,
-    reason = "integration tests discard Results with `let _ = ...` routinely; see regression.rs"
+    reason = "a tool: it discards Results with `let _ = ...` like the integration tests"
 )]
 
-#[path = "regression/settle_support.rs"]
+#[path = "../tests/regression/settle_support.rs"]
 #[allow(dead_code)]
 mod settle_support;
 
@@ -138,9 +139,7 @@ fn zoom_to(app: &mut Signex, percent: f64) {
     while canvas.zoom_percent() < percent && canvas.zoom_about_centre(true, 1.25) {}
 }
 
-#[test]
-#[ignore = "needs a GPU adapter; writes PNGs and prints timings"]
-fn msaa_off_and_on() {
+fn main() {
     let out = PathBuf::from(std::env::var("MSAA_OUT").expect("MSAA_OUT directory"));
     std::fs::create_dir_all(&out).expect("out dir");
     // `MSAA_SUFFIX=-snapped` writes a second set next to an earlier one.

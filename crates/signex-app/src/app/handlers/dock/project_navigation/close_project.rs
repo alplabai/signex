@@ -12,6 +12,7 @@ impl Signex {
     /// File ▸ Close Project: close the active project through the same gate
     /// as the project tree's Close Project; nothing when none is open.
     pub(crate) fn close_active_project(&mut self) -> Task<Message> {
+        self.commit_pending_title_block_drafts();
         let active = self.document_state.active_project;
         let index = self
             .document_state
@@ -715,6 +716,7 @@ impl Signex {
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
+        self.commit_pending_title_block_drafts();
         if self.hold_quit_while_path_op() {
             return Task::none();
         }

@@ -103,11 +103,6 @@ impl Signex {
         if state::project_fs::message_touches_disk(&message) {
             self.document_state.project_fs.invalidate();
         }
-        // What the canvas shows is what gets written: a pending title-block
-        // draft is committed before anything saves, exports or prints (#2027).
-        if message_persists_or_exports(&message) {
-            self.commit_pending_title_block_drafts();
-        }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
         // A Save completed behind the quit prompt must not leave it listing
@@ -146,23 +141,4 @@ impl Signex {
         }
         Task::batch(tasks)
     }
-}
-
-/// Messages that write a document or read the engine into a file, a print or
-/// an export; the title-block drafts are committed before they run.
-fn message_persists_or_exports(message: &Message) -> bool {
-    use crate::menu_bar::MenuMessage;
-    matches!(
-        message,
-        Message::File(FileMsg::Save | FileMsg::SaveAs { .. })
-            | Message::Menu(
-                MenuMessage::SaveAs
-                    | MenuMessage::SaveAll
-                    | MenuMessage::ExportPdf
-                    | MenuMessage::ExportNetlist
-                    | MenuMessage::ExportBom
-                    | MenuMessage::ExportErcReport
-            )
-            | Message::PrintPreview(PrintPreviewMsg::Requested | PrintPreviewMsg::Export)
-    )
 }

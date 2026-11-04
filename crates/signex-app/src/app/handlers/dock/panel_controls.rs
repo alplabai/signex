@@ -72,24 +72,58 @@ impl Signex {
             .into_iter()
             .partition(|d| Some(&d.sheet) == active.as_ref());
         for draft in others {
-            let command = signex_engine::Command::SetTitleBlockField {
-                key: draft.field.key().to_string(),
-                value: draft.text.trim().to_string(),
-            };
-            if let Some(engine) = self.document_state.engines.get_mut(&draft.sheet) {
-                match engine.execute(command) {
-                    Ok(_) => self.document_state.mark_document_dirty(&draft.sheet),
-                    Err(error) => crate::diagnostics::log_warning(format!(
-                        "A title-block edit on {} could not be applied: {error}",
-                        draft.sheet.display()
-                    )),
-                }
-            }
+            self.apply_title_block_field_to_sheet(
+                &draft.sheet,
+                draft.field.key(),
+                draft.text.trim(),
+            );
         }
         let fields: Vec<_> = mine.iter().map(|d| d.field).collect();
         self.document_state.panel_ctx.title_block_drafts = mine;
         for field in fields {
             self.commit_title_block_field(field);
+        }
+    }
+
+    /// One title-block edit on an open sheet that is not the active one,
+    /// through the same guards as the mutation gateway: a read-only sheet
+    /// refuses it (and says so in Messages), engine warnings are reported,
+    /// and the sheet is marked modified with its parked view dropped.
+    fn apply_title_block_field_to_sheet(
+        &mut self,
+        sheet: &std::path::Path,
+        key: &str,
+        value: &str,
+    ) {
+        if self.refuse_if_read_only_at(sheet).is_some() {
+            return;
+        }
+        let Some(engine) = self.document_state.engines.get_mut(sheet) else {
+            return;
+        };
+        let command = signex_engine::Command::SetTitleBlockField {
+            key: key.to_string(),
+            value: value.to_string(),
+        };
+        let result = engine.execute(command);
+        Self::report_engine_warnings(engine);
+        match result {
+            Ok(result) if result.changed => {
+                self.document_state.mark_document_dirty(sheet);
+                if let Some(tab) = self
+                    .document_state
+                    .tabs
+                    .iter_mut()
+                    .find(|t| t.path == sheet)
+                {
+                    tab.cached_document = None;
+                }
+            }
+            Ok(_) => {}
+            Err(error) => crate::diagnostics::log_warning(format!(
+                "A title-block edit on {} could not be applied: {error}",
+                sheet.display()
+            )),
         }
     }
 

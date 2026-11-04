@@ -165,6 +165,7 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
+        self.commit_pending_title_block_drafts();
         if idx >= self.document_state.tabs.len() {
             tracing::warn!(
                 target: "signex::tabs",
