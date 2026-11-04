@@ -167,7 +167,7 @@ impl Signex {
                 v.push(dd_planned(
                     None,
                     "Make Project Available Online...",
-                    Some("v3.4"),
+                    Some("Live Collaboration"),
                 ));
                 v.push(dd_msg(
                     None,
@@ -238,12 +238,16 @@ impl Signex {
                     dd_disabled(None, "Explore", None)
                 });
                 v.push(DropdownEntry::Separator);
-                v.push(dd_planned(None, "Variants...", Some("v1.1")));
+                v.push(dd_planned(None, "Variants...", Some("Advanced Schematic")));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_planned(None, "Project Packager...", Some("v4.2")));
-                v.push(dd_planned(None, "Project Releaser...", Some("v5.2")));
+                v.push(dd_planned(
+                    None,
+                    "Project Packager...",
+                    Some("Advanced Output"),
+                ));
+                v.push(dd_planned(None, "Project Releaser...", Some("PLM Sync")));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_planned(None, "Share...", Some("v3.4")));
+                v.push(dd_planned(None, "Share...", Some("Live Collaboration")));
                 v.push(dd_command(
                     None,
                     "open_project_options",
@@ -418,7 +422,11 @@ impl Signex {
                 } else {
                     dd_disabled(None, "Print...", None)
                 });
-                v.push(dd_planned(None, "Show Differences...", Some("v4.3")));
+                v.push(dd_planned(
+                    None,
+                    "Show Differences...",
+                    Some("Import + Git"),
+                ));
             }
             TreeNodeRole::Container => {
                 // Source Documents / Libraries / Settings folders. Minimum

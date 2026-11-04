@@ -247,7 +247,7 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
     let plm_unused: PlmReserved = row.plm.clone();
     // PlmReserved travels in the parameters cell? No — it has its own JSON
     // payload alongside content_hash. We hide it inside parameters cell?
-    // No again — keep it out of the wire format entirely until v3.0 by
+    // No again — keep it out of the wire format entirely until the Pro Release by
     // dropping into a dedicated JSON column would break the documented
     // schema length. Embed plm into the parameters cell? No.
     //
@@ -256,18 +256,18 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
     // optional field. Since the plan §2.4 schema lists 16 specific columns
     // and `plm` isn't one of them, we round-trip `plm` through the
     // `parameters` JSON map only when the user has set it. For now we drop
-    // it on serialise: PlmReserved::default() → empty payload, and v3.0
+    // it on serialise: PlmReserved::default() → empty payload, and the Pro Release
     // adds an explicit column. The unit tests verify default() round-trips.
     // **PLM persist gap.** As of v0.9, only `PlmReserved::default()` round-trips
     // through TSV. Non-default payloads (set by callers that have already
     // started populating `plm_part_id` / `eco_refs` / `compliance` ahead of the
-    // v3.0 PLM adapter) reject here so the failure is loud rather than a
+    // Pro Release PLM adapter) reject here so the failure is loud rather than a
     // silent drop. See the `PlmReserved` doc comment in `component.rs` — it
-    // mirrors this contract on the type definition. v3.0 will add dedicated
+    // mirrors this contract on the type definition. The Pro Release will add dedicated
     // columns and remove this guard.
     if plm_unused != PlmReserved::default() {
         return Err(LibraryError::InvalidData(
-            "PlmReserved fields cannot round-trip through TSV until v3.0 ships \
+            "PlmReserved fields cannot round-trip through TSV until the Pro Release ships \
              the dedicated column"
                 .into(),
         ));

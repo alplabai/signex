@@ -287,7 +287,7 @@ pub(super) fn add_new_entries(
     v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "PCB",
-        Some("v2.0"),
+        Some("PCB Viewer"),
     ));
     // v0.13.0 — footprint editor gated off; hide the "PCB Library" create
     // entry on the project-root menu.
@@ -305,12 +305,12 @@ pub(super) fn add_new_entries(
     v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Output Job",
-        Some("v1.3"),
+        Some("Enhanced Output"),
     ));
     v.push(dd_planned(
         Some(ic::icon_dd_text_frame(tid)),
         "Design Notebook",
-        Some("v1.4"),
+        Some("Design Notebook"),
     ));
     v.push(DropdownEntry::Separator);
     v.push(dd_planned(

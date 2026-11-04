@@ -32,13 +32,13 @@ impl Signex {
             MenuMessage::AnnotateResetDuplicates => Some(self.handle_reset_duplicate_designators()),
             MenuMessage::AnnotateBack => {
                 crate::diagnostics::log_info(
-                    "Back-annotate from PCB lands with the PCB editor (v2.0)",
+                    "Back-annotate from PCB lands with the PCB editor (PCB Viewer plan)",
                 );
                 Some(Task::none())
             }
             MenuMessage::AnnotateSheets => {
                 crate::diagnostics::log_info(
-                    "Number Schematic Sheets is a v1.1 feature (hierarchical design)",
+                    "Number Schematic Sheets is an Advanced Schematic feature (hierarchical design)",
                 );
                 Some(Task::none())
             }
