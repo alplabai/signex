@@ -173,8 +173,11 @@ mod tests {
             },
             x: 100.0,
             y: 100.0,
+            window: None,
         });
-        let mut overlay = app.components_row_context_menu_overlay();
+        let main = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(main);
+        let mut overlay = app.components_row_context_menu_overlay(main);
         assert_eq!(overlay.len(), 2, "backdrop and menu");
         let menu = overlay.remove(1);
         let texts = lay_out_texts(menu, iced::Size::new(1400.0, 900.0));
