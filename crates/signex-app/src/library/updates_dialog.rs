@@ -250,16 +250,24 @@ impl LibraryUpdatesState {
         }
     }
 
-    /// Record the answer to one conflict of the part `symbol_uuid`.
+    /// Record the answer to one conflict of the part `symbol_uuid`. Answering
+    /// ticks the entry (and, as with a click, the entries sharing its
+    /// `lib_id`): an answer on an unticked entry would be ignored.
     pub fn answer_conflict(&mut self, symbol_uuid: Uuid, field: StampField, choice: Choice) {
-        if let Some(conflict) = self
+        let Some(entry) = self
             .entries
             .iter_mut()
-            .filter(|e| e.symbol_uuid == symbol_uuid)
-            .flat_map(|e| e.conflicts.iter_mut())
-            .find(|c| c.field == field)
-        {
-            conflict.choice = choice;
+            .find(|e| e.symbol_uuid == symbol_uuid)
+        else {
+            return;
+        };
+        let Some(conflict) = entry.conflicts.iter_mut().find(|c| c.field == field) else {
+            return;
+        };
+        conflict.choice = choice;
+        let lib_id = entry.lib_id.clone();
+        for e in self.entries.iter_mut().filter(|e| e.lib_id == lib_id) {
+            e.selected = true;
         }
     }
 
@@ -603,5 +611,38 @@ mod tests {
         let r1 = state.entries[1].symbol_uuid;
         state.toggle(r1);
         assert_eq!(sel(&state), vec![true, true, true]);
+    }
+
+    /// Answering a conflict ticks its entry and the group sharing the copy.
+    #[test]
+    fn answering_a_conflict_ticks_the_entry() {
+        let mk = |refdes: &str, kind: BumpKind| LibraryUpdateEntry {
+            symbol_uuid: Uuid::now_v7(),
+            ref_des: refdes.to_string(),
+            lib_id: "L:R".to_string(),
+            library_id: Uuid::nil(),
+            library_name: "Lib".to_string(),
+            row_id: RowId::from_uuid(Uuid::nil()),
+            library_path: PathBuf::from("/tmp/x.snxlib"),
+            current_version: "1.0.0".to_string(),
+            latest_version: "2.0.0".to_string(),
+            bump_kind: kind,
+            selected: false,
+            conflicts: vec![ConflictChoice {
+                field: StampField::Mpn,
+                mine: "MINE".into(),
+                library: "LIB".into(),
+                choice: Choice::KeepMine,
+            }],
+        };
+        let mut state = LibraryUpdatesState::new(
+            PathBuf::from("/tmp/x.standard_sch"),
+            vec![mk("R1", BumpKind::Major), mk("R2", BumpKind::Major)],
+        );
+        assert_eq!(state.selected_count(), 0, "a major bump starts unticked");
+        let r1 = state.entries[0].symbol_uuid;
+        state.answer_conflict(r1, StampField::Mpn, Choice::UseLibrary);
+        assert_eq!(state.entries[0].conflicts[0].choice, Choice::UseLibrary);
+        assert_eq!(state.selected_count(), 2);
     }
 }

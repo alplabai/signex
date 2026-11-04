@@ -323,6 +323,25 @@ fn a_key_a_later_build_adds_to_the_stamp_survives_a_save() {
     assert!(write(&back).contains("datasheet = \"sheet.pdf\""));
 }
 
+/// An older build keeps the stamp among the unknown tables, alphabetically;
+/// this build writes it at the same place, so a re-save changes no byte even
+/// beside a foreign table that sorts before or after it.
+#[test]
+fn the_value_stamp_sorts_among_foreign_tables_like_an_older_build_writes_it() {
+    let head = "[extras.symbols.00000000-0000-0000-0000-000000000001.";
+    let text = stamp_text(|t| {
+        let at = t.find(&format!("{head}library_stamp]")).unwrap();
+        format!(
+            "{}{head}aaa_future]\nkey = 1\n\n{}\n\n{head}zzz_future]\nkey = 2\n",
+            &t[..at],
+            t[at..].trim_end()
+        )
+    });
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert_eq!(stamp_of(&back), stamped(1).library_stamp);
+    assert_eq!(write(&back), text);
+}
+
 /// Regenerates the value-stamp fixtures with a build from before #2004; see
 /// `regenerate_link_fixtures` for the `resave` binary:
 /// `OLDER_BUILD_RESAVE=<binary> cargo test -p signex-types regenerate_stamp_fixtures -- --ignored`

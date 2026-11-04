@@ -160,7 +160,10 @@ impl super::Symbol {
         let Some(row_id) = self.row_id else {
             return changed;
         };
-        if link.values.is_empty() {
+        // A part with a row but no valid stamp gets one even when no value is
+        // proven: it switches the legacy "version unmoved" rule off, and the
+        // absent keys read as unknown (so a conflict is not cleared unasked).
+        if link.values.is_empty() && self.valid_stamp().is_some() {
             return changed;
         }
         let before = self.library_stamp.clone();

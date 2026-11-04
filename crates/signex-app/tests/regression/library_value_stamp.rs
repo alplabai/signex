@@ -337,3 +337,74 @@ fn a_stamp_of_another_row_falls_back_to_the_legacy_rules() {
         "trusted, that stamp would make TWO-1 a follow and overwrite MINE"
     );
 }
+
+#[test]
+fn update_from_library_leaves_a_conflict_for_the_modal() {
+    let (f, mut app) = placed();
+    set_mpn(&mut app, "MINE");
+    row_update(&f, "1.2.4", |row| row.primary_mpn.mpn = "LIB".into());
+    check_drift(&mut app);
+    update_first(&mut app);
+    assert_eq!(mpn(&app).as_deref(), Some("MINE"));
+    assert_eq!(
+        doc(&app).symbols[0].library_version,
+        "1.2.3",
+        "an open conflict keeps the part on its version"
+    );
+    reopen(&mut app);
+    scan(&mut app);
+    let modal = app.library.library_updates.as_ref().expect("asked again");
+    assert_eq!(modal.entries[0].conflicts.len(), 1);
+    check_drift(&mut app);
+    assert!(is_drifted(&app), "the flag stays up");
+}
+
+#[test]
+fn a_legacy_conflict_is_not_cleared_by_update_from_library() {
+    let f = fixture();
+    // The row binds a footprint of a library that is not open: unknown.
+    row_update(&f, "1.2.3", |row| {
+        row.footprint_ref = Some(PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()));
+    });
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    select_first(&mut app);
+    drop_stamp(&mut app);
+    set_mpn(&mut app, "MINE");
+    row_update(&f, "1.2.4", |row| {
+        row.primary_mpn.manufacturer = "Other".into();
+        row.primary_mpn.mpn = "LIB".into();
+    });
+    check_drift(&mut app);
+    assert!(is_drifted(&app));
+    update_first(&mut app);
+    assert_eq!(mpn(&app).as_deref(), Some("MINE"));
+    check_drift(&mut app);
+    assert!(is_drifted(&app), "the conflict was not answered");
+}
+
+#[test]
+fn a_team_mode_override_and_a_row_move_is_a_conflict_the_user_settles() {
+    let f = fixture();
+    let text = std::fs::read_to_string(&f.snxlib).unwrap();
+    assert!(text.contains("mode = \"personal\""));
+    std::fs::write(
+        &f.snxlib,
+        text.replace("mode = \"personal\"", "mode = \"team\""),
+    )
+    .unwrap();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    select_first(&mut app);
+    set_mpn(&mut app, "MINE");
+    row_update(&f, "1.2.4", |row| row.primary_mpn.mpn = "LIB".into());
+    scan(&mut app);
+    let entry = &app.library.library_updates.as_ref().expect("modal").entries[0];
+    assert_eq!(entry.conflicts.len(), 1);
+    apply_modal(&mut app, Some(Choice::UseLibrary));
+    assert_eq!(mpn(&app).as_deref(), Some("LIB"));
+    assert_eq!(stamp(&app).mpn.as_deref(), Some("LIB"));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(mpn(&app).as_deref(), Some("MINE"), "one undo step");
+    assert_eq!(doc(&app).symbols[0].library_version, "1.2.3");
+}

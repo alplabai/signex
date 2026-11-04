@@ -167,3 +167,18 @@ fn a_stamp_of_another_row_is_no_stamp_and_a_link_stamp_writes_version_and_values
     assert!(free.apply_link_stamp(&link));
     assert!(free.library_stamp.is_none());
 }
+
+#[test]
+fn a_link_stamp_with_no_values_still_stamps_a_legacy_part_so_the_legacy_rule_is_off() {
+    let row = Uuid::from_u128(7);
+    let mut legacy = Symbol {
+        row_id: Some(row),
+        library_version: "1.0.0".into(),
+        ..Default::default()
+    };
+    assert!(legacy.valid_stamp().is_none());
+    assert!(legacy.apply_link_stamp(&LinkStamp::version("1.0.1")));
+    let stamp = legacy.valid_stamp().expect("an empty stamp is written");
+    assert!(stamp.footprint.is_none() && stamp.manufacturer.is_none() && stamp.mpn.is_none());
+    assert!(!legacy.apply_link_stamp(&LinkStamp::version("1.0.1")));
+}

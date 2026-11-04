@@ -66,8 +66,10 @@ row_id = "<uuid>"           # the row the values came from; required
 - **Valid only for its row.** A stamp whose `row_id` is not the symbol's
   `row_id` is ignored, and the part is treated as one with no stamp.
 - **Own unknown-key bag.** Keys a later build adds survive an older one. The
-  keys are declared alphabetically, so an older build that keeps the table as
-  unknown keys re-saves it byte for byte.
+  table is written among the symbol's unknown tables, which sort
+  alphabetically, and its keys are sorted: so an older build that keeps it as
+  an unknown table re-saves it byte for byte, even beside a foreign table that
+  sorts before it.
 - **No format bump**: still `snxsch/1`, as for the link. A malformed table (a
   wrong type, a `row_id` that is not a UUID) loads as no stamp with a
   `tracing::warn!` (target `signex::format`); the sheet opens.
@@ -101,7 +103,12 @@ A conflict is answered in the Library Updates modal, per part and field:
 **Keep mine** (the default) keeps `o` and sets `b := t`, which silences the
 flag until the row moves again; **Use library value** sets `o := t` and
 `b := t`. All answers apply in one undo step with the rest of the update.
-"Update from library" on a placed part never answers a conflict. The
+Answering ticks the part's entry; an answer on an unticked entry is ignored.
+**Skip all** and **Cancel** answer nothing, so the modal asks again on every
+open or mount until the conflict is answered.
+"Update from library" on a placed part never answers a conflict: it keeps
+`o` and also keeps the part on its old version, so the next scan lists the
+part with its conflict again. The
 open-time Personal restamp edits nothing: it advances a field's base only
 where `o = t`, never that of a pending follow, and a part with a conflict
 keeps its old version and is offered in the modal.
@@ -111,10 +118,13 @@ keeps its old version and is offered in the modal.
 The base is derived and never stored. If `library_version` is not empty and
 equals the row's version, `b` is the row as it is now (the part has not
 missed a move, so a difference is an override), except that an empty field is
-still filled (row 8). Otherwise `b` is unknown (rows 8 and 9). Once a valid
+still filled (row 8). Otherwise `b` is unknown (rows 8 and 9). A stamping
+event on a part with a row and no valid stamp writes a stamp even when it can
+prove no value (all keys absent): that switches this rule off, so an
+unanswered conflict is not read as "the row's value" and cleared. Once a valid
 stamp exists the version is no longer consulted for that part: a missing key
 is unknown. So an old file whose row moved and whose part differs in a
-non-empty value gets a one-time conflict choice where it used to be
+non-empty value gets a conflict choice, asked until answered, where it used to be
 overwritten.
 
 `library_link/written_with_value_stamp.snxsch` is a file this build writes and

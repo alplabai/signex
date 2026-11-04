@@ -491,12 +491,7 @@ impl Signex {
                 symbol_uuid,
                 field,
                 choice,
-            } => {
-                if let Some(state) = self.library.library_updates.as_mut() {
-                    state.answer_conflict(symbol_uuid, field, choice);
-                }
-                Task::none()
-            }
+            } => self.handle_library_updates_conflict_answered(symbol_uuid, field, choice),
             LibraryMessage::LibraryUpdatesApply => self.handle_library_updates_apply(),
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {

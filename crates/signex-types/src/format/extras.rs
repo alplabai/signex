@@ -234,6 +234,7 @@ impl SymbolExtras {
     }
 
     pub(in crate::format) fn from_symbol(s: &Symbol) -> Self {
+        let (typed_stamp, stamp_table) = stamp_for_write(s.library_stamp.as_ref());
         SymbolExtras {
             footprint: s.footprint.clone(),
             datasheet: s.datasheet.clone(),
@@ -269,13 +270,16 @@ impl SymbolExtras {
             library_id: s.library_id,
             row_id: s.row_id,
             library_version: s.library_version.clone(),
-            library_stamp: s.library_stamp.clone(),
+            library_stamp: typed_stamp,
             unknown: {
                 // A chosen body owns the key; a preserved unreadable value
                 // must not be written beside it.
                 let mut unknown = s.unknown.clone();
                 if !s.body_style.is_normal() {
                     unknown.remove("body_style");
+                }
+                if let Some(table) = stamp_table {
+                    unknown.insert_value("library_stamp", table);
                 }
                 unknown
             },
@@ -473,6 +477,23 @@ where
         );
     }
     Ok(parsed)
+}
+
+/// The stamp as it is written: a table among the unknown keys, so it sorts
+/// where a build without the field re-saves it and a re-save changes no
+/// byte (docs/architecture/snxsch-library-link.md, "Value stamp"). Should it
+/// not convert, the typed field writes it instead; it is never dropped.
+fn stamp_for_write(stamp: Option<&RowStamp>) -> (Option<RowStamp>, Option<toml::Value>) {
+    let Some(stamp) = stamp else {
+        return (None, None);
+    };
+    match toml::Value::try_from(stamp) {
+        Ok(table) => (None, Some(table)),
+        Err(error) => {
+            tracing::warn!(target: "signex::format", "library_stamp as a plain table: {error}");
+            (Some(stamp.clone()), None)
+        }
+    }
 }
 
 /// Deserialize the value stamp, mapping a table that is not one (a wrong

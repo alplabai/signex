@@ -31,6 +31,19 @@ impl Signex {
         Task::none()
     }
 
+    /// The user answered one conflict of a part in the Library Updates modal.
+    pub(super) fn handle_library_updates_conflict_answered(
+        &mut self,
+        symbol_uuid: uuid::Uuid,
+        field: signex_types::schematic::StampField,
+        choice: crate::library::part_sync::Choice,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_updates.as_mut() {
+            state.answer_conflict(symbol_uuid, field, choice);
+        }
+        Task::none()
+    }
+
     /// User clicked Skip All — close the modal and record the path on
     /// `skipped_updates_for` (nothing renders that set yet).
     pub(super) fn handle_library_updates_skip_all(&mut self) -> Task<Message> {
@@ -191,6 +204,8 @@ impl Signex {
                 .find_map(|(s, r)| blocker(s, r.as_ref(), &lib_id));
             // Built once per `lib_id`: the stamps, the opened library and
             // each row's footprint name serve every instance of it.
+            // ponytail: this opens libraries and reads footprints inline, like
+            // `instance_row`; the whole scan moves off-thread under #893.
             let mut sync_check = self.part_sync_check(&schematic_path, &lib_id);
             if team {
                 for (symbol, row) in stale {

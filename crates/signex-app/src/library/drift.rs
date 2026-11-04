@@ -381,7 +381,13 @@ pub fn apply_input(
         .map(|id| (id.to_string(), instance_stamps(doc, id, &approved)))
         .collect();
     for w in wanted.iter_mut().flat_map(|(_, stamps)| stamps.iter_mut()) {
-        if let Some(entry) = state.entries.iter().find(|e| e.symbol_uuid == w.symbol) {
+        // An answer counts only on a ticked entry; any other instance keeps
+        // its part's value and logs the kept line.
+        let ticked = state
+            .entries
+            .iter()
+            .find(|e| e.symbol_uuid == w.symbol && e.selected);
+        if let Some(entry) = ticked {
             w.choices = entry.choices();
         }
     }
@@ -528,8 +534,15 @@ fn stamp_or_reason(
             ))),
             _ => {
                 let settled = eval_part(w, opened, &r, libs).settle(true, &w.choices);
+                // An open conflict keeps the part on its old version, so the
+                // next scan lists it again and the modal can still ask.
+                let open_conflict = settled.sync.as_ref().is_some_and(|s| !s.kept.is_empty());
                 let link = LinkStamp {
-                    version: r.version,
+                    version: if open_conflict {
+                        w.stamped_version.clone()
+                    } else {
+                        r.version
+                    },
                     values: settled.values,
                 };
                 Ok(((w.symbol, link), settled.sync))
@@ -895,5 +908,56 @@ mod tests {
         let error =
             LibraryError::Backend("list /libs/lib/symbols: Permission denied (os error 13)".into());
         assert_eq!(short_reason(&error), "Permission denied (os error 13)");
+    }
+
+    /// An answer counts only on a ticked entry: another instance of the
+    /// same copy keeps its value and logs the kept line.
+    #[test]
+    fn apply_input_takes_choices_only_from_ticked_entries() {
+        use super::super::part_sync::Choice;
+        use super::super::updates_dialog::{
+            BumpKind, ConflictChoice, LibraryUpdateEntry, LibraryUpdatesState,
+        };
+        use signex_types::schematic::{StampField, Symbol};
+        let (library, row) = (Uuid::now_v7(), Uuid::now_v7());
+        let part = |reference: &str| Symbol {
+            uuid: Uuid::now_v7(),
+            reference: reference.into(),
+            lib_id: "L:S".into(),
+            library_id: Some(library),
+            row_id: Some(row),
+            ..Default::default()
+        };
+        let (ticked, unticked) = (part("U1"), part("U2"));
+        let sheet = signex_types::schematic::SchematicSheet {
+            symbols: vec![ticked.clone(), unticked.clone()],
+            ..Default::default()
+        };
+        let entry = |s: &Symbol, selected: bool| LibraryUpdateEntry {
+            symbol_uuid: s.uuid,
+            ref_des: s.reference.clone(),
+            lib_id: "L:S".into(),
+            library_id: library,
+            library_name: "Lib".into(),
+            row_id: signex_library::RowId::from_uuid(row),
+            library_path: PathBuf::from("/tmp/x.snxlib"),
+            current_version: "1.0.0".into(),
+            latest_version: "1.0.1".into(),
+            bump_kind: BumpKind::Patch,
+            selected,
+            conflicts: vec![ConflictChoice {
+                field: StampField::Mpn,
+                mine: "MINE".into(),
+                library: "LIB".into(),
+                choice: Choice::UseLibrary,
+            }],
+        };
+        let mut state = LibraryUpdatesState::new(PathBuf::from("/tmp/x.snxsch"), Vec::new());
+        state.entries = vec![entry(&ticked, true), entry(&unticked, false)];
+        let input = apply_input(&state, &sheet).expect("one entry is ticked");
+        let stamps = &input.wanted[0].1;
+        let choices_of = |s: &Symbol| &stamps.iter().find(|w| w.symbol == s.uuid).unwrap().choices;
+        assert_eq!(choices_of(&ticked).len(), 1);
+        assert!(choices_of(&unticked).is_empty());
     }
 }
