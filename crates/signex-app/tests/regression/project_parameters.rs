@@ -52,7 +52,9 @@ fn parameters_are_dirty_undoable_and_saved_with_the_project() {
     assert!(is_dirty(&f));
     let _ = f.app.update(Message::Edit(EditMsg::Undo));
     assert!(f.app.document_state.projects[0].data.parameters.is_empty());
+    assert!(!is_dirty(&f), "undo back to the file's content is clean");
     let _ = f.app.update(Message::Edit(EditMsg::Redo));
+    assert!(is_dirty(&f));
 
     set_parameter(&mut f.app, "Voltage", "24 V");
     save(&mut f.app);

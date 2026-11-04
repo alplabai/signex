@@ -201,6 +201,8 @@ impl Signex {
         };
         let (old, new) = (leaf(&request.from), leaf(&request.to));
         if let EntryPatch::Patched(bytes) = patch {
+            self.document_state
+                .note_project_bytes_on_disk(project_file, bytes.to_vec(), true);
             let other_edits = self.document_state.is_document_dirty(project_file);
             crate::diagnostics::log_info(format!(
                 "Renamed {old} to {new}; the saved project file now lists the new name{}.",

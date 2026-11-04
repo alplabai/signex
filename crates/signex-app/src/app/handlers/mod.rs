@@ -5,6 +5,7 @@ pub mod autosave_primitives;
 pub mod autosave_recovery;
 pub mod canvas;
 pub mod clipboard_workflows;
+mod component_history;
 #[cfg(test)]
 mod detached_confirm_tests;
 #[cfg(test)]

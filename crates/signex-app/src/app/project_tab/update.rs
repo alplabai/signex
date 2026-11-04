@@ -115,6 +115,8 @@ impl Signex {
     /// dirty. An edit for a project that is no longer loaded is dropped.
     fn apply_project_general(&mut self, project_id: ProjectId, command: ProjectGeneralCommand) {
         let document = &mut self.document_state;
+        // The cursor to undo back to is the state before the first edit.
+        document.note_project_clean_state(project_id);
         let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
             crate::diagnostics::log_warning(
                 "Project tab: the project was closed; the edit was dropped",
@@ -123,8 +125,7 @@ impl Signex {
         };
         let tab = document.project_tabs.entry(project_id).or_default();
         if tab.general_history.apply(&mut project.data, command) {
-            let project_file = project.path.clone();
-            document.mark_document_dirty(&project_file);
+            document.sync_project_history_dirty(project_id, true);
             self.refresh_panel_ctx();
         }
     }
@@ -166,10 +167,8 @@ impl Signex {
             tab.general_history.redo(&mut project.data)
         };
         if moved {
-            // Like an edit: the document now differs from what was last
-            // saved, or matches it only by coincidence; the save decides.
-            let project_file = project.path.clone();
-            document.mark_document_dirty(&project_file);
+            // Dirty unless the step landed back on the saved state.
+            document.sync_project_history_dirty(project_id, true);
             self.refresh_panel_ctx();
         }
         moved

@@ -248,6 +248,11 @@ impl Signex {
                     .project_by_id(project_id)
                     .map(|p| p.path.clone());
                 if let Some(project_file) = project_file {
+                    self.document_state.note_project_bytes_on_disk(
+                        &project_file,
+                        bytes.to_vec(),
+                        true,
+                    );
                     self.commit_bytes_to_project_git(
                         &project_file,
                         &format!("Save sheet as {name}"),
