@@ -452,6 +452,7 @@ impl Signex {
                         .pcb_canvases
                         .insert(id, per_window_pcb);
                 }
+                self.refresh_window_panel_ctxs(None);
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can
                 // land behind the main window otherwise.
@@ -465,6 +466,7 @@ impl Signex {
                 // short-circuits on `windows.remove -> None` and the
                 // canvas cache + selection leak.
                 self.ui_state.windows.remove(&id);
+                self.document_state.window_panel_ctx.remove(&id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 iced::window::close(id)

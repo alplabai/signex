@@ -729,7 +729,7 @@ impl Signex {
         installed
     }
 
-    fn sync_panel_ctx_from_visible_document(&mut self) {
+    pub(crate) fn sync_panel_ctx_from_visible_document(&mut self) {
         self.document_state.panel_ctx.has_schematic = self.has_active_schematic();
         self.document_state.panel_ctx.has_pcb = self.has_active_pcb();
 

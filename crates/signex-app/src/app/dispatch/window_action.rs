@@ -36,6 +36,31 @@ pub(super) fn tag_followup(window: iced::window::Id, message: Message) -> Messag
     })
 }
 
+/// A dock message that is not run against the window's sheet: the dock layout
+/// is shared, and anything that opens, selects or closes a document would load
+/// it into the window's swapped canvas. Those run on the main window. Panel
+/// edits of the sheet, and the Components row press that stamps its window,
+/// are scoped.
+fn dock_message_stays_on_main(message: &crate::dock::DockMessage) -> bool {
+    use crate::dock::DockMessage;
+    use crate::library::LibraryMessage;
+    use crate::panels::PanelMsg;
+    use signex_widgets::tree_view::TreeMsg;
+    match message {
+        // Expanding a row only changes the window's own tree.
+        DockMessage::Panel(PanelMsg::Tree(TreeMsg::Toggle(_))) => false,
+        DockMessage::Panel(
+            PanelMsg::Tree(_) | PanelMsg::Navigator(_) | PanelMsg::PlacedPartAction(_),
+        ) => true,
+        DockMessage::Panel(_) => false,
+        DockMessage::Library(
+            LibraryMessage::ComponentsPanelRowPressed(_)
+            | LibraryMessage::ComponentsPanelRowRightClicked(_),
+        ) => false,
+        _ => true,
+    }
+}
+
 impl Signex {
     /// Whether `window` is an undocked tab window with a canvas of its own,
     /// so an action from it can run against the document it shows.
@@ -58,6 +83,7 @@ impl Signex {
                 Message::CanvasEventInWindow { .. }
                     | Message::Window(WindowMsg::ActionTakenInWindow { .. })
             )
+            || matches!(&message, Message::Dock(dock) if dock_message_stays_on_main(dock))
         {
             return message;
         }
@@ -89,6 +115,7 @@ impl Signex {
     /// Selection, a menu or a Components drag stamped with its id would
     /// otherwise stay open where nothing paints them.
     pub(crate) fn close_surfaces_of_window(&mut self, window: iced::window::Id) {
+        self.document_state.window_panel_ctx.remove(&window);
         let stamped = Some(window);
         if self.ui_state.find_replace.window == stamped {
             self.ui_state.find_replace.open = false;

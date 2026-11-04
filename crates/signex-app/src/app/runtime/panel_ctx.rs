@@ -249,7 +249,15 @@ impl Signex {
         )
     }
 
+    /// Rebuild the panel contexts: the main window's, then those of the
+    /// undocked windows, each from the sheet its window shows.
     pub(crate) fn refresh_panel_ctx(&mut self) {
+        self.refresh_main_panel_ctx();
+        self.refresh_window_panel_ctxs(None);
+    }
+
+    /// Rebuild the context in the main slot from the active document.
+    pub(crate) fn refresh_main_panel_ctx(&mut self) {
         self.drop_pending_profile_update_for_other_project();
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);

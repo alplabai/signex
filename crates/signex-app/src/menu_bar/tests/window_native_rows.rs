@@ -150,29 +150,54 @@ pub(super) fn click_in_window(
     app.update(window_message(window, msg))
 }
 
-/// Rows that act on the main window's document do the same from an
-/// undocked window's bar.
+/// Select every symbol on the sheet `window` shows.
+fn select_window_symbols(app: &mut Signex, window: iced::window::Id) {
+    let Some(crate::app::WindowKind::UndockedTab { path, .. }) = app.ui_state.windows.get(&window)
+    else {
+        panic!("not an undocked tab window");
+    };
+    let items = app.document_state.engines[path]
+        .document()
+        .symbols
+        .iter()
+        .map(|s| SelectedItem::new(s.uuid, SelectedKind::Symbol))
+        .collect();
+    app.interaction_state
+        .canvases
+        .get_mut(&window)
+        .expect("canvas")
+        .selected = items;
+}
+
+/// A window's row acts on the sheet that window shows (#1966), so the same
+/// row from the main bar and from the window's bar ends in the same state
+/// when both sheets hold one selected symbol. Zoom is left out: it moves the
+/// canvas of the window the row was pressed in, and so does the label ghost
+/// of Net Label.
 #[test]
-fn undocked_window_rows_act_on_the_main_document_like_the_main_bar() {
+fn undocked_window_rows_act_like_the_main_bar_on_the_sheet_they_show() {
+    let mut differing = Vec::new();
     for path in [
         "Edit/Copy",
         "Edit/Select All",
         "Edit/Find",
-        "View/Zoom In",
         "View/Toggle Grid",
         "View/AutoFocus (dim unselected)",
         "Place/Wire",
-        "Place/Net Label",
         "Place/Junction",
         "Tools/Preferences...",
         "Help/Keyboard Shortcuts",
     ] {
         let (mut from_window, window) = with_undocked_window(one_symbol_selected());
+        select_window_symbols(&mut from_window, window);
         let _ = click_in_window(&mut from_window, window, path);
         let (mut from_main, _) = with_undocked_window(one_symbol_selected());
         let _ = click(&mut from_main, path);
-        assert_eq!(probe(&from_window), probe(&from_main), "{path}");
+        if probe(&from_window) != probe(&from_main) {
+            differing.push(path);
+        }
     }
+    assert!(differing.is_empty(), "rows that differ: {differing:?}");
 }
 
 /// #1922: View ▸ Fit All is enabled by the undocked window's own canvas and

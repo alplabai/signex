@@ -52,12 +52,17 @@ struct Fixture {
 /// The main window shows an empty `a.snxsch`; an undocked window shows
 /// `b.snxsch`, which holds one wire.
 fn fixture() -> Fixture {
-    let (mut app, _boot) = Signex::new();
+    let (app, _boot) = Signex::new();
+    fixture_in(app, Path::new(""))
+}
+
+/// [`fixture`] on `app`, with the two sheets in `dir`.
+fn fixture_in(mut app: Signex, dir: &Path) -> Fixture {
     app.ui_state.first_run_tour_open = false;
     let main = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(main);
-    let main_path = PathBuf::from("a.snxsch");
-    let window_path = PathBuf::from("b.snxsch");
+    let main_path = dir.join("a.snxsch");
+    let window_path = dir.join("b.snxsch");
     let empty =
         signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
     app.document_state.engines.insert(main_path.clone(), empty);
@@ -339,7 +344,7 @@ fn move_selection_by_xy_moves_the_sheet_of_the_window_it_was_opened_in() {
 }
 
 #[test]
-fn the_menu_bar_and_docks_of_an_undocked_window_are_never_scoped() {
+fn the_menu_bar_and_dock_layout_of_an_undocked_window_are_never_scoped() {
     // Scoping them runs a tab switch inside the window swap and loads the
     // wrong sheet into the window's canvas, so they send plain messages.
     let f = fixture();
@@ -354,19 +359,23 @@ fn the_menu_bar_and_docks_of_an_undocked_window_are_never_scoped() {
             ));
         }
     }
-    let chrome: Vec<_> = sent
-        .iter()
-        .filter(|m| matches!(m, Message::Menu(_) | Message::Dock(_)) || is_scoped(m, f.window))
-        .collect();
+    let is_chrome = |m: &Message| {
+        matches!(m, Message::Menu(_))
+            || matches!(
+                m,
+                Message::Dock(
+                    crate::dock::DockMessage::TabDragStart(..)
+                        | crate::dock::DockMessage::TabHoverEnter(..)
+                )
+            )
+    };
+    assert!(sent.iter().any(is_chrome), "no chrome message: {sent:?}");
     assert!(
-        chrome
-            .iter()
-            .any(|m| matches!(m, Message::Menu(_) | Message::Dock(_))),
-        "no menu or dock message was sent: {sent:?}"
-    );
-    assert!(
-        chrome.iter().all(|m| !is_scoped(m, f.window)),
-        "a menu or dock message from an undocked window was scoped: {chrome:?}"
+        sent.iter().all(|m| !matches!(
+            m,
+            Message::Window(WindowMsg::ActionTakenInWindow { message, .. }) if is_chrome(message)
+        )),
+        "a menu or dock layout message from an undocked window was scoped: {sent:?}"
     );
 }
 
@@ -480,4 +489,154 @@ fn an_action_for_a_closed_window_does_not_fall_through_to_the_main_window() {
     let _ = f.app.update(message);
 
     assert!(f.app.interaction_state.context_menu.is_none());
+}
+
+fn label_id() -> uuid::Uuid {
+    uuid::Uuid::from_u128(9)
+}
+
+/// `fixture` where the window's sheet is A3 and holds a selected label
+/// "WINDOW_NET"; the main window's sheet is A4 with nothing selected.
+fn fixture_with_a_labelled_a3_window() -> Fixture {
+    let mut f = fixture();
+    let engine = f
+        .app
+        .document_state
+        .engines
+        .get_mut(&f.window_path)
+        .unwrap();
+    engine
+        .execute(signex_engine::Command::SetPaperSize {
+            paper_size: "A3".into(),
+        })
+        .unwrap();
+    engine
+        .execute(signex_engine::Command::PlaceLabel {
+            label: signex_types::schematic::Label {
+                unknown_columns: Default::default(),
+                uuid: label_id(),
+                text: "WINDOW_NET".into(),
+                position: Point::new(30.48, 30.48),
+                rotation: 0.0,
+                label_type: signex_types::schematic::LabelType::Net,
+                shape: String::new(),
+                font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+                font_family: None,
+                justify: Default::default(),
+                justify_v: Default::default(),
+                locked: false,
+            },
+        })
+        .unwrap();
+    let cache = crate::schematic_runtime::SchematicRenderCache::from_sheet(
+        f.app.document_state.engines[&f.window_path].document(),
+    );
+    let slot = f.app.interaction_state.canvases.get_mut(&f.window).unwrap();
+    slot.set_render_cache(Some(cache));
+    slot.selected = vec![SelectedItem::new(label_id(), SelectedKind::Label)];
+    f.app.refresh_panel_ctx();
+    f
+}
+
+fn dock(message: crate::panels::PanelMsg) -> Message {
+    Message::Dock(crate::dock::DockMessage::Panel(message))
+}
+
+#[test]
+fn properties_in_an_undocked_window_shows_that_windows_sheet() {
+    let f = fixture_with_a_labelled_a3_window();
+
+    let window = f.app.panel_ctx_for(f.window);
+    assert_eq!(window.paper_size, "A3");
+    assert_eq!(window.selection_count, 1);
+    assert!(
+        window
+            .selection_info
+            .iter()
+            .any(|(_, value)| value == "WINDOW_NET"),
+        "the selected label's text is not in the window's Properties: {:?}",
+        window.selection_info
+    );
+    assert!(has(&f.app, f.window, "Net Label"));
+    assert!(has(&f.app, f.window, "1 object selected"));
+
+    let main = f.app.panel_ctx_for(f.main);
+    assert_eq!(main.paper_size, "A4");
+    assert_eq!(main.selection_count, 0);
+    assert!(has(&f.app, f.main, "Width: 297mm  Height: 210mm"));
+    assert!(has(&f.app, f.main, "Nothing selected"));
+}
+
+#[test]
+fn a_properties_edit_in_an_undocked_window_changes_that_windows_sheet_only() {
+    let mut f = fixture_with_a_labelled_a3_window();
+    let edit = |message| f.app.scope_to_window(f.window, dock(message));
+    let rename = edit(crate::panels::PanelMsg::EditLabelText(
+        label_id(),
+        "RENAMED".into(),
+    ));
+    let resize = edit(crate::panels::PanelMsg::SetPaperSize("A2".into()));
+    assert!(is_scoped(&rename, f.window) && is_scoped(&resize, f.window));
+    feed(&mut f.app, vec![rename, resize]);
+
+    let window_sheet = f.app.document_state.engines[&f.window_path].document();
+    assert_eq!(window_sheet.labels[0].text, "RENAMED");
+    assert_eq!(window_sheet.paper_size, "A2");
+    let main_sheet = f.app.document_state.engines[&f.main_path].document();
+    assert!(main_sheet.labels.is_empty());
+    assert_ne!(main_sheet.paper_size, "A2");
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+
+    assert_eq!(f.app.panel_ctx_for(f.window).paper_size, "A2");
+    assert_eq!(f.app.panel_ctx_for(f.main).paper_size, "A4");
+    assert_eq!(f.app.document_state.panel_ctx.selection_count, 0);
+}
+
+#[test]
+fn opening_a_sheet_from_an_undocked_windows_projects_panel_runs_on_the_main_window() {
+    use signex_widgets::tree_view::TreeMsg;
+    let dir = tempfile::tempdir().unwrap();
+    let names = ["a.snxsch", "b.snxsch", "c.snxsch"];
+    let app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.path().to_string_lossy(),
+        &names,
+    );
+    let mut f = fixture_in(app, dir.path());
+    let c_path = dir.path().join("c.snxsch");
+    let c = signex_engine::Engine::new(Default::default()).unwrap();
+    f.app.document_state.engines.insert(c_path.clone(), c);
+    f.app.document_state.tabs.push(tab(&c_path));
+    f.app.refresh_panel_ctx();
+    let key = vec![
+        f.app.document_state.projects[0].id.to_string(),
+        "Source Documents".to_string(),
+        "c.snxsch".to_string(),
+    ];
+
+    let mut sent = Vec::new();
+    for _ in 0..2 {
+        let message = dock(crate::panels::PanelMsg::Tree(TreeMsg::Select(key.clone())));
+        let scoped = f.app.scope_to_window(f.window, message);
+        assert!(
+            !is_scoped(&scoped, f.window),
+            "an open-sheet click was scoped"
+        );
+        sent.push(scoped);
+    }
+    feed(&mut f.app, sent);
+
+    assert_eq!(
+        f.app.document_state.active_path,
+        Some(c_path),
+        "the main window did not open the sheet"
+    );
+    let slot = f.app.interaction_state.canvas_for_window(f.window);
+    assert_eq!(slot.selected, Vec::new());
+    let wires_shown = slot.active_render_cache().map(|c| c.snapshot().wires.len());
+    assert_eq!(
+        wires_shown,
+        Some(1),
+        "the window's canvas was loaded with another sheet"
+    );
+    assert!(f.app.interaction_state.canvas.selected.is_empty());
 }

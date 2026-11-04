@@ -2,6 +2,7 @@
 
 use super::*;
 
+#[derive(Clone)]
 pub struct PanelContext {
     /// Multi-project workspace — one entry per `LoadedProject`. Every
     /// project-aware panel reads from this Vec; the active project is

@@ -483,6 +483,9 @@ pub struct DocumentState {
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
+    /// The panel context of each undocked document window, so its dock
+    /// panels show and edit that window's sheet (#1966).
+    pub window_panel_ctx: std::collections::HashMap<iced::window::Id, crate::panels::PanelContext>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.

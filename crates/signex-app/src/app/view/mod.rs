@@ -234,6 +234,7 @@ impl Signex {
         let bottom_collapsed = document.dock.is_collapsed(PanelPosition::Bottom);
 
         let left = self.view_dock_panel(
+            window_id,
             PanelPosition::Left,
             left_has_panels,
             left_collapsed,
@@ -251,6 +252,7 @@ impl Signex {
             true,
         );
         let right = self.view_dock_panel(
+            window_id,
             PanelPosition::Right,
             right_has_panels,
             right_collapsed,
@@ -264,6 +266,7 @@ impl Signex {
             false,
         );
         let bottom = self.view_dock_panel_h(
+            window_id,
             PanelPosition::Bottom,
             bottom_has_panels,
             bottom_collapsed,

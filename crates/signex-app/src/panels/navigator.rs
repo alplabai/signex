@@ -30,7 +30,7 @@ use crate::app::sheet_hierarchy::{
 type OccurrenceKey = Vec<String>;
 
 /// State behind the Navigator panel.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct NavigatorModel {
     /// What the hierarchy was built from; unchanged means the cached
     /// `hierarchy` is still current and the disk is not read again.

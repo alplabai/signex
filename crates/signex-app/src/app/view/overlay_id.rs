@@ -372,7 +372,7 @@ impl Signex {
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
             }
-            OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay()),
+            OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay(window_id)),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay(window_id)),

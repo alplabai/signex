@@ -490,6 +490,18 @@ impl Signex {
         if let Some(index) = retargeted_tab {
             self.document_state.active_tab = index;
         }
+        // The window's panel context goes into the main slot with its canvas,
+        // so the panels and the handlers see the sheet the window shows.
+        let fresh_ctx = !self
+            .document_state
+            .window_panel_ctx
+            .contains_key(&window_id);
+        let mut swapped_ctx = self
+            .document_state
+            .window_panel_ctx
+            .remove(&window_id)
+            .unwrap_or_else(|| self.new_window_panel_ctx());
+        std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
         let saved_active_path = self.document_state.active_path.take();
         let revision_before = self
             .document_state
@@ -504,8 +516,17 @@ impl Signex {
         // mutated state, which is fine as long as the swap itself
         // unwinds deterministically below.
         let saved_acting = self.interaction_state.acting_window.replace(window_id);
-        let task_result = catch_unwind(AssertUnwindSafe(|| handler(self)));
+        let task_result = catch_unwind(AssertUnwindSafe(|| {
+            if fresh_ctx {
+                self.init_window_panel_ctx();
+            }
+            handler(self)
+        }));
         self.interaction_state.acting_window = saved_acting;
+        std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
+        self.document_state
+            .window_panel_ctx
+            .insert(window_id, swapped_ctx);
 
         // Always-run cleanup (runs on success, error return, or panic
         // via resume_unwind below): swap the canvases back and restore

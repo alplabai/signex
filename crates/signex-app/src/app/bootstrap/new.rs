@@ -468,6 +468,7 @@ impl Signex {
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
+                window_panel_ctx: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
                     projects: Vec::new(),
                     sym_count: 0,

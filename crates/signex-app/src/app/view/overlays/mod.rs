@@ -753,19 +753,26 @@ impl Signex {
     /// Floating panels — one `Translate`-positioned widget per floating
     /// panel. No clamp: panels follow Altium behaviour and may be
     /// dragged anywhere, even past the window edge (the OS clips).
-    pub(super) fn floating_panels_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn floating_panels_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         for i in 0..document.dock.floating.len() {
             if let Some(panel_widget) =
                 document
                     .dock
-                    .view_floating_panel(i, &document.panel_ctx, &self.library)
+                    .view_floating_panel(i, self.panel_ctx_for(window_id), &self.library)
             {
                 let fp = &document.dock.floating[i];
                 out.push(
-                    super::translate::Translate::new(panel_widget.map(Message::Dock), (fp.x, fp.y))
-                        .into(),
+                    super::translate::Translate::new(
+                        panel_widget
+                            .map(move |msg| self.scope_to_window(window_id, Message::Dock(msg))),
+                        (fp.x, fp.y),
+                    )
+                    .into(),
                 );
             }
         }

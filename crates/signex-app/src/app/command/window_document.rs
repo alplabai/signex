@@ -232,7 +232,8 @@ impl Signex {
         handler: impl FnOnce(&mut Self) -> Task<Message>,
     ) -> Task<Message> {
         let task = self.run_in_window(window, true, handler);
-        self.refresh_panel_ctx();
+        self.refresh_main_panel_ctx();
+        self.refresh_window_panel_ctxs(Some(window));
         task
     }
 }
