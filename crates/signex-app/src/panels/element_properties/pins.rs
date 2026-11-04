@@ -6,6 +6,7 @@ use super::super::*;
 use crate::styles::{Spacing, TypeScale};
 use iced::widget::row;
 use signex_engine::info_keys;
+use std::collections::HashMap;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -31,8 +32,17 @@ pub(super) struct PinRow {
 /// focused key is marked, so a symbol with a repeated pin number highlights
 /// one row.
 pub(super) fn pin_rows(info: &[(String, String)]) -> Vec<PinRow> {
-    let value = |key: &str| info.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
-    let focus = value(info_keys::FOCUSED_PIN);
+    let focus = info
+        .iter()
+        .find(|(k, _)| k == info_keys::FOCUSED_PIN)
+        .map(|(_, v)| v.as_str());
+    // One pass for the nets; the first row of a repeated key wins.
+    let mut nets: HashMap<&str, &str> = HashMap::new();
+    for (k, v) in info {
+        if let Some(pin) = k.strip_prefix(info_keys::PIN_NET_PREFIX) {
+            nets.entry(pin).or_insert(v.as_str());
+        }
+    }
     let mut focus_taken = false;
     info.iter()
         .filter_map(|(k, v)| {
@@ -41,10 +51,10 @@ pub(super) fn pin_rows(info: &[(String, String)]) -> Vec<PinRow> {
             let name = cells.next().unwrap_or_default().to_string();
             let electrical_type = cells.next().unwrap_or_default().to_string();
             let hidden = cells.next() == Some("Yes");
-            let focused = !focus_taken && focus.as_deref() == Some(designator.as_str());
+            let focused = !focus_taken && focus == Some(designator.as_str());
             focus_taken |= focused;
             Some(PinRow {
-                net: value(&format!("{}{designator}", info_keys::PIN_NET_PREFIX)),
+                net: nets.get(designator.as_str()).map(|n| (*n).to_string()),
                 focused,
                 designator,
                 name,
@@ -64,14 +74,18 @@ pub(super) fn push_pins_section<'a>(
     primary: Color,
     border_c: Color,
 ) -> Column<'a, PanelMsg> {
-    let rows = pin_rows(&ctx.selection_info);
-    if rows.is_empty() {
+    // The count is a cheap scan; the rows are built only if the section is open.
+    let pin_count = ctx
+        .selection_info
+        .iter()
+        .filter(|(k, _)| k.starts_with(info_keys::PIN_PREFIX))
+        .count();
+    if pin_count == 0 {
         return col;
     }
     let accent = PanelPalette::from_tokens(&ctx.tokens).accent;
-    // The Net column exists only once the project net index can answer.
-    let show_net = rows.iter().any(|r| r.net.is_some());
-    let title = format!("Pins ({})", rows.len());
+    let title = format!("Pins ({pin_count})");
+    let info = &ctx.selection_info;
     col.push(collapsible_section(
         PINS_SECTION_KEY,
         &title,
@@ -79,6 +93,9 @@ pub(super) fn push_pins_section<'a>(
         muted,
         border_c,
         move || {
+            let rows = pin_rows(info);
+            // The Net column exists only once the project net index can answer.
+            let show_net = rows.iter().any(|r| r.net.is_some());
             let mut c = Column::new().spacing(0).width(Length::Fill);
             c = c.push(table_row(
                 ["Pin", "Name", "Type", "Net", "Hidden"].map(String::from),
@@ -186,5 +203,22 @@ mod tests {
         let mut rows = info();
         rows.retain(|(k, _)| !k.starts_with(info_keys::PIN_NET_PREFIX));
         assert!(pin_rows(&rows).iter().all(|r| r.net.is_none()));
+    }
+
+    #[test]
+    fn two_thousand_pins_each_get_their_own_net() {
+        let mut rows = Vec::new();
+        for n in 0..2000 {
+            rows.push((format!("Pin: {n}"), format!("P{n}	Passive	No")));
+        }
+        for n in (0..2000).rev() {
+            rows.push((format!("Pin Net: {n}"), format!("NET{n}")));
+        }
+        let out = pin_rows(&rows);
+        assert_eq!(out.len(), 2000);
+        for (n, row) in out.iter().enumerate() {
+            assert_eq!(row.designator, n.to_string());
+            assert_eq!(row.net.as_deref(), Some(format!("NET{n}").as_str()));
+        }
     }
 }
