@@ -213,6 +213,7 @@ altium	hint	-	-	place_wire_to_bus_entry
 altium	hint	-	-	previous_highlighted_net_item
 altium	hint	-	-	previous_sheet
 altium	hint	-	F8	run_erc
+altium	hint	-	-	open_erc_dialog
 altium	hint	-	-	open_parameter_manager
 altium	hint	-	T A E	reset_schematic_designators
 altium	hint	-	-	sheet_navigation_back
@@ -505,6 +506,7 @@ classic	hint	-	Z	place_wire_to_bus_entry
 classic	hint	-	Shift+TAB	previous_highlighted_net_item
 classic	hint	-	PGUP	previous_sheet
 classic	hint	-	F8	run_erc
+classic	hint	-	-	open_erc_dialog
 classic	hint	-	-	open_parameter_manager
 classic	hint	-	-	reset_schematic_designators
 classic	hint	-	Alt+LEFT	sheet_navigation_back

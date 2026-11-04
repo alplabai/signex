@@ -505,6 +505,11 @@
     "category": "file"
   },
   {
+    "id": "open_erc_dialog",
+    "group": "Schematic",
+    "category": "validation"
+  },
+  {
     "id": "open_grid_picker",
     "group": "General",
     "category": "view"
