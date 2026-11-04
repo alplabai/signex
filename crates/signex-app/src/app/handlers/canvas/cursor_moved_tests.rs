@@ -21,3 +21,17 @@ fn a_cursor_move_keeps_the_background_cache() {
         "the overlay must still follow the cursor"
     );
 }
+
+#[test]
+fn a_draft_grid_style_drops_the_background_cache() {
+    use crate::app::contracts::{Message, PreferencesMsg};
+    let (mut app, _boot) = Signex::new();
+    let before = app.interaction_state.active_canvas().bg_cache_clears;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        crate::preferences::PrefMsg::DraftGridStyle(crate::render_config::GridStyle::Lines),
+    )));
+    assert!(
+        app.interaction_state.active_canvas().bg_cache_clears > before,
+        "the grid-style preview stays stale until the camera moves"
+    );
+}
