@@ -127,7 +127,18 @@ fn a_step_pick_answered_during_a_delete_names_the_file() {
         "Messages names the picked file"
     );
 
+    // A cancelled dialog picked nothing: no refusal line, nothing changes.
+    let before = editor(&app, &address).row.clone();
+    let since = crate::diagnostics::newest_entry_id();
     let none = EditorMsg::StepAttachResult(None);
-    let line = app.preview_edit_refusal(&address, &none).unwrap();
-    assert!(line.starts_with("The picked file was not attached"));
+    assert!(app.preview_edit_refusal(&address, &none).is_none());
+    let _task = app.update(preview_event(&address, none));
+    assert!(
+        warnings_since(since)
+            .iter()
+            .all(|m| !m.contains("was not attached")),
+        "a cancelled pick logs no refusal"
+    );
+    assert_eq!(editor(&app, &address).row, before);
+    assert!(!editor(&app, &address).dirty);
 }

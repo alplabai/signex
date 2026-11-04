@@ -98,6 +98,7 @@ impl Default for LibraryState {
             external_poll_failure_reported: false,
             pricing_refresh: None,
             writes: Default::default(),
+            owed_cascades: Default::default(),
             closing: Default::default(),
             unmounted: Vec::new(),
             clock: chrono::Utc::now(),

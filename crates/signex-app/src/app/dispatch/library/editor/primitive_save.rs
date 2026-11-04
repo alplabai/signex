@@ -214,6 +214,7 @@ impl Signex {
         let turn = mounted_library
             .as_deref()
             .map(|library| self.library.writes.turn(library));
+        let others = self.other_library_turns(mounted_library.as_deref(), mode);
         let write = PrimitiveWrite {
             path: path.to_path_buf(),
             mounted_alias,
@@ -222,6 +223,7 @@ impl Signex {
             now,
             snapshot,
             turn,
+            others,
         };
         let guard = self
             .document_state
@@ -259,7 +261,7 @@ impl Signex {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
-                owed: editor.cascade_owed.clone(),
+                owed: with_kept(&editor.cascade_owed, self.library.owed_cascades.of(path)),
             };
             self.document_state.keep_document_dirty_until_saved(path);
             return Ok(snapshot);
@@ -294,7 +296,7 @@ impl Signex {
                 file: editor.file.clone(),
                 baseline: editor.baseline.clone(),
                 name: editor.primitive().name.clone(),
-                owed: editor.cascade_owed.clone(),
+                owed: with_kept(&editor.cascade_owed, self.library.owed_cascades.of(path)),
             };
             self.document_state.keep_document_dirty_until_saved(path);
             return Ok(snapshot);
@@ -419,10 +421,16 @@ impl Signex {
             PostSaveRefresh::Background(tasks) => {
                 tasks.push(self.refresh_primitive_cache_for(path));
                 tasks.push(self.refresh_editors_after_cascade(path, &written.cascaded_rows));
+                for (root, rows) in &written.cascaded_elsewhere {
+                    tasks.push(self.refresh_cascaded_library(root, rows));
+                }
             }
             PostSaveRefresh::Inline => {
                 self.refresh_primitive_cache_blocking(path);
                 self.refresh_editors_after_cascade_blocking(path, &written.cascaded_rows);
+                for (root, rows) in &written.cascaded_elsewhere {
+                    self.refresh_cascaded_library_blocking(root, rows);
+                }
             }
         }
         // The editor the snapshot came from is gone: closed, discarded and
@@ -430,12 +438,22 @@ impl Signex {
         // landed, but its baseline, versions and dirty state are not this
         // save's to set, and "Save X" would mislabel what is committed.
         let edited_in_place = self.primitive_save_generation(path) == Some(generation);
+        // What the write still owes follows the file, not the editor.
+        self.library.owed_cascades.set(
+            path,
+            if edited_in_place {
+                &[]
+            } else {
+                &written.cascade_owed
+            },
+        );
         if !edited_in_place {
             crate::diagnostics::log_info(format!(
                 "[{label}] Wrote {}; the editor it was saved from is no longer open, \
                  so the open document was left as it is",
                 path.display()
             ));
+            self.pay_debt_of_replacement(path, &written.cascade_owed);
         } else {
             self.settle_saved_editor(path, written.file, &written.versions, &written.cascade_owed);
             crate::diagnostics::log_info(format!("[{label}] Wrote {}", path.display()));
@@ -504,8 +522,123 @@ impl Signex {
         }
     }
 
-    /// Say so when an editor that still owes row updates is dropped or
-    /// replaced: they are lost, and the user has to re-bind by hand.
+    /// The write finished for an editor that was replaced meanwhile. If the
+    /// replacement was handed the debt this write paid ([`Self::seed_owed_cascade`]),
+    /// drop what is paid, and let it read clean when that debt was all that
+    /// kept it unsaved. Edits it holds stay unsaved (#2004).
+    fn pay_debt_of_replacement(&mut self, path: &std::path::Path, still_owed: &[uuid::Uuid]) {
+        let document = &mut self.document_state;
+        let settled = if let Some(editor) = document.symbol_editors.get_mut(path) {
+            let owed = !editor.cascade_owed.is_empty();
+            editor.cascade_owed.retain(|id| still_owed.contains(id));
+            owed && editor.cascade_owed.is_empty()
+                && editor.file.changed_since(&editor.baseline).is_empty()
+        } else if let Some(editor) = document.footprint_editors.get_mut(path) {
+            let owed = !editor.cascade_owed.is_empty();
+            editor.cascade_owed.retain(|id| still_owed.contains(id));
+            owed && editor.cascade_owed.is_empty()
+                && editor.file.changed_since(&editor.baseline).is_empty()
+        } else {
+            false
+        };
+        if settled {
+            self.mark_primitive_clean(path);
+        }
+    }
+
+    /// An editor that owes row updates is closed: the file keeps owing them,
+    /// and its next save carries them out (#2004).
+    pub(crate) fn keep_owed_cascade(&mut self, path: &std::path::Path) {
+        let document = &self.document_state;
+        let owed = document
+            .symbol_editors
+            .get(path)
+            .map(|e| e.cascade_owed.clone())
+            .or_else(|| {
+                document
+                    .footprint_editors
+                    .get(path)
+                    .map(|e| e.cascade_owed.clone())
+            })
+            .unwrap_or_default();
+        if owed.is_empty() {
+            return;
+        }
+        self.library.owed_cascades.set(path, &owed);
+        let name = path.file_stem().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        let line = format!(
+            "Rows that use {name} still await their update; the next save of it moves them, \
+             but only while Signex stays open"
+        );
+        crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
+    }
+
+    /// At quit: name the files whose rows still await an update, since the
+    /// record does not survive the process (#2004).
+    pub(crate) fn warn_owed_cascades_at_quit(&self) {
+        let document = &self.document_state;
+        let mut files: Vec<&std::path::Path> = self.library.owed_cascades.files().collect();
+        files.extend(
+            document
+                .symbol_editors
+                .iter()
+                .filter(|(_, e)| !e.cascade_owed.is_empty())
+                .map(|(path, _)| path.as_path()),
+        );
+        files.extend(
+            document
+                .footprint_editors
+                .iter()
+                .filter(|(_, e)| !e.cascade_owed.is_empty())
+                .map(|(path, _)| path.as_path()),
+        );
+        files.sort();
+        files.dedup();
+        if files.is_empty() {
+            return;
+        }
+        let names: Vec<String> = files
+            .iter()
+            .map(|p| {
+                p.file_stem().map_or_else(
+                    || p.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        let line = format!(
+            "Quit with rows still awaiting an update from: {}; save those files again to move them",
+            names.join(", ")
+        );
+        crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
+    }
+
+    /// A reopened editor takes back the row updates its file still owes, and
+    /// is unsaved until a save moves them (#2004).
+    pub(crate) fn seed_owed_cascade(&mut self, path: &std::path::Path) {
+        let owed = self.library.owed_cascades.take(path);
+        if owed.is_empty() {
+            return;
+        }
+        let document = &mut self.document_state;
+        if let Some(editor) = document.symbol_editors.get_mut(path) {
+            editor.cascade_owed = owed;
+        } else if let Some(editor) = document.footprint_editors.get_mut(path) {
+            editor.cascade_owed = owed;
+        } else {
+            self.library.owed_cascades.set(path, &owed);
+            return;
+        }
+        self.mark_primitive_owes_cascade(path);
+    }
+
+    /// Say so when a History restore replaces an editor that still owes row
+    /// updates: the restored file is not the one they were owed for, so they
+    /// are dropped and the user has to re-bind by hand. (Closing an editor
+    /// keeps the debt instead: [`Self::keep_owed_cascade`].)
     pub(crate) fn warn_if_cascade_owed(&self, path: &std::path::Path) {
         let document = &self.document_state;
         let owes = document
@@ -526,8 +659,12 @@ impl Signex {
             || path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let line =
-            format!("Re-bind the rows of {name} by hand; its pending row updates were discarded");
+        // A restore replaces the file, so what the old editor owed no longer
+        // describes it: unlike a close, nothing is kept (#2004).
+        let line = format!(
+            "{name} was restored from history, so its pending row updates are void; \
+             re-bind the rows that use it by hand"
+        );
         crate::diagnostics::log_warning(crate::text_trunc::prefix_within_bytes(&line, 157));
     }
 
@@ -629,6 +766,13 @@ impl Signex {
             ),
         }
     }
+}
+
+/// What the editor owes plus what the file kept after an editor of it closed.
+fn with_kept(editor: &[uuid::Uuid], kept: &[uuid::Uuid]) -> Vec<uuid::Uuid> {
+    let mut all = editor.to_vec();
+    all.extend(kept.iter().filter(|id| !editor.contains(id)));
+    all
 }
 
 /// `path` spelled under the mounted library's own folder, when the library

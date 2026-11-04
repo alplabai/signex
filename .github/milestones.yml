@@ -13,11 +13,27 @@
 # Versioning is CalVer (YY.MM.MICRO, month unpadded) since 2026-11, so a milestone for
 # future work is identified by NAME, never by a version number: which
 # release carries it is known only when it ships. Version titles
-# ("vX.Y.Z — Name") remain only on shipped (closed) milestones.
+# ("vX.Y.Z — Name") remain only on milestones closed before 2026-11.
+#
+# Naming convention:
+#   - Title = plan name only: Title Case, unique, no version, no date.
+#     Sub-plans are named by their own content; prefix "<Parent>: " only
+#     when the name alone is ambiguous (e.g. "Router: Walkaround").
+#   - Add a new milestone to docs/ROADMAP.md first (same exact name), then
+#     here, in the same PR.
+#   - description = one user-facing line of what it delivers; a gate's
+#     starts with "Gate:" (applies to new entries).
+#   - Rename = change the title and append the old one to `aliases`; never
+#     edit on GitHub by hand.
+#   - No due dates: milestones are scope, not schedule.
+#   - Shipping: when the last issue closes and the work is in a release, set
+#     `state: closed` and end the description with "Shipped in YY.MM.MICRO."
+#     The title keeps the plan name; milestones closed before 2026-11 keep
+#     their version titles as history.
 #
 # Fields:
-#   title       — must match the roadmap exactly: the plan name for open
-#                 and planned milestones; "vX.Y.Z — Name" for shipped ones
+#   title       — must match the roadmap exactly: the plan name;
+#                 "vX.Y.Z — Name" only for milestones closed before 2026-11
 #   description — one line, user-facing; shown on the milestones page
 #   state       — open | closed  (closed = shipped or abandoned)
 #   aliases     — former titles to rename FROM, so a corrected title
@@ -77,6 +93,14 @@
   description: "Newton-LM constraint solver + footprint pad-bake, Apache-clean. Shipped 2026-05-31."
   state: closed
 
+- title: "Command Registry & Symbol Units"
+  description: "Command Registry — one addressable action system for menus, keybindings, CLI and plugins — plus the symbol multi-unit tail. Shipped in 1.0.0-rc.1; test follow-up #1727 landed after the tag and ships in the next release."
+  state: closed
+  # Was "PCB Outline & Pours", inherited from the internal specs' v0.18
+  # band. The issues actually assigned here are the command-registry epic
+  # (#278) and symbol multi-unit (#289).
+  aliases: ["v0.16.0 — PCB Outline & Pours", "v0.16.0 — Command Registry & Symbol Units"]
+
 # ─────────────── release train ───────────────
 # Near-term, concrete. Derived from the ISSUE TRACKER, not from the
 # internal specs — the specs describe work that has largely already
@@ -98,14 +122,6 @@
   # the milestone was created. v0.14.0's own CHANGELOG names its only
   # v0.15 deferral as Break Track / Drag Track End.
   aliases: ["v0.15.0 — Footprint Editor Parity"]
-
-- title: "Command Registry & Symbol Units"
-  description: "Command Registry — one addressable action system for menus, keybindings, CLI and plugins — plus the symbol multi-unit tail."
-  state: open
-  # Was "PCB Outline & Pours", inherited from the internal specs' v0.18
-  # band. The issues actually assigned here are the command-registry epic
-  # (#278) and symbol multi-unit (#289).
-  aliases: ["v0.16.0 — PCB Outline & Pours", "v0.16.0 — Command Registry & Symbol Units"]
 
 # ─────────────── gates and planned releases ───────────────
 # Strategic. Undated by policy — see docs/ROADMAP.md §"What this does

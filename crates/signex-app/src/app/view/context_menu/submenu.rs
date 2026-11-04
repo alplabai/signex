@@ -284,11 +284,7 @@ pub(super) fn add_new_entries(
             P::AddProjectSymbolLibrary(target.clone()),
         )),
     ));
-    v.push(dd_planned(
-        Some(ic::icon_dd_part_actions(tid)),
-        "PCB",
-        Some("v2.0"),
-    ));
+    v.push(dd_planned(Some(ic::icon_dd_part_actions(tid)), "PCB", None));
     // v0.13.0 — footprint editor gated off; hide the "PCB Library" create
     // entry on the project-root menu.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
@@ -305,23 +301,23 @@ pub(super) fn add_new_entries(
     v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Output Job",
-        Some("v1.3"),
+        None,
     ));
     v.push(dd_planned(
         Some(ic::icon_dd_text_frame(tid)),
         "Design Notebook",
-        Some("v1.4"),
+        None,
     ));
     v.push(DropdownEntry::Separator);
     v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Constraint File",
-        Some("v3.x"),
+        None,
     ));
     v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "VHDL File",
-        Some("v3.x"),
+        None,
     ));
 
     v

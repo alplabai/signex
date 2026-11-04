@@ -134,7 +134,7 @@ fn view_params<'a>(
     if let Some(sketch) = editor.primitive().sketch.as_ref() {
         if sketch.parameters.is_empty() {
             col = col.push(
-                text("(no parameters yet — add via Inspector v0.13.2)")
+                text("(no parameters yet)")
                     .size(TS.caption)
                     .color(muted)
                     .boxed(),

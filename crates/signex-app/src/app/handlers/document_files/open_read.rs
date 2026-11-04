@@ -222,8 +222,9 @@ impl Signex {
             path.clone(),
             title,
             project_id,
-            crate::app::TabKind::SymbolEditor(path),
+            crate::app::TabKind::SymbolEditor(path.clone()),
         );
+        self.seed_owed_cascade(&path);
     }
 
     fn open_footprint_editor_tab(&mut self, path: PathBuf, file: signex_library::FootprintFile) {
@@ -249,8 +250,9 @@ impl Signex {
             path.clone(),
             title,
             project_id,
-            crate::app::TabKind::FootprintEditor(path),
+            crate::app::TabKind::FootprintEditor(path.clone()),
         );
+        self.seed_owed_cascade(&path);
     }
 
     fn push_primitive_tab(

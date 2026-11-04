@@ -311,7 +311,7 @@ fn eval_pow(base: Quantity, exp: Quantity) -> Result<Quantity, ExprError> {
                 Ok(base)
             } else {
                 Err(ExprError::Domain(format!(
-                    "{:?}^{} requires Area / higher-order unit (not modelled in v0.13)",
+                    "{:?}^{} requires Area / higher-order unit (not modelled yet)",
                     base.unit, e
                 )))
             }
