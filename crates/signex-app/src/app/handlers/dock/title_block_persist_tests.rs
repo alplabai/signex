@@ -226,10 +226,12 @@ fn tree_close_project_prompts_for_a_draft_only_sheet() {
     assert!(app.document_state.is_document_dirty(&sheet));
 }
 
-/// Discard drops the draft with the project: nothing is written, no dirty
-/// mark outlives the engines it described, and no draft stays behind.
+/// The Discard All flow end to end for a sheet whose only change is a draft:
+/// the project closes, nothing is written, and neither a dirty mark, an
+/// engine nor a draft is left behind. It pins the flow's outcome, not which
+/// step (the drop on close, the sweep's clear, Discard All's own prune) did it.
 #[test]
-fn discard_on_close_drops_the_draft_and_leaves_no_dirty_marks() {
+fn discard_all_closes_a_draft_only_project_and_writes_nothing() {
     use crate::app::{ProjectCloseChoice, ProjectMsg};
     let (mut app, sheet, id, recorder) = project_with_draft();
     close_project_to_gate(&mut app, id);
@@ -301,4 +303,139 @@ fn closing_the_sheet_commits_on_the_users_route_and_drops_on_a_discard() {
         !app.document_state.engines.contains_key(&a),
         "clean, so dropped"
     );
+}
+
+/// A project in a temp directory, its one sheet open with a draft pending,
+/// and the Remove dialog open on that sheet.
+fn remove_dialog_on_draft_sheet() -> (Signex, PathBuf, tempfile::TempDir, Arc<Recorder>) {
+    use crate::app::RemoveDialogState;
+    use crate::app::handlers::menu::export::tests as fx;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = fx::app_workspace(dir.path().to_str().expect("utf8"), &["top.snxsch"]);
+    let id = app.document_state.projects[0].id;
+    let sheet = dir.path().join("top.snxsch");
+    let engine =
+        signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(sheet.clone()))
+            .expect("engine");
+    app.document_state.engines.insert(sheet.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "top".to_string(),
+        path: sheet.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet.clone());
+    let recorder = Arc::new(Recorder::default());
+    app.document_state.document_saves = DocumentSaves::new(recorder.clone());
+    type_drawn_by(&mut app, "X");
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: sheet.clone(),
+        tree_path: vec![0],
+        project_id: Some(id),
+        display_name: "top".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+        is_directory_package: false,
+    });
+    (app, sheet, dir, recorder)
+}
+
+fn drawn_by_in_engine(app: &Signex, sheet: &Path) -> Option<String> {
+    app.document_state.engines[sheet]
+        .document()
+        .title_block
+        .get("drawn_by")
+        .cloned()
+}
+
+/// Exclude from Project on a sheet whose only change is a draft asks first,
+/// and the sheet stays open and untouched until the user answers.
+#[test]
+fn exclude_on_a_draft_only_sheet_asks_before_removing() {
+    let (mut app, sheet, _dir, _recorder) = remove_dialog_on_draft_sheet();
+    let _ = app.handle_remove_confirm(crate::app::RemoveChoice::ExcludeFromProject);
+    let dialog = app.ui_state.remove_dialog.as_ref().expect("dialog stays");
+    assert!(dialog.unsaved_prompt, "the draft is an unsaved edit");
+    assert!(
+        app.document_state.engines.contains_key(&sheet),
+        "still open"
+    );
+    assert_eq!(drawn_by_in_engine(&app, &sheet), None, "still a draft");
+    assert!(!app.document_state.is_document_dirty(&sheet));
+}
+
+/// Cancel changes nothing: the draft is still a draft, the sheet is clean and
+/// there is no undo step.
+#[test]
+fn cancel_on_remove_leaves_the_draft_pending_and_the_sheet_clean() {
+    use crate::app::{RemoveChoice, RemoveMsg};
+    let (mut app, sheet, _dir, _recorder) = remove_dialog_on_draft_sheet();
+    let _ = app.handle_remove_confirm(RemoveChoice::ExcludeFromProject);
+    let _ = app.update(Message::Remove(RemoveMsg::Close));
+    assert!(app.ui_state.remove_dialog.is_none());
+    assert_eq!(app.document_state.panel_ctx.title_block_drafts.len(), 1);
+    assert_eq!(drawn_by_in_engine(&app, &sheet), None);
+    assert!(!app.document_state.is_document_dirty(&sheet));
+    assert!(
+        !app.document_state.engines[&sheet].can_undo(),
+        "no undo step"
+    );
+}
+
+/// Save on the unsaved stage commits the draft, then saves it.
+#[test]
+fn save_on_the_remove_prompt_writes_the_draft() {
+    use crate::app::{ExcludeDirtyChoice, RemoveChoice, RemoveMsg};
+    let (mut app, sheet, _dir, _recorder) = remove_dialog_on_draft_sheet();
+    let _ = app.handle_remove_confirm(RemoveChoice::ExcludeFromProject);
+    let task = app.update(Message::Remove(RemoveMsg::ExcludeDirty(
+        ExcludeDirtyChoice::Save,
+    )));
+    settle(&mut app, task);
+    let on_disk = std::fs::read_to_string(&sheet).expect("the sheet was written");
+    let saved = signex_types::format::SnxSchematic::parse(&on_disk)
+        .expect("parses")
+        .sheet;
+    assert_eq!(
+        saved.title_block.get("drawn_by").map(String::as_str),
+        Some("X")
+    );
+    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+}
+
+/// Discard drops the draft with the sheet's edits.
+#[test]
+fn discard_on_the_remove_prompt_drops_the_draft() {
+    use crate::app::{ExcludeDirtyChoice, RemoveChoice, RemoveMsg};
+    let (mut app, sheet, _dir, recorder) = remove_dialog_on_draft_sheet();
+    let _ = app.handle_remove_confirm(RemoveChoice::ExcludeFromProject);
+    let task = app.update(Message::Remove(RemoveMsg::ExcludeDirty(
+        ExcludeDirtyChoice::Discard,
+    )));
+    settle(&mut app, task);
+    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(
+        recorder.0.lock().unwrap().is_empty(),
+        "nothing was written for it"
+    );
+    assert!(!app.document_state.is_document_dirty(&sheet));
+}
+
+/// Renaming a sheet moves its pending drafts with it: they stay shown for the
+/// renamed sheet and are saved under the new path.
+#[test]
+fn a_rename_keeps_the_pending_drafts() {
+    let (mut app, old, recorder) = app_with_draft();
+    let new = PathBuf::from("renamed.snxsch");
+    app.rekey_open_document(&old, &new);
+    let drafts = &app.document_state.panel_ctx.title_block_drafts;
+    assert_eq!(drafts.len(), 1);
+    assert_eq!(drafts[0].sheet, new, "the draft follows the sheet");
+
+    let task = app.update(Message::Menu(MenuMessage::command("save_document")));
+    settle(&mut app, task);
+    assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
+    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
 }
