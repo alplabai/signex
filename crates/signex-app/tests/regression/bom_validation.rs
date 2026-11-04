@@ -164,7 +164,7 @@ fn column_resize_ends_on_a_global_release_away_from_the_handle() {
         .column_widths[&0];
 
     // The release arrives through the global drag-end path, not the handle.
-    let _ = app.update(Message::Ui(UiMsg::DragEnd));
+    let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
     let preview = app.document_state.bom_preview.as_ref().unwrap();
     assert!(
         preview.column_resize.is_none(),

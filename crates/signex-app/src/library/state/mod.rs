@@ -872,6 +872,8 @@ pub struct ComponentsRowMenu {
     pub key: ComponentsPanelRowKey,
     pub x: f32,
     pub y: f32,
+    /// The undocked window that opened the menu (`None`: the main window).
+    pub window: Option<iced::window::Id>,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the

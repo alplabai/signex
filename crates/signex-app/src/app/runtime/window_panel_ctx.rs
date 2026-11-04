@@ -9,11 +9,10 @@ use crate::panels::PanelContext;
 
 impl PanelContext {
     /// Copy what is the app's rather than a document's: theme, units, grid,
-    /// fonts, filters, diagnostics, the ERC results and the Navigator. The
-    /// scalars are copied every time; the lists only when a cheap check (a
-    /// length, a newest id, a fingerprint) says they changed, so a steady
-    /// state costs no deep clone. A change the check misses is caught by
-    /// the next full refresh.
+    /// fonts, filters, diagnostics and the ERC results. The scalars are copied
+    /// every time; a list is compared by value (or by its newest id) and
+    /// cloned only when it differs, so a steady state costs no allocation.
+    /// The Navigator is not copied here: see `sync_window_panel_ctx_shared`.
     fn adopt_shared_from(&mut self, main: &PanelContext) {
         self.tokens = main.tokens;
         self.canvas_colors = main.canvas_colors;
@@ -46,37 +45,38 @@ impl PanelContext {
         if self.diagnostics.last().map(|e| e.id) != main.diagnostics.last().map(|e| e.id) {
             self.diagnostics.clone_from(&main.diagnostics);
         }
-        if self.component_classes.len() != main.component_classes.len() {
+        if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
         }
         if self.selection_filters != main.selection_filters {
             self.selection_filters.clone_from(&main.selection_filters);
         }
-        if self.custom_filter_presets.len() != main.custom_filter_presets.len() {
+        if self.custom_filter_presets != main.custom_filter_presets {
             self.custom_filter_presets
                 .clone_from(&main.custom_filter_presets);
         }
-        if self.footprint_filter_presets.len() != main.footprint_filter_presets.len() {
+        if self.footprint_filter_presets != main.footprint_filter_presets {
             self.footprint_filter_presets
                 .clone_from(&main.footprint_filter_presets);
         }
-        if self.erc_diagnostics.len() != main.erc_diagnostics.len() {
+        if self.erc_diagnostics != main.erc_diagnostics {
             self.erc_diagnostics.clone_from(&main.erc_diagnostics);
         }
-        if self.erc_waivers.len() != main.erc_waivers.len() {
+        if self.erc_waivers != main.erc_waivers {
             self.erc_waivers.clone_from(&main.erc_waivers);
         }
-        if self.erc_violation_waivers.len() != main.erc_violation_waivers.len() {
+        if self.erc_violation_waivers != main.erc_violation_waivers {
             self.erc_violation_waivers
                 .clone_from(&main.erc_violation_waivers);
-        }
-        if self.navigator.fingerprint != main.navigator.fingerprint {
-            self.navigator.clone_from(&main.navigator);
         }
     }
 
     /// Take over the per-sheet drafts of a window context that is going away,
-    /// so what was typed and not yet committed survives the window.
+    /// so what was typed and not yet committed survives the window. Only the
+    /// title-block and paper-edge drafts are kept: they belong to a sheet and
+    /// stay valid wherever it is shown. The numeric draft and the drawing
+    /// edit buffer belong to the window's selection, which the main window
+    /// does not share, so they end with the window.
     pub(crate) fn take_drafts_from(&mut self, window: PanelContext) {
         for draft in window.title_block_drafts {
             if !self
@@ -96,18 +96,17 @@ impl PanelContext {
                 self.paper_edge_drafts.push(draft);
             }
         }
-        if self.numeric_draft.is_none() {
-            self.numeric_draft = window.numeric_draft;
-        }
-        if self.drawing_edit_buf_for.is_none() {
-            self.drawing_edit_buf = window.drawing_edit_buf;
-            self.drawing_edit_buf_for = window.drawing_edit_buf_for;
-        }
     }
 }
 
 /// What a window's context was built from; unchanged means it is current.
-pub(crate) type WindowCtxKey = (Option<u64>, u64, u64, u64, usize, usize, bool);
+///
+/// The window's sheet revision; a stamp of what its panels read from the
+/// app (the open tabs, the projects' names, sheets, parameters and net
+/// classes, which documents are dirty); the library data version; and
+/// whether ERC is running. Not the global edit epochs: an edit to another
+/// sheet changes none of these.
+pub(crate) type WindowCtxKey = (Option<u64>, u64, u64, bool);
 
 impl Signex {
     /// The context the panels of `window` render: that window's own when it
@@ -122,8 +121,12 @@ impl Signex {
 
     /// A context for a window that has none yet: the main window's, as the
     /// starting point for `init_window_panel_ctx`.
-    pub(crate) fn new_window_panel_ctx(&self) -> PanelContext {
-        self.document_state.panel_ctx.clone()
+    pub(crate) fn new_window_panel_ctx(&self, window: iced::window::Id) -> PanelContext {
+        let mut ctx = self.document_state.panel_ctx.clone();
+        if !self.window_shares_main_navigator(window) {
+            ctx.navigator = Default::default();
+        }
+        ctx
     }
 
     /// Fill a new window context from the window's own sheet and selection.
@@ -157,13 +160,39 @@ impl Signex {
         };
         (
             revision,
-            self.document_state.sheet_edit_epoch,
-            self.document_state.documents_epoch,
+            self.window_panel_inputs_stamp(),
             self.library.data_version,
-            self.document_state.tabs.len(),
-            self.document_state.projects.len(),
             self.ui_state.erc_running,
         )
+    }
+
+    /// A hash of what a window's panels read from the app besides its sheet.
+    fn window_panel_inputs_stamp(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let document = &self.document_state;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for tab in &document.tabs {
+            tab.path.hash(&mut hasher);
+        }
+        for project in &document.projects {
+            let data = &project.data;
+            (project.id, &data.name, &data.dir).hash(&mut hasher);
+            data.sheets.len().hash(&mut hasher);
+            data.net_classes.len().hash(&mut hasher);
+            data.parameters.hash(&mut hasher);
+        }
+        // Order-independent: the set of dirty documents.
+        let dirty = document
+            .dirty_document_paths()
+            .iter()
+            .map(|path| {
+                let mut one = std::collections::hash_map::DefaultHasher::new();
+                path.hash(&mut one);
+                one.finish()
+            })
+            .fold(0u64, u64::wrapping_add);
+        dirty.hash(&mut hasher);
+        hasher.finish()
     }
 
     /// Bring the contexts of the undocked document windows up to date with
@@ -220,16 +249,55 @@ impl Signex {
         }
     }
 
+    /// The project the main window's Navigator is built for.
+    fn main_navigator_project(&self) -> Option<crate::app::state::ProjectId> {
+        self.document_state
+            .active_document_project()
+            .or_else(|| self.document_state.active_loaded_project())
+            .map(|p| p.id)
+    }
+
+    /// Whether the sheet `window` shows belongs to the project the main
+    /// window's Navigator describes. A window of another project must not
+    /// read that hierarchy: it would take a sheet placed twice for placed
+    /// once and rewrite a shared designator.
+    fn window_shares_main_navigator(&self, window: iced::window::Id) -> bool {
+        let Some(WindowKind::UndockedTab { path, .. }) = self.ui_state.windows.get(&window) else {
+            return false;
+        };
+        let window_project = self.document_state.document_project(path).map(|p| p.id);
+        window_project.is_some() && window_project == self.main_navigator_project()
+    }
+
     /// Keep the app-wide fields of every window context current; cheap
-    /// enough for every update.
+    /// enough for every update. A window of the main window's project
+    /// follows main's Navigator; a window of another project has none, so
+    /// nothing there is "known placed once" and its designator edits take
+    /// the placement-entry path.
     pub(in crate::app) fn sync_window_panel_ctx_shared(&mut self) {
         // Inside a window's swap the main slot holds that window's context.
         if self.interaction_state.acting_window.is_some() {
             return;
         }
+        let shares: Vec<(iced::window::Id, bool)> = self
+            .document_state
+            .window_panel_ctx
+            .keys()
+            .map(|w| (*w, self.window_shares_main_navigator(*w)))
+            .collect();
         let document = &mut self.document_state;
-        for ctx in document.window_panel_ctx.values_mut() {
+        for (window, shares_navigator) in shares {
+            let Some(ctx) = document.window_panel_ctx.get_mut(&window) else {
+                continue;
+            };
             ctx.adopt_shared_from(&document.panel_ctx);
+            if !shares_navigator {
+                if ctx.navigator.hierarchy.is_some() {
+                    ctx.navigator = Default::default();
+                }
+            } else if ctx.navigator.fingerprint != document.panel_ctx.navigator.fingerprint {
+                ctx.navigator.clone_from(&document.panel_ctx.navigator);
+            }
         }
     }
 }

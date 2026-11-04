@@ -84,8 +84,8 @@ impl Signex {
                 self.ui_state.window_size = (w, h);
                 self.finish_update()
             }
-            UiMsg::DragEnd => {
-                let dropped = self.finish_components_row_drag();
+            UiMsg::DragEnd(released_in) => {
+                let dropped = self.finish_components_row_drag(released_in);
                 self.handle_layout_drag_finished();
                 Task::batch([dropped, self.finish_update()])
             }
@@ -500,7 +500,7 @@ impl Signex {
             .document_state
             .window_panel_ctx
             .remove(&window_id)
-            .unwrap_or_else(|| self.new_window_panel_ctx());
+            .unwrap_or_else(|| self.new_window_panel_ctx(window_id));
         std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
         let saved_active_path = self.document_state.active_path.take();
         let revision_before = self

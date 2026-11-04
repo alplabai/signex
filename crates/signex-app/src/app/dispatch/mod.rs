@@ -23,7 +23,7 @@ mod prefs_async_tests;
 mod text_edit;
 mod tool;
 mod ui;
-mod window_action;
+pub(in crate::app) mod window_action;
 
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {

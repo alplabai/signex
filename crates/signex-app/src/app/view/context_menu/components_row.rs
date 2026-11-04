@@ -23,12 +23,16 @@ impl Signex {
     /// window; empty when no menu is open.
     pub(in crate::app::view) fn components_row_context_menu_overlay(
         &self,
+        window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let Some(menu_ctx) = self.library.components_panel.row_menu.as_ref() else {
             return Vec::new();
         };
+        if !self.overlay_belongs_to(menu_ctx.window, window_id) {
+            return Vec::new();
+        }
         let entries = components_row_menu_entries();
         let entries_len = entries.len();
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -40,9 +44,9 @@ impl Signex {
         let (x, y) = super::clamp_menu_origin(
             (menu_ctx.x, menu_ctx.y),
             (Self::CONTEXT_MENU_WIDTH, super::menu_height(entries_len)),
-            self.ui_state.window_size,
+            self.ui_state.size_of_window(window_id),
         );
-        vec![
+        let layers = vec![
             Self::dismiss_layer(Message::Library(
                 LibraryMessage::ComponentsPanelRowMenuDismissed,
             )),
@@ -56,7 +60,19 @@ impl Signex {
                 .width(Length::Fill),
             ]
             .into(),
-        ]
+        ];
+        match menu_ctx.window {
+            None => layers,
+            // A pick in an undocked window acts on that window's sheet.
+            Some(window) => layers
+                .into_iter()
+                .map(|layer| {
+                    layer.map(move |m| {
+                        crate::app::dispatch::window_action::scope_row_menu_message(window, m)
+                    })
+                })
+                .collect(),
+        }
     }
 }
 

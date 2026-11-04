@@ -26,7 +26,8 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
     match message {
         DockMessage::Library(
             LibraryMessage::ComponentsPanelRowPressed(_)
-            | LibraryMessage::ComponentsPanelRowRightClicked(_),
+            | LibraryMessage::ComponentsPanelRowRightClicked(_)
+            | LibraryMessage::ComponentsPanelRowMenuPicked(_),
         ) => true,
         // Expanding a row only changes the window's own tree.
         DockMessage::Panel(P::Tree(TreeMsg::Toggle(_))) => true,
@@ -75,33 +76,42 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
     }
 }
 
-/// Whether the message a command resolved to opens, activates or steps to
-/// another sheet, or clears every canvas's caches: it runs on the main
-/// window, never inside a window's swap (which would show the other sheet in
-/// the window's canvas while the window keeps its own path).
-fn command_stays_on_main(message: &Message) -> bool {
-    use crate::app::{NetNavMsg, UiMsg};
+/// Whether the message a command resolved to edits the sheet an undocked
+/// window shows, so it runs in the window's swap. An allow-list: sheet edits,
+/// selection, tools, in-place text edits, the Active Bar and the view zoom.
+/// Everything else (sheet stepping, project opens, net jumps, Find with
+/// Project scope, Annotate, ERC, export, app-wide toggles, and any message
+/// added later) runs on the main window, where it cannot load one sheet into
+/// another's canvas.
+fn command_edits_shown_sheet(message: &Message) -> bool {
     use crate::menu_bar::MenuMessage;
     matches!(
         message,
-        Message::Menu(
-            MenuMessage::AscendToParentSheet
-                | MenuMessage::NextSheet
-                | MenuMessage::PreviousSheet
-                | MenuMessage::NewProject
-                | MenuMessage::OpenProject
-                | MenuMessage::OpenRecentProject(_)
-                | MenuMessage::OpenSampleProject
-        ) | Message::Ui(
-            UiMsg::GridToggle
-                | UiMsg::NetNav(
-                    NetNavMsg::PartnerJumpRequested
-                        | NetNavMsg::SheetBackRequested
-                        | NetNavMsg::SheetForwardRequested
-                        | NetNavMsg::HighlightStepRequested { .. }
-                )
-        )
+        Message::Edit(_)
+            | Message::Selection(_)
+            | Message::Tool(_)
+            | Message::TextEdit(_)
+            | Message::ActiveBar(_)
+            | Message::Menu(MenuMessage::ZoomIn | MenuMessage::ZoomOut)
     )
+}
+
+/// Tag a pick from the Components row menu of the undocked `window` so it
+/// acts on that window's sheet; anything else passes through.
+pub(in crate::app) fn scope_row_menu_message(
+    window: iced::window::Id,
+    message: Message,
+) -> Message {
+    use crate::library::LibraryMessage;
+    match message {
+        Message::Library(inner @ LibraryMessage::ComponentsPanelRowMenuPicked(_)) => {
+            Message::Dock(crate::dock::DockMessage::ScopedToWindow(
+                window,
+                Box::new(crate::dock::DockMessage::Library(inner)),
+            ))
+        }
+        other => other,
+    }
 }
 
 impl Signex {
@@ -147,17 +157,37 @@ impl Signex {
             );
             return Task::none();
         }
-        self.run_in_window_document(window, |app| app.handle_dock_message(message))
+        use crate::dock::DockMessage;
+        use crate::library::LibraryMessage;
+        let presses_row = matches!(
+            message,
+            DockMessage::Library(LibraryMessage::ComponentsPanelRowPressed(_))
+        );
+        let opens_row_menu = matches!(
+            message,
+            DockMessage::Library(LibraryMessage::ComponentsPanelRowRightClicked(_))
+        );
+        let task = self.run_in_window_document(window, |app| app.handle_dock_message(message));
+        // The row's drag and menu are owned by the window they started in
+        // (#1910's `overlay_owner`), recorded only once the action ran.
+        let owner = self.overlay_owner(window);
+        if presses_row && let Some(drag) = self.library.components_panel.drag.as_mut() {
+            drag.window = owner;
+        }
+        if opens_row_menu && let Some(menu) = self.library.components_panel.row_menu.as_mut() {
+            menu.window = owner;
+        }
+        task
     }
 
     /// Run the message a command resolved to against the sheet `window`
-    /// shows, unless it opens or steps to another sheet.
+    /// shows when it edits that sheet; anything else runs on the main window.
     pub(crate) fn run_command_in_window(
         &mut self,
         window: iced::window::Id,
         message: Message,
     ) -> Task<Message> {
-        if command_stays_on_main(&message) {
+        if !command_edits_shown_sheet(&message) {
             return self.dispatch_update(message);
         }
         self.run_in_window_document(window, |app| app.dispatch_update(message))

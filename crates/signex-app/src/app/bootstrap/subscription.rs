@@ -743,22 +743,24 @@ impl Signex {
                 _ => Message::noop(),
             })
         } else if drag_active {
-            iced::event::listen().map(|event| match event {
-                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                    Message::Ui(UiMsg::DragMove(position.x, position.y))
-                }
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )) => Message::Ui(UiMsg::DragEnd),
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
-                    iced::mouse::Button::Left,
-                )) => Message::ContextMenu(ContextMenuMsg::Close),
-                // Window::Resized intentionally omitted — the
-                // `window::resize_events()` subscription below carries
-                // the window id so we can drop non-main resizes. If
-                // we also forwarded the raw event here, a detached
-                // modal's resize would clobber the main window's size.
-                _ => Message::noop(),
+            iced::event::listen_with(|event, _status, window| {
+                Some(match event {
+                    iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                        Message::Ui(UiMsg::DragMove(position.x, position.y))
+                    }
+                    iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                        iced::mouse::Button::Left,
+                    )) => Message::Ui(UiMsg::DragEnd(window)),
+                    iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                        iced::mouse::Button::Left,
+                    )) => Message::ContextMenu(ContextMenuMsg::Close),
+                    // Window::Resized intentionally omitted — the
+                    // `window::resize_events()` subscription below carries
+                    // the window id so we can drop non-main resizes. If
+                    // we also forwarded the raw event here, a detached
+                    // modal's resize would clobber the main window's size.
+                    _ => Message::noop(),
+                })
             })
         } else {
             // Always track the cursor so `last_mouse_pos` is fresh when the

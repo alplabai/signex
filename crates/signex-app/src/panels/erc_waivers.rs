@@ -57,7 +57,7 @@ pub enum ErcWaiverStatus {
 }
 
 /// One stored per-finding waiver for the panel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ErcViolationWaiverEntry {
     pub rule_id: String,
     pub objects: Vec<String>,

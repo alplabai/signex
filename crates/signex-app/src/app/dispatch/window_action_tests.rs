@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::app::state::WindowKind;
-use crate::app::{TabInfo, TabKind};
+use crate::app::{TabInfo, TabKind, WindowMsg};
 use crate::layout_probe::lay_out_texts;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
 
@@ -319,6 +319,40 @@ fn stepping_sheets_from_an_undocked_window_never_loads_another_sheet_into_it() {
     }
 }
 
+fn said(fragment: &str) -> bool {
+    crate::diagnostics::recent_entries()
+        .iter()
+        .any(|entry| entry.message.contains(fragment))
+}
+
+#[test]
+fn only_commands_that_edit_the_shown_sheet_run_in_a_windows_swap() {
+    use crate::find_replace::FindReplaceMsg;
+    use crate::menu_bar::MenuMessage;
+    // Find next / previous with Project scope open the hit's sheet.
+    for message in [
+        Message::FindReplaceMsg(FindReplaceMsg::NextRequested),
+        Message::FindReplaceMsg(FindReplaceMsg::PreviousRequested),
+        Message::Menu(MenuMessage::NextSheet),
+        Message::Menu(MenuMessage::AscendToParentSheet),
+        Message::Menu(MenuMessage::OpenProject),
+        Message::Ui(crate::app::UiMsg::GridToggle),
+        Message::Erc(crate::app::ErcMsg::Run),
+    ] {
+        assert!(
+            !command_edits_shown_sheet(&message),
+            "{message:?} would run inside the window's swap"
+        );
+    }
+    for message in [
+        Message::Edit(crate::app::EditMsg::Redo),
+        Message::Menu(MenuMessage::ZoomIn),
+        Message::Selection(crate::app::selection_request::SelectionRequest::SelectAll),
+    ] {
+        assert!(command_edits_shown_sheet(&message), "{message:?}");
+    }
+}
+
 #[test]
 fn history_restore_and_erc_focus_from_an_undocked_window_run_on_the_main_window() {
     let f = fixture();
@@ -337,6 +371,23 @@ fn history_restore_and_erc_focus_from_an_undocked_window_run_on_the_main_window(
             "{message:?} would run inside the window's swap"
         );
     }
+}
+
+#[test]
+fn a_history_restore_click_in_an_undocked_window_leaves_that_windows_sheet_alone() {
+    let mut f = fixture();
+    let before = f.app.document_state.engines[&f.window_path].revision();
+    let sent = f.app.scope_dock_message(
+        f.window,
+        dock(crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() }),
+    );
+    let _ = f.app.update(sent);
+    assert_eq!(
+        f.app.document_state.engines[&f.window_path].revision(),
+        before
+    );
+    assert_eq!(wires_shown_in(&f.app, f.window), Some(1));
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
 }
 
 #[test]
@@ -427,7 +478,212 @@ fn a_panel_action_for_a_closed_window_is_dropped_and_said() {
     );
     f.app.ui_state.windows.remove(&f.window);
     f.app.interaction_state.canvases.remove(&f.window);
+    let _ = crate::diagnostics::init_logging();
     let _ = f.app.update(edit);
+    assert!(said("for a window that has closed was dropped"));
     let main_sheet = f.app.document_state.engines[&f.main_path].document();
     assert_ne!(main_sheet.paper_size, "A2");
+}
+
+#[test]
+fn an_edit_in_a_window_updates_the_main_selection_when_main_shows_the_same_sheet() {
+    let mut f = fixture_with_a_labelled_a3_window();
+    // The main window shows the window's sheet too, with the label selected.
+    f.app.document_state.active_tab = 1;
+    f.app.document_state.active_path = Some(f.window_path.clone());
+    let cache = crate::schematic_runtime::SchematicRenderCache::from_sheet(
+        f.app.document_state.engines[&f.window_path].document(),
+    );
+    f.app.interaction_state.canvas.set_render_cache(Some(cache));
+    f.app.interaction_state.canvas.selected =
+        vec![SelectedItem::new(label_id(), SelectedKind::Label)];
+    f.app.update_selection_info();
+
+    let rename = f.app.scope_dock_message(
+        f.window,
+        dock(crate::panels::PanelMsg::EditLabelText(
+            label_id(),
+            "RENAMED".into(),
+        )),
+    );
+    let _ = f.app.update(rename);
+
+    let main = &f.app.document_state.panel_ctx;
+    assert!(
+        main.selection_info.iter().any(|(_, v)| v == "RENAMED"),
+        "main's selection still shows the old text: {:?}",
+        main.selection_info
+    );
+}
+
+#[test]
+fn a_designator_edit_in_a_window_of_another_project_changes_its_placement_only() {
+    use crate::app::handlers::menu::export::tests::current_placement::{
+        PLACEMENT_B, descend_by_canvas, placed_twice_on_disk,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    descend_by_canvas(&mut app, PLACEMENT_B);
+    // Another project becomes the main window's.
+    let other_dir = tempfile::tempdir().unwrap();
+    let mut other = app.document_state.projects[0].clone();
+    other.id = app.document_state.mint_project_id();
+    other.path = other_dir.path().join("Other.snxprj");
+    other.data.name = "Other".into();
+    other.data.dir = other_dir.path().to_string_lossy().into_owned();
+    other.data.schematic_root = Some("other.snxsch".into());
+    other.data.sheets[0].filename = "other.snxsch".into();
+    let other_path = other_dir.path().join("other.snxsch");
+    crate::app::runtime::sheet_tree_tests::write_sheet(other_dir.path(), "other.snxsch", &[]);
+    app.document_state.projects.push(other);
+    app.open_or_focus_sheet_path(other_path);
+    app.refresh_panel_ctx();
+    app.settle_navigator();
+    // The child sheet, placed twice in the first project, in its own window.
+    let window = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(iced::window::Id::unique());
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path: child.clone(),
+            title: "child".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    slot.set_render_cache(Some(
+        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+            app.document_state.engines[&child].document(),
+        ),
+    ));
+    app.interaction_state.canvases.insert(window, slot);
+    let symbol = app.document_state.engines[&child].document().symbols[0].uuid;
+
+    let edit = app.scope_dock_message(
+        window,
+        dock(crate::panels::PanelMsg::EditSymbolDesignator(
+            symbol,
+            "R205".into(),
+        )),
+    );
+    assert!(is_scoped(&edit, window));
+    let _ = app.update(edit);
+
+    let sheet = app.document_state.engines[&child].document();
+    let instances = &sheet.symbols[0].instances;
+    assert_eq!(
+        sheet.symbols[0].reference, "R1",
+        "the shared reference was rewritten"
+    );
+    assert!(
+        instances.iter().any(|i| i.reference == "R1"),
+        "placement A lost its entry: {instances:?}"
+    );
+    assert!(instances.iter().any(|i| i.reference == "R205"));
+}
+
+#[test]
+fn a_row_menu_opened_in_an_undocked_window_paints_there_only_and_its_picks_are_scoped() {
+    let mut f = fixture();
+    let key = crate::library::state::ComponentsPanelRowKey {
+        library_path: PathBuf::from("l.snxlib"),
+        table: "t".to_string(),
+        row_id: signex_library::RowId(uuid::Uuid::nil()),
+    };
+    let right_click = f.app.scope_dock_message(
+        f.window,
+        Message::Dock(crate::dock::DockMessage::Library(
+            crate::library::LibraryMessage::ComponentsPanelRowRightClicked(key),
+        )),
+    );
+    let _ = f.app.update(right_click);
+    assert!(has(&f.app, f.window, "Edit Component"));
+    assert!(!has(&f.app, f.main, "Edit Component"));
+    let pick = crate::app::dispatch::window_action::scope_row_menu_message(
+        f.window,
+        Message::Library(
+            crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(
+                crate::library::state::ComponentsRowAction::Place,
+            ),
+        ),
+    );
+    assert!(is_scoped(&pick, f.window));
+}
+
+fn pressed_row(f: &mut Fixture) {
+    let key = crate::library::state::ComponentsPanelRowKey {
+        library_path: PathBuf::from("l.snxlib"),
+        table: "t".to_string(),
+        row_id: signex_library::RowId(uuid::Uuid::nil()),
+    };
+    let press = f.app.scope_dock_message(
+        f.window,
+        Message::Dock(crate::dock::DockMessage::Library(
+            crate::library::LibraryMessage::ComponentsPanelRowPressed(key),
+        )),
+    );
+    let _ = f.app.update(press);
+    f.app
+        .library
+        .components_panel
+        .drag
+        .as_mut()
+        .unwrap()
+        .started = true;
+}
+
+#[test]
+fn a_components_drag_released_in_another_window_is_cancelled() {
+    let _ = crate::diagnostics::init_logging();
+    let mut f = fixture();
+    pressed_row(&mut f);
+    let _ = f
+        .app
+        .update(Message::Ui(crate::app::UiMsg::DragEnd(f.main)));
+    assert!(f.app.library.components_panel.drag.is_none());
+    assert!(said("released in another window than it started in"));
+}
+
+#[test]
+fn a_components_drag_released_in_its_own_window_ends_there() {
+    let mut f = fixture();
+    pressed_row(&mut f);
+    let _ = f
+        .app
+        .update(Message::Ui(crate::app::UiMsg::DragEnd(f.window)));
+    assert!(f.app.library.components_panel.drag.is_none());
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_title_block_draft_typed_in_a_window_survives_its_reattach_in_the_main_context() {
+    let mut f = fixture();
+    f.app.refresh_panel_ctx();
+    let draft = crate::panels::TitleBlockDraft {
+        sheet: f.window_path.clone(),
+        field: crate::panels::TitleBlockField::Title,
+        text: "typed in the window".into(),
+    };
+    f.app
+        .document_state
+        .window_panel_ctx
+        .entry(f.window)
+        .or_insert_with(|| f.app.document_state.panel_ctx.clone())
+        .title_block_drafts
+        .push(draft.clone());
+    let _ = f
+        .app
+        .update(Message::Window(WindowMsg::ReattachTab(f.window)));
+    assert!(
+        !f.app
+            .document_state
+            .window_panel_ctx
+            .contains_key(&f.window)
+    );
+    assert!(
+        f.app
+            .document_state
+            .panel_ctx
+            .title_block_drafts
+            .contains(&draft)
+    );
 }

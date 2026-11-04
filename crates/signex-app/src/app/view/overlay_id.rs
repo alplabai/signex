@@ -398,7 +398,7 @@ impl Signex {
                 layers.extend(self.project_tree_context_menu_overlay())
             }
             OverlayId::ComponentsRowContextMenu => {
-                layers.extend(self.components_row_context_menu_overlay())
+                layers.extend(self.components_row_context_menu_overlay(window_id))
             }
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),

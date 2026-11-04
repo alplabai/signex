@@ -25,6 +25,15 @@ mod window_gate_tests;
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
     pub(in crate::app) fn canvas_bounds(&self) -> iced::Rectangle {
+        self.canvas_bounds_in(None)
+    }
+
+    /// [`Self::canvas_bounds`] in the undocked window `window`, laid out at
+    /// that window's own size (`None`: the main window).
+    pub(in crate::app) fn canvas_bounds_in(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> iced::Rectangle {
         use crate::dock::PanelPosition::{Bottom, Left, Right};
         let dock = &self.document_state.dock;
         let extent = |pos, size| canvas_region::DockExtent {
@@ -34,7 +43,7 @@ impl Signex {
         };
         let ui = &self.ui_state;
         canvas_region::canvas_bounds(
-            ui.window_size,
+            window.map_or(ui.window_size, |w| ui.size_of_window(w)),
             extent(Left, ui.left_width),
             extent(Right, ui.right_width),
             extent(Bottom, ui.bottom_height),

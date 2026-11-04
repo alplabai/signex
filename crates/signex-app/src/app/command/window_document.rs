@@ -277,6 +277,15 @@ impl Signex {
         {
             self.library.components_panel.drag = None;
         }
+        if self
+            .library
+            .components_panel
+            .row_menu
+            .as_ref()
+            .is_some_and(|menu| menu.window == Some(window))
+        {
+            self.library.components_panel.row_menu = None;
+        }
         let interaction = &mut self.interaction_state;
         if interaction.active_bar_menu_window == Some(window) {
             interaction.active_bar_menu = None;
@@ -315,8 +324,27 @@ impl Signex {
         window: iced::window::Id,
         handler: impl FnOnce(&mut Self) -> Task<Message>,
     ) -> Task<Message> {
+        let target = match self.ui_state.windows.get(&window) {
+            Some(WindowKind::UndockedTab { path, .. }) => Some(path.clone()),
+            _ => None,
+        };
+        let revision_of = |app: &Self| {
+            target
+                .as_ref()
+                .and_then(|path| app.document_state.engines.get(path))
+                .map(signex_engine::Engine::revision)
+        };
+        let before = revision_of(self);
         let task = self.run_in_window(window, true, handler);
         self.refresh_main_panel_ctx();
+        // The main window may show the sheet the window just edited: its
+        // selection panel must not keep, and later write back, the old value.
+        if target.is_some()
+            && self.document_state.active_path == target
+            && revision_of(self) != before
+        {
+            self.update_selection_info();
+        }
         self.refresh_window_panel_ctxs(Some(window));
         task
     }
