@@ -9,6 +9,12 @@
 //! input set from slightly different rules. They disagreed: on the same state
 //! at the same instant, one reported a `MissingChild` for a sheet another had
 //! already stitched in (#406).
+//!
+//! It is also the only walker of `child_sheets`. A child it cannot load is
+//! reported on the set (`absent`, `refused`, `unreadable`) instead of dropped,
+//! so the closed-sheet scan behind the symbol delete warning reads its
+//! "unchecked" list from here (`assemble_from_seeds`, #1990;
+//! docs/architecture/path-ops.md, "Closed-sheet scan").
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -34,6 +40,14 @@ pub(crate) struct ProjectSheetSet {
     /// `(path, why)`. Distinguished from an absent file so the user is not
     /// sent hunting for a corrupt sheet sitting right where it should be.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
+    /// Sheets a walk reached that are not on disk (and not open): declared by
+    /// a parent's `child_sheets` or seeded, but nothing is there. Assemblers
+    /// leave these to the stitcher's `MissingChild`; the closed-sheet scan
+    /// reports them as unchecked.
+    pub(crate) absent: Vec<PathBuf>,
+    /// Child references the walk refused to follow because they leave the
+    /// parent sheet's folder (#463).
+    pub(crate) refused: Vec<RefusedChild>,
     /// The sheet this set was rooted at — what the netlist stitcher starts
     /// from. Carried here so no caller re-derives it and drifts.
     pub(crate) root: Option<PathBuf>,
@@ -44,6 +58,15 @@ pub(crate) struct ProjectSheetSet {
     pub(crate) fold: CaseFold,
 }
 
+/// A `child_sheets` reference the walk did not follow.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RefusedChild {
+    /// The sheet holding the reference.
+    pub(crate) parent: PathBuf,
+    /// The reference as written, trimmed.
+    pub(crate) reference: String,
+}
+
 impl ProjectSheetSet {
     /// No project in view (no active document).
     pub(crate) fn empty() -> Self {
@@ -51,6 +74,8 @@ impl ProjectSheetSet {
             sheets: HashMap::new(),
             pages_outside_the_hierarchy: Vec::new(),
             unreadable: Vec::new(),
+            absent: Vec::new(),
+            refused: Vec::new(),
             root: None,
             fold: CaseFold::host_default(),
         }
@@ -201,14 +226,10 @@ pub(crate) fn fold_key(path: &Path, fold: CaseFold) -> String {
     path_key_with(path, fold)
 }
 
-/// A disk parse of one sheet, ignoring open tabs (a worker has no engines).
-pub(crate) fn load_sheet_disk(path: &Path) -> Result<Option<SchematicSheet>, String> {
-    load_sheet_with(&|_| None, path)
-}
-
 /// [`load_sheet`] over an arbitrary "is it open?" lookup, so a background job
 /// can read from a snapshot of the open sheets instead of borrowing the live
-/// [`DocumentState`].
+/// [`DocumentState`]. `open` is asked immediately before the disk read: the
+/// closed-sheet scan takes its file stamps in it.
 fn load_sheet_with(
     open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     path: &Path,
@@ -347,6 +368,24 @@ pub(crate) fn assemble_project_sheets_from(
     assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold)
 }
 
+/// The one walk, started from `seeds` instead of a project's pages: every sheet
+/// reachable down `child_sheets`, none of `skip` (open sheets, already counted
+/// from memory) read or followed. `open` is asked for each path before any disk
+/// read. Nothing is dropped silently: see [`ProjectSheetSet::absent`],
+/// [`ProjectSheetSet::refused`] and [`ProjectSheetSet::unreadable`].
+pub(crate) fn assemble_from_seeds(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    seeds: &[PathBuf],
+    skip: &[PathBuf],
+    fold: CaseFold,
+) -> ProjectSheetSet {
+    let mut set = ProjectSheetSet::empty();
+    set.fold = fold;
+    let mut visited: HashSet<String> = skip.iter().map(|p| path_key_with(p, fold)).collect();
+    walk(open, seeds, &mut visited, &mut set, fold);
+    set
+}
+
 fn assemble_project_sheets_with(
     open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     pages: &[PathBuf],
@@ -357,6 +396,8 @@ fn assemble_project_sheets_with(
         sheets: HashMap::new(),
         pages_outside_the_hierarchy: Vec::new(),
         unreadable: Vec::new(),
+        absent: Vec::new(),
+        refused: Vec::new(),
         root: Some(root_path.to_path_buf()),
         fold,
     };
@@ -409,7 +450,10 @@ fn walk(
         let sheet = match load_sheet_with(open, &path) {
             Ok(Some(sheet)) => sheet,
             // Absent: the stitcher reports this as the MissingChild it is.
-            Ok(None) => continue,
+            Ok(None) => {
+                set.absent.push(path);
+                continue;
+            }
             Err(why) => {
                 set.unreadable.push((path.clone(), why));
                 continue;
@@ -422,8 +466,18 @@ fn walk(
             // revisits an already-visited key instead of minting a new path
             // each lap), and a reference escaping the sheet's folder is not
             // loaded (#463).
-            if let Some(resolved) = resolve_child_reference(&dir, &child.filename) {
-                queue.push(resolved);
+            match resolve_child_reference_quiet(&dir, &child.filename) {
+                Ok(resolved) => queue.push(resolved),
+                Err(ChildReferenceRefusal::Empty) => {}
+                Err(refusal) => {
+                    log_refusal(&refusal);
+                    if let ChildReferenceRefusal::Escapes { reference, .. } = refusal {
+                        set.refused.push(RefusedChild {
+                            parent: path.clone(),
+                            reference,
+                        });
+                    }
+                }
             }
         }
         loaded.insert(key);
@@ -691,26 +745,32 @@ pub(crate) fn project_graph_with(
 pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
     match resolve_child_reference_quiet(parent_dir, child_filename) {
         Ok(path) => Some(path),
-        Err(ChildReferenceRefusal::Empty) => None,
-        Err(ChildReferenceRefusal::Escapes {
-            reference,
-            resolved,
-            root,
-        }) => {
-            crate::diagnostics::log_error(
-                "Rejected child-sheet reference outside its resolution root",
-                &anyhow::anyhow!(
-                    "'{reference}' resolves to {} which escapes {}",
-                    resolved.display(),
-                    if root.as_os_str().is_empty() {
-                        "an empty resolution root".to_string()
-                    } else {
-                        root.display().to_string()
-                    }
-                ),
-            );
+        Err(refusal) => {
+            log_refusal(&refusal);
             None
         }
+    }
+}
+
+fn log_refusal(refusal: &ChildReferenceRefusal) {
+    if let ChildReferenceRefusal::Escapes {
+        reference,
+        resolved,
+        root,
+    } = refusal
+    {
+        crate::diagnostics::log_error(
+            "Rejected child-sheet reference outside its resolution root",
+            &anyhow::anyhow!(
+                "'{reference}' resolves to {} which escapes {}",
+                resolved.display(),
+                if root.as_os_str().is_empty() {
+                    "an empty resolution root".to_string()
+                } else {
+                    root.display().to_string()
+                }
+            ),
+        );
     }
 }
 
@@ -1289,6 +1349,8 @@ mod tests {
             sheets: sheets.clone(),
             pages_outside_the_hierarchy: pages,
             unreadable: Vec::new(),
+            absent: Vec::new(),
+            refused: Vec::new(),
             root: Some(root_path.clone()),
             fold: CaseFold::host_default(),
         };
@@ -1517,5 +1579,35 @@ mod tests {
         let plan = plan_project_sheets_for(&app.document_state, &dir.join("b.snxsch"));
         let seen = references_seen(&plan);
         assert!(seen.contains(&"R50".to_owned()), "{seen:?}");
+    }
+
+    /// The walk names the children it could not load: the closed-sheet scan's
+    /// unchecked list is built from this (#1990).
+    #[test]
+    fn the_assembler_reports_an_absent_and_a_refused_child() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        write_to_disk(
+            dir,
+            "root.snxsch",
+            &sheet_with("R1", &["gone.snxsch", "../outside.snxsch"]),
+        );
+        let open = OpenSheets::new();
+        let set = assemble_project_sheets_from(
+            &open,
+            &[],
+            &dir.join("root.snxsch"),
+            CaseFold::host_default(),
+        );
+        assert!(set.sheets.contains_key(&dir.join("root.snxsch")));
+        assert_eq!(set.absent, [dir.join("gone.snxsch")]);
+        assert_eq!(
+            set.refused,
+            [RefusedChild {
+                parent: dir.join("root.snxsch"),
+                reference: "../outside.snxsch".into(),
+            }]
+        );
+        assert!(set.unreadable.is_empty());
     }
 }
