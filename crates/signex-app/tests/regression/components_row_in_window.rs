@@ -118,3 +118,30 @@ fn a_row_dropped_in_a_window_commits_in_that_windows_sheet_when_the_read_lands()
     );
     assert_eq!(symbols_in(&app, &first), 0, "the main sheet got nothing");
 }
+
+#[test]
+fn a_designator_scan_that_lands_commits_a_window_drop_in_that_windows_sheet() {
+    let f = fixture();
+    let (mut app, window, first, other) = app_with_a_window(&f);
+    let _ = app.update(scoped(
+        window,
+        LibraryMessage::ComponentsPanelRowRightClicked(row_key(&f)),
+    ));
+    let task = app.update(scoped(
+        window,
+        LibraryMessage::ComponentsPanelRowMenuPicked(ComponentsRowAction::Place),
+    ));
+    for message in run(task) {
+        let _ = app.update(message);
+    }
+    // Armed from the window; its drop waits for the designator scan, which
+    // lands now (a fresh app's scan generation is 0).
+    let epoch = app.interaction_state.placement_epoch;
+    app.library.components_panel.pending_drop = Some((epoch, PLACE_AT));
+    let _ = app.update(Message::Library(LibraryMessage::DesignatorsScanned {
+        generation: 0,
+        result: std::sync::Arc::new(Err("scan unavailable".into())),
+    }));
+    assert_eq!(symbols_in(&app, &other), 1, "lands in the window's sheet");
+    assert_eq!(symbols_in(&app, &first), 0, "the main sheet got nothing");
+}

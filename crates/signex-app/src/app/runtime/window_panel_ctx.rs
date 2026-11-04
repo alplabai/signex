@@ -62,12 +62,35 @@ impl PanelContext {
         if self.erc_diagnostics != main.erc_diagnostics {
             self.erc_diagnostics.clone_from(&main.erc_diagnostics);
         }
+        self.adopt_net_classes_from(main);
         if self.erc_waivers != main.erc_waivers {
             self.erc_waivers.clone_from(&main.erc_waivers);
         }
         if self.erc_violation_waivers != main.erc_violation_waivers {
             self.erc_violation_waivers
                 .clone_from(&main.erc_violation_waivers);
+        }
+    }
+
+    /// Net classes are project-wide, and `PanelMsg::NetClass` runs on the
+    /// main window against the main window's panel state, so a window shows
+    /// that state (selection, draft, table) and never keeps its own. Only
+    /// the net label's class picker follows the window's own selection.
+    fn adopt_net_classes_from(&mut self, main: &PanelContext) {
+        let (own, shared) = (&mut self.net_classes, &main.net_classes);
+        own.available = shared.available;
+        own.project = shared.project;
+        own.selected = shared.selected;
+        own.can_undo = shared.can_undo;
+        own.can_redo = shared.can_redo;
+        if own.classes != shared.classes {
+            own.classes.clone_from(&shared.classes);
+        }
+        if own.draft != shared.draft {
+            own.draft.clone_from(&shared.draft);
+        }
+        if own.notice != shared.notice {
+            own.notice.clone_from(&shared.notice);
         }
     }
 
@@ -320,7 +343,7 @@ impl Signex {
                     ctx.navigator = Default::default();
                 }
             } else if ctx.navigator.fingerprint != document.panel_ctx.navigator.fingerprint {
-                ctx.navigator.clone_from(&document.panel_ctx.navigator);
+                ctx.navigator.adopt_from(&document.panel_ctx.navigator);
             }
         }
     }

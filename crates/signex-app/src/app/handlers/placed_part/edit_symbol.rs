@@ -7,7 +7,7 @@ use iced::Task;
 use signex_library::PrimitiveRef;
 
 use super::{PlacedPart, part_name};
-use crate::app::contracts::Message;
+use crate::app::contracts::{Message, ProjectMsg};
 use crate::app::state::Signex;
 use crate::library::drift::split_lib_id;
 
@@ -27,6 +27,12 @@ impl Signex {
             ));
             return Task::none();
         };
+        // A window cannot open or switch tabs inside its swap: the part is
+        // resolved here, against the window's sheet, and the open runs on
+        // the main window.
+        if self.interaction_state.acting_window.is_some() {
+            return Task::done(Message::Project(ProjectMsg::PrimitiveOpenRequested(path)));
+        }
         self.handle_open_primitive(path)
     }
 }

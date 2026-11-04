@@ -192,17 +192,24 @@ impl Signex {
             Some(id) if self.is_document_window(id) => self.interaction_state.canvas_for_window(id),
             _ => self.interaction_state.active_canvas(),
         };
-        let has_schematic = document.active_engine().is_some();
+        let main_has_schematic = document.active_engine().is_some();
         let has_symbol_editor = matches!(active_kind, Some(TabKind::SymbolEditor(_)));
         let has_footprint_editor = matches!(active_kind, Some(TabKind::FootprintEditor(_)));
         let own = self.window_document_kind(
             window,
             WindowDocumentKind {
-                is_schematic: has_schematic,
+                is_schematic: main_has_schematic,
                 is_editor: has_symbol_editor || has_footprint_editor,
                 has_file: true,
             },
         );
+        // An undocked sheet window is enabled by the sheet it shows, not by
+        // whatever tab the main window has active.
+        let has_schematic = if window.is_some_and(|id| self.is_document_window(id)) {
+            own.is_schematic
+        } else {
+            main_has_schematic
+        };
         CommandContext {
             has_schematic,
             has_pcb: self.has_active_pcb(),

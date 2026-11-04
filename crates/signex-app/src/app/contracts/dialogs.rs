@@ -642,6 +642,10 @@ pub enum ProjectMsg {
         path: std::path::PathBuf,
         placement: Option<signex_types::schematic::InstancePath>,
     },
+    /// Edit Symbol from an undocked window: the window cannot open or switch
+    /// tabs inside its swap, so the symbol file it resolved is opened here, on
+    /// the main window (#1966).
+    PrimitiveOpenRequested(std::path::PathBuf),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
     /// while any document is dirty. Reuses `ProjectCloseChoice`.

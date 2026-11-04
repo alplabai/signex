@@ -94,6 +94,32 @@ impl NavigatorModel {
         self.rebuild_with(active, open, &collapsed_now);
     }
 
+    /// Take `main`'s Navigator (a window that shares it), keeping which
+    /// branches this one had expanded or collapsed: a window's expansion is
+    /// its own and must outlive a refresh of the hierarchy.
+    pub fn adopt_from(&mut self, main: &NavigatorModel) {
+        let old = self.hierarchy.take();
+        let remembered: Vec<(OccurrenceKey, bool)> = branch_states(&self.tree)
+            .into_iter()
+            .filter_map(|(path, expanded)| Some((occurrence_key(old.as_ref()?, &path)?, expanded)))
+            .collect();
+        self.clone_from(main);
+        let Some(hierarchy) = self.hierarchy.as_ref() else {
+            return;
+        };
+        let located: Vec<(Vec<usize>, bool)> = remembered
+            .iter()
+            .filter_map(|(key, expanded)| Some((resolve_occurrence(hierarchy, key)?, *expanded)))
+            .collect();
+        for (path, expanded) in located {
+            if let Some(node) = node_mut(&mut self.tree, &path)
+                && !node.children.is_empty()
+            {
+                node.expanded = expanded;
+            }
+        }
+    }
+
     /// Re-derive the rows from the cached hierarchy, keeping the collapsed
     /// branches the user chose, and mark the active and open sheets.
     pub fn rebuild_tree(&mut self, active: Option<&Path>, open: &[PathBuf]) {
@@ -201,6 +227,23 @@ fn tree_node(
         .with_badge(node.filename.clone())
         .with_active(active == Some(key.as_str()))
         .with_open(open.contains(&key))
+}
+
+/// Every branch row with whether it is expanded.
+fn branch_states(roots: &[TreeNode]) -> Vec<(Vec<usize>, bool)> {
+    fn walk(nodes: &[TreeNode], prefix: &mut Vec<usize>, out: &mut Vec<(Vec<usize>, bool)>) {
+        for (i, node) in nodes.iter().enumerate() {
+            prefix.push(i);
+            if !node.children.is_empty() {
+                out.push((prefix.clone(), node.expanded));
+            }
+            walk(&node.children, prefix, out);
+            prefix.pop();
+        }
+    }
+    let mut out = Vec::new();
+    walk(roots, &mut Vec::new(), &mut out);
+    out
 }
 
 fn collapsed_paths(roots: &[TreeNode]) -> Vec<Vec<usize>> {
@@ -365,6 +408,26 @@ mod tests {
 
         assert_eq!(m.selected, Some(vec![0, 2]), "still B");
         assert!(!m.tree[0].children[1].expanded, "A stays collapsed");
+    }
+
+    #[test]
+    fn adopting_the_main_navigator_keeps_the_windows_own_expansion() {
+        let mut main = NavigatorModel::default();
+        main.replace_hierarchy(two_children("A", "B"), None, &[]);
+        let mut window = main.clone();
+        window.tree[0].children[0].expanded = false;
+
+        // The hierarchy changed in main: a sheet is inserted above A and B,
+        // and main (which still has A open) is cloned over the window's.
+        let mut grown = two_children("A", "B");
+        let root = grown.root.as_mut().expect("root");
+        root.children.insert(0, node("New", "new.snxsch", vec![]));
+        main.replace_hierarchy(grown, None, &[]);
+        window.adopt_from(&main);
+
+        assert_eq!(window.tree[0].children.len(), 3, "main's hierarchy");
+        assert!(!window.tree[0].children[1].expanded, "A stays collapsed");
+        assert!(window.tree[0].expanded);
     }
 
     #[test]

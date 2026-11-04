@@ -107,6 +107,10 @@ impl Signex {
                 let task = self.descend_to_child_sheet(symbol, path, placement);
                 Task::batch([task, self.finish_update()])
             }
+            ProjectMsg::PrimitiveOpenRequested(path) => {
+                let task = self.handle_open_primitive(path);
+                Task::batch([task, self.finish_update()])
+            }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::Tab(msg) => {
                 self.dispatch_project_tab_message(msg);

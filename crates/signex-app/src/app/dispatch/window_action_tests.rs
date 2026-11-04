@@ -1254,3 +1254,6 @@ fn a_descent_from_a_window_reaches_an_open_child_that_is_not_on_disk() {
     enter_in_window(&mut d);
     assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
 }
+
+#[path = "window_action_context_tests.rs"]
+mod context;
