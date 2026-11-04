@@ -503,7 +503,7 @@ impl Signex {
                 crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
                 _ => None,
             })?;
-        // Refused while the editor's library is renamed or deleted.
+        // Refused while the editor's library is being deleted.
         if !self.editor_edit_allowed(&path) {
             return None;
         }

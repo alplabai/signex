@@ -8,6 +8,7 @@
 //! go through (dropping a completion would strand its state).
 
 use super::*;
+use crate::app::path_ops::PathOpKind;
 use crate::library::stock_copy::StockCopyMsg;
 
 impl Signex {
@@ -33,9 +34,10 @@ impl Signex {
     }
 
     /// Why a symbol or footprint editor edit cannot apply now, or `None`.
-    /// While a library rename or delete runs, an edit to a primitive inside
-    /// that library is refused rather than kept and reported afterwards
-    /// (#1939): the editor stays as it was, so nothing is lost. View-only
+    /// While a library delete runs, an edit to a primitive inside that
+    /// library is refused rather than kept and reported afterwards (#1939):
+    /// the editor stays as it was. A rename allows edits and rekeys the
+    /// draft; saving stays refused during both. View-only
     /// events (cursor, pan, zoom, menus, selection) still go through.
     pub(super) fn primitive_edit_refusal(&self, msg: &LibraryMessage) -> Option<String> {
         let LibraryMessage::PrimitiveEditorEvent { path, msg } = msg else {
@@ -58,7 +60,13 @@ impl Signex {
     /// behaves the same from every surface.
     pub(crate) fn editor_edit_refusal(&self, path: &std::path::Path) -> Option<String> {
         let ops = &self.document_state.pending_path_ops;
-        if !ops.library_rename_running() || ops.blocking_write(path).is_none() {
+        // A rename keeps edits: the dirty draft moves to the new path with
+        // the library. Only a delete discards the draft, so only it refuses.
+        if !ops.library_rename_running()
+            || !ops
+                .blocking_write(path)
+                .is_some_and(|c| c.kind == PathOpKind::Delete)
+        {
             return None;
         }
         let library = self
@@ -67,8 +75,8 @@ impl Signex {
             .map(|lib| lib.display_name.clone())
             .unwrap_or_else(|| path.display().to_string());
         Some(format!(
-            "Library {library} is being renamed or deleted, so this edit was not applied. \
-             Try again once it finishes."
+            "Library {library} is being deleted, so this edit was not applied. \
+             Try again if the delete fails."
         ))
     }
 
@@ -245,7 +253,6 @@ fn writes_through_adapter(msg: &LibraryMessage) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::path_ops::PathOpKind;
     use crate::app::state::scope::CaseFold;
 
     fn app_with_library_rename() -> Signex {
@@ -307,19 +314,34 @@ mod tests {
         })
     }
 
-    /// #1939: an editor edit during a library rename is refused, not kept and
-    /// reported afterwards. The editor stays as it was and Messages names the
-    /// library; a view-only event still goes through.
-    #[test]
-    fn a_symbol_edit_during_a_library_rename_is_refused_and_logged() {
-        let _ = crate::diagnostics::init_logging();
-        let mut app = app_with_library_rename();
+    fn app_with_library_delete() -> Signex {
+        let (mut app, _task) = Signex::new();
+        app.document_state.pending_path_ops.begin(
+            PathOpKind::Delete,
+            vec!["/w/a.snxlib".into()],
+            CaseFold::PRESERVE,
+        );
+        app
+    }
+
+    fn app_with_open_symbol(app: &mut Signex) -> std::path::PathBuf {
         let path = std::path::PathBuf::from("/w/a.snxlib/symbols/r.snxsym");
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
         app.document_state.symbol_editors.insert(
             path.clone(),
             crate::app::SymbolDocument::new(path.clone(), file),
         );
+        path
+    }
+
+    /// #1939: an editor edit during a library delete is refused, not kept and
+    /// reported afterwards. The editor stays as it was and Messages names the
+    /// library; a view-only event still goes through.
+    #[test]
+    fn a_symbol_edit_during_a_library_delete_is_refused_and_logged() {
+        let _ = crate::diagnostics::init_logging();
+        let mut app = app_with_library_delete();
+        let path = app_with_open_symbol(&mut app);
         let pins =
             |app: &Signex| format!("{:?}", app.document_state.symbol_editors[&path].snapshot());
         let before = pins(&app);
@@ -334,6 +356,7 @@ mod tests {
             crate::diagnostics::recent_entries().iter().any(|e| {
                 Some(e.id) > since
                     && e.message.contains("a.snxlib")
+                    && e.message.contains("is being deleted")
                     && e.message.contains("edit was not applied")
             }),
             "Messages names the library"
@@ -350,6 +373,20 @@ mod tests {
             })
             .is_none()
         );
+    }
+
+    /// A rename keeps trunk's behaviour: the edit lands, and the draft is
+    /// rekeyed with the library when the rename completes.
+    #[test]
+    fn a_symbol_edit_during_a_library_rename_is_not_refused() {
+        let mut app = app_with_library_rename();
+        let path = app_with_open_symbol(&mut app);
+        let p = path.to_string_lossy().into_owned();
+
+        let _task = app.update(symbol_edit(&p, SymbolEditorMsg::AddPin { x: 1.0, y: 2.0 }));
+
+        assert!(app.document_state.symbol_editors[&path].is_dirty());
+        assert!(app.editor_edit_refusal(&path).is_none());
     }
 
     #[test]
@@ -378,8 +415,8 @@ mod tests {
     }
 
     /// An app with a symbol editor open as the active tab and one undoable
-    /// edit made, then a library rename started.
-    fn app_with_symbol_edited_then_rename() -> (Signex, std::path::PathBuf) {
+    /// edit made, then a library delete started.
+    fn app_with_symbol_edited_then_delete() -> (Signex, std::path::PathBuf) {
         let (mut app, _task) = Signex::new();
         let path = std::path::PathBuf::from("/w/a.snxlib/symbols/r.snxsym");
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
@@ -399,8 +436,8 @@ mod tests {
         let _ = app.update(symbol_edit(&p, SymbolEditorMsg::AddPin { x: 1.0, y: 2.0 }));
         assert!(app.document_state.symbol_editors[&path].is_dirty());
         app.document_state.pending_path_ops.begin(
-            PathOpKind::RenameLibrary,
-            vec!["/w/a.snxlib".into(), "/w/b.snxlib".into()],
+            PathOpKind::Delete,
+            vec!["/w/a.snxlib".into()],
             CaseFold::PRESERVE,
         );
         (app, path)
@@ -413,22 +450,22 @@ mod tests {
     /// Ctrl+Z reaches the editor outside the message stream, so it carries
     /// its own refusal: same command, same answer from every surface.
     #[test]
-    fn ctrl_z_on_an_editor_during_a_library_rename_is_refused() {
-        let (mut app, path) = app_with_symbol_edited_then_rename();
+    fn ctrl_z_on_an_editor_during_a_library_delete_is_refused() {
+        let (mut app, path) = app_with_symbol_edited_then_delete();
         let before = symbol_state(&app, &path);
 
         let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Undo));
 
         assert_eq!(symbol_state(&app, &path), before, "the editor is unchanged");
-        // Once the rename ends, the same Ctrl+Z undoes the edit.
+        // Once the delete ends, the same Ctrl+Z undoes the edit.
         app.document_state.pending_path_ops = Default::default();
         let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Undo));
         assert_ne!(symbol_state(&app, &path), before);
     }
 
     #[test]
-    fn a_properties_panel_edit_during_a_library_rename_is_refused() {
-        let (mut app, path) = app_with_symbol_edited_then_rename();
+    fn a_properties_panel_edit_during_a_library_delete_is_refused() {
+        let (mut app, path) = app_with_symbol_edited_then_delete();
         let before = symbol_state(&app, &path);
 
         let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
