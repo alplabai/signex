@@ -277,11 +277,26 @@ mod tests {
 
         let task = app.execute_command_palette_selected();
 
-        // `Task::done` carries a stream but no work "units" in the iced fork,
-        // so check for a stream rather than `units()`.
+        // `Task::done` reports no work "units" in the iced fork, so run the
+        // task and inspect the message it produces: it must be exactly the
+        // cached row's action.
+        use futures::StreamExt as _;
+        let mut stream = iced_runtime::task::into_stream(task)
+            .expect("the cached row's action must produce a task");
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let first = runtime.block_on(stream.next());
         assert!(
-            iced_runtime::task::into_stream(task).is_some(),
-            "the cached row's action must run"
+            matches!(
+                first,
+                Some(iced_runtime::Action::Output(Message::Overlay(
+                    OverlayMsg::OpenPanel(crate::panels::PanelKind::Erc)
+                )))
+            ),
+            "the cached row's action (open the ERC panel) must be what runs"
+        );
+        assert!(
+            runtime.block_on(stream.next()).is_none(),
+            "the action produces exactly one message"
         );
         assert!(!app.ui_state.command_palette.open);
     }
