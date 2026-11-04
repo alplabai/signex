@@ -11,8 +11,8 @@ use crate::schematic::SchematicSheet;
 /// Largest text height (mm) a loaded sheet keeps. A title in a large format
 /// is 10 to 25 mm; 100 mm text is a quarter of an A4 page, so nothing a
 /// drawing needs is above it. At the canvas zoom limit (48 px/mm) and a 3x
-/// display it stays under the outline ceiling
-/// (`signex_gfx::primitive::text::MAX_OUTLINE_TEXT_DEVICE_PX`).
+/// display it stays under the drawn-text ceiling
+/// (`signex_gfx::primitive::text::MAX_DRAWN_TEXT_DEVICE_PX`).
 pub const MAX_TEXT_SIZE_MM: f64 = 100.0;
 
 fn clamp(size: &mut f64, object: impl FnOnce() -> RepairedObject, made: &mut Vec<SheetLoadRepair>) {

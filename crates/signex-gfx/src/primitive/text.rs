@@ -43,40 +43,42 @@ impl TextSizePolicy {
 /// seen and a zero-size glyph run is not worth shaping.
 pub const MIN_VISIBLE_TEXT_DEVICE_PX: f32 = 0.5;
 
-// shortcut: fixed ceiling, not read from the device. A bitmap glyph this tall
-// does not fit the glyph atlas (8192 px textures) with its neighbours; text
-// above it is drawn as vector outlines instead, so it keeps its true size.
-// Reachable: 100 mm text at the 48 px/mm zoom limit is about 6500 px.
+// shortcut: fixed ceiling, not read from the device. A glyph bitmap this tall
+// does not fit the glyph atlas (8192 px textures) with its neighbours, so
+// signex's own atlas pipeline leaves larger text to the canvas, where iced
+// draws it as vector outlines (alplabai/iced `fill_text`). Reachable: 100 mm
+// text at the 48 px/mm zoom limit is about 6500 px.
 pub const MAX_RASTER_TEXT_DEVICE_PX: f32 = 4096.0;
 
-// shortcut: ceiling on outline text, sized to the largest real case: 100 mm
-// text (`signex_types::format::MAX_TEXT_SIZE_MM`, what a sheet keeps on load)
-// is 136 mm of em, times the 48 px/mm zoom limit times a 3x display is about
-// 19600 px; this is that with headroom. Past it the size is hostile data, not
-// drawing, and the item is skipped, so tessellation cost stays bounded.
-pub const MAX_OUTLINE_TEXT_DEVICE_PX: f32 = 32_768.0;
+// shortcut: sanity ceiling on drawn text, sized to the largest real case:
+// 100 mm text (`signex_types::format::MAX_TEXT_SIZE_MM`, what a sheet keeps on
+// load) is 136 mm of em, times the 48 px/mm zoom limit times a 3x display is
+// about 19600 px; this is that with headroom. Past it the size is hostile
+// data, not drawing, and the item is skipped.
+pub const MAX_DRAWN_TEXT_DEVICE_PX: f32 = 32_768.0;
 
 /// How a text of a given em size is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextRaster {
     /// Not drawn: non-finite, invisibly small, or absurdly large.
     Skip,
-    /// Glyph bitmaps from the atlas (GPU) or the canvas text path (CPU).
+    /// Drawn at true size from the glyph atlas (signex's GPU pipeline) or the
+    /// canvas text path.
     Bitmap,
-    /// Too large for the atlas: the scene build turns it into filled glyph
-    /// polygons, which the CPU replay and the GPU polygon pipeline both draw.
-    Outline,
+    /// Drawn at true size, but past the atlas: only the canvas draws it, and
+    /// iced turns it into vector outlines.
+    Oversize,
 }
 
 /// The one rule of the CPU canvas and the GPU glyph pipeline for an em of
 /// `device_px`; it never resizes text, it only picks how (or whether) to draw.
 pub fn text_raster(device_px: f32) -> TextRaster {
     if !device_px.is_finite()
-        || !(MIN_VISIBLE_TEXT_DEVICE_PX..=MAX_OUTLINE_TEXT_DEVICE_PX).contains(&device_px)
+        || !(MIN_VISIBLE_TEXT_DEVICE_PX..=MAX_DRAWN_TEXT_DEVICE_PX).contains(&device_px)
     {
         TextRaster::Skip
     } else if device_px > MAX_RASTER_TEXT_DEVICE_PX {
-        TextRaster::Outline
+        TextRaster::Oversize
     } else {
         TextRaster::Bitmap
     }
@@ -220,21 +222,22 @@ mod size_tests {
     fn the_raster_rule_skips_only_unreachable_sizes() {
         assert_eq!(text_raster(1.8), TextRaster::Bitmap);
         assert_eq!(text_raster(MAX_RASTER_TEXT_DEVICE_PX), TextRaster::Bitmap);
-        assert_eq!(text_raster(5224.0), TextRaster::Outline);
+        assert_eq!(text_raster(5224.0), TextRaster::Oversize);
         assert_eq!(text_raster(f32::NAN), TextRaster::Skip);
         assert_eq!(text_raster(f32::INFINITY), TextRaster::Skip);
         assert_eq!(text_raster(0.1), TextRaster::Skip);
-        assert_eq!(text_raster(MAX_OUTLINE_TEXT_DEVICE_PX), TextRaster::Outline);
+        assert_eq!(text_raster(MAX_DRAWN_TEXT_DEVICE_PX), TextRaster::Oversize);
         assert_eq!(text_raster(40_000.0), TextRaster::Skip);
         assert_eq!(text_raster(1.0e9), TextRaster::Skip);
     }
 
-    /// 40 mm text at 96 px/mm is about 5224 px: past the atlas, still drawn.
+    /// 40 mm text at 96 px/mm is about 5224 px: past the atlas, still drawn at
+    /// that size (never clamped to the ceiling, never culled).
     #[test]
-    fn text_past_the_atlas_ceiling_is_drawn_as_an_outline_not_culled() {
+    fn text_past_the_atlas_ceiling_is_drawn_at_true_size_not_clamped_or_culled() {
         let px = text_px_in(40.0, 96.0, TextSizePolicy::UNCLAMPED, None);
         assert!((px - 5224.0).abs() < 5.0, "{px}");
-        assert_eq!(text_raster(px), TextRaster::Outline);
+        assert_eq!(text_raster(px), TextRaster::Oversize);
     }
 
     #[test]
@@ -269,7 +272,7 @@ mod size_tests {
         let largest_real = text_px_in(100.0, zoom_limit, TextSizePolicy::UNCLAMPED, None) * dpr;
         assert_eq!(
             text_raster(largest_real),
-            TextRaster::Outline,
+            TextRaster::Oversize,
             "{largest_real}"
         );
     }

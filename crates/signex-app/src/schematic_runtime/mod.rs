@@ -451,13 +451,6 @@ pub fn build_schematic_scene(
             | DirtyFlags::TEXT,
         &mut scene,
     );
-    // Text above the atlas ceiling becomes polygons both replays draw.
-    crate::scene_outline_text::convert_oversize_texts(
-        &mut scene,
-        schematic_draw_options(transform),
-        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        bounds,
-    );
     Some(scene)
 }
 

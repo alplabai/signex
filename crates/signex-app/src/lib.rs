@@ -68,7 +68,6 @@ pub mod sample_project;
 pub mod scene_generation;
 pub mod scene_gpu_upload;
 mod scene_line_snap;
-mod scene_outline_text;
 pub mod scene_shader;
 pub mod schematic_runtime;
 pub mod start_screen;

@@ -562,7 +562,78 @@ pub fn draw_rotated_texts<F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    draw_text_items(frame, rotated_texts(scene), world_to_screen, options);
+    // Past the atlas ceiling only the canvas draws text (iced turns it into
+    // vector outlines), so a GPU-mounted sheet hands it to this overlay too.
+    let cpu_texts = scene
+        .texts
+        .iter()
+        .filter(|text| cpu_draws_beside_gpu(text, options));
+    draw_text_items(frame, cpu_texts, world_to_screen, options);
+}
+
+/// Whether the CPU canvas draws `text` of a GPU-mounted scene: what the glyph
+/// atlas cannot, a rotated item or one past its size ceiling.
+fn cpu_draws_beside_gpu(text: &TextItem, options: SceneDrawOptions) -> bool {
+    !text.is_axis_aligned() || options.text_raster(text) == TextRaster::Oversize
+}
+
+/// Whether an oversize text can touch the frame, from its cached advance (no
+/// shaping): its corners rotated about the anchor. Off-screen oversize text is
+/// never handed to iced, so a hostile file cannot make a frame cost more.
+fn oversize_text_on_screen(
+    frame: &canvas::Frame,
+    text: &TextItem,
+    position: Point,
+    size_px: f32,
+) -> bool {
+    let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
+    let width = text
+        .content
+        .split('\n')
+        .map(|line| {
+            signex_types::font::shaped_advance_em(line, Some(family))
+                .unwrap_or(line.chars().count() as f32 * 0.5)
+        })
+        .fold(0.0_f32, f32::max)
+        * size_px;
+    let height = text.content.split('\n').count() as f32
+        * size_px
+        * signex_gfx::primitive::text::LINE_HEIGHT_EM;
+    let x0 = match text.h_align {
+        TextHAlign::Left => 0.0,
+        TextHAlign::Center => -0.5 * width,
+        TextHAlign::Right => -width,
+    };
+    let y0 = match text.v_align {
+        TextVAlign::Top => 0.0,
+        TextVAlign::Center => -0.5 * height,
+        TextVAlign::Bottom => -height,
+    };
+    let (sin, cos) = text.rotation.sin_cos();
+    let corners = [
+        (x0, y0),
+        (x0 + width, y0),
+        (x0, y0 + height),
+        (x0 + width, y0 + height),
+    ]
+    .map(|(x, y)| {
+        (
+            position.x + x * cos - y * sin,
+            position.y + x * sin + y * cos,
+        )
+    });
+    let (min_x, max_x) = corners
+        .iter()
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), c| {
+            (lo.min(c.0), hi.max(c.0))
+        });
+    let (min_y, max_y) = corners
+        .iter()
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), c| {
+            (lo.min(c.1), hi.max(c.1))
+        });
+    let size = frame.size();
+    max_x >= 0.0 && min_x <= size.width && max_y >= 0.0 && min_y <= size.height
 }
 
 fn draw_text_items<'a, F>(
@@ -580,10 +651,14 @@ fn draw_text_items<'a, F>(
 
         let size_px = options.text_px(text.size_mm, text.family.as_deref());
         let position = world_to_screen(text.position);
-        // Text above the atlas ceiling is already polygons in the scene
-        // (`scene_outline_text::convert_oversize_texts`).
-        if options.text_raster(text) != TextRaster::Bitmap {
-            continue;
+        match options.text_raster(text) {
+            TextRaster::Skip => continue,
+            // iced draws it as outlines past its own atlas limit; nothing
+            // reaches it that cannot be seen.
+            TextRaster::Oversize if !oversize_text_on_screen(frame, text, position, size_px) => {
+                continue;
+            }
+            TextRaster::Oversize | TextRaster::Bitmap => {}
         }
         let draw_text = canvas::Text {
             content: text.content.clone(),
@@ -1132,5 +1207,40 @@ mod line_geometry_tests {
                 assert_eq!(ring, wire, "ring at {scale} px/mm, {dpr}x");
             }
         }
+    }
+
+    fn text_item(size_mm: f32, rotation: f32) -> TextItem {
+        TextItem {
+            content: "R1".into(),
+            size_mm,
+            rotation,
+            ..Default::default()
+        }
+    }
+
+    /// #2022 - 40 mm text at 96 px/mm (about 5224 px) is drawn at that true
+    /// size, not clamped to the atlas ceiling and not culled; being past the
+    /// atlas it is the canvas that draws it beside a GPU-mounted scene.
+    #[test]
+    fn oversize_text_keeps_its_true_size_and_goes_to_the_canvas_beside_the_gpu() {
+        let options = SceneDrawOptions {
+            scale_px_per_mm: 96.0,
+            device_px_per_logical_px: 1.0,
+            text_min_px: 0.0,
+            text_max_px: f32::INFINITY,
+        };
+        let big = text_item(40.0, 0.0);
+        let px = options.text_px(big.size_mm, None);
+        assert!((px - 5224.0).abs() < 5.0, "true size, got {px}");
+        assert_eq!(options.text_raster(&big), TextRaster::Oversize);
+        assert!(cpu_draws_beside_gpu(&big, options));
+        assert!(
+            cpu_draws_beside_gpu(&text_item(1.27, 1.0), options),
+            "rotated"
+        );
+        assert!(
+            !cpu_draws_beside_gpu(&text_item(1.27, 0.0), options),
+            "ordinary"
+        );
     }
 }
