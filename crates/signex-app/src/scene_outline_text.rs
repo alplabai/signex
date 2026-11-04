@@ -401,8 +401,7 @@ fn warn_scene_capped_once() {
     static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
         crate::diagnostics::log_warning(
-            "This sheet has more oversize text than can be drawn as outlines; the rest is left out"
-                .to_string(),
+            "This sheet has more oversize text than can be drawn as outlines; the rest is left out",
         );
     }
 }
