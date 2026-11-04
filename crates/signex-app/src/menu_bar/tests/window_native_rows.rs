@@ -151,7 +151,7 @@ pub(super) fn click_in_window(
 }
 
 /// Select every symbol on the sheet `window` shows.
-fn select_window_symbols(app: &mut Signex, window: iced::window::Id) {
+pub(super) fn select_window_symbols(app: &mut Signex, window: iced::window::Id) {
     let Some(crate::app::WindowKind::UndockedTab { path, .. }) = app.ui_state.windows.get(&window)
     else {
         panic!("not an undocked tab window");

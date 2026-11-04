@@ -167,6 +167,24 @@ fn the_same_holds_in_an_undocked_windows_own_bar() {
 /// dead. The list may only shrink.
 const KNOWN_INERT: &[(&str, &[&str])] = &[];
 
+/// What a row run from an undocked window can move besides [`probe`]: the
+/// selection and zoom of each window canvas, and the symbols of every sheet.
+fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize) {
+    let canvases = app
+        .interaction_state
+        .canvases
+        .values()
+        .map(|c| (c.selected.len(), c.zoom_percent()))
+        .collect();
+    let symbols = app
+        .document_state
+        .engines
+        .values()
+        .map(|e| e.document().symbols.len())
+        .sum();
+    (canvases, symbols)
+}
+
 /// Live rows of `build`'s app whose click moved nothing, as `(row, state)`.
 fn inert_rows(
     state: &'static str,
@@ -184,12 +202,16 @@ fn inert_rows(
         }
         let mut app = build();
         let window = window_of(&mut app);
-        let before = probe(&app);
+        // Cut acts on the window's own selection, which starts empty.
+        if let (Some(window), "Edit/Cut") = (window, path.as_str()) {
+            super::window_native_rows::select_window_symbols(&mut app, window);
+        }
+        let before = (probe(&app), window_state(&app));
         let task = match window {
             Some(window) => super::window_native_rows::click_in_window(&mut app, window, &path),
             None => click(&mut app, &path),
         };
-        if probe(&app) == before && !has_work(&task) {
+        if (probe(&app), window_state(&app)) == before && !has_work(&task) {
             inert.push((path, state));
         }
     }
