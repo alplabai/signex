@@ -98,10 +98,6 @@ const SWEPT: &[&str] = &[
     "library/editor/footprint/context_menu.rs",
     "library/editor/footprint/sketch_mode/inspector.rs",
     "library/editor/footprint/sketch_mode/active_bar.rs",
-    "panels/components_panel/details/footprint_canvas/mod.rs",
-    "panels/components_panel/details/footprint_canvas/layout.rs",
-    "panels/components_panel/details/footprint_canvas/palette.rs",
-    "panels/components_panel/details/footprint_canvas/graphics.rs",
 ];
 
 /// Calls whose argument must come from the scale, not a literal.
