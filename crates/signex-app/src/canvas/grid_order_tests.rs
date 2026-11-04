@@ -75,11 +75,12 @@ fn background_vertices(
     let bounds = Rectangle::with_size(size);
     let mut frame = canvas::Frame::<MeshOnly>::new(&MeshOnly, bounds.size());
     canvas.paint_background(&mut frame, bounds);
-    let Geometry::Live { meshes, .. } = frame.into_geometry() else {
+    let Geometry::Live { sections } = frame.into_geometry() else {
         panic!("a fresh frame is live geometry");
     };
-    meshes
+    sections
         .iter()
+        .flat_map(|section| section.meshes.iter())
         .filter_map(|mesh| match mesh {
             Mesh::Solid { buffers, .. } => Some(buffers.vertices.iter()),
             Mesh::Gradient { .. } => None,
