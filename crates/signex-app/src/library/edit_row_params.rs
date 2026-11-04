@@ -1,6 +1,6 @@
 //! The parameters table of the Edit Component Details modal.
 
-use iced::widget::{Column, Space, button, column, container, row, text, text_input};
+use iced::widget::{Column, Row, Space, button, column, container, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
 use signex_library::{
     ParamKind, ParamSlot, ParamValue, ParameterTemplate, slot_problem, slot_unit,
@@ -52,6 +52,9 @@ pub(super) fn view<'a>(
     .align_y(iced::Alignment::Center);
 
     let mut col: Column<'a, LibraryMessage> = column![header, Space::new().height(SP.s)].spacing(0);
+    if let Some(offer) = slot_offer(edit, template, tokens, &send) {
+        col = col.push(offer);
+    }
 
     let header_row = container(
         row![
@@ -115,6 +118,55 @@ pub(super) fn view<'a>(
             ..Default::default()
         })
         .into()
+}
+
+/// The template slots the row holds no value for yet, one button each; a
+/// pick adds the slot in its own kind and unit.
+fn slot_offer<'a>(
+    edit: &'a EditRowModalState,
+    template: Option<&'a ParameterTemplate>,
+    tokens: &'a ThemeTokens,
+    send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
+) -> Option<Element<'a, LibraryMessage>> {
+    let muted = theme_ext::text_secondary(tokens);
+    let text_c = theme_ext::text_primary(tokens);
+    let border = theme_ext::border_color(tokens);
+    let buttons: Vec<Element<'a, LibraryMessage>> = template?
+        .missing_slots(&edit.draft.parameters)
+        .map(|slot| {
+            let label = match slot_unit(slot) {
+                Some(u) => format!("+ {} ({})", slot.name, u.glyph()),
+                None => format!("+ {}", slot.name),
+            };
+            button(container(text(label).size(TS.body).color(text_c)).padding([SP.xs, SP.m]))
+                .on_press(send(BrowserEditMsg::AddSlotParam {
+                    name: slot.name.clone(),
+                }))
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: None,
+                    text_color: text_c,
+                    border: Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border,
+                    },
+                    ..iced::widget::button::Style::default()
+                })
+                .into()
+        })
+        .collect();
+    if buttons.is_empty() {
+        return None;
+    }
+    Some(
+        column![
+            text("Template parameters").size(TS.caption).color(muted),
+            Row::with_children(buttons).spacing(SP.s).wrap(),
+            Space::new().height(SP.s),
+        ]
+        .spacing(SP.xs)
+        .into(),
+    )
 }
 
 /// One parameter row: key, number field with its prefix picker, unit,

@@ -498,6 +498,8 @@ pub struct LibraryState {
     pub drift: super::drift::DriftState,
     /// A symbol Delete waiting for the user's answer (#1845).
     pub pending_symbol_delete: Option<super::symbol_delete::PendingSymbolDelete>,
+    /// Last serial handed to a symbol-Delete warning (#1903).
+    pub symbol_delete_serial: u64,
     /// Latest switch request per placed symbol (#1230).
     pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in
@@ -850,6 +852,9 @@ pub struct ComponentsRowDrag {
     pub key: ComponentsPanelRowKey,
     pub start: (f32, f32),
     pub started: bool,
+    /// The part was read for the cursor ghost: the pointer reached the
+    /// schematic canvas while dragging, so the part is (or is being) attached.
+    pub armed: bool,
 }
 
 /// What a row menu item does.
@@ -928,6 +933,7 @@ mod picker_cache;
 mod picker_cache_tests;
 mod placed_part;
 mod preview;
+mod preview_history;
 mod refresh;
 #[cfg(test)]
 mod refresh_tests;
@@ -947,6 +953,7 @@ pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
+pub use preview_history::{EditScope, RowHistory};
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;
 pub use stock_copy::STOCK_LIBRARY_ID;

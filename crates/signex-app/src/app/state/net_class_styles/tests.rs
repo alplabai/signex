@@ -112,14 +112,17 @@ fn resolved(
     } else {
         (
             signex_net::element_class_styles(netlist, &key.classes),
-            signex_net::element_net_names(netlist),
+            signex_net::element_net_names(netlist, &key.classes),
         )
     };
     ResolvedProject {
         project,
         key,
+        seq: 0,
         styles,
         nets,
+        placed_styles: Default::default(),
+        placed_nets: Default::default(),
         warnings: Vec::new(),
     }
 }
@@ -308,7 +311,11 @@ fn a_late_answer_for_a_project_that_moved_on_is_dropped() {
     let sheet = sheet_with_net(wire_id, "VCC");
     let netlist = signex_net::build_netlist(&sheet);
     let mut cache = NetClassStyleCache::default();
-    let (older, newer) = (key(1, &classes), key(2, &classes));
+    // The class table moved on: the answer joins a table that no longer
+    // exists, however recent its connectivity.
+    let mut dotted = dashed_class("Power", "VCC");
+    dotted.style.line = NetLineStyle::Dotted;
+    let (older, newer) = (key(1, &classes), key(1, &[dotted]));
     cache.want(PROJECT, &older);
     cache.want(PROJECT, &newer);
 
@@ -318,6 +325,56 @@ fn a_late_answer_for_a_project_that_moved_on_is_dropped() {
 
     assert_eq!(applied, Applied::default());
     assert!(cache.is_empty(), "the stale answer must not be stored");
+}
+
+#[test]
+fn an_answer_for_older_connectivity_is_drawn_while_the_newer_one_resolves() {
+    let wire_id = Uuid::from_u128(1);
+    let classes = [dashed_class("Power", "VCC")];
+    let netlist = signex_net::build_netlist(&sheet_with_net(wire_id, "VCC"));
+    let mut cache = NetClassStyleCache::default();
+    // Continuous editing: a new connectivity stamp before each answer lands.
+    let (first, second) = (key(1, &classes), key(2, &classes));
+    cache.want(PROJECT, &first);
+    let first_seq = cache.request_seq(PROJECT);
+    cache.want(PROJECT, &second);
+    let second_seq = cache.request_seq(PROJECT);
+    assert!(first_seq < second_seq);
+
+    let applied = cache.apply(&ResolvedStyles {
+        projects: vec![ResolvedProject {
+            seq: first_seq,
+            ..resolved(PROJECT, first.clone(), &netlist)
+        }],
+    });
+    assert!(applied.styles_changed, "the style must not freeze");
+    assert!(cache.styles().contains_key(&wire_id));
+    assert!(
+        !cache.want(PROJECT, &second),
+        "the newer key is still awaited"
+    );
+
+    // The newer answer replaces it, and the older one never comes back.
+    let renamed = signex_net::build_netlist(&sheet_with_net(wire_id, "SDA"));
+    cache.apply(&ResolvedStyles {
+        projects: vec![ResolvedProject {
+            seq: second_seq,
+            ..resolved(PROJECT, second, &renamed)
+        }],
+    });
+    assert!(cache.styles().is_empty());
+    let late = cache.apply(&ResolvedStyles {
+        projects: vec![ResolvedProject {
+            seq: first_seq,
+            ..resolved(PROJECT, first, &netlist)
+        }],
+    });
+    assert_eq!(
+        late,
+        Applied::default(),
+        "an older answer never replaces a newer"
+    );
+    assert!(cache.styles().is_empty());
 }
 
 #[test]
@@ -353,15 +410,23 @@ fn going_back_to_the_stored_key_cancels_the_answer_in_flight() {
     let mut cache = NetClassStyleCache::default();
     let stored = key(1, &classes);
     cache.want(PROJECT, &stored);
+    let stored_seq = cache.request_seq(PROJECT);
     cache.apply(&ResolvedStyles {
-        projects: vec![resolved(PROJECT, stored.clone(), &netlist)],
+        projects: vec![ResolvedProject {
+            seq: stored_seq,
+            ..resolved(PROJECT, stored.clone(), &netlist)
+        }],
     });
     let left = key(2, &classes);
     cache.want(PROJECT, &left);
+    let left_seq = cache.request_seq(PROJECT);
 
     assert!(!cache.want(PROJECT, &stored), "already held");
     let applied = cache.apply(&ResolvedStyles {
-        projects: vec![resolved(PROJECT, left, &netlist)],
+        projects: vec![ResolvedProject {
+            seq: left_seq,
+            ..resolved(PROJECT, left, &netlist)
+        }],
     });
 
     assert_eq!(applied, Applied::default());
@@ -499,4 +564,46 @@ fn the_gate_is_open_only_when_a_sheet_or_a_project_changed() {
         "the volume probe moved the case fold, so the stitch is stale"
     );
     assert!(cache.needs_refresh(8, &[]), "the project was closed");
+}
+
+#[test]
+fn a_sheet_placed_twice_draws_and_names_each_placement_on_its_own() {
+    use signex_types::schematic::InstancePath;
+    let (a, b) = (
+        InstancePath::from_chain(vec![Uuid::from_u128(500)]),
+        InstancePath::from_chain(vec![Uuid::from_u128(501)]),
+    );
+    let shared = Uuid::from_u128(7);
+    let style = NetClassStyle {
+        line: NetLineStyle::Dashed,
+        ..Default::default()
+    };
+    let mut cache = NetClassStyleCache::default();
+    let key = key(1, &[NetClass::named("Fast")]);
+    assert!(cache.want(PROJECT, &key));
+    let mut answer = resolved(PROJECT, key, &Default::default());
+    answer.seq = cache.request_seq(PROJECT);
+    answer.placed_styles = [(b.clone(), [(shared, style)].into())].into();
+    answer.placed_nets = [
+        (a.clone(), [(shared, "/A/SIG".to_string())].into()),
+        (b.clone(), [(shared, "/B/SIG".to_string())].into()),
+    ]
+    .into();
+    let applied = cache.apply(&ResolvedStyles {
+        projects: vec![answer],
+    });
+
+    assert!(applied.styles_changed && applied.nets_changed);
+    assert!(cache.styles_in(Some(&b)).contains_key(&shared));
+    assert!(
+        !cache.styles_in(Some(&a)).contains_key(&shared),
+        "the placement whose net is not styled draws no style"
+    );
+    assert_eq!(cache.net_in(PROJECT, shared, Some(&a)), Some("/A/SIG"));
+    assert_eq!(cache.net_in(PROJECT, shared, Some(&b)), Some("/B/SIG"));
+    assert_ne!(
+        cache.revision_in(Some(&a)),
+        cache.revision_in(Some(&b)),
+        "switching placement must repaint the canvas"
+    );
 }

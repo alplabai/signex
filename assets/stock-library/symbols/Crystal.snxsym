@@ -13,8 +13,8 @@ anchor = [
 ]
 pins_tsv = '''
 number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
-1	1	Passive	-3.81	0	Right	2.54					true	false	None	None	None	None	false	false	1
-2	2	Passive	3.81	0	Left	2.54					true	false	None	None	None	None	false	false	1
+1	1	Passive	-3.81	0	Right	2.54					false	false	None	None	None	None	false	false	1
+2	2	Passive	3.81	0	Left	2.54					false	false	None	None	None	None	false	false	1
 '''
 designator = "Y?"
 comment = "*"

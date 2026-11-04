@@ -55,7 +55,7 @@ use crate::primitive::{Footprint, PrimitiveRef, SimModel, Symbol};
 /// `.snxlib` file path so the same `library_id` mounted at two
 /// distinct on-disk locations is allowed. Path-less adapters
 /// (`DatabaseAdapter`) fall back to keying by `library_id`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MountKey {
     /// File-backed adapter — the `.snxlib` absolute path.
     Path(PathBuf),
@@ -141,19 +141,37 @@ impl LibrarySet {
 
     /// Replace whatever adapter is mounted at `lib`'s mount key with
     /// `lib`. Drops the previous adapter and returns it (or `None` if
-    /// no previous mount existed). It skips the duplicate-id check of
-    /// [`Self::mount`]: the caller replaces a library at its own path and
-    /// must not hand it another mounted library's id.
-    pub fn remount(&mut self, lib: Box<dyn LibraryAdapter>) -> Option<Arc<dyn LibraryAdapter>> {
+    /// no previous mount existed).
+    ///
+    /// Returns `Conflict`, leaving the set unchanged, when another mount
+    /// carries `lib`'s `library_id` (#1894): a replacement must not hand
+    /// the set a second library under an id it already serves.
+    pub fn remount(
+        &mut self,
+        lib: Box<dyn LibraryAdapter>,
+    ) -> Result<Option<Arc<dyn LibraryAdapter>>, LibraryError> {
         let key = MountKey::for_adapter(lib.as_ref());
-        self.libs.insert(key, Arc::from(lib))
+        let id = lib.library_id();
+        if let Some(other) = self
+            .libs
+            .iter()
+            .filter(|(k, a)| **k != key && a.library_id() == id)
+            .map(|(k, _)| k)
+            .min()
+        {
+            return Err(LibraryError::Conflict(format!(
+                "cannot replace the library mounted at {}: its library id ({id}) \
+                 is already used by {}",
+                describe_key(&key),
+                describe_key(other)
+            )));
+        }
+        Ok(self.libs.insert(key, Arc::from(lib)))
     }
 
-    /// Unmount the first adapter matching `library_id` and return it
-    /// (or `None` if no adapter is registered under that id).
-    ///
-    /// When two file-backed adapters share an id, the "first match"
-    /// is unspecified — callers needing a specific mount should use
+    /// Unmount the adapter matching `library_id` and return it (or `None`
+    /// if no adapter is registered under that id). Mounting keeps ids
+    /// unique; callers that hold a path should still prefer
     /// [`Self::unmount_by_path`].
     pub fn unmount(&mut self, library_id: Uuid) -> Option<Arc<dyn LibraryAdapter>> {
         let key = self.find_key_for_id(library_id)?;
@@ -316,17 +334,27 @@ impl LibrarySet {
     }
 
     fn find_adapter_for_id(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
-        self.libs
-            .values()
-            .find(|lib| lib.library_id() == library_id)
-            .map(|b| b.as_ref())
+        let key = self.find_key_for_id(library_id)?;
+        self.libs.get(&key).map(|b| b.as_ref())
     }
 
+    /// The mount serving `library_id`. Ids are unique by construction;
+    /// should two ever share one, the lowest mount key wins every time
+    /// instead of whichever the hash map yields first (#1894).
     fn find_key_for_id(&self, library_id: Uuid) -> Option<MountKey> {
         self.libs
             .iter()
-            .find(|(_, lib)| lib.library_id() == library_id)
-            .map(|(k, _)| k.clone())
+            .filter(|(_, lib)| lib.library_id() == library_id)
+            .map(|(k, _)| k)
+            .min()
+            .cloned()
+    }
+}
+
+fn describe_key(key: &MountKey) -> String {
+    match key {
+        MountKey::Path(p) => p.display().to_string(),
+        MountKey::Id(id) => format!("library {id}"),
     }
 }
 
@@ -831,7 +859,9 @@ mod tests {
         // remount under same mount key replaces the adapter and
         // returns the previous one so the caller can decide to drop it
         // or hand it elsewhere.
-        let prev = set.remount(Box::new(FakeAdapter::new(lib_id).with_symbol(second)));
+        let prev = set
+            .remount(Box::new(FakeAdapter::new(lib_id).with_symbol(second)))
+            .expect("same key, same id");
         assert!(prev.is_some());
 
         // First UUID no longer resolves; second does.
@@ -850,5 +880,59 @@ mod tests {
 
         // Suppress unused warning while keeping the symbol around for clarity.
         let _ = first.name;
+    }
+
+    /// #1894: replacing the mount at one path with a library that carries
+    /// another mount's id is refused and changes nothing.
+    #[test]
+    fn remount_refuses_an_id_another_mount_serves() {
+        let (id_a, id_b) = (Uuid::now_v7(), Uuid::now_v7());
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(
+            FakeAdapter::new(id_a).with_path("/tmp/a/a.snxlib"),
+        ))
+        .unwrap();
+        set.mount(Box::new(
+            FakeAdapter::new(id_b).with_path("/tmp/b/b.snxlib"),
+        ))
+        .unwrap();
+        let clash = set.remount(Box::new(
+            FakeAdapter::new(id_a).with_path("/tmp/b/b.snxlib"),
+        ));
+        let Err(LibraryError::Conflict(message)) = clash else {
+            panic!("remount onto another mount's id must be refused");
+        };
+        assert!(message.contains("/tmp/a/a.snxlib"), "{message}");
+        assert_eq!(set.len(), 2);
+        assert_eq!(
+            set.get(id_b).and_then(|l| l.library_file_path()),
+            Some(Path::new("/tmp/b/b.snxlib"))
+        );
+        assert_eq!(
+            set.get(id_a).and_then(|l| l.library_file_path()),
+            Some(Path::new("/tmp/a/a.snxlib"))
+        );
+    }
+
+    /// #1894: even with several mounts under one id, a lookup answers the
+    /// same mount every time, not whichever the hash map yields first.
+    #[test]
+    fn a_lookup_under_a_shared_id_answers_the_same_mount_every_time() {
+        let id = Uuid::now_v7();
+        for _ in 0..32 {
+            let mut set = LibrarySet::new();
+            for path in ["/tmp/z/z.snxlib", "/tmp/m/m.snxlib", "/tmp/a/a.snxlib"] {
+                let lib: Arc<dyn LibraryAdapter> = Arc::new(FakeAdapter::new(id).with_path(path));
+                set.libs.insert(MountKey::Path(PathBuf::from(path)), lib);
+            }
+            assert_eq!(
+                set.get(id).and_then(|l| l.library_file_path()),
+                Some(Path::new("/tmp/a/a.snxlib"))
+            );
+            assert_eq!(
+                set.find_key_for_id(id),
+                Some(MountKey::Path(PathBuf::from("/tmp/a/a.snxlib")))
+            );
+        }
     }
 }

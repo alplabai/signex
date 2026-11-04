@@ -10,7 +10,7 @@ disk?" is answered by `DocumentState::is_document_dirty(path)`
 |---|---|---|
 | Symbol or footprint draft | the editor's own `dirty` (private) | Roughly a hundred editor update sites flip it with `&mut editor` and no workspace state. |
 | Schematic sheet, PCB, `.snxprj`, `library.toml` | a path in `DirtyDocuments` (private) | The mark must outlive the tab: a parked engine stays dirty after its tab closed. |
-| Component editor row | `LibraryState.editors[..].dirty` | Keyed by row, not file; the tab dot reads it through `tab_bar::dirty_tab_paths`. |
+| Component editor row | `LibraryState.editors[..].dirty`, derived from its `RowHistory` | Keyed by row, not file; the tab dot reads it through `tab_bar::dirty_tab_paths`. |
 
 Everything else is derived. `TabInfo` has no dirty flag: the tab dot, the
 title-bar "N unsaved", the quit and close-project gates, Save All, the
@@ -163,6 +163,89 @@ own first step off the history.
 
 Undo and Redo own the flag: the symbol canvas's Ctrl+Z / Ctrl+Y
 (`SymbolEditorMsg::Undo`) must not call `mark_dirty` afterwards.
+
+## Component editor row save point (#1854)
+
+A Component editor keeps whole-row snapshots (`library/state/preview_history.rs`,
+depth 100) and the same `SavePoint` as a draft. Ctrl+Z / Ctrl+Y in the tab step
+it (`handlers/component_history.rs`); versions, pins and the base revision stay
+the live row's, only the edits move, and the typed-but-uncommitted buffers are
+dropped. An inline edit that changed the row is one step
+(`begin_edit` / `finish_edit` around `apply_inline_edit` and the save-time buffer
+flush). The flag after Undo, Redo or a landed save is "away from the saved
+position". A half-typed value in `params_edit_buf` counts as unsaved
+(`has_unsaved_edits`) only where a reload or a cascade rebase decides whether
+to replace the row; the close, quit and reopen gates read `.dirty`. The first
+Ctrl+Z with a half-typed value only drops the typed text; the next one steps.
+
+- The point is set where the save snapshot is taken (`begin_save`, beside
+  `saving_row`). A row with a write in flight stays dirty whatever Undo does;
+  the landing re-derives the flag, and a landed copy that differs from the row
+  on screen (`edited_since_save`) is dirty and keeps the point, so undoing back
+  to the saved copy reads clean.
+- A failed or abandoned write (`abort_save`) forgets the point.
+- Forgotten, so the row stays dirty until the next save: an edit after undoing
+  below the point, the saved step evicted at depth 100, and an edit that marks
+  the preview dirty without changing the row (the simulation model, which the
+  snapshots do not hold).
+- A re-bound primitive (an edit that changes a primitive reference, and the
+  bind from the picker) drops every step: a snapshot cannot hold the resolved
+  symbol, footprint or model. The row keeps whatever dirtiness it had.
+- An alternate symbol added from the picker is one step like an inline edit.
+  A bind whose write fails leaves the row dirty and forgets the point. A write
+  by the browser, a modal or a cascade to a row forgets the point of every
+  editor of it (a clean editor's reload yields to an edit typed first), since
+  it names disk content the library no longer holds. A cascade's pins and
+  version are also carried into every undo and redo step, so stepping never
+  brings back a pre-cascade pin (#1840).
+- Every edit is one step; there is no coalescing of keystrokes, so about 100
+  edits evict the opened state and undo can then no longer read clean.
+- Staged PDFs are kept while any undo or redo step pins them, so an undo to a
+  replaced pick still has bytes to write.
+- A reload replaces the editor state, so its history is new and the row clean;
+  Close and Discard remove the state with its history. There is no autosave
+  recovery for a row, so no recovered copy starts clean.
+
+The title-bar count still leaves a Component row out (see "Readers that differ").
+
+## Project file save point (#1854)
+
+The `.snxprj` has three undo histories (the Project tab's General and
+Parameters fields, the stored ERC rules, the net-class table), each stepped
+separately, so no single stack position names the saved state. The one cursor
+is the bytes the file holds (`state/dirty/project_history.rs`): the project as
+`encode_project` writes it at the last save, or at the moment before its first
+history edit while it was clean. After any history step (edit, undo, redo) the
+project is clean exactly when it encodes to those bytes, nothing outside the
+histories marked it, and no write is in flight. That needs no hook in the
+histories, so eviction at depth 100, a coalesced typing run and a cut redo
+branch cannot leave a stale position behind.
+
+- `note_project_clean_state` runs before a history edit; `sync_project_history_dirty`
+  after any history step. The three paths (`project_tab/update.rs`,
+  `handlers/erc/rules_edit.rs`, the net-class panel and `pick_undo.rs`) use them
+  instead of `mark_document_dirty`.
+- A save that lands clean records the cursor (`mark_document_clean`). A write that
+  landed while the project was edited records the bytes it wrote
+  (`note_project_bytes_on_disk`), so undo back to them is clean unless a
+  non-history edit was pending (that stays until a clean save); when a newer
+  write is still to land the cursor is unknown until it does.
+- The disk-only project updates (Add New Schematic, delete, sheet rename, Save
+  As repoint) rewrite the `.snxprj` and record the bytes they wrote the same
+  way, without clearing the dirty mark: undoing the project back to exactly the
+  file reads clean.
+- A discard of excluded or deleted documents (`discard_documents_where`) records
+  no saved state.
+- Forgotten, so the project stays dirty until the next save: a failed write
+  (`forget_project_saved_state`), a discard (`clear_document_dirty`), a rename or
+  Save As (`rekey_document_dirty`), and a project that was already dirty when its
+  first history edit came in.
+- The roughly twenty edits outside the histories (a library added or removed,
+  a sheet list change, a sheet reference rewrite, a Save As repoint)
+  keep `mark_document_dirty`: they sit in `external`, so undo never hides them and
+  only a save clears them. A library rename that patches the saved `.snxprj` on
+  disk neither marks nor records bytes: memory already carries the rename, and a
+  project dirty from a history edit before it cannot undo back to clean.
 
 ## Why a draft can also sit in the set
 

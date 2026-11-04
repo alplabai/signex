@@ -189,6 +189,10 @@ pub(super) fn commit_param_buffer(
         .unwrap_or(SiPrefix::One);
     let slot = measurement_slot(template, key);
     modal.note = None;
+    if let Some(reason) = super::slot_param::numeric_slot_refusal(template, key, &value) {
+        modal.error = Some(format!("Parameter \"{key}\": {reason}."));
+        return;
+    }
     match modal_param_value(value, &unit, prefix, modal.draft.parameters.get(key), slot) {
         Ok(pv) => {
             modal.draft.parameters.insert(key.to_string(), pv);
@@ -285,6 +289,9 @@ pub(super) fn uncommitted_param_edits(
         });
         if untouched {
             continue;
+        }
+        if let Some(reason) = super::slot_param::numeric_slot_refusal(template, key, value) {
+            return Err((key.clone(), reason));
         }
         match modal_param_value(
             value.clone(),

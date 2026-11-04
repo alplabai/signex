@@ -91,7 +91,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
 
     // Pad Features.
     col = col.push(
-        container(text("Pad Features").size(9).color(muted))
+        container(text("Pad Features").size(TS.caption).color(muted))
             .padding([6.0, SP.m])
             .width(Length::Fill),
     );
@@ -118,7 +118,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
 
     // Testpoint flags.
     col = col.push(
-        container(text("Testpoint").size(9).color(muted))
+        container(text("Testpoint").size(TS.caption).color(muted))
             .padding([6.0, SP.m])
             .width(Length::Fill),
     );
@@ -154,7 +154,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // Pad Stack overrides (the bool-typed subset; expression-typed
     // mask/paste margins stay sketch-parameterised).
     col = col.push(
-        container(text("Pad Stack").size(9).color(muted))
+        container(text("Pad Stack").size(TS.caption).color(muted))
             .padding([6.0, SP.m])
             .width(Length::Fill),
     );
@@ -210,7 +210,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // Hole Details (THT pads only).
     if p.has_drill {
         col = col.push(
-            container(text("Hole Details").size(9).color(muted))
+            container(text("Hole Details").size(TS.caption).color(muted))
                 .padding([6.0, SP.m])
                 .width(Length::Fill),
         );

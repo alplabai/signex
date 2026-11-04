@@ -104,9 +104,30 @@ fn element_net_names_use_the_netlist_name_and_the_first_net_wins() {
     let netlist = Netlist {
         nets: vec![net(1, "/LOCAL", &[a]), net(2, "OTHER", &[a, b])],
     };
-    let names = element_net_names(&netlist);
+    let names = element_net_names(&netlist, &[]);
     assert_eq!(names[&a], "/LOCAL");
     assert_eq!(names[&b], "OTHER");
+}
+
+#[test]
+fn a_shared_element_is_named_by_the_net_whose_style_is_drawn() {
+    let shared = Uuid::from_u128(1);
+    let netlist = Netlist {
+        nets: vec![net(1, "/A/SIG", &[shared]), net(2, "/B/SIG", &[shared])],
+    };
+    let color = Some(Color {
+        r: 255,
+        g: 0,
+        b: 0,
+        a: 255,
+    });
+    let classes = [styled("Fast", &["/B/SIG"], &[], color)];
+    assert!(element_class_styles(&netlist, &classes).contains_key(&shared));
+    assert_eq!(
+        element_net_names(&netlist, &classes)[&shared],
+        "/B/SIG",
+        "the picker must name the net the canvas styles"
+    );
 }
 
 #[test]

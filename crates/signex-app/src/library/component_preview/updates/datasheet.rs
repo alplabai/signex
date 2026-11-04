@@ -154,9 +154,7 @@ pub(super) fn apply_upload_result(
             edit_document(state, target, |doc| {
                 doc.source = DatasheetRef::hash_pinned(hash, filename);
             });
-            // A replaced pick is spent: only PDFs the row pins (or the copy
-            // being saved pins) stay staged.
-            state.prune_staged_datasheets();
+            // Pruning waits for `finish_edit`, which knows the undo step.
         }
     }
 }
@@ -275,6 +273,18 @@ mod tests {
         Some(Ok(picked(b"%PDF-1.4 datasheet", name)))
     }
 
+    /// An upload as `apply_inline_edit` runs it: one undo step, then the prune.
+    fn upload(
+        state: &mut ComponentPreviewState,
+        index: usize,
+        doc: &DatasheetDoc,
+        file: Option<Result<PickedFile, String>>,
+    ) {
+        let scope = state.begin_edit();
+        apply_upload_result(state, index, doc, file);
+        state.finish_edit(scope);
+    }
+
     fn refused() -> Option<Result<PickedFile, String>> {
         Some(Err("this file is not a PDF".into()))
     }
@@ -302,20 +312,39 @@ mod tests {
         let mut state = fixture();
         set_mode(&mut state, 0, DatasheetMode::PinnedPdf);
         let doc = state.row.documents()[0].clone();
-        apply_upload_result(&mut state, 0, &doc, pdf("a.pdf"));
+        upload(&mut state, 0, &doc, pdf("a.pdf"));
         let doc = state.row.documents()[0].clone();
         let second = Some(Ok(picked(b"%PDF-1.4 second", "b.pdf")));
-        apply_upload_result(&mut state, 0, &doc, second);
+        upload(&mut state, 0, &doc, second);
         assert_eq!(
             state.staged_datasheets.len(),
-            1,
-            "the replaced pick is pruned"
+            2,
+            "the replaced pick stays staged for an undo"
         );
         let used = state.staged_assets_in_use();
         assert_eq!(used.len(), 1);
         assert_eq!(used[0].bytes.as_ref(), b"%PDF-1.4 second");
         set_url(&mut state, 0, "https://x.example/d.pdf".into());
         assert!(state.staged_assets_in_use().is_empty());
+    }
+
+    #[test]
+    fn an_undo_to_a_replaced_pick_still_has_its_bytes_to_save() {
+        let mut state = fixture();
+        set_mode(&mut state, 0, DatasheetMode::PinnedPdf);
+        let doc = state.row.documents()[0].clone();
+        upload(&mut state, 0, &doc, pdf("a.pdf"));
+        let doc = state.row.documents()[0].clone();
+        upload(
+            &mut state,
+            0,
+            &doc,
+            Some(Ok(picked(b"%PDF-1.4 second", "b.pdf"))),
+        );
+        assert!(state.step_history(true));
+        let used = state.staged_assets_in_use();
+        assert_eq!(used.len(), 1, "the row pins a PDF whose bytes are gone");
+        assert_eq!(used[0].bytes.as_ref(), b"%PDF-1.4 datasheet");
     }
 
     #[test]

@@ -139,6 +139,9 @@ impl LibraryState {
             return;
         };
         let pn = state.row.internal_pn.to_string();
+        // One undo step, so the saved position cannot name a row that
+        // already holds the alternate.
+        let scope = state.begin_edit();
         let outcome = if state.edit_epoch != epoch_at_plan || state.row.symbol_ref != default_ref {
             // The pin check ran against a row that has since changed.
             Err(
@@ -161,6 +164,7 @@ impl LibraryState {
             Ok(()) => {
                 state.alternate_error = None;
                 state.mark_dirty();
+                state.finish_edit(scope);
             }
             Err(why) => {
                 crate::diagnostics::log_warning(format!(

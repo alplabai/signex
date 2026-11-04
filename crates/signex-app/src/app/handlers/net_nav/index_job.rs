@@ -10,6 +10,7 @@ use crate::app::runtime::net_class_styles::{PlannedProject, plan_projects};
 use crate::app::state::ProjectId;
 use crate::app::state::net_class_styles::ProjectKey;
 use crate::app::state::net_nav::{IndexOutcome, Pending, PendingNetAction, ProjectNetData, Stored};
+use crate::app::stitched_netlist::StitchSlot;
 
 use super::super::super::*;
 use super::messages;
@@ -30,6 +31,8 @@ pub(crate) struct NetIndexJob {
     project: ProjectId,
     key: ProjectKey,
     project_dir: PathBuf,
+    /// Shared with the net-class style job of the same project and key.
+    stitch: StitchSlot,
 }
 
 impl NetIndexJob {
@@ -40,18 +43,21 @@ impl NetIndexJob {
             project,
             key,
             project_dir,
+            stitch,
         } = self;
-        let stitched = crate::app::stitched_netlist::stitched_index_from(
-            &open,
-            &key.pages,
-            &key.root,
-            key.fold,
-            Some(project_dir.clone()),
-        );
-        let result = match stitched.index {
+        let stitched = stitch.get_or_init(|| {
+            crate::app::stitched_netlist::stitched_index_from(
+                &open,
+                &key.pages,
+                &key.root,
+                key.fold,
+                Some(project_dir.clone()),
+            )
+        });
+        let result = match &stitched.index {
             Some(index) => Ok(Arc::new(ProjectNetData {
-                index,
-                paths: stitched.sheet_paths,
+                index: index.clone(),
+                paths: stitched.sheet_paths.clone(),
                 base_dir: Some(project_dir),
                 fold: key.fold,
                 classes: key.classes.clone(),
@@ -65,7 +71,7 @@ impl NetIndexJob {
             project,
             key,
             result,
-            warnings: stitched.warnings,
+            warnings: stitched.warnings.clone(),
         }
     }
 }
@@ -93,14 +99,20 @@ impl Signex {
     }
 
     /// The build for a planned project: a snapshot of its open sheets.
-    fn job_for(&self, planned: PlannedProject) -> NetIndexJob {
+    fn job_for(&mut self, planned: PlannedProject) -> NetIndexJob {
         let open =
             project_sheets::open_sheets_snapshot_of(&self.document_state, &planned.open_paths);
+        let stitch = self
+            .document_state
+            .net_nav
+            .stitch_share
+            .claim(planned.project, &planned.key);
         NetIndexJob {
             open: Arc::new(open),
             project: planned.project,
             key: planned.key,
             project_dir: planned.project_dir,
+            stitch,
         }
     }
 

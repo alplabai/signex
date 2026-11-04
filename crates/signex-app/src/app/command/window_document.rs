@@ -81,6 +81,29 @@ impl Signex {
         })
     }
 
+    /// The Component editor a non-main window shows, when it shows one: its
+    /// Undo / Redo step that editor's row history, never the main window's
+    /// tab.
+    pub(super) fn window_component_editor(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> Option<crate::library::state::EditorAddress> {
+        let WindowDocument::Tab(index) = self.document_of_window(window)? else {
+            return None;
+        };
+        let tab = self
+            .document_state
+            .tabs
+            .get(index)?
+            .kind
+            .as_component_editor()?;
+        Some(crate::library::state::EditorAddress::new(
+            tab.library_path.clone(),
+            tab.table.clone(),
+            tab.row_id,
+        ))
+    }
+
     /// Close Document typed in `window`, or `None` when `window` is the main
     /// window (or names none) and the ordinary handler applies.
     ///

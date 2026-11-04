@@ -4,22 +4,31 @@
 //! text: on a child sheet a local label `LOCAL` names the net `/LOCAL`, and a
 //! higher-ranked label or power port on the same net can name it instead.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::net::Netlist;
+use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::schematic::{Point, SchematicSheet, Wire};
 use uuid::Uuid;
 
 use crate::build::{anchor_choice, point_on_segment, pt_key};
 
 /// The netlist's net name for every wire and junction in it. An element on
-/// several nets (a sheet instantiated twice) takes the first net listed, the
-/// one [`element_class_styles`](super::element_class_styles) also styles it by.
-pub fn element_net_names(netlist: &Netlist) -> HashMap<Uuid, String> {
+/// several nets (a sheet instantiated twice) is named by the first net
+/// [`element_class_styles`](super::element_class_styles) styles it by, so the
+/// name a picker shows is the net whose style is drawn; with no styled net it
+/// is the first net listed.
+pub fn element_net_names(netlist: &Netlist, classes: &[NetClass]) -> HashMap<Uuid, String> {
     let mut out = HashMap::new();
+    let mut styled = HashSet::new();
     for net in &netlist.nets {
+        let draws = first_matching_class(classes, &net.name).is_some_and(|c| !c.style.is_default());
         for id in net.wires.iter().chain(&net.junctions) {
-            out.entry(*id).or_insert_with(|| net.name.clone());
+            if draws && styled.insert(*id) {
+                out.insert(*id, net.name.clone());
+            } else {
+                out.entry(*id).or_insert_with(|| net.name.clone());
+            }
         }
     }
     out

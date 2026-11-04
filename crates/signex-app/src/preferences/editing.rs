@@ -41,7 +41,7 @@ pub(super) fn content_editing<'a>(
         .width(320),
         Space::new().width(Length::Fill),
         checkbox(draft_move_keeps_wires)
-            .size(16)
+            .size(TS.heading)
             .on_toggle(PrefMsg::DraftMoveKeepsWires),
     ]
     .align_y(iced::Alignment::Center);
@@ -57,7 +57,7 @@ pub(super) fn content_editing<'a>(
         .width(320),
         Space::new().width(Length::Fill),
         checkbox(draft_net_hover_enabled)
-            .size(16)
+            .size(TS.heading)
             .on_toggle(PrefMsg::DraftNetHoverEnabled),
     ]
     .align_y(iced::Alignment::Center);
@@ -73,7 +73,7 @@ pub(super) fn content_editing<'a>(
         .width(320),
         Space::new().width(Length::Fill),
         checkbox(draft_drag_direction_select)
-            .size(16)
+            .size(TS.heading)
             .on_toggle(PrefMsg::DraftDragDirectionSelect),
     ]
     .align_y(iced::Alignment::Center);
@@ -133,7 +133,7 @@ pub(super) fn content_editing<'a>(
         .width(320),
         Space::new().width(Length::Fill),
         checkbox(draft_autosave_enabled)
-            .size(16)
+            .size(TS.heading)
             .on_toggle(PrefMsg::DraftAutosaveEnabled),
     ]
     .align_y(iced::Alignment::Center);

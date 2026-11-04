@@ -79,6 +79,14 @@ impl Signex {
         else {
             return Vec::new();
         };
+        // Over the canvas the part itself follows the pointer.
+        let (px, py) = self.interaction_state.last_mouse_pos;
+        if drag.armed
+            && self.interaction_state.placement.is_some()
+            && self.canvas_bounds().contains(iced::Point::new(px, py))
+        {
+            return Vec::new();
+        }
         let key = &drag.key;
         let Some(pn) = self
             .library

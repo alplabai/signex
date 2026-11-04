@@ -44,9 +44,9 @@ pub mod global_prefs;
 pub mod split;
 pub mod stock;
 
-const PANEL_TEXT_SIZE: f32 = 11.0;
-const SECTION_HEADER_TEXT_SIZE: f32 = 12.0;
-const ROW_TEXT_SIZE: f32 = 10.0;
+const PANEL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
+const SECTION_HEADER_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.label;
+const ROW_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.caption;
 /// Pointer travel that turns a row press into a drag.
 pub(crate) const DRAG_THRESHOLD: f32 = ROW_TEXT_SIZE;
 /// Most rows built per library per frame; the rest are summarised by a

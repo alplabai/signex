@@ -19,6 +19,7 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
+use crate::library::editor::footprint::sketch_redundancy_task::dispatch_redundancy;
 use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
@@ -73,6 +74,8 @@ mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
+#[cfg(test)]
+mod component_save_point_tests;
 #[cfg(test)]
 mod save_all_cascade_tests;
 mod settings;
@@ -226,6 +229,12 @@ impl Signex {
                 row_id,
             } => self.handle_place_library_component(library_path, table, row_id),
             LibraryMessage::DriftChecked(report) => self.handle_library_drift_checked(*report),
+            LibraryMessage::SymbolDeleteClosedSheetsScanned(report) => {
+                self.handle_symbol_delete_closed_sheets_scanned(*report)
+            }
+            LibraryMessage::SymbolDeleteClosedSheetsVerified(verdict) => {
+                self.handle_symbol_delete_closed_sheets_verified(*verdict)
+            }
             LibraryMessage::LibraryUpdateSymbolsRead(read) => {
                 self.handle_library_update_symbols_read(*read)
             }

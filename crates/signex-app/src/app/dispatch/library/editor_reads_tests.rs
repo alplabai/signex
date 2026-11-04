@@ -235,6 +235,48 @@ fn an_alternate_symbol_picked_after_a_confirmed_reload_is_kept() {
     assert!(f.preview().dirty);
 }
 
+/// The alternate is one undo step: undoing the edit after it must not land
+/// on a row that reads clean while it still holds the unsaved alternate.
+#[test]
+fn undoing_an_edit_made_after_an_alternate_add_stays_dirty() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    settle_task(&mut f.app, pick);
+    assert_eq!(f.preview().row.alternate_symbols.len(), 1);
+    edit(&mut f, LifecycleState::Deprecated);
+
+    let preview = f.app.library.editors.get_mut(&f.address).unwrap();
+    assert!(preview.step_history(true));
+    assert_eq!(preview.row.alternate_symbols.len(), 1);
+    assert!(preview.dirty, "the alternate is not on disk");
+    assert!(preview.step_history(true), "the add itself is undoable");
+    assert!(preview.row.alternate_symbols.is_empty());
+    assert!(!preview.dirty, "back at the opened row");
+}
+
+#[test]
+fn a_failed_bind_write_leaves_the_row_dirty() {
+    let mut f = fixture();
+    f.app
+        .library
+        .editors
+        .get_mut(&f.address)
+        .unwrap()
+        .restart_history();
+    assert!(!f.preview().dirty);
+    let failure = crate::library::writes::WriteFailure {
+        reason: "read-only".into(),
+        row_changed: false,
+    };
+    let _ = f.app.preview_row_bound(f.address.clone(), Err(failure));
+    assert!(f.preview().dirty);
+    assert!(f.preview().history.is_dirty());
+}
+
 #[test]
 fn picking_an_alternate_symbol_reads_nothing_in_update() {
     let mut f = fixture();

@@ -18,7 +18,7 @@ use crate::library::editor::footprint::sketch_bake::{bake_solution, discard_fail
 use crate::library::editor::footprint::sketch_conflict::drop_dangling_selection;
 use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
 use crate::library::editor::footprint::sketch_solve_task::{
-    SolveOutcome, UnsolvedEdits, run_solve, snapshot_request,
+    SolveOutcome, UnsolvedEdits, run_solve_inline, snapshot_request,
 };
 use crate::library::editor::footprint::state::conflict::name_conflict;
 use crate::library::messages::FootprintEditorMsg;
@@ -57,7 +57,7 @@ pub(crate) fn settle_pending_inline(editor: &mut FootprintDocument) {
         let Some(request) = snapshot_request(editor) else {
             break;
         };
-        apply(editor, run_solve(request));
+        apply(editor, run_solve_inline(request));
     }
     editor.state.sketch_solve.supersede();
 }

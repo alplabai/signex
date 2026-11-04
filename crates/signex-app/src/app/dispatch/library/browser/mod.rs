@@ -15,6 +15,7 @@ mod modal_reload;
 mod param_commit;
 mod row_delete;
 mod row_save;
+mod slot_param;
 mod tables;
 
 use super::*;
@@ -461,6 +462,9 @@ impl Signex {
                         .parameters
                         .insert(key.clone(), signex_library::ParamValue::Text(String::new()));
                     modal.param_buf.insert(key, (String::new(), String::new()));
+                }
+                BrowserEditMsg::AddSlotParam { name } => {
+                    slot_param::add_slot_param(modal, &name, template);
                 }
                 BrowserEditMsg::DeleteParam { key } => {
                     modal.draft.parameters.remove(&key);

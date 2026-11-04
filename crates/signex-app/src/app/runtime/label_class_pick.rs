@@ -43,7 +43,11 @@ impl Signex {
         let sheet = document.engines.get(path)?.document();
         let label = sheet.labels.iter().find(|l| l.uuid == label_id)?;
         let wire = signex_net::wire_at_point(sheet, &label.position)?;
-        let net = self.ui_state.net_class_styles.net_of(project.id, wire)?;
+        let placement = self.shown_placement(path);
+        let net = self
+            .ui_state
+            .net_class_styles
+            .net_in(project.id, wire, placement.as_ref())?;
         Some(LabelClassPick {
             project: project.id,
             net: net.to_string(),
