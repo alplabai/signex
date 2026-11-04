@@ -4,11 +4,15 @@
 //! A sheet that cannot be read is reported as unchecked, never as unused: a
 //! failed read must not make a delete look safe.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
 use crate::app::CaseFold;
+
+use crate::app::project_sheets::assemble_from_seeds;
 
 use super::drift::split_lib_id;
 use super::symbol_delete::placed_on_sheets;
@@ -130,6 +134,9 @@ use crate::app::project_sheets::fold_key as key;
 /// Read every sheet the plan reaches, children included, and collect the
 /// ones that place `target`. A sheet visited twice is read once. Each sheet
 /// is keyed under the key rules of the project that reached it.
+///
+/// The hierarchy walk is the project assembler's (`assemble_from_seeds`); this
+/// only turns what it could not load into the unchecked list.
 pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetScan {
     let mut scan = ClosedSheetScan {
         placed: Vec::new(),
@@ -138,48 +145,60 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
         unfinished: false,
         stamps: Vec::new(),
     };
-    let mut visited = std::collections::HashSet::new();
-    let mut queue: Vec<(PathBuf, CaseFold)> = plan.seeds.clone();
-    while let Some((path, fold)) = queue.pop() {
-        let k = key(&path, fold);
-        if plan.open.iter().any(|o| key(o, fold) == k) || !visited.insert(k.clone()) {
-            continue;
+    let mut folds: Vec<CaseFold> = Vec::new();
+    for (_, fold) in &plan.seeds {
+        if !folds.contains(fold) {
+            folds.push(*fold);
         }
-        scan.visited.push(k);
-        let stamp = FileStamp::of(&path);
-        let sheet = match crate::app::project_sheets::load_sheet_disk(&path) {
-            Ok(Some(sheet)) => sheet,
+    }
+    for fold in folds {
+        let seeds: Vec<PathBuf> = plan
+            .seeds
+            .iter()
+            .filter(|(_, f)| *f == fold)
+            .map(|(p, _)| p.clone())
+            .collect();
+        // The assembler asks for each path just before it reads it, which is
+        // the moment the stamp must describe.
+        let stamped = RefCell::new(HashMap::new());
+        let set = assemble_from_seeds(
+            &|path| {
+                stamped
+                    .borrow_mut()
+                    .insert(path.to_path_buf(), FileStamp::of(path));
+                None
+            },
+            &seeds,
+            &plan.open,
+            fold,
+        );
+        let mut stamped = stamped.into_inner();
+        for (path, sheet) in &set.sheets {
+            scan.placed.extend(placed_on_sheets(
+                std::iter::once((path.as_path(), sheet)),
+                |id| target.matches(id),
+            ));
+            scan.visited.push(key(path, fold));
+            if let Some(stamp) = stamped.remove(path) {
+                scan.stamps.push((path.clone(), stamp));
+            }
+        }
+        for path in &set.absent {
+            scan.visited.push(key(path, fold));
             // Declared but absent: nothing was read, so nothing is known.
-            Ok(None) => {
-                scan.unreadable
-                    .push(format!("{} (file not found)", file_name(&path)));
-                continue;
-            }
-            Err(why) => {
-                scan.unreadable.push(format!("{} {why}", file_name(&path)));
-                continue;
-            }
-        };
-        scan.stamps.push((path.clone(), stamp));
-        scan.placed.extend(placed_on_sheets(
-            std::iter::once((path.as_path(), &sheet)),
-            |id| target.matches(id),
-        ));
-        let dir = path.parent().unwrap_or_else(|| Path::new(""));
-        for child in &sheet.child_sheets {
-            use crate::app::project_sheets::{
-                ChildReferenceRefusal, resolve_child_reference_quiet,
-            };
-            match resolve_child_reference_quiet(dir, &child.filename) {
-                Ok(resolved) => queue.push((resolved, fold)),
-                Err(ChildReferenceRefusal::Empty) => {}
-                Err(ChildReferenceRefusal::Escapes { reference, .. }) => {
-                    scan.unreadable.push(format!(
-                        "{}: child sheet {reference} is outside its parent sheet's folder",
-                        file_name(&path)
-                    ))
-                }
-            }
+            scan.unreadable
+                .push(format!("{} (file not found)", file_name(path)));
+        }
+        for (path, why) in &set.unreadable {
+            scan.visited.push(key(path, fold));
+            scan.unreadable.push(format!("{} {why}", file_name(path)));
+        }
+        for refused in &set.refused {
+            scan.unreadable.push(format!(
+                "{}: child sheet {} is outside its parent sheet's folder",
+                file_name(&refused.parent),
+                refused.reference
+            ));
         }
     }
     scan.placed.sort();
