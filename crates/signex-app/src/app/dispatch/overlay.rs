@@ -99,6 +99,21 @@ impl Signex {
             ProjectMsg::NavigatorAssembled(generation, assembly) => {
                 self.handle_navigator_assembled(generation, assembly)
             }
+            ProjectMsg::DescendRequested {
+                symbol,
+                path,
+                placement,
+            } => {
+                let task = self.descend_to_child_sheet(symbol, path, placement);
+                Task::batch([task, self.finish_update()])
+            }
+            ProjectMsg::PrimitiveOpenRequested(path) => {
+                let task = self.handle_open_primitive(path);
+                Task::batch([task, self.finish_update()])
+            }
+            ProjectMsg::WindowHierarchyAssembled(root, generation, assembly) => {
+                self.handle_window_hierarchy_assembled(&root, generation, assembly)
+            }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::Tab(msg) => {
                 self.dispatch_project_tab_message(msg);

@@ -82,6 +82,13 @@ impl Signex {
         if !navigates && self.refuse_read_only_write(&address.library_path) {
             return Task::none();
         }
+        // A delete of this library would discard the edit: refuse it with the
+        // editors' one message, leaving the copy as it was (#2045).
+        if let Some(refusal) = self.preview_edit_refusal(&address, &msg) {
+            rename_guard::log_refusal_once(&refusal);
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        }
         match msg {
             EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {

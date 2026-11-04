@@ -50,6 +50,9 @@ pub enum DockMessage {
     /// A row of the open dock tab context menu was picked.
     TabMenuActionPicked(DockTabAction),
     Panel(PanelMsg),
+    /// A dock message sent from an undocked document window; it runs against
+    /// the sheet that window shows (#1966).
+    ScopedToWindow(iced::window::Id, Box<DockMessage>),
     /// v0.9 Library panel message — wraps `crate::library::LibraryMessage`
     /// when the Library panel is active inside a dock region. The
     /// dispatcher unwraps this back into `Message::Library(_)`.

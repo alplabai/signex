@@ -106,7 +106,7 @@ pub(super) fn report_library_leftovers(name: &str, left: &[PathBuf]) {
         String::new()
     };
     crate::diagnostics::log_warning(format!(
-        "Deleted library {name}; {} file(s) were not deleted and were left: {}{tail}",
+        "Deleted library {name}; {} file(s) or folder(s) were left on disk: {}{tail}",
         left.len(),
         shown.join(", ")
     ));

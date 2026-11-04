@@ -68,15 +68,31 @@ impl Signex {
             .dirty_editors_matching(|root| path_is_under(root, target, fold))
     }
 
-    /// Say in Messages which unsaved editors the finished delete of `target`
-    /// takes with it: one may have gone dirty while the worker ran.
-    pub(super) fn report_editors_lost_to_delete(&self, target: &std::path::Path, fold: CaseFold) {
+    /// Say in Messages which unsaved editors closing the finished delete of
+    /// `target` drops: one may have gone dirty while the worker ran.
+    /// `deleted` is false when the file was already gone and this app removed
+    /// nothing; the editors are dropped all the same.
+    pub(super) fn report_editors_lost_to_delete(
+        &self,
+        target: &std::path::Path,
+        fold: CaseFold,
+        deleted: bool,
+    ) {
         for editor in self.dirty_editors_under(target, fold) {
-            crate::diagnostics::log_warning(format!(
-                "Deleted library {}: unsaved edits to {} were discarded with it.",
-                target.display(),
-                self.library.editor_label(&editor)
-            ));
+            let label = self.library.editor_label(&editor);
+            let line = if deleted {
+                format!(
+                    "Deleted library {}: unsaved edits to {label} were discarded with it.",
+                    target.display()
+                )
+            } else {
+                format!(
+                    "Library {} was already gone from disk: unsaved edits to {label} were \
+                     discarded when it was closed.",
+                    target.display()
+                )
+            };
+            crate::diagnostics::log_warning(line);
         }
     }
 

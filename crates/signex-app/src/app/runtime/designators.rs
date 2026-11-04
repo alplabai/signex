@@ -53,25 +53,45 @@ impl Signex {
     /// - `None` when the walk does not reach the sheet (or no project
     ///   hierarchy is known for it), and then `reference` is shown.
     ///
-    /// The Navigator's hierarchy describes the focused document's project, so
-    /// it is consulted only for the focused document; another path (an
-    /// undocked tab) keeps its recorded placement.
+    /// The hierarchy is the one of the project owning the sheet
+    /// ([`Self::hierarchy_describing`]), so an undocked window on another
+    /// project's sheet resolves through that project, not the focused one's
+    /// (#2021).
     pub(crate) fn shown_placement(&self, path: &std::path::Path) -> Option<InstancePath> {
-        let document_state = &self.document_state;
-        let recorded = document_state.tab_placements.get(path);
-        let hierarchy = document_state
-            .panel_ctx
-            .navigator
-            .hierarchy
-            .as_ref()
-            .filter(|_| document_state.active_path.as_deref() == Some(path));
-        let Some(hierarchy) = hierarchy else {
+        let recorded = self.document_state.tab_placements.get(path);
+        let Some((hierarchy, _)) = self.hierarchy_describing(path) else {
             return recorded.cloned();
         };
         let live = hierarchy.placements_of(path);
         match recorded {
             Some(recorded) if live.contains(recorded) => Some(recorded.clone()),
             _ => crate::app::state::default_placement(live),
+        }
+    }
+
+    /// Redraw every undocked window's designators from the hierarchies now
+    /// known; a window's canvas is otherwise only refreshed while it is the
+    /// active one.
+    pub(crate) fn refresh_window_designators(&mut self) {
+        let windows: Vec<_> = self
+            .ui_state
+            .windows
+            .iter()
+            .filter_map(|(id, kind)| match kind {
+                crate::app::state::WindowKind::UndockedTab { path, .. } => {
+                    Some((*id, path.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        for (id, path) in windows {
+            let designators = self.designators_for_path(&path);
+            if let Some(canvas) = self.interaction_state.canvases.get_mut(&id)
+                && canvas.designators != designators
+            {
+                canvas.designators = designators;
+                canvas.clear_content_cache();
+            }
         }
     }
 
@@ -104,14 +124,11 @@ impl Signex {
     pub(crate) fn known_single_placement(&self, path: &std::path::Path) -> bool {
         !self.shared_with_another_open_project(path)
             // A pending hierarchy may predate an edit that added a placement.
-            && self.navigator_is_settled()
             && self
-                .document_state
-                .panel_ctx
-                .navigator
-                .hierarchy
-                .as_ref()
-                .is_some_and(|h| h.is_complete() && h.placements_of(path).len() <= 1)
+                .hierarchy_describing(path)
+                .is_some_and(|(h, settled)| {
+                    settled && h.is_complete() && h.placements_of(path).len() <= 1
+                })
     }
 
     /// The commands that set `symbol`'s designator to `value` on the active
@@ -130,7 +147,10 @@ impl Signex {
     ///   check only sees open projects, so a second open project whose walk
     ///   is incomplete forces the entry branch for every sheet, shared or
     ///   not: safe, at the cost of a less simple file;
-    /// - with no placement shown (or the root chain), `reference`.
+    /// - with no placement shown (or the root chain), `reference`, except on
+    ///   a project's sheet whose hierarchy is not known yet: it may be placed
+    ///   more than once, so the edit is refused and the Messages panel says
+    ///   why (`designator_write_refusal`, #2021).
     pub(crate) fn designator_edit_commands(
         &self,
         symbol: uuid::Uuid,
@@ -142,6 +162,12 @@ impl Signex {
         let Some(engine) = self.document_state.active_engine() else {
             return Vec::new();
         };
+        if let Some(path) = active.filter(|_| placement.is_none())
+            && let Some(why) = self.designator_write_refusal(path)
+        {
+            crate::diagnostics::log_warning(format!("Designator edit refused: {why}."));
+            return Vec::new();
+        }
         signex_engine::designator_commands(
             engine.document(),
             symbol,

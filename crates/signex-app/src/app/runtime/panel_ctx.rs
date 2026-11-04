@@ -249,13 +249,32 @@ impl Signex {
         )
     }
 
+    /// Rebuild the panel contexts: the main window's, then those of the
+    /// undocked windows, each from the sheet its window shows.
     pub(crate) fn refresh_panel_ctx(&mut self) {
-        self.drop_pending_profile_update_for_other_project();
-        let fs_request = self.project_fs_request();
-        self.document_state.project_fs.want(fs_request);
+        self.refresh_main_panel_ctx();
+        self.refresh_window_panel_ctxs(None);
+    }
+
+    /// Rebuild the context in the main slot from the active document.
+    pub(crate) fn refresh_main_panel_ctx(&mut self) {
+        // The app-wide requests (project probe, row summaries, Navigator
+        // assembly, a pending profile update) belong to the main window. A
+        // window's refresh runs with its sheet swapped in and must not
+        // retarget them at that sheet's project.
+        let main_level = self.interaction_state.acting_window.is_none();
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
-        self.want_row_summaries();
-        let navigator = self.next_navigator_model(previous_navigator);
+        let navigator = if main_level {
+            self.drop_pending_profile_update_for_other_project();
+            let fs_request = self.project_fs_request();
+            self.document_state.project_fs.want(fs_request);
+            self.want_row_summaries();
+            let navigator = self.next_navigator_model(previous_navigator);
+            self.want_window_hierarchies();
+            navigator
+        } else {
+            previous_navigator
+        };
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /
         // `sheets` legacy singletons mirror whichever entry is `is_active`

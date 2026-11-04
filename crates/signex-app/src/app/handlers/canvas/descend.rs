@@ -28,6 +28,38 @@ impl Signex {
         let placement = self
             .focused_sheet_placement()
             .map(|placement| placement.child(sheet_symbol));
+        // An undocked window cannot switch sheets inside its swap. Its sheet
+        // symbol and placement are resolved here, against the window's sheet;
+        // the open itself is queued to run on the main window afterwards.
+        if self.interaction_state.acting_window.is_some() {
+            let path = self.resolve_held_spelling_now(path);
+            // An open child counts even before it has a file on disk.
+            let open = self.document_state.engines.contains_key(&path)
+                || self.document_state.tabs.iter().any(|tab| tab.path == path);
+            if !open && !path.exists() {
+                crate::diagnostics::log_warning(format!(
+                    "The sheet {} is missing; open its parent sheet in the main window to create it.",
+                    path.display()
+                ));
+                return Task::none();
+            }
+            return Task::done(Message::Project(ProjectMsg::DescendRequested {
+                symbol: sheet_symbol,
+                path,
+                placement,
+            }));
+        }
+        self.descend_to_child_sheet(sheet_symbol, path, placement)
+    }
+
+    /// The rest of a descent once the child's path and placement are known:
+    /// focus the sheet if it is open, else read it on a worker.
+    pub(crate) fn descend_to_child_sheet(
+        &mut self,
+        sheet_symbol: Uuid,
+        path: PathBuf,
+        placement: Option<InstancePath>,
+    ) -> Task<Message> {
         let mut open = SheetOpen::at(placement);
         open.create_for = Some(sheet_symbol);
         self.open_sheet(path, open)
@@ -56,7 +88,13 @@ impl Signex {
     /// for a referenced sheet opened directly, whose copy is unknown. Reads
     /// only state already in the Model: no file is touched.
     fn focused_sheet_placement(&self) -> Option<InstancePath> {
-        let active = self.active_tab_path()?;
+        // The sheet in view: inside a window's canvas event `active_path` is
+        // the window's sheet while `active_tab` is still the main window's.
+        let active = self
+            .document_state
+            .active_path
+            .clone()
+            .or_else(|| self.active_tab_path())?;
         if let Some(recorded) = self.document_state.tab_placements.get(&active) {
             return Some(recorded.clone());
         }

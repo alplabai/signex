@@ -86,6 +86,7 @@ impl DocumentState {
     /// those whose save is in flight (the snapshot reset the editor flag, the
     /// write has not landed, and a failed write leaves the draft dirty). The
     /// one collector the quit, Close Project and Close Library prompts share.
+    /// Discard cannot stop a save already in flight: that write still lands.
     pub fn dirty_primitive_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
         let symbols = self.symbol_editors.iter().filter(|(_, e)| e.is_dirty());
         let footprints = self.footprint_editors.iter().filter(|(_, e)| e.is_dirty());

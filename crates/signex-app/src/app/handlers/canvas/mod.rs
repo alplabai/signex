@@ -339,6 +339,9 @@ impl Signex {
     /// parked without a tab (#1135). `false` when no document holds the file.
     /// Touches no file.
     pub(crate) fn focus_open_sheet(&mut self, path: &std::path::Path) -> bool {
+        if self.sheet_switch_refused_in_window("Switching to a sheet") {
+            return false;
+        }
         if let Some(index) = self
             .document_state
             .tabs

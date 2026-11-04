@@ -74,10 +74,11 @@ fn chevron(open: bool) -> svg::Handle {
 /// `ctx.projects[].libraries[].root` rather than threading a
 /// separate slice. The panel context already carries the project
 /// info, so the dock's `view_region` signature stays narrow.
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     state: &'a LibraryState,
     ctx: &'a crate::panels::PanelContext,
     tokens: &'a ThemeTokens,
+    grid: details::symbol_canvas::SheetGrid,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let border_c = theme_ext::border_color(tokens);
@@ -172,6 +173,7 @@ pub fn view<'a>(
             &state.components_panel,
             tokens,
             &ctx.canvas_colors,
+            grid,
             ctx.device_px_per_logical_px,
         ))
         .height(Length::Fill)

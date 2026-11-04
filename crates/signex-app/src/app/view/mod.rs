@@ -111,9 +111,14 @@ impl Signex {
                 super::state::WindowKind::DetachedPanel(kind) => {
                     let ctx = &self.document_state.panel_ctx;
                     let panel = if *kind == crate::panels::PanelKind::Components {
-                        crate::panels::components_panel::view(&self.library, ctx, &ctx.tokens)
-                            .map(crate::dock::DockMessage::Library)
-                            .boxed()
+                        crate::panels::components_panel::view(
+                            &self.library,
+                            ctx,
+                            &ctx.tokens,
+                            self.sheet_grid(),
+                        )
+                        .map(crate::dock::DockMessage::Library)
+                        .boxed()
                     } else {
                         crate::panels::view_panel(*kind, ctx)
                             .map(crate::dock::DockMessage::Panel)
@@ -146,6 +151,7 @@ impl Signex {
                             &self.library,
                             tokens,
                             &self.document_state.panel_ctx.canvas_colors,
+                            self.sheet_grid(),
                             self.ui_state.device_px_per_logical_px(window_id),
                             address,
                         )
@@ -241,6 +247,7 @@ impl Signex {
         let bottom_collapsed = document.dock.is_collapsed(PanelPosition::Bottom);
 
         let left = self.view_dock_panel(
+            window_id,
             PanelPosition::Left,
             left_has_panels,
             left_collapsed,
@@ -258,6 +265,7 @@ impl Signex {
             true,
         );
         let right = self.view_dock_panel(
+            window_id,
             PanelPosition::Right,
             right_has_panels,
             right_collapsed,
@@ -271,6 +279,7 @@ impl Signex {
             false,
         );
         let bottom = self.view_dock_panel_h(
+            window_id,
             PanelPosition::Bottom,
             bottom_has_panels,
             bottom_collapsed,
@@ -525,6 +534,7 @@ impl Signex {
                     &self.library,
                     tokens,
                     &self.document_state.panel_ctx.canvas_colors,
+                    self.sheet_grid(),
                     self.ui_state.device_px_per_logical_px(window_id),
                     address,
                 )

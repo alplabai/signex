@@ -58,6 +58,8 @@ mod lifecycle;
 mod missing_mount_tests;
 mod new_component;
 mod new_row;
+#[cfg(test)]
+mod preview_delete_guard_tests;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
@@ -110,6 +112,11 @@ impl Signex {
             self.document_state.error_notice =
                 Some(crate::app::state::ErrorNotice::library_change(refusal));
             return self.finish_update();
+        }
+        if let Some(refusal) = self.primitive_edit_refusal(&msg) {
+            rename_guard::log_refusal_once(&refusal);
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
         }
         let per_event = matches!(
             &msg,
@@ -253,7 +260,18 @@ impl Signex {
             ),
             LibraryMessage::DesignatorsScanned { generation, result } => {
                 if self.apply_designator_scan(generation, &result) {
-                    self.commit_pending_drop()
+                    // A drop armed from an undocked window commits there.
+                    let window = self
+                        .interaction_state
+                        .placement
+                        .as_ref()
+                        .and_then(|s| self.undocked_window_of_other_sheet(&s.target_sheet));
+                    match window {
+                        Some(window) => {
+                            self.run_in_window_document(window, |app| app.commit_pending_drop())
+                        }
+                        None => self.commit_pending_drop(),
+                    }
                 } else {
                     Task::none()
                 }

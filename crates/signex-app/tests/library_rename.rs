@@ -297,6 +297,61 @@ fn library_writes_after_a_rename_land_in_the_renamed_file() {
     );
 }
 
+/// #1939, option C: a symbol edit made while its library is renamed is not
+/// refused, and the dirty draft is rekeyed to the new path with the edit in it.
+#[test]
+fn a_symbol_edit_during_a_library_rename_survives_the_rename() {
+    use signex_app::app::SymbolDocument;
+    use signex_app::library::messages::SymbolEditorMsg;
+
+    let mut f = fixture();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    let sym = f.alpha.join("symbols").join("draft.snxsym");
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
+    f.app
+        .document_state
+        .symbol_editors
+        .insert(sym.clone(), SymbolDocument::new(sym.clone(), file));
+    f.app.document_state.tabs.push(TabInfo {
+        title: "draft".into(),
+        path: sym.clone(),
+        cached_document: None,
+        project_id: Some(f.project_id),
+        kind: TabKind::SymbolEditor(sym.clone()),
+    });
+    f.app.document_state.active_tab = 0;
+
+    // The rename is in flight: its completion has not run yet.
+    let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+    let _ = f
+        .app
+        .update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: sym.clone(),
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::AddPin { x: 1.0, y: 2.0 }),
+        }));
+    assert!(
+        f.app.document_state.symbol_editors[&sym].is_dirty(),
+        "the edit lands during a rename"
+    );
+    settle_task(&mut f.app, task);
+
+    let moved = renamed.join("symbols").join("draft.snxsym");
+    assert!(
+        !f.app.document_state.symbol_editors.contains_key(&sym),
+        "the draft left the old path"
+    );
+    let editor = &f.app.document_state.symbol_editors[&moved];
+    assert!(
+        editor.is_dirty(),
+        "the draft is still dirty at the new path"
+    );
+    assert_eq!(
+        editor.file.symbols[0].pins.len(),
+        1,
+        "the edit survived the rename"
+    );
+}
+
 #[test]
 fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
     use signex_app::app::FootprintDocument;

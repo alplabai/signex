@@ -42,6 +42,7 @@ pub(crate) mod sheet_refs;
 mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
+pub(crate) mod window_hierarchies;
 mod window_scales;
 mod window_sizes;
 mod window_tab;
@@ -370,6 +371,8 @@ pub struct DocumentState {
     pub disk_poll: crate::app::handlers::document_files::DiskPoll,
     /// Off-thread Navigator hierarchy assembly (#1470).
     pub navigator_job: navigator_job::NavigatorJob,
+    /// Hierarchies of the other projects undocked windows show (#2021).
+    pub window_hierarchies: window_hierarchies::WindowHierarchies,
     /// Cached sheet-path -> owning-project index, rebuilt when its inputs
     /// change (#1470); see `state/ownership_index.rs`.
     pub(crate) ownership: std::cell::RefCell<Option<ownership_index::OwnershipIndex>>,
@@ -484,6 +487,12 @@ pub struct DocumentState {
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
+    /// The panel context of each undocked document window, so its dock
+    /// panels show and edit that window's sheet (#1966).
+    pub window_panel_ctx: std::collections::HashMap<iced::window::Id, crate::panels::PanelContext>,
+    /// What each window context was last built from; see `window_ctx_key`.
+    pub(crate) window_panel_ctx_keys:
+        std::collections::HashMap<iced::window::Id, crate::app::runtime::WindowCtxKey>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.

@@ -25,6 +25,15 @@ mod window_gate_tests;
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
     pub(in crate::app) fn canvas_bounds(&self) -> iced::Rectangle {
+        self.canvas_bounds_in(None)
+    }
+
+    /// [`Self::canvas_bounds`] in the undocked window `window`, laid out at
+    /// that window's own size (`None`: the main window).
+    pub(in crate::app) fn canvas_bounds_in(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> iced::Rectangle {
         use crate::dock::PanelPosition::{Bottom, Left, Right};
         let dock = &self.document_state.dock;
         let extent = |pos, size| canvas_region::DockExtent {
@@ -34,7 +43,7 @@ impl Signex {
         };
         let ui = &self.ui_state;
         canvas_region::canvas_bounds(
-            ui.window_size,
+            window.map_or(ui.window_size, |w| ui.size_of_window(w)),
             extent(Left, ui.left_width),
             extent(Right, ui.right_width),
             extent(Bottom, ui.bottom_height),
@@ -754,19 +763,25 @@ impl Signex {
     /// Floating panels — one `Translate`-positioned widget per floating
     /// panel. No clamp: panels follow Altium behaviour and may be
     /// dragged anywhere, even past the window edge (the OS clips).
-    pub(super) fn floating_panels_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn floating_panels_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         for i in 0..document.dock.floating.len() {
-            if let Some(panel_widget) =
-                document
-                    .dock
-                    .view_floating_panel(i, &document.panel_ctx, &self.library)
-            {
+            if let Some(panel_widget) = document.dock.view_floating_panel(
+                i,
+                self.panel_ctx_for(window_id),
+                &self.library,
+                self.sheet_grid(),
+            ) {
                 let fp = &document.dock.floating[i];
                 out.push(
                     super::translate::Translate::new(
-                        panel_widget.map(Message::Dock).boxed(),
+                        panel_widget
+                            .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)))
+                            .boxed(),
                         (fp.x, fp.y),
                     )
                     .boxed(),

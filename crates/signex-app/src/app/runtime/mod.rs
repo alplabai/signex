@@ -8,7 +8,7 @@ mod footprint_ctx;
 mod footprint_summaries;
 mod history;
 mod label_class_pick;
-mod navigator_ctx;
+pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
@@ -17,6 +17,11 @@ mod sheet_tree;
 #[cfg(test)]
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
+mod window_panel_ctx;
+pub(crate) use window_panel_ctx::WindowCtxKey;
+mod window_hierarchies;
+#[cfg(test)]
+mod window_placement_tests;
 
 impl Signex {
     /// Copy the UI-state grid/unit/snap fields into the panel context.
@@ -73,6 +78,7 @@ impl Signex {
         let net_nav = self.refresh_net_nav();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
+        self.sync_window_panel_ctx_shared();
         self.refresh_command_palette_if_stale();
 
         // Re-resolve the History panel's active path; on change, bump
@@ -189,17 +195,9 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    /// Refresh `panel_ctx` selection fields from the active canvas.
-    ///
-    /// NOTE: `panel_ctx` is shared across every window — the dock
-    /// panels, Properties panel, and status bar all read these
-    /// fields. When an undocked window handles a canvas event via
-    /// the swap trick, "active canvas" refers to the undocked
-    /// window's canvas for the duration of the event, so this
-    /// function writes THAT window's selection into the shared
-    /// panel_ctx. End result: main-window panels reflect the
-    /// most-recently-interacted-with window's selection. This is
-    /// intentional "last-touched wins" behaviour.
+    /// Refresh `panel_ctx` selection fields from the active canvas. While an
+    /// undocked window's action runs, both are that window's (see
+    /// `run_in_window`), so its Properties panel follows its own selection.
     pub(crate) fn update_selection_info(&mut self) {
         // AutoFocus dims every item not in the current selection, so any
         // selection change must invalidate the cached content layer to
@@ -450,6 +448,19 @@ impl Signex {
         self.document_state.panel_ctx.tokens = tokens;
         self.document_state.panel_ctx.theme_id = theme_id;
         self.document_state.panel_ctx.canvas_colors = self.canvas_colors_for(theme_id);
+    }
+
+    /// The schematic's visible grid, for the symbol previews. Read from the
+    /// draft style like `canvas_view_prefs`, so a Preferences live preview
+    /// and a Discard reach the preview at once.
+    pub(crate) fn sheet_grid(
+        &self,
+    ) -> crate::panels::components_panel::details::symbol_canvas::SheetGrid {
+        crate::panels::components_panel::details::symbol_canvas::SheetGrid {
+            visible: self.ui_state.grid_visible,
+            pitch_mm: self.ui_state.visible_grid_mm,
+            style: self.ui_state.preferences_draft_grid_style,
+        }
     }
 
     /// Settings the schematic canvas renders with, read fresh from app
