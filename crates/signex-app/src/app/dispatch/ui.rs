@@ -51,6 +51,10 @@ impl Signex {
                 self.handle_layout_drag_started(target);
                 self.finish_update()
             }
+            UiMsg::DragMovedIn { window, x, y } => {
+                self.interaction_state.pointer_window = Some(window);
+                self.dispatch_update(Message::Ui(UiMsg::DragMove(x, y)))
+            }
             UiMsg::DragMove(x, y) => {
                 self.handle_layout_drag_moved(x, y);
                 // Altium parity: cursor leaving the main window during a
@@ -87,6 +91,7 @@ impl Signex {
             UiMsg::DragEnd(released_in) => {
                 let dropped = self.finish_components_row_drag(released_in);
                 self.handle_layout_drag_finished();
+                self.interaction_state.pointer_window = None;
                 Task::batch([dropped, self.finish_update()])
             }
             UiMsg::GridCycle => {

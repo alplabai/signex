@@ -1257,3 +1257,6 @@ fn a_descent_from_a_window_reaches_an_open_child_that_is_not_on_disk() {
 
 #[path = "window_action_context_tests.rs"]
 mod context;
+
+#[path = "window_surface_tests.rs"]
+mod surfaces;

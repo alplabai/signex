@@ -179,7 +179,12 @@ impl Signex {
         let (x, y) = self.interaction_state.last_mouse_pos;
         self.close_all_context_menus();
         self.interaction_state.project_tree_context_menu =
-            Some(crate::app::ProjectTreeContextMenuState { x, y, key });
+            Some(crate::app::ProjectTreeContextMenuState {
+                x,
+                y,
+                key,
+                window: self.interaction_state.acting_window,
+            });
     }
 
     pub(crate) fn handle_project_tree_action(

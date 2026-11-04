@@ -637,7 +637,11 @@ pub enum ProjectMsg {
     /// A descent through a sheet symbol that an undocked window started: the
     /// window cannot switch sheets inside its swap, so the open runs here, on
     /// the main window, for the child the window's sheet references (#1966).
+    /// It names the window and the sheet the descent started on; it is
+    /// refused when it lands if either no longer holds (#2037).
     DescendRequested {
+        window: iced::window::Id,
+        from: std::path::PathBuf,
         symbol: uuid::Uuid,
         path: std::path::PathBuf,
         placement: Option<signex_types::schematic::InstancePath>,
@@ -646,6 +650,13 @@ pub enum ProjectMsg {
     /// tabs inside its swap, so the symbol file it resolved is opened here, on
     /// the main window (#1966).
     PrimitiveOpenRequested(std::path::PathBuf),
+    /// A Find hit on another sheet, reached from an undocked window: the
+    /// window cannot switch sheets inside its swap, so the sheet opens here,
+    /// on the main window, and the jump lands there (#2037).
+    SheetOpenRequested {
+        path: std::path::PathBuf,
+        open: Box<crate::app::handlers::canvas::SheetOpen>,
+    },
     /// The off-thread assembly of the hierarchy of the project (by root sheet)
     /// an undocked window shows finished (#2021).
     WindowHierarchyAssembled(
