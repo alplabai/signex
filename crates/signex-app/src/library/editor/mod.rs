@@ -32,7 +32,7 @@ pub mod supply;
 pub mod symbol;
 pub mod text_extent;
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, Widget, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
@@ -73,7 +73,7 @@ pub fn view<'a>(
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn view_header<'a>(
@@ -102,7 +102,7 @@ fn view_header<'a>(
     )
     .padding([SP.m, 14.0])
     .style(crate::styles::modal_header_strip(tokens))
-    .into()
+    .boxed()
 }
 
 fn view_tabs<'a>(
@@ -116,7 +116,9 @@ fn view_tabs<'a>(
     let border = crate::styles::ti(tokens.border);
     let accent = crate::styles::ti(tokens.accent);
     let last = PreviewTab::ORDER.len().saturating_sub(1);
-    let mut row_widget = row![].spacing(0).align_y(iced::Alignment::End);
+    let mut row_widget: iced::widget::Row<Element<'_, LibraryMessage>> = iced::widget::Row::new()
+        .spacing(0)
+        .align_y(iced::Alignment::End);
     for (i, tab) in PreviewTab::ORDER.iter().enumerate() {
         let is_active = *tab == active;
         let (fill, text_c) = if is_active {
@@ -136,7 +138,8 @@ fn view_tabs<'a>(
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None),
         )
-        .padding([SP.s, 10.0]);
+        .padding([SP.s, 10.0])
+        .boxed();
         let style = signex_widgets::tab_pill::TabPillStyle {
             fill,
             border,
@@ -152,7 +155,7 @@ fn view_tabs<'a>(
             row_id: address.row_id,
             msg: EditorMsg::SelectTab(*tab),
         };
-        row_widget = row_widget.push(iced::widget::mouse_area(pill).on_press(tab_msg));
+        row_widget = row_widget.push(iced::widget::mouse_area(pill).on_press(tab_msg).boxed());
     }
     container(row_widget)
         .padding(iced::Padding {
@@ -163,7 +166,7 @@ fn view_tabs<'a>(
         })
         .width(Length::Fill)
         .style(crate::styles::tab_bar_strip(tokens))
-        .into()
+        .boxed()
 }
 
 fn view_active_tab<'a>(
@@ -202,10 +205,10 @@ fn view_active_tab<'a>(
         }
     };
     container(inner)
-        .padding(14)
+        .padding(14.0)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn view_footer<'a>(
@@ -222,10 +225,10 @@ fn view_footer<'a>(
                 .size(TS.body)
                 .color(muted),
         )
-        .padding([10, 14])
+        .padding([10.0, 14.0])
         .width(Length::Fill)
         .style(crate::styles::modal_footer_strip(tokens))
-        .into();
+        .boxed();
     }
 
     // Themed like every other dialog's actions: accent for the primary,
@@ -251,15 +254,15 @@ fn view_footer<'a>(
             .style(crate::styles::outline_button(tokens))
     };
     let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
-        text("• unsaved").size(TS.body).color(muted).into()
+        text("• unsaved").size(TS.body).color(muted).boxed()
     } else {
-        Space::new().width(0).into()
+        Space::new().width(0.0).boxed()
     };
 
     // Offered once a save was refused because the row changed on the
     // server; discarding the working copy asks first.
     let reload: Element<'_, LibraryMessage> = if !state.stale_base {
-        Space::new().width(0).into()
+        Space::new().width(0.0).boxed()
     } else if state.reload_confirming {
         row![
             Space::new().width(12),
@@ -272,13 +275,13 @@ fn view_footer<'a>(
             secondary("Keep editing", EditorMsg::ReloadCancelled, &address),
         ]
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     } else {
         row![
             Space::new().width(12),
             secondary("Reload saved version", EditorMsg::ReloadRequested, &address),
         ]
-        .into()
+        .boxed()
     };
 
     container(
@@ -292,42 +295,45 @@ fn view_footer<'a>(
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([10, 14])
+    .padding([10.0, 14.0])
     .style(crate::styles::modal_footer_strip(tokens))
-    .into()
+    .boxed()
 }
 
 fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    button(container(text("\u{00D7}".to_string()).size(TS.heading).color(text_c)).padding([0, 6]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: address.library_path,
-            table: address.table,
-            row_id: address.row_id,
-            msg: EditorMsg::CloseEditor,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.03,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+    button(
+        container(text("\u{00D7}".to_string()).size(TS.heading).color(text_c)).padding([0.0, 6.0]),
+    )
+    .on_press(LibraryMessage::EditorEvent {
+        library_path: address.library_path,
+        table: address.table,
+        row_id: address.row_id,
+        msg: EditorMsg::CloseEditor,
+    })
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
+            )),
+            _ => Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.03,
+            ))),
+        };
+        iced::widget::button::Style {
+            background: bg,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+                ..Border::default()
+            },
+            text_color: text_c,
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .boxed()
 }
 
 /// Helper for placeholder-card layouts — kept around for tabs that
@@ -344,16 +350,16 @@ pub(crate) fn placeholder_card<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let mut col = column![
+    let mut col: iced::widget::Column<Element<'_, LibraryMessage>> = column![
         text(title).size(TS.heading).color(text_c),
         Space::new().height(8),
     ]
     .spacing(SP.s);
     for todo in todos {
-        col = col.push(text(format!("• {todo}")).size(TS.body).color(muted));
+        col = col.push(text(format!("• {todo}")).size(TS.body).color(muted).boxed());
     }
     container(col)
-        .padding(14)
+        .padding(14.0)
         .style(crate::styles::modal_card(tokens))
-        .into()
+        .boxed()
 }

@@ -1,5 +1,5 @@
 use iced::widget::{column, container, row, text};
-use iced::{Alignment, Background, Border, Element, Length};
+use iced::{Alignment, Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use super::color_code::ComponentColorCode;
@@ -25,14 +25,15 @@ pub fn color_code_representations<'a, Message: 'a>(
         color_codes = color_codes.push(
             text(color_code_unavailable_label(kind))
                 .size(11)
-                .color(token_color(tokens.text_secondary)),
+                .color(token_color(tokens.text_secondary))
+                .boxed(),
         );
     } else {
         for representation in representations {
             color_codes = color_codes.push(color_code_line(representation, tokens));
         }
     }
-    color_codes.into()
+    color_codes.boxed()
 }
 
 fn color_code_line<'a, Message: 'a>(
@@ -46,15 +47,17 @@ fn color_code_line<'a, Message: 'a>(
             container(text(" "))
                 .width(20)
                 .height(30)
-                .style(move |_theme| container::Style {
+                .style(move |_theme: &iced::Theme| container::Style {
                     background: Some(Background::Color(band.color())),
                     border: Border {
                         width: 1.0,
                         radius: 2.0.into(),
                         color: iced::Color::BLACK,
+                        ..Border::default()
                     },
                     ..container::Style::default()
-                }),
+                })
+                .boxed(),
         );
     }
     bands
@@ -64,9 +67,10 @@ fn color_code_line<'a, Message: 'a>(
                     .size(11)
                     .color(token_color(tokens.text)),
             )
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         )
-        .into()
+        .boxed()
 }
 
 fn color_code_unavailable_label(kind: ComponentKind) -> &'static str {

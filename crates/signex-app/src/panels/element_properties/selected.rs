@@ -8,6 +8,7 @@
 use super::super::*;
 use super::font_row::font_family_row;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -26,7 +27,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         panel_bg,
         ..
     } = palette;
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     let elem_type = ctx
         .selection_info
@@ -49,7 +50,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     col = col.push(
         container(text(elem_type.to_owned()).size(TS.body).color(primary))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
@@ -81,205 +83,220 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         // ── Location ──
         let pos_loc = position.clone();
         let rot_current = rotation_deg;
-        col = col.push(collapsible_section(
-            "sel_location",
-            "Location",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    "(X/Y)", &pos_loc, muted, input_bg, input_bdr,
-                ));
-                let rotation_opts: Vec<String> = vec![
-                    "0 Degrees".into(),
-                    "90 Degrees".into(),
-                    "180 Degrees".into(),
-                    "270 Degrees".into(),
-                ];
-                let rot_label = format!("{:.0} Degrees", rot_current);
-                c = c.push(form_pick_row(
-                    "Rotation",
-                    rotation_opts,
-                    rot_label,
-                    move |s| {
-                        let deg = pick_list_degrees(&s);
-                        PanelMsg::EditSymbolRotation(id, deg)
-                    },
-                    muted,
-                ));
-                c
-            },
-        ));
+        col = col.push(
+            collapsible_section(
+                "sel_location",
+                "Location",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_input_row(
+                        "(X/Y)", &pos_loc, muted, input_bg, input_bdr,
+                    ));
+                    let rotation_opts: Vec<String> = vec![
+                        "0 Degrees".into(),
+                        "90 Degrees".into(),
+                        "180 Degrees".into(),
+                        "270 Degrees".into(),
+                    ];
+                    let rot_label = format!("{:.0} Degrees", rot_current);
+                    c = c.push(form_pick_row(
+                        "Rotation",
+                        rotation_opts,
+                        rot_label,
+                        move |s| {
+                            let deg = pick_list_degrees(&s);
+                            PanelMsg::EditSymbolRotation(id, deg)
+                        },
+                        muted,
+                    ));
+                    c
+                },
+            )
+            .boxed(),
+        );
 
         // ── Properties (Name, Style) ──
         let name_val = value.clone();
         let base_lib = lib_id.clone();
-        col = col.push(collapsible_section(
-            "sel_props",
-            "Properties",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_edit_row("Name", &name_val, muted, move |s| {
-                    PanelMsg::EditSymbolValue(id, s)
-                }));
-                let base_lib = base_lib.clone();
-                let current_rot = rot_current;
-                c = c.push(form_pick_row(
-                    "Style",
-                    style_options,
-                    current_style.to_string(),
-                    move |style_label| {
-                        use signex_types::schematic::PowerPortStyle;
-                        let new_style = PowerPortStyle::ALL
-                            .into_iter()
-                            .find(|s| s.label() == style_label)
-                            .unwrap_or(PowerPortStyle::Bar);
-                        let new_lib = format!("power:{}", new_style.lib_tag());
-                        // A ground body hangs below its connection point and
-                        // every other style rises above it. Turn the port by
-                        // 180° when the direction flips, so it keeps its
-                        // current visual orientation.
-                        let old_down = PowerPortStyle::of(&base_lib).hangs_down();
-                        let target_rot = if old_down != new_style.hangs_down() {
-                            (current_rot + 180.0).rem_euclid(360.0)
-                        } else {
-                            current_rot
-                        };
-                        PanelMsg::EditPowerPortStyle {
-                            symbol_id: id,
-                            new_lib_id: new_lib,
-                            rotation_degrees: target_rot,
-                        }
-                    },
-                    muted,
-                ));
-                super::library_rows::push_library_rows(
-                    c,
-                    id,
-                    &library_name,
-                    library_status,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                )
-            },
-        ));
+        col = col.push(
+            collapsible_section(
+                "sel_props",
+                "Properties",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_edit_row("Name", &name_val, muted, move |s| {
+                        PanelMsg::EditSymbolValue(id, s)
+                    }));
+                    let base_lib = base_lib.clone();
+                    let current_rot = rot_current;
+                    c = c.push(form_pick_row(
+                        "Style",
+                        style_options,
+                        current_style.to_string(),
+                        move |style_label| {
+                            use signex_types::schematic::PowerPortStyle;
+                            let new_style = PowerPortStyle::ALL
+                                .into_iter()
+                                .find(|s| s.label() == style_label)
+                                .unwrap_or(PowerPortStyle::Bar);
+                            let new_lib = format!("power:{}", new_style.lib_tag());
+                            // A ground body hangs below its connection point and
+                            // every other style rises above it. Turn the port by
+                            // 180° when the direction flips, so it keeps its
+                            // current visual orientation.
+                            let old_down = PowerPortStyle::of(&base_lib).hangs_down();
+                            let target_rot = if old_down != new_style.hangs_down() {
+                                (current_rot + 180.0).rem_euclid(360.0)
+                            } else {
+                                current_rot
+                            };
+                            PanelMsg::EditPowerPortStyle {
+                                symbol_id: id,
+                                new_lib_id: new_lib,
+                                rotation_degrees: target_rot,
+                            }
+                        },
+                        muted,
+                    ));
+                    super::library_rows::push_library_rows(
+                        c,
+                        id,
+                        &library_name,
+                        library_status,
+                        muted,
+                        input_bg,
+                        input_bdr,
+                    )
+                },
+            )
+            .boxed(),
+        );
 
         // Add Font + B/I/U/T row to Properties section via a second collapsible
-        col = col.push(collapsible_section(
-            "sel_props_font",
-            "Font",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                let font_opts: Vec<String> = vec![
-                    "Iosevka Fixed SS03".into(),
-                    "Roboto".into(),
-                    "Fira Code".into(),
-                    "Arial".into(),
-                    "Times New Roman".into(),
-                ];
-                c = c.push(form_pick_row(
-                    "Font",
-                    font_opts,
-                    "Iosevka Fixed SS03".to_string(),
-                    |_| PanelMsg::Noop,
-                    muted,
-                ));
-                let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                    .iter()
-                    .map(|n| n.to_string())
-                    .collect();
-                c = c.push(form_pick_row(
-                    "Size",
-                    size_opts,
-                    "10".to_string(),
-                    move |s| {
-                        let pt: u32 = s.parse().unwrap_or(10);
-                        PanelMsg::EditSymbolValueFontSizePt(id, pt)
-                    },
-                    muted,
-                ));
-                c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                c
-            },
-        ));
+        col = col.push(
+            collapsible_section(
+                "sel_props_font",
+                "Font",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    let font_opts: Vec<String> = vec![
+                        "Iosevka Fixed SS03".into(),
+                        "Roboto".into(),
+                        "Fira Code".into(),
+                        "Arial".into(),
+                        "Times New Roman".into(),
+                    ];
+                    c = c.push(form_pick_row(
+                        "Font",
+                        font_opts,
+                        "Iosevka Fixed SS03".to_string(),
+                        |_| PanelMsg::Noop,
+                        muted,
+                    ));
+                    let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                        .iter()
+                        .map(|n| n.to_string())
+                        .collect();
+                    c = c.push(form_pick_row(
+                        "Size",
+                        size_opts,
+                        "10".to_string(),
+                        move |s| {
+                            let pt: u32 = s.parse().unwrap_or(10);
+                            PanelMsg::EditSymbolValueFontSizePt(id, pt)
+                        },
+                        muted,
+                    ));
+                    c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
+                    c
+                },
+            )
+            .boxed(),
+        );
 
         // ── General (Net) — informational ──
         let phys_name = value.clone();
-        col = col.push(collapsible_section(
-            "sel_net",
-            "General (Net)",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    "Physical Name",
-                    &phys_name,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                c = c.push(form_input_row(
-                    "Net Name", &phys_name, muted, input_bg, input_bdr,
-                ));
-                c = c.push(net_numeric_row(
-                    "Power Net",
-                    "0.000",
-                    "V",
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                c = c.push(net_numeric_row(
-                    "High Speed",
-                    "0.000",
-                    "Hz",
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                let dp_opts: Vec<String> = vec!["None".into()];
-                c = c.push(form_pick_row(
-                    "Differential Pair",
-                    dp_opts,
-                    "None".to_string(),
-                    |_| PanelMsg::Noop,
-                    muted,
-                ));
-                c
-            },
-        ));
+        col = col.push(
+            collapsible_section(
+                "sel_net",
+                "General (Net)",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_input_row(
+                        "Physical Name",
+                        &phys_name,
+                        muted,
+                        input_bg,
+                        input_bdr,
+                    ));
+                    c = c.push(form_input_row(
+                        "Net Name", &phys_name, muted, input_bg, input_bdr,
+                    ));
+                    c = c.push(net_numeric_row(
+                        "Power Net",
+                        "0.000",
+                        "V",
+                        muted,
+                        input_bg,
+                        input_bdr,
+                    ));
+                    c = c.push(net_numeric_row(
+                        "High Speed",
+                        "0.000",
+                        "Hz",
+                        muted,
+                        input_bg,
+                        input_bdr,
+                    ));
+                    let dp_opts: Vec<String> = vec!["None".into()];
+                    c = c.push(form_pick_row(
+                        "Differential Pair",
+                        dp_opts,
+                        "None".to_string(),
+                        |_| PanelMsg::Noop,
+                        muted,
+                    ));
+                    c
+                },
+            )
+            .boxed(),
+        );
 
         // ── Parameters (Net) — placeholder (no parameters/rules/classes yet) ──
-        col = col.push(collapsible_section(
-            "sel_net_params",
-            "Parameters (Net)",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(net_params_tabs(primary, input_bg, input_bdr));
-                c = c.push(net_params_header(muted, border_c));
-                c = c.push(empty_section_row("No Parameters", muted, border_c));
-                c = c.push(empty_section_row("No Rules", muted, border_c));
-                c = c.push(empty_section_row("No Classes", muted, border_c));
-                c = c.push(net_params_add_bar(muted, input_bg, input_bdr));
-                c
-            },
-        ));
+        col = col.push(
+            collapsible_section(
+                "sel_net_params",
+                "Parameters (Net)",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(net_params_tabs(primary, input_bg, input_bdr));
+                    c = c.push(net_params_header(muted, border_c));
+                    c = c.push(empty_section_row("No Parameters", muted, border_c));
+                    c = c.push(empty_section_row("No Rules", muted, border_c));
+                    c = c.push(empty_section_row("No Classes", muted, border_c));
+                    c = c.push(net_params_add_bar(muted, input_bg, input_bdr));
+                    c
+                },
+            )
+            .boxed(),
+        );
 
-        return scrollable(col).width(Length::Fill).into();
+        return scrollable(col).width(Length::Fill).boxed();
     }
 
     match selected_kind {
@@ -332,130 +349,140 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
             if let Some(id) = uuid {
                 // General section — editable
-                col = col.push(collapsible_section(
-                    "sel_general",
-                    "General",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Designator", &reference, muted, move |s| {
-                            PanelMsg::EditSymbolDesignator(id, s)
-                        }));
-                        c = c.push(form_edit_row("Value", &value, muted, move |s| {
-                            PanelMsg::EditSymbolValue(id, s)
-                        }));
-                        if !description.is_empty() {
+                col = col.push(
+                    collapsible_section(
+                        "sel_general",
+                        "General",
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_edit_row("Designator", &reference, muted, move |s| {
+                                PanelMsg::EditSymbolDesignator(id, s)
+                            }));
+                            c = c.push(form_edit_row("Value", &value, muted, move |s| {
+                                PanelMsg::EditSymbolValue(id, s)
+                            }));
+                            if !description.is_empty() {
+                                c = c.push(form_input_row(
+                                    "Description",
+                                    &description,
+                                    muted,
+                                    input_bg,
+                                    input_bdr,
+                                ));
+                            }
+                            c = c.push(form_edit_row("Footprint", &footprint, muted, move |s| {
+                                PanelMsg::EditSymbolFootprint(id, s)
+                            }));
+                            if !datasheet.is_empty() {
+                                c = c.push(form_input_row(
+                                    "Datasheet",
+                                    &datasheet,
+                                    muted,
+                                    input_bg,
+                                    input_bdr,
+                                ));
+                            }
+                            for (label, value) in &documents {
+                                c = c
+                                    .push(form_input_row(label, value, muted, input_bg, input_bdr));
+                            }
                             c = c.push(form_input_row(
-                                "Description",
-                                &description,
+                                "Library ID",
+                                &lib_id,
                                 muted,
                                 input_bg,
                                 input_bdr,
                             ));
-                        }
-                        c = c.push(form_edit_row("Footprint", &footprint, muted, move |s| {
-                            PanelMsg::EditSymbolFootprint(id, s)
-                        }));
-                        if !datasheet.is_empty() {
-                            c = c.push(form_input_row(
-                                "Datasheet",
-                                &datasheet,
+                            c = super::library_rows::push_symbol_choice_row(
+                                c,
+                                id,
+                                &symbol_choices,
+                                muted,
+                            );
+                            c = super::library_rows::push_library_rows(
+                                c,
+                                id,
+                                &library_name,
+                                library_status,
                                 muted,
                                 input_bg,
                                 input_bdr,
-                            ));
-                        }
-                        for (label, value) in &documents {
-                            c = c.push(form_input_row(label, value, muted, input_bg, input_bdr));
-                        }
-                        c = c.push(form_input_row(
-                            "Library ID",
-                            &lib_id,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = super::library_rows::push_symbol_choice_row(
-                            c,
-                            id,
-                            &symbol_choices,
-                            muted,
-                        );
-                        c = super::library_rows::push_library_rows(
-                            c,
-                            id,
-                            &library_name,
-                            library_status,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        );
-                        c = super::library_rows::push_part_actions(c);
-                        super::body_row::push_body_row(c, id, &body, muted, input_bg, input_bdr)
-                    },
-                ));
+                            );
+                            c = super::library_rows::push_part_actions(c);
+                            super::body_row::push_body_row(c, id, &body, muted, input_bg, input_bdr)
+                        },
+                    )
+                    .boxed(),
+                );
 
                 // Location section — read-only for now
-                col = col.push(collapsible_section(
-                    "sel_location",
-                    "Location",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Position", &position, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Rotation", &rotation, muted, input_bg, input_bdr,
-                        ));
-                        c
-                    },
-                ));
+                col = col.push(
+                    collapsible_section(
+                        "sel_location",
+                        "Location",
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_input_row(
+                                "Position", &position, muted, input_bg, input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Rotation", &rotation, muted, input_bg, input_bdr,
+                            ));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
 
                 // Graphical section — checkboxes
-                col = col.push(collapsible_section(
-                    "sel_graphical",
-                    "Graphical",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_check_row(
-                            "Mirror X",
-                            has_mirror_x,
-                            PanelMsg::ToggleSymbolMirrorX(id),
-                            muted,
-                            panel_bg,
-                        ));
-                        c = c.push(form_check_row(
-                            "Mirror Y",
-                            has_mirror_y,
-                            PanelMsg::ToggleSymbolMirrorY(id),
-                            muted,
-                            panel_bg,
-                        ));
-                        c = c.push(form_check_row(
-                            "Locked",
-                            locked,
-                            PanelMsg::ToggleSymbolLocked(id),
-                            muted,
-                            panel_bg,
-                        ));
-                        c = c.push(form_check_row(
-                            "DNP",
-                            dnp,
-                            PanelMsg::ToggleSymbolDnp(id),
-                            muted,
-                            panel_bg,
-                        ));
-                        c
-                    },
-                ));
+                col = col.push(
+                    collapsible_section(
+                        "sel_graphical",
+                        "Graphical",
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_check_row(
+                                "Mirror X",
+                                has_mirror_x,
+                                PanelMsg::ToggleSymbolMirrorX(id),
+                                muted,
+                                panel_bg,
+                            ));
+                            c = c.push(form_check_row(
+                                "Mirror Y",
+                                has_mirror_y,
+                                PanelMsg::ToggleSymbolMirrorY(id),
+                                muted,
+                                panel_bg,
+                            ));
+                            c = c.push(form_check_row(
+                                "Locked",
+                                locked,
+                                PanelMsg::ToggleSymbolLocked(id),
+                                muted,
+                                panel_bg,
+                            ));
+                            c = c.push(form_check_row(
+                                "DNP",
+                                dnp,
+                                PanelMsg::ToggleSymbolDnp(id),
+                                muted,
+                                panel_bg,
+                            ));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
 
                 // Parameters section — custom fields carried on the symbol
                 // instance. Read-only for v0.6; editing per-field lands in
@@ -466,31 +493,37 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     format!("Parameters ({})", params.len())
                 };
                 let section_params = params.clone();
-                col = col.push(collapsible_section(
-                    "sel_parameters",
-                    &header_label,
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        if section_params.is_empty() {
-                            c = c.push(
-                                container(
-                                    text("No custom parameters".to_string())
-                                        .size(TS.body)
-                                        .color(muted),
-                                )
-                                .padding([6.0, SP.m]),
-                            );
-                        } else {
-                            for (name, value) in &section_params {
-                                c = c.push(form_input_row(name, value, muted, input_bg, input_bdr));
+                col = col.push(
+                    collapsible_section(
+                        "sel_parameters",
+                        &header_label,
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            if section_params.is_empty() {
+                                c = c.push(
+                                    container(
+                                        text("No custom parameters".to_string())
+                                            .size(TS.body)
+                                            .color(muted),
+                                    )
+                                    .padding([6.0, SP.m])
+                                    .boxed(),
+                                );
+                            } else {
+                                for (name, value) in &section_params {
+                                    c = c.push(form_input_row(
+                                        name, value, muted, input_bg, input_bdr,
+                                    ));
+                                }
                             }
-                        }
-                        c
-                    },
-                ));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
             }
         }
         Some(signex_types::schematic::SelectedKind::SymbolRefField)
@@ -510,93 +543,99 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             );
 
             if let Some(id) = uuid {
-                col = col.push(collapsible_section(
-                    "sel_basic",
-                    "Basic Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Field",
-                            if is_reference { "Reference" } else { "Value" },
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_edit_row("Text", &text_value, muted, move |s| {
-                            if is_reference {
-                                PanelMsg::EditSymbolDesignator(id, s)
-                            } else {
-                                PanelMsg::EditSymbolValue(id, s)
-                            }
-                        }));
-                        c = c.push(form_input_row(
-                            "Visible", &visible, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Fields Autoplaced",
-                            &fields_autoplaced,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c
-                    },
-                ));
-
-                col = col.push(collapsible_section(
-                    "sel_text",
-                    "Text Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Position", &position, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Rotation", &rotation, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify H",
-                            &justify_h,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify V",
-                            &justify_v,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Text Size",
-                            &text_size,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(font_family_row(
-                            "Font",
-                            font_family.as_deref(),
-                            muted,
-                            move |family| {
-                                let target = if is_reference {
-                                    signex_engine::TextTarget::SymbolReference(id)
+                col = col.push(
+                    collapsible_section(
+                        "sel_basic",
+                        "Basic Properties",
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_input_row(
+                                "Field",
+                                if is_reference { "Reference" } else { "Value" },
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c = c.push(form_edit_row("Text", &text_value, muted, move |s| {
+                                if is_reference {
+                                    PanelMsg::EditSymbolDesignator(id, s)
                                 } else {
-                                    signex_engine::TextTarget::SymbolValue(id)
-                                };
-                                PanelMsg::EditTextFontFamily(target, family)
-                            },
-                        ));
-                        c
-                    },
-                ));
+                                    PanelMsg::EditSymbolValue(id, s)
+                                }
+                            }));
+                            c = c.push(form_input_row(
+                                "Visible", &visible, muted, input_bg, input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Fields Autoplaced",
+                                &fields_autoplaced,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
+
+                col = col.push(
+                    collapsible_section(
+                        "sel_text",
+                        "Text Properties",
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_input_row(
+                                "Position", &position, muted, input_bg, input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Rotation", &rotation, muted, input_bg, input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Justify H",
+                                &justify_h,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Justify V",
+                                &justify_v,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Text Size",
+                                &text_size,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c = c.push(font_family_row(
+                                "Font",
+                                font_family.as_deref(),
+                                muted,
+                                move |family| {
+                                    let target = if is_reference {
+                                        signex_engine::TextTarget::SymbolReference(id)
+                                    } else {
+                                        signex_engine::TextTarget::SymbolValue(id)
+                                    };
+                                    PanelMsg::EditTextFontFamily(target, family)
+                                },
+                            ));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
             }
         }
         Some(signex_types::schematic::SelectedKind::Label) => {
@@ -620,37 +659,40 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 // ── Location ──
                 let pos_clone = position.clone();
                 let rot_current = rotation_deg;
-                col = col.push(collapsible_section(
-                    "sel_location",
-                    "Location",
-                    &ctx.collapsed_sections,
-                    primary,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "(X/Y)", &pos_clone, muted, input_bg, input_bdr,
-                        ));
-                        let rotation_opts: Vec<String> = vec![
-                            "0 Degrees".into(),
-                            "90 Degrees".into(),
-                            "180 Degrees".into(),
-                            "270 Degrees".into(),
-                        ];
-                        let rot_label = format!("{:.0} Degrees", rot_current);
-                        c = c.push(form_pick_row(
-                            "Rotation",
-                            rotation_opts,
-                            rot_label,
-                            move |s| {
-                                let deg = pick_list_degrees(&s);
-                                PanelMsg::EditLabelRotation(id, deg)
-                            },
-                            muted,
-                        ));
-                        c
-                    },
-                ));
+                col = col.push(
+                    collapsible_section(
+                        "sel_location",
+                        "Location",
+                        &ctx.collapsed_sections,
+                        primary,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_input_row(
+                                "(X/Y)", &pos_clone, muted, input_bg, input_bdr,
+                            ));
+                            let rotation_opts: Vec<String> = vec![
+                                "0 Degrees".into(),
+                                "90 Degrees".into(),
+                                "180 Degrees".into(),
+                                "270 Degrees".into(),
+                            ];
+                            let rot_label = format!("{:.0} Degrees", rot_current);
+                            c = c.push(form_pick_row(
+                                "Rotation",
+                                rotation_opts,
+                                rot_label,
+                                move |s| {
+                                    let deg = pick_list_degrees(&s);
+                                    PanelMsg::EditLabelRotation(id, deg)
+                                },
+                                muted,
+                            ));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
 
                 // ── Properties (Net Name, Font, Justification) ──
                 let net_name = label_text.clone();
@@ -665,76 +707,80 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         crate::panels::net_class_choice(&pick.classes, &pick.net),
                     )
                 });
-                col = col.push(collapsible_section(
-                    "sel_props",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    primary,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
-                            PanelMsg::EditLabelText(id, s)
-                        }));
-                        if let Some((project, net, choices, current)) = net_class_picker {
+                col = col.push(
+                    collapsible_section(
+                        "sel_props",
+                        "Properties",
+                        &ctx.collapsed_sections,
+                        primary,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
+                                PanelMsg::EditLabelText(id, s)
+                            }));
+                            if let Some((project, net, choices, current)) = net_class_picker {
+                                c = c.push(form_pick_row(
+                                    "Net Class",
+                                    choices,
+                                    current,
+                                    move |choice| {
+                                        PanelMsg::NetClass(NetClassMsg::AssignNet {
+                                            project,
+                                            net: net.clone(),
+                                            class: choice.into_class(),
+                                        })
+                                    },
+                                    muted,
+                                ));
+                            }
+                            // Font family (stored on the label; size is below, colour is cosmetic for now)
+                            c = c.push(font_family_row(
+                                "Font",
+                                label_font_family.as_deref(),
+                                muted,
+                                move |family| {
+                                    PanelMsg::EditTextFontFamily(
+                                        signex_engine::TextTarget::Label(id),
+                                        family,
+                                    )
+                                },
+                            ));
+                            let size_opts: Vec<String> =
+                                [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
+                                    .iter()
+                                    .map(|n| n.to_string())
+                                    .collect();
                             c = c.push(form_pick_row(
-                                "Net Class",
-                                choices,
-                                current,
-                                move |choice| {
-                                    PanelMsg::NetClass(NetClassMsg::AssignNet {
-                                        project,
-                                        net: net.clone(),
-                                        class: choice.into_class(),
-                                    })
+                                "Font Size",
+                                size_opts,
+                                text_size_pt.to_string(),
+                                move |s| {
+                                    let pt: u32 = s.parse().unwrap_or(10);
+                                    PanelMsg::EditLabelFontSizePt(id, pt)
                                 },
                                 muted,
                             ));
-                        }
-                        // Font family (stored on the label; size is below, colour is cosmetic for now)
-                        c = c.push(font_family_row(
-                            "Font",
-                            label_font_family.as_deref(),
-                            muted,
-                            move |family| {
-                                PanelMsg::EditTextFontFamily(
-                                    signex_engine::TextTarget::Label(id),
-                                    family,
-                                )
-                            },
-                        ));
-                        let size_opts: Vec<String> =
-                            [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                                .iter()
-                                .map(|n| n.to_string())
-                                .collect();
-                        c = c.push(form_pick_row(
-                            "Font Size",
-                            size_opts,
-                            text_size_pt.to_string(),
-                            move |s| {
-                                let pt: u32 = s.parse().unwrap_or(10);
-                                PanelMsg::EditLabelFontSizePt(id, pt)
-                            },
-                            muted,
-                        ));
-                        // B/I/U/T row — cosmetic for now.
-                        c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                        // 3x3 Justification grid — Altium's 9-point anchor picker.
-                        c = c.push(form_label("Justification", muted));
-                        c = c.push(
-                            container(justification_grid(
-                                id,
-                                rotation_deg,
-                                justify_h,
-                                palette,
-                                ctx.theme_id,
-                            ))
-                            .padding([SP.s, SP.m]),
-                        );
-                        c
-                    },
-                ));
+                            // B/I/U/T row — cosmetic for now.
+                            c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
+                            // 3x3 Justification grid — Altium's 9-point anchor picker.
+                            c = c.push(form_label("Justification", muted));
+                            c = c.push(
+                                container(justification_grid(
+                                    id,
+                                    rotation_deg,
+                                    justify_h,
+                                    palette,
+                                    ctx.theme_id,
+                                ))
+                                .padding([SP.s, SP.m])
+                                .boxed(),
+                            );
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
             }
         }
         Some(signex_types::schematic::SelectedKind::TextNote) => {
@@ -747,70 +793,76 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             if let Some(id) = uuid {
-                col = col.push(collapsible_section(
-                    "sel_basic",
-                    "Basic Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Text", &note_text, muted, move |s| {
-                            PanelMsg::EditTextNoteText(id, s)
-                        }));
-                        c
-                    },
-                ));
+                col = col.push(
+                    collapsible_section(
+                        "sel_basic",
+                        "Basic Properties",
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_edit_row("Text", &note_text, muted, move |s| {
+                                PanelMsg::EditTextNoteText(id, s)
+                            }));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
 
-                col = col.push(collapsible_section(
-                    "sel_text",
-                    "Text Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Position", &position, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Rotation", &rotation, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify H",
-                            &justify_h,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify V",
-                            &justify_v,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Text Size",
-                            &text_size,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(font_family_row(
-                            "Font",
-                            note_font_family.as_deref(),
-                            muted,
-                            move |family| {
-                                PanelMsg::EditTextFontFamily(
-                                    signex_engine::TextTarget::TextNote(id),
-                                    family,
-                                )
-                            },
-                        ));
-                        c
-                    },
-                ));
+                col = col.push(
+                    collapsible_section(
+                        "sel_text",
+                        "Text Properties",
+                        &ctx.collapsed_sections,
+                        muted,
+                        border_c,
+                        move || {
+                            let mut c = Column::new().spacing(0).width(Length::Fill);
+                            c = c.push(form_input_row(
+                                "Position", &position, muted, input_bg, input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Rotation", &rotation, muted, input_bg, input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Justify H",
+                                &justify_h,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Justify V",
+                                &justify_v,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c = c.push(form_input_row(
+                                "Text Size",
+                                &text_size,
+                                muted,
+                                input_bg,
+                                input_bdr,
+                            ));
+                            c = c.push(font_family_row(
+                                "Font",
+                                note_font_family.as_deref(),
+                                muted,
+                                move |family| {
+                                    PanelMsg::EditTextFontFamily(
+                                        signex_engine::TextTarget::TextNote(id),
+                                        family,
+                                    )
+                                },
+                            ));
+                            c
+                        },
+                    )
+                    .boxed(),
+                );
             }
         }
         Some(signex_types::schematic::SelectedKind::Drawing) => {
@@ -828,20 +880,23 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 .filter(|(k, _)| k != "Type" && k != "Locked")
                 .cloned()
                 .collect();
-            col = col.push(collapsible_section(
-                "sel_general",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    for (key, value) in &info {
-                        c = c.push(prop_kv_row(key, value, muted, primary));
-                    }
-                    c
-                },
-            ));
+            col = col.push(
+                collapsible_section(
+                    "sel_general",
+                    "Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        for (key, value) in &info {
+                            c = c.push(prop_kv_row(key, value, muted, primary));
+                        }
+                        c
+                    },
+                )
+                .boxed(),
+            );
         }
     }
 
@@ -857,35 +912,40 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     {
         let locked = get("Locked") == "Yes";
         let item = signex_types::schematic::SelectedItem::new(id, kind);
-        col = col.push(collapsible_section(
-            "sel_state",
-            "State",
-            &ctx.collapsed_sections,
-            muted,
-            border_c,
-            move || {
-                Column::new()
-                    .spacing(0)
-                    .width(Length::Fill)
-                    .push(form_check_row(
-                        "Locked",
-                        locked,
-                        PanelMsg::ToggleItemLocked(item),
-                        muted,
-                        panel_bg,
-                    ))
-            },
-        ));
+        col = col.push(
+            collapsible_section(
+                "sel_state",
+                "State",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    Column::new()
+                        .spacing(0)
+                        .width(Length::Fill)
+                        .push(form_check_row(
+                            "Locked",
+                            locked,
+                            PanelMsg::ToggleItemLocked(item),
+                            muted,
+                            panel_bg,
+                        ))
+                },
+            )
+            .boxed(),
+        );
     }
 
     // ── Status bar ──
-    col = col.push(Space::new().height(8.0));
+    col = col.push(Space::new().height(8.0).boxed());
     col = col.push(thin_sep(border_c));
     col = col.push(
-        container(text("1 object selected").size(TS.caption).color(muted)).padding([SP.s, SP.m]),
+        container(text("1 object selected").size(TS.caption).color(muted))
+            .padding([SP.s, SP.m])
+            .boxed(),
     );
 
-    scrollable(col).width(Length::Fill).into()
+    scrollable(col).width(Length::Fill).boxed()
 }
 
 /// Rotation, in degrees, read from the panel's display text (`90°`). A

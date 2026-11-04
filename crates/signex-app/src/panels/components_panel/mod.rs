@@ -26,7 +26,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{Column, Space, button, column, container, row, svg, text, text_input};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use signex_library::ComponentRow;
 use signex_types::theme::ThemeTokens;
@@ -91,8 +91,10 @@ pub fn view<'a>(
     let filter_row = container(filter).padding([SP.s, 6.0]);
 
     // ── Three collapsible source sections ────────────────────────
-    let mut col: Column<'a, LibraryMessage> =
-        column![].spacing(0).width(Length::Fill).push(filter_row);
+    let mut col: Column<Element<'a, LibraryMessage>> = column![]
+        .spacing(0)
+        .width(Length::Fill)
+        .push(filter_row.boxed());
     if !state.id_clash_notices.is_empty() {
         col = col.push(id_clash_notices(state, tokens));
     }
@@ -146,7 +148,8 @@ pub fn view<'a>(
                     .size(PANEL_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([10.0, SP.m]),
+            .padding([10.0, SP.m])
+            .boxed(),
         );
     }
 
@@ -161,7 +164,7 @@ pub fn view<'a>(
     .on_press(LibraryMessage::ComponentsPanelSplitDragStarted);
 
     column![
-        container(crate::panels::panel_scrollable(col))
+        container(crate::panels::panel_scrollable(col.boxed()))
             .height(state.components_panel.list_height)
             .width(Length::Fill),
         divider,
@@ -177,7 +180,7 @@ pub fn view<'a>(
     .spacing(0)
     .width(Length::Fill)
     .height(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Non-modal list of libraries refused or closed for sharing a library id
@@ -187,18 +190,23 @@ fn id_clash_notices<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
-    let mut notices: Column<'a, LibraryMessage> = column![].spacing(SP.xs);
+    let mut notices: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.xs);
     for notice in &state.id_clash_notices {
-        notices = notices.push(text(notice.message()).size(ROW_TEXT_SIZE).color(text_c));
+        notices = notices.push(
+            text(notice.message())
+                .size(ROW_TEXT_SIZE)
+                .color(text_c)
+                .boxed(),
+        );
     }
     let dismiss = button(text("Dismiss").size(ROW_TEXT_SIZE).color(text_c))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::IdClashNoticesDismissed)
         .style(crate::styles::menu_item(tokens));
-    container(notices.push(dismiss))
+    container(notices.push(dismiss.boxed()))
         .padding([SP.s, SP.m])
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Render a single mount-source section with its collapsible header,
@@ -266,17 +274,19 @@ fn view_section<'a>(
             .padding([SP.xs, SP.m])
             .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
             .style(crate::styles::menu_item(tokens));
-        header_row = header_row.push(container(add_btn).padding([0, 6]));
+        header_row = header_row.push(container(add_btn).padding([0, 6]).boxed());
     }
 
-    let mut section_col: Column<'a, LibraryMessage> = column![header_row].spacing(0);
+    let mut section_col: Column<Element<'a, LibraryMessage>> = column![header_row].spacing(0);
 
     // ── Section body (only when expanded) ────────────────────────
     if !collapsed {
         if libs_for_source.is_empty() {
             let empty_msg = empty_section_text(src, project_libs);
             section_col = section_col.push(
-                container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6.0, SP.xl]),
+                container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted))
+                    .padding([6.0, SP.xl])
+                    .boxed(),
             );
         } else {
             let needle = state.components_panel.filter.trim().to_lowercase();
@@ -292,7 +302,7 @@ fn view_section<'a>(
         }
     }
 
-    section_col.into()
+    section_col.boxed()
 }
 
 /// What the workspace says about project libraries.
@@ -367,7 +377,7 @@ fn view_library_block<'a>(
     let tint = crate::styles::tokens::selection_tint(tokens);
     let hover = crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Hover);
 
-    let mut col: Column<'a, LibraryMessage> = column![].spacing(0);
+    let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(0);
 
     // Library header — name + (rows) badge.
     col = col.push(
@@ -384,7 +394,8 @@ fn view_library_block<'a>(
             .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([SP.s, SP.xl]),
+        .padding([SP.s, SP.xl])
+        .boxed(),
     );
 
     // Rows come from the cache `update` keeps current (lowercase keys and
@@ -422,7 +433,8 @@ fn view_library_block<'a>(
                 .size(ROW_TEXT_SIZE)
                 .color(muted),
             )
-            .padding([SP.xs, 28.0]),
+            .padding([SP.xs, 28.0])
+            .boxed(),
         );
     }
 
@@ -433,11 +445,12 @@ fn view_library_block<'a>(
                     .size(ROW_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([SP.xs, 28.0]),
+            .padding([SP.xs, 28.0])
+            .boxed(),
         );
     }
 
-    col.into()
+    col.boxed()
 }
 
 /// One row: `(internal_pn — mpn)  manufacturer`. A press selects it and
@@ -501,7 +514,7 @@ fn view_row_button<'a>(
         .on_right_press(LibraryMessage::ComponentsPanelRowRightClicked(key.clone()))
         .on_enter(LibraryMessage::ComponentsPanelRowEntered(key.clone()))
         .on_exit(LibraryMessage::ComponentsPanelRowExited(key))
-        .into()
+        .boxed()
 }
 
 fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
@@ -512,7 +525,7 @@ fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
             background: Some(Background::Color(border_c)),
             ..iced::widget::container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]
@@ -637,7 +650,6 @@ mod tests {
     /// asks for the menu.
     #[test]
     fn a_row_has_no_buttons_and_publishes_press_and_right_click() {
-        use iced::advanced::clipboard;
         use iced::{Event, Point, Size, mouse};
         use iced_runtime::UserInterface;
         use iced_runtime::user_interface::Cache;
@@ -672,15 +684,17 @@ mod tests {
         let publish = |events: &[Event]| {
             let mut renderer = crate::layout_probe::headless_renderer();
             let mut ui = UserInterface::build(build(), window, Cache::default(), &mut renderer);
-            let mut published = Vec::new();
+            let mut published = iced::advanced::shell::Bus::new();
             let _ = ui.update(
+                &iced::window::Headless,
+                &iced::advanced::shell::Waker::noop(),
                 events,
                 mouse::Cursor::Available(at),
                 &mut renderer,
-                &mut clipboard::Null,
                 &mut published,
             );
             // Hover enter/exit are not clicks.
+            let mut published: Vec<LibraryMessage> = published.into_iter().collect();
             published.retain(|m| {
                 !matches!(
                     m,

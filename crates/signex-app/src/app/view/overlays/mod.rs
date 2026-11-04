@@ -129,7 +129,7 @@ impl Signex {
             .spacing(SP.s)
             .width(Length::Fill)
             .align_y(iced::Alignment::Start)
-            .into()
+            .boxed()
         };
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(4);
@@ -168,6 +168,7 @@ impl Signex {
                     color: border_c,
                     width: 1.0,
                     radius: 4.0.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             });
@@ -180,7 +181,7 @@ impl Signex {
         let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let (x, y) =
             canvas_region::place_card((sx, sy), (CARD_W, estimated_h), self.card_bounds(window_id));
-        Some(super::view::translate::Translate::new(card, (x, y)).into())
+        Some(super::view::translate::Translate::new(card.boxed(), (x, y)).boxed())
     }
 
     /// Result list for the chrome-strip command palette. Anchored
@@ -264,22 +265,23 @@ impl Signex {
                             } else {
                                 Color::TRANSPARENT
                             },
+                            ..Border::default()
                         },
                         text_color: text_c,
                         ..button::Style::default()
                     }
                 });
-            rows.push(btn.into());
+            rows.push(btn.boxed());
         }
 
         let body: Element<'_, Message> = if total == 0 {
             container(text("No results").size(TS.label).color(muted_c))
                 .padding([SP.l, 14.0])
                 .width(Length::Fill)
-                .into()
+                .boxed()
         } else {
             let list = column(rows).spacing(SP.xs).padding(SP.s);
-            scrollable(list).height(Length::Shrink).into()
+            scrollable(list).height(Length::Shrink).boxed()
         };
 
         // Footer when there are more matches than we render.
@@ -294,9 +296,9 @@ impl Signex {
             )
             .padding([SP.s, 14.0])
             .width(Length::Fill)
-            .into()
+            .boxed()
         } else {
-            Space::new().height(0).into()
+            Space::new().height(0).boxed()
         };
 
         // Card width and x come from the same geometry the chrome strip
@@ -306,7 +308,7 @@ impl Signex {
         let (card_x, card_w) = self.chrome_search_bar_geometry();
         let card = container(column![body, footer])
             .width(card_w)
-            .max_height(360.0)
+            .height(Length::Fit.max(360.0))
             .padding(0)
             .style(move |_: &iced::Theme| container::Style {
                 background: Some(Background::Color(panel_bg)),
@@ -314,12 +316,13 @@ impl Signex {
                     color: border_c,
                     width: 1.0,
                     radius: 6.0.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             });
 
         let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
-        super::view::translate::Translate::new(card, (card_x, y)).into()
+        super::view::translate::Translate::new(card.boxed(), (card_x, y)).boxed()
     }
 
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
@@ -356,7 +359,7 @@ impl Signex {
                 }),
         )
         .on_press(on_press)
-        .into()
+        .boxed()
     }
 
     /// Active-bar dropdown menu (Place / Align / filter presets etc.).
@@ -380,7 +383,8 @@ impl Signex {
             has_selection,
             has_net_colors,
         )
-        .map(Message::ActiveBar);
+        .map(Message::ActiveBar)
+        .boxed();
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
         // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
         // plus a small gap so the dropdown visually touches.
@@ -395,7 +399,7 @@ impl Signex {
             Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,
             )),
-            super::translate::Translate::new(dropdown, (adjusted_x, ab_y)).into(),
+            super::translate::Translate::new(dropdown, (adjusted_x, ab_y)).boxed(),
         ]
     }
 
@@ -442,7 +446,7 @@ impl Signex {
                 ]
                 .width(Length::Fill),
             ]
-            .into(),
+            .boxed(),
         );
         // Submenu (Place / Align) — pop to the right of the parent
         // menu (or left if the right edge would overflow), and
@@ -498,7 +502,7 @@ impl Signex {
                     ]
                     .width(Length::Fill),
                 ]
-                .into(),
+                .boxed(),
             );
         }
         out
@@ -537,7 +541,7 @@ impl Signex {
                 ]
                 .width(Length::Fill),
             ]
-            .into(),
+            .boxed(),
         ]
     }
 
@@ -569,7 +573,7 @@ impl Signex {
                 ]
                 .width(Length::Fill),
             ]
-            .into(),
+            .boxed(),
         ]
     }
 
@@ -612,7 +616,7 @@ impl Signex {
                 ]
                 .width(Length::Fill),
             ]
-            .into(),
+            .boxed(),
         );
         // Adjacent submenu (currently only AddNewToProject opens
         // from this menu). Mirrors the canvas-menu submenu logic
@@ -649,7 +653,7 @@ impl Signex {
                     ]
                     .width(Length::Fill),
                 ]
-                .into(),
+                .boxed(),
             );
         }
         out
@@ -683,7 +687,7 @@ impl Signex {
                 ]
                 .width(Length::Fill),
             ]
-            .into(),
+            .boxed(),
         ]
     }
 
@@ -708,21 +712,21 @@ impl Signex {
                 .style(zone_style)
         };
         Some(match position {
-            crate::dock::PanelPosition::Left => zone(depth.into(), Length::Fill).into(),
+            crate::dock::PanelPosition::Left => zone(depth.into(), Length::Fill).boxed(),
             crate::dock::PanelPosition::Right => row![
                 iced::widget::Space::new().width(Length::Fill),
                 zone(depth.into(), Length::Fill),
             ]
             .width(Length::Fill)
             .height(Length::Fill)
-            .into(),
+            .boxed(),
             crate::dock::PanelPosition::Bottom => column![
                 iced::widget::Space::new().height(Length::Fill),
                 zone(Length::Fill, depth.into()),
             ]
             .width(Length::Fill)
             .height(Length::Fill)
-            .into(),
+            .boxed(),
         })
     }
 
@@ -740,8 +744,11 @@ impl Signex {
             {
                 let fp = &document.dock.floating[i];
                 out.push(
-                    super::translate::Translate::new(panel_widget.map(Message::Dock), (fp.x, fp.y))
-                        .into(),
+                    super::translate::Translate::new(
+                        panel_widget.map(Message::Dock).boxed(),
+                        (fp.x, fp.y),
+                    )
+                    .boxed(),
                 );
             }
         }

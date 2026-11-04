@@ -6,6 +6,7 @@
 use super::super::*;
 use super::drawing_preview::DrawingPreview;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -72,17 +73,18 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         } else {
             text(elem_type.clone())
                 .size(TS.body)
                 .color(Color::from_rgb(0.90, 0.90, 0.92))
-                .into()
+                .boxed()
         };
     col = col.push(
         container(header_row)
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
@@ -100,7 +102,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         let canvas_w: Element<'a, PanelMsg> = iced::widget::canvas(preview)
             .width(Length::Fill)
             .height(Length::Fixed(160.0))
-            .into();
+            .boxed();
         col = col.push(
             container(canvas_w)
                 .padding([SP.m, SP.l])
@@ -111,9 +113,11 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                         width: 1.0,
                         color: border_c,
                         radius: 0.0.into(),
+                        ..Border::default()
                     },
                     ..container::Style::default()
-                }),
+                })
+                .boxed(),
         );
     }
 
@@ -122,241 +126,256 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         "Line" => {
             let (sx, sy) = parse_pair(&get("Start"));
             let (ex, ey) = parse_pair(&get("End"));
-            col = col.push(collapsible_section(
-                "draw_line",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Start X",
-                        DrawingFieldId::LineStartX,
-                        sx,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Start Y",
-                        DrawingFieldId::LineStartY,
-                        sy,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "End X",
-                        DrawingFieldId::LineEndX,
-                        ex,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "End Y",
-                        DrawingFieldId::LineEndY,
-                        ey,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Width (mm)",
-                        DrawingFieldId::LineWidth,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    c
-                },
-            ));
+            col = col.push(
+                collapsible_section(
+                    "draw_line",
+                    "Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(drawing_num_row(
+                            "Start X",
+                            DrawingFieldId::LineStartX,
+                            sx,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Start Y",
+                            DrawingFieldId::LineStartY,
+                            sy,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "End X",
+                            DrawingFieldId::LineEndX,
+                            ex,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "End Y",
+                            DrawingFieldId::LineEndY,
+                            ey,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Width (mm)",
+                            DrawingFieldId::LineWidth,
+                            stroke_w,
+                            buf,
+                            muted,
+                        ));
+                        c
+                    },
+                )
+                .boxed(),
+            );
         }
         "Rectangle" => {
             let (px, py) = parse_pair(&get("Position"));
             let w_mm = parse_f64(&get("Width"));
             let h_mm = parse_f64(&get("Height"));
-            col = col.push(collapsible_section(
-                "draw_rect",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Position X",
-                        DrawingFieldId::RectStartX,
-                        px,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Position Y",
-                        DrawingFieldId::RectStartY,
-                        py,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Width (mm)",
-                        DrawingFieldId::RectWidth,
-                        w_mm,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Height (mm)",
-                        DrawingFieldId::RectHeight,
-                        h_mm,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Border",
-                        DrawingFieldId::RectBorder,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    if show_fill {
-                        c = c.push(drawing_fill_row(fill, muted, border_c));
-                    }
-                    c
-                },
-            ));
+            col = col.push(
+                collapsible_section(
+                    "draw_rect",
+                    "Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(drawing_num_row(
+                            "Position X",
+                            DrawingFieldId::RectStartX,
+                            px,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Position Y",
+                            DrawingFieldId::RectStartY,
+                            py,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Width (mm)",
+                            DrawingFieldId::RectWidth,
+                            w_mm,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Height (mm)",
+                            DrawingFieldId::RectHeight,
+                            h_mm,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Border",
+                            DrawingFieldId::RectBorder,
+                            stroke_w,
+                            buf,
+                            muted,
+                        ));
+                        if show_fill {
+                            c = c.push(drawing_fill_row(fill, muted, border_c));
+                        }
+                        c
+                    },
+                )
+                .boxed(),
+            );
         }
         "Circle" => {
             let (cx, cy) = parse_pair(&get("Center"));
             let radius = parse_f64(&get("Radius"));
-            col = col.push(collapsible_section(
-                "draw_circle",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Center X",
-                        DrawingFieldId::CircleCenterX,
-                        cx,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Center Y",
-                        DrawingFieldId::CircleCenterY,
-                        cy,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Radius",
-                        DrawingFieldId::CircleRadius,
-                        radius,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Border",
-                        DrawingFieldId::CircleBorder,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    if show_fill {
-                        c = c.push(drawing_fill_row(fill, muted, border_c));
-                    }
-                    c
-                },
-            ));
+            col = col.push(
+                collapsible_section(
+                    "draw_circle",
+                    "Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(drawing_num_row(
+                            "Center X",
+                            DrawingFieldId::CircleCenterX,
+                            cx,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Center Y",
+                            DrawingFieldId::CircleCenterY,
+                            cy,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Radius",
+                            DrawingFieldId::CircleRadius,
+                            radius,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Border",
+                            DrawingFieldId::CircleBorder,
+                            stroke_w,
+                            buf,
+                            muted,
+                        ));
+                        if show_fill {
+                            c = c.push(drawing_fill_row(fill, muted, border_c));
+                        }
+                        c
+                    },
+                )
+                .boxed(),
+            );
         }
         "Arc" => {
             let (cx, cy) = parse_pair(&get("Center"));
             let radius = parse_f64(&get("Radius"));
             let start_angle = parse_f64(&get("Start Angle"));
             let end_angle = parse_f64(&get("End Angle"));
-            col = col.push(collapsible_section(
-                "draw_arc",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Center X",
-                        DrawingFieldId::ArcCenterX,
-                        cx,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Center Y",
-                        DrawingFieldId::ArcCenterY,
-                        cy,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Radius",
-                        DrawingFieldId::ArcRadius,
-                        radius,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Start Angle",
-                        DrawingFieldId::ArcStartAngle,
-                        start_angle,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "End Angle",
-                        DrawingFieldId::ArcEndAngle,
-                        end_angle,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Width",
-                        DrawingFieldId::ArcWidth,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    c
-                },
-            ));
+            col = col.push(
+                collapsible_section(
+                    "draw_arc",
+                    "Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(drawing_num_row(
+                            "Center X",
+                            DrawingFieldId::ArcCenterX,
+                            cx,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Center Y",
+                            DrawingFieldId::ArcCenterY,
+                            cy,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Radius",
+                            DrawingFieldId::ArcRadius,
+                            radius,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Start Angle",
+                            DrawingFieldId::ArcStartAngle,
+                            start_angle,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "End Angle",
+                            DrawingFieldId::ArcEndAngle,
+                            end_angle,
+                            buf,
+                            muted,
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Width",
+                            DrawingFieldId::ArcWidth,
+                            stroke_w,
+                            buf,
+                            muted,
+                        ));
+                        c
+                    },
+                )
+                .boxed(),
+            );
         }
         "Polygon" => {
             let vert_count = parse_f64(&get("Vertices")) as i32;
-            col = col.push(collapsible_section(
-                "draw_poly",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(prop_kv_row(
-                        "Vertices",
-                        &vert_count.to_string(),
-                        muted,
-                        Color::from_rgb(0.90, 0.90, 0.92),
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Border",
-                        DrawingFieldId::PolyBorder,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    if show_fill {
-                        c = c.push(drawing_fill_row(fill, muted, border_c));
-                    }
-                    c
-                },
-            ));
+            col = col.push(
+                collapsible_section(
+                    "draw_poly",
+                    "Properties",
+                    &ctx.collapsed_sections,
+                    muted,
+                    border_c,
+                    move || {
+                        let mut c = Column::new().spacing(0).width(Length::Fill);
+                        c = c.push(prop_kv_row(
+                            "Vertices",
+                            &vert_count.to_string(),
+                            muted,
+                            Color::from_rgb(0.90, 0.90, 0.92),
+                        ));
+                        c = c.push(drawing_num_row(
+                            "Border",
+                            DrawingFieldId::PolyBorder,
+                            stroke_w,
+                            buf,
+                            muted,
+                        ));
+                        if show_fill {
+                            c = c.push(drawing_fill_row(fill, muted, border_c));
+                        }
+                        c
+                    },
+                )
+                .boxed(),
+            );
         }
         _ => {
             for (key, value) in &ctx.selection_info {
@@ -388,7 +407,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         col = col.push(drawing_stroke_color_row(current_color, muted));
         col = col.push(drawing_placement_row(ctx.selected_drawing_placement, muted));
     }
-    col.into()
+    col.boxed()
 }
 
 /// Buffer-backed numeric row — survives empty / partial input so the
@@ -412,7 +431,7 @@ fn drawing_num_row<'a>(
             .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(2)),
-        text_input("", &display)
+        text_input("", display)
             .size(TS.body)
             .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
             .width(Length::FillPortion(3)),
@@ -420,7 +439,7 @@ fn drawing_num_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// Altium-style stroke colour swatch row. A small preset palette
@@ -453,11 +472,12 @@ fn drawing_stroke_color_row<'a>(
                     } else {
                         Color::from_rgb(0.28, 0.28, 0.32)
                     },
+                    ..Border::default()
                 },
                 text_color: Color::WHITE,
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     let is_active = |c: Option<StrokeColor>| -> bool {
         match (current, c) {
@@ -516,7 +536,7 @@ fn drawing_stroke_color_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// Behind / Above the circuit. Drawings default to behind, so a highlight or
@@ -542,6 +562,7 @@ fn drawing_placement_row<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: Color::from_rgb(0.28, 0.28, 0.32),
+                    ..Border::default()
                 },
                 text_color: if active {
                     Color::from_rgb(1.0, 1.0, 1.0)
@@ -550,7 +571,7 @@ fn drawing_placement_row<'a>(
                 },
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     row![
         text("Placement")
@@ -567,7 +588,7 @@ fn drawing_placement_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn drawing_fill_row<'a>(
@@ -591,6 +612,7 @@ fn drawing_fill_row<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: Color::from_rgb(0.28, 0.28, 0.32),
+                    ..Border::default()
                 },
                 text_color: if active {
                     Color::from_rgb(1.0, 1.0, 1.0)
@@ -599,7 +621,7 @@ fn drawing_fill_row<'a>(
                 },
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     row![
         text("Fill")
@@ -621,5 +643,5 @@ fn drawing_fill_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }

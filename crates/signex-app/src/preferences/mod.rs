@@ -5,7 +5,7 @@
 //! Right side: settings panel for the selected category.
 
 use crate::render_config::{GridStyle, PinSelectionMode};
-use iced::widget::{Column, Space, button, column, container, row, scrollable, svg, text};
+use iced::widget::{Column, Space, Widget, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 
@@ -375,10 +375,8 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 // In-app overlay: keep a centred, capped card (the detached
                 // window path uses `view_body` directly and fills the window).
                 container(dialog)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .max_width(DLG_W)
-                    .max_height(DLG_H),
+                    .width(Length::Fill.max(DLG_W))
+                    .height(Length::Fill.max(DLG_H)),
                 Space::new().width(Length::Fill),
             ],
             Space::new().height(Length::Fill),
@@ -392,7 +390,7 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.65))),
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 // ─── Dialog shell ─────────────────────────────────────────────
@@ -433,9 +431,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
     .height(MODAL_HEADER_HEIGHT)
     .padding(MODAL_HEADER_PADDING)
     .style(move |theme: &Theme| container::Style {
-        background: Some(Background::Color(
-            theme.extended_palette().background.weak.color,
-        )),
+        background: Some(Background::Color(theme.palette().background.weak.color)),
         border: Border {
             width: 0.0,
             radius: iced::border::Radius::default()
@@ -454,9 +450,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
             .width(1)
             .height(Length::Fill)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(
-                    theme.extended_palette().background.strong.color
-                )),
+                background: Some(Background::Color(theme.palette().background.strong.color)),
                 ..container::Style::default()
             }),
         build_content(v),
@@ -473,12 +467,10 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
             .width(Length::Fill)
             .height(1)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(
-                    theme.extended_palette().background.strong.color,
-                )),
+                background: Some(Background::Color(theme.palette().background.strong.color)),
                 ..container::Style::default()
             })
-            .into()
+            .boxed()
     };
 
     // The prefs-file banner sits above the nav / content split, so it is
@@ -487,13 +479,13 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
     // insertion covers the in-app overlay and the detached OS window.
     let mut col_items: Vec<Element<'a, PrefMsg>> = Vec::new();
     if with_header {
-        col_items.push(header.into());
+        col_items.push(header.boxed());
         col_items.push(h_divider());
     }
     if let Some(banner) = build_prefs_file_banner(prefs_load_error, prefs_status) {
         col_items.push(banner);
     }
-    col_items.push(body.into());
+    col_items.push(body.boxed());
     if let Some(footer) = footer_opt {
         col_items.push(h_divider());
         col_items.push(footer);
@@ -507,13 +499,12 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.extended_palette().background.base.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.base.color)),
             border: Border {
                 width: 1.0,
                 radius: MODAL_CORNER_RADIUS.into(),
-                color: theme.extended_palette().background.strong.color,
+                color: theme.palette().background.strong.color,
+                ..Border::default()
             },
             shadow: iced::Shadow {
                 color: Color::from_rgba(0.0, 0.0, 0.0, 0.7),
@@ -523,7 +514,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
             ..container::Style::default()
         })
         .clip(true)
-        .into()
+        .boxed()
 }
 
 // ─── Left navigation ──────────────────────────────────────────
@@ -545,7 +536,8 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
                         bottom: 4.0,
                         left: 12.0,
                     })
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
             );
         }
         col = col.push(nav_item(item, active));
@@ -555,12 +547,10 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
         .width(NAV_W)
         .height(Length::Fill)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.extended_palette().background.weak.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.weak.color)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
@@ -573,10 +563,11 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
                     .size(TS.label)
                     .style(move |theme: &Theme| text::Style {
                         color: Some(if is_active {
-                            theme.extended_palette().primary.base.text
+                            theme.palette().primary.base.text
                         } else {
-                            theme.extended_palette().background.base.text
+                            theme.palette().background.base.text
                         }),
+                        selection: None,
                     }),
             ]
             .align_y(iced::Alignment::Center),
@@ -588,7 +579,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
     .width(Length::Fill)
     .on_press(PrefMsg::Nav(item))
     .style(move |theme: &Theme, status: button::Status| {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let bg = match (is_active, status) {
             (true, _) => Some(Background::Color(palette.primary.base.color)),
             (false, button::Status::Hovered) => {
@@ -607,7 +598,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
             ..button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 // ─── Right content ────────────────────────────────────────────
@@ -676,12 +667,10 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         .height(Length::Fill)
         .padding(0)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.extended_palette().background.base.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.base.color)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Canonical close-X — same SVG glyph and red hover footprint as the
@@ -700,7 +689,7 @@ fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
                 // light header; the red hover footprint contrasts with the
                 // near-white/near-black text colour on both palettes.
                 .style(move |theme: &Theme, _| svg::Style {
-                    color: Some(theme.extended_palette().background.base.text),
+                    color: Some(theme.palette().background.base.text),
                 }),
         )
         .width(MODAL_CLOSE_X_HIT_W)
@@ -731,7 +720,7 @@ fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
             ..button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 /// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).
@@ -750,7 +739,7 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         save_btn(),
     ]
     .align_y(iced::Alignment::Center)
-    .into();
+    .boxed();
 
     Some(
         container(footer_row)
@@ -773,7 +762,7 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
             // as cramped even though the footer's own height is fixed.
             .padding([0, 20])
             .style(move |theme: &Theme| {
-                let palette = theme.extended_palette();
+                let palette = theme.palette();
                 container::Style {
                     background: Some(Background::Color(palette.background.weak.color)),
                     border: Border {
@@ -782,11 +771,12 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
                         radius: iced::border::Radius::default()
                             .bottom_left(MODAL_CORNER_RADIUS)
                             .bottom_right(MODAL_CORNER_RADIUS),
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 }
             })
-            .into(),
+            .boxed(),
     )
 }
 
@@ -871,7 +861,8 @@ fn build_prefs_file_banner<'a>(
                 // hovering merged it with its own frame. `primary` is the
                 // one tone that contrasts on `background.weak` — and this
                 // is the single action the whole strip exists to offer.
-                .style(primary_button_style),
+                .style(primary_button_style)
+                .boxed(),
         );
     }
 
@@ -884,7 +875,7 @@ fn build_prefs_file_banner<'a>(
             // against the divider above and the nav column below.
             .padding([SP.l, SP.xl])
             .style(move |theme: &Theme| {
-                let palette = theme.extended_palette();
+                let palette = theme.palette();
                 container::Style {
                     background: Some(Background::Color(palette.background.weak.color)),
                     border: Border {
@@ -895,7 +886,7 @@ fn build_prefs_file_banner<'a>(
                     ..container::Style::default()
                 }
             })
-            .into(),
+            .boxed(),
     )
 }
 
@@ -904,7 +895,7 @@ fn save_btn<'a>() -> Element<'a, PrefMsg> {
         .padding([SP.m, 20.0])
         .on_press(PrefMsg::Save)
         .style(success_button_style)
-        .into()
+        .boxed()
 }
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
@@ -912,7 +903,7 @@ fn discard_btn<'a>() -> Element<'a, PrefMsg> {
         .padding([SP.m, SP.xl])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

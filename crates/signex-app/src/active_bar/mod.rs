@@ -3,7 +3,7 @@
 //! 13 icon buttons, each with an optional dropdown menu.
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
-use iced::widget::{button, svg, text};
+use iced::widget::{Widget, button, svg, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
@@ -728,10 +728,11 @@ fn bar_items(
                         width: 0.0,
                         radius: 3.0.into(),
                         color: Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..button::Style::default()
                 })
-                .into();
+                .boxed();
         // Declared width (see `DRAW_MODE_PILL_WIDTH_PX`), not measured
         // because `slot_offsets` places every dropdown from these
         // widths — see `ActiveBarItem::Custom`. This pill sits AFTER

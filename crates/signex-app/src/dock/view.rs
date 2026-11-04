@@ -1,6 +1,8 @@
 //! Dock rendering: region tab strips, collapsed rails, and floating panels.
 
-use iced::widget::{Column, Space, button, canvas, column, container, mouse_area, row, svg, text};
+use iced::widget::{
+    Column, Space, Widget, button, canvas, column, container, mouse_area, row, svg, text,
+};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
 use super::types::*;
@@ -33,7 +35,7 @@ impl DockArea {
         };
 
         if region.panels.is_empty() {
-            return container(text("")).width(0).into();
+            return container(text("")).width(0).boxed();
         }
 
         if region.collapsed {
@@ -54,11 +56,14 @@ impl DockArea {
             let arrow = button(text("<").size(TS.caption))
                 .padding([SP.s, SP.s])
                 .style(button::text);
-            tab_row = tab_row.push(if can_scroll_left {
-                arrow.on_press(DockMessage::TabScroll(position, -1))
-            } else {
-                arrow
-            });
+            tab_row = tab_row.push(
+                if can_scroll_left {
+                    arrow.on_press(DockMessage::TabScroll(position, -1))
+                } else {
+                    arrow
+                }
+                .boxed(),
+            );
         }
 
         // Last visible panel index drives the `is_last` flag so
@@ -133,14 +138,17 @@ impl DockArea {
                     .wrapping(iced::widget::text::Wrapping::None),
             )
             .padding([SP.s, 10.0]);
-            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(inner, pill_style))
-                .on_enter(DockMessage::TabHoverEnter(position, i))
-                .on_exit(DockMessage::TabHoverExit(position, i))
-                .on_press(DockMessage::TabDragStart(position, i))
-                .on_release(DockMessage::TabClick(position, i))
-                .on_right_press(DockMessage::TabContextMenuRequested(position, i));
+            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(
+                inner.boxed(),
+                pill_style,
+            ))
+            .on_enter(DockMessage::TabHoverEnter(position, i))
+            .on_exit(DockMessage::TabHoverExit(position, i))
+            .on_press(DockMessage::TabDragStart(position, i))
+            .on_release(DockMessage::TabClick(position, i))
+            .on_right_press(DockMessage::TabContextMenuRequested(position, i));
 
-            tab_row = tab_row.push(tab);
+            tab_row = tab_row.push(tab.boxed());
         }
 
         // Right scroll arrow (only when more tabs are hidden)
@@ -148,11 +156,14 @@ impl DockArea {
             let arrow = button(text(">").size(TS.caption))
                 .padding([SP.s, SP.s])
                 .style(button::text);
-            tab_row = tab_row.push(if can_scroll_right {
-                arrow.on_press(DockMessage::TabScroll(position, 1))
-            } else {
-                arrow
-            });
+            tab_row = tab_row.push(
+                if can_scroll_right {
+                    arrow.on_press(DockMessage::TabScroll(position, 1))
+                } else {
+                    arrow
+                }
+                .boxed(),
+            );
         }
 
         // Collapse button (SVG icon)
@@ -211,7 +222,9 @@ impl DockArea {
                         // library subsystem, not in `panels::view_panel`.
                         // Wrap the LibraryMessage in DockMessage::Library
                         // so the dispatcher can route it back out.
-                        crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
+                        crate::library::panel::view(library, &ctx.tokens)
+                            .map(DockMessage::Library)
+                            .boxed()
                     }
                     PanelKind::Components => {
                         // v0.9 Stage 9 Components Panel — three mount
@@ -223,11 +236,14 @@ impl DockArea {
                         // dock signature stays narrow.
                         panels::components_panel::view(library, ctx, &ctx.tokens)
                             .map(DockMessage::Library)
+                            .boxed()
                     }
-                    _ => panels::view_panel(*panel, ctx).map(DockMessage::Panel),
+                    _ => panels::view_panel(*panel, ctx)
+                        .map(DockMessage::Panel)
+                        .boxed(),
                 }
             } else {
-                text("").into()
+                text("").boxed()
             };
 
         // Altium parity: title + collapse/close on top, tabs on the
@@ -252,7 +268,7 @@ impl DockArea {
                 .clip(true)
                 .style(styles::tab_bar_strip(&ctx.tokens)),
         ]
-        .into()
+        .boxed()
     }
 
     fn view_rail<'a>(
@@ -266,7 +282,7 @@ impl DockArea {
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);
 
         if is_vertical {
-            let mut rail: Column<DockMessage> = Column::new().spacing(SP.xs);
+            let mut rail: Column<Element<'a, DockMessage>> = Column::new().spacing(SP.xs);
 
             // Expand button with SVG arrow
             let tid = ctx.theme_id;
@@ -280,7 +296,8 @@ impl DockArea {
                     .padding(SP.s)
                     .width(RAIL_CANVAS_W)
                     .style(button::text)
-                    .on_press(DockMessage::ToggleCollapse(position)),
+                    .on_press(DockMessage::ToggleCollapse(position))
+                    .boxed(),
             );
 
             for (i, panel) in region.panels.iter().enumerate() {
@@ -306,7 +323,8 @@ impl DockArea {
                     )
                     .padding(0)
                     .on_press(DockMessage::SelectTab(position, i))
-                    .style(styles::rail_tab(&ctx.tokens, is_active)),
+                    .style(styles::rail_tab(&ctx.tokens, is_active))
+                    .boxed(),
                 );
             }
 
@@ -314,7 +332,7 @@ impl DockArea {
                 .height(Length::Fill)
                 .padding([3.0, SP.xs])
                 .style(styles::collapsed_rail(&ctx.tokens))
-                .into()
+                .boxed()
         } else {
             // Bottom panel collapsed: horizontal thin strip with tab labels
             let mut rail = row![].spacing(SP.xs);
@@ -332,7 +350,8 @@ impl DockArea {
                     button(text(label).size(TS.caption).color(text_c))
                         .padding([SP.xs, SP.m])
                         .on_press(DockMessage::SelectTab(position, i))
-                        .style(button::text),
+                        .style(button::text)
+                        .boxed(),
                 );
             }
 
@@ -341,7 +360,7 @@ impl DockArea {
                 .height(28)
                 .padding([SP.xs, SP.s])
                 .style(styles::collapsed_rail(&ctx.tokens))
-                .into()
+                .boxed()
         }
     }
 
@@ -378,13 +397,15 @@ impl DockArea {
             .on_release(DockMessage::FloatingDragEnd(idx));
 
         let content: Element<'a, DockMessage> = match kind {
-            PanelKind::Library => {
-                crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
-            }
-            PanelKind::Components => {
-                panels::components_panel::view(library, ctx, &ctx.tokens).map(DockMessage::Library)
-            }
-            _ => panels::view_panel(kind, ctx).map(DockMessage::Panel),
+            PanelKind::Library => crate::library::panel::view(library, &ctx.tokens)
+                .map(DockMessage::Library)
+                .boxed(),
+            PanelKind::Components => panels::components_panel::view(library, ctx, &ctx.tokens)
+                .map(DockMessage::Library)
+                .boxed(),
+            _ => panels::view_panel(kind, ctx)
+                .map(DockMessage::Panel)
+                .boxed(),
         };
 
         let panel_widget = container(
@@ -399,7 +420,7 @@ impl DockArea {
         )
         .style(styles::floating_panel_shadow(&ctx.tokens));
 
-        Some(panel_widget.into())
+        Some(panel_widget.boxed())
     }
 }
 

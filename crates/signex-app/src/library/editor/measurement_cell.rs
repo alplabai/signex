@@ -3,7 +3,7 @@
 //! the row's own). Users never type a prefix or a unit.
 
 use iced::widget::{column, row, text, text_input};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_library::{ParamSlot, ParamValue, slot_unit};
 use signex_types::quantity::Unit;
 use signex_types::theme::ThemeTokens;
@@ -81,7 +81,7 @@ pub(super) fn view<'a>(
 
     let input_slot = slot.cloned();
     let (input_address, input_name) = (address.clone(), name.to_string());
-    let field = text_input("", &buf)
+    let field = text_input("", buf)
         .on_input(move |s| {
             super::params::editor_event(
                 &input_address,
@@ -119,22 +119,24 @@ pub(super) fn view<'a>(
         Some(pick) => row![field, pick]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center)
-            .into(),
-        None => field.into(),
+            .boxed(),
+        None => field.boxed(),
     };
     let mut lines = column![line].spacing(SP.xs).width(Length::Fill);
     if let Some(why) = state.params_error.get(name) {
         lines = lines.push(
             text(why.clone())
                 .size(TS.caption)
-                .color(theme_ext::error_color(tokens)),
+                .color(theme_ext::error_color(tokens))
+                .boxed(),
         );
     } else if let Some(note) = state.params_note.get(name) {
         lines = lines.push(
             text(note.clone())
                 .size(TS.caption)
-                .color(theme_ext::text_secondary(tokens)),
+                .color(theme_ext::text_secondary(tokens))
+                .boxed(),
         );
     }
-    lines.into()
+    lines.boxed()
 }

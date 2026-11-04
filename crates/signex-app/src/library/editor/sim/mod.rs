@@ -17,7 +17,7 @@ pub mod state;
 use iced::widget::{
     Space, checkbox, column, container, pick_list, row, scrollable, text, text_editor, text_input,
 };
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget as _};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -101,22 +101,23 @@ pub fn view<'a>(
             .width(Length::Fill)
             .height(Length::Fill)
             .style(crate::styles::modal_card(tokens))
-            .into();
+            .boxed();
     };
 
     // Header — checkbox + kind picker.
     let lib_path_for_kind = address.library_path.clone();
     let table_for_kind = address.table.clone();
     let kind_picker = pick_list(
-        SIM_KIND_OPTS.map(SimKindPick),
         Some(SimKindPick(sim.kind)),
-        move |SimKindPick(k)| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_kind.clone(),
-            table: table_for_kind.clone(),
-            row_id,
-            msg: EditorMsg::SimSetKind(k),
-        },
+        SIM_KIND_OPTS.map(SimKindPick),
+        |k: &SimKindPick| k.to_string(),
     )
+    .on_select(move |SimKindPick(k)| LibraryMessage::EditorEvent {
+        library_path: lib_path_for_kind.clone(),
+        table: table_for_kind.clone(),
+        row_id,
+        msg: EditorMsg::SimSetKind(k),
+    })
     .text_size(12)
     .padding([SP.s, SP.m]);
 
@@ -152,13 +153,13 @@ pub fn view<'a>(
                 row_id,
                 msg: EditorMsg::SimBodyAction(a),
             });
-        editor_widget.into()
+        editor_widget.boxed()
     } else {
         // sim_body should have been seeded by the SelectTab(Sim) arm.
         // This branch is the safety fallback for tabs that landed on
         // Sim without going through SelectTab — show a passive
         // multi-line view of whatever sim.body has.
-        text(sim.body.clone()).size(TS.body).color(text_c).into()
+        text(sim.body.clone()).size(TS.body).color(text_c).boxed()
     };
     let deck_block = column![text("SPICE deck").size(TS.caption).color(muted), deck,].spacing(SP.s);
 
@@ -176,7 +177,7 @@ pub fn view<'a>(
                 .color(muted),
         )
         .padding([6, 0])
-        .into(),
+        .boxed(),
     };
     let table_block = column![
         text("Pin / Node Map").size(TS.caption).color(muted),
@@ -206,7 +207,7 @@ pub fn view<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .style(crate::styles::modal_card(tokens))
-        .into()
+        .boxed()
 }
 
 fn view_pin_node_table<'a>(
@@ -221,7 +222,7 @@ fn view_pin_node_table<'a>(
     if pins.is_empty() {
         return container(text("(symbol has no pins yet)").size(TS.body).color(muted))
             .padding([6, 0])
-            .into();
+            .boxed();
     }
 
     let header = row![
@@ -252,11 +253,12 @@ fn view_pin_node_table<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Default::default()
             },
             ..Default::default()
         })
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn pin_node_row<'a>(
@@ -278,7 +280,7 @@ fn pin_node_row<'a>(
     let lib_path_for_input = address.library_path.clone();
     let table_for_input = address.table.clone();
     let row_id = address.row_id;
-    let input = text_input("net", &buf)
+    let input = text_input("net", buf)
         .padding([3, 6])
         .size(TS.body)
         .on_input(move |s| LibraryMessage::EditorEvent {
@@ -318,10 +320,11 @@ fn pin_node_row<'a>(
             width: 1.0,
             radius: 2.0.into(),
             color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+            ..Default::default()
         },
         ..Default::default()
     })
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

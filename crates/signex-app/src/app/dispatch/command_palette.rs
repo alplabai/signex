@@ -53,7 +53,7 @@ impl Signex {
         // over without the user clearing the previous query manually.
         Task::batch([
             operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
-            operation::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            operation::text_input::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
             // The project-wide rows come from an index built off-thread.
             self.start_palette_index(),
         ])
@@ -277,7 +277,12 @@ mod tests {
 
         let task = app.execute_command_palette_selected();
 
-        assert_eq!(task.units(), 1, "the cached row's action must run");
+        // `Task::done` carries a stream but no work "units" in the iced fork,
+        // so check for a stream rather than `units()`.
+        assert!(
+            iced_runtime::task::into_stream(task).is_some(),
+            "the cached row's action must run"
+        );
         assert!(!app.ui_state.command_palette.open);
     }
 

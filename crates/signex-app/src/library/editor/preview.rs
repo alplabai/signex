@@ -11,7 +11,7 @@
 //! the Footprint render: pad outlines on a flat board with no input
 //! capture.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, Widget, button, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
 use signex_library::{Footprint, Symbol, SymbolGraphicKind};
 use signex_types::theme::{CanvasColors, ThemeTokens};
@@ -65,7 +65,7 @@ pub fn view<'a>(
     container(scrollable(body).width(Length::Fill).height(Length::Fill))
         .padding(14)
         .style(crate::styles::modal_card(tokens))
-        .into()
+        .boxed()
 }
 
 fn header_row<'a>(
@@ -94,7 +94,7 @@ fn header_row<'a>(
         .color(muted),
     ]
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn render_panes<'a>(
@@ -168,6 +168,7 @@ fn render_panes<'a>(
                 device_px_per_logical_px,
             )
             .map(|()| LibraryMessage::Noop)
+            .boxed()
         });
     let symbol_pane = render_pane(
         "Symbol",
@@ -199,7 +200,7 @@ fn render_panes<'a>(
             iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into()
+                .boxed()
         });
     let footprint_pane = render_pane(
         "Footprint",
@@ -225,7 +226,7 @@ fn render_panes<'a>(
             .height(Length::Fixed(PREVIEW_PANE_HEIGHT)),
     ]
     .align_y(iced::Alignment::Start)
-    .into()
+    .boxed()
 }
 
 fn render_pane<'a>(
@@ -255,7 +256,7 @@ fn render_pane<'a>(
 
     let content: Element<'a, LibraryMessage> = match drawing {
         Some(drawing) => drawing,
-        None => text(summary).size(TS.body).color(text_c).into(),
+        None => text(summary).size(TS.body).color(text_c).boxed(),
     };
     let body = container(content)
         .padding(10)
@@ -267,6 +268,7 @@ fn render_pane<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..Default::default()
         });
@@ -275,7 +277,7 @@ fn render_pane<'a>(
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn symbol_summary_text(sym: Option<&Symbol>) -> String {
@@ -376,11 +378,12 @@ fn open_btn<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
 }
 
 /// The `.snxsym` a row's symbol ref points at, resolved through the
@@ -419,18 +422,20 @@ fn pin_map_subsection<'a>(
         col = col.push(
             text("Pin map view requires the symbol to be resolved.")
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
-        return col.into();
+        return col.boxed();
     };
 
     if sym.pins.is_empty() {
         col = col.push(
             text("Symbol has no pins yet — open the Symbol Editor to add some.")
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
-        return col.into();
+        return col.boxed();
     }
 
     // Header row.
@@ -451,7 +456,8 @@ fn pin_map_subsection<'a>(
             text("").size(TS.caption).width(Length::FillPortion(1)),
         ]
         .align_y(iced::Alignment::Center)
-        .padding([SP.xs, SP.s]),
+        .padding([SP.xs, SP.s])
+        .boxed(),
     );
 
     for pin in &sym.pins {
@@ -497,7 +503,8 @@ fn pin_map_subsection<'a>(
                 .width(Length::FillPortion(1)),
             ]
             .align_y(iced::Alignment::Center)
-            .padding([SP.xs, SP.s]),
+            .padding([SP.xs, SP.s])
+            .boxed(),
         );
 
         // Inline override editor for the expanded row.
@@ -511,7 +518,7 @@ fn pin_map_subsection<'a>(
         }
     }
 
-    col.into()
+    col.boxed()
 }
 
 fn override_action_btn<'a>(
@@ -556,16 +563,17 @@ fn override_action_btn<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
 }
 
 fn override_editor_row<'a>(
     pin_number: &str,
-    buf: &str,
+    buf: &'a str,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -639,6 +647,7 @@ fn override_editor_row<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         });
@@ -664,6 +673,7 @@ fn override_editor_row<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         });
@@ -685,7 +695,7 @@ fn override_editor_row<'a>(
         .spacing(0),
     )
     .padding([SP.s, 14.0])
-    .into()
+    .boxed()
 }
 
 fn where_used_footer<'a>(
@@ -713,5 +723,5 @@ fn where_used_footer<'a>(
         )
     };
 
-    text(label).size(TS.caption).color(muted).into()
+    text(label).size(TS.caption).color(muted).boxed()
 }

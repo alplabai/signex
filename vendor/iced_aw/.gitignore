@@ -1,0 +1,10 @@
+.devenv
+.direnv
+
+target/
+pkg/
+.idea
+.DS_Store
+.vscode/settings.json
+
+cobertura.xml

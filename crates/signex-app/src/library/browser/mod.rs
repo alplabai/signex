@@ -13,7 +13,7 @@ use iced::widget::{
     Column, Space, button, column, container, mouse_area, pick_list, row, scrollable, text,
     text_input,
 };
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{ComponentRow, LifecycleState, RowId};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -100,7 +100,7 @@ pub fn view<'a>(
             .padding(20)
             .center(Length::Fill)
             .style(crate::styles::modal_card(tokens))
-            .into();
+            .boxed();
         }
     };
 
@@ -116,7 +116,7 @@ pub fn view<'a>(
         ]
         .width(Length::Fill)
         .height(Length::Fill)
-        .into();
+        .boxed();
     }
 
     // Master-detail layout: left pane lists tables (vertical), right
@@ -225,7 +225,7 @@ pub fn view<'a>(
             }
         },
     )
-    .map(|bar| container(bar).padding([4, 10]));
+    .map(|bar| container(bar).padding([4, 10]).boxed());
 
     let banner = view_uncommitted_banner(library_path, library_state, tokens);
     let mut right = column![header, banner].spacing(0);
@@ -237,7 +237,8 @@ pub fn view<'a>(
             container(body)
                 .padding(SP.m)
                 .width(Length::Fill)
-                .height(Length::Fill),
+                .height(Length::Fill)
+                .boxed(),
         )
         .width(Length::Fill)
         .height(Length::Fill);
@@ -253,5 +254,5 @@ pub fn view<'a>(
     row![table_sidebar, separator, right]
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }

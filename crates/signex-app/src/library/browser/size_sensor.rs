@@ -8,8 +8,9 @@
 //! state already knows.
 
 use iced::advanced::layout::{self, Layout};
+use iced::advanced::widget::Meta;
 use iced::advanced::widget::{Operation, Tree, tree};
-use iced::advanced::{Clipboard, Shell, Widget, mouse, overlay, renderer};
+use iced::advanced::{Shell, Widget, mouse, overlay, renderer};
 use iced::{Element, Event, Length, Rectangle, Size, Vector, window};
 
 /// Height changes smaller than this are layout rounding, not a resize.
@@ -42,6 +43,8 @@ pub(super) fn sense_height<'a, Message, Theme, Renderer>(
     }
 }
 
+impl<Message, Theme, Renderer> Meta for SizeSensor<'_, Message, Theme, Renderer> {}
+
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for SizeSensor<'_, Message, Theme, Renderer>
 where
@@ -61,59 +64,52 @@ where
         })
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
+    fn diff(&mut self, tree: &mut Tree) {
+        if tree.children.len() != 1 {
+            tree.children = vec![Tree::new(&self.content)];
+        }
 
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
+        tree.children[0].diff(&mut self.content);
     }
 
     fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
+        self.content.size()
     }
 
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &layout::Limits) {
+        self.content.layout(&mut tree.children[0], renderer, limits);
+
+        tree.size = tree.children[0].size;
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
         self.content
-            .as_widget_mut()
-            .operate(&mut tree.children[0], layout, renderer, operation);
+            .operate(&mut tree.children[0], layout, viewport, renderer, operation);
     }
 
     fn update(
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        self.content.as_widget_mut().update(
+        self.content.update(
             &mut tree.children[0],
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -140,18 +136,13 @@ where
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
+        self.content
+            .mouse_interaction(&tree.children[0], layout, cursor, viewport, renderer)
     }
 
     fn draw(
@@ -160,11 +151,11 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        self.content.as_widget().draw(
+        self.content.draw(
             &tree.children[0],
             renderer,
             theme,
@@ -178,17 +169,19 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        self.content.as_widget_mut().overlay(
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content.overlay(
             &mut tree.children[0],
             layout,
             renderer,
             viewport,
             translation,
+            window,
         )
     }
 }
@@ -201,6 +194,6 @@ where
     Renderer: renderer::Renderer + 'a,
 {
     fn from(sensor: SizeSensor<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(sensor)
+        sensor._boxed()
     }
 }

@@ -26,6 +26,7 @@ impl Signex {
         active: crate::app::state::PdfPreviewTab,
     ) -> Element<'_, Message> {
         use crate::app::state::PdfPreviewTab;
+        use iced::Widget;
         use iced::widget::{Space, container, mouse_area, row, text};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -57,7 +58,9 @@ impl Signex {
                 is_last,
                 accent_position: AccentPosition::Bottom,
             };
-            let inner = container(text(label).size(TS.label).color(label_color)).padding([6, 18]);
+            let inner = container(text(label).size(TS.label).color(label_color))
+                .padding([6, 18])
+                .boxed();
             mouse_area(TabPill::new(inner, style))
                 .on_press(Message::PrintPreview(PrintPreviewMsg::SetTab(this)))
                 .interaction(iced::mouse::Interaction::Pointer)
@@ -73,6 +76,6 @@ impl Signex {
             .align_y(iced::Alignment::Center),
         )
         .padding([0, 14])
-        .into()
+        .boxed()
     }
 }

@@ -2,7 +2,7 @@
 
 use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
 use iced::widget::{Row, button, container, mouse_area, row, scrollable, text, tooltip};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
@@ -51,7 +51,11 @@ fn reveal_offset(active: usize, count: usize) -> RelativeOffset {
 
 /// Task scrolling the tab strip so tab `active` (of `count`) is visible.
 pub fn reveal_active_tab<M: Send + 'static>(active: usize, count: usize) -> iced::Task<M> {
-    iced::widget::operation::snap_to(TAB_STRIP_ID, reveal_offset(active, count))
+    iced::widget::operation::scrollable::snap_to(
+        TAB_STRIP_ID,
+        reveal_offset(active, count),
+        iced::widget::operation::Animation::Instant,
+    )
 }
 
 /// The hover text of a tab, or `None` when tooltips are off. They are off
@@ -154,7 +158,8 @@ pub fn view<'a>(
             content = content.push(
                 text(READ_ONLY_LABEL)
                     .size(TAB_FONT_SIZE)
-                    .color(styles::ti(tokens.text_secondary)),
+                    .color(styles::ti(tokens.text_secondary))
+                    .boxed(),
             );
         }
         let close_x = button(
@@ -171,8 +176,8 @@ pub fn view<'a>(
         .on_press(TabMessage::CloseClicked(i));
         let inner = container(
             content
-                .push(text(label).size(TAB_FONT_SIZE).color(text_c))
-                .push(close_x),
+                .push(text(label).size(TAB_FONT_SIZE).color(text_c).boxed())
+                .push(close_x.boxed()),
         )
         .padding([SP.s, 10.0]);
         // Cursor: default Pointer on hover so the bar reads as
@@ -185,12 +190,12 @@ pub fn view<'a>(
         } else {
             iced::mouse::Interaction::Pointer
         };
-        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner, pill_style))
+        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner.boxed(), pill_style))
             .on_press(TabMessage::StartDrag(i))
             .on_release(TabMessage::Select(i))
             .on_right_press(TabMessage::ContextMenu(i))
             .interaction(cursor)
-            .into();
+            .boxed();
         // The pill shows an ellipsized title; hovering names the full path.
         let tab_el: Element<'_, TabMessage> =
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
@@ -200,7 +205,7 @@ pub fn view<'a>(
                     tooltip::Position::Bottom,
                 )
                 .style(styles::context_menu(tokens))
-                .into(),
+                .boxed(),
                 None => tab_el,
             };
         bar = bar.push(tab_el);
@@ -245,7 +250,7 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(TAB_STRIP_HEIGHT)
     .style(styles::toolbar_strip(tokens))
-    .into()
+    .boxed()
 }
 
 /// Height of the document tab strip: the close-x hit box plus the pill's
@@ -269,7 +274,7 @@ pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
         .width(Length::Fill)
         .height(TAB_STRIP_HEIGHT)
         .style(styles::toolbar_strip(tokens))
-        .into()
+        .boxed()
 }
 
 /// Muted marker before the title of a read-only sheet (#1402).
@@ -368,7 +373,7 @@ fn dirty_dot<'a>(tokens: &ThemeTokens) -> Element<'a, TabMessage> {
             },
             ..iced::widget::container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Longest tab title drawn in full; longer ones are cut and end in `…`.
@@ -420,11 +425,12 @@ mod tests {
     #[test]
     fn the_strip_and_its_placeholder_both_use_the_height_token() {
         use iced::Length;
+        use iced::advanced::Widget as _;
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
         let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
 
         let placeholder = super::placeholder::<()>(&tokens);
-        assert_eq!(placeholder.as_widget().size().height, fixed);
+        assert_eq!(placeholder.size().height, fixed);
 
         let none = HashSet::new();
         let marks = super::TabMarks {
@@ -433,7 +439,7 @@ mod tests {
             tooltips_enabled: true,
         };
         let strip = super::view(&[], 0, None, &none, &marks, &tokens);
-        assert_eq!(strip.as_widget().size().height, fixed);
+        assert_eq!(strip.size().height, fixed);
     }
 
     fn tab(path: &str) -> TabInfo {

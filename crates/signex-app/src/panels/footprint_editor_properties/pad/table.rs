@@ -4,7 +4,7 @@
 //! rows, individual data cells) — used by `pad_form::render_pad_form_pad_stack`
 //! to compose the COPPER / HOLE / PASTE / SOLDER rows.
 
-use iced::widget::{container, pick_list, text, text_input};
+use iced::widget::{Widget, container, pick_list, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{PanelMsg, PanelPalette};
@@ -29,7 +29,7 @@ pub(super) fn pad_table_header<'a>(
     muted: Color,
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    let mut row = iced::widget::Row::new()
+    let mut row = iced::widget::Row::<iced::Element<'a, PanelMsg>>::new()
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
     for (i, label) in cols.iter().enumerate() {
@@ -38,7 +38,8 @@ pub(super) fn pad_table_header<'a>(
             text(label.to_string())
                 .size(9)
                 .color(muted)
-                .width(Length::FillPortion(portion)),
+                .width(Length::FillPortion(portion))
+                .boxed(),
         );
     }
     container(row)
@@ -52,10 +53,11 @@ pub(super) fn pad_table_header<'a>(
                 width: 0.0,
                 radius: 0.0.into(),
                 color: border_c,
+                ..iced::Border::default()
             },
             ..iced::widget::container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// v0.20 — Altium-style table data row. First cell is the row label
@@ -69,23 +71,24 @@ pub(super) fn pad_table_row<'a>(
     _border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     let label_portion = 3_u16;
-    let mut row = iced::widget::Row::new()
+    let mut row = iced::widget::Row::<iced::Element<'a, PanelMsg>>::new()
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
     row = row.push(
         text(label.to_string())
             .size(TS.caption)
             .color(primary)
-            .width(Length::FillPortion(label_portion)),
+            .width(Length::FillPortion(label_portion))
+            .boxed(),
     );
     for (i, cell) in cells.into_iter().enumerate() {
         let portion = portions.get(i).copied().unwrap_or(1);
-        row = row.push(container(cell).width(Length::FillPortion(portion)));
+        row = row.push(container(cell).width(Length::FillPortion(portion)).boxed());
     }
     container(row)
         .padding([3.0, SP.m])
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// v0.20 — text_input cell with the same chrome as `pad_input_row`'s
@@ -98,7 +101,7 @@ pub(super) fn pad_table_input_cell<'a>(
     primary: Color,
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    text_input(placeholder, &value)
+    text_input(placeholder, value)
         .size(TS.caption)
         .padding(SP.xs)
         .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -107,14 +110,14 @@ pub(super) fn pad_table_input_cell<'a>(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border_c,
+                ..iced::Border::default()
             },
-            icon: iced::Color::TRANSPARENT,
             placeholder: muted,
             value: primary,
             selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
         })
         .on_input(on_input)
-        .into()
+        .boxed()
 }
 
 /// v0.20 — pick_list cell for table data rows.
@@ -126,11 +129,12 @@ pub(super) fn pad_table_picklist_cell<'a, T>(
 where
     T: Clone + Eq + std::fmt::Display + 'static,
 {
-    pick_list(options, Some(selected), on_change)
+    pick_list(Some(selected), options, |t: &T| t.to_string())
+        .on_select(on_change)
         .text_size(10)
         .padding([SP.xs, 6.0])
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// v0.20 — checkbox cell for table data rows.
@@ -145,7 +149,7 @@ pub(super) fn pad_table_check_cell<'a>(
             .spacing(0),
     )
     .padding([SP.xs, SP.s])
-    .into()
+    .boxed()
 }
 
 /// v0.20 — disabled / read-only cell. Shows a value with greyed
@@ -167,11 +171,12 @@ pub(super) fn pad_table_disabled_cell<'a>(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border_c,
+                ..iced::Border::default()
             },
             ..iced::widget::container::Style::default()
         })
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// v0.20 — static text cell. No chrome, just dim text — used for
@@ -184,7 +189,7 @@ pub(super) fn pad_table_static_cell<'a>(
     container(text(value.into()).size(TS.caption).color(muted))
         .padding([3, 6])
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// v0.20 — single COPPER table row. Built inline because all four

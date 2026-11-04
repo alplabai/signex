@@ -30,7 +30,7 @@ pub(super) fn view_table_sidebar<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let active_bg = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10);
 
-    let mut col = column![]
+    let mut col: Column<Element<'a, LibraryMessage>> = column![]
         .spacing(SP.xs)
         .padding(iced::Padding {
             top: 6.0,
@@ -41,12 +41,14 @@ pub(super) fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(text("Tables").size(TS.body).color(muted)).padding(iced::Padding {
-            top: 0.0,
-            right: 8.0,
-            bottom: 4.0,
-            left: 12.0,
-        }),
+        container(text("Tables").size(TS.body).color(muted))
+            .padding(iced::Padding {
+                top: 0.0,
+                right: 8.0,
+                bottom: 4.0,
+                left: 12.0,
+            })
+            .boxed(),
     );
 
     // Hoist a single owned `PathBuf` out of every per-row loop.
@@ -96,7 +98,7 @@ pub(super) fn view_table_sidebar<'a>(
             },
             ..iced::widget::container::Style::default()
         });
-        col = col.push(container(banner).padding([SP.xs, SP.m]));
+        col = col.push(container(banner).padding([SP.xs, SP.m]).boxed());
     }
 
     for name in &names {
@@ -143,6 +145,7 @@ pub(super) fn view_table_sidebar<'a>(
                         width: 0.0,
                         radius: 2.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 });
@@ -157,7 +160,7 @@ pub(super) fn view_table_sidebar<'a>(
                     border: Border::default(),
                     ..iced::widget::button::Style::default()
                 });
-            let mut form = column![
+            let mut form: Column<Element<'a, LibraryMessage>> = column![
                 row![
                     name_input,
                     Space::new().width(4),
@@ -173,10 +176,11 @@ pub(super) fn view_table_sidebar<'a>(
                 form = form.push(
                     text(err.clone())
                         .size(BROWSER_TEXT_SIZE)
-                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3))
+                        .boxed(),
                 );
             }
-            col = col.push(form);
+            col = col.push(form.boxed());
             continue;
         }
 
@@ -221,6 +225,7 @@ pub(super) fn view_table_sidebar<'a>(
                         width: 0.0,
                         radius: 0.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }
@@ -256,6 +261,7 @@ pub(super) fn view_table_sidebar<'a>(
                         width: 0.0,
                         radius: 2.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }
@@ -292,6 +298,7 @@ pub(super) fn view_table_sidebar<'a>(
                         width: 0.0,
                         radius: 2.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }
@@ -300,7 +307,7 @@ pub(super) fn view_table_sidebar<'a>(
         let row_with_actions = row![row_btn, rename_btn, delete_btn,]
             .align_y(iced::Alignment::Center)
             .width(Length::Fill);
-        col = col.push(row_with_actions);
+        col = col.push(row_with_actions.boxed());
     }
 
     // Inline `+ Table` form / button — same lifecycle as before, now
@@ -338,6 +345,7 @@ pub(super) fn view_table_sidebar<'a>(
                     width: 0.0,
                     radius: 3.0.into(),
                     color: iced::Color::TRANSPARENT,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             });
@@ -355,10 +363,11 @@ pub(super) fn view_table_sidebar<'a>(
                         width: 0.0,
                         radius: 3.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 });
-            let mut form = column![
+            let mut form: Column<Element<'a, LibraryMessage>> = column![
                 name_input,
                 row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
             ]
@@ -368,10 +377,11 @@ pub(super) fn view_table_sidebar<'a>(
                 form = form.push(
                     text(err.clone())
                         .size(BROWSER_TEXT_SIZE)
-                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3))
+                        .boxed(),
                 );
             }
-            form.into()
+            form.boxed()
         }
         None => {
             let library_for_begin = lib_pb.clone();
@@ -395,6 +405,7 @@ pub(super) fn view_table_sidebar<'a>(
                         width: 0.0,
                         radius: 3.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }),
@@ -405,15 +416,15 @@ pub(super) fn view_table_sidebar<'a>(
                 bottom: 6.0,
                 left: 8.0,
             })
-            .into()
+            .boxed()
         }
     };
 
-    col = col.push(Space::new().height(Length::Fill));
+    col = col.push(Space::new().height(Length::Fill).boxed());
     col = col.push(bottom_section);
 
     container(col)
         .width(Length::Fixed(SIDEBAR_W))
         .height(Length::Fill)
-        .into()
+        .boxed()
 }

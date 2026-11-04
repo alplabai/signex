@@ -43,7 +43,10 @@ use signex_gfx::scene::{
     DirtyFlags, GPU_SCENE_DRAW_ORDER, Scene, SceneBucket, TextUploadParams, UploadCulling,
     UploadTracker, apply_dirty_uploads_with_culling,
 };
-use signex_gfx::wgpu;
+// iced 0.15 ships wgpu 30; the `Primitive`/`Pipeline` trait signatures use
+// iced's own re-export, so name that one here. `signex_gfx` must be built
+// against the same wgpu major (see migration notes).
+use iced::wgpu;
 
 use crate::app::Message;
 use crate::scene_gpu_upload::{GpuUploadTarget, TextFrame, visible_world_rect};

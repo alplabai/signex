@@ -13,7 +13,7 @@ pub(super) fn view_uncommitted_banner<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let Some(pending) = library_state.uncommitted_in(library_path) else {
-        return Space::new().into();
+        return Space::new().boxed();
     };
     let committing = library_state.is_committing(library_path);
     let count = pending.paths.len();
@@ -44,18 +44,17 @@ pub(super) fn view_uncommitted_banner<'a>(
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 10])
+    .padding([6.0, 10.0])
     .width(Length::Fill)
     .style(move |_| iced::widget::container::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
             0.95, 0.65, 0.1, 0.18,
         ))),
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: iced::Color::from_rgba(0.95, 0.65, 0.1, 0.6),
-        },
+        border: Border::default()
+            .width(1.0)
+            .rounded(3.0)
+            .color(iced::Color::from_rgba(0.95, 0.65, 0.1, 0.6)),
         ..iced::widget::container::Style::default()
     })
-    .into()
+    .boxed()
 }

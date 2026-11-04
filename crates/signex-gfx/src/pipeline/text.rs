@@ -226,14 +226,8 @@ pub(crate) fn shaped_buffer(
     viewport_px: [f32; 2],
 ) -> cryoglyph::Buffer {
     let mut buffer = cryoglyph::Buffer::new(font_system, metrics);
-    buffer.set_size(font_system, Some(viewport_px[0]), Some(viewport_px[1]));
-    buffer.set_text(
-        font_system,
-        &item.content,
-        attrs,
-        cryoglyph::Shaping::Advanced,
-        None,
-    );
+    buffer.set_size(Some(viewport_px[0]), Some(viewport_px[1]));
+    buffer.set_text(&item.content, attrs, cryoglyph::Shaping::Advanced, None);
     buffer.shape_until_scroll(font_system, false);
 
     // Alignment is a no-op for a lone line or when every line is equally wide.
@@ -247,7 +241,7 @@ pub(crate) fn shaped_buffer(
     // inside it, as the CPU replay does. Rounded up so a float tie on the
     // widest line cannot re-wrap it.
     let block_w = measure_text_bounds_px(&buffer)[0].ceil();
-    buffer.set_size(font_system, Some(block_w), Some(viewport_px[1]));
+    buffer.set_size(Some(block_w), Some(viewport_px[1]));
     let align = Some(cosmic_align(item.h_align));
     for line in buffer.lines.iter_mut() {
         line.set_align(align);
@@ -450,7 +444,7 @@ impl GlyphonTextPipeline {
                 .iter()
                 .zip(self.prepared_texts.iter())
                 .map(|(buffer, prepared)| cryoglyph::TextArea {
-                    buffer: buffer.as_ref(),
+                    text: buffer.layout_runs(),
                     left: prepared.left,
                     top: prepared.top,
                     scale: prepared.scale,

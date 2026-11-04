@@ -31,7 +31,9 @@ impl Signex {
                 self.ui_state.about_open = false;
                 Task::none()
             }
-            OverlayMsg::CopyAboutInfo => iced::clipboard::write(crate::about::version_info_text()),
+            OverlayMsg::CopyAboutInfo => {
+                iced::clipboard::write(crate::about::version_info_text()).discard()
+            }
             OverlayMsg::OpenLink(link) => crate::about::open_link(link, |detail| {
                 Message::Overlay(OverlayMsg::LinkOpenFailed(detail))
             }),

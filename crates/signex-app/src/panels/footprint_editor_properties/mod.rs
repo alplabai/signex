@@ -7,7 +7,7 @@
 //! Cutout) and the v0.16.3 Pad placement defaults form.
 
 use iced::widget::{Column, container, row, scrollable, text};
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Widget};
 
 use super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -67,7 +67,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
         FootprintModeKind::View3d => "3D View",
     };
 
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     // v0.27 — multi-select indicator. With > 1 pad selected, show a
     // "(N pads selected)" tag next to the mode label so the user
@@ -87,14 +87,15 @@ pub(super) fn view_footprint_editor_properties<'a>(
     .spacing(6)
     .align_y(iced::Alignment::Center);
     if let Some(tag) = multi_select_tag {
-        header_row = header_row.push(text("·").size(TS.label).color(muted));
-        header_row = header_row.push(text(tag).size(TS.body).color(accent_c));
+        header_row = header_row.push(text("·").size(TS.label).color(muted).boxed());
+        header_row = header_row.push(text(tag).size(TS.body).color(accent_c).boxed());
     }
 
     col = col.push(
         container(header_row)
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(super::thin_sep(border_c));
 
@@ -156,7 +157,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
                         .style(iced::widget::button::primary),
                 )
                 .padding([6.0, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
             );
             // v0.25 polish — reserve 12 px on the right so the
             // scrollbar doesn't overlap input fields. Without
@@ -170,7 +172,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 left: 0.0,
             }))
             .width(Length::Fill)
-            .into();
+            .boxed();
         }
         if in_placement {
             let values = PadFormValues::from_next_pad(fp);
@@ -192,7 +194,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 left: 0.0,
             }))
             .width(Length::Fill)
-            .into();
+            .boxed();
         }
         // Empty canvas + idle → fall through to the original chrome.
     }
@@ -224,26 +226,29 @@ pub(super) fn view_footprint_editor_properties<'a>(
         left: 0.0,
     }))
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// v0.20 — common Settings + Hint footer. Always renders the
 /// Auto-fit Courtyard toggle and a mode-specific hint string.
 fn render_fp_settings_and_hint<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
-    col = col.push(props_section_header(
-        "Settings",
-        "fp_settings",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+) -> Column<Element<'a, PanelMsg>> {
+    col = col.push(
+        props_section_header(
+            "Settings",
+            "fp_settings",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if !fp_is_collapsed("fp_settings", collapsed_sections) {
         // v0.26-I — auto-courtyard toggle removed. The courtyard is
         // an authored shape (silk / sketch entity), not an auto-
@@ -252,13 +257,9 @@ fn render_fp_settings_and_hint<'a>(
         let _ = fp.auto_fit_courtyard;
     }
 
-    col = col.push(props_section_header(
-        "Hint",
-        "fp_hint",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+    col = col.push(
+        props_section_header("Hint", "fp_hint", collapsed_sections, primary, border_c).boxed(),
+    );
     if !fp_is_collapsed("fp_hint", collapsed_sections) {
         let hint = match fp.mode_kind {
             FootprintModeKind::Pads => "Click a pad to edit its properties.",
@@ -270,7 +271,8 @@ fn render_fp_settings_and_hint<'a>(
         col = col.push(
             container(text(hint).size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         );
     }
     col
@@ -289,7 +291,7 @@ pub(super) fn props_section_header<'a>(
     collapsed: &super::CollapsedSections,
     primary: Color,
     border_c: Color,
-) -> iced::widget::Column<'a, PanelMsg> {
+) -> iced::widget::Column<Element<'a, PanelMsg>> {
     super::collapsible_section_header(key, label, collapsed, primary, border_c)
 }
 
@@ -305,13 +307,13 @@ pub(super) fn fp_is_collapsed(key: &str, collapsed: &super::CollapsedSections) -
 /// Returns the updated Column to keep the chained-update call style
 /// the rest of this module uses.
 fn props_kv_row<'a>(
-    col: Column<'a, PanelMsg>,
+    col: Column<Element<'a, PanelMsg>>,
     label_c: Color,
     input_bg: Color,
     input_bdr: Color,
     key: &str,
     value: String,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     col.push(super::form_input_row(
         key, &value, label_c, input_bg, input_bdr,
     ))

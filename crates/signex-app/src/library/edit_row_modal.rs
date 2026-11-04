@@ -4,7 +4,7 @@
 //! `view_delete_confirm` lives in this module too.
 
 use iced::widget::{
-    Space, button, column, container, pick_list, row, scrollable, text, text_input,
+    Space, Widget, button, column, container, pick_list, row, scrollable, text, text_input,
 };
 use iced::{Border, Element, Length, Theme};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
@@ -109,19 +109,25 @@ pub fn view<'a>(
         .iter()
         .find(|p| p.key == edit.draft.class.as_str())
         .cloned();
-    let class_picker = pick_list(class_picks, selected_class, {
-        let send = send.clone();
-        move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
-    })
-    .placeholder("Select class…")
-    .padding(6)
-    .text_size(12);
+    let class_picker = pick_list(selected_class, class_picks, ClassPick::to_string)
+        .on_select({
+            let send = send.clone();
+            move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
+        })
+        .placeholder("Select class…")
+        .padding(6)
+        .text_size(12);
 
     let selected_state = LIFECYCLE_OPTIONS
         .iter()
         .find(|p| p.0 == edit.draft.state)
         .copied();
-    let state_picker = pick_list(LIFECYCLE_OPTIONS.to_vec(), selected_state, {
+    let state_picker = pick_list(
+        selected_state,
+        LIFECYCLE_OPTIONS.to_vec(),
+        LifecyclePick::to_string,
+    )
+    .on_select({
         let send = send.clone();
         move |pick: LifecyclePick| send(BrowserEditMsg::SetState(pick.0))
     })
@@ -139,11 +145,11 @@ pub fn view<'a>(
             })
             .padding(6)
             .size(TS.label)
-            .into(),
+            .boxed(),
         DatasheetRef::HashPinned { filename, .. } => text(format!("Pinned PDF: {filename}"))
             .size(TS.label)
             .color(muted)
-            .into(),
+            .boxed(),
     };
 
     let mfr_input = text_input("Manufacturer", &edit.draft.primary_mpn.manufacturer)
@@ -200,6 +206,7 @@ pub fn view<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             });
@@ -221,6 +228,7 @@ pub fn view<'a>(
             width: 1.0,
             radius: 3.0.into(),
             color: border,
+            ..Border::default()
         },
         ..iced::widget::button::Style::default()
     });
@@ -232,22 +240,22 @@ pub fn view<'a>(
                 container(body).padding([SP.xs, 0.0])
             ]
             .spacing(SP.xs)
-            .into()
+            .boxed()
         };
 
     let pn_class_state_row = row![
-        labelled("Internal PN", pn_input.into()),
+        labelled("Internal PN", pn_input.boxed()),
         Space::new().width(8),
-        labelled("Class", class_picker.into()),
+        labelled("Class", class_picker.boxed()),
         Space::new().width(8),
-        labelled("State", state_picker.into()),
+        labelled("State", state_picker.boxed()),
     ]
     .spacing(0);
 
     let mfr_mpn_row = row![
-        labelled("Manufacturer", mfr_input.into()),
+        labelled("Manufacturer", mfr_input.boxed()),
         Space::new().width(8),
-        labelled("MPN", mpn_input.into()),
+        labelled("MPN", mpn_input.boxed()),
     ]
     .spacing(0);
 
@@ -281,9 +289,9 @@ pub fn view<'a>(
         Space::new().height(8),
         mfr_mpn_row,
         Space::new().height(8),
-        labelled("Description", description_input.into()),
+        labelled("Description", description_input.boxed()),
         Space::new().height(8),
-        labelled("Tags (comma-separated)", tags_input.into()),
+        labelled("Tags (comma-separated)", tags_input.boxed()),
         Space::new().height(12),
         text("Symbol ref").size(TS.caption).color(muted),
         symbol_row,
@@ -311,13 +319,13 @@ pub fn view<'a>(
                 .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
         )
         .padding([SP.s, SP.xl])
-        .into()
+        .boxed()
     } else if let Some(note) = edit.note.as_ref() {
         container(text(note.clone()).size(TS.body).color(muted))
             .padding([SP.s, SP.xl])
-            .into()
+            .boxed()
     } else {
-        Space::new().height(0).into()
+        Space::new().height(0).boxed()
     };
 
     let cancel_btn =
@@ -332,6 +340,7 @@ pub fn view<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             });
@@ -367,12 +376,13 @@ pub fn view<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             })
     };
     let reload: Element<'_, LibraryMessage> = if !edit.stale_base {
-        Space::new().width(0).into()
+        Space::new().width(0).boxed()
     } else if edit.reload_confirming {
         row![
             text("Discard your edits and reload?")
@@ -384,9 +394,9 @@ pub fn view<'a>(
             plain_btn("Keep editing", BrowserEditMsg::ReloadCancelled),
         ]
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     } else {
-        plain_btn("Reload saved version", BrowserEditMsg::ReloadRequested).into()
+        plain_btn("Reload saved version", BrowserEditMsg::ReloadRequested).boxed()
     };
 
     let footer = container(
@@ -409,7 +419,7 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 /// Delete-row confirm modal — sibling overlay launched from the
@@ -461,6 +471,7 @@ pub fn view_delete_confirm<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             });
@@ -508,5 +519,5 @@ pub fn view_delete_confirm<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }

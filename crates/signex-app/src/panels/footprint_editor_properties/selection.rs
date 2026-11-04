@@ -1,5 +1,5 @@
 use iced::widget::{Column, container, pick_list, row, text};
-use iced::{Color, Length};
+use iced::{Color, Element, Length, Widget as _};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -22,14 +22,14 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 pub(super) fn view_selection<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     mode_label: &str,
     palette: PanelPalette,
     custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
@@ -80,13 +80,16 @@ pub(super) fn view_selection<'a>(
             col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
-            col = col.push(props_section_header(
-                "Sketch entity",
-                "fp_sketch_entity",
-                collapsed_sections,
-                primary,
-                border_c,
-            ));
+            col = col.push(
+                props_section_header(
+                    "Sketch entity",
+                    "fp_sketch_entity",
+                    collapsed_sections,
+                    primary,
+                    border_c,
+                )
+                .boxed(),
+            );
             if !fp_is_collapsed("fp_sketch_entity", collapsed_sections) {
                 col = props_kv_row(
                     col,
@@ -157,7 +160,8 @@ pub(super) fn view_selection<'a>(
                             .align_y(iced::Alignment::Center),
                         )
                         .padding([3.0, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                     );
                 }
             } // end if !fp_sketch_entity collapsed
@@ -184,41 +188,40 @@ pub(super) fn view_selection<'a>(
                         .style(iced::widget::button::secondary),
                     )
                     .padding([6.0, SP.m])
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
                 );
             }
 
             // v0.16.2 — Role pick_list. Visible when an entity is
             // selected; pick_list value mirrors the entity's
             // currently-attached `*Attr` slot (or `Unassigned`).
-            col = col.push(props_section_header(
-                "Role",
-                "fp_role",
-                collapsed_sections,
-                primary,
-                border_c,
-            ));
+            col = col.push(
+                props_section_header("Role", "fp_role", collapsed_sections, primary, border_c)
+                    .boxed(),
+            );
             if !fp_is_collapsed("fp_role", collapsed_sections)
                 && let Some(id) = fp.selected_sketch_entity_id
             {
                 use crate::library::messages::RoleTag;
                 let current = fp.selected_sketch_role;
-                let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
-                    PanelMsg::FpEditorSetRole { id, role: new_role }
-                })
-                .text_size(11)
-                .padding([3.0, SP.m])
-                .width(Length::Fill);
+                let dropdown = pick_list(Some(current), RoleTag::ALL, |r: &RoleTag| r.to_string())
+                    .on_select(move |new_role| PanelMsg::FpEditorSetRole { id, role: new_role })
+                    .text_size(11)
+                    .padding([3.0, SP.m])
+                    .width(Length::Fill);
                 col = col.push(
                     container(dropdown)
                         .padding([SP.s, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                 );
                 if !fp.selected_sketch_is_point {
                     col = col.push(
                         container(text("Pad role applies to Points only").size(9).color(muted))
                             .padding([0.0, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .boxed(),
                     );
                 }
 
@@ -247,13 +250,16 @@ pub(super) fn view_selection<'a>(
             // content + delete the entry without leaving the
             // Properties panel.
             if let Some(silk) = fp.selected_silk_summary.as_ref() {
-                col = col.push(props_section_header(
-                    "Silk graphic",
-                    "fp_silk_graphic",
-                    collapsed_sections,
-                    primary,
-                    border_c,
-                ));
+                col = col.push(
+                    props_section_header(
+                        "Silk graphic",
+                        "fp_silk_graphic",
+                        collapsed_sections,
+                        primary,
+                        border_c,
+                    )
+                    .boxed(),
+                );
                 if !fp_is_collapsed("fp_silk_graphic", collapsed_sections) {
                     col = props_kv_row(
                         col,
@@ -282,7 +288,8 @@ pub(super) fn view_selection<'a>(
                                     .color(muted),
                             )
                             .padding([SP.s, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .boxed(),
                         );
                     } else {
                         col = silk_geometry_rows(col, &silk.kind, muted, primary, border_c);
@@ -319,7 +326,8 @@ pub(super) fn view_selection<'a>(
                                 .align_y(iced::Alignment::Center),
                             )
                             .padding([SP.s, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .boxed(),
                         );
                     }
                 } // end if !fp_silk_graphic collapsed
@@ -334,19 +342,25 @@ pub(super) fn view_selection<'a>(
                 // (redundant with Custom Selection Filters below + the
                 // active bar's Filter dropdown). The Custom presets
                 // section is the single Properties-panel surface.
-                col = col.push(super::super::view_custom_selection_filters_section(
-                    custom_filter_presets,
-                    active_custom_filter_tab,
-                    collapsed_sections,
-                    palette,
-                ));
-                col = col.push(props_section_header(
-                    "Footprint",
-                    "fp_footprint",
-                    collapsed_sections,
-                    primary,
-                    border_c,
-                ));
+                col = col.push(
+                    super::super::view_custom_selection_filters_section(
+                        custom_filter_presets,
+                        active_custom_filter_tab,
+                        collapsed_sections,
+                        palette,
+                    )
+                    .boxed(),
+                );
+                col = col.push(
+                    props_section_header(
+                        "Footprint",
+                        "fp_footprint",
+                        collapsed_sections,
+                        primary,
+                        border_c,
+                    )
+                    .boxed(),
+                );
                 if !fp_is_collapsed("fp_footprint", collapsed_sections) {
                     // Editable Name — text_input bound to the active
                     // internal footprint's `name` field via

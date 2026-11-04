@@ -61,12 +61,12 @@ pub(in crate::app::view) fn wrap_modal<'a>(
             background: Some(Background::Color(BACKDROP)),
             ..container::Style::default()
         })
-        .into();
+        .boxed();
 
     let positioned: Element<'a, Message> =
         super::super::translate::Translate::new(inner, (left, top)).into();
 
-    iced::widget::stack![backdrop, positioned].into()
+    iced::widget::stack![backdrop, positioned].boxed()
 }
 
 /// Wrap a header element in a mouse_area so pressing on it begins a modal
@@ -82,7 +82,7 @@ pub(in crate::app::view) fn draggable_header<'a>(
             x: last_mouse.0,
             y: last_mouse.1,
         }))
-        .into()
+        .boxed()
 }
 
 impl Signex {
@@ -121,7 +121,7 @@ impl Signex {
 /// the body draws no header of its own: an empty zero-height slot keeps
 /// the surrounding column layout identical to the in-window form.
 pub(crate) fn os_title_bar_slot<'a>() -> Element<'a, Message> {
-    Space::new().height(0).into()
+    Space::new().height(0).boxed()
 }
 
 /// Compact X close button for borderless modal headers. Matches the
@@ -182,7 +182,7 @@ pub(crate) fn close_x_button(
             ..button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 // `detach_button` was removed once the three big modals started
@@ -208,11 +208,12 @@ fn close_button(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             text_color,
             ..button::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Subtle section divider used inside the BOM modal's properties
@@ -233,7 +234,7 @@ pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> 
         background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.025))),
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 pub(super) fn secondary_button(
@@ -261,11 +262,12 @@ pub(super) fn secondary_button_maybe(
                 width: 1.0,
                 radius: 4.0.into(),
                 color: border,
+                ..Border::default()
             },
             text_color,
             ..button::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 pub(super) fn primary_button(
@@ -305,6 +307,7 @@ pub(super) fn primary_button_themed(
                 width: 1.0,
                 radius: 4.0.into(),
                 color: border,
+                ..Border::default()
             },
             text_color: fg,
             ..button::Style::default()
@@ -312,5 +315,5 @@ pub(super) fn primary_button_themed(
     if let Some(msg) = message {
         b = b.on_press(msg);
     }
-    b.into()
+    b.boxed()
 }

@@ -96,9 +96,9 @@ pub(crate) fn actions(task: iced::Task<Message>) -> Vec<iced_runtime::Action<Mes
 pub(crate) fn written_text(task: iced::Task<Message>) -> Option<String> {
     actions(task).into_iter().find_map(|action| match action {
         iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
-            contents,
+            content: iced::clipboard::Content::Text(text),
             ..
-        }) => Some(contents),
+        }) => Some(text),
         _ => None,
     })
 }

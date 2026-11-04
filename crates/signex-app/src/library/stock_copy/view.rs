@@ -1,7 +1,7 @@
 //! The "Copy to Library" dialog. A pure read of [`StockCopyState`] and the
 //! open libraries' names; every colour comes from theme tokens.
 
-use iced::widget::{Space, column, container, row, scrollable, text};
+use iced::widget::{Space, Widget, column, container, row, scrollable, text};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -55,14 +55,16 @@ pub fn view<'a>(
                 previous.display()
             ))
             .size(ts.caption)
-            .color(muted),
+            .color(muted)
+            .boxed(),
         );
     }
     if let Some(error) = &state.error {
         body = body.push(
             text(error.as_str())
                 .size(ts.caption)
-                .color(theme_ext::error_color(tokens)),
+                .color(theme_ext::error_color(tokens))
+                .boxed(),
         );
     }
 
@@ -71,7 +73,7 @@ pub fn view<'a>(
         text("No writable library is open. Create a new one to copy into.")
             .size(ts.body)
             .color(muted)
-            .into()
+            .boxed()
     } else {
         let rows = writable.into_iter().map(|(root, name)| {
             secondary_btn(
@@ -83,7 +85,7 @@ pub fn view<'a>(
         scrollable(column(rows).spacing(sp.s))
             .height(Length::Fixed(180.0))
             .width(Length::Fill)
-            .into()
+            .boxed()
     };
     body = body.push(list);
 
@@ -114,5 +116,5 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }

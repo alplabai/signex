@@ -4,7 +4,7 @@
 //! zoom, F1 for help). Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.3.
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::{Message, OverlayMsg};
@@ -66,7 +66,7 @@ fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(styles::modal_card(tokens))
-            .into();
+            .boxed();
     }
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(CARD_W))
@@ -83,5 +83,5 @@ fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
         )
         .align_x(iced::alignment::Horizontal::Right)
         .align_y(iced::alignment::Vertical::Bottom)
-        .into()
+        .boxed()
 }

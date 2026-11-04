@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use super::*;
-use iced::widget::{Space, button, column, container, row, text, text_input};
+use iced::widget::{Space, Widget, button, column, container, row, text, text_input};
 use iced::{Border, Color, Element, Length, Theme};
 
 use crate::app::rule_profile_ui::ProfileManager;
@@ -89,9 +89,10 @@ pub(super) fn content_profiles<'a>(
                         .size(11)
                         .style(text_muted),
                 )
-                .padding([0, 20]),
+                .padding([0, 20])
+                .boxed(),
             )
-            .into();
+            .boxed();
     }
 
     let mut list = column![default_row(
@@ -116,11 +117,14 @@ pub(super) fn content_profiles<'a>(
             default_profile == Some(name),
         ));
     }
-    body = body.push(container(list).padding([0, 20]));
+    body = body.push(container(list).padding([0, 20]).boxed());
 
     for problem in &manager.listing.problems {
-        body = body
-            .push(container(text(problem.clone()).size(10).style(text_warning)).padding([4, 20]));
+        body = body.push(
+            container(text(problem.clone()).size(10).style(text_warning))
+                .padding([4, 20])
+                .boxed(),
+        );
     }
     body = body.push(h_sep()).push(actions_row(manager));
     if let Some((is_error, message)) = &manager.status {
@@ -131,7 +135,8 @@ pub(super) fn content_profiles<'a>(
             } else {
                 styled.style(text_muted)
             })
-            .padding([4, 20]),
+            .padding([4, 20])
+            .boxed(),
         );
     }
     body = body.push(h_sep());
@@ -163,16 +168,17 @@ pub(super) fn content_profiles<'a>(
             if editable {
                 editing = editing.push(reset_row(manager, &listed.profile.name));
             }
-            body = body.push(editing.push(editor).padding([12, 20]));
+            body = body.push(editing.push(editor).padding([12, 20]).boxed());
         }
         None => {
             body = body.push(
                 container(text("No profile is selected.").size(11).style(text_muted))
-                    .padding([12, 20]),
+                    .padding([12, 20])
+                    .boxed(),
             );
         }
     }
-    body.into()
+    body.boxed()
 }
 
 /// One selectable profile: its name opens it in the editor, the second button
@@ -199,7 +205,7 @@ fn profile_row<'a>(
     ]
     .spacing(8)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn default_row<'a>(
@@ -214,7 +220,7 @@ fn default_row<'a>(
     .spacing(8)
     .padding([0, 10])
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn default_button<'a>(name: Option<&'a str>, is_default: bool) -> Element<'a, PrefMsg> {
@@ -222,17 +228,17 @@ fn default_button<'a>(name: Option<&'a str>, is_default: bool) -> Element<'a, Pr
         return text("Default for new projects")
             .size(11)
             .style(text_primary)
-            .into();
+            .boxed();
     }
     button(text("Use as default").size(11))
         .padding([4, 10])
         .on_press(pane(ProfilesMsg::DefaultChosen(name.map(str::to_string))))
         .style(secondary_button_style)
-        .into()
+        .boxed()
 }
 
 fn row_style(theme: &Theme, status: button::Status, selected: bool) -> button::Style {
-    let palette = theme.extended_palette();
+    let palette = theme.palette();
     let background = if selected {
         palette.primary.weak.color
     } else if matches!(status, button::Status::Hovered) {
@@ -255,6 +261,7 @@ fn row_style(theme: &Theme, status: button::Status, selected: bool) -> button::S
             } else {
                 Color::TRANSPARENT
             },
+            ..Border::default()
         },
         ..button::Style::default()
     }
@@ -291,25 +298,31 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
                      longer find it for Update from profile."
                 ))
                 .size(11)
-                .style(text_warning),
+                .style(text_warning)
+                .boxed(),
             )
             .push(
                 button(text("Delete").size(11))
                     .padding([5, 12])
                     .on_press(pane(ProfilesMsg::DeleteConfirmed))
-                    .style(danger_button_style),
+                    .style(danger_button_style)
+                    .boxed(),
             )
             .push(
                 button(text("Keep").size(11))
                     .padding([5, 12])
                     .on_press(pane(ProfilesMsg::DeleteCancelled))
-                    .style(secondary_button_style),
+                    .style(secondary_button_style)
+                    .boxed(),
             ),
-        None => buttons.push(action(
-            "Delete",
-            selected_kind == Some(ProfileKind::User),
-            ProfilesMsg::DeleteRequested,
-        )),
+        None => buttons.push(
+            action(
+                "Delete",
+                selected_kind == Some(ProfileKind::User),
+                ProfilesMsg::DeleteRequested,
+            )
+            .boxed(),
+        ),
     };
     container(
         column![
@@ -326,7 +339,7 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
         .spacing(8),
     )
     .padding([8, 20])
-    .into()
+    .boxed()
 }
 
 /// "Reset to Signex Default" for an editable profile, with its confirmation.
@@ -349,11 +362,11 @@ fn reset_row<'a>(manager: &'a ProfileManager, name: &'a str) -> Element<'a, Pref
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center)
-        .into();
+        .boxed();
     }
     button(text("Reset to Signex Default").size(11))
         .padding([5, 12])
         .on_press_maybe((!manager.busy).then(|| pane(ProfilesMsg::ResetRequested)))
         .style(secondary_button_style)
-        .into()
+        .boxed()
 }

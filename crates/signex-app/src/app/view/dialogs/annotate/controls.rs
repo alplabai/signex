@@ -41,10 +41,11 @@ pub(super) fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Compact visual *legend* of the annotate order — this is intentionally a
@@ -92,10 +93,11 @@ pub(super) fn order_preview(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..container::Style::default()
             })
-            .into()
+            .boxed()
     };
     let arrow = match order {
         AnnotateOrder::UpThenAcross => "↑→",
@@ -118,7 +120,7 @@ pub(super) fn order_preview(
     )
     .padding(6)
     .style(bordered_style(border))
-    .into()
+    .boxed()
 }
 
 pub(super) fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'static {
@@ -127,6 +129,7 @@ pub(super) fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Sty
             width: 1.0,
             radius: 3.0.into(),
             color: border,
+            ..Border::default()
         },
         background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.02))),
         ..container::Style::default()
@@ -155,11 +158,12 @@ pub(super) fn order_radio(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             text_color: fg,
             ..button::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// The line under the Annotation Summary that says what "Re-prefix to

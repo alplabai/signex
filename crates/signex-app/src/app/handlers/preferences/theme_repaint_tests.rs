@@ -69,8 +69,8 @@ fn a_panel_context_rebuild_keeps_the_drafted_palette() {
     assert_eq!(ctx.theme_id, drafted);
     let window = iced::window::Id::unique();
     assert_eq!(
-        app.theme(window).map(|t| t.palette()),
-        Some(Signex::id_to_iced_theme(drafted, None).palette()),
+        app.theme(window).map(|t| *t.palette()),
+        Some(*Signex::id_to_iced_theme(drafted, None).palette()),
         "the iced palette and the panel tokens must come from the same theme"
     );
     assert_eq!(app.ui_state.theme_id, saved, "a draft must not commit");

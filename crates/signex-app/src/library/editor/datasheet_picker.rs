@@ -9,7 +9,9 @@
 //!
 //! The mode is derived from the document's `DatasheetRef` variant.
 
-use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
+use iced::widget::{
+    Column, Space, Widget, button, column, container, pick_list, row, text, text_input,
+};
 use iced::{Border, Element, Length, Theme};
 use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
@@ -75,7 +77,8 @@ pub fn view<'a>(
     .color(muted)
     .width(Length::Fill);
 
-    let mut list = column![].spacing(SP.m).width(Length::Fill);
+    let mut list: Column<Element<'a, LibraryMessage>> =
+        Column::new().spacing(SP.m).width(Length::Fill);
     if count == 0 {
         list = list.push(
             container(
@@ -85,7 +88,8 @@ pub fn view<'a>(
             )
             .padding(SP.l)
             .width(Length::Fill)
-            .style(crate::styles::modal_card(tokens)),
+            .style(crate::styles::modal_card(tokens))
+            .boxed(),
         );
     }
     for (index, doc) in docs.into_iter().enumerate() {
@@ -105,7 +109,7 @@ pub fn view<'a>(
     column![intro, list, add]
         .spacing(SP.m)
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
@@ -121,7 +125,7 @@ fn small_button<'a>(
     label: &'a str,
     tokens: &'a ThemeTokens,
 ) -> iced::widget::Button<'a, LibraryMessage> {
-    button(text(label).size(TS.caption))
+    button(text(label).size(TS.caption).boxed())
         .padding([SP.xs, SP.m])
         .style(crate::styles::outline_button(tokens))
 }
@@ -130,7 +134,7 @@ fn small_button<'a>(
 /// the fields of every row line up.
 fn field_row<'a>(
     label: &'a str,
-    field: impl Into<Element<'a, LibraryMessage>>,
+    field: Element<'a, LibraryMessage>,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     row![
@@ -144,7 +148,7 @@ fn field_row<'a>(
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// The role badge in a card header: the primary gets the accent fill.
@@ -172,7 +176,7 @@ fn role_badge<'a>(is_primary: bool, tokens: &'a ThemeTokens) -> Element<'a, Libr
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// One document card: a header with its role and reorder / remove
@@ -188,14 +192,13 @@ fn view_document<'a>(
     let mode = DatasheetMode::from_ref(Some(&doc.source));
 
     let mode_address = address.clone();
-    let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
-        event(&mode_address, DatasheetMsg::SetMode(index, m))
-    })
-    .text_size(TS.body)
-    .padding([SP.s, SP.m]);
+    let mode_picker = pick_list(Some(mode), DatasheetMode::ALL, ToString::to_string)
+        .on_select(move |m| event(&mode_address, DatasheetMsg::SetMode(index, m)))
+        .text_size(TS.body)
+        .padding([SP.s, SP.m]);
 
     let label_address = address.clone();
-    let label_input = text_input("Datasheet", &doc.label)
+    let label_input = text_input("Datasheet", doc.label.clone())
         .on_input(move |s| event(&label_address, DatasheetMsg::SetLabel(index, s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
@@ -245,8 +248,8 @@ fn view_document<'a>(
 
     let mut body = column![
         header,
-        field_row("Label", label_input, tokens),
-        field_row("Source", mode_picker, tokens),
+        field_row("Label", label_input.boxed(), tokens),
+        field_row("Source", mode_picker.boxed(), tokens),
         field_row(value_label, value_row, tokens),
     ]
     .spacing(SP.m);
@@ -254,7 +257,8 @@ fn view_document<'a>(
         body = body.push(
             text(reason)
                 .size(TS.body)
-                .color(theme_ext::error_color(tokens)),
+                .color(theme_ext::error_color(tokens))
+                .boxed(),
         );
     }
 
@@ -262,7 +266,7 @@ fn view_document<'a>(
         .padding(SP.l)
         .style(crate::styles::modal_card(tokens))
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -278,11 +282,11 @@ fn view_url_input<'a>(
         DatasheetRef::Url { url } => url.clone(),
         _ => String::new(),
     };
-    text_input("https://example.com/datasheet.pdf", &url_value)
+    text_input("https://example.com/datasheet.pdf", url_value)
         .on_input(move |s| event(&address, DatasheetMsg::SetUrl(index, s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn view_pinned_input<'a>(
@@ -311,19 +315,20 @@ fn view_pinned_input<'a>(
                 text(short_hash).size(TS.caption).color(muted),
             ]
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         }
         _ => text("No PDF attached yet.")
             .size(TS.body)
             .color(muted)
-            .into(),
+            .boxed(),
     };
 
     row![container(summary).width(Length::Fill), upload_btn]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
