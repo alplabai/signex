@@ -1,0 +1,309 @@
+//! #1854: the `.snxprj` reads clean again when the three Project-tab
+//! histories (General, rules, net classes) undo back to the saved state, and
+//! never otherwise.
+
+use crate::app::handlers::menu::export::tests::app_workspace;
+use crate::app::{Message, ProjectMsg, ProjectTabMsg, Signex};
+
+fn app() -> Signex {
+    let dir = std::env::temp_dir().join(format!("signex-prj-sp-{}", uuid::Uuid::now_v7()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    app.ui_state.erc_severity_override.clear();
+    app.ui_state.pin_matrix_overrides.clear();
+    app.open_project_tab(0);
+    app
+}
+
+fn describe(app: &mut Signex, text: &str) {
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::DescriptionEdited {
+            project_id,
+            text: text.to_string(),
+        },
+    )));
+}
+
+fn parameter(app: &mut Signex, name: &str, value: &str) {
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::ParameterEdited {
+            project_id,
+            name: name.to_string(),
+            value: value.to_string(),
+        },
+    )));
+}
+
+fn dirty(app: &Signex) -> bool {
+    let path = &app.document_state.projects[0].path;
+    app.document_state.is_document_dirty(path)
+}
+
+fn step(app: &mut Signex, undo: bool) -> bool {
+    let id = app.document_state.projects[0].id;
+    app.step_project_tab_history(id, undo)
+}
+
+#[test]
+fn undo_back_to_the_saved_state_is_clean_and_redo_is_dirty() {
+    let mut app = app();
+    assert!(!dirty(&app));
+    describe(&mut app, "a");
+    assert!(dirty(&app));
+    assert!(step(&mut app, true));
+    assert!(!dirty(&app), "undo returned to the file's content");
+    assert!(step(&mut app, false));
+    assert!(dirty(&app));
+}
+
+#[test]
+fn a_typing_run_is_one_step_and_undoes_to_clean() {
+    let mut app = app();
+    for text in ["a", "ab", "abc"] {
+        describe(&mut app, text);
+    }
+    assert!(step(&mut app, true));
+    assert!(!dirty(&app));
+}
+
+#[test]
+fn undoing_only_one_of_two_histories_stays_dirty() {
+    let mut app = app();
+    let _ = app.handle_store_erc_rules_in_project();
+    describe(&mut app, "kept");
+    assert!(step(&mut app, true));
+    assert!(dirty(&app), "the stored rules are still unsaved");
+    assert!(app.undo_project_rules());
+    assert!(!dirty(&app), "both histories are back at the saved state");
+}
+
+#[test]
+fn an_outside_mark_survives_undo_until_a_save() {
+    let mut app = app();
+    let path = app.document_state.projects[0].path.clone();
+    app.document_state.mark_document_dirty(&path);
+    describe(&mut app, "a");
+    assert!(step(&mut app, true));
+    assert!(dirty(&app), "a non-history edit is never hidden by undo");
+    app.document_state.mark_document_clean(&path);
+    assert!(!dirty(&app));
+}
+
+#[test]
+fn an_undo_while_a_write_is_in_flight_stays_dirty() {
+    let mut app = app();
+    let path = app.document_state.projects[0].path.clone();
+    describe(&mut app, "a");
+    let _job = app.document_state.document_saves.begin(path, Vec::new());
+    assert!(step(&mut app, true));
+    assert!(dirty(&app));
+}
+
+#[test]
+fn a_history_that_evicted_the_saved_state_stays_dirty() {
+    let mut app = app();
+    let id = app.document_state.projects[0].id;
+    for n in 0..=signex_engine::PROJECT_GENERAL_HISTORY_LIMIT {
+        parameter(&mut app, "Rev", &n.to_string());
+        if let Some(tab) = app.document_state.project_tabs.get_mut(&id) {
+            tab.general_history.close_run();
+        }
+    }
+    while step(&mut app, true) {}
+    assert!(
+        dirty(&app),
+        "the oldest step fell off; no step reaches the file"
+    );
+}
+
+#[test]
+fn saving_then_undoing_to_the_saved_state_is_clean() {
+    let mut app = app();
+    let path = app.document_state.projects[0].path.clone();
+    describe(&mut app, "a");
+    // A save ends the typing run (`plan_project_write`), so "b" is a new step.
+    let id = app.document_state.projects[0].id;
+    app.document_state
+        .project_tabs
+        .get_mut(&id)
+        .unwrap()
+        .general_history
+        .close_run();
+    app.document_state.mark_document_clean(&path);
+    describe(&mut app, "b");
+    assert!(dirty(&app));
+    assert!(step(&mut app, true));
+    assert!(!dirty(&app), "back to what the save wrote");
+}
+
+fn encoded(app: &Signex) -> Vec<u8> {
+    signex_types::project::encode_project(&app.document_state.projects[0].data).unwrap()
+}
+
+/// The sequence of the write `begin` just handed out (a fresh app starts at 1).
+fn newest_sequence(app: &Signex, path: &std::path::Path) -> u64 {
+    (1..32)
+        .rev()
+        .find(|s| app.document_state.document_saves.is_newest_begun(path, *s))
+        .expect("a begun write")
+}
+
+fn finish_write(
+    app: &mut Signex,
+    sequence: u64,
+    bytes: Vec<u8>,
+    result: Result<crate::persist::SaveOutcome, String>,
+) {
+    let project_id = app.document_state.projects[0].id;
+    let path = app.document_state.projects[0].path.clone();
+    let _ = app.handle_project_file_saved(crate::persist::ProjectSaveDone {
+        project_id,
+        path,
+        sequence,
+        bytes,
+        libraries: Vec::new(),
+        result,
+    });
+}
+
+fn close_run(app: &mut Signex) {
+    let id = app.document_state.projects[0].id;
+    if let Some(tab) = app.document_state.project_tabs.get_mut(&id) {
+        tab.general_history.close_run();
+    }
+}
+
+#[test]
+fn a_failed_write_through_the_completion_handler_stays_dirty_after_undo() {
+    let mut app = app();
+    let path = app.document_state.projects[0].path.clone();
+    describe(&mut app, "a");
+    drop(
+        app.document_state
+            .document_saves
+            .begin(path.clone(), Vec::new()),
+    );
+    let sequence = newest_sequence(&app, &path);
+    finish_write(&mut app, sequence, Vec::new(), Err("disk full".into()));
+    assert!(step(&mut app, true));
+    assert!(dirty(&app), "the file may hold the failed bytes");
+}
+
+#[test]
+fn undo_back_to_bytes_written_while_editing_is_clean() {
+    let mut app = app();
+    let path = app.document_state.projects[0].path.clone();
+    describe(&mut app, "a");
+    close_run(&mut app);
+    let written = encoded(&app);
+    drop(
+        app.document_state
+            .document_saves
+            .begin(path.clone(), written.clone()),
+    );
+    let sequence = newest_sequence(&app, &path);
+    describe(&mut app, "b");
+    finish_write(
+        &mut app,
+        sequence,
+        written,
+        Ok(crate::persist::SaveOutcome::Written),
+    );
+    assert!(dirty(&app), "edited during the write");
+    assert!(step(&mut app, true));
+    assert!(!dirty(&app), "memory equals the file again");
+    assert!(step(&mut app, false));
+    assert!(dirty(&app));
+}
+
+#[test]
+fn a_write_that_is_not_the_newest_leaves_the_file_unknown() {
+    let mut app = app();
+    let path = app.document_state.projects[0].path.clone();
+    describe(&mut app, "a");
+    close_run(&mut app);
+    let written = encoded(&app);
+    drop(
+        app.document_state
+            .document_saves
+            .begin(path.clone(), written.clone()),
+    );
+    let first = newest_sequence(&app, &path);
+    drop(app.document_state.document_saves.begin(path, Vec::new()));
+    describe(&mut app, "b");
+    finish_write(
+        &mut app,
+        first,
+        written,
+        Ok(crate::persist::SaveOutcome::Written),
+    );
+    assert!(step(&mut app, true));
+    assert!(dirty(&app), "a newer write is still to land");
+}
+
+#[test]
+fn a_disk_only_sheet_add_then_undo_to_the_file_reads_clean() {
+    let mut app = app();
+    let id = app.document_state.projects[0].id;
+    let path = app.document_state.projects[0].path.clone();
+    let sheet =
+        std::path::PathBuf::from(&app.document_state.projects[0].data.dir).join("new.snxsch");
+    // The bytes the sheet add writes: the clean project plus the new sheet.
+    let before = app.document_state.projects[0].data.clone();
+    app.handle_add_new_schematic_written(
+        id,
+        sheet.clone(),
+        Ok(crate::app::project_entry_disk::EntryPatch::Patched(
+            std::sync::Arc::new(Vec::new()),
+        )),
+    );
+    let on_disk = encoded(&app);
+    app.document_state.projects[0].data = before;
+    describe(&mut app, "a");
+    app.handle_add_new_schematic_written(
+        id,
+        sheet,
+        Ok(crate::app::project_entry_disk::EntryPatch::Patched(
+            std::sync::Arc::new(on_disk),
+        )),
+    );
+    assert!(dirty(&app), "the description is unsaved");
+    assert!(step(&mut app, true));
+    assert!(!dirty(&app), "memory now equals the rewritten file");
+    assert!(!app.document_state.is_document_dirty(&path));
+}
+
+#[test]
+fn a_discard_records_no_saved_state() {
+    let mut app = app();
+    describe(&mut app, "a");
+    app.document_state.discard_documents_where(|_| true);
+    assert!(!dirty(&app));
+    assert!(step(&mut app, true));
+    assert!(step(&mut app, false));
+    assert!(dirty(&app), "the discarded edit was never written");
+}
+
+#[test]
+fn a_rules_edit_back_to_the_saved_rules_still_outdates_erc_results() {
+    let mut app = app();
+    let _ = app.handle_store_erc_rules_in_project();
+    let path = app.document_state.projects[0].path.clone();
+    app.document_state.mark_document_clean(&path);
+    let saved = app.document_state.projects[0].data.rules.clone();
+    for _ in 0..8 {
+        // "ERC ran" on the matrix as it is before this cycle.
+        app.ui_state.erc_epoch = app.document_state.sheet_edit_epoch;
+        let _ = app.handle_pin_matrix_cell_cycled(0, 1);
+        if app.document_state.projects[0].data.rules == saved {
+            break;
+        }
+    }
+    assert_eq!(app.document_state.projects[0].data.rules, saved);
+    assert!(!dirty(&app), "back at the saved rules");
+    assert_ne!(
+        app.document_state.sheet_edit_epoch, app.ui_state.erc_epoch,
+        "the rules changed since ERC ran; its results are stale"
+    );
+}

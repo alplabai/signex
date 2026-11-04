@@ -204,6 +204,12 @@ pub struct ComponentPreviewState {
     /// field it touched, and from wherever it came. View-only events never
     /// bump it.
     pub edit_epoch: u64,
+    /// Undo / redo of `row` with its saved position (#1854): `dirty` follows
+    /// it (see [`Self::sync_dirty`]).
+    pub history: RowHistory,
+    /// Bumped by every [`Self::mark_dirty`], so `finish_edit` can tell an
+    /// inline edit dirtied the preview.
+    pub(super) dirty_marks: u64,
 }
 
 impl ComponentPreviewState {
@@ -236,6 +242,8 @@ impl ComponentPreviewState {
             saving_batch: None,
             binding_primitive: false,
             edit_epoch: 0,
+            history: RowHistory::at_start(),
+            dirty_marks: 0,
         }
     }
 
@@ -292,6 +300,10 @@ impl ComponentPreviewState {
         if let Some(saving) = &self.saving_row {
             keep.extend(self.staged_assets_pinned_by(saving));
         }
+        // An undo or redo can pin a replaced PDF again.
+        for row in self.history.rows() {
+            keep.extend(self.staged_assets_pinned_by(row));
+        }
         self.staged_datasheets
             .retain(|hash, _| keep.iter().any(|a| &a.hash == hash));
     }
@@ -300,6 +312,7 @@ impl ComponentPreviewState {
     /// planned before this (a reload) no longer describes it.
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+        self.dirty_marks += 1;
         self.note_edit();
     }
 
