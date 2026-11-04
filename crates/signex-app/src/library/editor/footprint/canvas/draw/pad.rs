@@ -6,6 +6,26 @@ use iced::{Color, Point, Radians, Vector};
 use super::super::super::state::{EditorPad, FootprintEditorState, PadsTool, PlaceArcPending};
 use super::super::FootprintCanvasState;
 
+/// When a pad carries its number.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum PadLabels {
+    /// The editor: from `EDITOR_LABEL_SCALE` px/mm up.
+    Editor,
+    /// Previews: once the pad's smaller side is at least this many px.
+    MinPadPx(f32),
+}
+
+const EDITOR_LABEL_SCALE: f32 = 25.0;
+
+impl PadLabels {
+    fn shows(self, scale: f32, size_mm: (f64, f64)) -> bool {
+        match self {
+            Self::Editor => scale >= EDITOR_LABEL_SCALE,
+            Self::MinPadPx(px) => (size_mm.0.min(size_mm.1) as f32) * scale >= px,
+        }
+    }
+}
+
 /// Render a single pad — copper outline, drilled hole, and pad number
 /// (when zoomed in enough to read).
 pub(super) fn draw_pad(
@@ -13,6 +33,7 @@ pub(super) fn draw_pad(
     cstate: &FootprintCanvasState,
     pad: &EditorPad,
     is_selected: bool,
+    labels: PadLabels,
 ) {
     use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
@@ -189,7 +210,7 @@ pub(super) fn draw_pad(
 
     // Pad number — deliberately OUTSIDE the saved transform. Inside it
     // the label would turn with the pad and read upside down at 180°.
-    if cstate.scale >= 25.0 && !pad.number.is_empty() {
+    if labels.shows(cstate.scale, pad.size_mm) && !pad.number.is_empty() {
         let centre = screen_centre;
         let text_size = (cstate.scale * 0.35).clamp(8.0, 16.0);
         frame.fill_text(canvas::Text {
