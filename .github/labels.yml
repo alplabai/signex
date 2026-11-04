@@ -16,7 +16,7 @@
 # `tier:` answers "which release can this ship in?" (a scope gate, from
 # docs/ROADMAP.md). `priority:` answers "how soon should someone look at
 # it?" (urgency). A `tier: p2` bug can be `priority: critical` — it is
-# urgent, but it still cannot pull v3.0 scope into v1.0.
+# urgent, but it still cannot pull Pro Release scope into the Community Preview.
 #
 # `aliases` migrate pre-existing labels onto the new names without
 # losing the issues/PRs already tagged with the old label.
@@ -114,16 +114,16 @@
 # queryable instead of remembered.
 - name: "tier: p0"
   color: "006b75"
-  description: "Required for v1.0 — Community Preview cannot ship without it"
+  description: "Required for the Community Preview — it cannot ship without it"
 - name: "tier: p1"
   color: "006b75"
-  description: "Required for v2.0 — professional users expect it"
+  description: "Required for the PCB Viewer — professional users expect it"
 - name: "tier: p2"
   color: "006b75"
-  description: "Differentiator — drives Pro adoption; ships v2.1–v3.0"
+  description: "Differentiator — drives Pro adoption; ships PCB Routing through Pro Release"
 - name: "tier: p3"
   color: "006b75"
-  description: "Nice to have — stable core required first; v3.x and later"
+  description: "Nice to have — stable core required first; Pro Release band and later"
 
 # ────────────────────────── priority: ─────────────────────────
 - name: "priority: critical"

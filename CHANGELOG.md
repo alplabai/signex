@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Signex ship here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html), both strictly.
+All notable changes to Signex ship here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) strictly, and versions use [Calendar Versioning](https://calver.org) `YY.MM.MICRO` (month unpadded). Releases up to and including 1.0.0-rc.1 used [Semantic Versioning](https://semver.org/spec/v2.0.0.html); 1.0.0-rc.1 is the last SemVer release.
 
 ## Format
 

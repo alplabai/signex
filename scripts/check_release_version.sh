@@ -30,7 +30,7 @@ ROOT="${2:-.}"
 CARGO="$ROOT/Cargo.toml"
 CHANGELOG="$ROOT/CHANGELOG.md"
 
-# Strict semver tag, same shape the release workflow triggers on.
+# Strict three-number tag (vX.Y.Z; CalVer vYY.MM.MICRO), same shape the release workflow triggers on.
 if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]]; then
   echo "error: '$TAG' is not a release tag (expected vX.Y.Z or vX.Y.Z-pre)" >&2
   exit 2
