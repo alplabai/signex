@@ -70,7 +70,9 @@
     clippy::let_unit_value,
     clippy::float_cmp
 )]
-#![expect(
+// `allow`, not `expect`: which of these fire depends on the enabled features,
+// and an `expect` that does not fire is itself an error under `-D warnings`.
+#![allow(
     clippy::collapsible_match,
     clippy::elidable_lifetime_names,
     clippy::type_complexity,
