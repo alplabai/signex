@@ -478,20 +478,21 @@ fn a_project_replace_started_in_a_window_finishes_in_that_windows_project() {
     settle_task(&mut f.app, task);
     let (generation, prep) = prepared.expect("the replace was prepared");
 
-    let task = f
-        .app
-        .update(Message::FindReplaceMsg(FindReplaceMsg::ProjectReplacePrepared {
+    let task = f.app.update(Message::FindReplaceMsg(
+        FindReplaceMsg::ProjectReplacePrepared {
             generation,
             result: std::sync::Arc::new(Ok(prep)),
-        }));
+        },
+    ));
     settle_task(&mut f.app, task);
 
     let matches = &f.app.ui_state.find_replace.matches;
     assert!(!matches.is_empty(), "the rescan found nothing");
     assert!(
-        matches
-            .iter()
-            .all(|m| m.sheet.as_deref().is_some_and(|s| s.starts_with(dir_b.path()))),
+        matches.iter().all(|m| m
+            .sheet
+            .as_deref()
+            .is_some_and(|s| s.starts_with(dir_b.path()))),
         "a hit outside the window's project: {:?}",
         matches.iter().map(|m| m.sheet.clone()).collect::<Vec<_>>()
     );
@@ -575,7 +576,9 @@ fn the_command_palette_paints_in_the_window_it_was_opened_in_only() {
 fn a_drag_end_forgets_the_window_the_pointer_was_last_in() {
     let mut f = fixture();
     f.app.interaction_state.pointer_window = Some(f.window);
-    let task = f.app.update(Message::Ui(crate::app::UiMsg::DragEnd(f.main)));
+    let task = f
+        .app
+        .update(Message::Ui(crate::app::UiMsg::DragEnd(f.main)));
     settle_task(&mut f.app, task);
     assert_eq!(f.app.interaction_state.pointer_window, None);
 }
