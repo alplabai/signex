@@ -269,7 +269,9 @@ impl Signex {
             let fs_request = self.project_fs_request();
             self.document_state.project_fs.want(fs_request);
             self.want_row_summaries();
-            self.next_navigator_model(previous_navigator)
+            let navigator = self.next_navigator_model(previous_navigator);
+            self.want_window_hierarchies();
+            navigator
         } else {
             previous_navigator
         };
