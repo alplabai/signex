@@ -323,3 +323,55 @@ fn empty_footprint_draws_backdrop_without_panicking() {
     let drawn = draw_preview(&model, &state);
     assert!(drawn.paths() >= 3, "background and origin drawn");
 }
+
+#[test]
+fn a_saved_courtyard_is_stroked_and_inside_the_fit() {
+    let mut fp = fixture();
+    let plain_model = preview_of(&fp);
+    let plain = draw_preview(&plain_model, &show(&plain_model));
+    fp.courtyard = Polygon::new(vec![[-3.0, -3.0], [3.0, -3.0], [3.0, 3.0], [-3.0, 3.0]]);
+    let model = preview_of(&fp);
+    let state = show(&model);
+    let drawn = draw_preview(&model, &state);
+    assert_eq!(drawn.paths(), plain.paths() + 1, "one courtyard stroke");
+    let (min_x, min_y, max_x, max_y) = model.bbox_mm().expect("bbox");
+    assert!(min_x <= -3.0 && min_y <= -3.0 && max_x >= 3.0 && max_y >= 3.0);
+}
+
+#[test]
+fn silk_outside_the_pads_is_fitted_into_the_box() {
+    let mut fp = fixture();
+    fp.silk_f.push(FpGraphic {
+        kind: FpGraphicKind::Line {
+            from: [-9.0, -6.0],
+            to: [9.0, 6.0],
+        },
+        stroke_width: 0.15,
+        filled: false,
+        sketch_entity: None,
+    });
+    let model = preview_of(&fp);
+    let state = show(&model);
+    let (scale, off, size) = (state.scale(), state.offset(), BOX.size());
+    for (x, y) in [(-9.0_f32, -6.0_f32), (9.0, 6.0)] {
+        let (sx, sy) = (x * scale + off.x, y * scale + off.y);
+        assert!((0.0..=size.width).contains(&sx), "x {sx} inside the box");
+        assert!((0.0..=size.height).contains(&sy), "y {sy} inside the box");
+    }
+}
+
+#[test]
+fn component_preview_dialog_keeps_the_preview_model_in_step() {
+    use crate::library::component_preview::test_row;
+    use crate::library::state::ComponentPreviewState;
+    let mut state =
+        ComponentPreviewState::from_row(std::path::PathBuf::new(), "T".into(), test_row());
+    assert!(state.footprint_preview().is_none());
+    state.set_footprint(Some(fixture()));
+    let model = state
+        .footprint_preview()
+        .expect("model built with footprint");
+    assert_eq!(model.pads().len(), 3);
+    state.set_footprint(None);
+    assert!(state.footprint_preview().is_none());
+}

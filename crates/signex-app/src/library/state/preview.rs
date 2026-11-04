@@ -115,7 +115,7 @@ pub struct ComponentPreviewState {
     /// The editor's model of `footprint`, built when it is set so the
     /// preview does not rebuild pad models per draw. Set through
     /// [`Self::set_footprint`].
-    pub footprint_preview: Option<crate::library::editor::footprint::canvas::PreviewFootprint>,
+    footprint_preview: Option<crate::library::editor::footprint::canvas::PreviewFootprint>,
     /// Resolved SimModel — `None` when the Simulation tab hasn't been
     /// visited yet or no sim is bound.
     pub sim: Option<SimModel>,
@@ -217,6 +217,13 @@ impl ComponentPreviewState {
             .as_ref()
             .map(crate::library::editor::footprint::canvas::PreviewFootprint::build);
         self.footprint = footprint;
+    }
+
+    /// The editor's model of the resolved footprint, if any.
+    pub fn footprint_preview(
+        &self,
+    ) -> Option<&crate::library::editor::footprint::canvas::PreviewFootprint> {
+        self.footprint_preview.as_ref()
     }
 
     /// Build a preview state from a freshly-loaded row.
