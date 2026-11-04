@@ -192,6 +192,15 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
 }
 
 impl Engine {
+    /// Whether the placed symbol `id` is locked; `false` for an unknown id.
+    #[must_use]
+    pub fn symbol_locked(&self, id: Uuid) -> bool {
+        self.document
+            .symbols
+            .iter()
+            .any(|s| s.uuid == id && s.locked)
+    }
+
     /// The lock of a wire, label, text note or drawing, `None` for any other
     /// kind (a symbol keeps its own `SetSymbolLocked` path).
     #[must_use]
