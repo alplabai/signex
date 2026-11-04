@@ -582,6 +582,7 @@ impl SnxSchematic {
             no_erc_directives: sheet_extras.no_erc_directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
+            text_widths: Default::default(),
             net_colors,
             drawing_placements,
             frame: sheet_extras.frame.settings,

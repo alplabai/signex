@@ -449,6 +449,9 @@ pub struct SchematicSheet {
     pub title_block: HashMap<String, String>,
     #[serde(default)]
     pub lib_symbols: LibSymbolTable,
+    /// Measured text widths for hit boxes; derived data, not saved.
+    #[serde(skip)]
+    pub text_widths: super::TextWidths,
     /// Net colour overrides set with the Active Bar net-colour pen, keyed by
     /// the uuid of the wire or junction they colour. Saved per sheet in
     /// `[extras.sheet.net_colors]`; empty (and not written) when the sheet
@@ -506,6 +509,7 @@ impl Default for SchematicSheet {
             no_erc_directives: Vec::new(),
             title_block: HashMap::new(),
             lib_symbols: LibSymbolTable::default(),
+            text_widths: super::TextWidths::default(),
             net_colors: HashMap::new(),
             drawing_placements: BTreeMap::new(),
             frame: SheetFrameSettings::default(),

@@ -2,6 +2,7 @@
 //! in, not for a monospace guess.
 
 use super::*;
+use signex_types::schematic::text_aabb;
 
 const TEXT: &str = "SYSTEM_RESET_REQUEST_N";
 
@@ -125,8 +126,8 @@ fn iosevka_geometry_is_the_shaped_advance() {
 
 #[test]
 fn default_face_text_box_is_the_shared_types_box() {
-    use signex_types::schematic::text_aabb;
     let got = drawn_text_aabb(
+        None,
         "R101",
         None,
         1.27,
@@ -176,7 +177,6 @@ fn a_flag_is_as_tall_as_its_capitals_say_in_every_face() {
 /// guess.
 #[test]
 fn default_face_box_width_is_the_shaped_advance() {
-    use signex_types::schematic::text_aabb;
     roboto_em();
     for text in ["R101", "SYSTEM_RESET_REQUEST_N", "10k", "e\u{301}"] {
         let size = 1.27;
@@ -358,4 +358,106 @@ fn text_box_perf() {
     println!("hover per call (cold+warm): {:?}", hover(&sheet));
     let _ = boxed(&sheet);
     println!("box select 6000 items: {:?}", boxed(&sheet));
+}
+
+/// The stored widths of a sheet (`SchematicSheet::text_widths`) answer with the
+/// new width at once after every kind of change, undo and redo included: an
+/// entry is checked against the text, face and size it was measured from.
+mod stored_widths {
+    use super::*;
+
+    fn engine_with_label() -> (signex_engine::Engine, uuid::Uuid) {
+        let l = label(LabelType::Net, None);
+        let id = l.uuid;
+        let sheet = SchematicSheet {
+            labels: vec![l],
+            ..Default::default()
+        };
+        (signex_engine::Engine::new(sheet).expect("engine"), id)
+    }
+
+    /// (stored width, freshly shaped width) of the label.
+    fn widths(engine: &signex_engine::Engine) -> (f64, f64) {
+        let doc = engine.document();
+        let family = doc.font_family.as_deref();
+        let width = |b: Aabb| b.max_x - b.min_x;
+        let stored = label_aabb_with(Some(&doc.text_widths), &doc.labels[0], family);
+        let fresh = label_aabb(&doc.labels[0], family);
+        (width(stored), width(fresh))
+    }
+
+    fn assert_current(engine: &signex_engine::Engine, was: f64, changed: bool, what: &str) -> f64 {
+        let (stored, fresh) = widths(engine);
+        assert!(
+            (stored - fresh).abs() < 1e-9,
+            "{what}: stored {stored} vs {fresh}"
+        );
+        assert_eq!((stored - was).abs() > 1e-6, changed, "{what}");
+        stored
+    }
+
+    #[test]
+    fn every_change_that_alters_a_width_is_seen_at_once_and_undo_redo_restore_it() {
+        roboto_em();
+        let (mut engine, id) = engine_with_label();
+        let w0 = assert_current(&engine, 0.0, true, "first measure");
+        assert_current(&engine, w0, false, "read back");
+
+        engine
+            .execute(signex_engine::Command::SetDocumentFontFamily {
+                font_family: Some("Roboto".into()),
+            })
+            .unwrap();
+        let w1 = assert_current(&engine, w0, true, "default font");
+
+        engine
+            .execute(signex_engine::Command::UpdateText {
+                target: signex_engine::TextTarget::Label(id),
+                value: "A_MUCH_LONGER_NET_NAME".into(),
+            })
+            .unwrap();
+        let w2 = assert_current(&engine, w1, true, "text edit");
+
+        engine
+            .execute(signex_engine::Command::UpdateLabelProps {
+                label_id: id,
+                font_size_mm: Some(3.0),
+                justify: None,
+                rotation_degrees: None,
+            })
+            .unwrap();
+        let w3 = assert_current(&engine, w2, true, "size");
+
+        for (undone, back_to) in [("size", w2), ("text", w1), ("font", w0)] {
+            engine.undo().unwrap();
+            assert_current(&engine, back_to, false, &format!("undo {undone}"));
+            assert!((widths(&engine).0 - back_to).abs() < 1e-6, "undo {undone}");
+        }
+        for (redone, to) in [("font", w1), ("text", w2), ("size", w3)] {
+            engine.redo().unwrap();
+            assert!((widths(&engine).0 - to).abs() < 1e-6, "redo {redone}");
+        }
+    }
+
+    /// An item's own font beats the default: changing it changes the stored
+    /// width without any change of the default.
+    #[test]
+    fn an_items_own_font_change_is_seen_at_once() {
+        roboto_em();
+        let (engine, _) = engine_with_label();
+        let mut doc = engine.document().clone();
+        let (before, _) = widths(&engine);
+        let stored = |doc: &SchematicSheet| {
+            let b = label_aabb_with(Some(&doc.text_widths), &doc.labels[0], None);
+            b.max_x - b.min_x
+        };
+        assert!((stored(&doc) - before).abs() < 1e-9);
+        doc.labels[0].font_family = Some("Roboto".into());
+        let after = stored(&doc);
+        assert!(
+            (after - (label_aabb(&doc.labels[0], None).max_x - doc.labels[0].position.x)).abs()
+                < 1e-9
+        );
+        assert!((after - before).abs() > 1e-6);
+    }
 }
