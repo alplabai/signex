@@ -651,11 +651,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             // Parse numeric values for edit controls (with fallbacks).
             let rotation_deg = rotation_degrees(&rotation_str);
             let text_size_pt = text_size_str.parse::<u32>().unwrap_or(10);
-            let justify_h = match justify_h_str.as_str() {
-                "Left" => signex_types::schematic::HAlign::Left,
-                "Right" => signex_types::schematic::HAlign::Right,
-                _ => signex_types::schematic::HAlign::Center,
-            };
+            let justify_h = h_align_from_row(&justify_h_str);
 
             if let Some(id) = uuid {
                 // ── Location ──
@@ -981,5 +977,62 @@ mod tests {
         assert_eq!(rotation_degrees(" 270 "), 270.0);
         assert_eq!(pick_list_degrees("180 Degrees"), 180.0);
         assert_eq!(pick_list_degrees(""), 0.0);
+    }
+}
+
+/// The justification a Properties row reports (`info_keys::JUSTIFY_H`).
+fn h_align_from_row(row: &str) -> signex_types::schematic::HAlign {
+    use signex_types::schematic::HAlign;
+    match row {
+        "Left" => HAlign::Left,
+        "Right" => HAlign::Right,
+        _ => HAlign::Center,
+    }
+}
+
+#[cfg(test)]
+mod justify_tests {
+    use super::*;
+    use signex_types::schematic::HAlign;
+
+    /// #2024 - a left-justified label shows Left: its row, as the engine
+    /// writes it, reads back as `HAlign::Left` through the shared key.
+    #[test]
+    fn a_left_justified_label_row_reads_back_as_left() {
+        use signex_types::schematic::{
+            Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind, VAlign,
+        };
+        let label = Label {
+            uuid: uuid::Uuid::now_v7(),
+            text: "NET".into(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            label_type: LabelType::Net,
+            shape: String::new(),
+            font_size: 1.27,
+            font_family: None,
+            justify: HAlign::Left,
+            justify_v: VAlign::Bottom,
+            unknown_columns: Default::default(),
+            locked: false,
+        };
+        let id = label.uuid;
+        let engine = signex_engine::Engine::new(SchematicSheet {
+            labels: vec![label],
+            ..Default::default()
+        })
+        .expect("engine");
+        let details = engine
+            .describe_single_selection(&[SelectedItem::new(id, SelectedKind::Label)])
+            .expect("details");
+        let row = details
+            .info
+            .iter()
+            .find(|(k, _)| k == signex_engine::info_keys::JUSTIFY_H)
+            .map(|(_, v)| v.as_str())
+            .unwrap_or_default();
+        assert_eq!(h_align_from_row(row), HAlign::Left);
+        assert_eq!(h_align_from_row("Right"), HAlign::Right);
+        assert_eq!(h_align_from_row("Center"), HAlign::Center);
     }
 }
