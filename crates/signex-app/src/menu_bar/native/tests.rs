@@ -198,7 +198,7 @@ fn only_enabled_live_rows_activate() {
     // placeholder "No recent projects" has no handler at all.
     assert!(matches!(
         built.actions.get("File/New Project"),
-        Some(MenuMessage::NewProject)
+        Some(MenuMessage::Command(id)) if id.as_str() == "new_document"
     ));
     assert!(!built.actions.contains_key("File/Save"));
     assert!(
@@ -212,7 +212,7 @@ fn only_enabled_live_rows_activate() {
     let built = build(&menu_bar_model(&enabled), false);
     assert!(matches!(
         built.actions.get("File/Save"),
-        Some(MenuMessage::Save)
+        Some(MenuMessage::Command(id)) if id.as_str() == "save_document"
     ));
 }
 
@@ -269,7 +269,7 @@ fn app_menu_has_the_approved_content() {
     ));
     assert!(matches!(
         actions.get("Signex/Preferences..."),
-        Some(MenuMessage::OpenPreferences)
+        Some(MenuMessage::Command(id)) if id.as_str() == "open_preferences"
     ));
     assert!(matches!(
         actions.get("Signex/About Signex"),
@@ -475,13 +475,16 @@ fn the_native_file_menu_has_the_approved_rows() {
     let at = |id: &str| built.actions.get(id);
     assert!(matches!(
         at("File/Close Document"),
-        Some(MenuMessage::CloseDocument)
+        Some(MenuMessage::Command(id)) if id.as_str() == "close_active_document"
     ));
     assert!(matches!(
         at("File/Close Project"),
         Some(MenuMessage::CloseProject)
     ));
-    assert!(matches!(at("File/Print..."), Some(MenuMessage::Print)));
+    assert!(matches!(
+        at("File/Print..."),
+        Some(MenuMessage::Command(id)) if id.as_str() == "print"
+    ));
     let print = item_labelled(file, "Print...").unwrap();
     assert!(print.accelerator.is_none());
 }

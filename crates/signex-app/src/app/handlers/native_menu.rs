@@ -199,11 +199,11 @@ mod tests {
         app.ui_state.main_window_id = Some(main);
         app.ui_state.focused_window = Some(other);
         assert!(matches!(
-            app.native_menu_message(MenuMessage::Undo),
+            app.native_menu_message(MenuMessage::command("undo")),
             Message::Ui(UiMsg::MenuInWindow { window, .. }) if window == other
         ));
         assert!(matches!(
-            app.native_menu_message(MenuMessage::Save),
+            app.native_menu_message(MenuMessage::command("save_document")),
             Message::Ui(UiMsg::MenuInWindow { window, .. }) if window == other
         ));
         assert!(matches!(
@@ -212,8 +212,8 @@ mod tests {
         ));
         app.ui_state.focused_window = Some(main);
         assert!(matches!(
-            app.native_menu_message(MenuMessage::Undo),
-            Message::Menu(MenuMessage::Undo)
+            app.native_menu_message(MenuMessage::command("undo")),
+            Message::Menu(MenuMessage::Command(id)) if id.as_str() == "undo"
         ));
         app.ui_state.focused_window = None;
         assert_eq!(app.native_menu_window(), Some(main));
