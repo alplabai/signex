@@ -256,6 +256,7 @@ impl Signex {
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
         self.want_row_summaries();
         let navigator = self.next_navigator_model(previous_navigator);
+        self.want_window_hierarchies();
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /
         // `sheets` legacy singletons mirror whichever entry is `is_active`
