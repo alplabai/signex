@@ -51,6 +51,48 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
 const MINOR_GRID_LINE_PX: f32 = 0.6;
 const MAJOR_GRID_LINE_PX: f32 = 0.5;
 
+/// One grid dot, as a filled square with the area of a `radius` circle.
+///
+/// A dot is at most a few pixels wide, where a square reads the same as a
+/// circle. A circle path costs a full lyon tessellation per dot (about 2 µs,
+/// over 20 ms for a dense sheet on every pan frame); a rectangle is 4 vertices.
+pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
+    centre: Point,
+    radius: f32,
+    color: Color,
+) {
+    let side = radius * std::f32::consts::PI.sqrt();
+    frame.fill_rectangle(
+        Point::new(centre.x - side / 2.0, centre.y - side / 2.0),
+        iced::Size::new(side, side),
+        color,
+    );
+}
+
+/// One small "+" grid glyph, as two filled bars `width` thick reaching `arm`
+/// past `centre` (the same footprint as two butt-capped strokes, without the
+/// per-glyph stroke tessellation).
+pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
+    centre: Point,
+    arm: f32,
+    width: f32,
+    color: Color,
+) {
+    let half = width / 2.0;
+    frame.fill_rectangle(
+        Point::new(centre.x - arm, centre.y - half),
+        iced::Size::new(arm * 2.0, width),
+        color,
+    );
+    frame.fill_rectangle(
+        Point::new(centre.x - half, centre.y - arm),
+        iced::Size::new(width, arm * 2.0),
+        color,
+    );
+}
+
 /// Draw the grid dots on a canvas frame.
 ///
 /// The grid is **zoom-adaptive**: the user's `grid_mm` is the *base* spacing,
@@ -255,21 +297,9 @@ fn draw_grid_within<R: GeometryRenderer>(
                     continue;
                 }
                 match style {
-                    GridStyle::Dots => {
-                        let dot = canvas::Path::circle(screen, dot_radius);
-                        frame.fill(&dot, dot_color);
-                    }
+                    GridStyle::Dots => fill_grid_dot(frame, screen, dot_radius, dot_color),
                     GridStyle::SmallCrosses => {
-                        let h = canvas::Path::line(
-                            Point::new(screen.x - cross_arm, screen.y),
-                            Point::new(screen.x + cross_arm, screen.y),
-                        );
-                        let v = canvas::Path::line(
-                            Point::new(screen.x, screen.y - cross_arm),
-                            Point::new(screen.x, screen.y + cross_arm),
-                        );
-                        frame.stroke(&h, minor_stroke);
-                        frame.stroke(&v, minor_stroke);
+                        fill_grid_cross(frame, screen, cross_arm, MINOR_GRID_LINE_PX, dot_color)
                     }
                     // `Lines` took the branch above.
                     GridStyle::Lines => unreachable!(),
