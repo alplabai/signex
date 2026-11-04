@@ -55,7 +55,7 @@ const CLOSE_GLYPH_SCALE: f32 = 1.6;
 /// / Supply / Datasheet / Simulation), all read-only for Symbol+
 /// Footprint. The active tab body fills the panel; the header strip
 /// and footer give the row's identity + save controls.
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,

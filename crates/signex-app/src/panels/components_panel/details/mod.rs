@@ -112,7 +112,7 @@ impl DetailsState {
 }
 
 /// The details section for the panel's selected row.
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     panel: &'a ComponentsPanelState,
     tokens: &'a ThemeTokens,
     canvas_colors: &signex_types::theme::CanvasColors,

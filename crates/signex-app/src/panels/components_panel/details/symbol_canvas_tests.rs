@@ -217,7 +217,7 @@ fn the_preview_paints_paper_then_grid_then_the_symbol() {
 /// Grid-coloured fills (dots) and strokes (lines, the paper border) of a draw.
 fn grid_marks(p: &SymbolSheetPreview, grid_text: &str) -> (usize, usize) {
     let dump = dump(p, &PreviewState::default());
-    let hits = primitives(&dump)
+    primitives(&dump)
         .into_iter()
         .filter(|item| item.contains(grid_text))
         .fold((0, 0), |(fills, strokes), item| {
@@ -226,8 +226,7 @@ fn grid_marks(p: &SymbolSheetPreview, grid_text: &str) -> (usize, usize) {
             } else {
                 (fills + 1, strokes)
             }
-        });
-    hits
+        })
 }
 
 #[test]
