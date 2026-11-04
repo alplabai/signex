@@ -75,7 +75,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use color_field::{ColorFieldProps, color_field};
-pub use context::{PanelContext, SymbolChoiceItem};
+pub use context::{PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,

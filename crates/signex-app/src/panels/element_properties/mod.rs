@@ -12,6 +12,7 @@ mod drawing;
 mod drawing_preview;
 mod font_row;
 mod library_rows;
+mod pins;
 mod selected;
 
 pub(crate) use body_row::{

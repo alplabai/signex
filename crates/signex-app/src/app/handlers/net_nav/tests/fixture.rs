@@ -13,7 +13,8 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
+use crate::app::handlers::menu::export::tests::app_workspace;
+pub(super) use crate::app::handlers::menu::export::tests::sheet_with_net;
 use crate::app::{Message, NetNavMsg, Signex, UiMsg};
 
 pub(super) fn id(n: u128) -> Uuid {
@@ -165,6 +166,22 @@ fn build(broken_page: bool) -> Project {
         root: root_path,
         mid: mid_path,
         third: third_path,
+        _dir: dir,
+    }
+}
+
+/// One sheet, `u.snxsch`, open and focused.
+pub(super) fn single_sheet_project(sheet: signex_types::schematic::SchematicSheet) -> Project {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write(dir.path(), "u.snxsch", sheet);
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["u.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(path.clone()));
+    Project {
+        app,
+        root: path.clone(),
+        mid: path.clone(),
+        third: path,
         _dir: dir,
     }
 }

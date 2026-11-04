@@ -48,7 +48,7 @@ mod window_tab;
 
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
-pub use interaction::InteractionState;
+pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
 pub use pdf_page_setup::PageSetupInputs;

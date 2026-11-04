@@ -147,6 +147,11 @@ pub struct InteractionState {
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).
     pub hover_symbol_uuid: Option<uuid::Uuid>,
+    /// The pin a click on a placed symbol landed on. Set by the click and
+    /// kept by selection refreshes while that symbol, on that sheet in that
+    /// placement, stays the selected part; it brings the pin forward in
+    /// Properties.
+    pub clicked_pin: Option<ClickedPin>,
     /// Wall-clock timestamp at which `hover_symbol_uuid` was first set
     /// to its current value. Used by the view to gate the tooltip
     /// behind a 250 ms delay so hovering is a deliberate gesture.
@@ -205,4 +210,15 @@ impl InteractionState {
             None => &mut self.canvas,
         }
     }
+}
+
+/// A pin of a placed symbol that a click landed on. The symbol uuid alone
+/// does not name it: one child sheet opened through two placements has the
+/// same uuids in both tabs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClickedPin {
+    pub sheet: std::path::PathBuf,
+    pub placement: Option<signex_types::schematic::InstancePath>,
+    pub symbol: uuid::Uuid,
+    pub pin: String,
 }

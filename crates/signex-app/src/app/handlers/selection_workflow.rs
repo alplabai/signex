@@ -160,6 +160,7 @@ impl Signex {
                         .get(slot)
                         .map(|items| valid_selection_items(snapshot, items))
                         .unwrap_or_default();
+                    self.interaction_state.clicked_pin = None;
                     self.interaction_state.active_canvas_mut().selected = recalled;
                     self.interaction_state
                         .active_canvas_mut()
@@ -178,11 +179,39 @@ impl Signex {
                     );
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
+                    let at = signex_types::schematic::Point::new(world_x, world_y);
+                    let clicked_pin = hit.and_then(|h| {
+                        let sheet = self.document_state.active_path.as_deref()?;
+                        self.pin_under(sheet, &h, at)
+                            .map(|pin| crate::app::state::ClickedPin {
+                                sheet: sheet.to_path_buf(),
+                                placement: self.shown_placement(sheet),
+                                symbol: h.uuid,
+                                pin,
+                            })
+                    });
+                    if clicked_pin.is_some() {
+                        // A pin click opens the Pins section; the user can
+                        // collapse it again and that stands until the next
+                        // pin click.
+                        self.document_state
+                            .panel_ctx
+                            .collapsed_sections
+                            .remove(crate::panels::PINS_SECTION_KEY);
+                    }
+                    self.interaction_state.clicked_pin = clicked_pin;
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
                     self.update_selection_info();
+                    // The Pins rows read their nets from the project net index.
+                    // A cold index is built now, and the rows refresh when it
+                    // lands (`refresh_pin_rows`).
+                    if hit.is_some_and(|h| h.kind == signex_types::schematic::SelectedKind::Symbol)
+                    {
+                        return self.warm_net_index_for_pin_rows();
+                    }
                 }
             }
             selection_request::SelectionRequest::BoxSelect {
@@ -210,6 +239,7 @@ impl Signex {
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
                         .collect();
+                    self.interaction_state.clicked_pin = None;
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();

@@ -64,6 +64,60 @@ fn a_pin_shows_the_net_it_is_on() {
 }
 
 #[test]
+fn a_symbol_body_shows_the_part_and_only_its_pin_end_shows_the_net() {
+    let mut p = project();
+    // Well away from the pin end: the body, so no net card (#1958).
+    dwell_on(&mut p, ROOT_R1, SelectedKind::Symbol, (0.0, 8.0));
+    assert!(p.app.document_state.net_nav.hover.card.is_none());
+    // At the pin end the net card is back.
+    dwell_on(&mut p, ROOT_R1, SelectedKind::Symbol, (0.2, 0.1));
+    assert_eq!(card(&p).name, "VCC");
+}
+
+/// One sheet: `R1` (or a `GND` power port) at the origin on a wire named by a
+/// global label, with nothing near (0, 6).
+fn lone_part(power: bool) -> (Project, u128) {
+    let mut sheet = signex_types::schematic::SchematicSheet::default();
+    let named = sheet_with_net("R1", "GND", &[]);
+    sheet.lib_symbols = named.lib_symbols;
+    sheet.wires = named.wires;
+    sheet.labels = named.labels;
+    let mut symbol = named.symbols[0].clone();
+    symbol.is_power = power;
+    symbol.value = "GND".to_string();
+    symbol.uuid = id(777);
+    sheet.symbols = vec![symbol];
+    (single_sheet_project(sheet), 777)
+}
+
+#[test]
+fn a_power_port_shows_its_net_over_its_whole_head_and_a_part_does_not() {
+    let (mut port, uuid) = lone_part(true);
+    dwell_on(&mut port, uuid, SelectedKind::Symbol, (0.0, 6.0));
+    assert_eq!(card(&port).name, "GND");
+
+    let (mut part, uuid) = lone_part(false);
+    dwell_on(&mut part, uuid, SelectedKind::Symbol, (0.0, 6.0));
+    assert!(part.app.document_state.net_nav.hover.card.is_none());
+}
+
+#[test]
+fn hover_and_highlight_agree_on_a_power_port() {
+    use super::super::target::{net_of_hover, net_of_target};
+
+    let (mut p, uuid) = lone_part(true);
+    dwell_on(&mut p, uuid, SelectedKind::Symbol, (0.0, 6.0));
+    let project = p.app.project_of_sheet(&p.root).expect("project");
+    let data = p.app.ready_net_data(project).expect("index");
+    let key = data.key_of(&p.root).expect("sheet key");
+    let item = SelectedItem::new(id(uuid), SelectedKind::Symbol);
+    let hover = net_of_hover(&data, &key, &item, None, true, None);
+    let highlight = net_of_target(&data, &key, &item, None, None);
+    assert!(hover.is_some());
+    assert_eq!(hover, highlight);
+}
+
+#[test]
 fn a_label_shows_its_net_and_class() {
     let mut p = project();
     let id = p.app.document_state.projects[0].id;
