@@ -68,9 +68,7 @@ impl Signex {
             .chain(
                 // A sheet whose only change is a pending title-block draft is
                 // unsaved too: the draft is what Save would write (#2027).
-                doc.panel_ctx
-                    .title_block_drafts
-                    .iter()
+                doc.title_block_drafts_all()
                     .map(|draft| draft.sheet.clone()),
             )
             .filter(|p| path_is_under(p, target, fold))
@@ -84,7 +82,10 @@ impl Signex {
             })
             .collect();
         found.sort();
-        found.dedup();
+        // One entry per file: the project's key rule decides what is the same
+        // sheet (case, separators), not the spelling a draft was typed under.
+        let mut seen = std::collections::HashSet::new();
+        found.retain(|p| seen.insert(path_key_with(p, fold)));
         found
     }
 
@@ -303,10 +304,10 @@ impl Signex {
                     return iced::Task::none();
                 }
                 // Discard drops the drafts with the rest of the edits.
-                self.document_state
-                    .panel_ctx
-                    .title_block_drafts
-                    .retain(|draft| !path_is_under(&draft.sheet, &state.target_path, fold));
+                for ctx in self.document_state.panel_ctxs_mut() {
+                    ctx.title_block_drafts
+                        .retain(|draft| !path_is_under(&draft.sheet, &state.target_path, fold));
+                }
                 let mut tasks: Vec<iced::Task<Message>> = docs
                     .iter()
                     .flat_map(|p| self.close_tabs_of_removed(p, false, fold))

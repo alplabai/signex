@@ -72,13 +72,30 @@ impl Signex {
         &mut self,
         matches: impl Fn(&std::path::Path) -> bool,
     ) {
-        if self.document_state.panel_ctx.title_block_drafts.is_empty() {
+        if self
+            .document_state
+            .panel_ctxs()
+            .all(|ctx| ctx.title_block_drafts.is_empty())
+        {
             return;
         }
         let active = self.document_state.active_path.clone();
-        let drafts = std::mem::take(&mut self.document_state.panel_ctx.title_block_drafts);
-        let (picked, mut kept): (Vec<_>, Vec<_>) =
-            drafts.into_iter().partition(|d| matches(&d.sheet));
+        // Every window's drafts, the main window's first so that a field typed
+        // in an undocked window (later) replaces the main window's draft of the
+        // same sheet and field. What is not picked stays in its own context.
+        let mut picked = Vec::new();
+        for ctx in self.document_state.panel_ctxs_mut() {
+            let drafts = std::mem::take(&mut ctx.title_block_drafts);
+            let (take, keep): (Vec<_>, Vec<_>) =
+                drafts.into_iter().partition(|d| matches(&d.sheet));
+            ctx.title_block_drafts = keep;
+            for draft in take {
+                picked.retain(|d: &crate::panels::TitleBlockDraft| {
+                    !(d.sheet == draft.sheet && d.field == draft.field)
+                });
+                picked.push(draft);
+            }
+        }
         let (mine, others): (Vec<_>, Vec<_>) = picked
             .into_iter()
             .partition(|d| Some(&d.sheet) == active.as_ref());
@@ -90,8 +107,10 @@ impl Signex {
             );
         }
         let fields: Vec<_> = mine.iter().map(|d| d.field).collect();
-        kept.extend(mine);
-        self.document_state.panel_ctx.title_block_drafts = kept;
+        self.document_state
+            .panel_ctx
+            .title_block_drafts
+            .extend(mine);
         for field in fields {
             self.commit_title_block_field(field);
         }
@@ -142,10 +161,9 @@ impl Signex {
     /// Drop the pending title-block drafts of the sheet at `path`: a discard
     /// must not write what it was asked to throw away.
     pub(crate) fn drop_title_block_drafts_of(&mut self, path: &std::path::Path) {
-        self.document_state
-            .panel_ctx
-            .title_block_drafts
-            .retain(|d| d.sheet != path);
+        for ctx in self.document_state.panel_ctxs_mut() {
+            ctx.title_block_drafts.retain(|d| d.sheet != path);
+        }
     }
 
     /// Write the active sheet's custom width/height draft as one undoable

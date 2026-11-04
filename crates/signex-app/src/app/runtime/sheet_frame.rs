@@ -86,7 +86,7 @@ impl Signex {
         engine: &signex_engine::Engine,
     ) -> std::collections::HashMap<String, String> {
         let mut title_block = engine.document().title_block.clone();
-        for draft in &self.document_state.panel_ctx.title_block_drafts {
+        for draft in self.document_state.title_block_drafts_all() {
             if draft.sheet == path {
                 title_block.insert(draft.field.key().to_string(), draft.text.trim().to_string());
             }

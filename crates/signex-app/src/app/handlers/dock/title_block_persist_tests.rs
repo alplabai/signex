@@ -439,3 +439,109 @@ fn a_rename_keeps_the_pending_drafts() {
     assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
     assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
 }
+
+/// A draft typed in an undocked window: moved by `app_with_draft`'s typing
+/// into the window's own context.
+fn app_with_window_draft() -> (Signex, PathBuf, Arc<Recorder>, iced::window::Id) {
+    let (mut app, sheet, recorder) = app_with_draft();
+    let window = iced::window::Id::unique();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    app.document_state.panel_ctx.title_block_drafts.clear();
+    ctx.title_block_drafts = vec![crate::panels::TitleBlockDraft {
+        sheet: sheet.clone(),
+        field: TitleBlockField::DrawnBy,
+        text: "X".into(),
+    }];
+    app.document_state.window_panel_ctx.insert(window, ctx);
+    (app, sheet, recorder, window)
+}
+
+/// Quit, from the main window, counts a sheet whose only change is a draft
+/// typed in an undocked window, and Save writes it.
+#[test]
+fn a_window_draft_counts_as_unsaved_at_quit_and_is_saved() {
+    let (mut app, sheet, recorder, window) = app_with_window_draft();
+    let _ = app.handle_app_quit_requested();
+    let confirm = app.ui_state.app_quit_confirm.as_ref().expect("a prompt");
+    assert!(
+        confirm.dirty_paths.contains(&sheet),
+        "{:?}",
+        confirm.dirty_paths
+    );
+
+    let task = app.update(Message::Menu(MenuMessage::command("save_document")));
+    settle(&mut app, task);
+    assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
+    assert!(
+        app.document_state.window_panel_ctx[&window]
+            .title_block_drafts
+            .is_empty()
+    );
+}
+
+/// Renaming the sheet re-keys the drafts in every context, paper-edge drafts
+/// included.
+#[test]
+fn a_rename_re_keys_drafts_in_every_context() {
+    use crate::panels::{PaperEdge, PaperEdgeDraft};
+    let (mut app, old, _recorder, window) = app_with_window_draft();
+    let edge = |sheet: &PathBuf| PaperEdgeDraft {
+        sheet: sheet.clone(),
+        edge: PaperEdge::Width,
+        text: "250".into(),
+    };
+    app.document_state
+        .panel_ctx
+        .paper_edge_drafts
+        .push(edge(&old));
+    app.document_state
+        .window_panel_ctx
+        .get_mut(&window)
+        .expect("window")
+        .paper_edge_drafts
+        .push(edge(&old));
+    let new = PathBuf::from("renamed.snxsch");
+    app.rekey_open_document(&old, &new);
+    let window_ctx = &app.document_state.window_panel_ctx[&window];
+    assert_eq!(window_ctx.title_block_drafts[0].sheet, new);
+    assert_eq!(window_ctx.paper_edge_drafts[0].sheet, new);
+    assert_eq!(app.document_state.panel_ctx.paper_edge_drafts[0].sheet, new);
+}
+
+/// The project tree's Close Project prompts for a sheet whose only change is
+/// a draft typed in an undocked window.
+#[test]
+fn tree_close_project_prompts_for_a_window_draft() {
+    let (mut app, _sheet, id, _recorder) = project_with_draft();
+    let window = iced::window::Id::unique();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.title_block_drafts = std::mem::take(&mut app.document_state.panel_ctx.title_block_drafts);
+    app.document_state.window_panel_ctx.insert(window, ctx);
+    close_project_to_gate(&mut app, id);
+    assert!(app.ui_state.project_close_confirm.is_some());
+}
+
+/// The same sheet spelled in two cases is one entry of the unsaved list on a
+/// volume that ignores case.
+#[test]
+fn unsaved_documents_lists_a_case_variant_once() {
+    use crate::app::state::scope::CaseFold;
+    let (mut app, _t) = Signex::new();
+    let fold = CaseFold {
+        fold_case: true,
+        backslash_is_separator: false,
+        normalize_unicode: false,
+    };
+    for name in ["/w/A.snxsch", "/w/a.snxsch"] {
+        app.document_state
+            .panel_ctx
+            .title_block_drafts
+            .push(crate::panels::TitleBlockDraft {
+                sheet: PathBuf::from(name),
+                field: TitleBlockField::DrawnBy,
+                text: "X".into(),
+            });
+    }
+    let found = app.unsaved_documents(Path::new("/w"), fold);
+    assert_eq!(found.len(), 1, "{found:?}");
+}

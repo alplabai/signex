@@ -263,14 +263,17 @@ impl Signex {
             }
         }
         // Pending drafts belong to the sheet, not to the name it had.
-        for draft in &mut self.document_state.panel_ctx.title_block_drafts {
-            if draft.sheet == old_path {
-                draft.sheet = new_path.to_path_buf();
+        // ... in every window's context.
+        for ctx in self.document_state.panel_ctxs_mut() {
+            for draft in &mut ctx.title_block_drafts {
+                if draft.sheet == old_path {
+                    draft.sheet = new_path.to_path_buf();
+                }
             }
-        }
-        for draft in &mut self.document_state.panel_ctx.paper_edge_drafts {
-            if draft.sheet == old_path {
-                draft.sheet = new_path.to_path_buf();
+            for draft in &mut ctx.paper_edge_drafts {
+                if draft.sheet == old_path {
+                    draft.sheet = new_path.to_path_buf();
+                }
             }
         }
         if let Some(mut engine) = self.document_state.remove_engine(old_path) {

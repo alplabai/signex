@@ -14,9 +14,7 @@ impl Signex {
     pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
         let owned: Vec<std::path::PathBuf> = self
             .document_state
-            .panel_ctx
-            .title_block_drafts
-            .iter()
+            .title_block_drafts_all()
             .map(|d| d.sheet.clone())
             .filter(|sheet| {
                 self.document_state

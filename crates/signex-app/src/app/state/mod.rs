@@ -23,6 +23,7 @@ pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
+mod panel_drafts;
 mod parameter_table;
 mod path_key;
 mod pcb_revision;
