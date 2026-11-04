@@ -427,7 +427,12 @@ impl Signex {
         let panel = self
             .document_state
             .dock
-            .view_region(pos, &self.document_state.panel_ctx, &self.library)
+            .view_region(
+                pos,
+                &self.document_state.panel_ctx,
+                &self.library,
+                self.sheet_grid(),
+            )
             .map(Message::Dock);
         let width = if !has_panels {
             0.0
@@ -455,7 +460,12 @@ impl Signex {
         let panel = self
             .document_state
             .dock
-            .view_region(pos, &self.document_state.panel_ctx, &self.library)
+            .view_region(
+                pos,
+                &self.document_state.panel_ctx,
+                &self.library,
+                self.sheet_grid(),
+            )
             .map(Message::Dock);
         let height = if !has_panels {
             0.0
