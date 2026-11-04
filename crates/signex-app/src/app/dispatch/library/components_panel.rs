@@ -449,8 +449,9 @@ impl Signex {
         Task::none()
     }
 
-    /// "Place into Schematic" on a Components Panel row — routes through
-    /// the existing place handler.
+    /// "Place into Schematic" on a Components Panel row — the existing place
+    /// handler, run here so a pick from an undocked window's row menu arms on
+    /// that window's sheet (it runs in the window's swap).
     pub(super) fn handle_components_panel_place(
         &mut self,
         library_path: std::path::PathBuf,
@@ -459,11 +460,7 @@ impl Signex {
     ) -> Task<Message> {
         // Same flow as the picker: the part attaches to the cursor.
         self.library.components_panel.row_menu = None;
-        Task::done(Message::Library(LibraryMessage::PlaceLibraryComponent {
-            library_path,
-            table,
-            row_id,
-        }))
+        self.handle_place_library_component(library_path, table, row_id)
     }
 }
 

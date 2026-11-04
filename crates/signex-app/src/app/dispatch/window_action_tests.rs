@@ -345,7 +345,7 @@ fn only_commands_that_edit_the_shown_sheet_run_in_a_windows_swap() {
         );
     }
     for message in [
-        Message::Edit(crate::app::EditMsg::Redo),
+        Message::Edit(crate::app::EditMsg::Copy),
         Message::Menu(MenuMessage::ZoomIn),
         Message::Selection(crate::app::selection_request::SelectionRequest::SelectAll),
     ] {
@@ -869,5 +869,388 @@ fn find_next_with_project_scope_from_a_window_opens_the_hit_on_the_main_window()
     );
     crate::app::path_ops::settle_task(&mut d.app, task);
     window_still_shows_top(&d);
+    assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
+}
+
+fn press_in_window(f: &mut Fixture, id: &str) {
+    let _ = f.app.update(Message::Ui(crate::app::UiMsg::MenuInWindow {
+        window: f.window,
+        msg: crate::menu_bar::MenuMessage::command(id),
+    }));
+}
+
+fn select_wire_in(slot: &mut crate::canvas::CanvasSlot) {
+    slot.selected = vec![SelectedItem::new(wire_id(), SelectedKind::Wire)];
+}
+
+#[test]
+fn delete_typed_in_a_window_deletes_its_selection_when_main_has_none() {
+    let mut f = fixture();
+    select_wire_in(f.app.interaction_state.canvases.get_mut(&f.window).unwrap());
+    assert!(f.app.interaction_state.canvas.selected.is_empty());
+    press_in_window(&mut f, "delete_selection");
+    assert!(
+        f.app.document_state.engines[&f.window_path]
+            .document()
+            .wires
+            .is_empty()
+    );
+}
+
+#[test]
+fn delete_typed_in_a_window_with_nothing_selected_there_leaves_main_alone() {
+    let mut f = fixture();
+    // Main shows a sheet with a wire that is selected; the window selects nothing.
+    let main_engine = f.app.document_state.engines.get_mut(&f.main_path).unwrap();
+    main_engine
+        .execute(signex_engine::Command::PlaceWireSegment {
+            wire: Wire {
+                uuid: wire_id(),
+                start: Point::new(10.16, 10.16),
+                end: Point::new(20.32, 10.16),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    select_wire_in(&mut f.app.interaction_state.canvas);
+    press_in_window(&mut f, "delete_selection");
+    assert_eq!(
+        f.app.document_state.engines[&f.main_path]
+            .document()
+            .wires
+            .len(),
+        1,
+        "main's selected wire was deleted by a command typed in the window"
+    );
+    assert_eq!(
+        f.app.document_state.engines[&f.window_path]
+            .document()
+            .wires
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn arranging_drawings_and_the_other_sheet_edits_from_a_window_run_in_its_swap() {
+    use crate::app::{EditMsg, InputMsg, OverlayMsg};
+    use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
+    for arrange in [
+        signex_engine::DrawingArrange::ToFront,
+        signex_engine::DrawingArrange::ToBack,
+        signex_engine::DrawingArrange::Forward,
+        signex_engine::DrawingArrange::Backward,
+    ] {
+        assert!(command_edits_shown_sheet(&Message::Edit(
+            EditMsg::ArrangeDrawings(arrange)
+        )));
+    }
+    for message in [
+        Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(
+            PlacedPartAction::EditSymbol,
+        ))),
+        Message::Overlay(OverlayMsg::ToggleAutoFocus),
+        Message::Input(InputMsg::EscapePressed { window: None }),
+    ] {
+        assert!(command_edits_shown_sheet(&message), "{message:?}");
+    }
+}
+
+#[test]
+fn bring_to_front_typed_in_a_window_reorders_the_windows_drawings_not_mains() {
+    let mut f = fixture();
+    let rect = |n: u128| signex_types::schematic::SchDrawing::Line {
+        uuid: uuid::Uuid::from_u128(n),
+        start: Point::new(1.0, 1.0),
+        end: Point::new(5.0, 5.0),
+        width: 0.1,
+        stroke_color: None,
+        locked: false,
+    };
+    let first = rect(101);
+    let second = rect(102);
+    let order_of = |app: &Signex, path: &PathBuf| -> Vec<uuid::Uuid> {
+        app.document_state.engines[path]
+            .document()
+            .drawings
+            .iter()
+            .map(|d| d.uuid())
+            .collect()
+    };
+    let engine = f
+        .app
+        .document_state
+        .engines
+        .get_mut(&f.window_path)
+        .unwrap();
+    for drawing in [first, second] {
+        engine
+            .execute(signex_engine::Command::PlaceSchDrawing { drawing })
+            .unwrap();
+    }
+    f.app
+        .interaction_state
+        .canvases
+        .get_mut(&f.window)
+        .unwrap()
+        .selected = vec![SelectedItem::new(
+        uuid::Uuid::from_u128(101),
+        SelectedKind::Drawing,
+    )];
+    press_in_window(&mut f, "bring_drawings_to_front");
+    assert_eq!(
+        order_of(&f.app, &f.window_path),
+        vec![uuid::Uuid::from_u128(102), uuid::Uuid::from_u128(101)]
+    );
+}
+
+fn child_sheet(id: uuid::Uuid) -> signex_types::schematic::ChildSheet {
+    signex_types::schematic::ChildSheet {
+        uuid: id,
+        name: "Old".into(),
+        filename: "child.snxsch".into(),
+        position: Point::new(40.64, 40.64),
+        size: (20.0, 10.0),
+        stroke_width: 0.0,
+        fill: Default::default(),
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    }
+}
+
+fn typed_in_window(f: &Fixture, message: crate::panels::PanelMsg) -> Message {
+    f.app.scope_dock_message(f.window, dock(message))
+}
+
+#[test]
+fn a_child_sheet_name_typed_in_a_window_lands_in_that_windows_properties() {
+    let mut f = fixture();
+    f.app.refresh_panel_ctx();
+    assert!(
+        f.app
+            .document_state
+            .window_panel_ctx
+            .contains_key(&f.window)
+    );
+    let id = uuid::Uuid::from_u128(11);
+    let typed = typed_in_window(
+        &f,
+        crate::panels::PanelMsg::ChildSheetNameTyping(id, "Power".into()),
+    );
+    assert!(is_scoped(&typed, f.window));
+    let _ = f.app.update(typed);
+    assert_eq!(
+        f.app.document_state.window_panel_ctx[&f.window].child_sheet_name_buf,
+        Some((id, "Power".to_string()))
+    );
+    assert!(
+        f.app
+            .document_state
+            .panel_ctx
+            .child_sheet_name_buf
+            .is_none()
+    );
+}
+
+#[test]
+fn a_child_sheet_name_committed_in_a_window_lands_in_that_windows_engine() {
+    let mut f = fixture();
+    let id = uuid::Uuid::from_u128(11);
+    f.app
+        .document_state
+        .engines
+        .get_mut(&f.window_path)
+        .unwrap()
+        .execute(signex_engine::Command::PlaceChildSheet {
+            child_sheet: child_sheet(id),
+        })
+        .unwrap();
+    f.app.refresh_panel_ctx();
+    for message in [
+        crate::panels::PanelMsg::ChildSheetNameTyping(id, "Power".into()),
+        crate::panels::PanelMsg::CommitChildSheetName(id),
+    ] {
+        let scoped = typed_in_window(&f, message);
+        let _ = f.app.update(scoped);
+    }
+    let window_sheet = f.app.document_state.engines[&f.window_path].document();
+    assert_eq!(window_sheet.child_sheets[0].name, "Power");
+    let main_sheet = f.app.document_state.engines[&f.main_path].document();
+    assert!(main_sheet.child_sheets.is_empty());
+}
+
+#[test]
+fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped() {
+    use crate::library::PlacedPartAction;
+    use crate::panels::PanelMsg as P;
+    use signex_widgets::tree_view::TreeMsg;
+    let f = fixture();
+    let id = uuid::Uuid::from_u128(11);
+    let colour = iced::Color::from_rgb(0.1, 0.2, 0.3);
+    let scoped = [
+        P::ChildSheetNameTyping(id, String::new()),
+        P::ChildSheetFileTyping(id, String::new()),
+        P::CommitChildSheetName(id),
+        P::CommitChildSheetFile(id),
+        P::ToggleChildSheetBorderPicker(id),
+        P::ToggleChildSheetFillPicker(id),
+        P::OpenChildSheetAdvancedPicker(id, true),
+        P::CancelChildSheetColorPicker,
+        P::EditChildSheetBorderColor(id, colour),
+        P::EditChildSheetFillColor(id, colour),
+        P::ChildSheetStrokeWidthTyping(id, String::new()),
+        P::CommitChildSheetStrokeWidth(id),
+        P::ResetChildSheetStyle(id),
+        P::EditSymbolLibId(id, String::new()),
+        P::UpdateSymbolFromLibrary(id),
+        P::PlacedPartAction(PlacedPartAction::EditSymbol),
+        P::SetPrePlacementText(String::new()),
+        P::SetPrePlacementDesignator(String::new()),
+        P::SetPrePlacementRotation(0.0),
+        P::SetPrePlacementFont(String::new()),
+        P::SetPrePlacementFontSize(10),
+        P::TogglePrePlacementBold,
+        P::TogglePrePlacementItalic,
+        P::TogglePrePlacementUnderline,
+        P::ConfirmPrePlacement,
+        P::Navigator(TreeMsg::Toggle(vec!["x".into()])),
+    ];
+    for message in scoped {
+        let wrapped = typed_in_window(&f, message.clone());
+        assert!(is_scoped(&wrapped, f.window), "{message:?} runs on main");
+    }
+    // A Navigator row click opens a sheet: it stays on the main window.
+    let click = typed_in_window(&f, P::Navigator(TreeMsg::Select(vec!["x".into()])));
+    assert!(!is_scoped(&click, f.window));
+}
+
+fn draft(
+    sheet: &Path,
+    field: crate::panels::TitleBlockField,
+    text: &str,
+) -> crate::panels::TitleBlockDraft {
+    crate::panels::TitleBlockDraft {
+        sheet: sheet.to_path_buf(),
+        field,
+        text: text.into(),
+    }
+}
+
+#[test]
+fn reattach_merges_drafts_per_sheet_and_field_with_the_windows_newer() {
+    use crate::panels::{PaperEdge, PaperEdgeDraft, TitleBlockField as Field};
+    let f = fixture();
+    let sheet = f.window_path.as_path();
+    let mut main = f.app.document_state.panel_ctx.clone();
+    main.title_block_drafts = vec![draft(sheet, Field::Title, "old")];
+    main.paper_edge_drafts = vec![PaperEdgeDraft {
+        sheet: sheet.to_path_buf(),
+        edge: PaperEdge::Width,
+        text: "4".into(),
+    }];
+    let mut window = main.clone();
+    window.title_block_drafts = vec![
+        draft(sheet, Field::Title, "new"),
+        draft(sheet, Field::Revision, "B"),
+    ];
+    window.paper_edge_drafts = vec![
+        PaperEdgeDraft {
+            sheet: sheet.to_path_buf(),
+            edge: PaperEdge::Width,
+            text: "400".into(),
+        },
+        PaperEdgeDraft {
+            sheet: sheet.to_path_buf(),
+            edge: PaperEdge::Height,
+            text: "300".into(),
+        },
+    ];
+    main.take_drafts_from(window);
+    assert_eq!(
+        main.title_block_drafts,
+        vec![
+            draft(sheet, Field::Title, "new"),
+            draft(sheet, Field::Revision, "B")
+        ]
+    );
+    let edges: Vec<(PaperEdge, &str)> = main
+        .paper_edge_drafts
+        .iter()
+        .map(|d| (d.edge, d.text.as_str()))
+        .collect();
+    assert_eq!(
+        edges,
+        vec![(PaperEdge::Width, "400"), (PaperEdge::Height, "300")]
+    );
+}
+
+#[test]
+fn the_panel_inputs_stamp_moves_with_every_net_class_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let names = ["a.snxsch", "b.snxsch"];
+    let app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.path().to_string_lossy(),
+        &names,
+    );
+    let mut f = fixture_in(app, dir.path());
+    f.app.document_state.projects[0]
+        .data
+        .net_classes
+        .push(signex_types::net_class::NetClass::named("Power"));
+    let mut seen = vec![f.app.window_panel_inputs_stamp()];
+    let edits: [fn(&mut signex_types::net_class::NetClass); 5] = [
+        |c| c.name = "Power2".into(),
+        |c| c.nets.push("VCC".into()),
+        |c| c.patterns.push("V*".into()),
+        |c| c.clearance = 0.2,
+        |c| c.style.wire_width_mm = Some(0.3),
+    ];
+    for edit in edits {
+        edit(&mut f.app.document_state.projects[0].data.net_classes[0]);
+        let stamp = f.app.window_panel_inputs_stamp();
+        assert!(
+            !seen.contains(&stamp),
+            "a net-class edit left the stamp as it was"
+        );
+        seen.push(stamp);
+    }
+}
+
+#[test]
+fn an_in_place_edit_opened_from_a_window_commits_on_the_windows_sheet() {
+    let mut f = fixture_with_a_labelled_a3_window();
+    let command = crate::keymap::AppCommandId::new("edit_text_in_place").unwrap();
+    let (_outcome, task) = f.app.dispatch_command_reporting(
+        &command,
+        crate::app::command::CommandArgs::none(),
+        Some(f.window),
+    );
+    drop(task);
+    let open = f.app.interaction_state.editing_text.as_ref();
+    assert_eq!(
+        open.and_then(|s| s.sheet.clone()),
+        Some(f.window_path.clone())
+    );
+    let _ = f
+        .app
+        .update(Message::TextEdit(crate::app::TextEditMsg::Changed(
+            "RETYPED".into(),
+        )));
+    let _ = f
+        .app
+        .update(Message::TextEdit(crate::app::TextEditMsg::Submit));
+    let sheet = f.app.document_state.engines[&f.window_path].document();
+    assert_eq!(sheet.labels[0].text, "RETYPED");
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_descent_from_a_window_reaches_an_open_child_that_is_not_on_disk() {
+    let mut d = descent_fixture(true);
+    std::fs::remove_file(&d.child).unwrap();
+    enter_in_window(&mut d);
     assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
 }

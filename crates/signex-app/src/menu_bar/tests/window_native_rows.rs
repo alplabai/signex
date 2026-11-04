@@ -150,6 +150,27 @@ pub(super) fn click_in_window(
     app.update(window_message(window, msg))
 }
 
+/// App-wide rows do the same from an undocked window's bar as from the main
+/// bar: the app state they touch is the same, whichever window is clicked.
+#[test]
+fn undocked_window_app_wide_rows_act_like_the_main_bar() {
+    for path in [
+        "Edit/Find",
+        "View/Toggle Grid",
+        "View/AutoFocus (dim unselected)",
+        "Place/Wire",
+        "Place/Junction",
+        "Tools/Preferences...",
+        "Help/Keyboard Shortcuts",
+    ] {
+        let (mut from_window, window) = with_undocked_window(one_symbol_selected());
+        let _ = click_in_window(&mut from_window, window, path);
+        let (mut from_main, _) = with_undocked_window(one_symbol_selected());
+        let _ = click(&mut from_main, path);
+        assert_eq!(probe(&from_window), probe(&from_main), "{path}");
+    }
+}
+
 /// Select every symbol on the sheet `window` shows.
 pub(super) fn select_window_symbols(app: &mut Signex, window: iced::window::Id) {
     let Some(crate::app::WindowKind::UndockedTab { path, .. }) = app.ui_state.windows.get(&window)

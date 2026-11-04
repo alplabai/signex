@@ -33,7 +33,10 @@ impl Signex {
         // the open itself is queued to run on the main window afterwards.
         if self.interaction_state.acting_window.is_some() {
             let path = self.resolve_held_spelling_now(path);
-            if !path.exists() {
+            // An open child counts even before it has a file on disk.
+            let open = self.document_state.engines.contains_key(&path)
+                || self.document_state.tabs.iter().any(|tab| tab.path == path);
+            if !open && !path.exists() {
                 crate::diagnostics::log_warning(format!(
                     "The sheet {} is missing; open its parent sheet in the main window to create it.",
                     path.display()

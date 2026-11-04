@@ -29,8 +29,9 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
             | LibraryMessage::ComponentsPanelRowRightClicked(_)
             | LibraryMessage::ComponentsPanelRowMenuPicked(_),
         ) => true,
-        // Expanding a row only changes the window's own tree.
-        DockMessage::Panel(P::Tree(TreeMsg::Toggle(_))) => true,
+        // Expanding a row only changes the window's own tree. A Navigator
+        // row click opens a sheet, so it stays on the main window.
+        DockMessage::Panel(P::Tree(TreeMsg::Toggle(_)) | P::Navigator(TreeMsg::Toggle(_))) => true,
         DockMessage::Panel(panel) => matches!(
             panel,
             P::PropertiesTab(_)
@@ -71,6 +72,35 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::UpdateDrawingEdit(..)
                 | P::DrawingFieldTyping(..)
                 | P::MultiEdit(..)
+                | P::EditSymbolLibId(..)
+                | P::UpdateSymbolFromLibrary(_)
+                | P::PlacedPartAction(_)
+                | P::ToggleChildSheetBorderPicker(_)
+                | P::ToggleChildSheetFillPicker(_)
+                | P::OpenChildSheetAdvancedPicker(..)
+                | P::CancelChildSheetColorPicker
+                | P::EditChildSheetBorderColor(..)
+                | P::EditChildSheetFillColor(..)
+                | P::ChildSheetStrokeWidthTyping(..)
+                | P::CommitChildSheetStrokeWidth(_)
+                | P::ChildSheetNameTyping(..)
+                | P::ChildSheetFileTyping(..)
+                | P::CommitChildSheetName(_)
+                | P::CommitChildSheetFile(_)
+                | P::ResetChildSheetStyle(_)
+                | P::SetPrePlacementText(_)
+                | P::SetPrePlacementDesignator(_)
+                | P::SetPrePlacementRotation(_)
+                | P::SetPrePlacementFont(_)
+                | P::SetPrePlacementFontSize(_)
+                | P::SetPrePlacementJustifyH(_)
+                | P::SetPrePlacementJustifyV(_)
+                | P::TogglePrePlacementBold
+                | P::TogglePrePlacementItalic
+                | P::TogglePrePlacementUnderline
+                | P::SetPrePlacementShapeWidth(_)
+                | P::SetPrePlacementShapeFill(_)
+                | P::ConfirmPrePlacement
         ),
         _ => false,
     }
@@ -87,13 +117,13 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
 fn command_edits_shown_sheet(message: &Message) -> bool {
     use crate::active_bar::ActiveBarMsg;
     use crate::app::selection_request::SelectionRequest as Sel;
-    use crate::app::{EditMsg, TextEditMsg, ToolMessage};
+    use crate::app::{EditMsg, InputMsg, OverlayMsg, TextEditMsg, ToolMessage};
+    use crate::library::{LibraryMessage, PlacedPartMsg};
     use crate::menu_bar::MenuMessage;
     match message {
         Message::Edit(edit) => matches!(
             edit,
             EditMsg::DeleteSelected
-                | EditMsg::Redo
                 | EditMsg::RotateSelectedClockwise
                 | EditMsg::RotateSelectedCounterclockwise
                 | EditMsg::MirrorSelectedX
@@ -106,6 +136,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | EditMsg::RepeatLastItem
                 | EditMsg::RubberStampCopy
                 | EditMsg::PasteArrayRequested
+                | EditMsg::ArrangeDrawings(_)
         ),
         Message::Selection(selection) => matches!(
             selection,
@@ -127,6 +158,11 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | ToolMessage::RemoveLastVertex
         ),
         Message::ActiveBar(ActiveBarMsg::Action(_)) => true,
+        // Placed-part actions act on the selected part of the shown sheet.
+        Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(_))) => true,
+        // AutoFocus dims by the shown sheet's selection; Esc resets the tool.
+        Message::Overlay(OverlayMsg::ToggleAutoFocus) => true,
+        Message::Input(InputMsg::EscapePressed { .. }) => true,
         Message::TextEdit(TextEditMsg::Requested(_)) => true,
         Message::Menu(menu) => matches!(menu, MenuMessage::ZoomIn | MenuMessage::ZoomOut),
         _ => false,

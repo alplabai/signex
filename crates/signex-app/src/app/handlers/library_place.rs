@@ -107,6 +107,13 @@ impl Signex {
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     ) -> Task<Message> {
+        // The read was started in an undocked window: it comes back untagged,
+        // and finishes in that window so the sheet it arms on is the shown one.
+        if let Some(window) = self.undocked_window_of_other_sheet(&target_sheet) {
+            return self.run_in_window_document(window, |app| {
+                app.handle_library_component_resolved(target_sheet, arm_epoch, library_path, result)
+            });
+        }
         let drop = self
             .library
             .components_panel
@@ -130,6 +137,16 @@ impl Signex {
             return scan;
         }
         Task::batch([self.commit_pending_drop(), scan])
+    }
+
+    /// The undocked window that shows `sheet` when the main window's active
+    /// sheet is another one: where a follow-up of a gesture started there
+    /// has to run.
+    pub(crate) fn undocked_window_of_other_sheet(&self, sheet: &Path) -> Option<iced::window::Id> {
+        if self.document_state.active_path.as_deref() == Some(sheet) {
+            return None;
+        }
+        self.undocked_canvas_window(sheet)
     }
 
     /// Place the dropped row at its drop point and end the tool, when the

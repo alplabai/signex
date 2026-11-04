@@ -74,26 +74,30 @@ impl PanelContext {
     /// Take over the per-sheet drafts of a window context that is going away,
     /// so what was typed and not yet committed survives the window. Only the
     /// title-block and paper-edge drafts are kept: they belong to a sheet and
-    /// stay valid wherever it is shown. The numeric draft and the drawing
-    /// edit buffer belong to the window's selection, which the main window
-    /// does not share, so they end with the window.
+    /// stay valid wherever it is shown. Drafts are merged per (sheet, field);
+    /// the window's, typed last, replaces the main window's for the same
+    /// field. The numeric draft and the drawing edit buffer belong to the
+    /// window's selection, which the main window does not share, so they end
+    /// with the window.
     pub(crate) fn take_drafts_from(&mut self, window: PanelContext) {
         for draft in window.title_block_drafts {
-            if !self
+            match self
                 .title_block_drafts
-                .iter()
-                .any(|d| d.sheet == draft.sheet)
+                .iter_mut()
+                .find(|d| d.sheet == draft.sheet && d.field == draft.field)
             {
-                self.title_block_drafts.push(draft);
+                Some(existing) => existing.text = draft.text,
+                None => self.title_block_drafts.push(draft),
             }
         }
         for draft in window.paper_edge_drafts {
-            if !self
+            match self
                 .paper_edge_drafts
-                .iter()
-                .any(|d| d.sheet == draft.sheet)
+                .iter_mut()
+                .find(|d| d.sheet == draft.sheet && d.edge == draft.edge)
             {
-                self.paper_edge_drafts.push(draft);
+                Some(existing) => existing.text = draft.text,
+                None => self.paper_edge_drafts.push(draft),
             }
         }
     }
@@ -167,7 +171,7 @@ impl Signex {
     }
 
     /// A hash of what a window's panels read from the app besides its sheet.
-    fn window_panel_inputs_stamp(&self) -> u64 {
+    pub(crate) fn window_panel_inputs_stamp(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let document = &self.document_state;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -181,7 +185,23 @@ impl Signex {
                 (&sheet.name, &sheet.filename).hash(&mut hasher);
             }
             for class in &data.net_classes {
-                format!("{class:?}").hash(&mut hasher);
+                (&class.name, &class.nets, &class.patterns).hash(&mut hasher);
+                (class.style.color, class.style.line).hash(&mut hasher);
+                class
+                    .style
+                    .wire_width_mm
+                    .map(f64::to_bits)
+                    .hash(&mut hasher);
+                for rule in [
+                    class.clearance,
+                    class.trace_width,
+                    class.via_diameter,
+                    class.via_drill,
+                    class.diff_pair_gap,
+                    class.diff_pair_width,
+                ] {
+                    rule.to_bits().hash(&mut hasher);
+                }
             }
             data.parameters.hash(&mut hasher);
         }
