@@ -285,7 +285,7 @@ pub(super) fn add_new_entries(
         )),
     ));
     v.push(dd_planned(Some(ic::icon_dd_part_actions(tid)), "PCB", None));
-    // v0.13.0 — footprint editor gated off; hide the "PCB Library" create
+    // Footprint editor gated off for release; hide the "PCB Library" create
     // entry on the project-root menu.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         v.push(dd_msg(

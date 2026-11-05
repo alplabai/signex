@@ -250,7 +250,8 @@ pub struct FpPour {
     pub priority: u8,
 }
 
-/// What a keepout zone forbids. DRC enforcement lands with the PCB Routing plan.
+/// What a keepout zone forbids. DRC enforcement lands with the Advanced PCB plan
+/// (Routing Polish & Geometry).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
