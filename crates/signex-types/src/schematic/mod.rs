@@ -819,7 +819,7 @@ pub use sheet::*;
 mod sheet_frame;
 pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
 mod sheet_page;
-pub use sheet_page::{PageOrigin, SheetPageSettings};
+pub use sheet_page::{PageOrigin, SheetPageSettings, paper_height_mm};
 mod defaults;
 mod sheet_size;
 mod stroke;

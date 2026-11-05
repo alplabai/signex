@@ -52,27 +52,66 @@ fn the_defaults_keys_round_trip_and_keep_unknown_keys() {
     assert_eq!(raw["future_key"], 1);
 }
 
+/// Review of #2026: an unreadable key (a newer build's line style, say)
+/// leaves the readable keys applied, survives every save, edits of other
+/// keys included, and is replaced only by an edit of that same key.
 #[test]
-fn an_unreadable_section_opens_the_project_and_is_kept_until_replaced() {
+fn an_unreadable_key_is_kept_per_key_until_that_key_is_set() {
+    use crate::net_class::NetLineStyle;
     let (path, _dir) = project_file(
         r#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,
-            "schematic_defaults":{"wire_width_mm":"thick"}}"#,
+            "schematic_defaults":{"wire_width_mm":0.3,"wire_line_style":"dash_dot_dot"}}"#,
     );
     let mut data = parse_project(&path).expect("the project opens");
+    let resolved = data.schematic_defaults.resolve();
+    assert_eq!(resolved.wire_width_mm, 0.3, "the readable key applies");
+    assert_eq!(resolved.wire_line_style, NetLineStyle::Solid);
+    let saved = |path: &std::path::Path| -> Value {
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    };
+    write_project(&path, &data).unwrap();
+    assert_eq!(
+        saved(&path)["schematic_defaults"]["wire_line_style"],
+        "dash_dot_dot"
+    );
+
+    data.schematic_defaults = data
+        .schematic_defaults
+        .with(SchematicDefaultField::BusWidth, Some(0.8));
+    write_project(&path, &data).unwrap();
+    let raw = saved(&path);
+    assert_eq!(raw["schematic_defaults"]["wire_line_style"], "dash_dot_dot");
+    assert_eq!(raw["schematic_defaults"]["wire_width_mm"], 0.3);
+    assert_eq!(raw["schematic_defaults"]["bus_width_mm"], 0.8);
+
+    data.schematic_defaults
+        .set_wire_line_style(Some(NetLineStyle::Dashed));
+    write_project(&path, &data).unwrap();
+    assert_eq!(
+        saved(&path)["schematic_defaults"]["wire_line_style"],
+        "dashed"
+    );
+    let back = parse_project(&path).unwrap();
+    assert_eq!(
+        back.schematic_defaults.wire_line_style,
+        Some(NetLineStyle::Dashed)
+    );
+}
+
+/// A section that is not an object opens and is kept verbatim.
+#[test]
+fn a_non_object_section_is_kept_verbatim() {
+    let (path, _dir) = project_file(
+        r#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"schematic_defaults":7}"#,
+    );
+    let data = parse_project(&path).expect("the project opens");
     assert_eq!(
         data.schematic_defaults.resolve(),
         SchematicDefaults::BUILT_IN
     );
     write_project(&path, &data).unwrap();
     let raw: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    assert_eq!(raw["schematic_defaults"]["wire_width_mm"], "thick");
-
-    data.schematic_defaults = data
-        .schematic_defaults
-        .with(SchematicDefaultField::WireWidth, Some(0.5));
-    write_project(&path, &data).unwrap();
-    let back = parse_project(&path).unwrap();
-    assert_eq!(back.schematic_defaults.wire_width_mm, Some(0.5));
+    assert_eq!(raw["schematic_defaults"], 7);
 }
 
 #[test]

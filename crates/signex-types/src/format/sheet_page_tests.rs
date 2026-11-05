@@ -66,13 +66,29 @@ fn with_page_table(table: &str) -> String {
     format!("{}[extras.sheet.page]\n{table}\n", &text[..start])
 }
 
+/// Review of #2034: an unknown key and a value this build cannot read (a
+/// newer build's colour name or origin) open as the default and are written
+/// back unchanged; a value the user sets replaces the raw one.
 #[test]
-fn unknown_page_keys_are_kept_and_bad_values_open_leniently() {
+fn unknown_keys_and_unreadable_values_are_kept_raw() {
     let back = parse(&with_page_table(
         "color = \"cream\"\norigin = 7\npaper_grain = \"long\"",
     ));
-    assert!(back.page.is_default(), "bad values read as the default");
+    assert!(
+        back.page.is_default(),
+        "unreadable values show as the default"
+    );
     let saved = write(&back);
-    assert!(saved.contains("paper_grain = \"long\""), "{saved}");
+    for kept in ["color = \"cream\"", "origin = 7", "paper_grain = \"long\""] {
+        assert!(saved.contains(kept), "{kept} kept:\n{saved}");
+    }
     assert_eq!(write(&parse(&saved)), saved);
+
+    let mut picked = parse(&saved);
+    picked.page.origin = PageOrigin::UpperLeft;
+    picked.unknown.page.remove("origin");
+    let saved = write(&picked);
+    assert!(saved.contains("origin = \"upper_left\""), "{saved}");
+    assert!(!saved.contains("origin = 7"), "{saved}");
+    assert!(saved.contains("color = \"cream\""), "{saved}");
 }

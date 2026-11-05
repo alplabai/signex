@@ -35,6 +35,7 @@ use crate::schematic::SchematicSheet;
 mod extras;
 mod finite_toml;
 mod load_repair;
+mod page_extras;
 mod pcb_footprints;
 mod pcb_rows;
 mod pcb_uuid_repair;

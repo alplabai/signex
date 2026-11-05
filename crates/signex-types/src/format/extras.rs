@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::page_extras::PageExtras;
 use super::unknown::UnknownFields;
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
 use crate::schematic::{Junction, RowStamp, SchematicSheet, Symbol};
@@ -447,10 +448,7 @@ impl SheetExtras {
                 settings: s.frame,
                 unknown: s.unknown.frame.clone(),
             },
-            page: PageExtras {
-                settings: s.page,
-                unknown: s.unknown.page.clone(),
-            },
+            page: PageExtras::of(s.page, &s.unknown.page),
             unknown: s.unknown.extras.clone(),
         }
     }
@@ -695,22 +693,6 @@ pub(in crate::format) struct FrameExtras {
 }
 
 impl FrameExtras {
-    pub(in crate::format) fn is_default(&self) -> bool {
-        self.settings.is_default() && self.unknown.is_empty()
-    }
-}
-
-/// `[extras.sheet.page]`: the sheet's paper colour and coordinate origin,
-/// plus any key a newer build wrote there, kept so a save does not drop it.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub(in crate::format) struct PageExtras {
-    #[serde(flatten)]
-    pub(in crate::format) settings: crate::schematic::SheetPageSettings,
-    #[serde(flatten)]
-    pub(in crate::format) unknown: UnknownFields,
-}
-
-impl PageExtras {
     pub(in crate::format) fn is_default(&self) -> bool {
         self.settings.is_default() && self.unknown.is_empty()
     }

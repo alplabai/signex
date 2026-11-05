@@ -105,7 +105,14 @@ impl super::SchematicSheet {
     /// height comes from the sheet's paper size, Custom included.
     #[must_use]
     pub fn page_y(&self, y: f64) -> f64 {
-        let (size, orientation) = super::SheetSize::parse(&self.paper_size);
-        self.page.origin.map_y(y, size.dimensions_mm(orientation).1)
+        self.page.origin.map_y(y, paper_height_mm(&self.paper_size))
     }
+}
+
+/// The height in mm of the paper a stored paper-size token names, Custom
+/// included: what a Lower Left origin counts Y up from.
+#[must_use]
+pub fn paper_height_mm(paper_size: &str) -> f64 {
+    let (size, orientation) = super::SheetSize::parse(paper_size);
+    size.dimensions_mm(orientation).1
 }

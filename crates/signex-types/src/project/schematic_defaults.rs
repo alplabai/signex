@@ -67,6 +67,18 @@ impl SchematicDefaultField {
         Self::TextSize,
     ];
 
+    /// The field's `.snxprj` key.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::WireWidth => "wire_width_mm",
+            Self::BusWidth => "bus_width_mm",
+            Self::SymbolLineWidth => "symbol_line_width_mm",
+            Self::ShapeStroke => "shape_stroke_mm",
+            Self::JunctionDiameter => "junction_diameter_mm",
+            Self::TextSize => "text_size_pt",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::WireWidth => "Wire width (mm)",
@@ -105,12 +117,32 @@ impl SchematicDefaultOverrides {
         *self.slot(field)
     }
 
-    /// This set with `field` set to `value` (`None` clears it).
+    /// This set with `field` set to `value` (`None` clears it). An
+    /// unreadable value kept for that key is replaced.
     #[must_use]
     pub fn with(&self, field: SchematicDefaultField, value: Option<f64>) -> Self {
         let mut next = self.clone();
         *next.slot_mut(field) = value;
+        next.unknown.remove(field.key());
         next
+    }
+
+    /// Set the default font; an unreadable kept value is replaced.
+    pub fn set_font_family(&mut self, font: Option<String>) {
+        self.font_family = font.filter(|f| !f.trim().is_empty());
+        self.unknown.remove("font_family");
+    }
+
+    /// Set the wire line style; an unreadable kept value is replaced.
+    pub fn set_wire_line_style(&mut self, line: Option<NetLineStyle>) {
+        self.wire_line_style = line;
+        self.unknown.remove("wire_line_style");
+    }
+
+    /// Set the new-shape fill; an unreadable kept value is replaced.
+    pub fn set_shape_fill(&mut self, fill: Option<FillType>) {
+        self.shape_fill = fill;
+        self.unknown.remove("shape_fill");
     }
 
     fn slot(&self, field: SchematicDefaultField) -> &Option<f64> {
@@ -172,18 +204,51 @@ impl SchematicDefaultOverrides {
     }
 }
 
-/// Interpret a `schematic_defaults` section, or keep it verbatim for re-save
-/// when this build cannot read it. The project opens either way.
-pub(super) fn take_schematic_defaults(data: &mut ProjectData, raw: Value) {
-    match serde_json::from_value::<SchematicDefaultOverrides>(raw.clone()) {
-        Ok(overrides) => data.schematic_defaults = overrides,
+/// Read one key's value, or keep it raw in `unknown` when this build cannot.
+fn read_key<T: serde::de::DeserializeOwned>(
+    key: &str,
+    raw: Value,
+    unknown: &mut UnknownJson,
+) -> Option<T> {
+    match serde_json::from_value::<Option<T>>(raw.clone()) {
+        Ok(value) => value,
         Err(err) => {
             tracing::warn!(
                 target: "signex::project",
-                "The project's schematic defaults are not readable by this version of Signex \
-                 ({err}); they are kept unchanged and the built-in defaults apply."
+                "The project's schematic default `{key}` is not readable by this version of \
+                 Signex ({err}); it is kept unchanged and the built-in value applies."
             );
-            data.unknown.insert(SCHEMATIC_DEFAULTS_KEY.into(), raw);
+            unknown.insert(key.to_string(), raw);
+            None
         }
     }
+}
+
+/// Interpret a `schematic_defaults` section key by key: every readable key
+/// applies, an unreadable one is kept raw in the section's unknown keys and
+/// written back until that default is set here. A section that is not an
+/// object is kept verbatim in the project's unknown keys. The project opens
+/// either way.
+pub(super) fn take_schematic_defaults(data: &mut ProjectData, raw: Value) {
+    let Value::Object(map) = raw else {
+        data.unknown.insert(SCHEMATIC_DEFAULTS_KEY.into(), raw);
+        return;
+    };
+    let mut o = SchematicDefaultOverrides::default();
+    for (key, value) in map {
+        let u = &mut o.unknown;
+        match key.as_str() {
+            "wire_width_mm" => o.wire_width_mm = read_key(&key, value, u),
+            "bus_width_mm" => o.bus_width_mm = read_key(&key, value, u),
+            "symbol_line_width_mm" => o.symbol_line_width_mm = read_key(&key, value, u),
+            "shape_stroke_mm" => o.shape_stroke_mm = read_key(&key, value, u),
+            "junction_diameter_mm" => o.junction_diameter_mm = read_key(&key, value, u),
+            "text_size_pt" => o.text_size_pt = read_key(&key, value, u),
+            "font_family" => o.font_family = read_key(&key, value, u),
+            "wire_line_style" => o.wire_line_style = read_key(&key, value, u),
+            "shape_fill" => o.shape_fill = read_key(&key, value, u),
+            _ => u.insert(key, value),
+        }
+    }
+    data.schematic_defaults = o;
 }
