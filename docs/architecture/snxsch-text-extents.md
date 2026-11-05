@@ -14,6 +14,11 @@ text of a symbol. Not covered, each a known gap:
 - A child sheet's text: nothing uses its width.
 - The height of a label flag is not stored; it follows the em of the face that
   draws.
+- A hidden reference or value, and the reference of a power symbol (which
+  draws none), are not measured on the canvas, so no record is kept for them:
+  a save drops one that was there, and showing the text again measures it.
+- A stored entry that cannot be read (a wrong type, a missing field, a bad
+  key) is dropped on load with one Messages warning per file; the design opens.
 - PDF and SVG export do not read stored widths. They size from the face they
   actually draw, as before.
 

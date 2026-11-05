@@ -545,6 +545,15 @@ impl SnxSchematic {
             .iter()
             .map(String::as_str)
             .collect();
+        let (text_extents, dropped_extents) =
+            text_extents_extras::decode(&sheet_extras.text_extents);
+        if dropped_extents > 0 {
+            tracing::warn!(
+                target: "signex::format",
+                "{dropped_extents} stored text width(s) could not be read and were dropped; \
+                 they are measured again on the next save"
+            );
+        }
         let mut sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -589,7 +598,7 @@ impl SnxSchematic {
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),
-            text_extents: text_extents_extras::decode(&sheet_extras.text_extents),
+            text_extents,
             net_colors,
             drawing_placements,
             frame: sheet_extras.frame.settings,

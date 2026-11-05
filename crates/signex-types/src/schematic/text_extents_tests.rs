@@ -211,3 +211,9 @@ fn the_default_face_counts_as_installed_however_it_is_spelled() {
         (5.0, true)
     );
 }
+
+#[test]
+fn an_installed_face_matches_its_request_under_unicode_case_folding() {
+    assert!(face_is_available(Some("ÇEŞME"), Some("Çeşme")));
+    assert!(!face_is_available(Some("ÇEŞME"), None));
+}

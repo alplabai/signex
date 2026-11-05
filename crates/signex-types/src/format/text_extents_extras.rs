@@ -19,42 +19,51 @@ pub(in crate::format) struct ExtentEntry {
     text: String,
 }
 
-pub(in crate::format) type ExtentTable = BTreeMap<String, ExtentEntry>;
+/// Values stay raw: derived data must never fail the parse of a design, so a
+/// malformed entry is dropped by [`decode`], not rejected by serde.
+pub(in crate::format) type ExtentTable = BTreeMap<String, toml::Value>;
 
 pub(in crate::format) fn encode(extents: &TextExtents) -> ExtentTable {
     extents
         .iter()
         .map(|((id, field), rec)| {
-            (
-                format!("{id}:{}", field.file_key()),
-                ExtentEntry {
-                    width_nm: rec.width_nm,
-                    size_nm: rec.size_nm,
-                    family: rec.family.clone(),
-                    text: rec.text_hash.clone(),
-                },
-            )
+            let entry = ExtentEntry {
+                width_nm: rec.width_nm,
+                size_nm: rec.size_nm,
+                family: rec.family.clone(),
+                text: rec.text_hash.clone(),
+            };
+            let value = toml::Value::try_from(entry).expect("integers and strings encode");
+            (format!("{id}:{}", field.file_key()), value)
         })
         .collect()
 }
 
-/// A key that is not `<uuid>:<field>` or a negative width matches nothing and
-/// is dropped, like an entry for an item that is gone.
-pub(in crate::format) fn decode(table: &ExtentTable) -> TextExtents {
-    table
+/// The records of `table` and how many entries were dropped. A key that is
+/// not `<uuid>:<field>`, a value that is not a well-typed entry and a negative
+/// width match nothing and are dropped, like an entry for an item that is gone.
+pub(in crate::format) fn decode(table: &ExtentTable) -> (TextExtents, usize) {
+    let records: TextExtents = table
         .iter()
-        .filter(|(_, entry)| entry.width_nm >= 0)
-        .filter_map(|(key, entry)| {
-            let (id, field) = key.split_once(':')?;
-            Some((
-                (Uuid::parse_str(id).ok()?, TextField::from_file_key(field)?),
-                StoredTextExtent {
-                    width_nm: entry.width_nm,
-                    size_nm: entry.size_nm,
-                    family: entry.family.clone(),
-                    text_hash: entry.text.clone(),
-                },
-            ))
-        })
-        .collect()
+        .filter_map(|(key, value)| decode_one(key, value))
+        .collect();
+    (records.clone(), table.len() - records.len())
+}
+
+fn decode_one(key: &str, value: &toml::Value) -> Option<((Uuid, TextField), StoredTextExtent)> {
+    let (id, field) = key.split_once(':')?;
+    let entry: ExtentEntry = value.clone().try_into().ok()?;
+    if entry.width_nm < 0 {
+        return None;
+    }
+    let record = StoredTextExtent {
+        width_nm: entry.width_nm,
+        size_nm: entry.size_nm,
+        family: entry.family,
+        text_hash: entry.text,
+    };
+    Some((
+        (Uuid::parse_str(id).ok()?, TextField::from_file_key(field)?),
+        record,
+    ))
 }

@@ -211,12 +211,13 @@ pub fn probes(sheet: &SchematicSheet) -> Vec<TextProbe<'_>> {
 
 /// Whether the face a text asked for is the one it was measured in.
 pub fn face_is_available(requested: Option<&str>, resolved: Option<&str>) -> bool {
-    let is_default = |name: Option<&str>| {
-        name.is_none_or(|name| name.eq_ignore_ascii_case(BUNDLED_DEFAULT_FAMILY))
-    };
+    // Unicode folding, as the app's font catalog matches names.
+    let same = |a: &str, b: &str| a.trim().to_lowercase() == b.trim().to_lowercase();
+    let is_default =
+        |name: Option<&str>| name.is_none_or(|name| same(name, BUNDLED_DEFAULT_FAMILY));
     match (requested, resolved) {
         (req, res) if is_default(req) => is_default(res),
-        (Some(req), Some(res)) => req.eq_ignore_ascii_case(res),
+        (Some(req), Some(res)) => same(req, res),
         _ => false,
     }
 }

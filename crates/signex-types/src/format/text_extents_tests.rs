@@ -125,3 +125,44 @@ fn the_field_names_in_keys_are_label_note_ref_value() {
     .to_vec();
     assert_eq!(names, ["label", "note", "ref", "value"]);
 }
+
+/// A good record for label 2 followed by `bad` for label 1, appended to a
+/// file with no extents: a derived table never blocks opening a design.
+fn file_with_one_bad_entry(bad: &str) -> String {
+    let good = write(&with_extents());
+    let good_entry = &good[good.find(&format!("{}:label", Uuid::from_u128(2))).unwrap() - 1..];
+    format!(
+        "{}\n{bad}\n[extras.sheet.text_extents.{good_entry}",
+        write(&plain_sheet())
+    )
+}
+
+#[test]
+fn a_malformed_entry_is_dropped_and_the_file_still_opens() {
+    let bad_key = Uuid::from_u128(1);
+    for body in [
+        "width_nm = 1.5\nsize_nm = 1\ntext = \"x\"\n",
+        "width_nm = 1\nsize_nm = 1\n",
+        "width_nm = \"1\"\nsize_nm = 1\ntext = \"x\"\n",
+    ] {
+        let text = file_with_one_bad_entry(&format!(
+            "[extras.sheet.text_extents.\"{bad_key}:label\"]\n{body}"
+        ));
+        let loaded = load(&text);
+        let kept: Vec<_> = loaded.text_extents.iter().map(|((id, _), _)| *id).collect();
+        assert_eq!(kept, vec![Uuid::from_u128(2)], "{body}");
+        assert_eq!(loaded.labels.len(), 2, "nothing else lost");
+        assert!(!write(&loaded).contains(&format!("{bad_key}:label")));
+    }
+}
+
+#[test]
+fn a_non_table_entry_is_dropped_and_the_file_still_opens() {
+    let bad_key = Uuid::from_u128(1);
+    let text = file_with_one_bad_entry(&format!(
+        "[extras.sheet.text_extents]\n\"{bad_key}:label\" = 7\n"
+    ));
+    let loaded = load(&text);
+    assert_eq!(loaded.text_extents.len(), 1);
+    assert_eq!(loaded.labels.len(), 2);
+}
