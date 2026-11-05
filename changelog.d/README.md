@@ -39,8 +39,8 @@ starts with **Breaking:**, so the release notes can lift it into their
 
 On every PR into `trunk` the `lint · repo gates` job fails when:
 
-- the PR title type is `feat`, `fix` or `perf` (with or without scope or `!`)
-  and the PR adds no fragment. A change that is not user-visible takes another
+- the PR title starts with the lowercase type `feat`, `fix` or `perf` (with
+  or without scope or `!`) and the PR adds no fragment. A change that is not user-visible takes another
   type (`chore`, `refactor`, `test`, `ci`, `docs`); after a retitle, re-run the
   job, it reads the current title;
 - the PR edits `CHANGELOG.md` directly, except same-repo release PRs (head

@@ -452,7 +452,7 @@ jobs:
           echo "PR title (live): $PR_TITLE"
           if printf '%s' "$PR_TITLE" | awk '/^(feat|fix|perf)(\([^)]*\))?!?:/{f=1} END{exit !f}'; then
             git fetch --no-tags origin "$BASE_REF"
-            if ! git diff --name-only --diff-filter=A "origin/$BASE_REF...HEAD" |
+            if ! git diff --no-renames --name-only --diff-filter=A "origin/$BASE_REF...HEAD" |
               awk '/^changelog\.d\/[0-9]+\..+\.md$/{f=1} END{exit !f}'; then
               echo "::error title=No changelog fragment::feat/fix/perf PR adds no changelog.d/<number>.<section>.md fragment. Add one, or retitle with a type that is not user-visible (chore, refactor, test, ci, docs) and re-run this job."
               exit 1
