@@ -225,6 +225,24 @@ device pixels), at the camera offset of the build. It is reused while:
 
 The move-drag layers do not use it.
 
+Two things follow from the widget drawing in its own clip layer:
+
+- A sibling drawn over the canvas area after it, outside a `Stack`, would
+  render under the canvas. None exists: the badge and every overlay are
+  `Stack` children, which iced draws in layers of their own.
+- On the tiny-skia fallback the damage diff of text ignores the group
+  transformation, so a translated cached text-only region may not repaint
+  until something else dirties it. The wgpu renderer is the shipped path.
+
+The renderer's mesh snap (`wgpu/src/triangle.rs`, `Layer::prepare`) rounds the
+mesh clip bounds after the projection, so in NDC, and casts to `u32`. The
+nudge it applies to a mesh is then about minus the NDC position of the clip
+origin (a pixel or two for a canvas docked off the window origin), not a
+sub-pixel snap. All layers of the plain canvas share the canvas-origin clip
+and so share the nudge; the retained content clip starts a margin further
+up and left. `canvas::pan_reuse_pixel_tests` compares the two mounts on a
+docked canvas.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's

@@ -2,8 +2,8 @@
 //!
 //! Uses `iced::widget::canvas::Program`. Layers, back to front:
 //! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
-//! - content (`content_cache`): cached, cleared when the document or camera
-//!   changes (pan frames replay a camera-independent scene);
+//! - content (`content_surface`): retained across pans and moved by a
+//!   translation; cleared when the document changes (see `draw::retained`);
 //! - autofocus dim: drawn over the content when autofocus is active;
 //! - selection overlay (`overlay_cache`): cached, cleared on input events;
 //! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
@@ -109,11 +109,14 @@ pub type DesignatorsKey = (
 /// Holds references to app state needed for drawing (theme colors, etc).
 pub struct CanvasSlot {
     pub bg_cache: canvas::Cache,
+    /// The rotated-text layer of a GPU-mounted sheet (`gpu_drag`), with
+    /// `content_cache_camera` the camera it was drawn at. The CPU content layer
+    /// is `content_surface`.
     pub content_cache: canvas::Cache,
     /// The CPU content layer, retained across pans (#2078).
     content_surface: std::cell::RefCell<draw::RetainedContent>,
     pub overlay_cache: canvas::Cache,
-    /// Camera state when content_cache was last built — used to compute offset delta.
+    /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
     /// Camera `bg_cache` was last built at; `draw_background` drops the cache
     /// when it differs, so the paper and grid follow every camera move whatever
@@ -870,6 +873,8 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod grid_order_tests;
+#[cfg(test)]
+mod pan_reuse_pixel_tests;
 #[cfg(test)]
 mod pan_reuse_tests;
 #[cfg(test)]

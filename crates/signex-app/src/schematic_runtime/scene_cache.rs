@@ -103,6 +103,21 @@ impl ContentSceneCache {
         )
     }
 
+    /// Generation of the scene for `transform`, building one only if the held
+    /// scene no longer fits. `None` for a sheet that draws nothing.
+    pub fn generation_for(
+        &mut self,
+        sheet: &SchematicRenderSnapshot,
+        transform: &ScreenTransform,
+        colors: &CanvasColors,
+        bounds: Rectangle,
+        focus_set: Option<&HashSet<uuid::Uuid>>,
+        overrides: SceneOverrides<'_>,
+    ) -> Option<u64> {
+        let _ = self.scene_for(sheet, transform, colors, bounds, focus_set, overrides);
+        self.generation()
+    }
+
     /// [`Self::scene_for`] for a sheet that is costly to produce: `sheet` runs
     /// only when the scene must be built, never on a cache hit.
     pub fn scene_for_with<'s>(
