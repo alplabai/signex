@@ -73,6 +73,7 @@ pub enum CommandKind {
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
     UpdateSymbolFootprint,
+    SetSymbolFootprintBinding,
     UpdateSymbolFields,
     PlaceWireSegment,
     BreakWire,
@@ -229,6 +230,16 @@ pub enum Command {
     UpdateSymbolFootprint {
         symbol_id: Uuid,
         footprint: String,
+    },
+    /// Build a library part with another footprint of its row (#1234): set
+    /// the footprint name and record the choice in the part's value stamp as
+    /// the row value it now agrees with. `binding` is the footprint's
+    /// `<library uuid>:<footprint uuid>`, `None` for the row's default. One
+    /// undo step; a part with no library row keeps no stamp.
+    SetSymbolFootprintBinding {
+        symbol_id: Uuid,
+        footprint: String,
+        binding: Option<String>,
     },
     /// Change the lib_id reference of a symbol — used by the power-port Style
     /// dropdown to pick a new variant (Bar / Arrow / Wave / Circle / GND …).
@@ -573,6 +584,7 @@ impl Command {
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
+            Command::SetSymbolFootprintBinding { .. } => CommandKind::SetSymbolFootprintBinding,
             Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
             Command::SetSymbolField { .. } | Command::RemoveSymbolField { .. } => {
                 CommandKind::UpdateSymbolFields

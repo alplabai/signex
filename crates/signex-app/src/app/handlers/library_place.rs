@@ -3,7 +3,7 @@
 //! The place flow is keyed by `(library_path, table, row_id)`:
 //!
 //!   1. `PlaceLibraryComponent` validates cheaply and returns a `Task`
-//!      running [`resolve_placement`] off the update thread: read the
+//!      running [`resolve_placement_with_footprint`] off the update thread: read the
 //!      picked row and its `.snxsym`, convert with `Symbol::to_lib_symbol`.
 //!   2. `LibraryComponentResolved` arms a placement session (see
 //!      `placement_session.rs`): the part follows the cursor, Space / X / Y
@@ -20,7 +20,7 @@
 //!
 //! ## IO
 //!
-//! `update` does none. [`resolve_placement`] runs in `spawn_blocking` and
+//! `update` does none. [`resolve_placement_with_footprint`] runs in `spawn_blocking` and
 //! opens its own adapter on the `.snxlib`. The completion carries the sheet
 //! that was active when the gesture started and refuses to arm if that
 //! sheet is no longer the active one or the library was closed meanwhile:
@@ -46,16 +46,29 @@ use signex_library::RowId;
 use super::super::contracts::Message;
 use super::super::state::Signex;
 use crate::library::messages::{LibraryMessage, ResolvedPlacement};
-use crate::library::place::resolve_placement;
+use crate::library::place::resolve_placement_with_footprint;
 
 impl Signex {
-    /// Start a place gesture: validate cheaply, then read the row off the
-    /// update thread. Always closes the picker.
+    /// Start a place gesture with the row's default footprint: validate
+    /// cheaply, then read the row off the update thread. Always closes the
+    /// picker.
     pub(crate) fn handle_place_library_component(
         &mut self,
         library_path: PathBuf,
         table: String,
         row_id: RowId,
+    ) -> Task<Message> {
+        self.handle_place_library_component_with(library_path, table, row_id, None)
+    }
+
+    /// [`Self::handle_place_library_component`] building the part with the
+    /// alternate footprint `footprint` (`None`: the row's default, #1234).
+    pub(crate) fn handle_place_library_component_with(
+        &mut self,
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+        footprint: Option<signex_library::primitive::PrimitiveRef>,
     ) -> Task<Message> {
         self.library.picker = None;
         // A newer pick supersedes any read still in flight, even one that
@@ -83,7 +96,13 @@ impl Signex {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    resolve_placement(&path, &table, row_id, &open_libraries)
+                    resolve_placement_with_footprint(
+                        &path,
+                        &table,
+                        row_id,
+                        footprint,
+                        &open_libraries,
+                    )
                 })
                 .await
                 .unwrap_or_else(|e| Err(format!("place worker failed: {e}")))
@@ -99,7 +118,7 @@ impl Signex {
         )
     }
 
-    /// Completion of [`resolve_placement`]: attach the part to the cursor.
+    /// Completion of [`resolve_placement_with_footprint`]: attach the part to the cursor.
     pub(crate) fn handle_library_component_resolved(
         &mut self,
         target_sheet: PathBuf,

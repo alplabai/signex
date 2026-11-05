@@ -26,17 +26,30 @@ pub fn resolve_placement(
     row_id: RowId,
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Result<ResolvedPlacement, String> {
-    resolve_placement_of(library_path, table, row_id, None, open_libraries)
+    resolve_placement_of(library_path, table, row_id, None, None, open_libraries)
 }
 
-/// [`resolve_placement`] for the drawing `chosen` names: the row's default
-/// symbol when `None`, else one of its alternates (refused when the row no
-/// longer offers it).
+/// [`resolve_placement`] built with the footprint `footprint` names: the
+/// row's default when `None`, else one of its alternates (#1234).
+pub fn resolve_placement_with_footprint(
+    library_path: &Path,
+    table: &str,
+    row_id: RowId,
+    footprint: Option<PrimitiveRef>,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<ResolvedPlacement, String> {
+    resolve_placement_of(library_path, table, row_id, None, footprint, open_libraries)
+}
+
+/// [`resolve_placement`] for the drawing `chosen` and the footprint
+/// `chosen_footprint` name: the row's defaults when `None`, else one of its
+/// alternates (refused when the row no longer offers it).
 pub fn resolve_placement_of(
     library_path: &Path,
     table: &str,
     row_id: RowId,
     chosen: Option<PrimitiveRef>,
+    chosen_footprint: Option<PrimitiveRef>,
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Result<ResolvedPlacement, String> {
     use signex_library::LibraryAdapter as _;
@@ -65,10 +78,21 @@ pub fn resolve_placement_of(
     } else {
         row.primary_mpn.mpn.clone()
     };
-    let footprint = read_footprint_name(&adapter, &row, open_libraries);
+    if let Some(footprint) = chosen_footprint
+        .as_ref()
+        .filter(|f| !row.binds_footprint(f))
+    {
+        return Err(format!(
+            "{} no longer offers footprint {}.",
+            row.internal_pn, footprint.uuid
+        ));
+    }
+    // The default is the absence of a choice, so a stamp never pins it.
+    let chosen_footprint = chosen_footprint.filter(|f| row.footprint_ref != Some(*f));
+    let footprint = read_footprint_name(&adapter, &row, chosen_footprint.as_ref(), open_libraries);
     // An unreadable footprint leaves the stamp's footprint key absent
     // (unknown), not empty: "the row offered nothing" would be a claim.
-    let stamp = row_stamp(&row, footprint.as_ref().ok());
+    let stamp = row_stamp(&row, footprint.as_ref().ok(), chosen_footprint.as_ref());
     Ok(ResolvedPlacement {
         lib_symbol: symbol.to_lib_symbol(lib_id.clone()),
         lib_id,
@@ -106,13 +130,16 @@ fn footprint_or_warn(row: &signex_library::ComponentRow, read: Result<String, St
 }
 
 /// What a part placed from `row` agrees with it on (#2004 item 7).
-/// `footprint` is `None` when it could not be read.
+/// `footprint` is `None` when it could not be read; `chosen` is the
+/// alternate footprint the part is built with, `None` for the default.
 fn row_stamp(
     row: &signex_library::ComponentRow,
     footprint: Option<&String>,
+    chosen: Option<&PrimitiveRef>,
 ) -> signex_types::schematic::RowStamp {
     signex_types::schematic::RowStamp {
         footprint: footprint.cloned(),
+        footprint_ref: chosen.map(lib_id_of),
         manufacturer: Some(row.primary_mpn.manufacturer.clone()),
         mpn: Some(row.primary_mpn.mpn.clone()),
         version: Some(row.version.clone()),
@@ -121,16 +148,23 @@ fn row_stamp(
 }
 
 /// The name of the footprint `row` binds (empty when it binds none), or why
-/// it could not be read. Silent: each caller words its own report.
+/// it could not be read. `chosen` is an alternate the part was built with; a
+/// choice the row does not offer reads the default. Silent: each caller words
+/// its own report.
 pub(crate) fn read_footprint_name(
     own: &signex_library::adapters::local_git::LocalGitAdapter,
     row: &signex_library::ComponentRow,
+    chosen: Option<&PrimitiveRef>,
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Result<String, String> {
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
-    let Some(reference) = row.footprint_ref else {
+    let Some(reference) = chosen
+        .filter(|c| row.binds_footprint(c))
+        .copied()
+        .or(row.footprint_ref)
+    else {
         return Ok(String::new());
     };
     let read = if reference.library_id == own.library_id() {

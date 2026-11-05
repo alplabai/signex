@@ -376,7 +376,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 55] = [
+const ALL_KINDS: [CommandKind; 56] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -395,6 +395,7 @@ const ALL_KINDS: [CommandKind; 55] = [
     CommandKind::UpdateSymbolTextSize,
     CommandKind::UpdateSymbolLibId,
     CommandKind::UpdateSymbolFootprint,
+    CommandKind::SetSymbolFootprintBinding,
     CommandKind::UpdateSymbolFields,
     CommandKind::PlaceWireSegment,
     CommandKind::BreakWire,
@@ -457,6 +458,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateSymbolTextSize
         | CommandKind::UpdateSymbolLibId
         | CommandKind::UpdateSymbolFootprint
+        | CommandKind::SetSymbolFootprintBinding
         | CommandKind::UpdateSymbolFields
         | CommandKind::PlaceWireSegment
         | CommandKind::BreakWire
@@ -760,6 +762,14 @@ fn samples() -> Vec<(String, Command)> {
         Command::UpdateSymbolFootprint {
             symbol_id: sym,
             footprint: "FP:0603".into(),
+        },
+    );
+    add(
+        "SetSymbolFootprintBinding",
+        Command::SetSymbolFootprintBinding {
+            symbol_id: sym,
+            footprint: "FP:0402".into(),
+            binding: Some("FP:0402".into()),
         },
     );
     add(

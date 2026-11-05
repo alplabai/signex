@@ -809,6 +809,13 @@ pub struct ComponentsPanelState {
     pub list_height: f32,
     /// The selected row's details, or the load that is filling them.
     pub details: crate::panels::components_panel::details::DetailsState,
+    /// The footprint picked in the details view, with the row it was picked
+    /// for (#1234). Absent means the row's default; Place and the preview
+    /// both follow it. A pick for another row than the selected one is void.
+    pub footprint_pick: Option<(
+        ComponentsPanelRowKey,
+        signex_library::primitive::PrimitiveRef,
+    )>,
     /// A row press that may become a drag onto the schematic.
     pub drag: Option<ComponentsRowDrag>,
     /// The row context menu, while open.
@@ -832,6 +839,7 @@ impl Default for ComponentsPanelState {
             selected: None,
             list_height: crate::panels::components_panel::split::DEFAULT_LIST_HEIGHT,
             details: Default::default(),
+            footprint_pick: None,
             drag: None,
             row_menu: None,
             hovered: None,

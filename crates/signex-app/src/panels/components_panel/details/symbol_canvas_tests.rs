@@ -59,6 +59,40 @@ fn the_symbol_is_centred_and_fits_inside_the_box() {
 }
 
 #[test]
+fn the_fit_centres_the_symbol_inside_a_narrow_and_a_wide_box() {
+    let (sheet, symbol) = preview_sheet(&body_symbol());
+    let extent = symbol_bounds(&sheet, &symbol);
+    for size in [Size::new(120.0, 156.0), Size::new(700.0, 156.0)] {
+        let transform = fit_transform(extent, size, UNSCALED);
+        let low = transform.world_to_screen((extent.min_x, extent.min_y));
+        let high = transform.world_to_screen((extent.max_x, extent.max_y));
+        assert!(low.x >= 0.0 && low.y >= 0.0, "{size:?} {low:?}");
+        assert!(
+            high.x <= size.width && high.y <= size.height,
+            "{size:?} {high:?}"
+        );
+        assert!((low.x + high.x - size.width).abs() < 1e-3, "{size:?}");
+        assert!((low.y + high.y - size.height).abs() < 1e-3, "{size:?}");
+    }
+}
+
+#[test]
+fn a_resized_box_refits_an_untouched_symbol() {
+    let p = program(body_symbol(), DOTS);
+    let mut state = shown(&p);
+    let narrow = Rectangle::new(iced::Point::ORIGIN, Size::new(120.0, 156.0));
+    let moved = iced::Event::Mouse(mouse::Event::CursorMoved {
+        position: iced::Point::new(10.0, 10.0),
+    });
+    let _ =
+        canvas::Program::<()>::update(&p, &mut state, &moved, narrow, mouse::Cursor::Unavailable);
+    let fitted = p.fitted_camera(narrow.size());
+    assert_eq!(state.camera.scale, fitted.scale);
+    assert_eq!(state.camera.offset, fitted.offset);
+    assert_eq!(state.fitted_size, Some(narrow.size()));
+}
+
+#[test]
 fn a_small_box_keeps_a_pixel_margin_for_pin_text() {
     let (sheet, symbol) = preview_sheet(&body_symbol());
     let size = Size::new(60.0, 40.0);
@@ -452,4 +486,26 @@ fn pinch_zooms_about_the_cursor_without_ctrl_and_ignores_zero_delta() {
         &p
     ));
     assert!(state.camera.scale < before * 1.25);
+}
+
+#[test]
+fn a_resize_after_the_user_zoomed_keeps_the_symbol_view() {
+    let p = program(body_symbol(), DOTS);
+    let mut state = shown(&p);
+    hold_ctrl(&mut state, &p);
+    assert!(event(
+        mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
+        },
+        &mut state,
+        &p,
+    ));
+    let kept = state.camera.scale;
+    let narrow = Rectangle::new(iced::Point::ORIGIN, Size::new(120.0, 156.0));
+    let moved = iced::Event::Mouse(mouse::Event::CursorMoved {
+        position: iced::Point::new(10.0, 10.0),
+    });
+    let _ =
+        canvas::Program::<()>::update(&p, &mut state, &moved, narrow, mouse::Cursor::Unavailable);
+    assert_eq!(state.camera.scale, kept);
 }

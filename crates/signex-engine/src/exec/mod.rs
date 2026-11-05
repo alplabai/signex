@@ -27,6 +27,8 @@ mod drawings_tests;
 #[cfg(test)]
 mod font_family_tests;
 #[cfg(test)]
+mod footprint_binding_tests;
+#[cfg(test)]
 mod patch_exactness_tests;
 #[cfg(test)]
 mod register_lib_symbol_tests;

@@ -544,6 +544,7 @@ impl Engine {
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }
+            | Command::SetSymbolFootprintBinding { .. }
             | Command::SetSymbolField { .. }
             | Command::RemoveSymbolField { .. }
             | Command::UpdateSymbolFields { .. }

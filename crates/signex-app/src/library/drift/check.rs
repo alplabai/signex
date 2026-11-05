@@ -15,7 +15,8 @@ pub(crate) struct PartSyncCheck {
     libs: Vec<MountedLibrary>,
     stamps: Vec<ApplyStamp>,
     opened: HashMap<Uuid, Opened>,
-    wanted: HashMap<(Uuid, Uuid), RowOffer>,
+    /// Per library, row and chosen footprint binding (#1234).
+    wanted: HashMap<(Uuid, Uuid, Option<signex_library::primitive::PrimitiveRef>), RowOffer>,
 }
 
 impl PartSyncCheck {
@@ -55,10 +56,11 @@ impl PartSyncCheck {
             }
         };
         let libs = &self.libs;
+        let chosen = w.chosen_footprint();
         let offer = self
             .wanted
-            .entry((w.library_id, row.row_id))
-            .or_insert_with(|| row_offer(opened, row, libs));
+            .entry((w.library_id, row.row_id, chosen))
+            .or_insert_with(|| row_offer(opened, row, chosen.as_ref(), libs));
         Some(eval_against(w, offer, row))
     }
 }

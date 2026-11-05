@@ -244,6 +244,7 @@ impl Signex {
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
         self.document_state.panel_ctx.symbol_choices.clear();
+        self.document_state.panel_ctx.footprint_choices.clear();
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
@@ -313,6 +314,15 @@ impl Signex {
                 .map(|s| self.symbol_choices_for(s))
                 .unwrap_or_default();
             self.document_state.panel_ctx.symbol_choices = choices;
+            // The footprints it can be built with (#1234).
+            let footprints = engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == details.selected_uuid)
+                .map(|s| self.footprint_choices_for(s))
+                .unwrap_or_default();
+            self.document_state.panel_ctx.footprint_choices = footprints;
             // Library name + drift for a placed library symbol (#912).
             if let Some(lib_id) = self
                 .document_state

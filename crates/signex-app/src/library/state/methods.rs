@@ -143,6 +143,21 @@ impl LibraryState {
         self.open_libraries.iter().find(|lib| lib.root == path)
     }
 
+    /// The name of the footprint `r` names, from the listing of the open
+    /// library it lives in. `None` when that library is not open or does not
+    /// list it.
+    pub fn footprint_name(&self, r: &signex_library::PrimitiveRef) -> Option<String> {
+        let lib = self
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == r.library_id)?;
+        lib.cached_footprints
+            .iter()
+            .find(|s| s.uuid == r.uuid)
+            .map(|s| s.name.clone())
+            .filter(|name| !name.is_empty())
+    }
+
     /// On-disk file of the primitive `r` names, looked up in the open
     /// library `r.library_id`: the file its listing found it in (a symbol
     /// file is named by its author, #1841), else `<dir>/<uuid>.<ext>`.

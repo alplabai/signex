@@ -309,6 +309,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let lib_id = get("Library ID");
             let library_name = get("Library");
             let symbol_choices = ctx.symbol_choices.clone();
+            let footprint_choices = ctx.footprint_choices.clone();
             let library_drifted = get("Library Drift") == "Yes";
             let library_status = super::library_rows::LibraryStatus {
                 drifted: library_drifted,
@@ -374,9 +375,13 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                     input_bdr,
                                 ));
                             }
-                            c = c.push(form_edit_row("Footprint", &footprint, muted, move |s| {
-                                PanelMsg::EditSymbolFootprint(id, s)
-                            }));
+                            c = super::library_rows::push_footprint_row(
+                                c,
+                                id,
+                                &footprint,
+                                &footprint_choices,
+                                muted,
+                            );
                             if !datasheet.is_empty() {
                                 c = c.push(form_input_row(
                                     "Datasheet",

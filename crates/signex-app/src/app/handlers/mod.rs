@@ -21,6 +21,7 @@ pub mod erc;
 pub mod find_replace;
 pub mod find_similar;
 pub mod library_drift;
+pub mod library_footprint_choice;
 pub mod library_place;
 pub mod library_symbol_choice;
 pub mod menu;
