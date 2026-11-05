@@ -1071,3 +1071,12 @@ fn a_library_window_is_dirty_through_its_library_toml_not_mains_tab() {
         "the window read main's tab for the library.toml check"
     );
 }
+
+#[test]
+fn a_new_window_context_does_not_start_with_mains_history_rows() {
+    let mut f = fixture();
+    f.app.document_state.history.active_path = Some(f.main_path.clone());
+    f.app.document_state.panel_ctx.history = f.app.document_state.history.clone();
+    let ctx = f.app.new_window_panel_ctx(f.window);
+    assert_eq!(ctx.history.active_path, None);
+}
