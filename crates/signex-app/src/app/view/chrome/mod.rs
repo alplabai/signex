@@ -89,7 +89,12 @@ impl Signex {
                 });
         let palette_input = text_input(
             "Search files, symbols, commands…",
-            self.ui_state.command_palette.query.clone(),
+            // A palette owned by an undocked window types in that window.
+            if self.ui_state.command_palette.window.is_none() {
+                self.ui_state.command_palette.query.clone()
+            } else {
+                String::new()
+            },
         )
         .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
         .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))

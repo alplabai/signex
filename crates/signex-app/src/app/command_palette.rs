@@ -27,6 +27,11 @@ use crate::panels::{ALL_PANELS, PanelKind};
 pub static COMMAND_PALETTE_INPUT_ID: LazyLock<Id> =
     LazyLock::new(|| Id::new("signex.command_palette"));
 
+/// Widget id of the text input an undocked window's palette carries (the
+/// chrome-strip one belongs to the main window).
+pub static COMMAND_PALETTE_WINDOW_INPUT_ID: LazyLock<Id> =
+    LazyLock::new(|| Id::new("signex.command_palette.window"));
+
 /// Cap on rows rendered in the dropdown. Beyond this the user sees a
 /// "More results — refine query" footer; matches VS Code's behaviour.
 pub const MAX_RESULTS: usize = 10;

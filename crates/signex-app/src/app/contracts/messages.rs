@@ -123,6 +123,9 @@ pub enum CommandPaletteMsg {
     /// selected row to 0 because the result list reorders on every
     /// keystroke.
     QueryChanged(String),
+    /// [`Self::QueryChanged`] from the text input of an undocked window's
+    /// palette: the query changes, the palette stays that window's (#2067). Ignored unless that window still owns the palette.
+    QueryTypedInWindow(iced::window::Id, String),
     /// Move the highlighted row by `delta` (wraps around at both ends).
     /// Wired to ArrowUp / ArrowDown when the palette is open.
     MoveSelection(i32),
@@ -268,8 +271,11 @@ pub enum UiMsg {
     /// `DocumentState.history.generation` when the load was kicked off;
     /// the handler discards stale results whose generation no longer
     /// matches (the user has switched tabs since). `path` is the file
-    /// the load targeted, for diagnostic logging only.
+    /// the load targeted, for diagnostic logging only. `window` is the
+    /// undocked window whose panel asked (`None`: the main window); the
+    /// answer lands in that window's history, or is dropped if it has closed.
     HistoryLoaded {
+        window: Option<iced::window::Id>,
         generation: u32,
         path: std::path::PathBuf,
         result: Result<crate::panels::history::HistoryLoad, String>,

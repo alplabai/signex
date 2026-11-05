@@ -177,11 +177,31 @@ impl Signex {
             (Some(message), Some(window_id)) if self.is_document_window(window_id) => {
                 self.run_command_in_window(window_id, message)
             }
+            // Find Next / Previous from main (F3, menu, palette: `None` is
+            // main) take a Sheet-scope Find owned by an undocked window over.
+            (Some(message), w)
+                if is_find_step(&message)
+                    && w.is_none_or(|w| self.ui_state.main_window_id == Some(w)) =>
+            {
+                match self.ui_state.main_window_id {
+                    Some(main_id) => self.step_find_in_window(main_id, message),
+                    None => self.dispatch_update(message),
+                }
+            }
             (Some(message), _) => self.dispatch_update(message),
             (None, _) => Task::none(),
         };
         (outcome, task)
     }
+}
+
+/// F3 / Shift+F3 resolved to a Find step.
+fn is_find_step(message: &Message) -> bool {
+    use crate::find_replace::FindReplaceMsg::{NextRequested, PreviousRequested};
+    matches!(
+        message,
+        Message::FindReplaceMsg(NextRequested | PreviousRequested)
+    )
 }
 
 #[cfg(test)]

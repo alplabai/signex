@@ -85,7 +85,10 @@ impl Signex {
         // the generation counter and kick off an async load. Stale
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
-        let history = self.refresh_history_panel();
+        let history = Task::batch([
+            self.refresh_history_panel(),
+            self.refresh_window_histories(),
+        ]);
         let dir_probes = self.warm_document_dir_probes();
         // v0.23 — Drain any queued git commits onto the iced task
         // pool so they run off the update thread. The "Saving…" pill
