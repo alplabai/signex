@@ -258,3 +258,31 @@ fn a_schematic_default_edit_undoes_and_redoes() {
     assert!(history.undo(&mut data));
     assert_eq!(data.schematic_defaults.font_family(), "Iosevka");
 }
+
+/// Review of #2026: edits of two different defaults are two undo steps;
+/// typing in one field stays one.
+#[test]
+fn edits_of_two_defaults_are_two_undo_steps() {
+    use signex_types::project::SchematicDefaultField as F;
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let set = |field, value| ProjectGeneralCommand::SetSchematicDefault {
+        field,
+        value: Some(value),
+    };
+    history.apply(&mut data, set(F::WireWidth, 0.3));
+    history.apply(&mut data, set(F::BusWidth, 0.9));
+    assert!(history.undo(&mut data));
+    assert_eq!(
+        data.schematic_defaults.wire_width_mm,
+        Some(0.3),
+        "wire stays"
+    );
+    assert_eq!(data.schematic_defaults.bus_width_mm, None);
+
+    history.apply(&mut data, set(F::BusWidth, 0.5));
+    history.apply(&mut data, set(F::BusWidth, 0.55));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.schematic_defaults.bus_width_mm, None, "one typing run");
+    assert_eq!(data.schematic_defaults.wire_width_mm, Some(0.3));
+}

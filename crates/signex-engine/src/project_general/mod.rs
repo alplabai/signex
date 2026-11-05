@@ -108,6 +108,29 @@ pub struct ProjectGeneralHistory {
     redo: Vec<GeneralSnapshot>,
     /// An edit run is open: the next edit joins the last step.
     run_open: bool,
+    /// What the open run edits; an edit of something else starts a new step.
+    run_field: Option<RunField>,
+}
+
+/// What a typing run edits. Description and parameter edits share one run,
+/// as before; each schematic default is a run of its own (#2026).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunField {
+    General,
+    SchematicDefault(SchematicDefaultField),
+    SchematicDefaultFont,
+}
+
+impl RunField {
+    fn of(command: &ProjectGeneralCommand) -> Self {
+        match command {
+            ProjectGeneralCommand::SetSchematicDefault { field, .. } => {
+                Self::SchematicDefault(*field)
+            }
+            ProjectGeneralCommand::SetSchematicDefaultFont(_) => Self::SchematicDefaultFont,
+            _ => Self::General,
+        }
+    }
 }
 
 impl ProjectGeneralHistory {
@@ -122,9 +145,11 @@ impl ProjectGeneralHistory {
                 | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
                 | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
         );
-        if is_pick {
+        let field = RunField::of(&command);
+        if is_pick || self.run_field != Some(field) {
             self.run_open = false;
         }
+        self.run_field = Some(field);
         match command {
             ProjectGeneralCommand::SetDescription(text) => {
                 data.description = (!text.is_empty()).then_some(text);
