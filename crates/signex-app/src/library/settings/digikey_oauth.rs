@@ -138,6 +138,9 @@ pub fn run_blocking(
             "DigiKey OAuth client_id missing — set ${ENV_CLIENT_ID} before connecting."
         ));
     }
+    if crate::config_root::is_override_active() {
+        return fail_and_log(crate::config_root::KEYRING_UNUSED_UNDER_OVERRIDE.to_string());
+    }
 
     let (listener, redirect_uri) = match bind_callback_listener() {
         Ok(t) => t,
@@ -261,6 +264,9 @@ fn cancelled_outcome() -> Outcome {
 /// Delete the DigiKey refresh token from the OS credential store. Blocking:
 /// call it from `spawn_blocking`, never from `update`.
 pub fn remove_stored_token() -> Result<(), String> {
+    if crate::config_root::is_override_active() {
+        return Err(crate::config_root::KEYRING_UNUSED_UNDER_OVERRIDE.to_string());
+    }
     signex_library::distributors::digikey::DigiKeyAuth::remove_stored_refresh_token()
         .map_err(|e| e.to_string())
 }
