@@ -10,8 +10,8 @@ use super::{ProjectData, UnknownJson};
 use crate::format::MAX_TEXT_SIZE_MM;
 use crate::net_class::NetLineStyle;
 use crate::schematic::{
-    FillType, SCHEMATIC_DEFAULT_FONT, SCHEMATIC_PT_TO_MM, SCHEMATIC_RENDER_MIN_STROKE_MM,
-    SchematicDefaults, is_set_width,
+    FillType, SCHEMATIC_DEFAULT_FONT, SCHEMATIC_PT_TO_MM, SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM,
+    SCHEMATIC_RENDER_MIN_STROKE_MM, SchematicDefaults, is_set_width,
 };
 
 /// The `.snxprj` key of the schematic defaults.
@@ -106,6 +106,10 @@ impl SchematicDefaultField {
     pub fn range(self) -> std::ops::RangeInclusive<f64> {
         match self {
             Self::BusWidth => SCHEMATIC_RENDER_MIN_STROKE_MM..=MAX_BUS_WIDTH_MM,
+            // A junction never draws under its radius floor.
+            Self::JunctionDiameter => {
+                2.0 * SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM..=MAX_DEFAULT_WIDTH_MM
+            }
             Self::TextSize => MIN_TEXT_SIZE_PT..=MAX_TEXT_SIZE_MM / SCHEMATIC_PT_TO_MM,
             _ => SCHEMATIC_RENDER_MIN_STROKE_MM..=MAX_DEFAULT_WIDTH_MM,
         }
