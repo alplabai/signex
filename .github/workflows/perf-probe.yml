@@ -2,7 +2,7 @@
 name: perf probe
 on:
   push:
-    branches: [perf/busy-sheet-probe]
+    branches: [perf/busy-sheet-probe, perf/probe-2078]
 jobs:
   probe:
     runs-on: ubuntu-latest
