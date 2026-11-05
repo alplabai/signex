@@ -347,6 +347,9 @@ pub(in crate::format) struct SheetExtras {
     /// sheet that never changed them re-saves byte-identical.
     #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
     pub(in crate::format) frame: FrameExtras,
+    /// Page settings (`[extras.sheet.page]`, #2034); omitted at the default.
+    #[serde(default, skip_serializing_if = "PageExtras::is_default")]
+    pub(in crate::format) page: PageExtras,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -369,6 +372,7 @@ impl SheetExtras {
             && self.drawing_placements.is_empty()
             && self.locked_objects.is_empty()
             && self.frame.is_default()
+            && self.page.is_default()
             && self.unknown.is_empty()
     }
 
@@ -442,6 +446,10 @@ impl SheetExtras {
             frame: FrameExtras {
                 settings: s.frame,
                 unknown: s.unknown.frame.clone(),
+            },
+            page: PageExtras {
+                settings: s.page,
+                unknown: s.unknown.page.clone(),
             },
             unknown: s.unknown.extras.clone(),
         }
@@ -687,6 +695,22 @@ pub(in crate::format) struct FrameExtras {
 }
 
 impl FrameExtras {
+    pub(in crate::format) fn is_default(&self) -> bool {
+        self.settings.is_default() && self.unknown.is_empty()
+    }
+}
+
+/// `[extras.sheet.page]`: the sheet's paper colour and coordinate origin,
+/// plus any key a newer build wrote there, kept so a save does not drop it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub(in crate::format) struct PageExtras {
+    #[serde(flatten)]
+    pub(in crate::format) settings: crate::schematic::SheetPageSettings,
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
+}
+
+impl PageExtras {
     pub(in crate::format) fn is_default(&self) -> bool {
         self.settings.is_default() && self.unknown.is_empty()
     }

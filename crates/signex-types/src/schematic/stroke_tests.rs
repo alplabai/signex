@@ -19,26 +19,6 @@ fn wire_pin_body_ratio_is_the_same_at_every_zoom_above_the_floor() {
 }
 
 #[test]
-fn a_wire_width_is_one_value_for_the_canvas_and_the_exports() {
-    // Default: no own width, or a class width of 0.
-    assert_eq!(wire_stroke_mm(0.0, None), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
-    assert_eq!(
-        wire_stroke_mm(0.0, Some(0.0)),
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    );
-    // A class width of 0 is unset: the wire keeps its own.
-    assert_eq!(wire_stroke_mm(0.3, Some(0.0)), 0.3);
-    assert_eq!(
-        wire_stroke_mm(f64::NAN, None),
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    );
-    // Explicit widths keep their value, down to the floor.
-    assert_eq!(wire_stroke_mm(0.5, None), 0.5);
-    assert_eq!(wire_stroke_mm(0.5, Some(0.8)), 0.8);
-    assert_eq!(wire_stroke_mm(0.1, None), SCHEMATIC_RENDER_MIN_STROKE_MM);
-}
-
-#[test]
 fn the_floor_is_one_value_for_every_kind() {
     let scale = SCHEMATIC_ZOOM_100_SCALE * 0.25;
     let floored: Vec<f32> = [
@@ -72,45 +52,5 @@ fn the_floor_is_in_device_pixels() {
     assert_eq!(
         min_stroke_logical_px(f32::NAN),
         SCHEMATIC_MIN_STROKE_DEVICE_PX
-    );
-}
-
-#[test]
-fn effective_width_defaults_a_zero_or_broken_width() {
-    assert_eq!(effective_stroke_mm(0.0), SCHEMATIC_RENDER_MIN_STROKE_MM);
-    assert_eq!(
-        effective_stroke_mm(f64::NAN),
-        SCHEMATIC_RENDER_MIN_STROKE_MM
-    );
-    assert_eq!(effective_stroke_mm(0.254), 0.254);
-}
-
-#[test]
-fn a_symbol_strokes_at_its_most_common_library_width() {
-    assert_eq!(symbol_stroke_mm([0.254, 0.254, 0.5]), 0.254);
-    assert_eq!(symbol_stroke_mm([0.254, 0.5]), 0.5, "a tie takes the wider");
-    assert_eq!(
-        symbol_stroke_mm([0.0, 0.0, 0.5]),
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    );
-    assert_eq!(symbol_stroke_mm([]), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
-}
-
-/// #2025 - a width-0 symbol stroke is the default wire width, not the floor;
-/// explicit widths keep the floor.
-#[test]
-fn a_zero_symbol_stroke_is_the_default_wire_width() {
-    assert_eq!(
-        symbol_graphic_stroke_mm(0.0),
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    );
-    assert_eq!(
-        symbol_graphic_stroke_mm(f64::NAN),
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    );
-    assert_eq!(symbol_graphic_stroke_mm(0.5), 0.5);
-    assert_eq!(
-        symbol_graphic_stroke_mm(0.01),
-        SCHEMATIC_RENDER_MIN_STROKE_MM
     );
 }

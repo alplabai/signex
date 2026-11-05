@@ -74,6 +74,8 @@ mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
 #[cfg(test)]
+mod sheet_page_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod unknown_columns_tests;
@@ -586,10 +588,12 @@ impl SnxSchematic {
             net_colors,
             drawing_placements,
             frame: sheet_extras.frame.settings,
+            page: sheet_extras.page.settings,
             unknown: SheetUnknown {
                 manifest: raw.unknown,
                 extras: sheet_extras.unknown,
                 frame: sheet_extras.frame.unknown,
+                page: sheet_extras.page.unknown,
                 sheets: raw.sheets.unknown,
                 extras_root: extras.unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)

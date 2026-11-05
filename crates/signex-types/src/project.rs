@@ -11,6 +11,7 @@ mod annotation;
 mod erc_waiver;
 mod rule_profile;
 mod rules;
+mod schematic_defaults;
 mod unknown;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
@@ -18,6 +19,7 @@ pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };
 pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
+pub use schematic_defaults::{SchematicDefaultField, SchematicDefaultOverrides};
 pub use unknown::UnknownJson;
 
 /// Format token written into every saved `.snxprj` (`"format"` key). Files
@@ -196,6 +198,11 @@ pub struct ProjectData {
     /// untouched file re-saves without a `parameters` key.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub parameters: BTreeMap<String, String>,
+    /// Defaults for unset schematic primitives (#2026), edited in the Project
+    /// tab. Skipped on save when nothing is overridden, so an untouched file
+    /// re-saves without a `schematic_defaults` key.
+    #[serde(default, skip_serializing_if = "SchematicDefaultOverrides::is_empty")]
+    pub schematic_defaults: SchematicDefaultOverrides,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -240,6 +247,8 @@ mod description_tests;
 mod net_class_tests;
 #[cfg(test)]
 mod parameters_tests;
+#[cfg(test)]
+mod schematic_defaults_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -427,6 +436,7 @@ mod tests {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -458,6 +468,7 @@ mod tests {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -599,7 +610,13 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         let annotation = value
             .as_object_mut()
             .and_then(|map| map.remove(annotation::ANNOTATION_KEY));
+        let defaults = value
+            .as_object_mut()
+            .and_then(|map| map.remove(schematic_defaults::SCHEMATIC_DEFAULTS_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = defaults {
+            schematic_defaults::take_schematic_defaults(&mut data, raw);
+        }
         if let Some(raw) = rules {
             take_rules(&mut data, raw);
         }
@@ -656,6 +673,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        schematic_defaults: Default::default(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
     })
@@ -702,6 +720,13 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
         stamped.insert(
             annotation::ANNOTATION_KEY.into(),
             serde_json::to_value(annotation)?,
+        );
+    }
+    // Defaults set in this session replace a section kept from a newer build.
+    if !data.schematic_defaults.is_empty() {
+        stamped.insert(
+            schematic_defaults::SCHEMATIC_DEFAULTS_KEY.into(),
+            serde_json::to_value(&data.schematic_defaults)?,
         );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))
