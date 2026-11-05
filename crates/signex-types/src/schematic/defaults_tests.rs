@@ -115,3 +115,26 @@ fn a_junction_keeps_the_canvas_floor_and_takes_the_project_size() {
     assert_eq!(p.junction_radius_mm(0.0), 0.5);
     assert_eq!(p.junction_radius_mm(1.2), 0.6, "an explicit size wins");
 }
+
+#[test]
+fn a_wire_line_style_falls_back_class_project_built_in() {
+    use crate::net_class::NetLineStyle as L;
+    assert_eq!(B.wire_line_style, L::Solid);
+    assert_eq!(B.shape_fill, super::super::FillType::None);
+    let p = SchematicDefaults {
+        wire_line_style: L::Dashed,
+        ..B
+    };
+    assert_eq!(
+        p.wire_line(Some(L::Dotted)),
+        L::Dotted,
+        "class beats project"
+    );
+    assert_eq!(p.wire_line(None), L::Dashed, "project beats built-in");
+    assert_eq!(
+        p.wire_line(Some(L::Solid)),
+        L::Dashed,
+        "Solid is a class's unset"
+    );
+    assert_eq!(B.wire_line(None), L::Solid);
+}

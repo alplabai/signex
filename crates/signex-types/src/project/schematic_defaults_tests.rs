@@ -87,3 +87,30 @@ fn unusable_values_resolve_as_unset() {
     assert_eq!(overrides.resolve(), SchematicDefaults::BUILT_IN);
     assert_eq!(overrides.font_family(), "Iosevka");
 }
+
+#[test]
+fn line_style_shape_fill_and_font_round_trip_and_resolve() {
+    use crate::net_class::NetLineStyle;
+    use crate::schematic::FillType;
+    let (path, _dir) = project_file(
+        r#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,
+            "schematic_defaults":{"wire_line_style":"dashed","shape_fill":"background","font_family":"Roboto"}}"#,
+    );
+    let data = parse_project(&path).unwrap();
+    let resolved = data.schematic_defaults.resolve();
+    assert_eq!(resolved.wire_line_style, NetLineStyle::Dashed);
+    assert_eq!(resolved.shape_fill, FillType::Background);
+    assert_eq!(
+        data.schematic_defaults.placed_font_family().as_deref(),
+        Some("Roboto")
+    );
+    write_project(&path, &data).unwrap();
+    assert_eq!(
+        parse_project(&path).unwrap().schematic_defaults,
+        data.schematic_defaults
+    );
+    assert_eq!(
+        SchematicDefaultOverrides::default().placed_font_family(),
+        None
+    );
+}

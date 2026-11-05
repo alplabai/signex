@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{ProjectData, UnknownJson};
-use crate::schematic::{SCHEMATIC_DEFAULT_FONT, SchematicDefaults, is_set_width};
+use crate::net_class::NetLineStyle;
+use crate::schematic::{FillType, SCHEMATIC_DEFAULT_FONT, SchematicDefaults, is_set_width};
 
 /// The `.snxprj` key of the schematic defaults.
 pub(super) const SCHEMATIC_DEFAULTS_KEY: &str = "schematic_defaults";
@@ -32,6 +33,12 @@ pub struct SchematicDefaultOverrides {
     pub text_size_pt: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_family: Option<String>,
+    /// Line style of a wire whose class sets none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wire_line_style: Option<NetLineStyle>,
+    /// Fill new shapes are placed with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape_fill: Option<FillType>,
     /// Keys a newer build wrote inside the section; kept for re-save.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
@@ -141,7 +148,19 @@ impl SchematicDefaultOverrides {
             junction_diameter_mm: usable(self.junction_diameter_mm)
                 .unwrap_or(built_in.junction_diameter_mm),
             text_size_pt: usable(self.text_size_pt).unwrap_or(built_in.text_size_pt),
+            wire_line_style: self.wire_line_style.unwrap_or(built_in.wire_line_style),
+            shape_fill: self.shape_fill.unwrap_or(built_in.shape_fill),
         }
+    }
+
+    /// The font a placed label or note stores: the project's when it names
+    /// one, else `None` (the sheet's default font, as before).
+    pub fn placed_font_family(&self) -> Option<String> {
+        self.font_family
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .map(str::to_string)
     }
 
     /// The font new text is placed in.

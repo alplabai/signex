@@ -8,9 +8,10 @@
 //! canvas, the selection box and every export resolve through these methods.
 
 use super::{
-    SCHEMATIC_DEFAULT_WIRE_STROKE_MM, SCHEMATIC_RENDER_BUS_STROKE_MM,
+    FillType, SCHEMATIC_DEFAULT_WIRE_STROKE_MM, SCHEMATIC_RENDER_BUS_STROKE_MM,
     SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM, SCHEMATIC_RENDER_MIN_STROKE_MM,
 };
+use crate::net_class::NetLineStyle;
 
 /// Font new text is placed in when the project names none.
 pub const SCHEMATIC_DEFAULT_FONT: &str = "Iosevka";
@@ -32,6 +33,12 @@ pub struct SchematicDefaults {
     /// Diameter of a junction stored with diameter `0`.
     pub junction_diameter_mm: f64,
     pub text_size_pt: f64,
+    /// How a wire whose net class sets no line style is stroked. A wire
+    /// stores no line style of its own.
+    pub wire_line_style: NetLineStyle,
+    /// Fill new shapes are placed with. A placed shape always stores its
+    /// fill, so this never reinterprets a stored one.
+    pub shape_fill: FillType,
 }
 
 /// A width counts as set when it is a finite number above zero.
@@ -49,7 +56,19 @@ impl SchematicDefaults {
         shape_stroke_mm: SCHEMATIC_RENDER_MIN_STROKE_MM,
         junction_diameter_mm: 2.0 * SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM,
         text_size_pt: SCHEMATIC_DEFAULT_TEXT_SIZE_PT,
+        wire_line_style: NetLineStyle::Solid,
+        shape_fill: FillType::None,
     };
+
+    /// The line style a wire is stroked with: its class's, else the project
+    /// default. A class stores Solid as "no style" (it is not written), so a
+    /// Solid class style falls through to the default.
+    #[must_use]
+    pub fn wire_line(&self, class_line: Option<NetLineStyle>) -> NetLineStyle {
+        class_line
+            .filter(|line| *line != NetLineStyle::Solid)
+            .unwrap_or(self.wire_line_style)
+    }
 
     /// `own` when it is set, else `default`; never under the shared floor.
     fn resolve(own: f64, default: f64) -> f64 {
