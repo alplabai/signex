@@ -2,11 +2,10 @@
 //! (#2078), on a canvas that is not at the window origin and at fractional
 //! display scales.
 //!
-//! The renderer snaps each mesh by its clip bounds, so a content layer whose
-//! clip starts elsewhere than the other layers' could land a fraction of a
-//! pixel off them. The reference is the plain `canvas(SchematicCanvas)` mount
-//! of trunk, whose layers all share the canvas-origin clip. Rendered through
-//! iced's wgpu renderer (the harness of `gpu_mount_tests`).
+//! The reference is trunk's own frame: the plain `canvas(SchematicCanvas)`
+//! mount with the content drawn in a frame of the canvas size (clip at the
+//! canvas origin), where the retained layer's clip starts a margin further up
+//! and left. Rendered through iced's wgpu renderer (the harness of `gpu_mount_tests`).
 
 use iced::advanced::renderer::Style;
 use iced::widget::Widget as _;
@@ -148,6 +147,11 @@ fn last_frame(
             offset,
             scale: SCALE,
         };
+        // What the app does when the view moves (`CanvasEvent::ViewMoved`):
+        // the selection overlay is cached and follows the camera only
+        // through this.
+        slot.clear_overlay_cache();
+        slot.clear_bg_cache();
         last = Some(render_in(gpu, mount, widget(path, &slot, prefs)));
     }
     let rebuilds = slot.content_surface.borrow().rebuilds();
@@ -219,20 +223,63 @@ fn centre_of(
     (n > 0).then(|| ((sx / n as f32, sy / n as f32), n))
 }
 
-/// Offset of the selection highlight's centre from the wire's centre, read
-/// off one frame: the two layers drawn together.
+/// Offset of the selection highlight's centre from the centre of the second
+/// wire (the first one is mostly under the highlight), read off one frame: the
+/// two layers drawn together.
 fn selection_offset(frame: &Frame, mount: Mount, run: &Run) -> (f32, f32) {
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
     let of = |c: signex_types::theme::Color| [c.r, c.g, c.b];
-    // The first wire, run from (5, 5) to (20, 5) mm, and a band around it
-    // that stays clear of the second wire at y = 8 mm.
-    let (x0, y0) = window_px(mount, run, 4.0, 3.8);
-    let (x1, y1) = window_px(mount, run, 21.0, 6.2);
-    let band = (x0, y0, x1, y1);
-    let (wire, wire_n) = centre_of(frame, of(colors.wire), band).expect("no wire pixels");
-    let (sel, sel_n) = centre_of(frame, of(colors.selection), band).expect("no selection pixels");
+    let band = |x0, y0, x1, y1| {
+        let (a, b) = window_px(mount, run, x0, y0);
+        let (c, d) = window_px(mount, run, x1, y1);
+        (a, b, c, d)
+    };
+    // The first wire runs (5, 5) to (20, 5) mm and the highlight sits around
+    // it; the second runs (5, 8) to (20, 8) mm, clear of the highlight.
+    let (wire, wire_n) =
+        centre_of(frame, of(colors.wire), band(4.0, 7.0, 21.0, 9.0)).expect("no wire pixels");
+    let (sel, sel_n) = centre_of(frame, of(colors.selection), band(4.0, 3.5, 21.0, 6.5))
+        .expect("no selection pixels");
     eprintln!("wire centre {wire:?} ({wire_n} px), selection centre {sel:?} ({sel_n} px)");
     (sel.0 - wire.0, sel.1 - wire.1)
+}
+
+/// Where and how the two frames differ, by the colour class each shows there.
+fn describe_differences(surface: &Frame, trunk: &Frame, differing: &[(u32, u32)]) {
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let classes = [
+        ("wire", colors.wire),
+        ("selection", colors.selection),
+        ("paper", colors.paper),
+        ("background", colors.background),
+    ];
+    let class = |px: [u8; 4]| {
+        classes
+            .iter()
+            .find(|(_, c)| {
+                [c.r, c.g, c.b]
+                    .iter()
+                    .zip(px)
+                    .all(|(a, b)| a.abs_diff(b) <= 24)
+            })
+            .map_or("other", |(name, _)| *name)
+    };
+    let mut groups: std::collections::BTreeMap<(&str, &str), (usize, [u32; 4])> =
+        Default::default();
+    for &(x, y) in differing {
+        let key = (class(surface.px(x, y)), class(trunk.px(x, y)));
+        let entry = groups.entry(key).or_insert((0, [u32::MAX, u32::MAX, 0, 0]));
+        entry.0 += 1;
+        entry.1 = [
+            entry.1[0].min(x),
+            entry.1[1].min(y),
+            entry.1[2].max(x),
+            entry.1[3].max(y),
+        ];
+    }
+    for ((got, want), (n, [x0, y0, x1, y1])) in groups {
+        eprintln!("  surface {got} where trunk has {want}: {n} px in [{x0},{y0}]-[{x1},{y1}]");
+    }
 }
 
 fn assert_lines_up(mount: Mount, run: Run) {
@@ -250,6 +297,7 @@ fn assert_lines_up(mount: Mount, run: Run) {
         off.len(),
         max_channel_diff(&surface, &trunk)
     );
+    describe_differences(&surface, &trunk, &off);
     if run.select {
         let (tx, ty) = selection_offset(&trunk, mount, &run);
         let (sx, sy) = selection_offset(&surface, mount, &run);

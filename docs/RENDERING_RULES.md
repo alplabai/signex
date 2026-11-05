@@ -234,14 +234,10 @@ Two things follow from the widget drawing in its own clip layer:
   transformation, so a translated cached text-only region may not repaint
   until something else dirties it. The wgpu renderer is the shipped path.
 
-The renderer's mesh snap (`wgpu/src/triangle.rs`, `Layer::prepare`) rounds the
-mesh clip bounds after the projection, so in NDC, and casts to `u32`. The
-nudge it applies to a mesh is then about minus the NDC position of the clip
-origin (a pixel or two for a canvas docked off the window origin), not a
-sub-pixel snap. All layers of the plain canvas share the canvas-origin clip
-and so share the nudge; the retained content clip starts a margin further
-up and left. `canvas::pan_reuse_pixel_tests` compares the two mounts on a
-docked canvas.
+The retained clip starts a margin further up and left than the canvas-origin
+clip the plain canvas uses. `canvas::pan_reuse_pixel_tests` renders both on a
+canvas docked off the window origin and compares them pixel for pixel, with
+the plain side drawn as the plain canvas draws it.
 
 ## What this document is *not*
 
