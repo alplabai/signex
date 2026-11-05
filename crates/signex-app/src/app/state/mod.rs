@@ -702,7 +702,7 @@ pub struct BomPreviewState {
     pub validation_report: signex_output::BomValidationReport,
     /// Available variants for the active project. Reserved for the
     /// variant picker dropdown — empty when no variants are defined.
-    /// Currently only seeded; the picker UI lands in v0.8.1.
+    /// Currently only seeded; the picker UI lands with the Advanced Schematic plan.
     pub variants: Vec<String>,
     /// Active sort spec — `(column index in options.columns, ascending)`.
     /// `None` = render rollup order (the default emit order from

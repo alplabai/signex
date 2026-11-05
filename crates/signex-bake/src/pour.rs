@@ -5,7 +5,7 @@
 //! polygon boundary + all PourAttr metadata (layer, net, fill_type,
 //! thermal_relief, clearance, min_thickness, priority). Actual fill
 //! generation (polygon offset + raster fill + thermal-relief geometry)
-//! lands in v0.15.
+//! lands with the PCB Routing plan (Copper Pour).
 
 use signex_library::primitive::footprint::{
     FpPour, LayerId, NetRef, Polygon, PourFillType as LibPourFill, ThermalReliefStyle as LibThermal,

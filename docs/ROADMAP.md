@@ -53,7 +53,7 @@ have this section and drifted six versions away from reality as a result.
 | Next tag | The first CalVer release, `vYY.MM.MICRO` (or `-rc.N`), dated per §3 (the month of its first release candidate, or the month it ships if there is none). `1.0.0` final is never cut |
 | `workspace.package.version` | **1.0.0-rc.1** until the first CalVer release-prep PR sets it |
 | Latest CHANGELOG section | **1.0.0-rc.1** — dated 2026-10-29; the summary is the release page, the full list sits under "Detailed changes in 1.0.0-rc.1" |
-| Current work | Command Registry & Symbol Units milestone: 0 open issues; it shipped in 1.0.0-rc.1, and its test follow-up #1727 landed after the tag and ships in the next release. Community Preview milestone, 6 open issues as of 2026-11-04: #2021, #2004, #1972, #1952, #661 (one document model epic), #322 (the user guide). Release prep for the first CalVer release follows |
+| Current work | Command Registry & Symbol Units milestone: 0 open issues; it shipped in 1.0.0-rc.1, and its test follow-up #1727 landed after the tag and ships in the next release. Community Preview milestone: open issues are tracked on [the milestone](https://github.com/alplabai/signex/milestone/12) (a dated issue list here goes stale). Release prep for the first CalVer release follows |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
 **shipped**. The work since v0.9 — the Apache-clean native-format
