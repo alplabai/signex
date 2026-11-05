@@ -327,6 +327,11 @@ pub(in crate::format) struct SheetExtras {
     /// so are gone after the next save.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(in crate::format) note_font_families: BTreeMap<String, String>,
+    /// Stored text widths (#2029); omitted when empty so a sheet without any
+    /// re-saves byte-identical. A table, so a build that predates it keeps it
+    /// as an unknown key of `[extras.sheet]`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) text_extents: super::text_extents_extras::ExtentTable,
     /// Drawing placements by drawing uuid; only `"above"` is written, because
     /// no entry means behind. Kept beside the drawings, not in them: a build
     /// that predates the field drops unknown keys nested in the typed
@@ -370,6 +375,7 @@ impl SheetExtras {
             && self.net_colors.is_empty()
             && self.font_family.is_none()
             && self.note_font_families.is_empty()
+            && self.text_extents.is_empty()
             && self.drawing_placements.is_empty()
             && self.locked_objects.is_empty()
             && self.frame.is_default()
@@ -424,6 +430,7 @@ impl SheetExtras {
                 .iter()
                 .filter_map(|note| Some((note.uuid.to_string(), note.font_family.clone()?)))
                 .collect(),
+            text_extents: super::text_extents_extras::encode(&s.text_extents.retained(s)),
             drawing_placements: s
                 .drawing_placements
                 .iter()

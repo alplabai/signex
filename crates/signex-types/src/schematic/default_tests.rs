@@ -73,6 +73,7 @@ fn every_field_is_accounted_for() {
         title_block: _,
         lib_symbols: _,
         text_widths: _,
+        text_extents: _,
         net_colors: _,
         drawing_placements: _,
         frame: _,
