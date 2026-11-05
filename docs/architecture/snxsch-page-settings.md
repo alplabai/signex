@@ -37,8 +37,9 @@ corner of the paper, Y down; no coordinate is rewritten when the origin
 changes. With Lower Left, the shown Y is `paper_height_mm - y`, the paper
 height coming from the sheet's paper size (Custom included). The status bar,
 Properties ▸ Position (and Start / End / Center rows), the pre-placement X/Y
-readout and typed drawing coordinates go through one mapping, refreshed when
-the origin or the paper size changes, `SchematicSheet::page_y`, which is its own
+readout, the ERC panel's location label and typed drawing coordinates go
+through one mapping, refreshed when the origin or the paper size changes (a
+half-typed coordinate box is dropped then), `SchematicSheet::page_y`, which is its own
 inverse. X never changes.
 
 ## Known gaps
@@ -47,3 +48,7 @@ inverse. X never changes.
   whatever the origin.
 - ERC marker contrast is tuned against the theme paper, not a custom sheet
   colour.
+- Text built in the engine and the rule checker still shows stored Y: the
+  lock refusal messages (`signex-engine` `lock.rs`) and ERC rule message
+  bodies (e.g. `signex-erc` `rules/multiple_names.rs`). The ERC panel's
+  location label reads from the origin.

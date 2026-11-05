@@ -229,6 +229,10 @@ the Project tab's Schematic defaults section, added without bumping the
   (a newer build's line style name, say), is kept raw and written back on
   every save, edits of other keys included, until that same default is set
   here. A section that is not an object is kept verbatim and not applied.
+- Editing in the Project tab: each default is its own undo step (typing in one
+  field is one step); text that is not a usable number keeps the stored value
+  and the typed text, and only empty text clears the default. The junction
+  diameter range starts at 0.7 mm, its draw floor.
 - Ranges: widths resolve clamped to 0.15–5 mm (bus 0.15–10 mm), text to
   1 pt–the size the `.snxsch` loader repairs past (100 mm). The Project tab
   stores a typed value clamped and says so under the field; a file value out
