@@ -15,6 +15,7 @@ use signex_app::config_root::{
     ConfigRootOverrideError, config_root, default_config_root, set_config_root_override,
 };
 use signex_app::library::pricing::resolve_client;
+use signex_app::library::settings::digikey_oauth;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::task_driver::TaskDriver;
 use signex_library::{ClientUnavailable, DistributorSource};
@@ -155,6 +156,28 @@ fn assert_credentials_unused() {
             Ok(_) => panic!("{name}: a client was built from the keyring"),
         }
     }
+    // Pre-cancelled: without the refusal the flow stops as Cancelled.
+    let cancel = digikey_oauth::CancelHandle::new();
+    cancel.cancel();
+    let connect = digikey_oauth::run_blocking(
+        "client-id".into(),
+        "client-secret".into(),
+        "http://127.0.0.1:9/authorize".into(),
+        "http://127.0.0.1:9/token".into(),
+        cancel,
+        false,
+    );
+    assert!(
+        matches!(&connect, digikey_oauth::Outcome::Failed { reason } if reason.contains("keyring")),
+        "DigiKey connect must not reach the keyring: {connect:?}"
+    );
+    let removed = digikey_oauth::remove_stored_token();
+    assert!(
+        removed
+            .as_ref()
+            .is_err_and(|reason| reason.contains("keyring")),
+        "DigiKey token removal must not reach the keyring: {removed:?}"
+    );
 }
 
 fn late() {
