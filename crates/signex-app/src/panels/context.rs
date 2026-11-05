@@ -118,6 +118,10 @@ pub struct PanelContext {
     /// UUID that owns the current drawing_edit_buf. When
     /// `selected_uuid` changes the handler clears the buffer.
     pub drawing_edit_buf_for: Option<uuid::Uuid>,
+    /// Page origin and paper size the drawing buffer's text was typed
+    /// under: a typed Y reads from both, so a change of either drops the
+    /// buffer and the boxes show the stored value again (#2034).
+    pub drawing_edit_buf_page: Option<(PageOrigin, String)>,
     /// The live SchDrawing matching `selected_uuid` when a single
     /// drawing is selected. Feeds the mini preview canvas in the
     /// Properties panel so the shape renders true-to-life.

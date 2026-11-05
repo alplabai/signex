@@ -8,20 +8,36 @@ pub(super) use view::view;
 
 use signex_types::project::SchematicDefaultField;
 
-/// The number typed in a field: empty or not a number above zero stores no
-/// override, so the built-in value applies; a number out of the field's
-/// range is stored clamped into it.
-pub(super) fn parse_override(field: SchematicDefaultField, text: &str) -> Option<f64> {
-    crate::numeric_field::parse_field_f64(text)
-        .filter(|v| v.is_finite() && *v > 0.0)
-        .map(|v| field.clamped(v))
+/// What a field's typed text does to its stored default.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum DefaultInput {
+    /// Empty text: clear the override, the built-in value applies.
+    Clear,
+    /// A number above zero, clamped into the field's range.
+    Set(f64),
+    /// Mid-edit, not a number, or not above zero: keep the draft text and
+    /// change nothing (the house rule in `numeric_field`).
+    Keep,
+}
+
+/// Read a field's typed text.
+pub(super) fn parse_override(field: SchematicDefaultField, text: &str) -> DefaultInput {
+    if text.trim().is_empty() {
+        return DefaultInput::Clear;
+    }
+    match crate::numeric_field::parse_field_f64(text) {
+        Some(v) if v > 0.0 => DefaultInput::Set(field.clamped(v)),
+        _ => DefaultInput::Keep,
+    }
 }
 
 /// The note under a field whose typed number was clamped: what was stored
 /// instead, and the range. `None` when the typed text is in range.
 pub(super) fn clamp_note(field: SchematicDefaultField, draft: Option<&String>) -> Option<String> {
     let typed = crate::numeric_field::parse_field_f64(draft?)?;
-    let stored = parse_override(field, draft?)?;
+    let DefaultInput::Set(stored) = parse_override(field, draft?) else {
+        return None;
+    };
     (typed != stored).then(|| {
         let range = field.range();
         format!(

@@ -78,13 +78,19 @@ impl Signex {
                 field,
                 text,
             } => {
-                let value = super::schematic_defaults::parse_override(field, &text);
+                use super::schematic_defaults::DefaultInput;
+                let input = super::schematic_defaults::parse_override(field, &text);
                 self.document_state
                     .project_tabs
                     .entry(project_id)
                     .or_default()
                     .default_drafts
                     .insert(field, text);
+                let value = match input {
+                    DefaultInput::Clear => None,
+                    DefaultInput::Set(value) => Some(value),
+                    DefaultInput::Keep => return,
+                };
                 self.apply_project_general(
                     project_id,
                     ProjectGeneralCommand::SetSchematicDefault { field, value },

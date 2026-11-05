@@ -322,3 +322,57 @@ fn an_out_of_range_default_is_clamped_and_reported() {
     );
     assert_eq!(raw.bus_width_mm, Some(50.0), "and is not rewritten");
 }
+
+/// Review of #2026: text that is not a usable number keeps the stored
+/// default and the draft (`numeric_field`'s rule); only empty text clears.
+/// A half-typed number joins the same undo step as the full one.
+#[test]
+fn unusable_input_keeps_the_default_and_only_empty_text_clears() {
+    let (mut app, _sheet, _window) = app();
+    let wire = |app: &Signex| {
+        app.document_state.projects[0]
+            .data
+            .schematic_defaults
+            .wire_width_mm
+    };
+    edit(&mut app, SchematicDefaultField::WireWidth, "0.");
+    assert_eq!(wire(&app), None, "mid-edit changes nothing");
+    edit(&mut app, SchematicDefaultField::WireWidth, "0.3");
+    for text in ["0,4", "x", "-1", "0"] {
+        edit(&mut app, SchematicDefaultField::WireWidth, text);
+        assert_eq!(wire(&app), Some(0.3), "{text:?} keeps the default");
+    }
+    let project_id = app.document_state.projects[0].id;
+    let draft = app.document_state.project_tabs[&project_id]
+        .default_drafts
+        .get(&SchematicDefaultField::WireWidth)
+        .cloned();
+    assert_eq!(draft.as_deref(), Some("0"), "the box keeps the typed text");
+    assert!(app.step_project_tab_history(project_id, true));
+    assert_eq!(wire(&app), None, "0. and 0.3 were one step");
+    assert!(app.step_project_tab_history(project_id, false));
+    assert_eq!(wire(&app), Some(0.3));
+    edit(&mut app, SchematicDefaultField::WireWidth, "");
+    assert_eq!(wire(&app), None, "empty text clears");
+}
+
+/// Review of #2026: a junction default below its draw floor is clamped to
+/// 0.7 mm and the field says so.
+#[test]
+fn a_junction_default_below_the_floor_is_clamped_and_noted() {
+    let draft = "0.3".to_string();
+    let note = super::schematic_defaults::clamp_note(
+        SchematicDefaultField::JunctionDiameter,
+        Some(&draft),
+    );
+    assert!(note.is_some_and(|n| n.contains("0.7")), "noted");
+    let (mut app, _sheet, _window) = app();
+    edit(&mut app, SchematicDefaultField::JunctionDiameter, "0.3");
+    assert_eq!(
+        app.document_state.projects[0]
+            .data
+            .schematic_defaults
+            .junction_diameter_mm,
+        Some(0.7)
+    );
+}

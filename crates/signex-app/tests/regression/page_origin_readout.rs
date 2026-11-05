@@ -178,3 +178,41 @@ fn the_position_row_follows_a_paper_change() {
         position_matches_paper(&app, &path, 30.0);
     }
 }
+
+fn buffered(app: &Signex) -> bool {
+    !app.document_state.panel_ctx.drawing_edit_buf.is_empty()
+}
+
+/// Review of #2034: a typed Y box is read under one origin and paper, so a
+/// change of either (or its undo) drops the typed text and the box shows the
+/// stored value again.
+#[test]
+fn a_typed_y_box_drops_its_text_on_an_origin_or_paper_change() {
+    let id = uuid::Uuid::now_v7();
+    let (mut app, _path) = app_with(label(uuid::Uuid::now_v7(), 0.0, 0.0), line(id));
+    select(
+        &mut app,
+        SelectedItem::new(id, SelectedKind::Drawing),
+        PageOrigin::LowerLeft,
+    );
+    let type_y = |app: &mut Signex| {
+        panel(
+            app,
+            PanelMsg::DrawingFieldTyping(DrawingFieldId::LineStartY, "150".into()),
+        );
+        assert!(buffered(app), "the typed text is kept while typing");
+    };
+
+    type_y(&mut app);
+    panel(&mut app, PanelMsg::SetPageOrigin(PageOrigin::UpperLeft));
+    assert!(!buffered(&app), "origin change");
+
+    type_y(&mut app);
+    panel(&mut app, PanelMsg::SetPaperSize("A3".into()));
+    assert!(!buffered(&app), "paper change");
+
+    type_y(&mut app);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(!buffered(&app), "undo of the paper change");
+}

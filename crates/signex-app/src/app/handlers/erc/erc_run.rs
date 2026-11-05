@@ -263,6 +263,19 @@ impl Signex {
         self.ui_state.erc_violations = violations;
     }
 
+    /// The Y an ERC finding's location shows: from the page origin of the
+    /// sheet it is in, when the point is that sheet's own (#2034).
+    fn erc_shown_y(&self, path: &std::path::Path, v: &signex_erc::Violation) -> f64 {
+        let own = matches!(
+            v.location_space,
+            signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+        );
+        match self.document_state.engines.get(path) {
+            Some(engine) if own => engine.document().page_y(v.location.y),
+            _ => v.location.y,
+        }
+    }
+
     pub(crate) fn build_erc_diagnostic_entries(&self) -> Vec<crate::panels::ErcDiagnosticEntry> {
         let mut paths: Vec<_> = self
             .ui_state
@@ -305,6 +318,7 @@ impl Signex {
                         message: v.message.clone(),
                         world_x: v.location.x,
                         world_y: v.location.y,
+                        shown_y: self.erc_shown_y(&path, v),
                         select: v.primary,
                         locatable: matches!(
                             v.location_space,

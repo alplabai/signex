@@ -492,7 +492,14 @@ impl Signex {
         let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
         let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
-        let drawing_edit_buf = self.document_state.panel_ctx.drawing_edit_buf.clone();
+        let drawing_edit_buf_page =
+            active_schematic_snapshot.map(|sheet| (sheet.page.origin, sheet.paper_size.clone()));
+        let drawing_edit_buf =
+            if self.document_state.panel_ctx.drawing_edit_buf_page == drawing_edit_buf_page {
+                self.document_state.panel_ctx.drawing_edit_buf.clone()
+            } else {
+                Default::default()
+            };
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
         let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
@@ -629,6 +636,7 @@ impl Signex {
             symbol_choices,
             drawing_edit_buf,
             drawing_edit_buf_for,
+            drawing_edit_buf_page,
             selected_drawing,
             selected_drawing_placement,
             selected_child_sheet,
