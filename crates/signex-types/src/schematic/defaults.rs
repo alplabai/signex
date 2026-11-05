@@ -60,6 +60,20 @@ impl SchematicDefaults {
         shape_fill: FillType::None,
     };
 
+    /// The whole-point text size placement uses, the one conversion every
+    /// placement path shares (the pre-placement form holds whole points);
+    /// never below 1 pt.
+    #[must_use]
+    pub fn placed_text_pt(&self) -> u32 {
+        self.text_size_pt.round().max(1.0) as u32
+    }
+
+    /// [`Self::placed_text_pt`] in mm, the size stored on placed text.
+    #[must_use]
+    pub fn placed_text_mm(&self) -> f64 {
+        f64::from(self.placed_text_pt()) * super::SCHEMATIC_PT_TO_MM
+    }
+
     /// The line style a wire is stroked with: its class's, else the project
     /// default. A class stores Solid as "no style" (it is not written), so a
     /// Solid class style falls through to the default.

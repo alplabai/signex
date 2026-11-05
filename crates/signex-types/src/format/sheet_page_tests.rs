@@ -93,3 +93,28 @@ fn unknown_keys_and_unreadable_values_are_kept_raw() {
     assert!(!saved.contains("origin = 7"), "{saved}");
     assert!(saved.contains("color = \"cream\""), "{saved}");
 }
+
+/// Review of #2034: a `page` value that is not a table opens the sheet, is
+/// written back, and gives way to a page table once a value is set.
+#[test]
+fn a_page_value_that_is_not_a_table_opens_and_is_kept() {
+    // A default font makes the writer emit an `[extras.sheet]` table.
+    let text = write(&SchematicSheet {
+        font_family: Some("Roboto".into()),
+        ..Default::default()
+    });
+    let start = text.find("[extras.sheet]").expect("an extras.sheet table");
+    let end = start + "[extras.sheet]".len();
+    let text = format!("{}\npage = 5{}", &text[..end], &text[end..]);
+    let back = parse(&text);
+    assert!(back.page.is_default());
+    let saved = write(&back);
+    assert!(saved.contains("page = 5"), "{saved}");
+    assert_eq!(write(&parse(&saved)), saved);
+
+    let mut picked = parse(&saved);
+    picked.page.origin = PageOrigin::UpperLeft;
+    let saved = write(&picked);
+    assert!(!saved.contains("page = 5"), "{saved}");
+    assert_eq!(parse(&saved).page.origin, PageOrigin::UpperLeft);
+}

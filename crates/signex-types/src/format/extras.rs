@@ -449,7 +449,14 @@ impl SheetExtras {
                 unknown: s.unknown.frame.clone(),
             },
             page: PageExtras::of(s.page, &s.unknown.page),
-            unknown: s.unknown.extras.clone(),
+            unknown: {
+                // A kept non-table `page` gives way to a real page table.
+                let mut extras = s.unknown.extras.clone();
+                if !s.page.is_default() || !s.unknown.page.is_empty() {
+                    extras.remove("page");
+                }
+                extras
+            },
         }
     }
 }

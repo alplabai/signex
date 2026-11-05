@@ -138,3 +138,18 @@ fn a_wire_line_style_falls_back_class_project_built_in() {
     );
     assert_eq!(B.wire_line(None), L::Solid);
 }
+
+#[test]
+fn placed_text_rounds_once_and_never_to_zero() {
+    let p = |pt| SchematicDefaults {
+        text_size_pt: pt,
+        ..B
+    };
+    assert_eq!(p(10.4).placed_text_pt(), 10);
+    assert_eq!(
+        p(10.4).placed_text_mm(),
+        10.0 * crate::schematic::SCHEMATIC_PT_TO_MM
+    );
+    assert_eq!(p(0.2).placed_text_pt(), 1);
+    assert_eq!(B.placed_text_mm(), crate::schematic::SCHEMATIC_TEXT_MM);
+}

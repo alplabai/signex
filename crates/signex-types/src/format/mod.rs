@@ -592,7 +592,13 @@ impl SnxSchematic {
             page: sheet_extras.page.settings,
             unknown: SheetUnknown {
                 manifest: raw.unknown,
-                extras: sheet_extras.unknown,
+                extras: {
+                    let mut extras = sheet_extras.unknown;
+                    if let Some(raw) = sheet_extras.page.not_a_table {
+                        extras.insert_value("page", raw);
+                    }
+                    extras
+                },
                 frame: sheet_extras.frame.unknown,
                 page: sheet_extras.page.unknown,
                 sheets: raw.sheets.unknown,

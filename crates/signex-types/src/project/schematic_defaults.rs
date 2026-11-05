@@ -7,8 +7,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{ProjectData, UnknownJson};
+use crate::format::MAX_TEXT_SIZE_MM;
 use crate::net_class::NetLineStyle;
-use crate::schematic::{FillType, SCHEMATIC_DEFAULT_FONT, SchematicDefaults, is_set_width};
+use crate::schematic::{
+    FillType, SCHEMATIC_DEFAULT_FONT, SCHEMATIC_PT_TO_MM, SCHEMATIC_RENDER_MIN_STROKE_MM,
+    SchematicDefaults, is_set_width,
+};
 
 /// The `.snxprj` key of the schematic defaults.
 pub(super) const SCHEMATIC_DEFAULTS_KEY: &str = "schematic_defaults";
@@ -43,6 +47,13 @@ pub struct SchematicDefaultOverrides {
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
 }
+
+/// Widest a wire, symbol line, shape stroke or junction default may be (mm).
+pub const MAX_DEFAULT_WIDTH_MM: f64 = 5.0;
+/// Widest a bus default may be (mm).
+pub const MAX_BUS_WIDTH_MM: f64 = 10.0;
+/// Smallest default text size (pt), so placed text never rounds to 0.
+pub const MIN_TEXT_SIZE_PT: f64 = 1.0;
 
 /// Which override a Project tab field edits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -90,6 +101,21 @@ impl SchematicDefaultField {
         }
     }
 
+    /// The values this field accepts: widths from the render floor to a sane
+    /// maximum, text from 1 pt to the size the file loader repairs past.
+    pub fn range(self) -> std::ops::RangeInclusive<f64> {
+        match self {
+            Self::BusWidth => SCHEMATIC_RENDER_MIN_STROKE_MM..=MAX_BUS_WIDTH_MM,
+            Self::TextSize => MIN_TEXT_SIZE_PT..=MAX_TEXT_SIZE_MM / SCHEMATIC_PT_TO_MM,
+            _ => SCHEMATIC_RENDER_MIN_STROKE_MM..=MAX_DEFAULT_WIDTH_MM,
+        }
+    }
+
+    /// `value` clamped into [`Self::range`].
+    pub fn clamped(self, value: f64) -> f64 {
+        value.clamp(*self.range().start(), *self.range().end())
+    }
+
     /// The value this field resolves to in `defaults`.
     pub fn resolved(self, defaults: &SchematicDefaults) -> f64 {
         match self {
@@ -103,8 +129,10 @@ impl SchematicDefaultField {
     }
 }
 
-fn usable(value: Option<f64>) -> Option<f64> {
-    value.filter(|v| is_set_width(*v))
+/// The override of `field` if it is a usable number, clamped into the
+/// field's range. A stored value is never rewritten; it resolves clamped.
+fn usable(value: Option<f64>, field: SchematicDefaultField) -> Option<f64> {
+    value.filter(|v| is_set_width(*v)).map(|v| field.clamped(v))
 }
 
 impl SchematicDefaultOverrides {
@@ -171,15 +199,18 @@ impl SchematicDefaultOverrides {
     /// follow the wire width unless set themselves.
     pub fn resolve(&self) -> SchematicDefaults {
         let built_in = SchematicDefaults::BUILT_IN;
-        let wire = usable(self.wire_width_mm).unwrap_or(built_in.wire_width_mm);
+        use SchematicDefaultField as F;
+        let wire = usable(self.wire_width_mm, F::WireWidth).unwrap_or(built_in.wire_width_mm);
         SchematicDefaults {
             wire_width_mm: wire,
-            bus_width_mm: usable(self.bus_width_mm).unwrap_or(built_in.bus_width_mm),
-            symbol_line_width_mm: usable(self.symbol_line_width_mm).unwrap_or(wire),
-            shape_stroke_mm: usable(self.shape_stroke_mm).unwrap_or(built_in.shape_stroke_mm),
-            junction_diameter_mm: usable(self.junction_diameter_mm)
+            bus_width_mm: usable(self.bus_width_mm, F::BusWidth).unwrap_or(built_in.bus_width_mm),
+            symbol_line_width_mm: usable(self.symbol_line_width_mm, F::SymbolLineWidth)
+                .unwrap_or(wire),
+            shape_stroke_mm: usable(self.shape_stroke_mm, F::ShapeStroke)
+                .unwrap_or(built_in.shape_stroke_mm),
+            junction_diameter_mm: usable(self.junction_diameter_mm, F::JunctionDiameter)
                 .unwrap_or(built_in.junction_diameter_mm),
-            text_size_pt: usable(self.text_size_pt).unwrap_or(built_in.text_size_pt),
+            text_size_pt: usable(self.text_size_pt, F::TextSize).unwrap_or(built_in.text_size_pt),
             wire_line_style: self.wire_line_style.unwrap_or(built_in.wire_line_style),
             shape_fill: self.shape_fill.unwrap_or(built_in.shape_fill),
         }

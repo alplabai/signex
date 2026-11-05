@@ -18,6 +18,11 @@ pub(in crate::format) struct PageExtras {
     pub(in crate::format) settings: SheetPageSettings,
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
+    /// A `page` value that is not a table (`page = 5`): the sheet still
+    /// opens, and the reader moves the value into `[extras.sheet]`'s
+    /// unknown keys so a save writes it back.
+    #[serde(skip)]
+    pub(in crate::format) not_a_table: Option<toml::Value>,
 }
 
 impl PageExtras {
@@ -35,14 +40,25 @@ impl PageExtras {
         if settings.origin != PageOrigin::default() {
             unknown.remove("origin");
         }
-        Self { settings, unknown }
+        Self {
+            settings,
+            unknown,
+            not_a_table: None,
+        }
     }
 }
 
 impl<'de> Deserialize<'de> for PageExtras {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let mut out = Self::default();
-        for (key, value) in BTreeMap::<String, toml::Value>::deserialize(d)? {
+        let table: BTreeMap<String, toml::Value> = match toml::Value::deserialize(d)? {
+            toml::Value::Table(table) => table.into_iter().collect(),
+            other => {
+                out.not_a_table = Some(other);
+                return Ok(out);
+            }
+        };
+        for (key, value) in table {
             let read = match key.as_str() {
                 "color" => value
                     .as_str()
