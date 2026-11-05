@@ -48,8 +48,58 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
 
 /// Fixed widths of the grid lines and crosses, in logical px (not a zoom law). A line or arm
 /// is kept off the paper edge by half of its width (#1940).
-const MINOR_GRID_LINE_PX: f32 = 0.6;
+pub(crate) const MINOR_GRID_LINE_PX: f32 = 0.6;
 const MAJOR_GRID_LINE_PX: f32 = 0.5;
+
+/// One grid dot, as a filled square with the area of a `radius` circle.
+///
+/// A dot is at most a few pixels wide, where a square reads the same as a
+/// circle. A circle path costs a full lyon tessellation per dot (about 2 µs,
+/// over 20 ms for a dense sheet on every pan frame); a rectangle is 4 vertices.
+pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
+    centre: Point,
+    radius: f32,
+    color: Color,
+) {
+    // At least 1 px, so the square always holds a pixel centre: tiny-skia
+    // fills rectangles without anti-aliasing and would drop a smaller one.
+    let side = (radius * std::f32::consts::PI.sqrt()).max(1.0);
+    frame.fill_rectangle(
+        Point::new(centre.x - side / 2.0, centre.y - side / 2.0),
+        iced::Size::new(side, side),
+        color,
+    );
+}
+
+/// One small "+" grid glyph, as two filled bars `width` thick reaching `arm`
+/// past `centre` (the same footprint as two butt-capped strokes, without the
+/// per-glyph stroke tessellation). Each bar's thin axis is centred on a
+/// device pixel centre (`device_scale` device px per logical px): tiny-skia
+/// fills rectangles without anti-aliasing, and a bar under 1 px thick between
+/// two pixel centres would not draw.
+pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
+    centre: Point,
+    arm: f32,
+    width: f32,
+    device_scale: f32,
+    color: Color,
+) {
+    let half = width / 2.0;
+    let k = sanitised_device_scale(device_scale);
+    let on_pixel = |v: f32| ((v * k).floor() + 0.5) / k;
+    frame.fill_rectangle(
+        Point::new(centre.x - arm, on_pixel(centre.y) - half),
+        iced::Size::new(arm * 2.0, width),
+        color,
+    );
+    frame.fill_rectangle(
+        Point::new(on_pixel(centre.x) - half, centre.y - arm),
+        iced::Size::new(width, arm * 2.0),
+        color,
+    );
+}
 
 /// Draw the grid dots on a canvas frame.
 ///
@@ -97,7 +147,17 @@ pub fn draw_grid<R: GeometryRenderer>(
         page_w,
         page_h,
         style,
+        device_px_per_logical_px,
     );
+}
+
+/// The device px per logical px, or 1 when the value is unusable.
+fn sanitised_device_scale(device_px_per_logical_px: f32) -> f32 {
+    if device_px_per_logical_px.is_finite() && device_px_per_logical_px > 0.0 {
+        device_px_per_logical_px
+    } else {
+        1.0
+    }
 }
 
 /// The paper rectangle in screen px, shrunk inward to whole device pixels
@@ -113,11 +173,7 @@ pub(crate) fn paper_clip(
 ) -> Option<iced::Rectangle> {
     let tl = camera.world_to_screen(Point::new(0.0, 0.0), bounds);
     let br = camera.world_to_screen(Point::new(page_w, page_h), bounds);
-    let k = if device_px_per_logical_px.is_finite() && device_px_per_logical_px > 0.0 {
-        device_px_per_logical_px
-    } else {
-        1.0
-    };
+    let k = sanitised_device_scale(device_px_per_logical_px);
     let left = (tl.x.max(0.0) * k).ceil() / k;
     let top = (tl.y.max(0.0) * k).ceil() / k;
     let right = (br.x.min(bounds.width) * k).floor() / k;
@@ -146,10 +202,7 @@ pub(crate) fn axis_stops(lo: f32, hi: f32, step: f32) -> impl Iterator<Item = f3
     (first..=last).map(move |k| k as f32 * step)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the draw inputs of `draw_grid`, with the device scale already spent on `paper_bounds`"
-)]
+#[expect(clippy::too_many_arguments, reason = "the draw inputs of `draw_grid`")]
 fn draw_grid_within<R: GeometryRenderer>(
     frame: &mut canvas::Frame<R>,
     camera: &Camera,
@@ -160,6 +213,7 @@ fn draw_grid_within<R: GeometryRenderer>(
     page_w: f32,
     page_h: f32,
     style: GridStyle,
+    device_px_per_logical_px: f32,
 ) {
     if grid_mm <= 0.0 || camera.scale <= 0.0 {
         return;
@@ -255,22 +309,15 @@ fn draw_grid_within<R: GeometryRenderer>(
                     continue;
                 }
                 match style {
-                    GridStyle::Dots => {
-                        let dot = canvas::Path::circle(screen, dot_radius);
-                        frame.fill(&dot, dot_color);
-                    }
-                    GridStyle::SmallCrosses => {
-                        let h = canvas::Path::line(
-                            Point::new(screen.x - cross_arm, screen.y),
-                            Point::new(screen.x + cross_arm, screen.y),
-                        );
-                        let v = canvas::Path::line(
-                            Point::new(screen.x, screen.y - cross_arm),
-                            Point::new(screen.x, screen.y + cross_arm),
-                        );
-                        frame.stroke(&h, minor_stroke);
-                        frame.stroke(&v, minor_stroke);
-                    }
+                    GridStyle::Dots => fill_grid_dot(frame, screen, dot_radius, dot_color),
+                    GridStyle::SmallCrosses => fill_grid_cross(
+                        frame,
+                        screen,
+                        cross_arm,
+                        MINOR_GRID_LINE_PX,
+                        device_px_per_logical_px,
+                        dot_color,
+                    ),
                     // `Lines` took the branch above.
                     GridStyle::Lines => unreachable!(),
                 }
