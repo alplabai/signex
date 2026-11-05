@@ -1,7 +1,7 @@
 //! Pads-mode + sketch-mode tool enums and the multi-click pending-tool
 //! state.
 
-/// Pads-mode drawing tool — v0.15. The Pads-mode active bar's
+/// Pads-mode drawing tool. The Pads-mode active bar's
 /// "Place Pad" button switches to `PlacePad`; right-click cancels
 /// back to `Select`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -10,31 +10,29 @@ pub enum PadsTool {
     Select,
     /// Click empty canvas → adds a new pad at the cursor.
     PlacePad,
-    /// v0.18.12 — non-plated through hole. 1-click drop.
+    /// Non-plated through hole. 1-click drop.
     PlaceHole,
-    /// v0.18.15 — silk-layer text placeholder. 1-click drop.
+    /// Silk-layer text placeholder. 1-click drop.
     PlaceString,
-    /// v0.14 — silk-layer text with a drag-defined bounding box
+    /// Silk-layer text with a drag-defined bounding box
     /// (item ③). Press-drag-release on empty canvas: press sets the
     /// anchor, drag previews a ghost rectangle, release computes
     /// w×h and commits a framed `Text`. Text is aligned/clipped
     /// inside the frame at render time — no auto-wrap/reflow.
     PlaceTextFrame,
-    /// v0.18.15.1 — silk-layer line. 2-click gesture.
+    /// Silk-layer line. 2-click gesture.
     PlaceTrack,
-    /// v0.18.15.3 — silk-layer arc. 3-click gesture.
+    /// Silk-layer arc. 3-click gesture.
     PlaceArc,
-    /// v0.18.15.4 — silk-layer closed-loop polygon.
+    /// Silk-layer closed-loop polygon.
     PlacePolygon,
-    /// v0.18.17 — silk-layer filled region.
+    /// Silk-layer filled region.
     PlaceRegion,
-    /// v0.13 — through-hole via.
+    /// Through-hole via.
     PlaceVia,
 }
 
-/// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
-/// only; v0.13.2 adds Line, Circle, Arc; v0.15 adds Rectangle; v0.16
-/// adds RoundedRectangle.
+/// Sketch-mode drawing tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SketchTool {
     #[default]
@@ -50,23 +48,23 @@ pub enum SketchTool {
     /// the circumcircle of the three picks (shared solver, #461/#483)
     /// instead of the centre-first `Arc` tool's gesture.
     EdgeArc,
-    /// v0.22 Phase B1 — Mirror tool.
+    /// Mirror tool.
     Mirror,
-    /// v0.22 Phase B2 — Offset tool.
+    /// Offset tool.
     Offset,
-    /// v0.22 Phase B3 — Rectangular Pattern tool.
+    /// Rectangular Pattern tool.
     RectPattern,
-    /// v0.22 Phase B4 — Circular (Polar) Pattern tool.
+    /// Circular (Polar) Pattern tool.
     CircularPattern,
-    /// v0.24 Track C — Tangent Arc tool.
+    /// Tangent Arc tool.
     TangentArc,
-    /// v0.27 — Fillet two adjacent lines with a tangent arc. Click
+    /// Fillet two adjacent lines with a tangent arc. Click
     /// the first line, then the second; the dispatcher splices a
     /// constant-radius arc across the corner and shortens the lines.
     /// EDA use: rounding silk / courtyard / pad-from-rect corners
     /// without redrawing them by hand.
     Fillet,
-    /// v0.27 — Trim a segment of a line/arc up to its nearest
+    /// Trim a segment of a line/arc up to its nearest
     /// intersections with other sketch entities. Click the segment
     /// you want gone. EDA use: cleaning up overlapping silk/outline
     /// without manual delete + redraw.
@@ -106,11 +104,11 @@ pub enum ToolPending {
     LineFirst {
         first: signex_sketch::id::SketchEntityId,
     },
-    /// Rectangle tool, first corner click landed. v0.15.
+    /// Rectangle tool, first corner click landed.
     RectangleFirst {
         first: signex_sketch::id::SketchEntityId,
     },
-    /// Rounded-Rectangle tool, first corner click landed. v0.16.
+    /// Rounded-Rectangle tool, first corner click landed.
     RoundedRectangleFirst {
         first: signex_sketch::id::SketchEntityId,
     },
@@ -140,16 +138,16 @@ pub enum ToolPending {
         start: signex_sketch::id::SketchEntityId,
         end: signex_sketch::id::SketchEntityId,
     },
-    /// v0.23 — "Re-pick centre" affordance from the Pattern Properties
+    /// "Re-pick centre" affordance from the Pattern Properties
     /// sub-form.
     RepickPolarCenter {
         array_id: signex_sketch::array::ArrayId,
     },
-    /// v0.24 Track C — Tangent Arc, first endpoint placed.
+    /// Tangent Arc, first endpoint placed.
     TangentArcFirst {
         first: signex_sketch::id::SketchEntityId,
     },
-    /// v0.27 — Fillet, first Line picked. Awaiting second Line.
+    /// Fillet, first Line picked. Awaiting second Line.
     FilletFirst {
         line: signex_sketch::id::SketchEntityId,
     },
