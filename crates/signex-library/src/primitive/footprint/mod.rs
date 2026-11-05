@@ -230,8 +230,8 @@ pub enum ThermalReliefStyle {
     None,
 }
 
-/// Copper pour / region. Fill generation lives in v0.15 — v0.14 stores
-/// the boundary + metadata only.
+/// Copper pour / region. Stores the boundary + metadata only; fill
+/// generation lands with the PCB Routing plan (Copper Pour).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FpPour {
     pub boundary: Polygon,
@@ -250,7 +250,8 @@ pub struct FpPour {
     pub priority: u8,
 }
 
-/// What a keepout zone forbids. DRC enforcement lands in v0.15.
+/// What a keepout zone forbids. DRC enforcement lands with the Advanced PCB plan
+/// (Routing Polish & Geometry).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]

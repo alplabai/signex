@@ -2,8 +2,8 @@
 //!
 //! Uses `iced::widget::canvas::Program`. Layers, back to front:
 //! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
-//! - content (`content_cache`): cached, cleared when the document or camera
-//!   changes (pan frames replay a camera-independent scene);
+//! - content (`content_surface`): retained across pans and moved by a
+//!   translation; cleared when the document changes (see `draw::retained`);
 //! - autofocus dim: drawn over the content when autofocus is active;
 //! - selection overlay (`overlay_cache`): cached, cleared on input events;
 //! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
@@ -25,6 +25,7 @@ pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
 mod special_strings;
+mod surface;
 #[cfg(test)]
 mod tool_click_tests;
 
@@ -44,6 +45,7 @@ pub use move_pick::MovePick;
 pub use placement_ghost::PlacementGhost;
 pub use shape_preview::{BoxDirection, MeasureOverlay, ShapePreviewKind};
 pub use special_strings::SpecialStrings;
+pub use surface::SchematicSurface;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
 
@@ -107,9 +109,14 @@ pub type DesignatorsKey = (
 /// Holds references to app state needed for drawing (theme colors, etc).
 pub struct CanvasSlot {
     pub bg_cache: canvas::Cache,
+    /// The rotated-text layer of a GPU-mounted sheet (`gpu_drag`), with
+    /// `content_cache_camera` the camera it was drawn at. The CPU content layer
+    /// is `content_surface`.
     pub content_cache: canvas::Cache,
+    /// The CPU content layer, retained across pans (#2078).
+    content_surface: std::cell::RefCell<draw::RetainedContent>,
     pub overlay_cache: canvas::Cache,
-    /// Camera state when content_cache was last built — used to compute offset delta.
+    /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
     /// Camera `bg_cache` was last built at; `draw_background` drops the cache
     /// when it differs, so the paper and grid follow every camera move whatever
@@ -238,6 +245,10 @@ pub struct CanvasSlot {
     /// Whether the move drag in flight keeps wires, written by the canvas
     /// after each event for the status bar; `None` outside a drag.
     pub move_behaviour: std::cell::Cell<Option<bool>>,
+    /// Test-only: draw the content as trunk did, in a frame of the canvas
+    /// size through `content_cache`, as the reference of the pixel tests.
+    #[cfg(test)]
+    pub(in crate::canvas) trunk_content: std::cell::Cell<bool>,
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
@@ -268,6 +279,7 @@ impl CanvasSlot {
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
+            content_surface: std::cell::RefCell::new(Default::default()),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             bg_cache_camera: std::cell::Cell::new(None),
@@ -310,6 +322,8 @@ impl CanvasSlot {
             keep_connections_next: false,
             move_behaviour: std::cell::Cell::new(None),
             #[cfg(test)]
+            trunk_content: std::cell::Cell::new(false),
+            #[cfg(test)]
             content_cache_clears: 0,
             #[cfg(test)]
             overlay_cache_clears: 0,
@@ -340,6 +354,7 @@ impl CanvasSlot {
             self.content_cache_clears += 1;
         }
         self.content_cache.clear();
+        self.content_surface.get_mut().clear();
         self.content_scene.get_mut().invalidate();
         self.drag_layers.get_mut().clear();
     }
@@ -768,83 +783,8 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let mut layers = Vec::with_capacity(4);
-
-        // Layer 1: background (grid + paper). A GPU-mounted sheet has the
-        // backdrop canvas for it beneath the shader.
-        if self.mode == ContentMode::Cpu {
-            layers.push(self.draw_background(renderer, bounds));
-        }
-
-        let drag_offset = self.drag_delta(state);
-
-        // A move-drag draws the sheet in two layers (#1335): the items the
-        // drag leaves alone in a retained geometry, and each frame only the
-        // moving items, shifted. With "keep wires" the moving items include
-        // the rubber-banded wires computed when the cursor moved
-        // (`refresh_drag_ghost`); until then the plain shift stands in.
-        //
-        // A GPU-mounted sheet reads the frame `update` published, so the
-        // shaders and this layer agree on what is moving.
-        let drag_frame = match self.mode {
-            ContentMode::Cpu => self.drag_frame(state, drag_offset),
-            ContentMode::GpuOverlay => self.live_drag(),
-        };
-        let Some(drag_frame) = drag_frame else {
-            if self.drag_layers.borrow().is_active() {
-                self.drag_layers.borrow_mut().clear();
-            }
-            let snapshot = self.active_snapshot();
-
-            // Layer 2: content (schematic elements). A GPU-mounted sheet has
-            // its content on the shaders, and its rotated and oversize texts on a layer
-            // of their own beneath the drag shader.
-            if self.mode == ContentMode::Cpu {
-                layers.push(self.draw_content(state, renderer, bounds, snapshot, drag_offset));
-            }
-
-            // Layer 2.5: AutoFocus dim
-            if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, snapshot) {
-                layers.push(dim);
-            }
-
-            // Layer 3: selection overlay
-            if let Some(selection) = self.draw_selection(renderer, bounds, snapshot, drag_offset) {
-                layers.push(selection);
-            }
-
-            // Layer 4: overlay (cursor HUD, previews, drag guides)
-            layers.push(self.draw_overlay(state, renderer, bounds, cursor));
-            return layers;
-        };
-        let moving = Some(&*drag_frame.moving);
-
-        // Layer 2: content, static layer then moving items on top
-        match self.mode {
-            ContentMode::Cpu => {
-                layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame))
-            }
-            // The static layer's rotated and oversize texts have their own layer below the
-            // drag shader; only the moving ones belong above it.
-            ContentMode::GpuOverlay => {
-                layers.push(self.draw_moving_canvas_texts(renderer, bounds));
-            }
-        }
-
-        // Layer 2.5: AutoFocus dim
-        if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, moving) {
-            layers.push(dim);
-        }
-
-        // Layer 3: selection overlay
-        if let Some(selection) = self.draw_selection(renderer, bounds, moving, drag_offset) {
-            layers.push(selection);
-        }
-
-        // Layer 4: overlay (cursor HUD, previews, drag guides)
-        layers.push(self.draw_overlay(state, renderer, bounds, cursor));
-
-        layers
+        self.draw_surface(state, renderer, bounds, cursor, false)
+            .layers
     }
 
     fn mouse_interaction(
@@ -940,6 +880,10 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod grid_order_tests;
+#[cfg(test)]
+mod pan_reuse_pixel_tests;
+#[cfg(test)]
+mod pan_reuse_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
 #[cfg(test)]

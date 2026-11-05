@@ -1192,7 +1192,7 @@ fn new_project_opens_the_project_and_returns_the_open_task() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// v0.13.0 — footprint editor gated off for release
+// Footprint editor gated off for release
 //
 // The footprint / sketch editor is feature-incomplete and is hidden
 // behind `signex_app::feature_flags::FOOTPRINT_EDITOR_ENABLED` for the

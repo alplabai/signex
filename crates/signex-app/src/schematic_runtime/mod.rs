@@ -35,7 +35,7 @@ pub mod text;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
-pub(crate) use scene_cache::SceneInputs;
+pub(crate) use scene_cache::{SceneInputs, pan_reach};
 pub use snapshot::build_renderer_snapshot;
 pub use wire_style::{
     WireClassStyles, WireStyling, drawn_wire_width_mm, junction_color, wire_color,
