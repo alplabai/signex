@@ -85,8 +85,9 @@ fn unknown_keys_and_unreadable_values_are_kept_raw() {
     assert_eq!(write(&parse(&saved)), saved);
 
     let mut picked = parse(&saved);
+    // A value set in the model (an engine pick also drops the raw key; the
+    // writer never writes the key twice either way).
     picked.page.origin = PageOrigin::UpperLeft;
-    picked.unknown.page.remove("origin");
     let saved = write(&picked);
     assert!(saved.contains("origin = \"upper_left\""), "{saved}");
     assert!(!saved.contains("origin = 7"), "{saved}");
