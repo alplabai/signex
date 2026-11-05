@@ -26,14 +26,32 @@ heading:
 - **Bold lead (#748)** — one or two sentences on what changed for a user.
 ```
 
+A breaking change (a file older Signex cannot read, a removed command or
+shortcut, a changed default) is a `changed` or `removed` fragment whose bullet
+starts with **Breaking:**, so the release notes can lift it into their
+`### Breaking changes` section:
+
+```
+- **Breaking: `.snxsch` sheets saved by this version need 26.11 or later (#748)** — one or two sentences on what a user must do.
+```
+
+## When CI requires one
+
+On every PR into `trunk` the `lint · repo gates` job fails when:
+
+- the PR title type is `feat`, `fix` or `perf` (with or without scope or `!`)
+  and the PR adds no fragment. A change that is not user-visible takes another
+  type (`chore`, `refactor`, `test`, `ci`, `docs`); after a retitle, re-run the
+  job, it reads the current title;
+- the PR edits `CHANGELOG.md` directly, except same-repo release PRs (head
+  branch `chore/release-*` or `release/*`).
+
 ## What happens to them
 
 At release time `scripts/changelog_assemble.sh` folds every fragment into
 `CHANGELOG.md` and deletes it. Validate yours with
 `scripts/changelog_assemble.sh --check`. `README.md` and `.gitkeep` are not
-fragments. The `lint · repo gates` CI job runs the `--check` on every PR and warns on PRs into `trunk` that edit
-`CHANGELOG.md` directly (it will become an error after a transition window),
-except same-repo release PRs (head branch `chore/release-*` or `release/*`).
+fragments. The `lint · repo gates` CI job runs the `--check` on every PR.
 
 After a `--version` cut the release PR still adds, by hand, the headline, the
 install block and the closing
