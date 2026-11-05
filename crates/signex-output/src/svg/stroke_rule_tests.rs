@@ -30,7 +30,7 @@ fn sheet() -> SheetSnapshot {
 
 fn elements_of(sheet: &SheetSnapshot, opts: &PdfOptions) -> Vec<SvgElement> {
     let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
-    SvgRenderContext::from_sheet(sheet, opts, w_mm, h_mm, MM_TO_UNIT, None).elements
+    SvgRenderContext::from_sheet(sheet, opts, w_mm, h_mm, f64::from(MM_TO_UNIT), None).elements
 }
 
 fn port(is_power: bool) -> Symbol {
