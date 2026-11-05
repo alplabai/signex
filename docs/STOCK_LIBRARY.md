@@ -68,7 +68,7 @@ cargo run --example build_stock_library -p signex-app -- --force
 
 The four power ports (GND, VCC, +3V3, +5V) take their stem and head
 geometry from `power_port_lib_symbol` in `signex-types`, so a stock port and
-a built-in one are the same size (2.54 mm stem, #2091). Their committed
+a built-in one are the same size (2.54 mm stem, 1.27 mm for GND, #2091). Their committed
 files were edited in place to match the generator, which keeps any other
 edit made in Signex.
 

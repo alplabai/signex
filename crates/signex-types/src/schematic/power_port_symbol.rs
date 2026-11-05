@@ -17,6 +17,18 @@ use super::{
 /// stock library's pin stub (two 1.27 mm grid steps). The connection point
 /// is the pin tip at the origin and never moves; only the far end does.
 const STEM_MM: f64 = 2.54;
+/// Stem of the hanging ground styles, mm: one grid step, so the bars sit
+/// close under the wire (maintainer decision, #2091).
+const GROUND_STEM_MM: f64 = 1.27;
+
+/// Stem length of `style`, mm.
+fn stem_mm(style: PowerPortStyle) -> f64 {
+    if style.hangs_down() {
+        GROUND_STEM_MM
+    } else {
+        STEM_MM
+    }
+}
 /// Half width of a bar, arrow or circle head, mm.
 const HEAD_HALF_MM: f64 = 1.016;
 /// Half widths of the three ground bars, widest first, mm (the stock GND).
@@ -131,14 +143,14 @@ fn line(a: (f64, f64), b: (f64, f64)) -> Graphic {
 pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
     let style = PowerPortStyle::of(lib_id);
     let dir = if style.hangs_down() { -1.0 } else { 1.0 };
-    let mut out = vec![line((0.0, 0.0), (0.0, dir * STEM_MM))];
+    let mut out = vec![line((0.0, 0.0), (0.0, dir * stem_mm(style)))];
     out.extend(power_port_head(style));
     out
 }
 
 /// The head of a style, without the stem (the stem is the library pin).
 fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
-    let top = STEM_MM;
+    let top = stem_mm(style);
     match style {
         PowerPortStyle::PowerGround => {
             let mut out = Vec::new();
@@ -209,13 +221,14 @@ const VALUE_GAP_MM: f64 = 0.254;
 
 /// How far the head of `style` reaches past the connection point, mm.
 fn head_reach_mm(style: PowerPortStyle) -> f64 {
+    let stem = stem_mm(style);
     match style {
-        PowerPortStyle::Bar => STEM_MM,
-        PowerPortStyle::Arrow | PowerPortStyle::SignalGround => STEM_MM + TRIANGLE_DEPTH_MM,
-        PowerPortStyle::PowerGround => STEM_MM + GROUND_BAR_STEP_MM * 2.0,
-        PowerPortStyle::Circle => STEM_MM + 2.0 * HEAD_HALF_MM,
-        PowerPortStyle::Wave => STEM_MM + WAVE_OFFSET_MM + WAVE_SWING_MM,
-        PowerPortStyle::Earth => STEM_MM + EARTH_HATCH_MM,
+        PowerPortStyle::Bar => stem,
+        PowerPortStyle::Arrow | PowerPortStyle::SignalGround => stem + TRIANGLE_DEPTH_MM,
+        PowerPortStyle::PowerGround => stem + GROUND_BAR_STEP_MM * 2.0,
+        PowerPortStyle::Circle => stem + 2.0 * HEAD_HALF_MM,
+        PowerPortStyle::Wave => stem + WAVE_OFFSET_MM + WAVE_SWING_MM,
+        PowerPortStyle::Earth => stem + EARTH_HATCH_MM,
     }
 }
 
@@ -328,7 +341,7 @@ pub fn power_port_lib_symbol(lib_id: &str) -> LibSymbol {
                 position: Point::new(0.0, 0.0),
                 // Library space is Y-up: 90 degrees points the stub up.
                 rotation: if style.hangs_down() { 270.0 } else { 90.0 },
-                length: STEM_MM,
+                length: stem_mm(style),
                 name: String::new(),
                 number: "1".to_owned(),
                 visible: true,
@@ -415,12 +428,13 @@ mod tests {
     /// pin tip at the symbol origin for every style and both directions: a
     /// saved wire ends on that point, so it must never move.
     #[test]
-    fn the_stem_is_a_stock_pin_and_the_tip_stays_on_the_origin() {
+    fn the_stem_is_a_stock_pin_or_one_step_for_a_ground_and_the_tip_stays_on_the_origin() {
         for style in PowerPortStyle::ALL {
             let lib = power_port_lib_symbol(&format!("power:{}", style.lib_tag()));
             let pin = &lib.pins[0].pin;
             assert_eq!((pin.position.x, pin.position.y), (0.0, 0.0));
-            assert_eq!(pin.length, 2.54, "{style:?}");
+            let want = if style.hangs_down() { 1.27 } else { 2.54 };
+            assert_eq!(pin.length, want, "{style:?}");
             let stem = power_port_graphics(&format!("power:{}", style.lib_tag()));
             let Graphic::Polyline { points, .. } = &stem[0] else {
                 panic!("the first graphic is the stem");
@@ -459,7 +473,7 @@ mod tests {
                 .collect();
             assert_eq!(pins.len(), 1, "{lib_id}");
             assert_eq!((pins[0].0.x, pins[0].0.y), (0.0, 0.0), "{lib_id}");
-            let stem = STEM_MM;
+            let stem = stem_mm(PowerPortStyle::of(&lib_id));
             assert!((pins[0].1.x).abs() < 1e-9, "{lib_id}");
             assert!((pins[0].1.y.abs() - stem).abs() < 1e-9, "{lib_id}");
             // Same extent as the entry-less fallback.

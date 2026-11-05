@@ -320,10 +320,17 @@ fn caller_width_replaces_the_monospace_estimate() {
         0.0,
         HAlign::Left,
         VAlign::Top,
+        None,
     );
     assert_box(estimate, same.min_x, same.min_y, same.max_x, same.max_y);
-    let wide = text_aabb_with_width(10.0, size, anchor, 0.0, HAlign::Right, VAlign::Top);
-    assert_box(wide, 0.0, 5.0, 10.0, 5.0 + text_height_mm(size));
+    let wide = text_aabb_with_width(10.0, size, anchor, 0.0, HAlign::Right, VAlign::Top, None);
+    assert_box(
+        wide,
+        0.0,
+        5.0,
+        10.0,
+        5.0 + crate::font::line_box_mm(text_height_mm(size), None),
+    );
 }
 
 /// A symbol with a 2x2 normal body and a 6x6 alternate body (#1233).

@@ -13,8 +13,8 @@ anchor = [
 ]
 pins_tsv = '''
 number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
-1	1	Passive	0	3.81	Down	2.54					false	false	None	None	None	None	false	false	1
-2	2	Passive	0	-3.81	Up	2.54					false	false	None	None	None	None	false	false	1
+1	1	Passive	0	3.81	Down	1.27					false	false	None	None	None	None	false	false	1
+2	2	Passive	0	-3.81	Up	1.27					false	false	None	None	None	None	false	false	1
 '''
 designator = "L?"
 comment = "*"
@@ -35,9 +35,9 @@ part_number = 0
 kind = "arc"
 center = [
     0.0,
-    0.9525,
+    1.905,
 ]
-radius = 0.3175
+radius = 0.635
 start_deg = 270.0
 end_deg = 90.0
 
@@ -49,9 +49,9 @@ part_number = 0
 kind = "arc"
 center = [
     0.0,
-    0.3175,
+    0.635,
 ]
-radius = 0.3175
+radius = 0.635
 start_deg = 270.0
 end_deg = 90.0
 
@@ -63,9 +63,9 @@ part_number = 0
 kind = "arc"
 center = [
     0.0,
-    -0.3175,
+    -0.635,
 ]
-radius = 0.3175
+radius = 0.635
 start_deg = 270.0
 end_deg = 90.0
 
@@ -77,9 +77,9 @@ part_number = 0
 kind = "arc"
 center = [
     0.0,
-    -0.9525,
+    -1.905,
 ]
-radius = 0.3175
+radius = 0.635
 start_deg = 270.0
 end_deg = 90.0
 

@@ -188,6 +188,57 @@ fn icon_style(disabled: bool, muted: iced::Color) -> iced::widget::svg::Style {
 /// chip-grid that drives its own width). Caller wraps the result in a
 /// Translate / Stack overlay layer at the chevron's anchor and pairs
 /// it with a transparent backstop for click-outside-to-dismiss.
+/// Glyph advance per em the fitted width falls back to before the shaper is
+/// installed: a slight overestimate of a UI face, so a label never clips.
+const FIT_GLYPH_EM: f32 = 0.58;
+/// Margin on a shaped width, for hinting and rounding in the real layout.
+const FIT_SHAPED_MARGIN: f32 = 1.05;
+
+/// Width a menu of `entries` needs, for a context menu that fits its labels
+/// rather than a shared width, at most `max_w`. It mirrors [`view`]'s row
+/// layout: panel padding, row padding, the icon gutter only when a row has
+/// an icon, the label, the gap before the right cluster and its shortcut
+/// and check. Labels are measured in `ui_family`, the face the menu draws
+/// in, so a different UI font still fits.
+pub fn fitted_width<M>(entries: &[DropdownEntry<M>], max_w: f32, ui_family: &str) -> f32
+where
+    M: Clone,
+{
+    let family = Some(ui_family).filter(|f| !f.trim().is_empty());
+    let advance = |text: &str, size: f32| match signex_types::font::shaped_advance_em(text, family)
+    {
+        Some(em) => em * size * FIT_SHAPED_MARGIN,
+        None => text.chars().count() as f32 * size * FIT_GLYPH_EM,
+    };
+    let has_icons = entries
+        .iter()
+        .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some()));
+    let widest_row = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            DropdownEntry::Item(item) => {
+                let mut w = advance(&item.label, LABEL_SIZE);
+                if has_icons {
+                    w += 20.0 + 8.0;
+                }
+                // Gap spacer before the right cluster, with its spacing.
+                w += 8.0 + 20.0 + 8.0;
+                if let Some(s) = &item.shortcut {
+                    w += advance(s, 11.0) + 8.0;
+                }
+                if item.checked {
+                    w += 13.0;
+                }
+                Some(w)
+            }
+            DropdownEntry::Header(label) => Some(advance(label, 10.0)),
+            _ => None,
+        })
+        .fold(0.0, f32::max);
+    // Row padding (12 each side) plus the panel padding (4 each side).
+    (widest_row + 24.0 + 8.0).ceil().min(max_w)
+}
+
 pub fn view<'a, M>(
     entries: Vec<DropdownEntry<M>>,
     tokens: &'a ThemeTokens,
@@ -212,6 +263,11 @@ where
         Length::Fit
     };
     let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(col_width);
+    // The icon gutter only appears when some row has an icon; a menu of
+    // plain labels starts its text at the row padding.
+    let has_icons = entries
+        .iter()
+        .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some()));
     for entry in entries {
         match entry {
             DropdownEntry::Header(label) => {
@@ -268,7 +324,7 @@ where
                             .style(move |_: &Theme, _| icon_style(disabled, muted))
                             .boxed(),
                     );
-                } else {
+                } else if has_icons {
                     row_w = row_w.push(Space::new().width(Length::Fixed(20.0)).boxed());
                 }
                 // Label. Menu rows never wrap — a too-narrow width_hint

@@ -37,12 +37,14 @@ impl SchematicCanvas<'_> {
         cursor: mouse::Cursor,
         allow_shift: bool,
     ) -> SurfaceLayers {
+        let _probe = crate::frame_probe::span("canvas");
         let mut layers = Vec::with_capacity(4);
         let mut content_shift = None;
 
         // Layer 1: background (grid + paper). A GPU-mounted sheet has the
         // backdrop canvas for it beneath the shader.
         if self.mode == ContentMode::Cpu {
+            let _probe = crate::frame_probe::span("canvas.background");
             layers.push(self.draw_background(renderer, bounds));
         }
 
@@ -70,6 +72,7 @@ impl SchematicCanvas<'_> {
             // its content on the shaders, and its rotated and oversize texts on a layer
             // of their own beneath the drag shader.
             if self.mode == ContentMode::Cpu {
+                let _probe = crate::frame_probe::span("canvas.content");
                 let content =
                     self.draw_content(renderer, bounds, snapshot, drag_offset, allow_shift);
                 if content.shift != Vector::ZERO {
@@ -84,12 +87,16 @@ impl SchematicCanvas<'_> {
             }
 
             // Layer 3: selection overlay
+            let selection_probe = crate::frame_probe::span("canvas.selection");
             if let Some(selection) = self.draw_selection(renderer, bounds, snapshot, drag_offset) {
                 layers.push(selection);
             }
+            drop(selection_probe);
 
             // Layer 4: overlay (cursor HUD, previews, drag guides)
+            let overlay_probe = crate::frame_probe::span("canvas.overlay");
             layers.push(self.draw_overlay(state, renderer, bounds, cursor));
+            drop(overlay_probe);
             return SurfaceLayers {
                 layers,
                 content_shift,

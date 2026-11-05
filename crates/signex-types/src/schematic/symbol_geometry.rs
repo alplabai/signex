@@ -427,7 +427,7 @@ pub fn text_aabb(
     family: Option<&str>,
 ) -> Aabb {
     let w = crate::font::family_width_mm(text, family, text_height_mm(font_size));
-    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
+    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align, family)
 }
 
 /// [`text_aabb`] for a caller-measured text width `width_mm` (a face other
@@ -439,8 +439,10 @@ pub fn text_aabb_with_width(
     rotation_deg: f64,
     h_align: HAlign,
     v_align: VAlign,
+    family: Option<&str>,
 ) -> Aabb {
-    let h = text_height_mm(font_size);
+    // The drawn line box, which the text is aligned by (#2099).
+    let h = crate::font::line_box_mm(text_height_mm(font_size), family);
     let w = width_mm;
     let ox = match h_align {
         HAlign::Left => 0.0,

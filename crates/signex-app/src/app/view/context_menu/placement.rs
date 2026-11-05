@@ -43,6 +43,26 @@ pub(in crate::app::view) fn clamp_menu_origin(
     (x, y)
 }
 
+/// `menu` laid at `origin` (from [`clamp_menu_origin`]) on a full-window
+/// layer: the one placement every context menu overlay shares.
+pub(in crate::app::view) fn anchored_menu<'a, M: 'a>(
+    menu: iced::Element<'a, M>,
+    origin: (f32, f32),
+) -> iced::Element<'a, M> {
+    use iced::Length;
+    use iced::widget::{Space, Widget as _, column, row};
+    column![
+        Space::new().height(origin.1),
+        row![
+            Space::new().width(origin.0),
+            menu,
+            Space::new().width(Length::Fill)
+        ]
+        .width(Length::Fill),
+    ]
+    .boxed()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

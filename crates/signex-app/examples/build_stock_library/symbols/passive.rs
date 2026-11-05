@@ -75,12 +75,28 @@ fn plain(
     two_terminal(name, designator, description, ("1", "1"), ("2", "2"), body)
 }
 
+/// Vertical two-terminal part as long as the others (pins at ±3.81 mm) with
+/// 1.27 mm leads, leaving 5.08 mm for the body.
+fn short_lead_two_terminal(
+    name: &str,
+    designator: &str,
+    description: &str,
+    body: Vec<super::SymbolGraphic>,
+) -> Symbol {
+    let pins = vec![
+        name_hidden(with_length(pin("1", "1", Passive, 0.0, 3.81, Down), 1.27)),
+        name_hidden(with_length(pin("2", "2", Passive, 0.0, -3.81, Up), 1.27)),
+    ];
+    symbol(name, designator, description, pins, body)
+}
+
 fn resistor() -> Symbol {
-    plain(
+    // A 5.08 x 1.524 mm rectangle: about 3:1, the usual resistor proportion.
+    short_lead_two_terminal(
         "R",
         "R?",
         "Resistor (IEC rectangle).",
-        vec![rect([-1.016, 1.27], [1.016, -1.27])],
+        vec![rect([-0.762, 2.54], [0.762, -2.54])],
     )
 }
 
@@ -112,12 +128,12 @@ fn capacitor_polarized() -> Symbol {
 }
 
 fn inductor() -> Symbol {
-    // Four humps bulging to the right of the axis, 0.635 mm each.
-    let body = [0.9525, 0.3175, -0.3175, -0.9525]
+    // Four humps bulging to the right of the axis, 1.27 mm each.
+    let body = [1.905, 0.635, -0.635, -1.905]
         .iter()
-        .map(|&cy| arc([0.0, cy], 0.3175, 270.0, 90.0))
+        .map(|&cy| arc([0.0, cy], 0.635, 270.0, 90.0))
         .collect();
-    plain("L", "L?", "Inductor (four-hump coil).", body)
+    short_lead_two_terminal("L", "L?", "Inductor (four-hump coil).", body)
 }
 
 fn ferrite() -> Symbol {

@@ -112,7 +112,24 @@ impl Signex {
         let Some(v) = self.project_tree_entries(ctx) else {
             return container(iced::widget::Space::new()).boxed();
         };
-        signex_widgets::active_bar_dropdown::view(v, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+        let width = self.project_tree_menu_width(ctx);
+        signex_widgets::active_bar_dropdown::view(v, tokens, Some(width))
+    }
+
+    /// Width of the project-tree menu: fitted to its labels, at most the
+    /// shared context-menu width. The submenu flyout opens at this edge.
+    pub(in crate::app::view) fn project_tree_menu_width(
+        &self,
+        ctx: &crate::app::ProjectTreeContextMenuState,
+    ) -> f32 {
+        self.project_tree_entries(ctx)
+            .map_or(Self::CONTEXT_MENU_WIDTH, |v| {
+                signex_widgets::active_bar_dropdown::fitted_width(
+                    &v,
+                    Self::CONTEXT_MENU_WIDTH,
+                    &self.document_state.panel_ctx.ui_font_name,
+                )
+            })
     }
 
     /// The pure row data behind [`Self::view_project_tree_context_menu`]:

@@ -68,7 +68,13 @@ impl Signex {
                 bottom: 8.0,
                 left: 10.0,
             })
-            .width(Length::Fixed(width))
+            // Shrink to the text; the estimate only places the card. At the
+            // cap the card stops growing.
+            .width(if width < CARD_MAX_W {
+                Length::Shrink
+            } else {
+                Length::Fixed(width)
+            })
             .style(move |_: &iced::Theme| container::Style {
                 background: Some(Background::Color(panel_bg)),
                 border: Border {

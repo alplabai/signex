@@ -21,6 +21,18 @@ pub const BUNDLED_DEFAULT_FAMILY: &str = "Iosevka";
 /// over its em, which is why this is only the *fallback*: use [`mm_per_em`].
 pub const FALLBACK_MM_PER_EM: f32 = 0.72;
 
+/// Line height as a multiple of the em size, the line box every text replay
+/// lays a line in and aligns by. The selection and hit boxes use the same
+/// line box, so they cover what is drawn.
+pub const TEXT_LINE_HEIGHT_EM: f32 = 1.2;
+
+/// Height of the line box of a text whose cap height is `size_mm`, drawn in
+/// `family`: one em ([`mm_per_em`]) times [`TEXT_LINE_HEIGHT_EM`].
+#[must_use]
+pub fn line_box_mm(size_mm: f64, family: Option<&str>) -> f64 {
+    size_mm / f64::from(mm_per_em(family)) * f64::from(TEXT_LINE_HEIGHT_EM)
+}
+
 /// OS/2 `sCapHeight / unitsPerEm` of the bundled faces, by family name.
 /// The bold cuts share their regular cut's capital height. A test in
 /// `signex-output` pins these to the font files.

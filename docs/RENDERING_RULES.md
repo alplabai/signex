@@ -210,7 +210,9 @@ A power port (`Symbol::is_power`) draws its body strokes, its pin and its
 Value text in the theme's `power` colour, on the canvas and in SVG / PDF
 (still through the focus dimming). The reference keeps the body colour. The
 placement ghost keeps the single ghost colour. Built-in power port heads are
-sized to the stock library: the stem is one stock pin (2.54 mm) and the
+sized to the stock library: the stem is one stock pin (2.54 mm), except
+the hanging grounds (power ground, signal ground, earth), whose stem is
+one grid step (1.27 mm) so the bars sit close under the wire, and the
 heads (bar half width 1.016 mm, ground bars 2.54 / 1.524 / 0.508 mm) sit in
 proportion. The connection point is the pin tip at the symbol origin and
 never moves; a sheet's own saved library entry keeps the size it was placed
