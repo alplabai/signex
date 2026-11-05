@@ -240,11 +240,7 @@ impl Signex {
             .clicked_pin
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
-        if self.interaction_state.active_canvas().focused_pin != clicked_pin {
-            let canvas = self.interaction_state.active_canvas_mut();
-            canvas.focused_pin = clicked_pin.clone();
-            canvas.clear_overlay_cache();
-        }
+        self.sync_focused_pin(clicked_pin.clone());
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();

@@ -29,3 +29,21 @@ pub(super) fn add_pin_rows(
         info.push((info_keys::FOCUSED_PIN.into(), pin));
     }
 }
+
+impl crate::app::Signex {
+    /// Show `clicked` as the highlighted pin on the active canvas and drop any
+    /// highlight another canvas still shows: only the selection a pin click
+    /// made keeps one (#2086).
+    pub(super) fn sync_focused_pin(&mut self, clicked: Option<(Uuid, String)>) {
+        let state = &mut self.interaction_state;
+        if state.canvas.focused_pin != clicked {
+            state.canvas.focused_pin = clicked;
+            state.canvas.clear_overlay_cache();
+        }
+        for slot in state.canvases.values_mut() {
+            if slot.focused_pin.take().is_some() {
+                slot.clear_overlay_cache();
+            }
+        }
+    }
+}

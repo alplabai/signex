@@ -106,13 +106,12 @@ struct HotspotEntry {
     revision: u64,
     selection: Vec<SelectedItem>,
     radius_bits: u64,
-    points: Vec<signex_types::schematic::Point>,
     index: signex_types::schematic::MoveHotspots,
 }
 
 impl HotspotEntry {
     fn snap(&self, delta: (f64, f64)) -> (f64, f64) {
-        self.index.snap(&self.points, delta)
+        self.index.snap(delta)
     }
 }
 
@@ -135,7 +134,6 @@ impl HotspotCache {
                 revision,
                 selection: selected.to_vec(),
                 radius_bits: radius.to_bits(),
-                points,
                 index,
             });
         }

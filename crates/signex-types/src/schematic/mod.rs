@@ -833,8 +833,8 @@ pub use power_port_symbol::{
 };
 mod pin_pick;
 pub use pin_pick::{
-    PickedPin, SCHEMATIC_PIN_PICK_TOLERANCE_MM, SCHEMATIC_PIN_PICK_TOLERANCE_PX,
-    PinLine, pin_pick_tolerance_mm, symbol_pin_at, symbol_pin_line,
+    PickedPin, PinLine, SCHEMATIC_PIN_PICK_TOLERANCE_MM, SCHEMATIC_PIN_PICK_TOLERANCE_PX,
+    pin_pick_tolerance_mm, symbol_pin_at, symbol_pin_line,
 };
 mod pin_labels;
 pub use pin_labels::{

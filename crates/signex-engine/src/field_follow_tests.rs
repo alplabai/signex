@@ -1,5 +1,5 @@
-//! A designator or value text selected together with its symbol moves once,
-//! with the symbol, not a second time on its own (#2087).
+//! A designator or value text selected together with its symbol moves and
+//! turns once, with the symbol, not a second time on its own (#2087, #2094).
 
 use crate::*;
 use signex_types::schematic::{Point, SelectedKind, Symbol, TextProp};
@@ -123,4 +123,110 @@ fn a_field_moved_on_its_own_still_moves() {
         [(10.0, 10.0), (6.27, 8.0), (5.0, 12.0)],
         "field alone",
     );
+}
+
+/// Turning a part with its texts selected turns the texts once, through the
+/// part, and leaves them to the autoplacer as a turn of the part alone does
+/// (#2094).
+#[test]
+fn fields_selected_with_their_symbol_turn_once() {
+    let mut alone = engine();
+    alone
+        .execute(Command::RotateSelection {
+            items: vec![SelectedItem::new(Uuid::from_u128(1), SelectedKind::Symbol)],
+            angle_degrees: 90.0,
+            keep_wires: false,
+        })
+        .expect("rotate the part");
+    let mut together = engine();
+    together
+        .execute(Command::RotateSelection {
+            items: with_fields(),
+            angle_degrees: 90.0,
+            keep_wires: false,
+        })
+        .expect("rotate the part with its texts");
+    let (a, b) = (
+        &alone.document().symbols[0],
+        &together.document().symbols[0],
+    );
+    assert_eq!(a.rotation, b.rotation);
+    assert_eq!(a.ref_text, b.ref_text, "designator");
+    assert_eq!(a.val_text, b.val_text, "value");
+    assert_eq!(a.fields_user_placed, b.fields_user_placed);
+    assert!(
+        !b.fields_user_placed,
+        "a part turn leaves the texts to autoplace"
+    );
+}
+
+#[test]
+fn a_field_turned_on_its_own_still_turns() {
+    let mut engine = engine();
+    engine
+        .execute(Command::RotateSelection {
+            items: vec![SelectedItem::new(
+                Uuid::from_u128(1),
+                SelectedKind::SymbolRefField,
+            )],
+            angle_degrees: 90.0,
+            keep_wires: false,
+        })
+        .expect("rotate the designator");
+    let symbol = &engine.document().symbols[0];
+    assert_eq!(symbol.ref_text.as_ref().expect("ref text").rotation, 90.0);
+    assert!(symbol.fields_user_placed);
+}
+
+/// A box around several parts selects each part and its texts; one move of
+/// that selection moves every text once, with its own part (the report:
+/// texts moved 2 mm when their parts moved 1 mm).
+#[test]
+fn a_box_selection_of_several_parts_moves_each_text_once() {
+    let part = |n: u128, x: f64| Symbol {
+        uuid: Uuid::from_u128(n),
+        reference: format!("R{n}"),
+        position: Point::new(x, 10.0),
+        unit: 1,
+        ref_text: Some(text_at(x - 5.0, 8.0)),
+        val_text: Some(text_at(x - 5.0, 12.0)),
+        ..Default::default()
+    };
+    let mut engine = Engine::new(SchematicSheet {
+        symbols: vec![part(1, 10.0), part(2, 30.0)],
+        ..Default::default()
+    })
+    .expect("engine");
+    let items: Vec<SelectedItem> = [1u128, 2]
+        .into_iter()
+        .flat_map(|n| {
+            let id = Uuid::from_u128(n);
+            [
+                SelectedItem::new(id, SelectedKind::SymbolRefField),
+                SelectedItem::new(id, SelectedKind::Symbol),
+                SelectedItem::new(id, SelectedKind::SymbolValField),
+            ]
+        })
+        .collect();
+    engine
+        .execute(Command::MoveSelection {
+            items,
+            dx: 1.0,
+            dy: 0.0,
+            keep_wires: true,
+        })
+        .expect("move");
+    for (symbol, x) in engine.document().symbols.iter().zip([10.0, 30.0]) {
+        assert_near(symbol.position, (x + 1.0, 10.0), "part");
+        assert_near(
+            symbol.ref_text.as_ref().expect("ref").position,
+            (x - 4.0, 8.0),
+            "designator",
+        );
+        assert_near(
+            symbol.val_text.as_ref().expect("value").position,
+            (x - 4.0, 12.0),
+            "value",
+        );
+    }
 }

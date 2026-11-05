@@ -3,21 +3,41 @@
 use crate::*;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
-/// A moved symbol carries its designator and value texts, so a field item
-/// whose symbol is in the same move is dropped: moving it too would shift the
-/// text twice (#2087).
+/// Whether `item` is the designator or value field of a symbol `symbols`
+/// holds: that symbol's own move or turn already carries the text (#2087,
+/// #2094).
+fn is_field_of(item: &SelectedItem, symbols: &std::collections::HashSet<uuid::Uuid>) -> bool {
+    matches!(
+        item.kind,
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+    ) && symbols.contains(&item.uuid)
+}
+
+fn symbol_ids<'a>(
+    items: impl Iterator<Item = &'a SelectedItem>,
+) -> std::collections::HashSet<uuid::Uuid> {
+    items
+        .filter(|item| item.kind == SelectedKind::Symbol)
+        .map(|item| item.uuid)
+        .collect()
+}
+
+/// Drop the field items whose symbol is in the same move, so the text moves
+/// once, with its symbol (#2087).
 fn drop_fields_of_moved_symbols(moves: &mut Vec<(SelectedItem, f64, f64)>) {
-    let symbols: std::collections::HashSet<uuid::Uuid> = moves
+    let symbols = symbol_ids(moves.iter().map(|(item, _, _)| item));
+    moves.retain(|(item, _, _)| !is_field_of(item, &symbols));
+}
+
+/// `items` less the field items whose symbol is also there, so a turn rotates
+/// the text once, through its symbol (#2094).
+fn without_fields_of_selected_symbols(items: &[SelectedItem]) -> Vec<SelectedItem> {
+    let symbols = symbol_ids(items.iter());
+    items
         .iter()
-        .filter(|(item, _, _)| item.kind == SelectedKind::Symbol)
-        .map(|(item, _, _)| item.uuid)
-        .collect();
-    moves.retain(|(item, _, _)| {
-        !(matches!(
-            item.kind,
-            SelectedKind::SymbolRefField | SelectedKind::SymbolValField
-        ) && symbols.contains(&item.uuid))
-    });
+        .filter(|item| !is_field_of(item, &symbols))
+        .copied()
+        .collect()
 }
 
 impl Engine {
@@ -281,7 +301,7 @@ impl Engine {
                 let tips = self.pin_tips_if(keep_wires, &items);
                 let adjacent = self.touching_wire_pairs();
                 let mut changed = false;
-                for item in &items {
+                for item in &without_fields_of_selected_symbols(&items) {
                     changed |= self.rotate_selected_item(item, angle_degrees);
                 }
                 self.finish_transform(
