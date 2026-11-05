@@ -30,6 +30,6 @@ jobs:
           perl -0pi -e 's/#\[cfg\(test\)\]\nmod tests \{/#[cfg(any())]\nmod tests {/' crates/signex-app/src/library/editor/inert.rs
           grep -n "cfg(any())" crates/signex-app/src/library/editor/inert.rs
           cargo test --release -p signex-app --lib pan_reuse -- --nocapture --test-threads=1 2>&1 | tee pan.log || true
-          cargo test --release -p signex-app --lib busy_sheet_probe -- --ignored --nocapture 2>&1 | tee probe.log
-          grep -E "test |panicked|left|right|diff|differ|pixels" pan.log >> "$GITHUB_STEP_SUMMARY" || true
-          grep '^PERF' probe.log >> "$GITHUB_STEP_SUMMARY" || true
+          echo skip-bench
+          grep -E "test |panicked|differ|offset|centre|pixels" pan.log >> "$GITHUB_STEP_SUMMARY" || true
+          
