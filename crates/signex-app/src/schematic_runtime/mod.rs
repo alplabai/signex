@@ -261,6 +261,7 @@ fn copy_invalidated(
         dst.title_block.clone_from(&src.title_block);
         dst.root_sheet_page.clone_from(&src.root_sheet_page);
         dst.frame = src.frame;
+        dst.page = src.page;
     }
 }
 
@@ -296,7 +297,12 @@ pub fn draw_power_port_preview(
 
     // The body is the placed port's own lowering, so the ghost shows the
     // shape the click will commit.
-    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol, None);
+    let (primitives, bbox) = symbol::symbol_geometry_of(
+        None,
+        symbol,
+        None,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     let mut wires = Vec::new();
     let mut arcs = Vec::new();
     let mut polygons = Vec::new();
@@ -312,6 +318,7 @@ pub fn draw_power_port_preview(
         missing: color,
         scale: transform.scale,
         family: None,
+        defaults: signex_types::schematic::SchematicDefaults::BUILT_IN,
     };
     let mut sink = symbol::SymbolSink {
         wires: &mut wires,
@@ -375,6 +382,9 @@ pub struct SceneOverrides<'a> {
     pub designators: Option<&'a HashMap<uuid::Uuid, String>>,
     /// Resolves `${TOKEN}` special strings in text notes (#1080).
     pub special_strings: Option<&'a crate::canvas::SpecialStrings>,
+    /// The project's widths and sizes for unset items (#2026); built-in by
+    /// default.
+    pub defaults: signex_types::schematic::SchematicDefaults,
 }
 
 pub fn render_schematic(
@@ -647,8 +657,13 @@ fn collect_item_bounds_with(
     for wire in &snapshot.wires {
         out.push(ItemBound {
             item: SelectedItem::new(wire.uuid, SelectedKind::Wire),
-            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y)
-                .expand(drawn_wire_width_mm(wire, None) * 0.5),
+            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y).expand(
+                drawn_wire_width_mm(
+                    wire,
+                    None,
+                    &signex_types::schematic::SchematicDefaults::BUILT_IN,
+                ) * 0.5,
+            ),
             anchor: Point::new(
                 (wire.start.x + wire.end.x) * 0.5,
                 (wire.start.y + wire.end.y) * 0.5,
@@ -660,7 +675,7 @@ fn collect_item_bounds_with(
         out.push(ItemBound {
             item: SelectedItem::new(bus.uuid, SelectedKind::Bus),
             bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y)
-                .expand(signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM),
+                .expand(signex_types::schematic::SchematicDefaults::BUILT_IN.bus_mm()),
             anchor: Point::new(
                 (bus.start.x + bus.end.x) * 0.5,
                 (bus.start.y + bus.end.y) * 0.5,
@@ -1097,6 +1112,8 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
     normalize(am) < normalize(a1)
 }
 
+#[cfg(test)]
+mod defaults_tests;
 #[cfg(test)]
 mod drawings_tests;
 #[cfg(test)]

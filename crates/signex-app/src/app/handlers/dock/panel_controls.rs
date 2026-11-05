@@ -411,7 +411,12 @@ impl Signex {
                 // Emit the engine update only when the string parses
                 // cleanly — empty / partial input stays in the buffer
                 // so the user can keep typing.
-                if let Some(v) = crate::numeric_field::parse_field_f64(text) {
+                if let Some(typed) = crate::numeric_field::parse_field_f64(text) {
+                    // A typed Y is read from the sheet's page origin (#2034).
+                    let v = match self.document_state.active_engine() {
+                        Some(engine) if field_id.is_page_y() => engine.document().page_y(typed),
+                        _ => typed,
+                    };
                     use crate::app::contracts::DrawingFieldEdit as E;
                     use crate::panels::DrawingFieldId as F;
                     let edit = match field_id {
@@ -583,7 +588,12 @@ impl Signex {
                 self.commit_title_block_field(*field);
             }
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
-                self.document_state.panel_ctx.page_origin = *origin;
+                // The Position rows read from the origin: refresh them.
+                self.apply_engine_command(
+                    signex_engine::Command::SetPageOrigin { origin: *origin },
+                    false,
+                    true,
+                );
             }
             crate::panels::PanelMsg::CustomPaperEdgeTyping(edge, text) => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
@@ -596,8 +606,13 @@ impl Signex {
                 self.commit_custom_paper_edge(*edge);
             }
             crate::panels::PanelMsg::SetSheetColor(color) => {
-                self.document_state.panel_ctx.sheet_color = *color;
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                self.apply_engine_command(
+                    signex_engine::Command::SetSheetColor {
+                        color: color.stored(),
+                    },
+                    false,
+                    false,
+                );
             }
             crate::panels::PanelMsg::ToggleSelectionFilter(filter) => {
                 follow = self.handle_active_bar_filter_toggle(*filter);

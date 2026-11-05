@@ -86,7 +86,11 @@ fn small_body_is_not_hit_where_the_placeholder_box_was() {
 fn missing_library_symbol_falls_back_to_the_placeholder_box() {
     let (mut sheet, sym) = sheet_with_body(20.0, 40.0, 0.0, 0.0, 0.0);
     sheet.lib_symbols.clear();
-    let (primitives, bbox) = symbol_geometry(&sheet, &sym);
+    let (primitives, bbox) = symbol_geometry(
+        &sheet,
+        &sym,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(primitives.is_empty());
     assert!(approx(bbox, -4.0, -2.8, 4.0, 2.8), "{bbox:?}");
 }
@@ -247,7 +251,11 @@ fn placed_power_port(lib_id: &str) -> (SchematicSheet, Symbol) {
 #[test]
 fn a_power_port_without_a_library_entry_gets_its_own_body_not_the_box() {
     let (sheet, sym) = placed_power_port("power:GND");
-    let (primitives, bbox) = symbol_geometry(&sheet, &sym);
+    let (primitives, bbox) = symbol_geometry(
+        &sheet,
+        &sym,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(!primitives.is_empty(), "no body lowered");
     assert!(bbox.width() < 3.0 && bbox.height() < 4.0, "{bbox:?}");
     assert!(
@@ -272,10 +280,19 @@ fn a_bar_power_port_rises_above_the_connection_point() {
 #[test]
 fn the_power_port_placement_ghost_draws_the_same_geometry_as_the_placed_port() {
     let (_, sym) = placed_power_port("power:arrow");
-    let (ghost, ghost_box) = symbol_geometry_of(None, &sym, None);
+    let (ghost, ghost_box) = symbol_geometry_of(
+        None,
+        &sym,
+        None,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     let mut with_sym = SchematicSheet::default();
     with_sym.symbols.push(sym.clone());
-    let (placed, placed_box) = symbol_geometry(&with_sym, &sym);
+    let (placed, placed_box) = symbol_geometry(
+        &with_sym,
+        &sym,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(!ghost.is_empty(), "ghost drew no body");
     assert_eq!(ghost, placed);
     assert!(approx(

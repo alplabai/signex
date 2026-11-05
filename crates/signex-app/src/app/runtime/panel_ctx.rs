@@ -546,8 +546,6 @@ impl Signex {
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
-        let page_origin = self.document_state.panel_ctx.page_origin;
-        let sheet_color = self.document_state.panel_ctx.sheet_color;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
         let erc_waivers = self.erc_waiver_entries();
         let erc_violation_waivers = self.erc_violation_waiver_entries();
@@ -665,8 +663,12 @@ impl Signex {
             sheet_frame: active_schematic_snapshot
                 .map(|snapshot| snapshot.frame)
                 .unwrap_or_default(),
-            page_origin,
-            sheet_color,
+            page_origin: active_schematic_snapshot
+                .map(|snapshot| snapshot.page.origin)
+                .unwrap_or_default(),
+            sheet_color: crate::panels::SchematicSheetColor::of(
+                active_schematic_snapshot.and_then(|snapshot| snapshot.page.color),
+            ),
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
@@ -746,6 +748,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                schematic_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -796,6 +799,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                schematic_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

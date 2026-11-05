@@ -49,6 +49,7 @@ fn app_focused_on(focused: &str) -> Signex {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

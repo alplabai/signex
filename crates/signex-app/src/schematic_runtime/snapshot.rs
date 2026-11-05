@@ -38,7 +38,7 @@ pub fn build_renderer_snapshot(
             id: renderer_id(wire.uuid),
             p0: [wire.start.x as f32, wire.start.y as f32],
             p1: [wire.end.x as f32, wire.end.y as f32],
-            width_mm: drawn_wire_width_mm(wire, class) as f32,
+            width_mm: drawn_wire_width_mm(wire, class, &overrides.defaults) as f32,
             explicit_color: Some(to_rgba(color)),
         });
         if let Some(class) = class.filter(|c| c.line != NetLineStyle::Solid) {
@@ -57,7 +57,7 @@ pub fn build_renderer_snapshot(
             id: renderer_id(bus.uuid),
             p0: [bus.start.x as f32, bus.start.y as f32],
             p1: [bus.end.x as f32, bus.end.y as f32],
-            width_mm: signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM as f32,
+            width_mm: overrides.defaults.bus_mm() as f32,
             explicit_color: Some(to_rgba(focus_color(
                 to_iced(&colors.bus),
                 focus_set,
@@ -80,7 +80,7 @@ pub fn build_renderer_snapshot(
             id: renderer_id(entry.uuid),
             p0: [entry.position.x as f32, entry.position.y as f32],
             p1: [end.x as f32, end.y as f32],
-            width_mm: drawn_wire_width_mm(&signex_types::schematic::Wire::default(), None) as f32,
+            width_mm: overrides.defaults.wire_mm(0.0, None) as f32,
             explicit_color: Some(to_rgba(focus_color(
                 to_iced(&colors.wire),
                 focus_set,
@@ -163,9 +163,7 @@ pub fn build_renderer_snapshot(
 
         junctions.push(JunctionInput {
             center: [junction.position.x as f32, junction.position.y as f32],
-            radius_mm: (junction.diameter * 0.5)
-                .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
-                as f32,
+            radius_mm: overrides.defaults.junction_radius_mm(junction.diameter) as f32,
             color: to_rgba(focus_color(
                 junction_color(overrides.wire_styling, junction.uuid)
                     .as_ref()
@@ -178,7 +176,7 @@ pub fn build_renderer_snapshot(
     }
 
     for symbol in &snapshot.symbols {
-        let (primitives, bbox) = symbol::symbol_geometry(snapshot, symbol);
+        let (primitives, bbox) = symbol::symbol_geometry(snapshot, symbol, &overrides.defaults);
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
         let max = transform.world_to_screen((bbox.max_x, bbox.max_y));
         let rect_min = iced::Point::new(min.x.min(max.x), min.y.min(max.y));
@@ -196,6 +194,7 @@ pub fn build_renderer_snapshot(
             missing: focus_color(to_iced(&colors.no_connect), focus_set, symbol.uuid),
             scale: transform.scale,
             family: resolve_family(None, document_family),
+            defaults: overrides.defaults,
         };
         let mut sink = symbol::SymbolSink {
             wires: &mut wires,
@@ -322,7 +321,14 @@ pub fn build_renderer_snapshot(
             DrawingPlacement::Behind => &mut drawings,
             DrawingPlacement::Above => &mut drawings_front,
         };
-        drawings::push_drawing(drawing, colors, focus_set, transform.scale, out);
+        drawings::push_drawing(
+            drawing,
+            colors,
+            focus_set,
+            transform.scale,
+            &overrides.defaults,
+            out,
+        );
     }
 
     for label in &snapshot.labels {

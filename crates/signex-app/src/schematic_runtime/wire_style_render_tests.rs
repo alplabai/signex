@@ -21,6 +21,14 @@ fn sheet_with_wire() -> SchematicRenderSnapshot {
     sheet
 }
 
+/// The same wire with its width unset, so a class width applies to it: an
+/// explicit width beats the class (#2026).
+fn sheet_with_unset_wire() -> SchematicRenderSnapshot {
+    let mut sheet = sheet_with_wire();
+    sheet.wires[0].stroke_width = 0.0;
+    sheet
+}
+
 fn class_style(
     line: NetLineStyle,
     width: Option<f64>,
@@ -100,6 +108,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
                     }),
                     designators: Some(designators),
                     special_strings: None,
+                    defaults: Default::default(),
                 },
             );
             cache.builds()
@@ -122,7 +131,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
 
 #[test]
 fn class_line_style_width_and_colour_reach_the_scene() {
-    let sheet = sheet_with_wire();
+    let sheet = sheet_with_unset_wire();
     let red = ThemeColor::new(255, 0, 0, 255);
     let classes = class_style(NetLineStyle::Dashed, Some(0.6), Some(red));
     let no_overrides = HashMap::new();
@@ -162,7 +171,7 @@ fn dotted_class_draws_dotted() {
 
 #[test]
 fn per_net_colour_override_wins_over_the_class_colour() {
-    let sheet = sheet_with_wire();
+    let sheet = sheet_with_unset_wire();
     let red = ThemeColor::new(255, 0, 0, 255);
     let green = ThemeColor::new(0, 255, 0, 255);
     let classes = class_style(NetLineStyle::Dashed, Some(0.6), Some(red));
@@ -195,7 +204,7 @@ fn a_wire_without_a_class_draws_as_before() {
 
 #[test]
 fn a_class_width_widens_the_hit_area_to_the_drawn_width() {
-    let sheet = sheet_with_wire();
+    let sheet = sheet_with_unset_wire();
     // 1.5 mm off the wire: outside the default 0.25 mm tolerance.
     let (x, y) = (30.0, 11.5);
     assert!(hit_test::hit_test(&sheet, &Designators::new(), x, y).is_none());

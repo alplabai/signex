@@ -256,6 +256,7 @@ pub(in crate::canvas) mod tests {
             net_colors: Default::default(),
             drawing_placements: Default::default(),
             frame: Default::default(),
+            page: Default::default(),
             font_family: None,
         };
         let mut slot = CanvasSlot::new();

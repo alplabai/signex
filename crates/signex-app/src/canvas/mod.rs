@@ -118,10 +118,11 @@ pub struct CanvasSlot {
     pub overlay_cache: canvas::Cache,
     /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
-    /// Camera `bg_cache` was last built at; `draw_background` drops the cache
-    /// when it differs, so the paper and grid follow every camera move whatever
-    /// event announced it (#1993).
-    pub bg_cache_camera: std::cell::Cell<Option<(f32, f32, f32)>>,
+    /// Camera and paper colour `bg_cache` was last built at; `draw_background`
+    /// drops the cache when either differs, so the paper and grid follow every
+    /// camera move and sheet-colour change whatever event announced it (#1993,
+    /// #2034).
+    pub bg_cache_camera: std::cell::Cell<Option<((f32, f32, f32), [u8; 4])>>,
     /// Test-only: how often the background was tessellated.
     #[cfg(test)]
     pub bg_tessellations: std::cell::Cell<u32>,
@@ -552,6 +553,8 @@ pub struct CanvasViewPrefs<'a> {
     /// The class-style cache's revision for `wire_class_styles`; moves when
     /// the map does.
     pub wire_class_revision: u64,
+    /// The sheet's project defaults for unset widths and sizes (#2026).
+    pub schematic_defaults: signex_types::schematic::SchematicDefaults,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// Content attached to the cursor, for the window whose document is the
     /// session's target sheet only (`None` everywhere else).
@@ -611,6 +614,7 @@ impl<'a> SchematicCanvas<'a> {
             wire_styling: Some(self.prefs.wire_styling()),
             designators: Some(&self.slot.designators),
             special_strings: self.slot.special_strings.as_ref(),
+            defaults: self.prefs.schematic_defaults,
         }
     }
 
@@ -887,6 +891,8 @@ mod pan_reuse_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
 #[cfg(test)]
+mod sheet_color_tests;
+#[cfg(test)]
 mod view_gesture_tests;
 
 #[cfg(test)]
@@ -938,6 +944,7 @@ mod tests {
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             wire_class_revision: 0,
+            schematic_defaults: Default::default(),
             selection_filters: filters,
             placement: None,
             power_port_pending: false,

@@ -522,6 +522,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
             net_classes: classes,
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -124,6 +124,7 @@ fn fixture() -> Signex {
             net_classes: vec![power],
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

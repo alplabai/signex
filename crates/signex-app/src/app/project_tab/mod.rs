@@ -14,6 +14,7 @@
 mod general;
 mod open;
 mod parameters;
+mod schematic_defaults;
 mod update;
 mod view;
 
@@ -21,6 +22,8 @@ mod view;
 mod open_command_tests;
 #[cfg(test)]
 mod save_point_tests;
+#[cfg(test)]
+mod schematic_defaults_tests;
 #[cfg(test)]
 mod undo_routing_tests;
 
@@ -37,16 +40,23 @@ pub enum ProjectSection {
     General,
     /// Project parameters the sheets inherit (#1080).
     Parameters,
+    /// Widths and sizes of unset schematic items (#2026).
+    SchematicDefaults,
 }
 
 impl ProjectSection {
     /// Every section, in list order.
-    pub const ALL: [ProjectSection; 2] = [ProjectSection::General, ProjectSection::Parameters];
+    pub const ALL: [ProjectSection; 3] = [
+        ProjectSection::General,
+        ProjectSection::Parameters,
+        ProjectSection::SchematicDefaults,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             ProjectSection::General => "General",
             ProjectSection::Parameters => "Parameters",
+            ProjectSection::SchematicDefaults => "Schematic defaults",
         }
     }
 }
@@ -61,6 +71,10 @@ pub struct ProjectTabState {
     pub general_history: signex_engine::ProjectGeneralHistory,
     /// The name typed for a new custom parameter, not yet added.
     pub new_parameter_name: String,
+    /// Schematic default fields as typed, until the next undo, redo or
+    /// section switch shows the stored values again.
+    pub default_drafts:
+        std::collections::HashMap<signex_types::project::SchematicDefaultField, String>,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -99,6 +113,17 @@ pub enum ProjectTabMsg {
     /// Add the typed custom parameter, with an empty value.
     ParameterAdded {
         project_id: ProjectId,
+    },
+    /// A schematic default as typed (#2026); empty clears it.
+    SchematicDefaultEdited {
+        project_id: ProjectId,
+        field: signex_types::project::SchematicDefaultField,
+        text: String,
+    },
+    /// The schematic default font as typed (#2026); empty clears it.
+    SchematicDefaultFontEdited {
+        project_id: ProjectId,
+        text: String,
     },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {

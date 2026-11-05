@@ -38,6 +38,7 @@ pub(crate) fn empty_sheet() -> SchematicSheet {
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
         frame: Default::default(),
+        page: Default::default(),
         unknown: Default::default(),
         font_family: None,
     }
@@ -215,6 +216,7 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -279,6 +281,7 @@ fn defaults_are_unique_across_parents_of_one_project() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -51,6 +51,7 @@ pub(super) fn push_drawing(
     colors: &CanvasColors,
     focus_set: Option<&HashSet<uuid::Uuid>>,
     scale: f32,
+    defaults: &signex_types::schematic::SchematicDefaults,
     out: &mut Vec<OrderedItem>,
 ) {
     let (uuid, width, fill, stroke_color) = match drawing {
@@ -94,7 +95,7 @@ pub(super) fn push_drawing(
         fill: fill_color_for(fill, stroke_color, colors)
             .map(to_rgba)
             .unwrap_or(CLEAR),
-        width_mm: signex_types::schematic::effective_stroke_mm(width) as f32,
+        width_mm: defaults.shape_stroke_mm(width) as f32,
     };
 
     match drawing {

@@ -582,7 +582,7 @@ impl Signex {
                     page_format_mode: crate::panels::PageFormatMode::default(),
                     sheet_frame: Default::default(),
                     page_origin: crate::panels::PageOrigin::default(),
-                    sheet_color: crate::panels::SheetColor::default(),
+                    sheet_color: Default::default(),
                     symbol_editor: None,
                     footprint_editor: None,
                     history: crate::panels::history::HistoryPanelState::default(),

@@ -75,6 +75,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
         frame: Default::default(),
+        page: Default::default(),
         font_family: None,
     }
 }

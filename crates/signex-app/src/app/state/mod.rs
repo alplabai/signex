@@ -946,6 +946,57 @@ impl DocumentState {
         };
         self.document_project(path)
     }
+
+    /// The resolved schematic defaults (#2026) of the project that owns
+    /// `sheet`; the built-in table for a loose sheet.
+    pub fn schematic_defaults_for(
+        &self,
+        sheet: &std::path::Path,
+    ) -> signex_types::schematic::SchematicDefaults {
+        self.document_project(sheet)
+            .map_or(signex_types::schematic::SchematicDefaults::BUILT_IN, |p| {
+                p.data.schematic_defaults.resolve()
+            })
+    }
+
+    /// [`Self::schematic_defaults_for`] the active document.
+    pub fn active_schematic_defaults(&self) -> signex_types::schematic::SchematicDefaults {
+        self.active_path
+            .as_deref()
+            .map(|path| self.schematic_defaults_for(path))
+            .unwrap_or_default()
+    }
+
+    /// A pre-placement form for the active document, starting from its
+    /// project's text defaults (#2026).
+    pub fn new_pre_placement(
+        &self,
+        tool_name: String,
+        kind: crate::panels::PrePlacementKind,
+        label_text: String,
+        cursor_mm: (f64, f64),
+    ) -> crate::panels::PrePlacementData {
+        let mut data = crate::panels::PrePlacementData::new(
+            tool_name,
+            kind,
+            label_text,
+            cursor_mm.0,
+            cursor_mm.1,
+        );
+        data.font_size_pt = self.active_schematic_defaults().text_size_pt.round() as u32;
+        if let Some(path) = self.active_path.as_deref() {
+            data.font = self.schematic_default_font_for(path);
+        }
+        data
+    }
+
+    /// The font new text on `sheet` is placed in (#2026).
+    pub fn schematic_default_font_for(&self, sheet: &std::path::Path) -> String {
+        self.document_project(sheet).map_or_else(
+            || signex_types::schematic::SCHEMATIC_DEFAULT_FONT.to_string(),
+            |p| p.data.schematic_defaults.font_family().to_string(),
+        )
+    }
     /// Every open engine that belongs to the same project as the active
     /// document, the active one included. A loose active document yields only
     /// itself. Used where a name must be unique across the whole hierarchy

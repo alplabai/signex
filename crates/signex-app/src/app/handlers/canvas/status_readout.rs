@@ -70,17 +70,25 @@ impl Signex {
         }
     }
 
-    /// The cursor's world position in mm over the canvas `window_id` is
-    /// showing. A library editor that has not seen the cursor reads the
-    /// origin, as the app does before the first hover.
+    /// The cursor's position in mm over the canvas `window_id` is showing.
+    /// On a schematic sheet Y is shown from the sheet's page origin (#2034).
+    /// A library editor that has not seen the cursor reads the origin, as the
+    /// app does before the first hover.
     pub(crate) fn status_cursor(&self, window_id: iced::window::Id) -> (f64, f64) {
-        let own = match self.status_surface(window_id) {
-            Surface::SymbolEditor(editor) => Some(editor.cursor_mm.unwrap_or_default()),
-            Surface::FootprintEditor(editor) => Some(editor.state.cursor_mm.unwrap_or_default()),
-            Surface::NoCamera => Some((0.0, 0.0)),
-            Surface::Pcb | Surface::Schematic => None,
-        };
-        own.unwrap_or((self.ui_state.cursor_x, self.ui_state.cursor_y))
+        let (x, y) = (self.ui_state.cursor_x, self.ui_state.cursor_y);
+        match self.status_surface(window_id) {
+            Surface::SymbolEditor(editor) => editor.cursor_mm.unwrap_or_default(),
+            Surface::FootprintEditor(editor) => editor.state.cursor_mm.unwrap_or_default(),
+            Surface::NoCamera => (0.0, 0.0),
+            Surface::Pcb => (x, y),
+            Surface::Schematic => {
+                let sheet = self
+                    .interaction_state
+                    .canvas_for_window(window_id)
+                    .active_snapshot();
+                (x, sheet.map_or(y, |sheet| sheet.page_y(y)))
+            }
+        }
     }
 }
 
@@ -200,6 +208,31 @@ mod tests {
         let (app, window, _path) = app_showing(|_| TabKind::Schematic);
         assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM);
         assert_eq!(app.status_cursor(window), (7.0, 8.0));
+    }
+
+    /// #2034: the status bar reads Y from the sheet's page origin; Lower
+    /// Left (the default) counts up from the bottom edge of the paper.
+    #[test]
+    fn the_schematic_cursor_reads_y_from_the_page_origin() {
+        use signex_types::schematic::{PageOrigin, SchematicSheet, SheetPageSettings};
+        let (mut app, window, _path) = app_showing(|_| TabKind::Schematic);
+        for (origin, y) in [
+            (PageOrigin::LowerLeft, 210.0 - 8.0),
+            (PageOrigin::UpperLeft, 8.0),
+        ] {
+            let sheet = SchematicSheet {
+                paper_size: "A4".into(),
+                page: SheetPageSettings {
+                    origin,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            app.interaction_state.canvas.set_render_cache(Some(
+                crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+            ));
+            assert_eq!(app.status_cursor(window), (7.0, y), "{origin:?}");
+        }
     }
 
     fn viewport() -> iced::Rectangle {

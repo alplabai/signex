@@ -223,6 +223,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

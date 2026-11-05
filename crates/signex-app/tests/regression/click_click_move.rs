@@ -47,6 +47,7 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
         frame: Default::default(),
+        page: Default::default(),
         font_family: None,
     };
     let path = PathBuf::from("click-click-move.snxsch");
@@ -428,6 +429,7 @@ fn deliver(
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
             wire_class_revision: 0,
+            schematic_defaults: Default::default(),
             selection_filters: &app.interaction_state.selection_filters,
             placement: with_ghost
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))

@@ -125,7 +125,11 @@ mod tests {
             .symbols
             .iter()
             .filter_map(|sym| {
-                let parts = lower_placed_symbol(sheet.lib_symbols.get(&sym.lib_id), sym);
+                let parts = lower_placed_symbol(
+                    sheet.lib_symbols.get(&sym.lib_id),
+                    sym,
+                    &signex_types::schematic::SchematicDefaults::BUILT_IN,
+                );
                 primitives_bounds(&parts).map(|b| (sym.reference.clone(), b))
             })
             .collect();

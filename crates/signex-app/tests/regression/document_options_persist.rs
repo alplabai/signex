@@ -10,7 +10,10 @@ use futures::StreamExt;
 use iced::Task;
 use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
-use signex_app::panels::{PanelMsg, PaperEdge, SheetFrameEdit, TitleBlockField};
+use signex_app::panels::{
+    PageOrigin, PanelMsg, PaperEdge, SchematicSheetColor, SheetColor, SheetFrameEdit,
+    TitleBlockField,
+};
 use signex_app::persist::{DocumentSaves, DocumentSink};
 use signex_types::format::SnxSchematic;
 use signex_types::schematic::{SchematicSheet, SheetOrientation};
@@ -183,4 +186,51 @@ fn a_document_options_change_is_one_undo_step() {
     let doc = app.document_state.engines[&path].document();
     assert_eq!(doc.paper_size, "A4");
     assert!(doc.frame.show_border);
+}
+
+/// #2034: Sheet Color is stored in the sheet; Default writes nothing.
+#[test]
+fn the_sheet_color_is_saved_and_default_writes_nothing() {
+    let cream = SchematicSheetColor::Preset(SheetColor::Cream);
+    let sheet = change_save_reopen(|app| panel(app, PanelMsg::SetSheetColor(cream)));
+    assert_eq!(sheet.page.color, cream.stored());
+    assert!(sheet.page.color.is_some());
+
+    let sheet = change_save_reopen(|app| {
+        panel(app, PanelMsg::SetSheetColor(cream));
+        panel(app, PanelMsg::SetSheetColor(SchematicSheetColor::Default));
+    });
+    assert_eq!(sheet.page.color, None, "Default follows the theme");
+}
+
+/// #2034: Page Origin is stored in the sheet.
+#[test]
+fn the_page_origin_is_saved() {
+    let sheet =
+        change_save_reopen(|app| panel(app, PanelMsg::SetPageOrigin(PageOrigin::UpperLeft)));
+    assert_eq!(sheet.page.origin, PageOrigin::UpperLeft);
+}
+
+#[test]
+fn sheet_color_and_page_origin_each_undo_in_one_step() {
+    let (mut app, path, _r) = clean_app();
+    let gray = SchematicSheetColor::Preset(SheetColor::LightGray);
+    panel(&mut app, PanelMsg::SetSheetColor(gray));
+    panel(&mut app, PanelMsg::SetPageOrigin(PageOrigin::UpperLeft));
+    assert_eq!(app.document_state.panel_ctx.sheet_color, gray);
+    assert_eq!(
+        app.document_state.panel_ctx.page_origin,
+        PageOrigin::UpperLeft
+    );
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let doc = app.document_state.engines[&path].document();
+    assert_eq!(doc.page.origin, PageOrigin::LowerLeft);
+    assert_eq!(doc.page.color, gray.stored());
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let doc = app.document_state.engines[&path].document();
+    assert!(doc.page.is_default());
+    assert_eq!(
+        app.document_state.panel_ctx.sheet_color,
+        SchematicSheetColor::Default
+    );
 }

@@ -136,6 +136,20 @@ pub enum DrawingFieldId {
     PolyBorder,
 }
 
+impl DrawingFieldId {
+    /// A Y coordinate on the sheet: shown and typed from the page origin.
+    pub fn is_page_y(self) -> bool {
+        matches!(
+            self,
+            Self::LineStartY
+                | Self::LineEndY
+                | Self::RectStartY
+                | Self::CircleCenterY
+                | Self::ArcCenterY
+        )
+    }
+}
+
 /// Distinguishes placement flavors so the pre-placement form only shows
 /// fields relevant to what the user is about to drop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

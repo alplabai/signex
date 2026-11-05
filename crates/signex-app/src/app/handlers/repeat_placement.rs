@@ -81,22 +81,19 @@ impl Signex {
         style: Option<PrePlacementStyle>,
     ) {
         let tool_name = format!("{}", self.interaction_state.current_tool);
-        let (cursor_x_mm, cursor_y_mm) = (self.ui_state.cursor_x, self.ui_state.cursor_y);
-        let slot = &mut self.document_state.panel_ctx.pre_placement;
-        match slot.as_mut() {
-            Some(pre) => {
-                pre.kind = kind;
-                pre.tool_name = tool_name;
-                pre.label_text = text;
-            }
-            None => {
-                let mut pre =
-                    PrePlacementData::new(tool_name, kind, text, cursor_x_mm, cursor_y_mm);
-                if let Some(style) = style {
-                    pre.set_style(style);
-                }
-                *slot = Some(pre);
-            }
+        let cursor_mm = (self.ui_state.cursor_x, self.ui_state.cursor_y);
+        if let Some(pre) = self.document_state.panel_ctx.pre_placement.as_mut() {
+            pre.kind = kind;
+            pre.tool_name = tool_name;
+            pre.label_text = text;
+            return;
         }
+        let mut pre = self
+            .document_state
+            .new_pre_placement(tool_name, kind, text, cursor_mm);
+        if let Some(style) = style {
+            pre.set_style(style);
+        }
+        self.document_state.panel_ctx.pre_placement = Some(pre);
     }
 }

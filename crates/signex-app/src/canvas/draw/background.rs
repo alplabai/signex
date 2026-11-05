@@ -17,7 +17,10 @@ impl SchematicCanvas<'_> {
         // it, so the cache is keyed on the camera as the content layer is.
         let key = {
             let cam = self.camera();
-            (cam.offset.x, cam.offset.y, cam.scale)
+            (
+                (cam.offset.x, cam.offset.y, cam.scale),
+                self.paper_color().into_rgba8(),
+            )
         };
         if self.bg_cache_camera.get() != Some(key) {
             self.bg_cache.clear();
@@ -46,7 +49,7 @@ impl SchematicCanvas<'_> {
             (self.paper_width_mm, self.paper_height_mm),
             &paper::PaperLook {
                 backdrop: self.prefs.theme_bg,
-                paper: self.prefs.theme_paper,
+                paper: self.paper_color(),
                 grid: self.prefs.theme_grid,
                 grid_visible: self.prefs.grid_visible,
                 grid_mm: self.prefs.visible_grid_mm as f32,
@@ -57,6 +60,15 @@ impl SchematicCanvas<'_> {
 
         let frame_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
         self.draw_sheet_frame(frame, &cam, bounds, frame_color);
+    }
+
+    /// The sheet's own paper colour (#2034), else the theme's.
+    pub(in crate::canvas) fn paper_color(&self) -> Color {
+        self.active_snapshot()
+            .and_then(|sheet| sheet.page.color)
+            .map_or(self.prefs.theme_paper, |color| {
+                crate::render_config::to_iced(&color)
+            })
     }
 
     /// A sheet-frame line of `width_mm` between screen points: the stroke

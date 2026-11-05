@@ -43,6 +43,7 @@ pub(crate) struct SceneInputs {
     focus: Option<HashSet<uuid::Uuid>>,
     styling: Option<wire_style::OwnedWireStyling>,
     designators: Option<HashMap<uuid::Uuid, String>>,
+    defaults: signex_types::schematic::SchematicDefaults,
 }
 
 struct Entry {
@@ -193,6 +194,7 @@ impl SceneInputs {
             focus: focus_set.cloned(),
             styling: overrides.wire_styling.map(WireStyling::to_owned_styling),
             designators: overrides.designators.cloned(),
+            defaults: overrides.defaults,
         }
     }
 
@@ -212,6 +214,7 @@ impl SceneInputs {
             && self.focus.as_ref() == focus_set
             && self.styling_matches(overrides.wire_styling)
             && self.designators.as_ref() == overrides.designators
+            && self.defaults == overrides.defaults
     }
 
     /// Like [`Self::fits`] but a pan of a pixel does not fit: for geometry

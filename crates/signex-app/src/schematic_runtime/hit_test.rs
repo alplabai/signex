@@ -144,8 +144,14 @@ fn hit_wire(
     point: Point,
     class_styles: &WireClassStyles,
 ) -> bool {
-    let tolerance = drawn_wire_width_mm(wire, class_styles.get(&wire.uuid))
-        .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
+    // shortcut: hit-test uses the built-in default, not the project's; thread
+    // the project defaults here if a project sets a very wide wire.
+    let tolerance = drawn_wire_width_mm(
+        wire,
+        class_styles.get(&wire.uuid),
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    )
+    .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
     point_to_segment_distance(point, wire.start, wire.end) <= tolerance
 }
 

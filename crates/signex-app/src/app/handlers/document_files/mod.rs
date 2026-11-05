@@ -167,6 +167,7 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         net_colors: Default::default(),
         drawing_placements: Default::default(),
         frame: Default::default(),
+        page: Default::default(),
         font_family: None,
     }
 }

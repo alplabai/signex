@@ -202,10 +202,10 @@ pub struct PanelContext {
     pub page_format_mode: PageFormatMode,
     /// The active sheet's frame settings: border, title block, zone counts.
     pub sheet_frame: signex_types::schematic::SheetFrameSettings,
-    /// Page coordinate origin.
+    /// The active sheet's coordinate origin.
     pub page_origin: PageOrigin,
-    /// Sheet background colour.
-    pub sheet_color: SheetColor,
+    /// The active sheet's paper colour.
+    pub sheet_color: super::SchematicSheetColor,
     /// When the active tab is a `.snxsym` standalone editor, this carries
     /// the symbol's display data so the right-dock Properties panel and
     /// the left-dock SCH-Library panel can render context-aware content

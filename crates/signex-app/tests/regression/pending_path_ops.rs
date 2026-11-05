@@ -62,6 +62,7 @@ fn fixture(dirty: bool) -> Fixture {
             rules: Default::default(),
             net_classes: Default::default(),
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

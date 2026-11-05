@@ -483,7 +483,8 @@ mod tests {
                 uuid: WIRE,
                 start: SheetPoint::new(10.0, 10.0),
                 end: SheetPoint::new(30.0, 10.0),
-                stroke_width: 0.15,
+                // Unset, so a class width applies: an explicit one beats it (#2026).
+                stroke_width: 0.0,
                 ..Default::default()
             }],
             ..Default::default()
@@ -517,7 +518,7 @@ mod tests {
         let no_styles = crate::schematic_runtime::WireClassStyles::new();
         assert!(
             !press_lands_on_an_item(&no_styles),
-            "1.5 mm off a 0.15 mm wire is empty space"
+            "1.5 mm off a default-width wire is empty space"
         );
 
         let mut wide = crate::schematic_runtime::WireClassStyles::new();

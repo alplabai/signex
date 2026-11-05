@@ -202,12 +202,11 @@ impl Signex {
                                 .filter(|value| !value.is_empty())
                         })
                         .unwrap_or(default_designator);
-                    let defaults = crate::panels::PrePlacementData::new(
+                    let defaults = self.document_state.new_pre_placement(
                         String::new(),
                         PrePlacementKind::Other,
                         String::new(),
-                        0.0,
-                        0.0,
+                        (0.0, 0.0),
                     );
                     let prev = self.document_state.panel_ctx.pre_placement.as_ref();
                     let prev_rotation = on_cursor_part
