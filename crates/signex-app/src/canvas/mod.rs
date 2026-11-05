@@ -245,6 +245,10 @@ pub struct CanvasSlot {
     /// Whether the move drag in flight keeps wires, written by the canvas
     /// after each event for the status bar; `None` outside a drag.
     pub move_behaviour: std::cell::Cell<Option<bool>>,
+    /// Test-only: draw the content as trunk did, in a frame of the canvas
+    /// size through `content_cache`, as the reference of the pixel tests.
+    #[cfg(test)]
+    pub(in crate::canvas) trunk_content: std::cell::Cell<bool>,
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
@@ -317,6 +321,8 @@ impl CanvasSlot {
             measure: None,
             keep_connections_next: false,
             move_behaviour: std::cell::Cell::new(None),
+            #[cfg(test)]
+            trunk_content: std::cell::Cell::new(false),
             #[cfg(test)]
             content_cache_clears: 0,
             #[cfg(test)]

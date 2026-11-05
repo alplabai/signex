@@ -34,6 +34,18 @@ impl SchematicCanvas<'_> {
         let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
         let focus_set = self.auto_focus_set();
         let focus_ref = focus_set.as_ref();
+        #[cfg(test)]
+        if self.trunk_content.get() && drag_offset.is_none() {
+            let geometry = self.content_cache.draw(renderer, bounds.size(), |frame| {
+                if let Some(snapshot) = effective_snapshot {
+                    self.render_content_scene(frame, snapshot, &live_transform, bounds, focus_ref);
+                }
+            });
+            return super::retained::RetainedLayer {
+                geometry,
+                shift: iced::Vector::ZERO,
+            };
+        }
         if drag_offset.is_none() {
             return self.retained_content(
                 renderer,
