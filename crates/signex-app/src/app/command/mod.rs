@@ -177,12 +177,16 @@ impl Signex {
             (Some(message), Some(window_id)) if self.is_document_window(window_id) => {
                 self.run_command_in_window(window_id, message)
             }
-            // F3 in the main window takes a Sheet-scope Find owned by an
-            // undocked window over, as F3 in a window does.
-            (Some(message), Some(window_id))
-                if is_find_step(&message) && self.ui_state.main_window_id == Some(window_id) =>
+            // Find Next / Previous from main (F3, menu, palette: `None` is
+            // main) take a Sheet-scope Find owned by an undocked window over.
+            (Some(message), w)
+                if is_find_step(&message)
+                    && w.is_none_or(|w| self.ui_state.main_window_id == Some(w)) =>
             {
-                self.step_find_in_window(window_id, message)
+                match self.ui_state.main_window_id {
+                    Some(main_id) => self.step_find_in_window(main_id, message),
+                    None => self.dispatch_update(message),
+                }
             }
             (Some(message), _) => self.dispatch_update(message),
             (None, _) => Task::none(),

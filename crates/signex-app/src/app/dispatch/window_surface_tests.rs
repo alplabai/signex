@@ -1080,3 +1080,106 @@ fn a_new_window_context_does_not_start_with_mains_history_rows() {
     let ctx = f.app.new_window_panel_ctx(f.window);
     assert_eq!(ctx.history.active_path, None);
 }
+
+fn own_a_sheet_find(f: &mut Fixture) {
+    f.app.ui_state.find_replace.query = "NO_SUCH_TEXT".into();
+    f.app.ui_state.find_replace.window = Some(f.window);
+    f.app.ui_state.find_replace.open = true;
+    f.app.ui_state.find_replace.scope = crate::find_replace::FindScope::Sheet;
+}
+
+#[test]
+fn find_next_from_mains_menu_takes_a_window_owned_sheet_find_over_like_f3() {
+    let mut f = fixture();
+    own_a_sheet_find(&mut f);
+    let task = f
+        .app
+        .run_menu_command(&AppCommandId::new("find_next").unwrap(), None);
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.ui_state.find_replace.window, None,
+        "menu Find Next stepped the window's Find"
+    );
+}
+
+#[test]
+fn find_next_from_the_palette_takes_a_window_owned_sheet_find_over_like_f3() {
+    use crate::app::command_palette::CommandAction;
+    let mut f = fixture();
+    let (_outcome, task) = command(&mut f.app, "open_command_palette", f.main);
+    settle_task(&mut f.app, task);
+    own_a_sheet_find(&mut f);
+    f.app.ui_state.command_palette.query = "find next".into();
+    f.app.refresh_command_palette_results();
+    let row = f
+        .app
+        .ui_state
+        .command_palette
+        .results
+        .iter()
+        .position(|e| matches!(&e.action, CommandAction::Command(id) if id.as_str() == "find_next"))
+        .expect("the palette offers Find Next");
+    f.app.ui_state.command_palette.selected_index = row;
+    let task = f.app.update(Message::CommandPalette(
+        crate::app::CommandPaletteMsg::ExecuteSelected,
+    ));
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.ui_state.find_replace.window, None,
+        "palette Find Next stepped the window's Find"
+    );
+}
+
+#[test]
+fn a_restore_after_a_real_history_load_for_a_window_passes_the_guard() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    let generation = f.app.document_state.window_history[&f.window].generation;
+    let task = f.app.update(Message::Ui(UiMsg::HistoryLoaded {
+        window: Some(f.window),
+        generation,
+        path: f.window_path.clone(),
+        result: Ok(crate::panels::history::HistoryLoad::Entries(Vec::new())),
+    }));
+    settle_task(&mut f.app, task);
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert!(
+        !said(&format!(
+            "The history of {} is not loaded",
+            f.window_path.display()
+        )),
+        "the guard refused a click on a loaded list"
+    );
+    assert!(said(&format!(
+        "{} does not belong to an open project",
+        f.window_path.display()
+    )));
+}
+
+#[test]
+fn a_history_panel_opened_after_an_undock_never_lists_mains_rows() {
+    let mut f = fixture();
+    f.app.document_state.dock = crate::dock::DockArea::new();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    let task = f
+        .app
+        .update(Message::Overlay(crate::app::OverlayMsg::OpenPanel(
+            crate::panels::PanelKind::History,
+        )));
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.panel_ctx_for(f.window).history.active_path.as_deref(),
+        Some(f.window_path.as_path()),
+        "the window's History panel does not list the window's file"
+    );
+}

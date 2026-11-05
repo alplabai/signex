@@ -262,9 +262,10 @@ impl Signex {
 /// tracked (and marked dirty) through its `library.toml`, so both keys are
 /// consulted for that tab kind. Pure: no filesystem access.
 fn history_dirty(app: &Signex, path: &std::path::Path) -> bool {
-    let kind = app.history_tab().map(|t| &t.kind);
-    kind.is_some_and(|kind| history_dirty_of(&app.document_state, kind, path))
-        || app.document_state.is_document_dirty(path)
+    match app.history_tab() {
+        Some(tab) => history_dirty_of(&app.document_state, &tab.kind, path),
+        None => app.document_state.is_document_dirty(path),
+    }
 }
 
 fn history_dirty_of(
