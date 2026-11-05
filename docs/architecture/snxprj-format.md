@@ -193,6 +193,33 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   reported in the Messages panel when a part is placed. Choosing a standard in
   the Project tab replaces it.
 
+## Schematic defaults (`schematic_defaults`, #2026)
+
+`ProjectData.schematic_defaults` is an optional top-level object, edited in
+the Project tab's Schematic defaults section, added without bumping the
+`snxprj/1` token.
+
+```json
+"schematic_defaults": { "wire_width_mm": 0.3, "bus_width_mm": 0.6, "text_size_pt": 12, "font_family": "Roboto" }
+```
+
+- Keys: `wire_width_mm`, `bus_width_mm`, `symbol_line_width_mm` (symbol lines,
+  and so pins), `shape_stroke_mm`, `junction_diameter_mm`, `text_size_pt`,
+  `font_family`. Every key is optional; a missing key, or a number that is not
+  above zero, falls back to the built-in table
+  (`signex_types::schematic::SchematicDefaults::BUILT_IN`: 0.254, 0.45, the
+  wire width, 0.15, 0.7 mm, 10 pt, Iosevka). An unset symbol line follows the
+  project's wire width.
+- Only unset values follow it: an item stored with width or size `0`. An
+  explicit value in a sheet is never rewritten. A wire resolves explicit width
+  > net class width > project > built-in; a bus stores no width and has no
+  class, so project > built-in.
+- The canvas and every export resolve through the same table; placement tools
+  start from the project's text size, font and shape stroke.
+- Omitted when nothing is set. Keys a newer build wrote inside the object are
+  kept. A section this build cannot read is kept verbatim, not applied, and
+  replaced once a default is edited here.
+
 ## Description (`description`) and the name (#1202)
 
 `ProjectData.description` is an optional free-text string, edited in the
