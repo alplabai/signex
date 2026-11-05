@@ -841,10 +841,12 @@ pub use pin_labels::{
     lower_pin_labels, pin_text_layout,
 };
 mod symbol_geometry;
+mod text_widths;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,
-    primitives_bounds, text_aabb, text_aabb_with_width, text_height_mm,
+    primitives_bounds, primitives_bounds_in, text_aabb, text_aabb_with_width, text_height_mm,
 };
+pub use text_widths::{MeasuredText, TextField, TextWidths};
 
 #[cfg(test)]
 mod default_tests;

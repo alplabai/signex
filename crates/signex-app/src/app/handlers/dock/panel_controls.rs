@@ -40,14 +40,9 @@ impl Signex {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
-        let Some(at) = drafts
-            .iter()
-            .position(|d| d.field == field && d.sheet == sheet)
-        else {
+        let Some(draft) = self.document_state.drafts.take_title_block(&sheet, field) else {
             return;
         };
-        let draft = drafts.remove(at);
         self.apply_engine_command(
             signex_engine::Command::SetTitleBlockField {
                 key: field.key().to_string(),
@@ -58,20 +53,124 @@ impl Signex {
         );
     }
 
+    /// Commit every pending title-block draft, so what the canvas shows is
+    /// what a save, an export or a print writes (#2027). Drafts of the active
+    /// sheet go through the usual undoable edit; another sheet's are written to
+    /// its own engine and mark it modified.
+    pub(crate) fn commit_pending_title_block_drafts(&mut self) {
+        self.commit_title_block_drafts_where(|_| true);
+    }
+
+    /// [`Self::commit_pending_title_block_drafts`] for the drafts of the
+    /// sheets `matches` picks only; the rest stay pending.
+    pub(crate) fn commit_title_block_drafts_where(
+        &mut self,
+        matches: impl Fn(&std::path::Path) -> bool,
+    ) {
+        let picked = self.document_state.drafts.take_title_blocks_where(matches);
+        let active = self.document_state.active_path.clone();
+        let (mine, others): (Vec<_>, Vec<_>) = picked
+            .into_iter()
+            .partition(|d| Some(&d.sheet) == active.as_ref());
+        for draft in others {
+            self.apply_title_block_field_to_sheet(
+                &draft.sheet,
+                draft.field.key(),
+                draft.text.trim(),
+            );
+        }
+        for draft in mine {
+            self.apply_engine_command(
+                signex_engine::Command::SetTitleBlockField {
+                    key: draft.field.key().to_string(),
+                    value: draft.text.trim().to_string(),
+                },
+                false,
+                false,
+            );
+        }
+    }
+
+    /// Commit the pending title-block drafts of the document `anchor` and of
+    /// the other sheets of its project: the scope of an export or a project
+    /// close. Another project's drafts stay pending.
+    pub(crate) fn commit_drafts_in_scope_of(&mut self, anchor: Option<&std::path::Path>) {
+        let Some(anchor) = anchor else {
+            return;
+        };
+        let project = self.document_state.document_project(anchor).map(|p| p.id);
+        let owned: Vec<std::path::PathBuf> = self
+            .document_state
+            .drafts
+            .title_block_sheets()
+            .into_iter()
+            .filter(|sheet| {
+                sheet == anchor
+                    || project.is_some_and(|id| {
+                        self.document_state
+                            .document_project(sheet)
+                            .is_some_and(|p| p.id == id)
+                    })
+            })
+            .collect();
+        self.commit_title_block_drafts_where(|sheet| owned.iter().any(|p| p == sheet));
+    }
+
+    /// One title-block edit on an open sheet that is not the active one,
+    /// through the same guards as the mutation gateway: a read-only sheet
+    /// refuses it (and says so in Messages), engine warnings are reported,
+    /// and the sheet is marked modified with its parked view dropped.
+    fn apply_title_block_field_to_sheet(
+        &mut self,
+        sheet: &std::path::Path,
+        key: &str,
+        value: &str,
+    ) {
+        if self.refuse_if_read_only_at(sheet).is_some() {
+            return;
+        }
+        let Some(engine) = self.document_state.engines.get_mut(sheet) else {
+            crate::diagnostics::log_warning(format!(
+                "A pending title-block edit of {} was dropped: the sheet is no longer open.",
+                sheet.display()
+            ));
+            return;
+        };
+        let command = signex_engine::Command::SetTitleBlockField {
+            key: key.to_string(),
+            value: value.to_string(),
+        };
+        let result = engine.execute(command);
+        Self::report_engine_warnings(engine);
+        match result {
+            Ok(result) if result.changed => {
+                self.document_state.mark_document_dirty(sheet);
+                if let Some(tab) = self
+                    .document_state
+                    .tabs
+                    .iter_mut()
+                    .find(|t| t.path == sheet)
+                {
+                    tab.cached_document = None;
+                }
+            }
+            Ok(_) => {}
+            Err(error) => crate::diagnostics::log_warning(format!(
+                "A title-block edit on {} could not be applied: {error}",
+                sheet.display()
+            )),
+        }
+    }
+
     /// Write the active sheet's custom width/height draft as one undoable
     /// `SetPaperSize`. Text that is not a number keeps the current edge.
     pub(crate) fn commit_custom_paper_edge(&mut self, edge: crate::panels::PaperEdge) {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        let drafts = &mut self.document_state.panel_ctx.paper_edge_drafts;
-        let Some(at) = drafts
-            .iter()
-            .position(|d| d.edge == edge && d.sheet == sheet)
-        else {
+        let Some(draft) = self.document_state.drafts.take_paper_edge(&sheet, edge) else {
             return;
         };
-        let draft = drafts.remove(at);
         let (w, h) = crate::panels::paper_dimensions(&self.document_state.panel_ctx.paper_size);
         let current = match edge {
             crate::panels::PaperEdge::Width => w,
@@ -474,14 +573,11 @@ impl Signex {
             }
             crate::panels::PanelMsg::TitleBlockTyping(field, text) => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
-                    let drafts = &mut self.document_state.panel_ctx.title_block_drafts;
-                    drafts.retain(|d| !(d.field == *field && d.sheet == sheet));
-                    drafts.push(crate::panels::TitleBlockDraft {
-                        sheet,
-                        field: *field,
-                        text: text.clone(),
-                    });
+                    self.document_state
+                        .drafts
+                        .set_title_block(&sheet, *field, text);
                 }
+                self.refresh_canvas_sheet_frame();
             }
             crate::panels::PanelMsg::CommitTitleBlockField(field) => {
                 self.commit_title_block_field(*field);
@@ -491,13 +587,9 @@ impl Signex {
             }
             crate::panels::PanelMsg::CustomPaperEdgeTyping(edge, text) => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
-                    let drafts = &mut self.document_state.panel_ctx.paper_edge_drafts;
-                    drafts.retain(|d| !(d.edge == *edge && d.sheet == sheet));
-                    drafts.push(crate::panels::PaperEdgeDraft {
-                        sheet,
-                        edge: *edge,
-                        text: text.clone(),
-                    });
+                    self.document_state
+                        .drafts
+                        .set_paper_edge(&sheet, *edge, text);
                 }
             }
             crate::panels::PanelMsg::CommitCustomPaperEdge(edge) => {

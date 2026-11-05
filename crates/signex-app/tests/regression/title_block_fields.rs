@@ -70,7 +70,7 @@ fn a_field_commits_on_enter_as_one_undo_step() {
         Some("A. Engineer"),
         "the panel shows the stored value"
     );
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
     assert!(
         app.document_state
             .is_document_dirty(&app.document_state.tabs[0].path),
@@ -185,7 +185,149 @@ fn the_sign_off_fields_appear_in_the_drawn_title_block() {
         "B. Reviewer",
         "Approved",
         "C. Lead",
+        "File",
+        "power.snxsch",
     ] {
         assert!(drawn.contains(&wanted), "{wanted} not in {drawn:?}");
+    }
+}
+
+/// #2027 - a title-block field previews on the canvas while it is typed; the
+/// document is untouched until Enter commits it.
+#[test]
+fn a_typed_draft_previews_on_the_canvas_before_it_commits() {
+    let (mut app, _t) = Signex::new();
+    let sheet = open_sheet(&mut app, "power");
+    let drawn = |app: &Signex, wanted: &str| {
+        app.interaction_state
+            .active_canvas()
+            .sheet_frame
+            .iter()
+            .any(|p| matches!(p, signex_output::template::FramePrimitive::Text { text, .. } if text == wanted))
+    };
+
+    type_field(&mut app, TitleBlockField::DrawnBy, "A. Eng");
+    assert!(drawn(&app, "A. Eng"), "the draft shows while typing");
+    type_field(&mut app, TitleBlockField::DrawnBy, " A. Engineer ");
+    assert!(drawn(&app, "A. Engineer"), "the preview follows each key");
+    assert!(!drawn(&app, "A. Eng"));
+    assert_eq!(stored(&app, &sheet, "drawn_by"), None, "no document write");
+    assert!(
+        !app.document_state.is_document_dirty(&sheet),
+        "typing does not dirty the sheet"
+    );
+
+    panel(
+        &mut app,
+        PanelMsg::CommitTitleBlockField(TitleBlockField::DrawnBy),
+    );
+    assert!(drawn(&app, "A. Engineer"));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(
+        !drawn(&app, "A. Engineer"),
+        "undo removes it from the sheet"
+    );
+}
+
+/// #2027 - what the canvas shows is what gets written: a field typed without
+/// Enter is committed as one undoable edit before Save, and before an export
+/// or a print reads the engine.
+mod drafts_before_persist {
+    use super::*;
+    use signex_app::app::{FileMsg, PrintPreviewMsg};
+    use signex_app::menu_bar::MenuMessage;
+    use signex_app::persist::{DocumentSaves, DocumentSink};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct Recorder(Mutex<Vec<String>>);
+
+    impl DocumentSink for Recorder {
+        fn write(&self, _path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+            self.0
+                .lock()
+                .unwrap()
+                .push(String::from_utf8_lossy(bytes).into_owned());
+            Ok(())
+        }
+    }
+
+    fn run(task: iced::Task<Message>) -> Vec<Message> {
+        use futures::StreamExt;
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return Vec::new();
+        };
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        })
+    }
+
+    #[test]
+    fn save_writes_a_field_typed_without_enter_and_it_is_one_undo_step() {
+        let (mut app, _t) = Signex::new();
+        let sheet = open_sheet(&mut app, "power");
+        let recorder = Arc::new(Recorder::default());
+        app.document_state.document_saves = DocumentSaves::new(recorder.clone());
+        type_field(&mut app, TitleBlockField::DrawnBy, "A. Engineer");
+        assert_eq!(stored(&app, &sheet, "drawn_by"), None, "still a draft");
+
+        let task = app.update(Message::File(FileMsg::Save));
+        for message in run(task) {
+            let _ = app.update(message);
+        }
+
+        let written = recorder
+            .0
+            .lock()
+            .unwrap()
+            .last()
+            .cloned()
+            .expect("Save wrote");
+        let reopened = signex_types::format::SnxSchematic::parse(&written)
+            .expect("reopens")
+            .sheet;
+        assert_eq!(
+            reopened.title_block.get("drawn_by").map(String::as_str),
+            Some("A. Engineer")
+        );
+        assert!(app.document_state.drafts.is_empty());
+        let _ = app.update(Message::Edit(EditMsg::Undo));
+        assert_eq!(stored(&app, &sheet, "drawn_by"), None, "one undo step");
+    }
+
+    #[test]
+    fn an_export_or_a_print_reads_the_committed_field() {
+        for message in [
+            Message::Menu(MenuMessage::ExportPdf),
+            Message::Menu(MenuMessage::ExportNetlist),
+            Message::PrintPreview(PrintPreviewMsg::Requested),
+        ] {
+            let (mut app, _t) = Signex::new();
+            let sheet = open_sheet(&mut app, "power");
+            type_field(&mut app, TitleBlockField::Title, "Power supply");
+            let _ = app.update(message);
+            assert_eq!(
+                stored(&app, &sheet, "title").as_deref(),
+                Some("Power supply"),
+                "the engine the export reads holds the draft"
+            );
+        }
+    }
+
+    #[test]
+    fn a_draft_on_another_sheet_is_written_to_that_sheet_before_save_all() {
+        let (mut app, _t) = Signex::new();
+        let first = open_sheet(&mut app, "first");
+        type_field(&mut app, TitleBlockField::Revision, "C");
+        let second = open_sheet(&mut app, "second");
+        let _ = app.update(Message::Menu(MenuMessage::SaveAll));
+        assert_eq!(stored(&app, &first, "rev").as_deref(), Some("C"));
+        assert_eq!(stored(&app, &second, "rev"), None);
     }
 }

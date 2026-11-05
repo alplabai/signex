@@ -67,7 +67,7 @@ impl SchematicCanvas<'_> {
             let snapshot = self.active_snapshot();
 
             // Layer 2: content (schematic elements). A GPU-mounted sheet has
-            // its content on the shaders, and its rotated texts on a layer
+            // its content on the shaders, and its rotated and oversize texts on a layer
             // of their own beneath the drag shader.
             if self.mode == ContentMode::Cpu {
                 let content =
@@ -102,10 +102,10 @@ impl SchematicCanvas<'_> {
             ContentMode::Cpu => {
                 layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame))
             }
-            // The static layer's rotated texts have their own layer below the
+            // The static layer's rotated and oversize texts have their own layer below the
             // drag shader; only the moving ones belong above it.
             ContentMode::GpuOverlay => {
-                layers.push(self.draw_moving_rotated_texts(renderer, bounds));
+                layers.push(self.draw_moving_canvas_texts(renderer, bounds));
             }
         }
 

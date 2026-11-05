@@ -8,8 +8,12 @@ use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
-use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
+use signex_gfx::primitive::text::{TextHAlign, TextItem, TextRaster, TextVAlign};
 use signex_gfx::scene::{CPU_SCHEMATIC_DRAW_ORDER, Scene, SceneBucket};
+
+/// The largest text, in logical pixels, iced draws from the glyph atlas; past
+/// it iced draws vector outlines. The one atlas limit: signex reads iced's.
+pub(crate) const ATLAS_TEXT_LIMIT_PX: f32 = iced::advanced::graphics::geometry::MAX_ATLAS_TEXT_SIZE;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SceneDrawOptions {
@@ -24,6 +28,7 @@ pub struct SceneDrawOptions {
     /// copy is how the replays drifted apart.
     pub text_min_px: f32,
     pub text_max_px: f32,
+    pub frame_origin: Point, // where the frame starts, for the oversize cull
 }
 
 /// Does this world→screen map flip Y?
@@ -160,7 +165,22 @@ impl SceneDrawOptions {
         (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
     }
 
-    fn text_px(self, size_mm: f32, family: Option<&str>) -> f32 {
+    /// How `text` draws at this scale and display (the one rule the GPU
+    /// glyph pipeline reads as well).
+    pub(crate) fn text_raster(self, text: &TextItem) -> TextRaster {
+        let dpr = self.device_px_per_logical_px;
+        signex_gfx::primitive::text::text_raster(
+            self.text_px(text.size_mm, text.family.as_deref()) * dpr,
+            ATLAS_TEXT_LIMIT_PX * dpr,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn text_px_for_test(self, size_mm: f32) -> f32 {
+        self.text_px(size_mm, None)
+    }
+
+    pub(crate) fn text_px(self, size_mm: f32, family: Option<&str>) -> f32 {
         signex_gfx::primitive::text::text_px_in(
             size_mm,
             self.scale_px_per_mm,
@@ -530,18 +550,11 @@ fn draw_text_bucket<F>(
     draw_text_items(frame, texts.iter(), world_to_screen, options);
 }
 
-/// The texts of `scene` the GPU glyph atlas cannot draw: every item that is
-/// not [`TextItem::is_axis_aligned`], the same predicate the GPU text pipeline
-/// stages by. Together with the axis-aligned rest they are exactly
-/// `scene.texts`.
-pub fn rotated_texts(scene: &Scene) -> impl Iterator<Item = &TextItem> {
-    scene.texts.iter().filter(|text| !text.is_axis_aligned())
-}
-
-/// CPU fallback for a scene whose axis-aligned text draws on the GPU: paints
-/// only the rotated items, through the same path as the full replay so they
-/// match it pixel for pixel.
-pub fn draw_rotated_texts<F>(
+/// Canvas pass for a scene whose atlas text draws on the GPU: paints only what
+/// the glyph atlas cannot, the rotated and the oversize texts
+/// ([`cpu_draws_beside_gpu`]), through the same path as the full replay so
+/// they match it pixel for pixel.
+pub fn draw_canvas_texts<F>(
     frame: &mut canvas::Frame,
     scene: &Scene,
     world_to_screen: F,
@@ -549,7 +562,29 @@ pub fn draw_rotated_texts<F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    draw_text_items(frame, rotated_texts(scene), world_to_screen, options);
+    // Past the atlas ceiling only the canvas draws text (iced turns it into
+    // vector outlines), so a GPU-mounted sheet hands it to this overlay too.
+    let cpu_texts = scene
+        .texts
+        .iter()
+        .filter(|text| cpu_draws_beside_gpu(text, options));
+    draw_text_items(frame, cpu_texts, world_to_screen, options);
+}
+
+/// Whether signex's GPU glyph pipeline stages `text`: axis-aligned (the atlas
+/// cannot rotate) and within the atlas limit.
+pub(crate) fn gpu_stages_text(text: &TextItem, options: SceneDrawOptions) -> bool {
+    let dpr = options.device_px_per_logical_px;
+    text.gpu_stages(
+        options.text_px(text.size_mm, text.family.as_deref()) * dpr,
+        ATLAS_TEXT_LIMIT_PX * dpr,
+    )
+}
+
+/// Whether the canvas draws `text` of a GPU-mounted scene: everything that is
+/// drawn at all and not staged on the GPU, so each text is drawn exactly once.
+pub(crate) fn cpu_draws_beside_gpu(text: &TextItem, options: SceneDrawOptions) -> bool {
+    options.text_raster(text) != TextRaster::Skip && !gpu_stages_text(text, options)
 }
 
 fn draw_text_items<'a, F>(
@@ -560,17 +595,34 @@ fn draw_text_items<'a, F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
+    let mut budget = crate::oversize_text::OversizeBudget::default();
     for text in texts {
         if text.content.is_empty() {
             continue;
         }
 
+        let size_px = options.text_px(text.size_mm, text.family.as_deref());
         let position = world_to_screen(text.position);
+        let content = match options.text_raster(text) {
+            TextRaster::Skip => continue,
+            // iced draws it as outlines past its own atlas limit; nothing
+            // reaches it that cannot be seen, and what does is bounded.
+            TextRaster::Oversize => {
+                if !crate::oversize_text::on_screen(frame, options, text, position, size_px) {
+                    continue;
+                }
+                match budget.admit(&text.content) {
+                    Some(content) => content.to_string(),
+                    None => continue,
+                }
+            }
+            TextRaster::Bitmap => text.content.clone(),
+        };
         let draw_text = canvas::Text {
-            content: text.content.clone(),
+            content,
             position: Point::ORIGIN,
             color: color_from_rgba(text.color),
-            size: iced::Pixels(options.text_px(text.size_mm, text.family.as_deref())),
+            size: iced::Pixels(size_px),
             line_height: iced::widget::text::LineHeight::Relative(
                 signex_gfx::primitive::text::LINE_HEIGHT_EM,
             ),
@@ -963,41 +1015,70 @@ mod rotated_text_tests {
         }
     }
 
-    /// The GPU stages `is_axis_aligned` items and this fallback draws the rest,
-    /// so a text is never lost and never drawn twice (#199 S1).
+    /// The GPU stages what the atlas can draw and the canvas draws the rest,
+    /// so a text that is drawn at all is never lost and never drawn twice
+    /// (#199 S1), over the real predicates: rotated, oversize and tiny items
+    /// included.
     #[test]
-    fn gpu_staged_plus_fallback_is_exactly_the_scene_texts() {
-        let scene = Scene {
-            texts: vec![
-                text("horizontal", 0.0),
-                text("vertical", std::f32::consts::FRAC_PI_2),
-                text("negative-zero", -0.0),
-                text("arbitrary", 0.61),
-                text("vertical-down", -std::f32::consts::FRAC_PI_2),
-                text("flipped", std::f32::consts::PI),
-            ],
-            ..Scene::default()
+    fn gpu_staged_plus_canvas_is_exactly_the_drawn_texts() {
+        let options = SceneDrawOptions {
+            scale_px_per_mm: 30.0,
+            device_px_per_logical_px: 1.0,
+            text_min_px: 0.0,
+            text_max_px: f32::INFINITY,
+            frame_origin: Point::ORIGIN,
         };
-
-        let staged: Vec<&str> = scene
-            .texts
+        let sized = |content: &str, size_mm: f32, rotation: f32| TextItem {
+            size_mm,
+            ..text(content, rotation)
+        };
+        let texts = [
+            sized("horizontal", 1.27, 0.0),
+            sized("negative-zero", 1.27, -0.0),
+            sized("vertical", 1.27, std::f32::consts::FRAC_PI_2),
+            sized("arbitrary", 1.27, 0.61),
+            sized("vertical-down", 1.27, -std::f32::consts::FRAC_PI_2),
+            sized("flipped", 1.27, std::f32::consts::PI),
+            sized("oversize", 40.0, 0.0),
+            sized("oversize-rotated", 40.0, 0.61),
+            sized("invisible", f32::NAN, 0.0),
+        ];
+        let staged: Vec<&str> = texts
             .iter()
-            .filter(|t| t.is_axis_aligned())
+            .filter(|t| gpu_stages_text(t, options))
             .map(|t| t.content.as_str())
             .collect();
-        let fallback: Vec<&str> = rotated_texts(&scene).map(|t| t.content.as_str()).collect();
-
+        let canvas: Vec<&str> = texts
+            .iter()
+            .filter(|t| cpu_draws_beside_gpu(t, options))
+            .map(|t| t.content.as_str())
+            .collect();
         assert_eq!(staged, ["horizontal", "negative-zero"]);
         assert_eq!(
-            fallback,
-            ["vertical", "arbitrary", "vertical-down", "flipped"]
+            canvas,
+            [
+                "vertical",
+                "arbitrary",
+                "vertical-down",
+                "flipped",
+                "oversize",
+                "oversize-rotated"
+            ]
         );
-        assert!(staged.iter().all(|c| !fallback.contains(c)), "disjoint");
-        let mut all: Vec<&str> = staged.iter().chain(&fallback).copied().collect();
-        let mut expected: Vec<&str> = scene.texts.iter().map(|t| t.content.as_str()).collect();
-        all.sort_unstable();
-        expected.sort_unstable();
-        assert_eq!(all, expected, "nothing missed, nothing duplicated");
+        assert!(staged.iter().all(|c| !canvas.contains(c)), "disjoint");
+        let mut union: Vec<&str> = staged.iter().chain(&canvas).copied().collect();
+        let mut drawn: Vec<&str> = texts
+            .iter()
+            .map(|t| t.content.as_str())
+            .filter(|c| *c != "invisible")
+            .collect();
+        union.sort_unstable();
+        drawn.sort_unstable();
+        assert_eq!(union, drawn, "nothing missed, nothing duplicated");
+        assert!(
+            !staged.contains(&"invisible") && !canvas.contains(&"invisible"),
+            "an invisible text is drawn by neither"
+        );
     }
 
     #[test]
@@ -1038,6 +1119,7 @@ mod line_geometry_tests {
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             text_min_px: 1.0,
             text_max_px: 100.0,
+            frame_origin: Point::ORIGIN,
         }
     }
 
@@ -1100,8 +1182,7 @@ mod line_geometry_tests {
                 let options = SceneDrawOptions {
                     scale_px_per_mm: scale,
                     device_px_per_logical_px: dpr,
-                    text_min_px: 1.0,
-                    text_max_px: 100.0,
+                    ..options()
                 };
                 let to_screen = |p: [f32; 2]| Point::new(p[0] * scale + 0.37, p[1] * scale + 0.61);
                 let (_, _, wire) =
@@ -1113,5 +1194,64 @@ mod line_geometry_tests {
                 assert_eq!(ring, wire, "ring at {scale} px/mm, {dpr}x");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod oversize_text_tests {
+    use super::*;
+
+    fn text_item(size_mm: f32, rotation: f32) -> TextItem {
+        TextItem {
+            content: "R1".into(),
+            size_mm,
+            rotation,
+            ..Default::default()
+        }
+    }
+
+    /// #2022 - 40 mm text at 96 px/mm (about 5224 px) is drawn at that true
+    /// size, not clamped to the atlas ceiling and not culled; being past the
+    /// atlas it is the canvas that draws it beside a GPU-mounted scene.
+    #[test]
+    fn oversize_text_keeps_its_true_size_and_goes_to_the_canvas_beside_the_gpu() {
+        let options = SceneDrawOptions {
+            scale_px_per_mm: 96.0,
+            device_px_per_logical_px: 1.0,
+            text_min_px: 0.0,
+            text_max_px: f32::INFINITY,
+            frame_origin: Point::ORIGIN,
+        };
+        let big = text_item(40.0, 0.0);
+        let px = options.text_px(big.size_mm, None);
+        assert!((px - 5224.0).abs() < 5.0, "true size, got {px}");
+        assert_eq!(options.text_raster(&big), TextRaster::Oversize);
+        assert!(cpu_draws_beside_gpu(&big, options));
+        assert!(
+            cpu_draws_beside_gpu(&text_item(1.27, 1.0), options),
+            "rotated"
+        );
+        assert!(
+            !cpu_draws_beside_gpu(&text_item(1.27, 0.0), options),
+            "ordinary"
+        );
+    }
+
+    /// One atlas limit: iced's own constant, in logical px, times the display
+    /// scale for the GPU staging, decides `Oversize`.
+    #[test]
+    fn oversize_starts_just_past_the_iced_atlas_limit_at_every_display_scale() {
+        use iced::advanced::graphics::geometry::MAX_ATLAS_TEXT_SIZE;
+        use signex_gfx::primitive::text::text_raster;
+        for dpr in [1.0_f32, 2.0, 3.0] {
+            let limit = MAX_ATLAS_TEXT_SIZE * dpr;
+            assert_eq!(text_raster(limit, limit), TextRaster::Bitmap, "{dpr}x");
+            assert_eq!(
+                text_raster(limit + 1.0, limit),
+                TextRaster::Oversize,
+                "{dpr}x"
+            );
+        }
+        assert_eq!(ATLAS_TEXT_LIMIT_PX, MAX_ATLAS_TEXT_SIZE);
     }
 }

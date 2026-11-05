@@ -75,7 +75,7 @@ impl Signex {
 
     /// Surface the notices a command raised (a rubber-band pin that could
     /// not be kept connected) in the Messages panel.
-    fn report_engine_warnings(engine: &mut signex_engine::Engine) {
+    pub(crate) fn report_engine_warnings(engine: &mut signex_engine::Engine) {
         for warning in engine.take_warnings() {
             crate::diagnostics::log_warning(warning);
         }

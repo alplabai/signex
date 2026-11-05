@@ -22,13 +22,20 @@ impl Signex {
     /// (`instance_id`), so a drag of many events does not flood Messages; a
     /// reopen makes a new engine and re-arms it.
     pub(crate) fn refuse_if_active_read_only(&mut self) -> Option<String> {
-        let engine = self.document_state.active_engine()?;
+        let path = self.document_state.active_path.clone()?;
+        self.refuse_if_read_only_at(&path)
+    }
+
+    /// [`Self::refuse_if_active_read_only`] for the open sheet at `path`, for
+    /// an edit that targets a sheet that is not the active one.
+    pub(crate) fn refuse_if_read_only_at(&mut self, path: &std::path::Path) -> Option<String> {
+        let engine = self.document_state.engines.get(path)?;
         let document = engine.document();
         if !document.is_read_only() {
             return None;
         }
         let token = document.unknown.newer_minor_source.as_deref().unwrap_or("");
-        let message = refusal_message(self.document_state.active_path.as_deref(), token);
+        let message = refusal_message(Some(path), token);
         let instance = engine.instance_id();
         if self.document_state.read_only_refusal_noted.insert(instance) {
             crate::diagnostics::log_warning(&message);

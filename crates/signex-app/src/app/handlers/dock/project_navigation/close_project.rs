@@ -9,10 +9,30 @@ use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
 impl Signex {
+    /// Commit the pending title-block drafts of the sheets that belong to
+    /// `project_id`, before a gate reads which of them are unsaved (#2027).
+    pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
+        let owned: Vec<std::path::PathBuf> = self
+            .document_state
+            .drafts
+            .title_block_sheets()
+            .into_iter()
+            .filter(|sheet| {
+                self.document_state
+                    .document_project(sheet)
+                    .is_some_and(|project| project.id == project_id)
+            })
+            .collect();
+        self.commit_title_block_drafts_where(|sheet| owned.iter().any(|p| p == sheet));
+    }
+
     /// File ▸ Close Project: close the active project through the same gate
     /// as the project tree's Close Project; nothing when none is open.
     pub(crate) fn close_active_project(&mut self) -> Task<Message> {
         let active = self.document_state.active_project;
+        if let Some(id) = active {
+            self.commit_drafts_of_project(id);
+        }
         let index = self
             .document_state
             .projects
@@ -98,6 +118,9 @@ impl Signex {
         project_id: ProjectId,
         result: Result<Box<SheetRefs>, String>,
     ) -> Task<Message> {
+        // The gate below reads the dirty marks: a draft typed while the read
+        // ran is an edit of its sheet like any other.
+        self.commit_drafts_of_project(project_id);
         let sheet_refs = match result {
             Ok(refs) => *refs,
             Err(reason) => {
@@ -577,6 +600,13 @@ impl Signex {
             self.refresh_panel_ctx();
             return Task::none();
         }
+        // A field typed while the prompt was up is an edit of this project
+        // too: Save All commits it before the scan below, so it is written.
+        // Discard All must not: a refused one leaves the prompt up, and the
+        // field would already be an engine edit by then.
+        if choice == ProjectCloseChoice::SaveAll {
+            self.commit_drafts_of_project(state.project_id);
+        }
         // A project opened since the references were read has disk-only
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.
@@ -715,6 +745,7 @@ impl Signex {
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
+        self.commit_pending_title_block_drafts();
         if self.hold_quit_while_path_op() {
             return Task::none();
         }

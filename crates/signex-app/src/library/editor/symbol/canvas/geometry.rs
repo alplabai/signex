@@ -45,7 +45,7 @@ pub(super) fn symbol_stroke_mm(
     scale: f32,
     device_px_per_logical_px: f32,
 ) -> f32 {
-    let mm = signex_types::schematic::effective_stroke_mm(width_mm) as f32;
+    let mm = signex_types::schematic::symbol_graphic_stroke_mm(width_mm) as f32;
     if selected {
         stroke_px(mm, scale, device_px_per_logical_px) * SELECTED_STROKE_FACTOR
             / scale.max(f32::MIN_POSITIVE)

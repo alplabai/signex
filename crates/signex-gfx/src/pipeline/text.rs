@@ -55,11 +55,6 @@ fn alignment_offset_px(size_px: [f32; 2], h_align: TextHAlign, v_align: TextVAli
     [x, y]
 }
 
-/// The items the glyph atlas can draw; rotated ones belong to the CPU layer.
-fn atlas_drawable(texts: &[TextItem]) -> impl Iterator<Item = &TextItem> {
-    texts.iter().filter(|text| text.is_axis_aligned())
-}
-
 /// Top-left of the glyph run for an axis-aligned item. Rotation is not part of
 /// this maths: a cryoglyph `TextArea` cannot rotate, so rotated items never
 /// reach it (`TextItem::is_axis_aligned`) and are drawn by the CPU canvas layer.
@@ -217,6 +212,20 @@ pub(crate) fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
     }
 }
 
+/// Shape sheet text the way the pipeline draws it: one line per source line,
+/// since wrapping at the viewport would break a deep-zoom note on the GPU only.
+fn shaped_sheet_text(
+    font_system: &mut cryoglyph::FontSystem,
+    item: &TextItem,
+    metrics: cryoglyph::Metrics,
+    attrs: &cryoglyph::Attrs<'_>,
+) -> cryoglyph::Buffer {
+    shaped_buffer(font_system, item, metrics, attrs, SHEET_TEXT_WRAP_PX)
+}
+
+/// The wrap width sheet text is shaped and cached under.
+const SHEET_TEXT_WRAP_PX: [f32; 2] = [super::text_measure::NO_WRAP_PX; 2];
+
 /// Shape `item`'s content into a buffer.
 pub(crate) fn shaped_buffer(
     font_system: &mut cryoglyph::FontSystem,
@@ -301,6 +310,58 @@ struct GlyphonPreparedText {
     scale: f32,
     bounds: cryoglyph::TextBounds,
     default_color: cryoglyph::Color,
+}
+
+/// Shape one item and place it for the frame, or `None` when this pipeline
+/// does not draw it (not the atlas's, or off the viewport). Sheet text is
+/// shaped unwrapped, so a note wider than the viewport stays one line.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "every argument is one axis of staging a text: what, how big, where, in which face"
+)]
+fn stage_text(
+    shaped: &mut ShapedBufferCache,
+    font_system: &mut cryoglyph::FontSystem,
+    text: &TextItem,
+    scale_px_per_mm: f32,
+    size_policy: TextSizePolicy,
+    family: &'static str,
+    bounds: cryoglyph::TextBounds,
+    offset_px: [f32; 2],
+) -> Option<(GlyphonPreparedText, Arc<cryoglyph::Buffer>)> {
+    let font_px = text_size_px(text, scale_px_per_mm, size_policy);
+    if !text.gpu_stages(font_px, size_policy.atlas_limit_px) {
+        return None;
+    }
+    let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
+    // Shape at the snapped size so the cache key is truthful and a
+    // zoom reuses shapes (see `text_cache::quantise_px`).
+    let (font_px, line_height_px) = (quantise_px(font_px), quantise_px(line_height_px));
+    let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
+    if !may_intersect_viewport(text, font_px, line_height_px, anchor_px, bounds) {
+        return None;
+    }
+    let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
+    let attrs = attrs_for_item(text, family);
+    let key = ShapedKey::new(text, family, font_px, line_height_px, SHEET_TEXT_WRAP_PX);
+    let buffer = shaped.get_or_shape(font_system, key, |font_system| {
+        shaped_sheet_text(font_system, text, metrics, &attrs)
+    });
+
+    let text_bounds_px = measure_text_bounds_px(&buffer);
+    let top_left_px = anchored_top_left_px(text, anchor_px, text_bounds_px);
+    let text_rect = rect_from_top_left_size(top_left_px, text_bounds_px);
+    if !rect_intersects_viewport(text_rect, bounds) {
+        return None;
+    }
+    let prepared = GlyphonPreparedText {
+        left: top_left_px[0],
+        top: top_left_px[1],
+        scale: 1.0,
+        bounds,
+        default_color: to_glyphon_color(text.color),
+    };
+    Some((prepared, buffer))
 }
 
 /// Production text path using glyphon atlas, shaping, and cached glyph rendering.
@@ -394,44 +455,24 @@ impl GlyphonTextPipeline {
         }
 
         let bounds = viewport_bounds(viewport_size_px);
-        let viewport_width = viewport_size_px[0] as f32;
-        let viewport_height = viewport_size_px[1] as f32;
 
         // Rotated items are the CPU canvas layer's to draw — see
         // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
-        for text in atlas_drawable(texts) {
-            let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
-            // Shape at the snapped size so the cache key is truthful and a
-            // zoom reuses shapes (see `text_cache::quantise_px`).
-            let (font_px, line_height_px) = (quantise_px(font_px), quantise_px(line_height_px));
-            let anchor_px = text_position_px(text, scale_px_per_mm, offset_px);
-            if !may_intersect_viewport(text, font_px, line_height_px, anchor_px, bounds) {
-                continue;
-            }
-            let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
-            let attrs = attrs_for_item(text, family);
-            let wrap_px = [viewport_width, viewport_height];
-            let key = ShapedKey::new(text, family, font_px, line_height_px, wrap_px);
-            let buffer = self.shaped.get_or_shape(font_system, key, |font_system| {
-                shaped_buffer(font_system, text, metrics, &attrs, wrap_px)
-            });
-
-            let text_bounds_px = measure_text_bounds_px(&buffer);
-            let top_left_px = anchored_top_left_px(text, anchor_px, text_bounds_px);
-            let text_rect = rect_from_top_left_size(top_left_px, text_bounds_px);
-            if !rect_intersects_viewport(text_rect, bounds) {
-                continue;
-            }
-
-            self.prepared_texts.push(GlyphonPreparedText {
-                left: top_left_px[0],
-                top: top_left_px[1],
-                scale: 1.0,
+        for text in texts {
+            let staged = stage_text(
+                &mut self.shaped,
+                font_system,
+                text,
+                scale_px_per_mm,
+                size_policy,
+                family,
                 bounds,
-                default_color: to_glyphon_color(text.color),
-            });
-            self.buffers.push(buffer);
+                offset_px,
+            );
+            if let Some((prepared, buffer)) = staged {
+                self.prepared_texts.push(prepared);
+                self.buffers.push(buffer);
+            }
         }
 
         self.text_count = self.prepared_texts.len() as u32;
@@ -502,11 +543,69 @@ impl GlyphonTextPipeline {
 mod tests {
     use super::TextSizePolicy;
     use super::{
-        alignment_offset_px, anchored_top_left_px, atlas_drawable, attrs_for_item,
-        overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,
-        shaped_buffer, text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
+        alignment_offset_px, anchored_top_left_px, attrs_for_item, overlap_ratio_by_smaller_area,
+        rect_from_top_left_size, rect_intersects_viewport, shaped_buffer, shaped_sheet_text,
+        text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
     };
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+
+    /// A note longer than the viewport stays one line on the GPU, as it is
+    /// on the canvas: the wrap width the pipeline shapes with never breaks it.
+    #[test]
+    fn a_long_note_is_not_wrapped_at_the_viewport() {
+        let mut fs = test_font_system();
+        let item = TextItem {
+            content: "w".repeat(400),
+            size_mm: 1.0,
+            color: [1.0; 4],
+            ..Default::default()
+        };
+        let attrs = attrs_for_item(&item, "Iosevka");
+        let metrics = cryoglyph::Metrics::new(16.0, 19.0);
+        let lines = |wrap: [f32; 2], fs: &mut cryoglyph::FontSystem| {
+            shaped_buffer(fs, &item, metrics, &attrs, wrap)
+                .layout_runs()
+                .count()
+        };
+        assert!(
+            lines([800.0, 600.0], &mut fs) > 1,
+            "the viewport would wrap"
+        );
+        let sheet = shaped_sheet_text(&mut fs, &item, metrics, &attrs);
+        assert_eq!(sheet.layout_runs().count(), 1);
+    }
+
+    /// The staging path itself: a 400-character note in a 200 px viewport is
+    /// staged as one line wider than the viewport, not wrapped to fit it.
+    #[test]
+    fn staging_a_long_note_in_a_narrow_viewport_keeps_one_line() {
+        use super::{ShapedBufferCache, measure_text_bounds_px, stage_text};
+        let mut fs = test_font_system();
+        let item = TextItem {
+            content: "w".repeat(400),
+            size_mm: 1.0,
+            color: [1.0; 4],
+            ..Default::default()
+        };
+        let viewport = [200_u32, 100];
+        let mut shaped = ShapedBufferCache::new();
+        let (_, buffer) = stage_text(
+            &mut shaped,
+            &mut fs,
+            &item,
+            12.0,
+            TextSizePolicy::UNCLAMPED,
+            "Iosevka",
+            viewport_bounds(viewport),
+            [0.0, 0.0],
+        )
+        .expect("the note is staged");
+        assert_eq!(buffer.layout_runs().count(), 1, "one line, not wrapped");
+        assert!(
+            measure_text_bounds_px(&buffer)[0] > viewport[0] as f32,
+            "wider than the viewport"
+        );
+    }
 
     #[test]
     fn pre_shaping_cull_never_drops_an_item_shaping_would_keep() {
@@ -724,10 +823,10 @@ mod tests {
             v_align: TextVAlign::Top,
             family: None,
         };
-        assert_eq!(atlas_drawable(std::slice::from_ref(&item)).count(), 1);
+        assert!(item.gpu_stages(12.0, f32::INFINITY));
         for angle in [std::f32::consts::FRAC_PI_2, -std::f32::consts::FRAC_PI_2] {
             item.rotation = angle;
-            assert_eq!(atlas_drawable(std::slice::from_ref(&item)).count(), 0);
+            assert!(!item.gpu_stages(12.0, f32::INFINITY));
         }
     }
 

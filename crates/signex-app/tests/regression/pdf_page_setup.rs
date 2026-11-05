@@ -31,6 +31,7 @@ fn app_with_sheet(paper: &str) -> Signex {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         title_block: HashMap::new(),
+        text_widths: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),

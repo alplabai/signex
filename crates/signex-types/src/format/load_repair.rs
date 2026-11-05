@@ -43,7 +43,7 @@ pub struct RepairedObject {
 }
 
 /// One change made while parsing a sheet.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SheetLoadRepair {
     /// An exact copy of an earlier object of the same kind, carrying its
     /// uuid, was dropped.
@@ -58,6 +58,12 @@ pub enum SheetLoadRepair {
         holder: &'static str,
         /// The sheet symbol a sheet pin, or the footprint a pad, belongs to.
         owner: Option<String>,
+    },
+    /// A text size no schematic uses was clamped to `new` (mm).
+    TextSizeClamped {
+        object: RepairedObject,
+        old: f64,
+        new: f64,
     },
     /// Two pins of one symbol shared an id; the later pin got a new one.
     PinUuidReminted {
@@ -112,6 +118,10 @@ impl SheetLoadRepair {
                 }
                 text
             }
+            Self::TextSizeClamped { object, old, new } => format!(
+                "{} had text size {old} mm; clamped to {new} mm",
+                object.label()
+            ),
             Self::PinUuidReminted {
                 symbol,
                 pin,

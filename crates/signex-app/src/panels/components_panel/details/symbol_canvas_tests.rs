@@ -66,7 +66,7 @@ fn a_small_box_keeps_a_pixel_margin_for_pin_text() {
     let transform = fit_transform(extent, size, UNSCALED);
     let low = transform.world_to_screen((extent.min_x, extent.min_y));
     let high = transform.world_to_screen((extent.max_x, extent.max_y));
-    let room = SCHEMATIC_TEXT_SIZE.min_px * TEXT_MARGIN_EM;
+    let room = PREVIEW_TEXT_SIZE.min_px * TEXT_MARGIN_EM;
     assert!(low.x >= room - 1e-3 && low.y >= room - 1e-3, "{low:?}");
     assert!(high.x <= size.width - room + 1e-3, "{high:?}");
     assert!(high.y <= size.height - room + 1e-3, "{high:?}");
@@ -411,6 +411,23 @@ fn an_edited_body_under_the_same_id_refits() {
     assert_eq!(state.camera.scale, fitted.scale);
     assert_eq!(state.fitted_for, Some(second.fit_key()));
     assert_ne!(first.fit_key(), second.fit_key());
+}
+
+/// The preview draws its text through a readability clamp the sheet no
+/// longer has: past 64 px it stops growing and under 6 px it stops shrinking.
+#[test]
+fn the_preview_draws_text_inside_its_clamp() {
+    let at = |scale: f32| {
+        let transform = ScreenTransform {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale,
+            device_px_per_logical_px: UNSCALED,
+        };
+        preview_draw_options(&transform).text_px_for_test(TEXT_HEIGHT_MM)
+    };
+    assert_eq!(at(10_000.0), 64.0, "far past the ceiling");
+    assert_eq!(at(0.01), 6.0, "far under the floor");
 }
 
 #[test]

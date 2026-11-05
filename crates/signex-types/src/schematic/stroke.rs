@@ -51,6 +51,18 @@ pub fn effective_stroke_mm(width_mm: f64) -> f64 {
     width.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
 }
 
+/// The world width a symbol stroke (outline or pin) stored as `width_mm` draws
+/// at: a `0` or non-finite width is the default, [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`]
+/// (#2025); an explicit width is raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`].
+#[must_use]
+pub fn symbol_graphic_stroke_mm(width_mm: f64) -> f64 {
+    if width_mm.is_finite() && width_mm > 0.0 {
+        width_mm.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
+    } else {
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    }
+}
+
 /// The world width a wire is drawn and exported at: the net class width, else
 /// the wire's own, raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`]. A class width
 /// of `0` (or not a finite number) is unset and falls back to the wire's own;
@@ -92,7 +104,7 @@ pub fn stroke_px(width_mm: f32, scale_px_per_mm: f32, device_px_per_logical_px: 
 #[must_use]
 pub fn symbol_stroke_mm(graphic_widths_mm: impl IntoIterator<Item = f64>) -> f64 {
     let mut counts: Vec<(f64, usize)> = Vec::new();
-    for width in graphic_widths_mm.into_iter().map(effective_stroke_mm) {
+    for width in graphic_widths_mm.into_iter().map(symbol_graphic_stroke_mm) {
         match counts.iter_mut().find(|(w, _)| *w == width) {
             Some((_, n)) => *n += 1,
             None => counts.push((width, 1)),
@@ -101,7 +113,7 @@ pub fn symbol_stroke_mm(graphic_widths_mm: impl IntoIterator<Item = f64>) -> f64
     counts
         .into_iter()
         .max_by(|a, b| a.1.cmp(&b.1).then(a.0.total_cmp(&b.0)))
-        .map_or(SCHEMATIC_RENDER_MIN_STROKE_MM, |(width, _)| width)
+        .map_or(SCHEMATIC_DEFAULT_WIRE_STROKE_MM, |(width, _)| width)
 }
 
 #[cfg(test)]

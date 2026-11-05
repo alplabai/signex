@@ -486,6 +486,9 @@ pub struct DocumentState {
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
+    /// The one store of half-typed title-block and paper-edge text (#2027);
+    /// every panel context holds a handle to it.
+    pub drafts: crate::panels::PanelDrafts,
     pub panel_ctx: crate::panels::PanelContext,
     /// The panel context of each undocked document window, so its dock
     /// panels show and edit that window's sheet (#1966).

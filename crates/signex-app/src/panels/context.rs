@@ -155,14 +155,9 @@ pub struct PanelContext {
     /// The parameters of the project that owns the active sheet (#1080): the
     /// values a field falls back to while the sheet leaves it empty.
     pub project_parameters: std::collections::BTreeMap<String, String>,
-    /// Half-typed title-block fields, one per (sheet, field), each
-    /// committed on Enter. Moving to another field keeps the first one's
-    /// draft; switching sheets hides a sheet's drafts until it is active
-    /// again, so a draft can only ever be committed on its own sheet.
-    pub title_block_drafts: Vec<super::TitleBlockDraft>,
-    /// Half-typed custom paper width/height, one per (sheet, edge), each
-    /// committed on Enter as a single undoable `SetPaperSize`.
-    pub paper_edge_drafts: Vec<super::PaperEdgeDraft>,
+    /// The app's one store of half-typed title-block fields and custom
+    /// paper edges (#2027): a handle the view reads, never a copy.
+    pub drafts: super::PanelDrafts,
     /// Raw text of the plain numeric box being typed in.
     pub numeric_draft: Option<super::NumericDraft>,
     /// The sheet `title_block` and the shown drafts belong to.

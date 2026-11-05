@@ -852,6 +852,7 @@ fn symbol_draw_options(
         device_px_per_logical_px,
         text_min_px: SYMBOL_TEXT_SIZE.min_px,
         text_max_px: SYMBOL_TEXT_SIZE.max_px,
+        frame_origin: iced::Point::ORIGIN,
     }
 }
 

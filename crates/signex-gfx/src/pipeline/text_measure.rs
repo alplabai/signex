@@ -69,11 +69,14 @@ impl TextMeasurer {
             &item,
             metrics,
             &attrs,
-            [1.0e7, 1.0e7],
+            [NO_WRAP_PX, NO_WRAP_PX],
         );
         measure_text_bounds_px(&buffer)[0] / PROBE_PX
     }
 }
+
+/// A wrap width no text reaches: sheet text is never wrapped.
+pub(crate) const NO_WRAP_PX: f32 = 1.0e7;
 
 /// `sCapHeight / unitsPerEm`, falling back to the bounding box of `H`.
 fn cap_height_ratio(face: &ttf_parser::Face<'_>) -> Option<f32> {

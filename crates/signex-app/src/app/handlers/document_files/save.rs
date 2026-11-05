@@ -68,6 +68,9 @@ pub(crate) fn log_foreign_column_offenders(error: &anyhow::Error) {
 
 impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
+        if let Some(path) = self.document_state.active_path.clone() {
+            self.commit_title_block_drafts_where(|sheet| sheet == path);
+        }
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab) {
             // Refused before any branch below could ask for a Save As dialog
             // for a path that is only missing because it is being renamed.
@@ -226,6 +229,7 @@ impl Signex {
         from_path: &std::path::Path,
         path: PathBuf,
     ) -> Result<iced::Task<Message>> {
+        self.commit_title_block_drafts_where(|sheet| sheet == from_path);
         self.refuse_save_while_restoring(from_path)?;
         // A name typed without an extension gets `.snxsch`, like the
         // symbol / footprint Save As; if that file exists the user was never

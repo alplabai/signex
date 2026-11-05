@@ -42,6 +42,10 @@ fn main() -> iced::Result {
     .theme(Signex::theme)
     .subscription(Signex::subscription)
     .scale_factor(Signex::scale_factor)
+    // 4x multisampling for canvas meshes (vector outlines of oversize text,
+    // polygon fills). Only iced's mesh pass is multisampled, and it resolves
+    // into the single-sample frame, so signex-gfx's own pipelines are unaffected.
+    .antialiasing(fonts::read_antialiasing_pref())
     // Iosevka — schematic / PCB canvas text (monospace, tuned for EDA).
     .font(bundled::IOSEVKA_REGULAR)
     .font(bundled::IOSEVKA_BOLD)

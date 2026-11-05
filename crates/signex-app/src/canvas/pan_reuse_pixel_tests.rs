@@ -384,3 +384,54 @@ fn a_pan_to_the_edge_of_the_margin_lines_up() {
         assert_lines_up(mount, run);
     }
 }
+
+/// An oversize text (a 1100 px em, right-justified) whose anchor sits at
+/// x = -1500 px at the start camera: inside the retained layer's left margin,
+/// which is a viewport wide, and outside the viewport itself.
+fn oversize_text_in_the_margin() -> SchematicSheet {
+    use signex_types::schematic::{HAlign, Point as WorldPoint, TextNote, VAlign};
+    let mut sheet = SchematicSheet::default();
+    sheet.text_notes.push(TextNote {
+        uuid: uuid::Uuid::now_v7(),
+        text: "H".into(),
+        position: WorldPoint::new(f64::from(-1500.0 / SCALE), f64::from(900.0 / SCALE)),
+        rotation: 0.0,
+        font_size: f64::from(1100.0 / SCALE * signex_types::font::mm_per_em(None)),
+        font_family: None,
+        justify_h: HAlign::Right,
+        justify_v: VAlign::Bottom,
+        locked: false,
+    });
+    sheet
+}
+
+/// The retained layer is built a pan before the text comes into view: the
+/// oversize text in its margin must have been drawn into it, so the panned
+/// layer equals the plain canvas at the final camera. The cull measured the
+/// frame from the origin, dropped the margin and left this blank.
+#[test]
+fn an_oversize_text_in_the_margin_is_in_the_retained_layer_after_a_pan() {
+    let mut gpu = gpu();
+    let sheet = oversize_text_in_the_margin();
+    let run = Run {
+        start: iced::Point::ORIGIN,
+        pans: vec![(1650.0, 0.0)],
+        select: false,
+    };
+    let (plain, _) = last_frame(&mut gpu, Path::Plain, DOCKED, &sheet, &run);
+    let (surface, _) = last_frame(&mut gpu, Path::Surface, DOCKED, &sheet, &run);
+    let blank = last_frame(
+        &mut gpu,
+        Path::Plain,
+        DOCKED,
+        &SchematicSheet::default(),
+        &run,
+    )
+    .0;
+    assert!(
+        differing(&plain, &blank).len() > 1000,
+        "the plain canvas draws the text"
+    );
+    let missing = differing(&surface, &plain).len();
+    assert_eq!(missing, 0, "{missing} px of the panned layer differ");
+}

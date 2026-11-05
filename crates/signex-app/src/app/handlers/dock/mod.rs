@@ -17,6 +17,8 @@ pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
 mod search_prefs_persist;
+#[cfg(test)]
+mod title_block_persist_tests;
 
 impl Signex {
     pub(crate) fn handle_dock_message(&mut self, msg: DockMessage) -> Task<Message> {

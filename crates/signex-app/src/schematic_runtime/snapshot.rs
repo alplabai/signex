@@ -331,7 +331,7 @@ pub fn build_renderer_snapshot(
             screen,
             bounds,
             22.0,
-            &label_aabb(label, document_family),
+            &label_aabb_with(Some(&snapshot.text_widths), label, document_family),
             transform.scale,
         ) {
             continue;
@@ -389,7 +389,7 @@ pub fn build_renderer_snapshot(
             pos,
             bounds,
             28.0,
-            &note_aabb(note, document_family),
+            &note_aabb_with(Some(&snapshot.text_widths), note, document_family),
             transform.scale,
         ) {
             continue;

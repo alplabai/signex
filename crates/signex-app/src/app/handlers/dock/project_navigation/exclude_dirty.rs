@@ -65,6 +65,11 @@ impl Signex {
         let mut found: Vec<std::path::PathBuf> = doc
             .dirty_document_paths()
             .into_iter()
+            .chain(
+                // A sheet whose only change is a pending title-block draft is
+                // unsaved too: the draft is what Save would write (#2027).
+                doc.drafts.title_block_sheets(),
+            )
             .filter(|p| path_is_under(p, target, fold))
             // A project file's own dirty marker is metadata, not a document
             // the user can lose by excluding a row.
@@ -76,6 +81,10 @@ impl Signex {
             })
             .collect();
         found.sort();
+        // One entry per file: the project's key rule decides what is the same
+        // sheet (case, separators), not the spelling a draft was typed under.
+        let mut seen = std::collections::HashSet::new();
+        found.retain(|p| seen.insert(path_key_with(p, fold)));
         found
     }
 
@@ -265,6 +274,11 @@ impl Signex {
         let docs = self.unsaved_documents(&state.target_path, fold);
         match choice {
             ExcludeDirtyChoice::Save => {
+                // Saving is what commits a draft: the drafts under the target
+                // become its edit, then the save below writes them.
+                self.commit_title_block_drafts_where(|sheet| {
+                    path_is_under(sheet, &state.target_path, fold)
+                });
                 for doc_path in &docs {
                     if let Err(err) = self.try_save_dirty_path_with(doc_path) {
                         self.report_exclude_save_failure(&state, doc_path, &err);
@@ -288,6 +302,10 @@ impl Signex {
                     self.refresh_panel_ctx();
                     return iced::Task::none();
                 }
+                // Discard drops the drafts with the rest of the edits.
+                self.document_state
+                    .drafts
+                    .retain_sheets(|sheet| !path_is_under(sheet, &state.target_path, fold));
                 let mut tasks: Vec<iced::Task<Message>> = docs
                     .iter()
                     .flat_map(|p| self.close_tabs_of_removed(p, false, fold))

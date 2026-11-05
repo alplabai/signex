@@ -532,22 +532,10 @@ impl Signex {
             .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
-        let title_block_drafts: Vec<crate::panels::TitleBlockDraft> = self
-            .document_state
-            .panel_ctx
-            .title_block_drafts
-            .iter()
-            .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
-            .cloned()
-            .collect();
-        let paper_edge_drafts: Vec<crate::panels::PaperEdgeDraft> = self
-            .document_state
-            .panel_ctx
-            .paper_edge_drafts
-            .iter()
-            .filter(|draft| self.document_state.engines.contains_key(&draft.sheet))
-            .cloned()
-            .collect();
+        self.document_state
+            .drafts
+            .retain_sheets(|sheet| self.document_state.engines.contains_key(sheet));
+        let drafts = self.document_state.drafts.clone();
         let numeric_draft = self
             .document_state
             .panel_ctx
@@ -655,8 +643,7 @@ impl Signex {
             child_sheet_file_buf,
             title_block,
             project_parameters,
-            title_block_drafts,
-            paper_edge_drafts,
+            drafts,
             numeric_draft,
             title_block_sheet,
             collapsed_sections,

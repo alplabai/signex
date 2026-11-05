@@ -93,37 +93,6 @@ impl PanelContext {
             own.notice.clone_from(&shared.notice);
         }
     }
-
-    /// Take over the per-sheet drafts of a window context that is going away,
-    /// so what was typed and not yet committed survives the window. Only the
-    /// title-block and paper-edge drafts are kept: they belong to a sheet and
-    /// stay valid wherever it is shown. Drafts are merged per (sheet, field);
-    /// the window's, typed last, replaces the main window's for the same
-    /// field. The numeric draft and the drawing edit buffer belong to the
-    /// window's selection, which the main window does not share, so they end
-    /// with the window.
-    pub(crate) fn take_drafts_from(&mut self, window: PanelContext) {
-        for draft in window.title_block_drafts {
-            match self
-                .title_block_drafts
-                .iter_mut()
-                .find(|d| d.sheet == draft.sheet && d.field == draft.field)
-            {
-                Some(existing) => existing.text = draft.text,
-                None => self.title_block_drafts.push(draft),
-            }
-        }
-        for draft in window.paper_edge_drafts {
-            match self
-                .paper_edge_drafts
-                .iter_mut()
-                .find(|d| d.sheet == draft.sheet && d.edge == draft.edge)
-            {
-                Some(existing) => existing.text = draft.text,
-                None => self.paper_edge_drafts.push(draft),
-            }
-        }
-    }
 }
 
 /// What a window's context was built from; unchanged means it is current.
@@ -292,14 +261,12 @@ impl Signex {
         }
     }
 
-    /// Drop the context of `window`, which has closed or been reattached,
-    /// keeping its unsaved drafts in the main window's context.
+    /// Drop the context of `window`, which has closed or been reattached.
+    /// Drafts live in the app's one store, so none go with it.
     pub(crate) fn retire_window_panel_ctx(&mut self, window: iced::window::Id) {
         self.document_state.window_panel_ctx_keys.remove(&window);
         self.document_state.window_history.remove(&window);
-        if let Some(ctx) = self.document_state.window_panel_ctx.remove(&window) {
-            self.document_state.panel_ctx.take_drafts_from(ctx);
-        }
+        self.document_state.window_panel_ctx.remove(&window);
     }
 
     /// The project the main window's Navigator is built for.

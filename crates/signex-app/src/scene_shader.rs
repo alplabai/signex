@@ -136,6 +136,13 @@ impl SceneSurface for PcbSurface {
     const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
+/// `S`'s text limits in device pixels at display scale `dpi`; what
+/// `prepare` hands the glyph pipeline.
+fn text_policy_device<S: SceneSurface>(dpi: f32) -> TextSizePolicy {
+    TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi)
+        .with_atlas_limit(crate::renderer_scene_canvas::ATLAS_TEXT_LIMIT_PX * dpi)
+}
+
 /// The schematic editor's scene surface.
 ///
 /// Every value comes from the constants the schematic CPU replay already uses
@@ -390,7 +397,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // rotate (`TextItem::is_axis_aligned`). The PCB scene carries no text; the
         // schematic's rotated items get their CPU pass from the overlay canvas
         // in `crate::canvas::gpu_mount`.
-        let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
+        let text_size = text_policy_device::<S>(dpi);
         let ScenePipeline {
             line,
             circle,
@@ -760,5 +767,36 @@ mod tests {
             SchematicSurface::MIN_RADIUS_PX,
             crate::renderer_scene_canvas::MIN_RADIUS_PX
         );
+    }
+
+    #[test]
+    fn sheet_text_is_its_true_size_at_every_zoom_on_both_paths() {
+        use signex_gfx::primitive::text::text_px_in;
+        let em_mm = 1.27 / signex_types::font::mm_per_em(None);
+        for scale in [1.75_f32, 60.0] {
+            let expected = em_mm * scale;
+            let cpu = crate::schematic_runtime::schematic_draw_options(
+                &crate::schematic_runtime::ScreenTransform {
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                    scale,
+                    device_px_per_logical_px: 1.0,
+                },
+            );
+            assert!(
+                (cpu.text_px_for_test(1.27) - expected).abs() < 1e-3,
+                "cpu {scale}"
+            );
+            for dpi in [1.0_f32, 2.0] {
+                let policy = text_policy_device::<SchematicSurface>(dpi);
+                let gpu = text_px_in(1.27, scale * dpi, policy, None);
+                assert!((gpu - expected * dpi).abs() < 1e-3, "gpu {scale}@{dpi}");
+            }
+        }
+    }
+
+    #[test]
+    fn pcb_surface_keeps_its_readability_clamp() {
+        assert_eq!(PcbSurface::TEXT_SIZE, TextSizePolicy::new(6.0, 64.0));
     }
 }

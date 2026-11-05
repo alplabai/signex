@@ -640,21 +640,14 @@ fn a_components_drag_released_in_its_own_window_ends_there() {
 }
 
 #[test]
-fn a_title_block_draft_typed_in_a_window_survives_its_reattach_in_the_main_context() {
+fn a_title_block_draft_typed_in_a_window_survives_its_reattach() {
     let mut f = fixture();
     f.app.refresh_panel_ctx();
-    let draft = crate::panels::TitleBlockDraft {
-        sheet: f.window_path.clone(),
-        field: crate::panels::TitleBlockField::Title,
-        text: "typed in the window".into(),
-    };
-    f.app
-        .document_state
-        .window_panel_ctx
-        .entry(f.window)
-        .or_insert_with(|| f.app.document_state.panel_ctx.clone())
-        .title_block_drafts
-        .push(draft.clone());
+    f.app.document_state.drafts.set_title_block(
+        &f.window_path,
+        crate::panels::TitleBlockField::Title,
+        "typed in the window",
+    );
     let _ = f
         .app
         .update(Message::Window(WindowMsg::ReattachTab(f.window)));
@@ -664,12 +657,13 @@ fn a_title_block_draft_typed_in_a_window_survives_its_reattach_in_the_main_conte
             .window_panel_ctx
             .contains_key(&f.window)
     );
-    assert!(
+    assert_eq!(
         f.app
             .document_state
-            .panel_ctx
-            .title_block_drafts
-            .contains(&draft)
+            .drafts
+            .title_block_text(&f.window_path, crate::panels::TitleBlockField::Title)
+            .as_deref(),
+        Some("typed in the window")
     );
 }
 
@@ -1106,66 +1100,6 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
     // A Navigator row click opens a sheet: it stays on the main window.
     let click = typed_in_window(&f, P::Navigator(TreeMsg::Select(vec!["x".into()])));
     assert!(!is_scoped(&click, f.window));
-}
-
-fn draft(
-    sheet: &Path,
-    field: crate::panels::TitleBlockField,
-    text: &str,
-) -> crate::panels::TitleBlockDraft {
-    crate::panels::TitleBlockDraft {
-        sheet: sheet.to_path_buf(),
-        field,
-        text: text.into(),
-    }
-}
-
-#[test]
-fn reattach_merges_drafts_per_sheet_and_field_with_the_windows_newer() {
-    use crate::panels::{PaperEdge, PaperEdgeDraft, TitleBlockField as Field};
-    let f = fixture();
-    let sheet = f.window_path.as_path();
-    let mut main = f.app.document_state.panel_ctx.clone();
-    main.title_block_drafts = vec![draft(sheet, Field::Title, "old")];
-    main.paper_edge_drafts = vec![PaperEdgeDraft {
-        sheet: sheet.to_path_buf(),
-        edge: PaperEdge::Width,
-        text: "4".into(),
-    }];
-    let mut window = main.clone();
-    window.title_block_drafts = vec![
-        draft(sheet, Field::Title, "new"),
-        draft(sheet, Field::Revision, "B"),
-    ];
-    window.paper_edge_drafts = vec![
-        PaperEdgeDraft {
-            sheet: sheet.to_path_buf(),
-            edge: PaperEdge::Width,
-            text: "400".into(),
-        },
-        PaperEdgeDraft {
-            sheet: sheet.to_path_buf(),
-            edge: PaperEdge::Height,
-            text: "300".into(),
-        },
-    ];
-    main.take_drafts_from(window);
-    assert_eq!(
-        main.title_block_drafts,
-        vec![
-            draft(sheet, Field::Title, "new"),
-            draft(sheet, Field::Revision, "B")
-        ]
-    );
-    let edges: Vec<(PaperEdge, &str)> = main
-        .paper_edge_drafts
-        .iter()
-        .map(|d| (d.edge, d.text.as_str()))
-        .collect();
-    assert_eq!(
-        edges,
-        vec![(PaperEdge::Width, "400"), (PaperEdge::Height, "300")]
-    );
 }
 
 #[test]

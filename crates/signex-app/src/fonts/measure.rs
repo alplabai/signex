@@ -13,9 +13,12 @@ use signex_gfx::pipeline::text_measure::TextMeasurer;
 
 static MEASURER: OnceLock<Mutex<TextMeasurer>> = OnceLock::new();
 static CAP_HEIGHTS: Mutex<Option<HashMap<String, Option<f32>>>> = Mutex::new(None);
-static CACHE: Mutex<Option<HashMap<(String, String), f32>>> = Mutex::new(None);
+/// Per family, then per text: a hit looks both up by `&str`, no allocation.
+type AdvanceCache = HashMap<String, HashMap<String, f32>>;
+static CACHE: Mutex<Option<AdvanceCache>> = Mutex::new(None);
 
-/// Most entries kept before the cache starts over.
+/// Most texts kept per family; at the cap half of that family's entries go
+/// (a miss only costs one shaping, so which half does not matter).
 const CACHE_CAP: usize = 8192;
 
 /// Build the measurer with the bundled faces and the machine's fonts, the
@@ -23,6 +26,8 @@ const CACHE_CAP: usize = 8192;
 pub fn install_blocking() {
     MEASURER.get_or_init(|| Mutex::new(TextMeasurer::new(&super::bundled::BUNDLED_FONTS, true)));
     signex_types::font::set_cap_height_resolver(cap_height_per_em);
+    signex_types::font::set_advance_resolver(shaped_advance_em);
+    signex_types::font::set_family_resolver(resolve_for_export);
 }
 
 /// Cap height over em of an installed family, read once per family from the
@@ -43,6 +48,11 @@ pub fn cap_height_per_em(family: &str) -> Option<f32> {
     ratio
 }
 
+/// The face the canvas draws a text in, as the exports pick it too.
+fn resolve_for_export(item: Option<&str>, document: Option<&str>) -> Option<String> {
+    super::resolve::resolve_installed(item, document).map(|family| family.to_string())
+}
+
 /// Whether the measurer exists yet.
 pub fn installed() -> bool {
     MEASURER.get().is_some()
@@ -52,20 +62,23 @@ pub fn installed() -> bool {
 /// is installed.
 pub fn shaped_advance_em(text: &str, family: &str) -> Option<f32> {
     let measurer = MEASURER.get()?;
-    let key = (family.to_string(), text.to_string());
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     let map = cache.get_or_insert_with(HashMap::new);
-    if let Some(&em) = map.get(&key) {
+    if let Some(&em) = map.get(family).and_then(|texts| texts.get(text)) {
         return Some(em);
     }
     let em = measurer
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .advance_em(text, family);
-    if map.len() >= CACHE_CAP {
-        map.clear();
+    let texts = map.entry(family.to_string()).or_default();
+    if texts.len() >= CACHE_CAP {
+        let evict: Vec<String> = texts.keys().take(CACHE_CAP / 2).cloned().collect();
+        for key in evict {
+            texts.remove(&key);
+        }
     }
-    map.insert(key, em);
+    texts.insert(text.to_string(), em);
     Some(em)
 }
 
@@ -74,4 +87,6 @@ pub fn shaped_advance_em(text: &str, family: &str) -> Option<f32> {
 pub fn install_hermetic() {
     MEASURER.get_or_init(|| Mutex::new(TextMeasurer::new(&super::bundled::BUNDLED_FONTS, false)));
     signex_types::font::set_cap_height_resolver(cap_height_per_em);
+    signex_types::font::set_advance_resolver(shaped_advance_em);
+    signex_types::font::set_family_resolver(resolve_for_export);
 }

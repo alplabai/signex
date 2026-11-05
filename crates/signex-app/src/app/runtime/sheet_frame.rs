@@ -58,7 +58,10 @@ impl Signex {
             None => loose_sheet_position(document_state, path),
         };
         Some(SpecialStrings {
-            metadata: crate::app::handlers::menu::export::export_metadata(engine, project),
+            metadata: crate::app::handlers::menu::export::export_metadata_with(
+                project,
+                &self.title_block_with_drafts(path, engine),
+            ),
             filename: path
                 .file_name()
                 .unwrap_or_default()
@@ -72,6 +75,23 @@ impl Signex {
             sheet_number,
             sheet_count,
         })
+    }
+
+    /// The sheet's title block with its uncommitted drafts laid over it, so
+    /// a field shows on the canvas while it is typed (#2027). An empty draft
+    /// clears the field, as its commit would.
+    fn title_block_with_drafts(
+        &self,
+        path: &std::path::Path,
+        engine: &signex_engine::Engine,
+    ) -> std::collections::HashMap<String, String> {
+        let mut title_block = engine.document().title_block.clone();
+        for draft in self.document_state.drafts.title_blocks() {
+            if draft.sheet == path {
+                title_block.insert(draft.field.key().to_string(), draft.text.trim().to_string());
+            }
+        }
+        title_block
     }
 
     /// Frame + title block for the schematic at `path` on a `w` × `h` mm

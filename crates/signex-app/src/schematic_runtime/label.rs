@@ -100,9 +100,7 @@ fn flag_local(label: &Label, document_family: Option<&str>) -> ([(f64, f64); 5],
     // and its height follows the em that family draws the text at.
     let family = resolve_family(label.font_family.as_deref(), document_family);
     let em_mm = size_mm / f64::from(signex_types::font::mm_per_em(family.as_deref()));
-    let monospace_w = (label.text.chars().count().max(1) as f64) * (em_mm * 0.58);
-    let glyph_w =
-        super::text_width::text_width_mm(&label.text, family.as_deref(), size_mm, monospace_w);
+    let glyph_w = signex_types::font::family_width_mm(&label.text, family.as_deref(), size_mm);
     let half_h = em_mm * 0.62;
     let point = em_mm * 0.52;
     let pad = em_mm * 0.325;

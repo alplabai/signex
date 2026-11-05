@@ -262,6 +262,8 @@ impl Signex {
                 _ => {}
             }
         }
+        // Pending drafts belong to the sheet, not to the name it had.
+        self.document_state.drafts.rekey(old_path, new_path);
         if let Some(mut engine) = self.document_state.remove_engine(old_path) {
             // `Engine::save` writes to its own path; leaving the old one
             // would write the renamed sheet back under its old filename.

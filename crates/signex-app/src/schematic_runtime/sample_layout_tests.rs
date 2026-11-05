@@ -72,6 +72,7 @@ fn no_sample_net_label_sits_on_a_power_port_glyph() {
         let glyph = symbol::symbol_bounds(&sheet, port);
         for label in &sheet.labels {
             let text = drawn_text_aabb(
+                None,
                 &label.text,
                 None,
                 label.font_size,

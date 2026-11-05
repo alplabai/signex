@@ -28,11 +28,72 @@
 pub struct TextSizePolicy {
     pub min_px: f32,
     pub max_px: f32,
+    /// Largest em, in the policy's own pixels, the atlas pipeline draws; text
+    /// past it is left to the canvas (see [`text_raster`]). Infinite: no
+    /// limit, for surfaces whose [`Self::max_px`] already bounds the size.
+    pub atlas_limit_px: f32,
 }
 
 impl TextSizePolicy {
+    /// True size at every zoom: no floor, no ceiling.
+    pub const UNCLAMPED: Self = Self::new(0.0, f32::INFINITY);
+
     pub const fn new(min_px: f32, max_px: f32) -> Self {
-        Self { min_px, max_px }
+        Self {
+            min_px,
+            max_px,
+            atlas_limit_px: f32::INFINITY,
+        }
+    }
+
+    /// This policy with the atlas limit set.
+    pub const fn with_atlas_limit(mut self, atlas_limit_px: f32) -> Self {
+        self.atlas_limit_px = atlas_limit_px;
+        self
+    }
+}
+
+/// Text whose em is under this many device pixels is not drawn: it cannot be
+/// seen and a zero-size glyph run is not worth shaping.
+pub const MIN_VISIBLE_TEXT_DEVICE_PX: f32 = 0.5;
+
+// shortcut: sanity ceiling on drawn text, derived from the largest real case
+// rather than picked: the biggest text a sheet keeps on load
+// (`MAX_TEXT_SIZE_MM`), over the smallest cap-height ratio `mm_per_em` can
+// return (`MIN_MM_PER_EM`), at the canvas zoom limit and on a display scale of
+// 4, doubled for headroom. Real text can therefore never reach it; past it the
+// size is hostile data, not drawing, and the item is skipped.
+pub const MAX_DRAWN_TEXT_DEVICE_PX: f32 = 2.0
+    * (signex_types::format::MAX_TEXT_SIZE_MM as f32 / signex_types::font::MIN_MM_PER_EM)
+    * (signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 16.0)
+    * 4.0;
+
+/// How a text of a given em size is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextRaster {
+    /// Not drawn: non-finite, invisibly small, or absurdly large.
+    Skip,
+    /// Drawn at true size from the glyph atlas (signex's GPU pipeline) or the
+    /// canvas text path.
+    Bitmap,
+    /// Drawn at true size, but past the atlas: only the canvas draws it, and
+    /// iced turns it into vector outlines.
+    Oversize,
+}
+
+/// The one rule of the CPU canvas and the GPU glyph pipeline for an em of
+/// `device_px`, with `atlas_limit_device_px` the largest em the atlas draws
+/// (iced's `MAX_ATLAS_TEXT_SIZE` times the display scale). It never resizes
+/// text, it only picks how (or whether) to draw.
+pub fn text_raster(device_px: f32, atlas_limit_device_px: f32) -> TextRaster {
+    if !device_px.is_finite()
+        || !(MIN_VISIBLE_TEXT_DEVICE_PX..=MAX_DRAWN_TEXT_DEVICE_PX).contains(&device_px)
+    {
+        TextRaster::Skip
+    } else if device_px > atlas_limit_device_px {
+        TextRaster::Oversize
+    } else {
+        TextRaster::Bitmap
     }
 }
 
@@ -48,7 +109,13 @@ pub fn text_px_in(
     policy: TextSizePolicy,
     family: Option<&str>,
 ) -> f32 {
-    let em_mm = size_mm.max(0.1) / signex_types::font::mm_per_em(family);
+    // `f32::max` swallows NaN; keep it so the raster guard culls the item.
+    let size_mm = if size_mm.is_nan() {
+        size_mm
+    } else {
+        size_mm.max(0.1)
+    };
+    let em_mm = size_mm / signex_types::font::mm_per_em(family);
     (em_mm * scale_px_per_mm).clamp(policy.min_px, policy.max_px)
 }
 
@@ -163,6 +230,82 @@ mod size_tests {
         assert!(!at(std::f32::consts::FRAC_PI_2).is_axis_aligned());
         assert!(!at(-std::f32::consts::FRAC_PI_2).is_axis_aligned());
     }
+
+    /// The atlas limit a test passes: iced's own constant is imported in the
+    /// app crate, where iced is available.
+    const ATLAS: f32 = 1024.0;
+
+    #[test]
+    fn the_raster_rule_skips_only_unreachable_sizes() {
+        assert_eq!(text_raster(1.8, ATLAS), TextRaster::Bitmap);
+        assert_eq!(text_raster(ATLAS, ATLAS), TextRaster::Bitmap);
+        assert_eq!(text_raster(ATLAS + 1.0, ATLAS), TextRaster::Oversize);
+        assert_eq!(text_raster(5224.0, ATLAS), TextRaster::Oversize);
+        assert_eq!(text_raster(f32::NAN, ATLAS), TextRaster::Skip);
+        assert_eq!(text_raster(f32::INFINITY, ATLAS), TextRaster::Skip);
+        assert_eq!(text_raster(0.1, ATLAS), TextRaster::Skip);
+        assert_eq!(
+            text_raster(MAX_DRAWN_TEXT_DEVICE_PX, ATLAS),
+            TextRaster::Oversize
+        );
+        assert_eq!(
+            text_raster(MAX_DRAWN_TEXT_DEVICE_PX * 1.01, ATLAS),
+            TextRaster::Skip
+        );
+        assert_eq!(text_raster(1.0e9, ATLAS), TextRaster::Skip);
+    }
+
+    /// 40 mm text at 96 px/mm is about 5224 px: past the atlas, still drawn at
+    /// that size (never clamped to the ceiling, never culled).
+    #[test]
+    fn text_past_the_atlas_ceiling_is_drawn_at_true_size_not_clamped_or_culled() {
+        let px = text_px_in(40.0, 96.0, TextSizePolicy::UNCLAMPED, None);
+        assert!((px - 5224.0).abs() < 5.0, "{px}");
+        assert_eq!(text_raster(px, ATLAS), TextRaster::Oversize);
+    }
+
+    #[test]
+    fn a_hostile_file_size_is_culled_and_normal_zoom_is_untouched() {
+        let policy = TextSizePolicy::UNCLAMPED;
+        for size_mm in [f32::NAN, f32::INFINITY, 1.0e30] {
+            let px = text_px_in(size_mm, 48.0, policy, None);
+            assert_eq!(
+                text_raster(px, ATLAS),
+                TextRaster::Skip,
+                "{size_mm} -> {px}"
+            );
+        }
+        // 1.27 mm text from fit-all to the zoom limit is always drawn.
+        for scale in [0.75_f32, 1.75, 3.0, 48.0] {
+            assert_eq!(
+                text_raster(text_px_in(1.27, scale, policy, None), ATLAS),
+                TextRaster::Bitmap
+            );
+        }
+    }
+
+    /// Many absurd file-supplied sizes at the zoom limit on a 3x display cost
+    /// nothing: every one is skipped before any shaping or tessellation, and
+    /// the largest real text still draws.
+    #[test]
+    fn a_hostile_file_of_huge_texts_is_skipped_at_max_zoom() {
+        let (zoom_limit, dpr) = (48.0, 3.0);
+        let hostile = (0..10_000)
+            .filter(|_| {
+                text_raster(
+                    text_px_in(1.0e5, zoom_limit, TextSizePolicy::UNCLAMPED, None) * dpr,
+                    ATLAS,
+                ) != TextRaster::Skip
+            })
+            .count();
+        assert_eq!(hostile, 0);
+        let largest_real = text_px_in(100.0, zoom_limit, TextSizePolicy::UNCLAMPED, None) * dpr;
+        assert_eq!(
+            text_raster(largest_real, ATLAS),
+            TextRaster::Oversize,
+            "{largest_real}"
+        );
+    }
 }
 
 /// Line height as a multiple of the em size, for every text replay.
@@ -194,6 +337,15 @@ pub struct TextItem {
 }
 
 impl TextItem {
+    /// Whether signex's GPU glyph pipeline stages this item, drawn at an em of
+    /// `device_px` with `atlas_limit_device_px` the largest the atlas takes:
+    /// axis-aligned, and a size [`text_raster`] draws as a bitmap. The one
+    /// rule the pipeline stages by and the canvas overlay leaves to it.
+    pub fn gpu_stages(&self, device_px: f32, atlas_limit_device_px: f32) -> bool {
+        self.is_axis_aligned()
+            && text_raster(device_px, atlas_limit_device_px) == TextRaster::Bitmap
+    }
+
     /// The family this item draws in: its own, else `default`.
     pub fn family_or<'a>(&'a self, default: &'a str) -> &'a str {
         self.family.as_deref().unwrap_or(default)

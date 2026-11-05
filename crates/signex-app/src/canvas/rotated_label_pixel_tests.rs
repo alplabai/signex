@@ -24,7 +24,7 @@ use signex_gfx::scene::Scene;
 
 use super::gpu_mount_tests::{Frame, HEIGHT, WIDTH, gpu, render};
 use crate::renderer_scene_canvas::{
-    SceneDrawOptions, draw_rotated_texts, draw_scene_with_world_to_screen,
+    SceneDrawOptions, draw_canvas_texts, draw_scene_with_world_to_screen,
 };
 
 /// Glyph height in logical pixels. Large so the measurements dwarf the slack.
@@ -56,6 +56,7 @@ impl canvas::Program<crate::app::Message> for OneLabel {
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             text_min_px: 1.0,
             text_max_px: 400.0,
+            frame_origin: Point::ORIGIN,
         };
         let to_screen = |p: [f32; 2]| Point::new(p[0], p[1]);
         // The 0 degree label belongs to the GPU atlas on the real surface, so
@@ -64,7 +65,7 @@ impl canvas::Program<crate::app::Message> for OneLabel {
         if self.0.is_axis_aligned() {
             draw_scene_with_world_to_screen(&mut frame, &scene, to_screen, options);
         } else {
-            draw_rotated_texts(&mut frame, &scene, to_screen, options);
+            draw_canvas_texts(&mut frame, &scene, to_screen, options);
         }
         vec![frame.into_geometry()]
     }

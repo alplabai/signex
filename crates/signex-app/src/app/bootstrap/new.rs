@@ -126,6 +126,7 @@ impl Signex {
         // saved toggle before the user opens Preferences) plus the
         // `ui_state.pcb_gpu_render` saved mirror and its Preferences draft.
         let pcb_gpu_render = crate::fonts::read_pcb_gpu_render_pref_from(prefs);
+        let antialiasing = crate::fonts::read_antialiasing_pref_from(prefs);
         pcb_canvas.gpu_render = pcb_gpu_render;
         // #629 — same shape for the three Symbol Editor settings: one read
         // each, feeding both the committed field and its Preferences draft.
@@ -240,6 +241,7 @@ impl Signex {
         // the first open.
         let keymap_editor = crate::keymap::KeymapEditorModel::new(keymap_profiles.clone());
 
+        let drafts = crate::panels::PanelDrafts::default();
         // Only a preference that is on reads the file; the record is checked
         // against the real monitors once the window exists.
         let restored_geometry = remember_window_geometry
@@ -302,6 +304,8 @@ impl Signex {
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref_from(prefs),
                 pcb_gpu_render,
                 preferences_draft_pcb_gpu_render: pcb_gpu_render,
+                antialiasing,
+                preferences_draft_antialiasing: antialiasing,
                 ui_scale,
                 preferences_draft_ui_scale_percent: crate::ui_scale::scale_to_percent(ui_scale),
                 zoom_step_percent,
@@ -443,6 +447,7 @@ impl Signex {
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
             },
             document_state: DocumentState {
+                drafts: drafts.clone(),
                 dock,
                 dock_layout_sync,
                 search_prefs,
@@ -551,8 +556,7 @@ impl Signex {
                     child_sheet_file_buf: None,
                     title_block: std::collections::BTreeMap::new(),
                     project_parameters: std::collections::BTreeMap::new(),
-                    title_block_drafts: Vec::new(),
-                    paper_edge_drafts: Vec::new(),
+                    drafts: drafts.clone(),
                     numeric_draft: None,
                     title_block_sheet: None,
                     collapsed_sections: std::collections::HashSet::new(),
