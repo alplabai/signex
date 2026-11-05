@@ -190,7 +190,7 @@ iced_widget = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56
 iced_winit = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
 iced_debug = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
 
+# Local release builds keep cargo's parallel codegen defaults; shipped binaries
+# get lto = "thin" + codegen-units = 1 from env in .github/workflows/release.yml.
 [profile.release]
-lto = "thin"
-codegen-units = 1
 strip = "symbols"
