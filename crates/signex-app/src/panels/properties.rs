@@ -30,7 +30,8 @@ pub struct PrePlacementData {
     pub justify_h: signex_types::schematic::HAlign,
     /// Vertical justification (TextNote / Component fields).
     pub justify_v: signex_types::schematic::VAlign,
-    /// Style toggles.
+    /// Style toggles. Not yet applied to placed text; underline has no
+    /// renderer support.
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,

@@ -537,8 +537,8 @@ pub enum PanelMsg {
     /// v0.18.13 — Snapping mode 3-state toggle.
     FpEditorSetSnappingMode(crate::library::editor::footprint::state::SnappingMode),
     /// v0.18.13 — `Add` button on the Grid Manager table (placeholder
-    /// for the multi-grid CRUD that lands with the v0.18.14 grid
-    /// system). Dispatch logs a warn for now.
+    /// for multi-grid CRUD, not built yet). Dispatch logs a warn for
+    /// now.
     FpEditorGridManagerAdd,
     /// v0.18.13 — `Properties` button on the Grid Manager row;
     /// reuses the Ctrl+G Cartesian Grid Editor modal.

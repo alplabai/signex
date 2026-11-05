@@ -105,7 +105,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             target,
             palette,
             // Only the first (top) row drives shape / size; mid / bottom
-            // mirror until the v0.21 schema lands.
+            // mirror until the schema carries per-layer shape / size.
             is_first,
         ));
     }

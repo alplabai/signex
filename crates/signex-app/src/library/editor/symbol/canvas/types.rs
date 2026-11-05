@@ -181,7 +181,7 @@ pub enum RotatePivotMode {
 /// Mirrors the SchLib Place menu: Pin / Line / Rectangle / Ellipse
 /// (Circle) / Arc / Text / Polygon are the working tools;
 /// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active Bar
-/// as stubs and are deferred to v0.9.x.
+/// as stubs, not built yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTool {
     Select,
