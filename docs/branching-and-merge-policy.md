@@ -75,13 +75,15 @@ What the aggregated jobs run:
   (`scripts/check_discarded_tasks.sh`), the lint-lockstep gate
   (`scripts/check_lint_lockstep.sh`: every `[workspace.lints.*]` entry is
   present, at the same level, in each member that does not inherit with
-  `[lints] workspace = true`; only `signex-app` opts out, #570) and the
-  changelog fragment check (`scripts/changelog_assemble.sh --check`).
+  `[lints] workspace = true`; only `signex-app` opts out, #570), the
+  changelog fragment check (`scripts/changelog_assemble.sh --check`) and, on
+  PRs into `trunk`, the fragment rules: no direct `CHANGELOG.md` edit outside
+  release PRs, and a fragment on every `feat`/`fix`/`perf` PR
+  ([`changelog.d/README.md`](../changelog.d/README.md)).
 
 `test · library-server postgres` and `test · <os>` run on PRs but are not part
-of `ci · required`. Warn-level clippy output, the `cargo deny` `sources` and
-`advisories` steps, the `CHANGELOG.md should not be edited directly` warning and
-the missing-fragment warning annotate a PR and do not block it.
+of `ci · required`. Warn-level clippy output and the `cargo deny` `sources` and
+`advisories` steps annotate a PR and do not block it.
 
 **Clippy is half a gate, by design.** It has no status-check context of its
 own; it is a step inside the three `check` jobs. Clippy's deny-by-default

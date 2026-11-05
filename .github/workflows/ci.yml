@@ -292,6 +292,10 @@ jobs:
   lint:
     name: lint · repo gates
     runs-on: ubuntu-latest
+    # pull-requests: read for the live PR-title lookup in the fragment gate.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -409,10 +413,8 @@ jobs:
       # merge queue are exempt). CHANGELOG.md is edited directly only by
       # same-repo release PRs (head `chore/release-*` or `release/*`, the shape
       # every release prep PR has used); forks cannot self-exempt.
-      # TRANSITION: warning only while open PRs still edit CHANGELOG.md; flip
-      # the `::warning` to `::error` + `exit 1` once they land (follow-up to #748).
       # Branch/title go through env, never inline-interpolated into the script.
-      - name: CHANGELOG.md should not be edited directly
+      - name: CHANGELOG.md must not be edited directly
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'trunk' }}
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -429,21 +431,31 @@ jobs:
           fi
           git fetch --no-tags origin "$BASE_REF"
           if git diff --name-only "origin/$BASE_REF...HEAD" | awk '$0 == "CHANGELOG.md" {f=1} END {exit !f}'; then
-            echo "::warning file=CHANGELOG.md::Do not edit CHANGELOG.md in a PR. Add a fragment changelog.d/<number>.<section>.md instead (see changelog.d/README.md)."
+            echo "::error file=CHANGELOG.md::Do not edit CHANGELOG.md in a PR. Add a fragment changelog.d/<number>.<section>.md instead (see changelog.d/README.md)."
+            exit 1
           fi
 
-      # Advisory: a feat/fix PR with no new fragment gets a warning annotation.
-      - name: Warn when a feat/fix PR has no fragment
+      # A feat/fix/perf PR into trunk must add a fragment. The title type is
+      # the declaration: a change that is not user-visible takes another type
+      # (chore, refactor, test, ci, docs). The title is read live, because
+      # `edited` does not trigger this workflow: after a retitle, re-running
+      # this job sees the new title (the event payload would keep the old one).
+      - name: Require a fragment on feat/fix/perf PRs
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'trunk' }}
         env:
           BASE_REF: ${{ github.base_ref }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PAYLOAD_TITLE: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if printf '%s' "$PR_TITLE" | awk '/^(feat|fix)(\([^)]*\))?!?:/{f=1} END{exit !f}'; then
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq .title) || PR_TITLE="$PAYLOAD_TITLE"
+          echo "PR title (live): $PR_TITLE"
+          if printf '%s' "$PR_TITLE" | awk '/^(feat|fix|perf)(\([^)]*\))?!?:/{f=1} END{exit !f}'; then
             git fetch --no-tags origin "$BASE_REF"
-            if ! git diff --name-only --diff-filter=A "origin/$BASE_REF...HEAD" |
+            if ! git diff --no-renames --name-only --diff-filter=A "origin/$BASE_REF...HEAD" |
               awk '/^changelog\.d\/[0-9]+\..+\.md$/{f=1} END{exit !f}'; then
-              echo "::warning title=No changelog fragment::feat/fix PR adds no changelog.d/<number>.<section>.md fragment. Add one, or ignore if the change is not user-visible."
+              echo "::error title=No changelog fragment::feat/fix/perf PR adds no changelog.d/<number>.<section>.md fragment. Add one, or retitle with a type that is not user-visible (chore, refactor, test, ci, docs) and re-run this job."
+              exit 1
             fi
           fi
 
