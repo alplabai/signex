@@ -134,7 +134,7 @@ pub(super) fn finish_restore(app: &mut Signex, messages: Vec<Message>) {
 
 /// Clicks Restore on `sha` and runs the worker it starts to completion.
 pub(super) fn restore(app: &mut Signex, sha: &str) {
-    let task = app.handle_history_restore_clicked(sha);
+    let task = app.click_restore_on_listed_history(sha);
     finish_restore(app, collect_messages(task));
 }
 
@@ -489,7 +489,7 @@ fn a_queued_save_followed_by_a_restore_is_one_restore_commit() {
 // ---- #859: the restore runs on a worker; only the request still tracked lands.
 
 pub(super) fn click_restore(app: &mut Signex, sha: &str) -> Vec<Message> {
-    let task = app.handle_history_restore_clicked(sha);
+    let task = app.click_restore_on_listed_history(sha);
     collect_messages(task)
 }
 
@@ -523,7 +523,7 @@ pub(super) fn footprint_fixture() -> (tempfile::TempDir, PathBuf, String, Signex
 fn clicking_restore_changes_nothing_until_the_worker_completes() {
     let (_dir, path, sha, mut app) = footprint_fixture();
     let before = std::fs::read_to_string(&path).expect("read");
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     assert_eq!(
         std::fs::read_to_string(&path).expect("read"),
         before,
@@ -546,8 +546,8 @@ fn clicking_restore_changes_nothing_until_the_worker_completes() {
 #[test]
 fn a_second_restore_click_while_one_runs_is_ignored() {
     let (_dir, _path, sha, mut app) = footprint_fixture();
-    let first = app.handle_history_restore_clicked(&sha);
-    let second = app.handle_history_restore_clicked(&sha);
+    let first = app.click_restore_on_listed_history(&sha);
+    let second = app.click_restore_on_listed_history(&sha);
     assert_eq!(first.units(), 1);
     assert_eq!(second.units(), 0, "no second worker");
     finish_restore(&mut app, collect_messages(first));

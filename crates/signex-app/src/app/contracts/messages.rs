@@ -124,8 +124,8 @@ pub enum CommandPaletteMsg {
     /// keystroke.
     QueryChanged(String),
     /// [`Self::QueryChanged`] from the text input of an undocked window's
-    /// palette: the query changes, the palette stays that window's (#2067).
-    QueryTypedInWindow(String),
+    /// palette: the query changes, the palette stays that window's (#2067). Ignored unless that window still owns the palette.
+    QueryTypedInWindow(iced::window::Id, String),
     /// Move the highlighted row by `delta` (wraps around at both ends).
     /// Wired to ArrowUp / ArrowDown when the palette is open.
     MoveSelection(i32),

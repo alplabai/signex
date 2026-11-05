@@ -21,10 +21,56 @@ impl Signex {
         d.tabs.iter().find(|tab| &tab.path == path)
     }
 
+    /// The file the History panel in the main slots tracks.
+    pub(crate) fn history_target_path(&self) -> Option<std::path::PathBuf> {
+        history_target(self)
+    }
+
+    /// Whether the History state in the main slots is a loaded list issued
+    /// for the file `history_tab` resolves to.
+    pub(crate) fn history_lists_target(&self) -> bool {
+        let history = &self.document_state.history;
+        history.mode == crate::panels::history::HistoryRenderMode::Ready
+            && history.active_path.is_some()
+            && history.active_path == self.history_target_path()
+    }
+
+    /// The tab an undocked document window shows, without swapping it in.
+    fn window_history_tab(&self, window: iced::window::Id) -> Option<&crate::app::TabInfo> {
+        use crate::app::state::WindowKind;
+        let Some(WindowKind::UndockedTab { path, .. }) = self.ui_state.windows.get(&window) else {
+            return None;
+        };
+        self.document_state
+            .tabs
+            .iter()
+            .find(|tab| &tab.path == path)
+    }
+
+    /// Whether a window's History state already matches what a refresh would
+    /// leave: same tab, same target, same dirty bit. Such a window needs no swap.
+    fn window_history_is_current(&self, window: iced::window::Id) -> bool {
+        let d = &self.document_state;
+        let (Some(history), Some(tab)) = (
+            d.window_history.get(&window),
+            self.window_history_tab(window),
+        ) else {
+            return false;
+        };
+        let target = history_target_of(tab);
+        history.source_key.as_deref() == Some(tab.path.as_path())
+            && history.active_path == target
+            && target
+                .as_deref()
+                .is_none_or(|t| history.dirty == history_dirty_of(d, &tab.kind, t))
+    }
+
     /// Re-target the History panel of every undocked document window, each
     /// in its own swap, so it shows and restores that window's file (#2067).
+    /// A window whose History is already current is not swapped, and none is
+    /// touched while the dock shows no panel.
     pub(in crate::app) fn refresh_window_histories(&mut self) -> Task<Message> {
-        if self.interaction_state.acting_window.is_some() {
+        if self.interaction_state.acting_window.is_some() || !self.dock_has_panels() {
             return Task::none();
         }
         let windows: Vec<iced::window::Id> = self
@@ -32,7 +78,7 @@ impl Signex {
             .windows
             .keys()
             .copied()
-            .filter(|w| self.is_document_window(*w))
+            .filter(|w| self.is_document_window(*w) && !self.window_history_is_current(*w))
             .collect();
         Task::batch(
             windows
@@ -48,13 +94,18 @@ impl Signex {
         if self.history_source_key() != self.document_state.history.source_key {
             return self.refresh_history_panel();
         }
+        let dirty = self
+            .document_state
+            .history
+            .active_path
+            .as_deref()
+            .map(|p| history_dirty(self, p));
         let d = &mut self.document_state;
-        if let Some(p) = &d.history.active_path {
-            let dirty = history_dirty(d, p);
-            if dirty != d.history.dirty {
-                d.history.dirty = dirty;
-                d.panel_ctx.history = d.history.clone();
-            }
+        if let Some(dirty) = dirty
+            && dirty != d.history.dirty
+        {
+            d.history.dirty = dirty;
+            d.panel_ctx.history = d.history.clone();
         }
         Task::none()
     }
@@ -102,8 +153,7 @@ impl Signex {
             // Also refresh the dirty bit — the user may have just
             // saved/edited the active file without switching tabs.
             if let Some(p) = self.document_state.history.active_path.clone() {
-                let d = &self.document_state;
-                self.document_state.history.dirty = history_dirty(d, &p);
+                self.document_state.history.dirty = history_dirty(self, &p);
             }
             self.document_state.panel_ctx.history = self.document_state.history.clone();
             return Task::none();
@@ -124,8 +174,7 @@ impl Signex {
             return Task::none();
         };
 
-        let d = &self.document_state;
-        self.document_state.history.dirty = history_dirty(d, &target);
+        self.document_state.history.dirty = history_dirty(self, &target);
         self.document_state.history.loading = true;
         self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Loading;
         self.document_state.panel_ctx.history = self.document_state.history.clone();
@@ -212,14 +261,20 @@ impl Signex {
 /// Browser tab is keyed on its `.snxlib` directory, but the library is
 /// tracked (and marked dirty) through its `library.toml`, so both keys are
 /// consulted for that tab kind. Pure: no filesystem access.
-fn history_dirty(d: &crate::app::DocumentState, path: &std::path::Path) -> bool {
-    if d.is_document_dirty(path) {
-        return true;
-    }
-    matches!(
-        d.tabs.get(d.active_tab).map(|t| &t.kind),
-        Some(crate::app::TabKind::LibraryBrowser(_))
-    ) && d.is_document_dirty(&path.join("library.toml"))
+fn history_dirty(app: &Signex, path: &std::path::Path) -> bool {
+    let kind = app.history_tab().map(|t| &t.kind);
+    kind.is_some_and(|kind| history_dirty_of(&app.document_state, kind, path))
+        || app.document_state.is_document_dirty(path)
+}
+
+fn history_dirty_of(
+    d: &crate::app::DocumentState,
+    kind: &crate::app::TabKind,
+    path: &std::path::Path,
+) -> bool {
+    d.is_document_dirty(path)
+        || (matches!(kind, crate::app::TabKind::LibraryBrowser(_))
+            && d.is_document_dirty(&path.join("library.toml")))
 }
 
 /// The file the History panel tracks for the active tab, from Model state
@@ -231,7 +286,10 @@ fn history_dirty(d: &crate::app::DocumentState, path: &std::path::Path) -> bool 
 /// itself, depending on entry point); whether it is a directory is decided
 /// by [`load_history`], off the UI thread.
 fn history_target(app: &super::super::Signex) -> Option<std::path::PathBuf> {
-    let active = app.history_tab()?;
+    history_target_of(app.history_tab()?)
+}
+
+fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf> {
     match &active.kind {
         crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
         crate::app::TabKind::ComponentEditor(_) => None,

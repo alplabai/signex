@@ -325,13 +325,16 @@ impl Signex {
         } else {
             self.chrome_search_bar_geometry()
         };
-        let input: Element<'_, Message> = if in_window {
+        let input: Element<'_, Message> = if let Some(window) = self.ui_state.command_palette.window
+        {
             text_input(
                 "Search files, symbols, commands…",
                 &self.ui_state.command_palette.query,
             )
             .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
-            .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(q)))
+            .on_input(move |q| {
+                Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
+            })
             .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
             .padding(SP.l)
             .size(TS.body)

@@ -36,7 +36,9 @@ impl Signex {
         self.refresh_find_matches()
     }
 
-    /// F3 / Shift+F3 pressed in `window`. A Sheet-scope search belongs to the
+    /// F3 / Shift+F3 pressed in `window` (the main window included). The Find
+    /// dialog renders only in its owner, so taking the search over moves an
+    /// open dialog from the window that had it to this one. A Sheet-scope search belongs to the
     /// window it was opened in; a press in any other window takes it over
     /// without opening the dialog, the way Find Next in the main window
     /// searches the sheet with the last query while the dialog is closed.
@@ -52,6 +54,7 @@ impl Signex {
         if find.window != owner && find.scope == crate::find_replace::FindScope::Sheet {
             find.matches.clear();
             find.selected_index = None;
+            find.skips_reported.clear();
             find.window = owner;
         }
         self.dispatch_update(step)

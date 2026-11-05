@@ -35,10 +35,11 @@ impl Signex {
                 self.ui_state.command_palette.window = None;
                 self.change_palette_query(q)
             }
-            CommandPaletteMsg::QueryTypedInWindow(q) => {
-                // A late keystroke for a palette that closed or moved is stale.
+            CommandPaletteMsg::QueryTypedInWindow(window, q) => {
+                // A late keystroke for a palette that closed or moved to
+                // another window is stale.
                 if !self.ui_state.command_palette.open
-                    || self.ui_state.command_palette.window.is_none()
+                    || self.ui_state.command_palette.window != Some(window)
                 {
                     return Task::none();
                 }

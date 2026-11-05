@@ -618,12 +618,28 @@ fn dock_restore(f: &Fixture, message: crate::panels::PanelMsg) -> Message {
     )
 }
 
+/// Present the window's History as a loaded list, as a finished load would.
+fn load_window_history(f: &mut Fixture) {
+    let history = f
+        .app
+        .document_state
+        .window_history
+        .get_mut(&f.window)
+        .unwrap();
+    assert_eq!(
+        history.active_path.as_deref(),
+        Some(f.window_path.as_path())
+    );
+    history.mode = HistoryRenderMode::Ready;
+}
+
 #[test]
 fn a_restore_click_in_a_window_acts_on_the_windows_file_only() {
     let _ = crate::diagnostics::init_logging();
     let mut f = fixture();
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
+    load_window_history(&mut f);
     f.app.document_state.mark_history_edit_dirty(&f.window_path);
     let before = f.app.document_state.engines[&f.window_path].revision();
     let click = || crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() };
@@ -642,6 +658,7 @@ fn a_restore_click_in_a_window_acts_on_the_windows_file_only() {
         Some("abc")
     );
     assert_eq!(f.app.document_state.history.pending_restore, None);
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
     assert_eq!(
         f.app.document_state.engines[&f.window_path].revision(),
         before
@@ -654,6 +671,7 @@ fn a_restore_click_in_a_window_acts_on_the_windows_file_only() {
     settle_task(&mut f.app, task);
     assert!(said("b.snxsch does not belong to an open project"));
     assert!(!said("a.snxsch does not belong to an open project"));
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
 }
 
 #[test]
@@ -661,10 +679,19 @@ fn a_window_restore_cancel_clears_the_windows_confirmation_only() {
     let mut f = fixture();
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
+    load_window_history(&mut f);
+    f.app.document_state.mark_history_edit_dirty(&f.window_path);
     f.app.document_state.history.pending_restore = Some("main-sha".into());
     let click = crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() };
     let task = f.app.update(dock_restore(&f, click));
     settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.document_state.window_history[&f.window]
+            .pending_restore
+            .as_deref(),
+        Some("abc"),
+        "the click did not arm the window's confirmation"
+    );
 
     let cancel = dock_restore(&f, crate::panels::PanelMsg::HistoryRestoreCancelled);
     let task = f.app.update(cancel);
@@ -678,6 +705,110 @@ fn a_window_restore_cancel_clears_the_windows_confirmation_only() {
         f.app.document_state.history.pending_restore.as_deref(),
         Some("main-sha")
     );
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_restore_click_on_a_list_the_window_has_not_loaded_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    // Main lists a.snxsch. The window's context is built the way UndockTab
+    // builds it: no finish_update, so no load for the window has run.
+    f.app.document_state.history.active_path = Some(f.main_path.clone());
+    f.app.document_state.history.mode = HistoryRenderMode::Ready;
+    f.app.document_state.panel_ctx.history = f.app.document_state.history.clone();
+    f.app.refresh_window_panel_ctxs(None);
+    assert_ne!(
+        f.app.panel_ctx_for(f.window).history.active_path.as_deref(),
+        Some(f.main_path.as_path()),
+        "the window's History panel lists main's file"
+    );
+    // b.snxsch is clean, so an unguarded click restores at once.
+    f.app.document_state.window_history.insert(
+        f.window,
+        crate::panels::history::HistoryPanelState {
+            active_path: Some(f.main_path.clone()),
+            mode: HistoryRenderMode::Ready,
+            ..Default::default()
+        },
+    );
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert!(
+        said(&format!(
+            "The history of {} is not loaded",
+            f.window_path.display()
+        )),
+        "the click was not refused"
+    );
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.window_path.display()
+    )));
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_window_without_any_history_state_refuses_a_restore_click() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    f.app.document_state.window_history.remove(&f.window);
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert!(said(&format!(
+        "The history of {} is not loaded",
+        f.window_path.display()
+    )));
+}
+
+#[test]
+fn a_restore_whose_list_was_issued_for_another_file_is_refused_on_main_too() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    // Main shows a.snxsch, but its list was issued for b.snxsch.
+    f.app.document_state.history.active_path = Some(f.window_path.clone());
+    f.app.document_state.history.mode = HistoryRenderMode::Ready;
+    let click = Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    ));
+    let task = f.app.update(click);
+    settle_task(&mut f.app, task);
+    assert!(said(&format!(
+        "The history of {} is not loaded",
+        f.main_path.display()
+    )));
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.main_path.display()
+    )));
+
+    // Not Ready is refused even for the right file.
+    f.app.document_state.history.active_path = Some(f.main_path.clone());
+    f.app.document_state.history.mode = HistoryRenderMode::Loading;
+    let click = Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    ));
+    let task = f.app.update(click);
+    settle_task(&mut f.app, task);
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.main_path.display()
+    )));
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
 }
 
 #[test]
@@ -766,7 +897,7 @@ fn typing_in_a_windows_palette_filters_its_rows_and_leaves_main_alone() {
     let all = f.app.ui_state.command_palette.total_matches;
 
     let task = f.app.update(Message::CommandPalette(
-        crate::app::CommandPaletteMsg::QueryTypedInWindow("zzzz_no_such_row".into()),
+        crate::app::CommandPaletteMsg::QueryTypedInWindow(f.window, "zzzz_no_such_row".into()),
     ));
     settle_task(&mut f.app, task);
 
@@ -780,5 +911,163 @@ fn typing_in_a_windows_palette_filters_its_rows_and_leaves_main_alone() {
     assert!(
         !has(&f.app, f.main, "zzzz_no_such_row"),
         "main's chrome input shows the window's query"
+    );
+}
+
+fn entry(sha: &str) -> signex_widgets::HistoryEntry {
+    signex_widgets::HistoryEntry {
+        sha: sha.into(),
+        author_name: String::new(),
+        author_email: String::new(),
+        time: chrono::Utc::now(),
+        subject: String::new(),
+    }
+}
+
+#[test]
+fn a_pcb_window_has_its_own_history_and_restores_the_pcb_file() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    f.app.document_state.tabs[1].kind = crate::app::TabKind::Pcb;
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    load_window_history(&mut f);
+    assert_eq!(
+        f.app.panel_ctx_for(f.window).history.active_path.as_deref(),
+        Some(f.window_path.as_path()),
+        "the PCB window lists another file"
+    );
+
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+
+    assert!(said(&format!(
+        "{} does not belong to an open project",
+        f.window_path.display()
+    )));
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.main_path.display()
+    )));
+}
+
+#[test]
+fn a_windows_history_that_is_current_is_not_swapped_again() {
+    let mut f = fixture();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    // The window's state moves on; a current window is left alone, so its
+    // context does not pick the change up.
+    f.app
+        .document_state
+        .window_history
+        .get_mut(&f.window)
+        .unwrap()
+        .entries = vec![entry("abc")];
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(
+        f.app.document_state.window_panel_ctx[&f.window]
+            .history
+            .entries
+            .is_empty(),
+        "an unchanged window was swapped and its history cloned again"
+    );
+
+    // A changed dirty bit is picked up.
+    f.app.document_state.mark_history_edit_dirty(&f.window_path);
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(f.app.document_state.window_history[&f.window].dirty);
+}
+
+#[test]
+fn no_window_history_is_built_while_the_dock_shows_no_panel() {
+    let mut f = fixture();
+    for kind in crate::panels::ALL_PANELS {
+        f.app.document_state.dock.close_panel(*kind);
+    }
+    f.app.document_state.dock.floating.clear();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(f.app.document_state.window_history.is_empty());
+    assert!(f.app.document_state.window_panel_ctx.is_empty());
+}
+
+#[test]
+fn f3_moving_the_find_dialog_to_another_window_forgets_its_skip_report() {
+    let mut f = fixture_with_a_labelled_a3_window();
+    f.app.ui_state.find_replace.query = "WINDOW_NET".into();
+    f.app.ui_state.find_replace.window = None;
+    f.app.ui_state.find_replace.open = true;
+    f.app
+        .ui_state
+        .find_replace
+        .skips_reported
+        .insert(std::path::PathBuf::from("skipped.snxsch"));
+
+    let (_outcome, task) = command(&mut f.app, "find_next", f.window);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.app.ui_state.find_replace.window, Some(f.window));
+    assert!(f.app.ui_state.find_replace.skips_reported.is_empty());
+}
+
+#[test]
+fn f3_in_main_takes_a_sheet_find_owned_by_a_window_over() {
+    let mut f = fixture();
+    f.app.ui_state.find_replace.query = "NO_SUCH_TEXT".into();
+    f.app.ui_state.find_replace.window = Some(f.window);
+    f.app.ui_state.find_replace.open = true;
+    f.app.ui_state.find_replace.scope = crate::find_replace::FindScope::Sheet;
+    f.app
+        .ui_state
+        .find_replace
+        .skips_reported
+        .insert(std::path::PathBuf::from("skipped.snxsch"));
+
+    let (_outcome, task) = command(&mut f.app, "find_next", f.main);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.app.ui_state.find_replace.window, None);
+    assert!(f.app.ui_state.find_replace.skips_reported.is_empty());
+}
+
+#[test]
+fn a_keystroke_for_a_palette_another_window_now_owns_is_ignored() {
+    let mut f = fixture();
+    let (_outcome, task) = command(&mut f.app, "open_command_palette", f.window);
+    settle_task(&mut f.app, task);
+    let other = iced::window::Id::unique();
+    let before = f.app.ui_state.command_palette.query.clone();
+
+    let task = f.app.update(Message::CommandPalette(
+        crate::app::CommandPaletteMsg::QueryTypedInWindow(other, "late_keystroke".into()),
+    ));
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.app.ui_state.command_palette.query, before);
+    assert_eq!(f.app.ui_state.command_palette.window, Some(f.window));
+}
+
+#[test]
+fn a_library_window_is_dirty_through_its_library_toml_not_mains_tab() {
+    let mut f = fixture();
+    // Main's active tab is a schematic; the window shows a library.
+    f.app.document_state.tabs[1].kind = crate::app::TabKind::LibraryBrowser(f.window_path.clone());
+    f.app
+        .document_state
+        .mark_history_edit_dirty(&f.window_path.join("library.toml"));
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(
+        f.app.document_state.window_history[&f.window].dirty,
+        "the window read main's tab for the library.toml check"
     );
 }

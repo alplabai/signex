@@ -137,7 +137,9 @@ pub(crate) type WindowCtxKey = (Option<u64>, u64, u64, bool);
 
 impl Signex {
     /// The context the panels of `window` render: that window's own when it
-    /// shows a document of its own, the main window's otherwise.
+    /// shows a document of its own, the main window's otherwise. A document
+    /// window without a context yet would draw main's History rows; a click on
+    /// one is refused (`history_lists_target`), never restored.
     pub(crate) fn panel_ctx_for(&self, window: iced::window::Id) -> &PanelContext {
         self.document_state
             .window_panel_ctx
@@ -150,6 +152,9 @@ impl Signex {
     /// starting point for `init_window_panel_ctx`.
     pub(crate) fn new_window_panel_ctx(&self, window: iced::window::Id) -> PanelContext {
         let mut ctx = self.document_state.panel_ctx.clone();
+        // Main's History rows belong to main's file; the window lists its own
+        // once its first load lands (see `refresh_window_histories`).
+        ctx.history = Default::default();
         if !self.window_shares_main_navigator(window) {
             ctx.navigator = Default::default();
         }
@@ -165,7 +170,7 @@ impl Signex {
 
     /// Whether the dock shows any panel, so a window's context is worth
     /// building.
-    fn dock_has_panels(&self) -> bool {
+    pub(super) fn dock_has_panels(&self) -> bool {
         use crate::dock::PanelPosition::{Bottom, Left, Right};
         let dock = &self.document_state.dock;
         [Left, Right, Bottom]
