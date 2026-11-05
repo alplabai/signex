@@ -320,7 +320,7 @@ mod tests {
     }
 
     /// Messages run in the order they are produced, as the iced runtime
-    /// delivers them: both of a batch before the follow-up of the first.
+    /// delivers them: both of a batch, then their follow-ups in order.
     #[test]
     fn messages_run_first_in_first_out() {
         let tag = |n: u32| Message::Window(WindowMsg::NativeMenuItemActivated(n.to_string()));
@@ -334,13 +334,15 @@ mod tests {
                     seen.push(n.clone());
                     match n.as_str() {
                         "1" => Task::done(tag(3)),
+                        "2" => Task::done(tag(4)),
                         _ => Task::none(),
                     }
                 },
                 Task::batch([Task::done(tag(1)), Task::done(tag(2))]),
             )
             .expect("settled");
-        assert_eq!(seen, ["1", "2", "3"]);
+        // Depth-first would give 1 3 2 4, last-in-first-out 1 2 4 3.
+        assert_eq!(seen, ["1", "2", "3", "4"]);
     }
 
     #[test]
