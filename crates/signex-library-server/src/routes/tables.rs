@@ -12,7 +12,7 @@
 //!
 //! `library_id` rides on the query string the same way it does for the
 //! primitive routes (`/symbols` / `/footprints` / `/sims`). Once OIDC lands
-//! in v0.9.x the value can be derived from the bearer token claims; until
+//! the value can be derived from the bearer token claims; until
 //! then it stays explicit so the wire contract is symmetric across the
 //! refactor.
 

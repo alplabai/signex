@@ -529,9 +529,8 @@ pub enum PanelMsg {
     /// live on the v0.18.14 unified active bar; the Properties
     /// panel surfaces the toggle through this same message.
     FpEditorToggleSelectionFilter(crate::library::editor::footprint::state::SelectionFilterKind),
-    /// v0.18.13 — open the Custom Selection Filter modal. Stubbed
-    /// until v0.18.14 ships the modal body alongside the active
-    /// bar pills.
+    /// v0.18.13 — open the Custom Selection Filter modal (routes to
+    /// `SelectionFilterMsg::OpenCustom`).
     FpEditorOpenSelectionFilterCustom,
     /// v0.18.13 — Snap Options sub-tab switch (Grids / Guides / Axes).
     FpEditorSetSnapSubTab(crate::library::editor::footprint::state::SnapSubTab),
