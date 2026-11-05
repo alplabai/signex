@@ -229,3 +229,75 @@ fn a_project_line_style_dashes_the_wire_on_canvas_and_in_export() {
     );
     assert!(export_segments(dashed) > 2, "dashes");
 }
+
+/// #2026: a class's explicit Solid overrides a project Dashed on the canvas
+/// and in export; a class with no line style inherits the project's.
+#[test]
+fn an_explicit_solid_class_beats_a_dashed_project_and_none_inherits() {
+    use signex_types::net_class::{NetClassStyle, NetLineStyle};
+    let dashed = SchematicDefaults {
+        wire_line_style: NetLineStyle::Dashed,
+        ..SchematicDefaults::BUILT_IN
+    };
+    let classes = |line| {
+        WireClassStyles::from([(
+            WIRE,
+            NetClassStyle {
+                line,
+                ..NetClassStyle::default()
+            },
+        )])
+    };
+    let canvas = |classes: &WireClassStyles| {
+        let none = HashMap::new();
+        build_renderer_snapshot(
+            &sheet(),
+            &transform(),
+            &canvas_colors(ThemeId::Signex),
+            bounds(),
+            None,
+            SceneOverrides {
+                wire_styling: Some(WireStyling {
+                    color_overrides: &none,
+                    class_styles: classes,
+                    class_revision: 0,
+                }),
+                defaults: dashed,
+                ..SceneOverrides::default()
+            },
+        )
+        .wire_line_styles
+        .get(&renderer_id(WIRE))
+        .copied()
+    };
+    let export_segments = |classes: &WireClassStyles| {
+        let snapshot = SheetSnapshot {
+            path: "t.snxsch".into(),
+            schematic: sheet(),
+            sheet_name: "t".into(),
+            sheet_number: 1,
+            sheet_count: 1,
+            placement: Default::default(),
+        };
+        let opts = PdfOptions {
+            schematic_defaults: dashed,
+            net_class_styles: classes.clone(),
+            ..PdfOptions::default()
+        };
+        let page = SvgRenderContext::from_sheet(&snapshot, &opts, 297.0, 210.0, 1.0, None);
+        match &page.elements[2] {
+            SvgElement::Path { commands, .. } => commands.len(),
+            SvgElement::Text { .. } => panic!("a path"),
+        }
+    };
+    let solid = classes(Some(NetLineStyle::Solid));
+    assert_eq!(canvas(&solid), None, "explicit Solid draws solid");
+    assert_eq!(export_segments(&solid), 2, "and exports solid");
+    let inherit = classes(None);
+    assert_eq!(
+        canvas(&inherit),
+        Some(NetLineStyle::Dashed),
+        "None inherits"
+    );
+    assert!(export_segments(&inherit) > 2, "and exports dashed");
+}

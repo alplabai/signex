@@ -99,7 +99,7 @@ fn fixture() -> Signex {
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
     let mut power = NetClass::named("Power");
-    power.style.line = NetLineStyle::Dashed;
+    power.style.line = Some(NetLineStyle::Dashed);
     app.document_state.projects.push(LoadedProject {
         id,
         path: dir.join("P.snxprj"),
@@ -161,7 +161,7 @@ fn assigning_a_net_to_a_class_styles_its_wire_and_undo_unstyles_it() {
         },
     );
     let style = app.ui_state.net_class_styles.styles().get(&WIRE_ID);
-    assert_eq!(style.map(|s| s.line), Some(NetLineStyle::Dashed));
+    assert_eq!(style.and_then(|s| s.line), Some(NetLineStyle::Dashed));
 
     send(&mut app, NetClassMsg::Undo);
     assert!(app.ui_state.net_class_styles.styles().is_empty());

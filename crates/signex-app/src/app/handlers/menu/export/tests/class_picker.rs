@@ -16,7 +16,7 @@ use crate::panels::{NetClassMsg, PanelMsg};
 
 fn power_class() -> NetClass {
     let mut class = NetClass::named("Power");
-    class.style.line = NetLineStyle::Dashed;
+    class.style.line = Some(NetLineStyle::Dashed);
     class
 }
 
@@ -93,7 +93,7 @@ fn assigning_from_a_child_label_stores_the_net_name_and_styles_the_wire() {
             .net_class_styles
             .styles()
             .get(&wire)
-            .map(|s| s.line),
+            .and_then(|s| s.line),
         Some(NetLineStyle::Dashed),
         "the child wire is styled, which the label text `LOCAL` never did"
     );
@@ -207,11 +207,11 @@ fn late_and_failed_resolutions_delivered_through_update_leave_the_canvas_alone()
     // it arrives.
     let mut dotted = power_class();
     dotted.nets = vec!["/LOCAL".to_string()];
-    dotted.style.line = NetLineStyle::Dotted;
+    dotted.style.line = Some(NetLineStyle::Dotted);
     app.document_state.projects[0].data.net_classes = vec![dotted.clone()];
     let stale = app.plan_net_class_refresh().expect("first plan").run();
     let stale_key = stale.projects[0].key.clone();
-    dotted.style.line = NetLineStyle::Solid;
+    dotted.style.line = None;
     dotted.style.wire_width_mm = Some(0.6);
     app.document_state.projects[0].data.net_classes = vec![dotted];
     let current = app.plan_net_class_refresh().expect("second plan").run();
@@ -250,11 +250,11 @@ fn a_failure_for_a_superseded_key_does_not_block_the_current_answer() {
 
     let mut class = power_class();
     class.nets = vec!["/LOCAL".to_string()];
-    class.style.line = NetLineStyle::Dotted;
+    class.style.line = Some(NetLineStyle::Dotted);
     app.document_state.projects[0].data.net_classes = vec![class.clone()];
     let stale = app.plan_net_class_refresh().expect("first plan").run();
     let stale_key = stale.projects[0].key.clone();
-    class.style.line = NetLineStyle::Solid;
+    class.style.line = None;
     class.style.wire_width_mm = Some(0.6);
     app.document_state.projects[0].data.net_classes = vec![class];
     let current = app.plan_net_class_refresh().expect("second plan").run();

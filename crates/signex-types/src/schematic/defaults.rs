@@ -74,14 +74,11 @@ impl SchematicDefaults {
         f64::from(self.placed_text_pt()) * super::SCHEMATIC_PT_TO_MM
     }
 
-    /// The line style a wire is stroked with: its class's, else the project
-    /// default. A class stores Solid as "no style" (it is not written), so a
-    /// Solid class style falls through to the default.
+    /// The line style a wire is stroked with: its class's when the class
+    /// sets one (an explicit Solid included), else the project default.
     #[must_use]
     pub fn wire_line(&self, class_line: Option<NetLineStyle>) -> NetLineStyle {
-        class_line
-            .filter(|line| *line != NetLineStyle::Solid)
-            .unwrap_or(self.wire_line_style)
+        class_line.unwrap_or(self.wire_line_style)
     }
 
     /// `own` when it is set, else `default`; never under the shared floor.

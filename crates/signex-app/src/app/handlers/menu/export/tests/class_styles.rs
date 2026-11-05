@@ -34,7 +34,7 @@ fn parent_and_child() -> (SchematicSheet, SchematicSheet, Uuid, Uuid) {
 fn dashed_vcc() -> NetClass {
     let mut class = NetClass::named("Power");
     class.nets.push("VCC".to_string());
-    class.style.line = NetLineStyle::Dashed;
+    class.style.line = Some(NetLineStyle::Dashed);
     class
 }
 
@@ -65,12 +65,12 @@ fn an_export_styles_a_child_sheet_that_is_not_open_in_a_tab() {
     std::fs::remove_dir_all(&dir).ok();
 
     assert_eq!(
-        styles.get(&parent_wire).map(|s| s.line),
+        styles.get(&parent_wire).and_then(|s| s.line),
         Some(NetLineStyle::Dashed),
         "the open parent wire is styled"
     );
     assert_eq!(
-        styles.get(&child_wire).map(|s| s.line),
+        styles.get(&child_wire).and_then(|s| s.line),
         Some(NetLineStyle::Dashed),
         "the child is only on disk, but it reaches VCC through the sheet entry"
     );
@@ -104,11 +104,11 @@ fn a_child_wire_reaching_the_net_through_a_sheet_entry_is_styled_on_the_canvas()
 
     let styles = app.ui_state.net_class_styles.styles();
     assert_eq!(
-        styles.get(&parent_wire).map(|s| s.line),
+        styles.get(&parent_wire).and_then(|s| s.line),
         Some(NetLineStyle::Dashed)
     );
     assert_eq!(
-        styles.get(&child_wire).map(|s| s.line),
+        styles.get(&child_wire).and_then(|s| s.line),
         Some(NetLineStyle::Dashed),
         "the child wire is VCC through the sheet entry, as on the parent"
     );
@@ -214,7 +214,7 @@ fn a_stale_resolution_is_dropped_and_the_newer_one_kept() {
 
     let older = app.plan_net_class_refresh().expect("first gate opening");
     let mut dotted = dashed_vcc();
-    dotted.style.line = NetLineStyle::Dotted;
+    dotted.style.line = Some(NetLineStyle::Dotted);
     app.document_state.projects[0].data.net_classes = vec![dotted];
     let newer = app.plan_net_class_refresh().expect("second gate opening");
 
@@ -227,7 +227,7 @@ fn a_stale_resolution_is_dropped_and_the_newer_one_kept() {
             .net_class_styles
             .styles()
             .get(&parent_wire)
-            .map(|s| s.line),
+            .and_then(|s| s.line),
         Some(NetLineStyle::Dotted),
         "the late, older answer must not overwrite the newer one"
     );

@@ -527,7 +527,7 @@ mod tests {
             NetClassStyle {
                 color: None,
                 wire_width_mm: Some(2.0),
-                line: NetLineStyle::Solid,
+                line: None,
             },
         );
         assert!(

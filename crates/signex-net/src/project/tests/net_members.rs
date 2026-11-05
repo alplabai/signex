@@ -349,7 +349,7 @@ fn class_styles_and_names_follow_the_placement_of_a_child_placed_twice() {
 
     let mut class = NetClass::named("Fast");
     class.nets.push(b.clone());
-    class.style.line = NetLineStyle::Dashed;
+    class.style.line = Some(NetLineStyle::Dashed);
     let styles = crate::placement_class_styles(&idx, &[class]);
     assert!(
         styles[&via(501)].contains_key(&shared),

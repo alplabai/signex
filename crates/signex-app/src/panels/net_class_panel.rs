@@ -30,7 +30,8 @@ pub enum NetClassMsg {
     Select(usize),
     Draft(NetClassField, String),
     Commit(NetClassField),
-    SetLine(NetLineStyle),
+    /// The class's line style; `None` is Default (inherit the project's).
+    SetLine(Option<NetLineStyle>),
     /// Put `net` in `class` (and out of every other class's exact list), or
     /// in no class for `None`, in `project`'s table. Sent from a selected net
     /// label's Properties; `project` is the one that label's sheet belongs
@@ -309,9 +310,9 @@ pub fn view_net_classes_section<'a>(
             ));
             c = c.push(form_pick_row(
                 "Line",
-                NetLineStyle::ALL.to_vec(),
-                panel.classes[selected].style.line,
-                |l| PanelMsg::NetClass(NetClassMsg::SetLine(l)),
+                ClassLine::options(),
+                ClassLine(panel.classes[selected].style.line),
+                |l: ClassLine| PanelMsg::NetClass(NetClassMsg::SetLine(l.0)),
                 muted,
             ));
             c = c.push(field(
@@ -379,5 +380,24 @@ mod tests {
 
         assert_ne!(clear, lookalike);
         assert_eq!(NetClassChoice::Class("Power".into()).to_string(), "Power");
+    }
+}
+
+/// A class line style choice: `None` is Default, the project's line style
+/// (#2026); Solid, Dashed and Dotted are explicit and override it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ClassLine(Option<NetLineStyle>);
+
+impl ClassLine {
+    fn options() -> Vec<Self> {
+        std::iter::once(Self(None))
+            .chain(NetLineStyle::ALL.iter().map(|line| Self(Some(*line))))
+            .collect()
+    }
+}
+
+impl std::fmt::Display for ClassLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.map_or("Default", NetLineStyle::label))
     }
 }

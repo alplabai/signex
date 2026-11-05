@@ -22,7 +22,7 @@ fn sample_class() -> NetClass {
         style: NetClassStyle {
             color: Some(Color::new(220, 30, 30, 255)),
             wire_width_mm: Some(0.35),
-            line: NetLineStyle::Dotted,
+            line: Some(NetLineStyle::Dotted),
         },
         ..NetClass::default()
     }

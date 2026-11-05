@@ -72,7 +72,7 @@ fn a_dashed_class_splits_the_wire_into_marks() {
     let opts = options_with(NetClassStyle {
         color: None,
         wire_width_mm: None,
-        line: NetLineStyle::Dashed,
+        line: Some(NetLineStyle::Dashed),
     });
 
     let (commands, style) = wire_path(&sheet_with_wire(), &opts);
@@ -87,7 +87,7 @@ fn class_colour_and_width_reach_the_stroke() {
     let opts = options_with(NetClassStyle {
         color: Some(Color::new(255, 0, 0, 255)),
         wire_width_mm: Some(0.5),
-        line: NetLineStyle::Solid,
+        line: None,
     });
 
     // An unset width, so the class width applies: an explicit one beats it (#2026).
@@ -108,7 +108,7 @@ fn per_net_colour_override_wins_over_the_class_colour_in_export() {
     let opts = options_with(NetClassStyle {
         color: Some(Color::new(255, 0, 0, 255)),
         wire_width_mm: None,
-        line: NetLineStyle::Dotted,
+        line: Some(NetLineStyle::Dotted),
     });
     let mut sheet = sheet_with_wire();
     sheet
@@ -130,7 +130,7 @@ fn class_colored(color: Option<Color>) -> NetClassStyle {
     NetClassStyle {
         color,
         wire_width_mm: None,
-        line: NetLineStyle::Solid,
+        line: None,
     }
 }
 

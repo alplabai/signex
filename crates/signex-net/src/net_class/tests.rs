@@ -23,7 +23,7 @@ fn styled(name: &str, nets: &[&str], patterns: &[&str], color: Option<Color>) ->
         style: NetClassStyle {
             color,
             wire_width_mm: None,
-            line: NetLineStyle::Dashed,
+            line: Some(NetLineStyle::Dashed),
         },
         ..NetClass::default()
     }

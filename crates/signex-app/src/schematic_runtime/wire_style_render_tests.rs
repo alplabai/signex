@@ -38,7 +38,7 @@ fn sheet_with_unset_wire() -> SchematicRenderSnapshot {
 }
 
 fn class_style(
-    line: NetLineStyle,
+    line: Option<NetLineStyle>,
     width: Option<f64>,
     color: Option<ThemeColor>,
 ) -> WireClassStyles {
@@ -93,8 +93,8 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     let no_colors = HashMap::new();
-    let thin = class_style(NetLineStyle::Solid, Some(0.5), None);
-    let thick = class_style(NetLineStyle::Solid, Some(1.0), None);
+    let thin = class_style(None, Some(0.5), None);
+    let thick = class_style(None, Some(1.0), None);
     let no_designators = HashMap::new();
     let mut renamed = HashMap::new();
     renamed.insert(uuid::Uuid::now_v7(), "R7".to_string());
@@ -141,7 +141,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
 fn class_line_style_width_and_colour_reach_the_scene() {
     let sheet = sheet_with_unset_wire();
     let red = ThemeColor::new(255, 0, 0, 255);
-    let classes = class_style(NetLineStyle::Dashed, Some(0.6), Some(red));
+    let classes = class_style(Some(NetLineStyle::Dashed), Some(0.6), Some(red));
     let no_overrides = HashMap::new();
 
     let line = scene_line(
@@ -161,7 +161,7 @@ fn class_line_style_width_and_colour_reach_the_scene() {
 #[test]
 fn dotted_class_draws_dotted() {
     let sheet = sheet_with_wire();
-    let classes = class_style(NetLineStyle::Dotted, None, None);
+    let classes = class_style(Some(NetLineStyle::Dotted), None, None);
     let no_overrides = HashMap::new();
 
     let line = scene_line(
@@ -182,7 +182,7 @@ fn per_net_colour_override_wins_over_the_class_colour() {
     let sheet = sheet_with_unset_wire();
     let red = ThemeColor::new(255, 0, 0, 255);
     let green = ThemeColor::new(0, 255, 0, 255);
-    let classes = class_style(NetLineStyle::Dashed, Some(0.6), Some(red));
+    let classes = class_style(Some(NetLineStyle::Dashed), Some(0.6), Some(red));
     let mut overrides = HashMap::new();
     overrides.insert(WIRE_ID, green);
 
@@ -217,7 +217,7 @@ fn a_class_width_widens_the_hit_area_to_the_drawn_width() {
     let (x, y) = (30.0, 11.5);
     assert!(hit_test::hit_test(&sheet, &Designators::new(), x, y).is_none());
 
-    let wide = class_style(NetLineStyle::Solid, Some(2.0), None);
+    let wide = class_style(None, Some(2.0), None);
     let hit = hit_test::hit_test_styled(&sheet, &Designators::new(), x, y, class_widths(&wide));
 
     assert_eq!(hit.map(|h| h.uuid), Some(WIRE_ID));
@@ -262,7 +262,7 @@ fn a_project_wire_width_widens_the_hit_area_and_the_box() {
 #[test]
 fn a_style_without_width_keeps_the_default_hit_area() {
     let sheet = sheet_with_wire();
-    let dashed = class_style(NetLineStyle::Dashed, None, None);
+    let dashed = class_style(Some(NetLineStyle::Dashed), None, None);
 
     assert!(
         hit_test::hit_test_styled(
@@ -325,7 +325,7 @@ fn junction_class(color: Option<ThemeColor>) -> WireClassStyles {
         NetClassStyle {
             color,
             wire_width_mm: None,
-            line: NetLineStyle::Solid,
+            line: None,
         },
     );
     map

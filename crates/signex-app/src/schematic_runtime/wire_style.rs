@@ -182,7 +182,7 @@ mod tests {
         NetClassStyle {
             color,
             wire_width_mm: width,
-            line: NetLineStyle::Dashed,
+            line: Some(NetLineStyle::Dashed),
         }
     }
 

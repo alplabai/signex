@@ -52,13 +52,13 @@ fn committing_fields_edits_the_selected_class() {
     assert!(f.type_and_commit(NetClassField::Width, "0.4"));
     assert!(f.type_and_commit(NetClassField::Nets, "GND, +3V3"));
     assert!(f.type_and_commit(NetClassField::Patterns, "VCC*"));
-    assert!(f.send(NetClassMsg::SetLine(NetLineStyle::Dashed)));
+    assert!(f.send(NetClassMsg::SetLine(Some(NetLineStyle::Dashed))));
 
     let class = &f.classes[0];
     assert_eq!(class.name, "Power");
     assert_eq!(class.style.color, Some(Color::new(255, 0, 0, 255)));
     assert_eq!(class.style.wire_width_mm, Some(0.4));
-    assert_eq!(class.style.line, NetLineStyle::Dashed);
+    assert_eq!(class.style.line, Some(NetLineStyle::Dashed));
     assert_eq!(class.nets, ["GND", "+3V3"]);
     assert_eq!(class.patterns, ["VCC*"]);
 }

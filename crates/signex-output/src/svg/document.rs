@@ -113,7 +113,7 @@ impl SvgRenderContext {
                 start,
                 end,
                 opts.schematic_defaults
-                    .wire_line(class.map(|style| style.line)),
+                    .wire_line(class.and_then(|style| style.line)),
                 stroke_mm * xform.mm_to_unit,
             );
             let commands = marks

@@ -133,8 +133,8 @@ fn a_wire_line_style_falls_back_class_project_built_in() {
     assert_eq!(p.wire_line(None), L::Dashed, "project beats built-in");
     assert_eq!(
         p.wire_line(Some(L::Solid)),
-        L::Dashed,
-        "Solid is a class's unset"
+        L::Solid,
+        "an explicit Solid class overrides the project"
     );
     assert_eq!(B.wire_line(None), L::Solid);
 }
