@@ -284,7 +284,7 @@ fn the_grid_lands_on_device_pixels_at_one_and_a_half_times() {
 
     let dots = drawn_grid_vertices(GridStyle::Dots, dpr);
     assert!(
-        dots.len() >= 4 && dots.len() % 4 == 0,
+        dots.len() >= 4 && dots.len().is_multiple_of(4),
         "{} dot vertices",
         dots.len()
     );
