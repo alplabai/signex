@@ -13,7 +13,7 @@ anchor = [
 ]
 pins_tsv = '''
 number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
-1	GND	Power	0	0	Down	1.27					false	false	None	None	None	None	false	false	1
+1	GND	Power	0	0	Down	2.54					false	false	None	None	None	None	false	false	1
 '''
 designator = "#PWR?"
 comment = "GND"
@@ -34,11 +34,11 @@ part_number = 0
 kind = "line"
 from = [
     -1.27,
-    -1.27,
+    -2.54,
 ]
 to = [
     1.27,
-    -1.27,
+    -2.54,
 ]
 
 [[symbols.graphics]]
@@ -49,11 +49,11 @@ part_number = 0
 kind = "line"
 from = [
     -0.762,
-    -1.778,
+    -3.048,
 ]
 to = [
     0.762,
-    -1.778,
+    -3.048,
 ]
 
 [[symbols.graphics]]
@@ -64,11 +64,11 @@ part_number = 0
 kind = "line"
 from = [
     -0.254,
-    -2.286,
+    -3.556,
 ]
 to = [
     0.254,
-    -2.286,
+    -3.556,
 ]
 
 [symbols.schematic_params]

@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn previews_ghost_and_frame_draw_at_the_placed_wire_width() {
         use iced::{Point as P, Rectangle, Size};
-        use signex_types::schematic::{Point as SchPoint, SCHEMATIC_RENDER_MIN_STROKE_MM};
+        use signex_types::schematic::{Point as SchPoint, SCHEMATIC_DEFAULT_WIRE_STROKE_MM};
         let (mut app, main) = app_with_main();
         let tab = undocked(&mut app);
         scale_changed(&mut app, main, 1.0);
@@ -225,7 +225,7 @@ mod tests {
                     device_px_per_logical_px: dpr,
                 };
                 let law = schematic_draw_options(&transform)
-                    .stroke_px(SCHEMATIC_RENDER_MIN_STROKE_MM as f32);
+                    .stroke_px(SCHEMATIC_DEFAULT_WIRE_STROKE_MM as f32);
                 // What the replay gives a placed wire of this direction.
                 let placed = |a: P, b: P| crate::scene_line_snap::snap_hairline(a, b, law, dpr).2;
                 let mut slot = crate::canvas::CanvasSlot::new();
@@ -265,7 +265,7 @@ mod tests {
                 );
 
                 let (a, b) = (P::new(3.3, 5.3), P::new(90.1, 5.3));
-                let frame = canvas.sheet_frame_line(a, b, SCHEMATIC_RENDER_MIN_STROKE_MM, scale);
+                let frame = canvas.sheet_frame_line(a, b, SCHEMATIC_DEFAULT_WIRE_STROKE_MM, scale);
                 assert_eq!(frame.2, placed(a, b), "sheet frame, {context}");
             }
         }

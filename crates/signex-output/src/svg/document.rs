@@ -10,7 +10,7 @@
 
 use super::drawings::push_placed_drawings;
 use super::family::alias_for_family;
-use super::geometry::{path_to_tiny_skia, rect_path};
+use super::geometry::{circle_path, path_to_tiny_skia, rect_path};
 use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
@@ -163,9 +163,9 @@ impl SvgRenderContext {
         }
 
         for j in &sheet.schematic.junctions {
-            let dia_mm = if j.diameter > 0.0 { j.diameter } else { 0.7 };
-            let side = (dia_mm * xform.mm_to_unit) as f32;
-            let half = side / 2.0;
+            // The canvas rule: a filled disc, never under the minimum radius.
+            let radius_mm = (j.diameter * 0.5)
+                .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM);
             let cx = xform.x(j.position.x);
             let cy = xform.px_y(j.position.y);
             let junction_rgb = wire_style::junction_rgb(
@@ -174,15 +174,14 @@ impl SvgRenderContext {
                 &opts.net_class_styles,
                 palette.junction,
             );
-            elements.push(rect_path(
-                cx - half,
-                cy - half,
-                side,
-                side,
+            elements.push(circle_path(
+                cx,
+                cy,
+                (radius_mm * xform.mm_to_unit) as f32,
                 SvgStyle {
-                    stroke_rgb: Some(junction_rgb),
+                    stroke_rgb: None,
                     fill_rgb: Some(junction_rgb),
-                    stroke_width: 0.8,
+                    stroke_width: 0.0,
                 },
             ));
         }
@@ -279,11 +278,9 @@ impl SvgRenderContext {
                 SvgStyle {
                     stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
-                    stroke_width: ((if child.stroke_width > 0.0 {
-                        child.stroke_width
-                    } else {
-                        0.2
-                    }) * xform.mm_to_unit) as f32,
+                    stroke_width: (signex_types::schematic::symbol_graphic_stroke_mm(
+                        child.stroke_width,
+                    ) * xform.mm_to_unit) as f32,
                 },
             ));
             if !child.name.is_empty() {
@@ -368,7 +365,8 @@ impl SvgRenderContext {
                     SvgStyle {
                         stroke_rgb: Some(palette.symbol_stroke),
                         fill_rgb: None,
-                        stroke_width: (0.1 * xform.mm_to_unit) as f32,
+                        stroke_width: (signex_types::schematic::symbol_graphic_stroke_mm(0.0)
+                            * xform.mm_to_unit) as f32,
                     },
                 ));
             }
@@ -424,7 +422,11 @@ impl SvgRenderContext {
                     align: halign_to_svg(val_style.1),
                     v_align: valign_to_svg(val_style.2),
                     rotation_deg: val_style.0 as f32,
-                    fill_rgb: palette.value,
+                    fill_rgb: if sym.is_power {
+                        palette.power_label
+                    } else {
+                        palette.value
+                    },
                     text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }
