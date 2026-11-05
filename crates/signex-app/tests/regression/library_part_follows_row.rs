@@ -230,6 +230,11 @@ fn a_part_from_before_mpn_stamping_is_offered_the_row_mpn() {
             })
             .unwrap();
     }
+    // ... and no value stamp: it predates both.
+    let engine = app.document_state.engines.get_mut(&path).unwrap();
+    let mut sheet = engine.document().clone();
+    sheet.symbols[0].library_stamp = None;
+    engine.set_document(sheet);
     select_first(&mut app);
     check_drift(&mut app);
     assert!(

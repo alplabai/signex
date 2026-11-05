@@ -176,6 +176,7 @@ fn field_symbol(ref_text: Option<TextProp>) -> Symbol {
         library_id: None,
         row_id: None,
         library_version: String::new(),
+        library_stamp: None,
     }
 }
 

@@ -1412,6 +1412,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             library_id: None,
             row_id: None,
             library_version: String::new(),
+            library_stamp: None,
         }],
         child_sheets: vec![ChildSheet {
             uuid: sheet_uuid,

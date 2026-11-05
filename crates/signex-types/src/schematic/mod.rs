@@ -731,6 +731,10 @@ pub struct Symbol {
     /// current `ComponentRow.version` on schematic open.
     #[serde(default)]
     pub library_version: String,
+    /// The row values this part last agreed with (see [`RowStamp`]); `None`
+    /// for a part that predates the stamp or has no row.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_stamp: Option<RowStamp>,
     /// Keys in this symbol's `[extras.symbols.<uuid>]` table that this
     /// build does not recognise, kept so a save re-emits them. Empty for
     /// every file written by this build.
@@ -781,6 +785,7 @@ impl Default for Symbol {
             library_id: None,
             row_id: None,
             library_version: String::new(),
+            library_stamp: None,
             unknown: UnknownFields::default(),
             unknown_columns: UnknownColumns::default(),
         }
@@ -801,6 +806,12 @@ pub use field_style::{field_effective_style, readable_text_style};
 pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
+mod row_stamp;
+#[cfg(test)]
+mod row_stamp_tests;
+pub use row_stamp::{
+    LinkStamp, RowStamp, StampField, StampValues, Theirs, Verdict, base_of, resolve,
+};
 mod pin_map;
 pub use pin_map::{PinMapping, PinMatchedBy, PinPair, map_pins, pin_key};
 mod sheet;

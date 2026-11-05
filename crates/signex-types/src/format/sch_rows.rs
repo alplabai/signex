@@ -347,6 +347,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         fields.insert("MPN".to_string(), row.mpn.clone());
     }
     let mut unknown = extras.unknown;
+    let library_stamp = super::extras::stamp_from_read(extras.library_stamp, &mut unknown);
     let body_style = body_style_from_tag(extras.body_style, &row.ref_des, row.uuid, &mut unknown);
     Symbol {
         uuid: row.uuid,
@@ -386,6 +387,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         library_id: extras.library_id,
         row_id: extras.row_id,
         library_version: extras.library_version,
+        library_stamp,
         instances: extras.instances,
         unknown,
         unknown_columns: row.unknown_columns,
