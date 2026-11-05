@@ -13,4 +13,6 @@ mod hud_tag;
 mod measure;
 mod overlay;
 mod previews;
+mod retained;
+pub(in crate::canvas) use retained::RetainedContent;
 mod scene;

@@ -653,10 +653,10 @@ impl Signex {
             let base: Element<'_, Message> = if crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED {
                 crate::canvas::gpu_mount::view(slot, prefs)
             } else {
-                canvas(crate::canvas::SchematicCanvas::new(slot, prefs))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .boxed()
+                crate::canvas::SchematicSurface::new(crate::canvas::SchematicCanvas::new(
+                    slot, prefs,
+                ))
+                .boxed()
             };
             let base = if is_main {
                 base

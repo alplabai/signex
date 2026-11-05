@@ -11,15 +11,16 @@ impl SchematicCanvas<'_> {
             && (scale - cam.scale).abs() < 0.0001
     }
 
-    /// Layer 2 — the schematic content (cached unless panning/dragging).
+    /// Layer 2 — the schematic content. Retained across pans (see
+    /// [`super::retained`]); a move-drag draws it uncached.
     pub(in crate::canvas) fn draw_content(
         &self,
-        state: &CanvasState,
         renderer: &Renderer,
         bounds: Rectangle,
         effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot>,
         drag_offset: Option<(f64, f64)>,
-    ) -> canvas::Geometry {
+        allow_shift: bool,
+    ) -> super::retained::RetainedLayer {
         let cam = self.camera();
         let live_transform = crate::schematic_runtime::ScreenTransform {
             offset_x: cam.offset.x,
@@ -27,54 +28,51 @@ impl SchematicCanvas<'_> {
             scale: cam.scale,
             device_px_per_logical_px: self.prefs.device_px_per_logical_px,
         };
-        // #632 — this used to republish the camera into a
-        // `live_camera: Cell<(f32, f32, f32)>` on every frame so `view` could
-        // place world-anchored overlays. `view` now reads
-        // `CanvasSlot::live_camera()` off the same cell `draw` reads,
-        // so there is nothing to publish and nothing that can lag a frame.
-        let camera_matches_cache = self.content_cache_fits_camera();
+        drop(cam);
         // The frame is local; cull against the widget size, not its
         // window-space origin.
         let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
         let focus_set = self.auto_focus_set();
         let focus_ref = focus_set.as_ref();
-        if state.panning || drag_offset.is_some() {
-            let mut frame = canvas::Frame::new(renderer, bounds.size());
-            if let Some(snapshot) = effective_snapshot {
-                if drag_offset.is_some() {
-                    // The drag snapshot is rebuilt every frame, so its scene
-                    // cannot be cached.
-                    crate::schematic_runtime::render_schematic(
-                        &mut frame,
-                        snapshot,
-                        &live_transform,
-                        &self.prefs.canvas_colors,
-                        bounds,
-                        focus_ref,
-                        self.scene_overrides(),
-                    );
-                } else {
-                    self.render_content_scene(
-                        &mut frame,
-                        snapshot,
-                        &live_transform,
-                        bounds,
-                        focus_ref,
-                    );
-                }
-            }
-            frame.into_geometry()
-        } else {
-            if !camera_matches_cache {
-                self.content_cache.clear();
-            }
-            self.content_cache.draw(renderer, bounds.size(), |frame| {
-                self.content_cache_camera
-                    .set((cam.offset.x, cam.offset.y, cam.scale));
+        #[cfg(test)]
+        if self.trunk_content.get() && drag_offset.is_none() {
+            let geometry = self.content_cache.draw(renderer, bounds.size(), |frame| {
                 if let Some(snapshot) = effective_snapshot {
                     self.render_content_scene(frame, snapshot, &live_transform, bounds, focus_ref);
                 }
-            })
+            });
+            return super::retained::RetainedLayer {
+                geometry,
+                shift: iced::Vector::ZERO,
+            };
+        }
+        if drag_offset.is_none() {
+            return self.retained_content(
+                renderer,
+                bounds,
+                effective_snapshot,
+                focus_ref,
+                &live_transform,
+                allow_shift,
+            );
+        }
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        if let Some(snapshot) = effective_snapshot {
+            // The drag snapshot is rebuilt every frame, so its scene cannot be
+            // cached.
+            crate::schematic_runtime::render_schematic(
+                &mut frame,
+                snapshot,
+                &live_transform,
+                &self.prefs.canvas_colors,
+                bounds,
+                focus_ref,
+                self.scene_overrides(),
+            );
+        }
+        super::retained::RetainedLayer {
+            geometry: frame.into_geometry(),
+            shift: iced::Vector::ZERO,
         }
     }
 
