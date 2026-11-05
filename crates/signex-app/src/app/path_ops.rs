@@ -566,23 +566,9 @@ pub(crate) fn settle(app: &mut crate::app::Signex, message: crate::app::Message)
 /// [`settle`] for a task a handler returned directly.
 #[cfg(test)]
 pub(crate) fn settle_task(app: &mut crate::app::Signex, task: iced::Task<crate::app::Message>) {
-    use futures::StreamExt as _;
-    let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    let mut pending = vec![task];
-    while let Some(task) = pending.pop() {
-        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
-            continue;
-        };
-        let mut messages = Vec::new();
-        runtime.block_on(async {
-            while let Some(action) = stream.next().await {
-                if let iced_runtime::Action::Output(next) = action {
-                    messages.push(next);
-                }
-            }
-        });
-        pending.extend(messages.into_iter().map(|m| app.update(m)));
-    }
+    crate::task_driver::TaskDriver::new()
+        .settle(app, task)
+        .expect("the task chain settled");
 }
 
 #[cfg(test)]

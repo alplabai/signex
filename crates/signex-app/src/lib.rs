@@ -76,6 +76,7 @@ pub mod startup_args;
 pub mod status_bar;
 pub mod styles;
 pub mod tab_bar;
+pub mod task_driver;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod text_trunc;
