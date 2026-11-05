@@ -80,3 +80,34 @@ fn a_pan_drag_is_a_user_gesture_but_a_hover_is_not() {
     let pan = published(&view, &mut state, moved(second), second);
     assert!(matches!(pan, Some(CanvasEvent::ViewMoved)), "{pan:?}");
 }
+
+#[test]
+fn a_pixel_scroll_pans_with_trackpad_pan_on_and_zooms_while_ctrl_is_held() {
+    let slot = CanvasSlot::new();
+    let (overrides, filters) = Default::default();
+    let mut prefs = test_prefs(&overrides, &filters);
+    prefs.trackpad_pan = true;
+    let view = SchematicCanvas::new(&slot, prefs);
+    let at = iced::Point::new(300.0, 200.0);
+    let scroll = || {
+        Event::Mouse(mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Pixels { x: 20.0, y: 50.0 },
+        })
+    };
+
+    let before = slot.camera().clone();
+    let mut state = CanvasState::default();
+    assert!(published(&view, &mut state, scroll(), at).is_some());
+    let panned = slot.camera().clone();
+    assert_eq!(panned.scale, before.scale);
+    assert_ne!(panned.offset, before.offset);
+
+    // Ctrl alone (not Cmd) sets the zoom modifier, so the scroll zooms.
+    let mods = Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+        iced::keyboard::Modifiers::CTRL,
+    ));
+    let _ = view.update(&mut state, &mods, bounds(), mouse::Cursor::Available(at));
+    assert!(state.zoom_modifier);
+    assert!(published(&view, &mut state, scroll(), at).is_some());
+    assert_ne!(slot.camera().scale, panned.scale);
+}

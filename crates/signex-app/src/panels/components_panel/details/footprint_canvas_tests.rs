@@ -163,6 +163,7 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
         silk_f: &fp.silk_f,
         silk_b: &fp.silk_b,
         zoom_step: 1.1,
+        trackpad_pan: false,
     };
     let camera = FootprintCanvasState::with_view(at.scale(), at.offset());
     let renderer = headless_renderer();
@@ -474,4 +475,22 @@ fn small_pads_get_numbers_in_the_preview_but_not_the_editor() {
     assert!(state.scale() < 25.0 && 1.2 * state.scale() >= 9.0);
     assert!(draw_preview(&model, &state).has_text("1"));
     assert_eq!(draw_editor(&fp, &state).texts(), 1, "silk text only");
+}
+
+#[test]
+fn pinch_zoom_is_cursor_anchored_floored_and_ignores_no_ops() {
+    let mut cam = FootprintCanvasState::with_view(10.0, Point::new(0.0, 0.0));
+    let anchor = Point::new(100.0, 50.0);
+    assert!(super::pinch_zoom(&mut cam, anchor, 0.5));
+    assert!((cam.scale - 15.0).abs() < 1e-4);
+    // The world point under the anchor stays put.
+    assert!((cam.offset.x - (100.0 - 100.0 * 1.5)).abs() < 1e-3);
+    assert!((cam.offset.y - (50.0 - 50.0 * 1.5)).abs() < 1e-3);
+    assert!(!super::pinch_zoom(&mut cam, anchor, 0.0));
+    assert!(!super::pinch_zoom(&mut cam, anchor, f32::NAN));
+    for _ in 0..40 {
+        super::pinch_zoom(&mut cam, anchor, -0.5);
+    }
+    assert_eq!(cam.scale, super::MIN_PREVIEW_SCALE);
+    assert!(!super::pinch_zoom(&mut cam, anchor, -0.5));
 }

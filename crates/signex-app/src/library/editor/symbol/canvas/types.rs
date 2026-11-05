@@ -119,6 +119,13 @@ pub enum CanvasAction {
         sy: f32,
         delta: f32,
     },
+    /// Zoom centred on `(sx, sy)` by an absolute scale `factor` (a trackpad
+    /// pinch). Greater than 1 zooms in.
+    ZoomFactor {
+        sx: f32,
+        sy: f32,
+        factor: f32,
+    },
     /// Fit the symbol bbox into the viewport (Home key).
     Fit,
     /// The canvas measured its real size while a Fit / centre-origin
@@ -209,6 +216,9 @@ impl SymbolTool {
 /// Canvas-program ephemeral state — drag + pan tracking.
 #[derive(Debug, Default)]
 pub struct CanvasState {
+    /// Ctrl/Cmd held, from `ModifiersChanged` (mouse events carry no
+    /// modifiers); a modified scroll keeps zooming under "Two-finger scroll pans".
+    pub zoom_modifier: bool,
     /// True when the user is mid-drag of the currently-selected pin.
     pub dragging: bool,
     /// `(graphic_idx, handle)` while the user drags a graphic resize

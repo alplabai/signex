@@ -34,6 +34,18 @@ impl<'a> FootprintPreview<'a> {
     }
 }
 
+/// Zoom `camera` about `anchor` for one pinch event, with the shared pinch
+/// factor and the preview's own scale floor. False when nothing changed.
+fn pinch_zoom(camera: &mut FootprintCanvasState, anchor: Point, delta: f32) -> bool {
+    let factor = Camera::pinch_factor(delta);
+    if factor == 1.0 {
+        return false;
+    }
+    let before = camera.scale;
+    camera.zoom_about(anchor, factor, MIN_PREVIEW_SCALE);
+    camera.scale != before
+}
+
 /// The preview's own camera and geometry cache (widget state).
 #[derive(Default)]
 pub struct PreviewState {
@@ -117,6 +129,16 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
                     return None;
                 }
                 state.camera.zoom_about(anchor, factor, MIN_PREVIEW_SCALE);
+                state.cache.clear();
+                Some(Action::request_redraw().and_capture())
+            }
+            // Previews keep wheel and pinch zoom only: the opt-in two-finger
+            // pan is an editor-canvas preference and is not offered here.
+            mouse::Event::PinchGesture { delta } => {
+                let anchor = cursor.position_in(bounds)?;
+                if !pinch_zoom(&mut state.camera, anchor, *delta) {
+                    return None;
+                }
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }

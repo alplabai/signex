@@ -412,3 +412,27 @@ fn an_edited_body_under_the_same_id_refits() {
     assert_eq!(state.fitted_for, Some(second.fit_key()));
     assert_ne!(first.fit_key(), second.fit_key());
 }
+
+#[test]
+fn pinch_zooms_about_the_cursor_without_ctrl_and_ignores_zero_delta() {
+    let p = program(body_symbol(), DOTS);
+    let mut state = shown(&p);
+    let before = state.camera.scale;
+    assert!(!event(
+        mouse::Event::PinchGesture { delta: 0.0 },
+        &mut state,
+        &p
+    ));
+    assert!(event(
+        mouse::Event::PinchGesture { delta: 0.25 },
+        &mut state,
+        &p
+    ));
+    assert!((state.camera.scale / before - 1.25).abs() < 1e-4);
+    assert!(event(
+        mouse::Event::PinchGesture { delta: -0.25 },
+        &mut state,
+        &p
+    ));
+    assert!(state.camera.scale < before * 1.25);
+}

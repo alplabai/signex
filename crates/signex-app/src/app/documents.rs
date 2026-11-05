@@ -302,6 +302,8 @@ pub struct SymbolDocument {
     /// Per-wheel-notch zoom factor (Preferences "Zoom speed"). Synced from
     /// `UiState` on every update, like the PCB canvases' `zoom_step`.
     pub zoom_step: f32,
+    /// "Two-finger scroll pans" preference, synced with `zoom_step`.
+    pub trackpad_pan: bool,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
     /// outside the canvas. Per-tab — tracking the cursor is
@@ -437,6 +439,7 @@ impl SymbolDocument {
             cascade_owed: Vec::new(),
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
+            trackpad_pan: false,
             cursor_mm: None,
             pending_view: None,
             selection_filter: Default::default(),
@@ -531,6 +534,8 @@ pub struct FootprintDocument {
     /// Per-wheel-notch zoom factor (Preferences "Zoom speed"); see
     /// [`SymbolDocument::zoom_step`].
     pub zoom_step: f32,
+    /// "Two-finger scroll pans" preference, synced with `zoom_step`.
+    pub trackpad_pan: bool,
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
     dirty: bool,
@@ -686,6 +691,7 @@ impl FootprintDocument {
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
             zoom_step: default_zoom_step(),
+            trackpad_pan: false,
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,

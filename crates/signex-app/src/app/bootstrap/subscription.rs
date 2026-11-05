@@ -817,6 +817,7 @@ impl Signex {
         // A window's OS scale changed (moved to another screen, or the
         // system setting changed): every window, with its id (#1887).
         let window_rescale = iced::window::events().filter_map(|(id, event)| match event {
+            iced::window::Event::Moved(_) => Some(Message::Window(WindowMsg::WindowMoved(id))),
             iced::window::Event::Rescaled(scale) => {
                 Some(Message::Window(WindowMsg::WindowScaleChanged(id, scale)))
             }

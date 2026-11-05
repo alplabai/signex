@@ -150,10 +150,13 @@ pub fn status_bar(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style +
     move |_| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
+        // A 1 px line along the TOP edge only (separating the bar from
+        // the content above); the other three sides have no border.
         border: Border {
-            width: 1.0,
+            width: 0.0,
             radius: 0.0.into(),
             color: border,
+            top: iced::border::Side::default().width(1.0),
             ..Border::default()
         },
         ..container::Style::default()

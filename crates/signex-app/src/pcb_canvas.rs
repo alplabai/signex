@@ -25,6 +25,9 @@ use cull::{CULL_MARGIN_PX, SceneBounds, WorldRect, visible};
 pub struct PcbCanvasState {
     panning: bool,
     last_pan_pos: Option<iced::Point>,
+    /// Ctrl/Cmd held, tracked from `ModifiersChanged` (mouse events carry no
+    /// modifiers); keeps a modified scroll zooming under "Two-finger scroll pans".
+    zoom_modifier: bool,
 }
 
 pub struct PcbCanvas {
@@ -77,6 +80,8 @@ pub struct PcbCanvas {
     /// Per-wheel-notch zoom factor (Preferences "Zoom speed"). Synced from
     /// `UiState` on every update, so canvases created later pick it up.
     pub zoom_step: f32,
+    /// "Two-finger scroll pans" preference, synced with `zoom_step`.
+    pub trackpad_pan: bool,
     pub theme_bg: Color,
     pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
@@ -110,6 +115,7 @@ impl PcbCanvas {
             grid_visible: true,
             gpu_render: false,
             zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
+            trackpad_pan: false,
             theme_bg: crate::render_config::to_iced(&colors.background),
             theme_grid: crate::render_config::to_iced(&colors.grid),
             canvas_colors: colors,
@@ -550,18 +556,32 @@ impl canvas::Program<Message> for PcbCanvas {
         }
 
         match event {
+            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
+                state.zoom_modifier = mods.command() || mods.control();
+            }
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let scroll_y = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } => *y,
-                    mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
-                };
+                let intent =
+                    Camera::scroll_intent(delta, 50.0, self.trackpad_pan, state.zoom_modifier);
                 if let Some(cursor_pos) = cursor.position_in(bounds)
-                    && self.camera.borrow_mut().zoom_at(
+                    && self.camera.borrow_mut().apply_scroll(
                         cursor_pos,
-                        scroll_y,
+                        intent,
                         self.zoom_step,
                         bounds,
                     )
+                {
+                    return Some(
+                        canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved))
+                            .and_capture(),
+                    );
+                }
+            }
+            Event::Mouse(mouse::Event::PinchGesture { delta }) => {
+                if let Some(cursor_pos) = cursor.position_in(bounds)
+                    && self
+                        .camera
+                        .borrow_mut()
+                        .zoom_by_factor(cursor_pos, Camera::pinch_factor(*delta))
                 {
                     return Some(
                         canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved))

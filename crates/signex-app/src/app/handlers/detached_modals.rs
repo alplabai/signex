@@ -231,9 +231,13 @@ impl Signex {
 
     fn detach_browser_modal(&mut self, modal: ModalId, path: std::path::PathBuf) -> Task<Message> {
         let size = self.modal_window_size(modal);
-        let (id, open_task) = iced::window::open(crate::app::handlers::erc::modal_window_settings(
-            modal, size,
-        ));
+        let mut settings = crate::app::handlers::erc::modal_window_settings(modal, size);
+        settings.position = self.new_window_position(
+            size,
+            crate::app::handlers::window_placement::Anchor::MonitorCenter,
+            settings.position,
+        );
+        let (id, open_task) = iced::window::open(settings);
         self.ui_state
             .modal_window_sizes
             .insert(id, (size.width, size.height));

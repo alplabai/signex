@@ -38,3 +38,5 @@ mod repeat_placement;
 pub mod selection_transform;
 pub mod selection_workflow;
 pub mod window_controls;
+pub mod window_geometry_events;
+pub mod window_placement;

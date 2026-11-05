@@ -39,6 +39,8 @@ pub(crate) use draw::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_backdrop, draw_courtyard, draw_fab, draw_origin,
     draw_pads, draw_silk,
 };
+#[cfg(test)]
+pub(crate) use draw::{LayerInput, PadLabels};
 pub use preview_model::PreviewFootprint;
 
 use geometry::{point_in_polygon, point_to_segment_dist, polygon_outline_hit};
@@ -265,6 +267,8 @@ pub struct FootprintCanvas<'a> {
     /// Per-wheel-notch zoom factor — the Preferences "Zoom speed", shared
     /// with the schematic, PCB and symbol canvases.
     pub zoom_step: f32,
+    /// "Two-finger scroll pans" preference (pixel-delta scroll pans, not zooms).
+    pub trackpad_pan: bool,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
@@ -297,6 +301,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                 self.on_wheel_scrolled(cstate, delta, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::PinchGesture { delta }) => {
+                self.on_pinch_gesture(cstate, *delta, bounds, cursor)
             }
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 self.on_button_pressed(cstate, button, bounds, cursor)
