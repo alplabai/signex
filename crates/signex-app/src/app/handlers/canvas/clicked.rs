@@ -349,6 +349,7 @@ impl Signex {
                         library_id: None,
                         row_id: None,
                         library_version: String::new(),
+                        library_stamp: None,
                     };
                     self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }

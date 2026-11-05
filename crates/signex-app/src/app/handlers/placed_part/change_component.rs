@@ -417,6 +417,7 @@ fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
         library_id: Some(resolved.library_id),
         row_id: Some(resolved.row_id),
         library_version: resolved.library_version.clone(),
+        stamp: Some(resolved.stamp.clone()),
         value: resolved.value.clone(),
         footprint: resolved.footprint.clone(),
         datasheet: resolved.datasheet.clone(),

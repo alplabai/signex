@@ -979,6 +979,7 @@ fn the_library_updates_modal_follows_the_rename() {
             latest_version: "1.1".into(),
             bump_kind: BumpKind::Minor,
             selected: false,
+            conflicts: Vec::new(),
         }],
     ));
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");

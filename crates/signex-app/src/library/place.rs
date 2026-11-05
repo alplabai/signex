@@ -65,6 +65,10 @@ pub fn resolve_placement_of(
     } else {
         row.primary_mpn.mpn.clone()
     };
+    let footprint = read_footprint_name(&adapter, &row, open_libraries);
+    // An unreadable footprint leaves the stamp's footprint key absent
+    // (unknown), not empty: "the row offered nothing" would be a claim.
+    let stamp = row_stamp(&row, footprint.as_ref().ok());
     Ok(ResolvedPlacement {
         lib_symbol: symbol.to_lib_symbol(lib_id.clone()),
         lib_id,
@@ -77,7 +81,8 @@ pub fn resolve_placement_of(
         prefix: signex_types::designator::placement_prefix(&symbol.designator),
         class: row.class.as_str().to_owned(),
         prefix_override: row.designator_prefix_override().map(str::to_owned),
-        footprint: footprint_name(&adapter, &row, open_libraries),
+        footprint: footprint_or_warn(&row, footprint),
+        stamp,
         datasheet: match &row.datasheet {
             signex_library::DatasheetRef::Url { url } => url.trim().to_string(),
             signex_library::DatasheetRef::HashPinned { .. } => String::new(),
@@ -86,22 +91,33 @@ pub fn resolve_placement_of(
     })
 }
 
-/// The name of the footprint the row binds, for the placed symbol's
-/// footprint field that ERC, the netlist and the BOM read (#1842); empty
-/// when the row binds none. A footprint that cannot be read is reported and
-/// leaves the field empty, so the placement still goes ahead.
-pub(crate) fn footprint_name(
-    own: &signex_library::adapters::local_git::LocalGitAdapter,
-    row: &signex_library::ComponentRow,
-    open_libraries: &[(Uuid, PathBuf)],
-) -> String {
-    read_footprint_name(own, row, open_libraries).unwrap_or_else(|why| {
+/// The footprint name a placement stamps on the symbol, where ERC, the
+/// netlist and the BOM read it (#1842); empty when the row binds none. A
+/// footprint that cannot be read is reported and leaves the field empty, so
+/// the placement still goes ahead.
+fn footprint_or_warn(row: &signex_library::ComponentRow, read: Result<String, String>) -> String {
+    read.unwrap_or_else(|why| {
         crate::diagnostics::log_warning(format!(
             "The footprint of {} could not be read ({why}); the placed part has no footprint.",
             row.internal_pn
         ));
         String::new()
     })
+}
+
+/// What a part placed from `row` agrees with it on (#2004 item 7).
+/// `footprint` is `None` when it could not be read.
+fn row_stamp(
+    row: &signex_library::ComponentRow,
+    footprint: Option<&String>,
+) -> signex_types::schematic::RowStamp {
+    signex_types::schematic::RowStamp {
+        footprint: footprint.cloned(),
+        manufacturer: Some(row.primary_mpn.manufacturer.clone()),
+        mpn: Some(row.primary_mpn.mpn.clone()),
+        version: Some(row.version.clone()),
+        ..signex_types::schematic::RowStamp::new(row.row_id)
+    }
 }
 
 /// The name of the footprint `row` binds (empty when it binds none), or why

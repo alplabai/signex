@@ -259,6 +259,7 @@ impl Signex {
                 library_id: None,
                 row_id: None,
                 library_version: String::new(),
+                library_stamp: None,
             });
         task
     }
