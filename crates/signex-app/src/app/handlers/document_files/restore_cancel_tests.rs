@@ -65,7 +65,7 @@ fn close_all(app: &mut Signex) {
 fn closing_the_tab_mid_restore_keeps_saves_refused_and_a_clean_reopen_gets_the_restore() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, mut app) = footprint_fixture();
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     let before = std::fs::read_to_string(&path).expect("read");
 
     let _ = app.close_tab_now(0);
@@ -95,7 +95,7 @@ fn closing_the_tab_mid_restore_keeps_saves_refused_and_a_clean_reopen_gets_the_r
 fn a_reopened_tab_with_edits_keeps_them_and_the_message_says_what_a_save_does() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, mut app) = footprint_fixture();
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     let _ = app.close_tab_now(0);
     reopen_from_tree(&mut app, &path);
     edit_description(&mut app, "mine");
@@ -119,7 +119,7 @@ fn a_reopened_tab_with_edits_keeps_them_and_the_message_says_what_a_save_does() 
 fn close_all_mid_restore_keeps_saves_refused_until_the_worker_reports() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, mut app) = footprint_fixture();
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     let before = std::fs::read_to_string(&path).expect("read");
 
     close_all(&mut app);
@@ -139,7 +139,7 @@ fn a_cancelled_restore_that_wrote_nothing_says_so() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, _sha, mut app) = footprint_fixture();
     let bad = "0000000000000000000000000000000000000000";
-    let task = app.handle_history_restore_clicked(bad);
+    let task = app.click_restore_on_listed_history(bad);
     let _ = app.close_tab_now(0);
     finish_restore(&mut app, collect_messages(task));
     assert!(logged(&format!(
@@ -157,11 +157,11 @@ fn a_cancelled_restore_that_wrote_nothing_says_so() {
 fn a_second_restore_while_a_cancelled_one_runs_says_why_it_did_nothing() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, mut app) = footprint_fixture();
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     let _ = app.close_tab_now(0);
     reopen_from_tree(&mut app, &path);
     assert_eq!(
-        app.handle_history_restore_clicked(&sha).units(),
+        app.click_restore_on_listed_history(&sha).units(),
         0,
         "no second worker next to the cancelled one"
     );
@@ -195,7 +195,7 @@ fn schematic_in(app: &mut Signex, path: &Path) {
 fn save_as_onto_a_file_whose_restore_is_cancelled_but_running_is_refused() {
     let _ = crate::diagnostics::init_logging();
     let (dir, path, sha, mut app) = footprint_fixture();
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     let before = std::fs::read_to_string(&path).expect("read");
     let _ = app.close_tab_now(0);
     let other = dir.path().join(format!("b-{}.snxsch", file_name(&path)));
@@ -223,7 +223,7 @@ fn save_as_onto_a_file_whose_restore_is_cancelled_but_running_is_refused() {
 #[test]
 fn primitive_save_as_onto_a_restoring_file_is_refused_and_rolled_back() {
     let (dir, path, sha, mut app) = footprint_fixture();
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     let _ = app.close_tab_now(0);
     let other = dir.path().join(format!("o-{}", file_name(&path)));
     marker_editor(&mut app, &other, "other");
@@ -276,7 +276,7 @@ fn a_restore_clicked_while_the_file_is_saving_is_refused_with_a_reason() {
         .document_saves
         .begin(path.clone(), b"saved".to_vec());
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
 
     assert!(!app.document_state.pending_restores.contains(&path));
     assert_eq!(task.units(), 0, "no restore job was started");
@@ -347,8 +347,8 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
         .begin(path.clone(), saved.clone().into_bytes());
 
     // The first click arms the unsaved-edits confirmation, the second restores.
-    assert!(app.handle_history_restore_clicked(&sha).units() == 0);
-    let refused_task = app.handle_history_restore_clicked(&sha);
+    assert!(app.click_restore_on_listed_history(&sha).units() == 0);
+    let refused_task = app.click_restore_on_listed_history(&sha);
     assert!(
         !app.document_state.pending_restores.contains(&path),
         "no restore claim while the save is writing"
@@ -385,7 +385,7 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
     );
     // The save is done, so the restore now goes ahead and lands; a
     // schematic restore leaves the tab dirty and commits nothing.
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore(&mut app, collect_messages(task));
     assert!(app.document_state.error_notice.is_none());
     assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
@@ -407,7 +407,7 @@ fn a_restore_over_edits_marks_the_tab_and_the_dirty_set_together() {
             .is_document_dirty(&app.document_state.tabs[0].path),
         "a clean tab to start"
     );
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     // A colour override changes what the tab holds without either dirty
     // marker having been told yet.
     app.ui_state.wire_color_overrides.insert(
@@ -433,7 +433,7 @@ fn a_restore_finishing_on_a_background_schematic_leaves_the_users_tab_state_alon
     let (dir, path, sha, restored, mut app) = schematic_fixture("focus-keep");
     let mine = dir.path().join("mine-focus-keep.snxsch");
     schematic_in(&mut app, &mine);
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     app.document_state.active_tab = 1;
     app.document_state.active_path = Some(mine.clone());
 
@@ -511,7 +511,7 @@ fn assert_old_engine_state_gone(app: &mut Signex) {
 fn a_restore_replacing_the_active_engine_drops_state_that_pointed_into_it() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, restored, mut app) = schematic_fixture("replace-active");
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     arm_state_of_the_old_engine(&mut app);
     finish_restore(&mut app, collect_messages(task));
     assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
@@ -522,7 +522,7 @@ fn a_restore_replacing_the_active_engine_drops_state_that_pointed_into_it() {
 fn a_clean_reopened_active_tab_that_takes_a_cancelled_restore_drops_that_state_too() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, restored, mut app) = schematic_fixture("replace-reopened");
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     let _ = app.close_tab_now(0);
     reopen_from_tree(&mut app, &path);
     arm_state_of_the_old_engine(&mut app);
@@ -555,7 +555,7 @@ fn an_undocked_window_on_a_background_restored_schematic_is_redrawn_and_deselect
     slot.selected.push(ghost_item());
     app.interaction_state.canvases.insert(window, slot);
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     app.document_state.active_tab = 1;
     app.document_state.active_path = Some(mine);
     finish_restore(&mut app, collect_messages(task));
@@ -588,7 +588,7 @@ fn a_restore_on_the_active_tab_also_deselects_undocked_windows_on_that_sheet() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, restored, mut app) = schematic_fixture("active-undocked");
     let window = undocked_slot_on(&mut app, &path);
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore(&mut app, collect_messages(task));
     assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
     assert!(app.interaction_state.canvases[&window].selected.is_empty());
@@ -642,7 +642,7 @@ fn inline_text_on_an_object_of_a_background_restored_sheet_is_discarded() {
     );
     let mine = dir.path().join("mine-text-on-background.snxsch");
     schematic_in(&mut app, &mine);
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     app.document_state.active_tab = 1;
     app.document_state.active_path = Some(mine);
 
@@ -693,7 +693,7 @@ fn a_restore_that_replaces_the_engine_drops_this_runs_stale_recovery_copy() {
     let _ = crate::diagnostics::init_logging();
     let (_dir, path, sha, restored, mut app) = schematic_fixture("autosave-stale");
     let recovery_dir = arm_autosave_copy(&mut app, &path);
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore_running_followups(&mut app, task);
 
     assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
@@ -717,7 +717,7 @@ fn a_restore_leaves_a_deferred_earlier_run_copy_alone_and_protected() {
     app.document_state.autosave.set_dir(Some(dir.clone()));
     crate::autosave::sidecar::write(&dir, &path, b"earlier run").expect("sidecar");
     app.document_state.autosave.defer(&path);
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore_running_followups(&mut app, task);
 
     assert_eq!(engine_uuid(&app, &path), restored, "restore applied");

@@ -530,6 +530,11 @@ pub struct DocumentState {
     /// last loaded entries, the path the load was issued for. Driven
     /// by `Message::HistoryLoaded` and re-targeted on tab switch.
     pub history: crate::panels::history::HistoryPanelState,
+    /// The History panel state of each undocked document window, swapped in
+    /// with its panel context so the window shows and restores its own file
+    /// (#2067).
+    pub(crate) window_history:
+        std::collections::HashMap<iced::window::Id, crate::panels::history::HistoryPanelState>,
     /// v0.23 — Async git commit work queue. Save handlers push tuples
     /// here; `finish_update` drains them into `Task::perform` calls
     /// that run the actual commit on a tokio `spawn_blocking`. Each

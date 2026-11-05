@@ -5,8 +5,8 @@ use iced::widget::operation;
 
 use super::super::*;
 use crate::app::command_palette::{
-    COMMAND_PALETTE_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, catalog_stamp,
-    rank_results,
+    COMMAND_PALETTE_INPUT_ID, COMMAND_PALETTE_WINDOW_INPUT_ID, CommandAction, MAX_RESULTS,
+    build_catalog, catalog_stamp, rank_results,
 };
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
@@ -29,15 +29,21 @@ impl Signex {
                 Task::none()
             }
             CommandPaletteMsg::QueryChanged(q) => {
-                self.ui_state.command_palette.query = q;
-                self.ui_state.command_palette.selected_index = 0;
                 // First keystroke promotes a passive (placeholder)
                 // chrome bar into a live palette. The bar is the main
                 // window's, so the typed query is the main window's.
-                self.ui_state.command_palette.open = true;
                 self.ui_state.command_palette.window = None;
-                self.refresh_command_palette_results();
-                self.start_palette_index()
+                self.change_palette_query(q)
+            }
+            CommandPaletteMsg::QueryTypedInWindow(window, q) => {
+                // A late keystroke for a palette that closed or moved to
+                // another window is stale.
+                if !self.ui_state.command_palette.open
+                    || self.ui_state.command_palette.window != Some(window)
+                {
+                    return Task::none();
+                }
+                self.change_palette_query(q)
             }
             CommandPaletteMsg::IndexBuilt { generation, result } => {
                 self.apply_palette_index(generation, &result);
@@ -55,15 +61,28 @@ impl Signex {
         }
     }
 
+    fn change_palette_query(&mut self, query: String) -> Task<Message> {
+        self.ui_state.command_palette.query = query;
+        self.ui_state.command_palette.selected_index = 0;
+        self.ui_state.command_palette.open = true;
+        self.refresh_command_palette_results();
+        self.start_palette_index()
+    }
+
     fn open_command_palette(&mut self) -> Task<Message> {
         self.ui_state.command_palette.open = true;
         self.ui_state.command_palette.selected_index = 0;
         self.refresh_command_palette_results();
+        let input = if self.ui_state.command_palette.window.is_some() {
+            COMMAND_PALETTE_WINDOW_INPUT_ID.clone()
+        } else {
+            COMMAND_PALETTE_INPUT_ID.clone()
+        };
         // Focus + select-all so a fresh `Ctrl+Shift+P` can be typed
         // over without the user clearing the previous query manually.
         Task::batch([
-            operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
-            operation::text_input::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            operation::focus(input.clone()),
+            operation::text_input::select_all(input),
             // The project-wide rows come from an index built off-thread.
             self.start_palette_index(),
         ])

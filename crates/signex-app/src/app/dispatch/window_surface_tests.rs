@@ -582,3 +582,604 @@ fn a_drag_end_forgets_the_window_the_pointer_was_last_in() {
     settle_task(&mut f.app, task);
     assert_eq!(f.app.interaction_state.pointer_window, None);
 }
+
+// ---- History panel, F3 and palette input per window (#2067) ----
+
+use crate::app::UiMsg;
+use crate::panels::history::HistoryRenderMode;
+
+#[test]
+fn a_windows_history_panel_shows_the_windows_own_file() {
+    let mut f = fixture();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+
+    let window_ctx = &f.app.document_state.window_panel_ctx[&f.window];
+    assert_eq!(
+        window_ctx.history.active_path.as_deref(),
+        Some(f.window_path.as_path())
+    );
+    assert_eq!(
+        f.app
+            .document_state
+            .panel_ctx
+            .history
+            .active_path
+            .as_deref(),
+        Some(f.main_path.as_path()),
+        "main's History moved"
+    );
+}
+
+fn dock_restore(f: &Fixture, message: crate::panels::PanelMsg) -> Message {
+    f.app.scope_dock_message(
+        f.window,
+        Message::Dock(crate::dock::DockMessage::Panel(message)),
+    )
+}
+
+/// Present the window's History as a loaded list, as a finished load would.
+fn load_window_history(f: &mut Fixture) {
+    let history = f
+        .app
+        .document_state
+        .window_history
+        .get_mut(&f.window)
+        .unwrap();
+    assert_eq!(
+        history.active_path.as_deref(),
+        Some(f.window_path.as_path())
+    );
+    history.mode = HistoryRenderMode::Ready;
+}
+
+#[test]
+fn a_restore_click_in_a_window_acts_on_the_windows_file_only() {
+    let _ = crate::diagnostics::init_logging();
+    let mut f = fixture();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    load_window_history(&mut f);
+    f.app.document_state.mark_history_edit_dirty(&f.window_path);
+    let before = f.app.document_state.engines[&f.window_path].revision();
+    let click = || crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() };
+
+    // The window's sheet has unsaved edits: the first click only arms the
+    // confirmation, in the window's own History state.
+    assert!(f.app.document_state.is_document_dirty(&f.window_path));
+    let sent = dock_restore(&f, click());
+    assert!(is_scoped(&sent, f.window));
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.document_state.window_history[&f.window]
+            .pending_restore
+            .as_deref(),
+        Some("abc")
+    );
+    assert_eq!(f.app.document_state.history.pending_restore, None);
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+    assert_eq!(
+        f.app.document_state.engines[&f.window_path].revision(),
+        before
+    );
+
+    // The confirming click goes on to the window's file: the refusal (no
+    // project holds it here) names it, never main's.
+    let sent = dock_restore(&f, click());
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert!(said("b.snxsch does not belong to an open project"));
+    assert!(!said("a.snxsch does not belong to an open project"));
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_window_restore_cancel_clears_the_windows_confirmation_only() {
+    let mut f = fixture();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    load_window_history(&mut f);
+    f.app.document_state.mark_history_edit_dirty(&f.window_path);
+    f.app.document_state.history.pending_restore = Some("main-sha".into());
+    let click = crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() };
+    let task = f.app.update(dock_restore(&f, click));
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.document_state.window_history[&f.window]
+            .pending_restore
+            .as_deref(),
+        Some("abc"),
+        "the click did not arm the window's confirmation"
+    );
+
+    let cancel = dock_restore(&f, crate::panels::PanelMsg::HistoryRestoreCancelled);
+    let task = f.app.update(cancel);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(
+        f.app.document_state.window_history[&f.window].pending_restore,
+        None
+    );
+    assert_eq!(
+        f.app.document_state.history.pending_restore.as_deref(),
+        Some("main-sha")
+    );
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_restore_click_on_a_list_the_window_has_not_loaded_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    // Main lists a.snxsch. The window's context is built the way UndockTab
+    // builds it: no finish_update, so no load for the window has run.
+    f.app.document_state.history.active_path = Some(f.main_path.clone());
+    f.app.document_state.history.mode = HistoryRenderMode::Ready;
+    f.app.document_state.panel_ctx.history = f.app.document_state.history.clone();
+    f.app.refresh_window_panel_ctxs(None);
+    assert_ne!(
+        f.app.panel_ctx_for(f.window).history.active_path.as_deref(),
+        Some(f.main_path.as_path()),
+        "the window's History panel lists main's file"
+    );
+    // b.snxsch is clean, so an unguarded click restores at once.
+    f.app.document_state.window_history.insert(
+        f.window,
+        crate::panels::history::HistoryPanelState {
+            active_path: Some(f.main_path.clone()),
+            mode: HistoryRenderMode::Ready,
+            ..Default::default()
+        },
+    );
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert!(
+        said(&format!(
+            "The history of {} is not loaded",
+            f.window_path.display()
+        )),
+        "the click was not refused"
+    );
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.window_path.display()
+    )));
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_window_without_any_history_state_refuses_a_restore_click() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    f.app.document_state.window_history.remove(&f.window);
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert!(said(&format!(
+        "The history of {} is not loaded",
+        f.window_path.display()
+    )));
+}
+
+#[test]
+fn a_restore_whose_list_was_issued_for_another_file_is_refused_on_main_too() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    // Main shows a.snxsch, but its list was issued for b.snxsch.
+    f.app.document_state.history.active_path = Some(f.window_path.clone());
+    f.app.document_state.history.mode = HistoryRenderMode::Ready;
+    let click = Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    ));
+    let task = f.app.update(click);
+    settle_task(&mut f.app, task);
+    assert!(said(&format!(
+        "The history of {} is not loaded",
+        f.main_path.display()
+    )));
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.main_path.display()
+    )));
+
+    // Not Ready is refused even for the right file.
+    f.app.document_state.history.active_path = Some(f.main_path.clone());
+    f.app.document_state.history.mode = HistoryRenderMode::Loading;
+    let click = Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    ));
+    let task = f.app.update(click);
+    settle_task(&mut f.app, task);
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.main_path.display()
+    )));
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_history_answer_for_a_window_lands_in_that_windows_history() {
+    let mut f = fixture();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    let generation = f.app.document_state.window_history[&f.window].generation;
+
+    let task = f.app.update(Message::Ui(UiMsg::HistoryLoaded {
+        window: Some(f.window),
+        generation,
+        path: f.window_path.clone(),
+        result: Err("boom".into()),
+    }));
+    settle_task(&mut f.app, task);
+
+    assert_eq!(
+        f.app.document_state.window_history[&f.window].mode,
+        HistoryRenderMode::Error("boom".into())
+    );
+    assert_ne!(
+        f.app.document_state.history.mode,
+        HistoryRenderMode::Error("boom".into())
+    );
+}
+
+#[test]
+fn a_history_answer_for_a_closed_window_is_dropped_and_said() {
+    let _ = crate::diagnostics::init_logging();
+    let mut f = fixture();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    let generation = f.app.document_state.window_history[&f.window].generation;
+    f.app.ui_state.windows.remove(&f.window);
+    f.app.interaction_state.canvases.remove(&f.window);
+    f.app.close_overlays_owned_by(f.window);
+
+    let task = f.app.update(Message::Ui(UiMsg::HistoryLoaded {
+        window: Some(f.window),
+        generation,
+        path: f.window_path.clone(),
+        result: Err("boom".into()),
+    }));
+    settle_task(&mut f.app, task);
+
+    assert!(said("the window that asked for it has closed"));
+    assert!(!f.app.document_state.window_history.contains_key(&f.window));
+    assert_ne!(
+        f.app.document_state.history.mode,
+        HistoryRenderMode::Error("boom".into())
+    );
+}
+
+#[test]
+fn f3_in_a_window_without_find_searches_that_windows_sheet() {
+    let mut f = fixture_with_a_labelled_a3_window();
+    f.app
+        .interaction_state
+        .canvases
+        .get_mut(&f.window)
+        .unwrap()
+        .selected
+        .clear();
+    // Find is open in the main window, with the label's text as its query.
+    f.app.ui_state.find_replace.query = "WINDOW_NET".into();
+    f.app.ui_state.find_replace.window = None;
+    f.app.ui_state.find_replace.open = true;
+
+    let (_outcome, task) = command(&mut f.app, "find_next", f.window);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.app.ui_state.find_replace.window, Some(f.window));
+    let selected = &f.app.interaction_state.canvases[&f.window].selected;
+    assert_eq!(selected.len(), 1, "the window's sheet was not searched");
+    assert_eq!(selected[0].uuid, label_id());
+    assert!(f.app.interaction_state.canvas.selected.is_empty());
+}
+
+#[test]
+fn typing_in_a_windows_palette_filters_its_rows_and_leaves_main_alone() {
+    let mut f = fixture();
+    let (_outcome, task) = command(&mut f.app, "open_command_palette", f.window);
+    settle_task(&mut f.app, task);
+    assert_eq!(f.app.ui_state.command_palette.window, Some(f.window));
+    let all = f.app.ui_state.command_palette.total_matches;
+
+    let task = f.app.update(Message::CommandPalette(
+        crate::app::CommandPaletteMsg::QueryTypedInWindow(f.window, "zzzz_no_such_row".into()),
+    ));
+    settle_task(&mut f.app, task);
+
+    let palette = &f.app.ui_state.command_palette;
+    assert_eq!(palette.query, "zzzz_no_such_row");
+    assert_eq!(palette.total_matches, 0);
+    assert!(all > 0);
+    assert_eq!(palette.window, Some(f.window), "the palette moved to main");
+    assert!(has(&f.app, f.window, "No results"));
+    assert!(!has(&f.app, f.main, "No results"));
+    assert!(
+        !has(&f.app, f.main, "zzzz_no_such_row"),
+        "main's chrome input shows the window's query"
+    );
+}
+
+fn entry(sha: &str) -> signex_widgets::HistoryEntry {
+    signex_widgets::HistoryEntry {
+        sha: sha.into(),
+        author_name: String::new(),
+        author_email: String::new(),
+        time: chrono::Utc::now(),
+        subject: String::new(),
+    }
+}
+
+#[test]
+fn a_pcb_window_has_its_own_history_and_restores_the_pcb_file() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    f.app.document_state.tabs[1].kind = crate::app::TabKind::Pcb;
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    load_window_history(&mut f);
+    assert_eq!(
+        f.app.panel_ctx_for(f.window).history.active_path.as_deref(),
+        Some(f.window_path.as_path()),
+        "the PCB window lists another file"
+    );
+
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+
+    assert!(said(&format!(
+        "{} does not belong to an open project",
+        f.window_path.display()
+    )));
+    assert!(!said(&format!(
+        "{} does not belong to an open project",
+        f.main_path.display()
+    )));
+}
+
+#[test]
+fn a_windows_history_that_is_current_is_not_swapped_again() {
+    let mut f = fixture();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    // The window's state moves on; a current window is left alone, so its
+    // context does not pick the change up.
+    f.app
+        .document_state
+        .window_history
+        .get_mut(&f.window)
+        .unwrap()
+        .entries = vec![entry("abc")];
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(
+        f.app.document_state.window_panel_ctx[&f.window]
+            .history
+            .entries
+            .is_empty(),
+        "an unchanged window was swapped and its history cloned again"
+    );
+
+    // A changed dirty bit is picked up.
+    f.app.document_state.mark_history_edit_dirty(&f.window_path);
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(f.app.document_state.window_history[&f.window].dirty);
+}
+
+#[test]
+fn no_window_history_is_built_while_the_dock_shows_no_panel() {
+    let mut f = fixture();
+    for kind in crate::panels::ALL_PANELS {
+        f.app.document_state.dock.close_panel(*kind);
+    }
+    f.app.document_state.dock.floating.clear();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(f.app.document_state.window_history.is_empty());
+    assert!(f.app.document_state.window_panel_ctx.is_empty());
+}
+
+#[test]
+fn f3_moving_the_find_dialog_to_another_window_forgets_its_skip_report() {
+    let mut f = fixture_with_a_labelled_a3_window();
+    f.app.ui_state.find_replace.query = "WINDOW_NET".into();
+    f.app.ui_state.find_replace.window = None;
+    f.app.ui_state.find_replace.open = true;
+    f.app
+        .ui_state
+        .find_replace
+        .skips_reported
+        .insert(std::path::PathBuf::from("skipped.snxsch"));
+
+    let (_outcome, task) = command(&mut f.app, "find_next", f.window);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.app.ui_state.find_replace.window, Some(f.window));
+    assert!(f.app.ui_state.find_replace.skips_reported.is_empty());
+}
+
+#[test]
+fn f3_in_main_takes_a_sheet_find_owned_by_a_window_over() {
+    let mut f = fixture();
+    f.app.ui_state.find_replace.query = "NO_SUCH_TEXT".into();
+    f.app.ui_state.find_replace.window = Some(f.window);
+    f.app.ui_state.find_replace.open = true;
+    f.app.ui_state.find_replace.scope = crate::find_replace::FindScope::Sheet;
+    f.app
+        .ui_state
+        .find_replace
+        .skips_reported
+        .insert(std::path::PathBuf::from("skipped.snxsch"));
+
+    let (_outcome, task) = command(&mut f.app, "find_next", f.main);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.app.ui_state.find_replace.window, None);
+    assert!(f.app.ui_state.find_replace.skips_reported.is_empty());
+}
+
+#[test]
+fn a_keystroke_for_a_palette_another_window_now_owns_is_ignored() {
+    let mut f = fixture();
+    let (_outcome, task) = command(&mut f.app, "open_command_palette", f.window);
+    settle_task(&mut f.app, task);
+    let other = iced::window::Id::unique();
+    let before = f.app.ui_state.command_palette.query.clone();
+
+    let task = f.app.update(Message::CommandPalette(
+        crate::app::CommandPaletteMsg::QueryTypedInWindow(other, "late_keystroke".into()),
+    ));
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.app.ui_state.command_palette.query, before);
+    assert_eq!(f.app.ui_state.command_palette.window, Some(f.window));
+}
+
+#[test]
+fn a_library_window_is_dirty_through_its_library_toml_not_mains_tab() {
+    let mut f = fixture();
+    // Main's active tab is a schematic; the window shows a library.
+    f.app.document_state.tabs[1].kind = crate::app::TabKind::LibraryBrowser(f.window_path.clone());
+    f.app
+        .document_state
+        .mark_history_edit_dirty(&f.window_path.join("library.toml"));
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    assert!(
+        f.app.document_state.window_history[&f.window].dirty,
+        "the window read main's tab for the library.toml check"
+    );
+}
+
+#[test]
+fn a_new_window_context_does_not_start_with_mains_history_rows() {
+    let mut f = fixture();
+    f.app.document_state.history.active_path = Some(f.main_path.clone());
+    f.app.document_state.panel_ctx.history = f.app.document_state.history.clone();
+    let ctx = f.app.new_window_panel_ctx(f.window);
+    assert_eq!(ctx.history.active_path, None);
+}
+
+fn own_a_sheet_find(f: &mut Fixture) {
+    f.app.ui_state.find_replace.query = "NO_SUCH_TEXT".into();
+    f.app.ui_state.find_replace.window = Some(f.window);
+    f.app.ui_state.find_replace.open = true;
+    f.app.ui_state.find_replace.scope = crate::find_replace::FindScope::Sheet;
+}
+
+#[test]
+fn find_next_from_mains_menu_takes_a_window_owned_sheet_find_over_like_f3() {
+    let mut f = fixture();
+    own_a_sheet_find(&mut f);
+    let task = f
+        .app
+        .run_menu_command(&AppCommandId::new("find_next").unwrap(), None);
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.ui_state.find_replace.window, None,
+        "menu Find Next stepped the window's Find"
+    );
+}
+
+#[test]
+fn find_next_from_the_palette_takes_a_window_owned_sheet_find_over_like_f3() {
+    use crate::app::command_palette::CommandAction;
+    let mut f = fixture();
+    let (_outcome, task) = command(&mut f.app, "open_command_palette", f.main);
+    settle_task(&mut f.app, task);
+    own_a_sheet_find(&mut f);
+    f.app.ui_state.command_palette.query = "find next".into();
+    f.app.refresh_command_palette_results();
+    let row = f
+        .app
+        .ui_state
+        .command_palette
+        .results
+        .iter()
+        .position(|e| matches!(&e.action, CommandAction::Command(id) if id.as_str() == "find_next"))
+        .expect("the palette offers Find Next");
+    f.app.ui_state.command_palette.selected_index = row;
+    let task = f.app.update(Message::CommandPalette(
+        crate::app::CommandPaletteMsg::ExecuteSelected,
+    ));
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.ui_state.find_replace.window, None,
+        "palette Find Next stepped the window's Find"
+    );
+}
+
+#[test]
+fn a_restore_after_a_real_history_load_for_a_window_passes_the_guard() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _boot) = Signex::new();
+    let mut f = fixture_in(app, dir.path());
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    let generation = f.app.document_state.window_history[&f.window].generation;
+    let task = f.app.update(Message::Ui(UiMsg::HistoryLoaded {
+        window: Some(f.window),
+        generation,
+        path: f.window_path.clone(),
+        result: Ok(crate::panels::history::HistoryLoad::Entries(Vec::new())),
+    }));
+    settle_task(&mut f.app, task);
+    let sent = dock_restore(
+        &f,
+        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
+    );
+    let task = f.app.update(sent);
+    settle_task(&mut f.app, task);
+    assert!(
+        !said(&format!(
+            "The history of {} is not loaded",
+            f.window_path.display()
+        )),
+        "the guard refused a click on a loaded list"
+    );
+    assert!(said(&format!(
+        "{} does not belong to an open project",
+        f.window_path.display()
+    )));
+}
+
+#[test]
+fn a_history_panel_opened_after_an_undock_never_lists_mains_rows() {
+    let mut f = fixture();
+    f.app.document_state.dock = crate::dock::DockArea::new();
+    let task = f.app.finish_update();
+    settle_task(&mut f.app, task);
+    let task = f
+        .app
+        .update(Message::Overlay(crate::app::OverlayMsg::OpenPanel(
+            crate::panels::PanelKind::History,
+        )));
+    settle_task(&mut f.app, task);
+    assert_eq!(
+        f.app.panel_ctx_for(f.window).history.active_path.as_deref(),
+        Some(f.window_path.as_path()),
+        "the window's History panel does not list the window's file"
+    );
+}

@@ -13,11 +13,12 @@ use crate::app::{Message, Signex};
 
 /// Whether a dock message edits the sheet an undocked window shows, so it
 /// runs in the window's swap. This is an allow-list: everything else (the
-/// dock layout, Projects, Navigator, ERC focus and quick fixes, History
-/// restore, library rows, anything that opens or activates a document, and
-/// any variant added later) runs on the main window, where the swap cannot
-/// load one sheet into another's canvas or write one sheet's history over
-/// another sheet. The Components row press is scoped to stamp its window.
+/// dock layout, Projects, Navigator, ERC focus and quick fixes, library rows,
+/// anything that opens or activates a document, and any variant added later)
+/// runs on the main window, where the swap cannot load one sheet into
+/// another's canvas or write one sheet's history over another sheet. The
+/// Components row press is scoped to stamp its window; History restore is
+/// scoped so it restores the file the window's own History panel shows.
 fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
     use crate::dock::DockMessage;
     use crate::library::LibraryMessage;
@@ -80,6 +81,8 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditSymbolLibId(..)
                 | P::UpdateSymbolFromLibrary(_)
                 | P::PlacedPartAction(_)
+                | P::HistoryRestoreClicked { .. }
+                | P::HistoryRestoreCancelled
                 | P::ToggleChildSheetBorderPicker(_)
                 | P::ToggleChildSheetFillPicker(_)
                 | P::OpenChildSheetAdvancedPicker(..)
@@ -293,6 +296,15 @@ impl Signex {
             return self.dispatch_update(Message::CommandPalette(
                 crate::app::CommandPaletteMsg::OpenInWindow(window),
             ));
+        }
+        if matches!(
+            message,
+            Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::NextRequested
+                    | crate::find_replace::FindReplaceMsg::PreviousRequested
+            )
+        ) {
+            return self.step_find_in_window(window, message);
         }
         if !command_edits_shown_sheet(&message) {
             return self.dispatch_update(message);

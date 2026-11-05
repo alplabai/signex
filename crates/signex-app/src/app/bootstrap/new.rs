@@ -570,6 +570,7 @@ impl Signex {
                     document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
+                window_history: std::collections::HashMap::new(),
                 preview: None,
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),

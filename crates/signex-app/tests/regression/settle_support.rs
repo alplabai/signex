@@ -44,3 +44,11 @@ pub fn settle_history_panel(app: &mut Signex) {
     d.history.source_key = path.clone();
     d.history.active_path = path;
 }
+
+/// Show the active tab's history as a finished load leaves it, so a Restore
+/// click is not refused for want of a loaded list.
+pub fn list_active_history(app: &mut Signex) {
+    let d = &mut app.document_state;
+    d.history.active_path = d.tabs.get(d.active_tab).map(|tab| tab.path.clone());
+    d.history.mode = signex_app::panels::history::HistoryRenderMode::Ready;
+}

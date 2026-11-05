@@ -161,7 +161,7 @@ fn the_restore_commit_records_the_restored_revision_even_if_the_file_is_edited_a
         repo.find_blob(entry.id()).expect("blob").content().to_vec()
     };
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore(&mut app, collect_messages(task));
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
 
@@ -193,7 +193,7 @@ fn a_restore_is_not_held_back_by_a_save_commit_that_carries_its_bytes() {
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
     assert!(app.document_state.unbound_git_commits.is_empty());
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
 
     assert!(
         app.document_state.pending_restores.contains(&path),
@@ -241,7 +241,7 @@ fn a_restore_queues_behind_a_pending_save_commit_instead_of_replacing_it() {
         repo.find_blob(entry.id()).expect("blob").content().to_vec()
     };
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore(&mut app, collect_messages(task));
     assert_eq!(
         app.document_state.pending_git_commits.len(),
@@ -270,7 +270,7 @@ fn a_later_save_coalesces_into_the_newest_queued_entry_of_the_file() {
     let (dir, path, sha, mut app) = footprint_fixture();
     let rel = file_name(&path);
     app.commit_bytes_to_project_git(&path, "Save part", commit_bytes(b"S", 1));
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore(&mut app, collect_messages(task));
     app.commit_bytes_to_project_git(&path, "Save part again", commit_bytes(b"S2", 2));
     app.commit_bytes_to_project_git(&path, "Save part third", commit_bytes(b"S3", 3));
@@ -371,14 +371,14 @@ fn a_restore_waits_for_a_commit_that_reads_the_file_and_runs_after_it_finishes_o
             .active_git_repos
             .insert(running.project_root.clone());
 
-        let refused = app.handle_history_restore_clicked(&sha);
+        let refused = app.click_restore_on_listed_history(&sha);
         assert_eq!(refused.units(), 0);
         assert!(!app.document_state.pending_restores.contains(&path));
         assert!(app.document_state.error_notice.take().is_some());
 
         let _ = app.handle_project_git_commit_done(running.project_root, running.rel_path, outcome);
         assert!(app.document_state.unbound_git_commits.is_empty());
-        let task = app.handle_history_restore_clicked(&sha);
+        let task = app.click_restore_on_listed_history(&sha);
         assert!(app.document_state.pending_restores.contains(&path));
         drop(task);
     }
@@ -393,7 +393,7 @@ fn the_restore_guard_finds_the_commit_by_the_projects_case_folding() {
     app.commit_save_to_project_git(&respelled, "Save part");
     assert_eq!(app.document_state.unbound_git_commits.len(), 1);
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
 
     assert_eq!(task.units(), 0, "refused");
     assert!(!app.document_state.pending_restores.contains(&path));
@@ -417,7 +417,7 @@ fn the_restore_guard_names_the_same_repo_as_the_commit_queue_for_nested_projects
     app.commit_save_to_project_git(&path, "Save part");
     assert_eq!(app.document_state.unbound_git_commits.len(), 1);
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
 
     assert_eq!(task.units(), 0, "refused");
     assert!(!app.document_state.pending_restores.contains(&path));
@@ -444,7 +444,7 @@ fn a_restore_in_a_nested_project_targets_the_inner_git_repo_and_starts_none_outs
     outer.data.enable_git = false;
     app.document_state.projects.insert(0, outer);
 
-    let task = app.handle_history_restore_clicked(&sha);
+    let task = app.click_restore_on_listed_history(&sha);
     finish_restore(&mut app, collect_messages(task));
 
     assert!(

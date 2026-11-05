@@ -15,11 +15,15 @@ impl Signex {
                 // whose home is elsewhere — Projects, Signal, ERC —
                 // grew a second copy on the right (#641).
                 self.ui_state.panel_list_open = false;
-                self.show_panel(kind)
+                let shown = self.show_panel(kind);
+                // A panel opened into an empty dock gives the undocked
+                // windows their panel contexts and History loads.
+                Task::batch([shown, self.finish_update()])
             }
             OverlayMsg::PanelToggled(kind) => {
                 self.ui_state.panel_list_open = false;
-                self.toggle_panel(kind)
+                let toggled = self.toggle_panel(kind);
+                Task::batch([toggled, self.finish_update()])
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
