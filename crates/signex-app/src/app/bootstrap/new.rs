@@ -627,6 +627,7 @@ impl Signex {
                 active_bar_menu: None,
                 active_bar_menu_window: None,
                 acting_window: None,
+                pointer_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
                     .copied()

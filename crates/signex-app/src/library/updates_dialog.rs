@@ -37,15 +37,17 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, checkbox, column, container, row, scrollable, text};
+use iced::widget::{Space, checkbox, column, container, radio, row, scrollable, text};
 use iced::{Element, Length, Widget};
 use signex_library::RowId;
+use signex_types::schematic::StampField;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
 use super::modal_chrome::{primary_btn_if, secondary_btn};
+use super::part_sync::{Choice, Choices, ConflictView};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -150,6 +152,40 @@ pub struct LibraryUpdateEntry {
     /// on modal open; the dispatcher toggles via
     /// [`LibraryMessage::LibraryUpdatesToggleSelection`].
     pub selected: bool,
+    /// Fields where both the part and the row moved, each with the user's
+    /// answer (default: keep the part's value). Applied with the update, in
+    /// the same undo step (#2004).
+    pub conflicts: Vec<ConflictChoice>,
+}
+
+impl LibraryUpdateEntry {
+    /// The answers to this part's conflicts.
+    pub fn choices(&self) -> Choices {
+        self.conflicts.iter().map(|c| (c.field, c.choice)).collect()
+    }
+}
+
+/// One field of a part that differs from its row after both moved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConflictChoice {
+    pub field: StampField,
+    /// What the part holds.
+    pub mine: String,
+    /// What the row offers now.
+    pub library: String,
+    pub choice: Choice,
+}
+
+impl ConflictChoice {
+    /// An open conflict, answered "keep mine" until the user says otherwise.
+    pub fn new(view: ConflictView) -> Self {
+        Self {
+            field: view.field,
+            mine: view.mine,
+            library: view.library,
+            choice: Choice::KeepMine,
+        }
+    }
 }
 
 /// Modal state — owned by [`crate::library::LibraryState::library_updates`].
@@ -211,6 +247,27 @@ impl LibraryUpdatesState {
         let (lib_id, selected) = (e.lib_id.clone(), !e.selected);
         for e in self.entries.iter_mut().filter(|e| e.lib_id == lib_id) {
             e.selected = selected;
+        }
+    }
+
+    /// Record the answer to one conflict of the part `symbol_uuid`. Answering
+    /// ticks the entry (and, as with a click, the entries sharing its
+    /// `lib_id`): an answer on an unticked entry would be ignored.
+    pub fn answer_conflict(&mut self, symbol_uuid: Uuid, field: StampField, choice: Choice) {
+        let Some(entry) = self
+            .entries
+            .iter_mut()
+            .find(|e| e.symbol_uuid == symbol_uuid)
+        else {
+            return;
+        };
+        let Some(conflict) = entry.conflicts.iter_mut().find(|c| c.field == field) else {
+            return;
+        };
+        conflict.choice = choice;
+        let lib_id = entry.lib_id.clone();
+        for e in self.entries.iter_mut().filter(|e| e.lib_id == lib_id) {
+            e.selected = true;
         }
     }
 
@@ -325,7 +382,13 @@ fn render_entry_row<'a>(
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))
         .boxed();
 
-    container(
+    let conflicts = entry
+        .conflicts
+        .iter()
+        .fold(column![].spacing(SP.xs), |col, c| {
+            col.push(render_conflict(entry.symbol_uuid, c, text_c, muted))
+        });
+    let line = container(
         row![
             cb,
             Space::new().width(8),
@@ -355,7 +418,52 @@ fn render_entry_row<'a>(
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([SP.s, SP.s])
+    .padding([SP.s, SP.s]);
+    column![line, conflicts].boxed()
+}
+
+/// One conflict: the part's value against the row's, and the two answers.
+fn render_conflict<'a>(
+    symbol_uuid: Uuid,
+    conflict: &'a ConflictChoice,
+    text_c: iced::Color,
+    muted: iced::Color,
+) -> Element<'a, LibraryMessage> {
+    let field = conflict.field;
+    let pick = move |choice| LibraryMessage::LibraryUpdatesConflictAnswered {
+        symbol_uuid,
+        field,
+        choice,
+    };
+    container(
+        row![
+            text(format!(
+                "{}: yours {:?}, library now {:?}",
+                field.label(),
+                conflict.mine,
+                conflict.library
+            ))
+            .size(TS.body)
+            .color(muted)
+            .width(Length::Fill),
+            radio("Keep mine", Choice::KeepMine, Some(conflict.choice), pick).text_size(TS.body),
+            Space::new().width(12),
+            radio(
+                "Use library value",
+                Choice::UseLibrary,
+                Some(conflict.choice),
+                pick
+            )
+            .text_size(TS.body),
+        ]
+        .align_y(iced::Alignment::Center)
+        .spacing(SP.xs),
+    )
+    .padding([0.0, SP.xl + 8.0])
+    .style(move |_| container::Style {
+        text_color: Some(text_c),
+        ..Default::default()
+    })
     .boxed()
 }
 
@@ -410,6 +518,7 @@ mod tests {
             .to_string(),
             bump_kind: kind,
             selected: false,
+            conflicts: Vec::new(),
         };
         let state = LibraryUpdatesState::new(
             path,
@@ -456,6 +565,7 @@ mod tests {
                 latest_version: "1.0.1".to_string(),
                 bump_kind: BumpKind::Patch,
                 selected: false,
+                conflicts: Vec::new(),
             }],
         );
         // Started pre-checked because of the patch default.
@@ -483,6 +593,7 @@ mod tests {
             latest_version: "1.0.1".to_string(),
             bump_kind: kind,
             selected: false,
+            conflicts: Vec::new(),
         };
         let mut state = LibraryUpdatesState::new(
             PathBuf::from("/tmp/x.standard_sch"),
@@ -500,5 +611,38 @@ mod tests {
         let r1 = state.entries[1].symbol_uuid;
         state.toggle(r1);
         assert_eq!(sel(&state), vec![true, true, true]);
+    }
+
+    /// Answering a conflict ticks its entry and the group sharing the copy.
+    #[test]
+    fn answering_a_conflict_ticks_the_entry() {
+        let mk = |refdes: &str, kind: BumpKind| LibraryUpdateEntry {
+            symbol_uuid: Uuid::now_v7(),
+            ref_des: refdes.to_string(),
+            lib_id: "L:R".to_string(),
+            library_id: Uuid::nil(),
+            library_name: "Lib".to_string(),
+            row_id: RowId::from_uuid(Uuid::nil()),
+            library_path: PathBuf::from("/tmp/x.snxlib"),
+            current_version: "1.0.0".to_string(),
+            latest_version: "2.0.0".to_string(),
+            bump_kind: kind,
+            selected: false,
+            conflicts: vec![ConflictChoice {
+                field: StampField::Mpn,
+                mine: "MINE".into(),
+                library: "LIB".into(),
+                choice: Choice::KeepMine,
+            }],
+        };
+        let mut state = LibraryUpdatesState::new(
+            PathBuf::from("/tmp/x.standard_sch"),
+            vec![mk("R1", BumpKind::Major), mk("R2", BumpKind::Major)],
+        );
+        assert_eq!(state.selected_count(), 0, "a major bump starts unticked");
+        let r1 = state.entries[0].symbol_uuid;
+        state.answer_conflict(r1, StampField::Mpn, Choice::UseLibrary);
+        assert_eq!(state.entries[0].conflicts[0].choice, Choice::UseLibrary);
+        assert_eq!(state.selected_count(), 2);
     }
 }

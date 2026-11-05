@@ -498,6 +498,11 @@ impl Signex {
             LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid) => {
                 self.handle_library_updates_toggle_selection(symbol_uuid)
             }
+            LibraryMessage::LibraryUpdatesConflictAnswered {
+                symbol_uuid,
+                field,
+                choice,
+            } => self.handle_library_updates_conflict_answered(symbol_uuid, field, choice),
             LibraryMessage::LibraryUpdatesApply => self.handle_library_updates_apply(),
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {

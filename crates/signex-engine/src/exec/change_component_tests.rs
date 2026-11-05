@@ -4,6 +4,7 @@
 use super::change_component::{ComponentReplacement, DataChange, change_component_preview};
 use crate::test_support::test_sheet;
 use crate::{Command, Engine};
+use signex_types::schematic::RowStamp;
 use signex_types::schematic::{
     LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol, Wire,
 };
@@ -43,6 +44,7 @@ fn replacement(pins: Vec<LibPin>) -> ComponentReplacement {
         library_id: Some(Uuid::from_u128(0xA)),
         row_id: Some(Uuid::from_u128(0xB)),
         library_version: "2.0".into(),
+        stamp: None,
         value: "NEW-MPN".into(),
         footprint: "L:FP-NEW".into(),
         datasheet: "https://new.example/d.pdf".into(),
@@ -79,6 +81,7 @@ fn engine_with_wired_pin_2() -> (Engine, Uuid) {
         library_id: Some(Uuid::from_u128(0x1)),
         row_id: Some(Uuid::from_u128(0x2)),
         library_version: "1.0".into(),
+        library_stamp: None,
         ..Default::default()
     });
     sheet.wires.push(Wire {
@@ -541,4 +544,79 @@ fn a_fan_out_mapping_never_gives_two_pins_one_uuid() {
     let out = super::change_component::remap_pin_uuids(&sym, &[&shown], &mapping);
     assert_eq!(out["A"], shared);
     assert_ne!(out["B"], shared);
+}
+
+fn stamp(row: u128, mpn: &str) -> RowStamp {
+    RowStamp {
+        mpn: Some(mpn.into()),
+        version: Some("2.0".into()),
+        ..RowStamp::new(Uuid::from_u128(row))
+    }
+}
+
+#[test]
+fn the_swap_replaces_the_value_stamp_and_undo_restores_it() {
+    let (mut engine, id) = engine_with_wired_pin_2();
+    let mut doc = engine.document().clone();
+    doc.symbols[0].library_stamp = Some(stamp(0x2, "OLD-MPN"));
+    engine.set_document(doc);
+    let mut swap = replacement(swap_pins());
+    swap.stamp = Some(stamp(0xB, "NEW-MPN"));
+    engine
+        .execute(Command::ChangeComponent {
+            symbol_id: id,
+            replacement: swap,
+        })
+        .unwrap();
+    assert_eq!(
+        engine.document().symbols[0].library_stamp,
+        Some(stamp(0xB, "NEW-MPN")),
+        "the old part's stamp described another row"
+    );
+    engine.undo().unwrap();
+    assert_eq!(
+        engine.document().symbols[0].library_stamp,
+        Some(stamp(0x2, "OLD-MPN"))
+    );
+}
+
+#[test]
+fn a_swap_to_a_part_with_no_library_leaves_no_stamp() {
+    let (mut engine, id) = engine_with_wired_pin_2();
+    let mut doc = engine.document().clone();
+    doc.symbols[0].library_stamp = Some(stamp(0x2, "OLD-MPN"));
+    engine.set_document(doc);
+    let mut swap = replacement(swap_pins());
+    swap.library_id = None;
+    swap.row_id = None;
+    swap.stamp = Some(stamp(0xB, "NEW-MPN"));
+    engine
+        .execute(Command::ChangeComponent {
+            symbol_id: id,
+            replacement: swap,
+        })
+        .unwrap();
+    assert_eq!(engine.document().symbols[0].library_stamp, None);
+}
+
+#[test]
+fn the_swap_tags_the_stamp_with_the_version_it_travels_with() {
+    let (mut engine, id) = engine_with_wired_pin_2();
+    let mut swap = replacement(swap_pins());
+    swap.stamp = Some(RowStamp {
+        version: Some("9.9".into()),
+        ..stamp(0xB, "NEW-MPN")
+    });
+    engine
+        .execute(Command::ChangeComponent {
+            symbol_id: id,
+            replacement: swap,
+        })
+        .unwrap();
+    let part = &engine.document().symbols[0];
+    assert_eq!(part.library_version, "2.0");
+    assert!(
+        part.valid_stamp().is_some(),
+        "the stamp matches the version"
+    );
 }
