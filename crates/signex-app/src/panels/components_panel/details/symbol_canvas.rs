@@ -259,6 +259,19 @@ impl canvas::Program<()> for SymbolSheetPreview {
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
+            // Previews keep wheel and pinch zoom only: the opt-in two-finger
+            // pan is an editor-canvas preference and is not offered here.
+            mouse::Event::PinchGesture { delta } => {
+                let anchor = cursor.position_in(bounds)?;
+                if !state
+                    .camera
+                    .zoom_by_factor(anchor, Camera::pinch_factor(*delta))
+                {
+                    return None;
+                }
+                state.cache.clear();
+                Some(Action::request_redraw().and_capture())
+            }
             mouse::Event::ButtonPressed(mouse::Button::Left) => {
                 cursor.position_in(bounds)?;
                 state.pan_from = cursor.position();

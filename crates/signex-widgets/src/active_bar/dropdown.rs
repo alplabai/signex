@@ -49,6 +49,9 @@ use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
 
+/// Text size of a menu row label.
+pub const LABEL_SIZE: f32 = 13.0;
+
 /// One row inside the dropdown. The widget walks the slice in order
 /// so semantic grouping (section header → items → separator → next
 /// section) reads top-down at the call site.
@@ -201,11 +204,12 @@ where
     let accent = theme_ext::to_color(&tokens.accent);
 
     // Fill children inside a Shrink column lay out at zero width in the
-    // fork, so a fixed-width panel gets a Fill column (buttons stay clickable).
+    // fork, so a fixed-width panel gets a Fill column (buttons stay clickable)
+    // and an unsized panel fits its content.
     let col_width = if width_hint.is_some() {
         Length::Fill
     } else {
-        Length::Shrink
+        Length::Fit
     };
     let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(col_width);
     for entry in entries {
@@ -253,7 +257,7 @@ where
                 let mut row_w: Row<Element<'a, M>> = Row::new()
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
-                    .width(Length::Shrink);
+                    .width(Length::Fit);
                 // Leading icon column — fixed-width for alignment.
                 if let Some(handle) = icon {
                     // Tint only via `icon_style` (disabled rows); never always.
@@ -271,7 +275,7 @@ where
                 // clips rather than reflowing a label onto two lines.
                 row_w = row_w.push(
                     text(label)
-                        .size(13)
+                        .size(LABEL_SIZE)
                         .color(row_text_c)
                         .wrapping(text::Wrapping::None)
                         .boxed(),
@@ -280,7 +284,7 @@ where
                 let mut right: Row<Element<'a, M>> = Row::new()
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
-                    .width(Length::Shrink);
+                    .width(Length::Fit);
                 if let Some(s) = shortcut {
                     right = right.push(text(s).size(11).color(muted).boxed());
                 }
@@ -335,7 +339,7 @@ where
     if let Some(w) = width_hint {
         panel = panel.width(Length::Fixed(w));
     } else {
-        panel = panel.width(Length::Shrink);
+        panel = panel.width(Length::Fit);
     }
     panel
         .style(move |_: &Theme| iced::widget::container::Style {
@@ -423,5 +427,17 @@ mod tests {
     fn disabled_icon_is_tinted_muted() {
         let muted = iced::Color::from_rgb(0.5, 0.5, 0.5);
         assert_eq!(icon_style(true, muted).color, Some(muted));
+    }
+
+    /// The fork's `Shrink` compresses contents to their minimum, which
+    /// collapsed menu rows to boxes without labels; the panel sizes to its
+    /// content with `Fit` (#2043).
+    #[test]
+    fn panel_without_a_width_hint_fits_its_content() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let entries = vec![DropdownEntry::Item(DropdownItem::new("Place", ()))];
+        let panel = view(entries, &tokens, None);
+        use iced::advanced::Widget as _;
+        assert_eq!(panel.size().width, Length::Fit);
     }
 }

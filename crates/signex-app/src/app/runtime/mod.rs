@@ -49,14 +49,18 @@ impl Signex {
     /// `finish_update`.
     pub(in crate::app) fn sync_zoom_step(&mut self) {
         let zoom_step = self.ui_state.effective_zoom_step();
+        let trackpad_pan = self.ui_state.trackpad_pan;
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.zoom_step = zoom_step;
+            canvas.trackpad_pan = trackpad_pan;
         }
         for editor in self.document_state.symbol_editors.values_mut() {
             editor.zoom_step = zoom_step;
+            editor.trackpad_pan = trackpad_pan;
         }
         for editor in self.document_state.footprint_editors.values_mut() {
             editor.zoom_step = zoom_step;
+            editor.trackpad_pan = trackpad_pan;
         }
     }
 
@@ -85,7 +89,10 @@ impl Signex {
         // the generation counter and kick off an async load. Stale
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
-        let history = self.refresh_history_panel();
+        let history = Task::batch([
+            self.refresh_history_panel(),
+            self.refresh_window_histories(),
+        ]);
         let dir_probes = self.warm_document_dir_probes();
         // v0.23 — Drain any queued git commits onto the iced task
         // pool so they run off the update thread. The "Saving…" pill
@@ -502,6 +509,7 @@ impl Signex {
             grid_style: self.ui_state.preferences_draft_grid_style,
             auto_focus: self.ui_state.auto_focus,
             zoom_step: self.ui_state.effective_zoom_step(),
+            trackpad_pan: self.ui_state.trackpad_pan,
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             current_tool: self.interaction_state.current_tool,

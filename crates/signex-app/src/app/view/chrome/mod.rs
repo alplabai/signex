@@ -89,7 +89,12 @@ impl Signex {
                 });
         let palette_input = text_input(
             "Search files, symbols, commands…",
-            self.ui_state.command_palette.query.clone(),
+            // A palette owned by an undocked window types in that window.
+            if self.ui_state.command_palette.window.is_none() {
+                self.ui_state.command_palette.query.clone()
+            } else {
+                String::new()
+            },
         )
         .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
         .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
@@ -227,6 +232,8 @@ impl Signex {
                 draft_annotate_undo: ui.preferences_draft_annotate_undo,
                 draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
                 draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+                draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
+                draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
                 draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
                 draft_increment_step: ui.preferences_draft_increment_step,
                 draft_paste_designators: ui.preferences_draft_paste_designators,
@@ -359,20 +366,21 @@ impl Signex {
 
         const EDGE: f32 = 6.0;
 
-        let straight =
-            |direction: Direction, cursor: Interaction, horizontal: bool| -> Element<'a, Message> {
-                let (w, h) = if horizontal {
-                    (Length::Fill, Length::Fixed(EDGE))
-                } else {
-                    (Length::Fixed(EDGE), Length::Fill)
-                };
-                mouse_area(Space::new().width(w).height(h))
-                    .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
-                    .interaction(cursor)
-                    .boxed()
+        let straight = |(direction, cursor): (Direction, Interaction),
+                        horizontal: bool|
+         -> Element<'a, Message> {
+            let (w, h) = if horizontal {
+                (Length::Fill, Length::Fixed(EDGE))
+            } else {
+                (Length::Fixed(EDGE), Length::Fill)
             };
+            mouse_area(Space::new().width(w).height(h))
+                .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
+                .interaction(cursor)
+                .boxed()
+        };
 
-        let corner = |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
+        let corner = |(direction, cursor): (Direction, Interaction)| -> Element<'a, Message> {
             mouse_area(
                 Space::new()
                     .width(Length::Fixed(EDGE))
@@ -383,14 +391,15 @@ impl Signex {
             .boxed()
         };
 
-        let top = straight(Direction::North, Interaction::ResizingVertically, true);
-        let bottom = straight(Direction::South, Interaction::ResizingVertically, true);
-        let left = straight(Direction::West, Interaction::ResizingHorizontally, false);
-        let right = straight(Direction::East, Interaction::ResizingHorizontally, false);
-        let nw = corner(Direction::NorthWest, Interaction::ResizingDiagonallyDown);
-        let ne = corner(Direction::NorthEast, Interaction::ResizingDiagonallyUp);
-        let sw = corner(Direction::SouthWest, Interaction::ResizingDiagonallyUp);
-        let se = corner(Direction::SouthEast, Interaction::ResizingDiagonallyDown);
+        let [top, bottom, left, right, nw, ne, sw, se] = edge_table();
+        let top = straight(top, true);
+        let bottom = straight(bottom, true);
+        let left = straight(left, false);
+        let right = straight(right, false);
+        let nw = corner(nw);
+        let ne = corner(ne);
+        let sw = corner(sw);
+        let se = corner(se);
 
         // Middle row: left/right edges frame a Fill/Fill empty Space so
         // the whole overlay is window-sized and the centre passes
@@ -516,6 +525,44 @@ impl Signex {
             .interaction(interaction)
             .on_press(Message::Ui(UiMsg::DragStart(target)))
             .boxed()
+    }
+}
+
+/// The eight resize hit zones in overlay order (N, S, W, E, NW, NE, SW,
+/// SE), each paired with its cursor from `Direction::interaction`.
+fn edge_table() -> [(iced::window::Direction, iced::mouse::Interaction); 8] {
+    use iced::window::Direction::{
+        East, North, NorthEast, NorthWest, South, SouthEast, SouthWest, West,
+    };
+    [
+        North, South, West, East, NorthWest, NorthEast, SouthWest, SouthEast,
+    ]
+    .map(|d| (d, d.interaction()))
+}
+
+#[cfg(test)]
+mod edge_table_tests {
+    use super::edge_table;
+    use iced::mouse::Interaction as I;
+    use iced::window::Direction as D;
+
+    #[test]
+    fn resize_edge_cursors_match_the_direction_mapping() {
+        let t = edge_table();
+        let expect = [
+            (D::North, I::ResizingVertically),
+            (D::South, I::ResizingVertically),
+            (D::West, I::ResizingHorizontally),
+            (D::East, I::ResizingHorizontally),
+            (D::NorthWest, I::ResizingDiagonallyDown),
+            (D::NorthEast, I::ResizingDiagonallyUp),
+            (D::SouthWest, I::ResizingDiagonallyUp),
+            (D::SouthEast, I::ResizingDiagonallyDown),
+        ];
+        assert_eq!(t, expect);
+        for (d, i) in t {
+            assert_eq!(I::from(d), i);
+        }
     }
 }
 

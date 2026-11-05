@@ -194,6 +194,7 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
                     library_id: None,
                     row_id: None,
                     library_version: String::new(),
+                    stamp: None,
                     value: String::new(),
                     footprint: String::new(),
                     datasheet: String::new(),
@@ -503,6 +504,7 @@ fn changing_the_component_of_a_free_unit_is_refused_while_a_sibling_unit_is_lock
             library_id: None,
             row_id: None,
             library_version: String::new(),
+            stamp: None,
             value: "NEW".into(),
             footprint: String::new(),
             datasheet: String::new(),
@@ -512,4 +514,29 @@ fn changing_the_component_of_a_free_unit_is_refused_while_a_sibling_unit_is_lock
     assert!(message.contains("U1 is locked"), "{message}");
     assert_eq!(format!("{:?}", engine.document()), before);
     assert!(engine.undo().is_ok_and(|undone| undone.is_none()));
+}
+
+#[test]
+fn a_part_is_edit_locked_from_every_unit_when_one_unit_is_locked() {
+    let part = engine_with_a_locked_second_unit();
+    assert!(
+        part.part_edit_locked(id(1)),
+        "the free unit of a locked part"
+    );
+    assert!(part.part_edit_locked(id(2)), "the locked unit");
+    assert!(!part.part_edit_locked(id(9)), "an unknown id");
+    assert!(!engine().part_edit_locked(id(2)), "an unlocked single unit");
+    assert!(engine().part_edit_locked(id(1)), "a locked single unit");
+}
+
+#[test]
+fn the_locked_part_units_are_every_unit_of_each_locked_part() {
+    let part = engine_with_a_locked_second_unit();
+    let held = part.edit_locked_part_units();
+    assert!(held.contains(&id(1)) && held.contains(&id(2)), "{held:?}");
+    let single = engine().edit_locked_part_units();
+    assert!(
+        single.contains(&id(1)) && !single.contains(&id(2)),
+        "{single:?}"
+    );
 }

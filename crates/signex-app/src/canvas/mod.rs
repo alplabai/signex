@@ -36,7 +36,7 @@ use iced::mouse;
 use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
 
-pub use camera::Camera;
+pub use camera::{Camera, ScrollIntent};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 mod move_connections;
 pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
@@ -62,6 +62,8 @@ pub struct CanvasState {
     last_pan_pos: Option<iced::Point>,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
+    /// Ctrl or Cmd held: a scroll zooms even with "Two-finger scroll pans" on.
+    pub zoom_modifier: bool,
     /// Whether Shift is currently held (for multi-select add).
     pub shift_held: bool,
     /// Whether Alt is held (flips wire behaviour for a drag, #1266).
@@ -515,6 +517,8 @@ pub struct CanvasViewPrefs<'a> {
     pub grid_style: crate::render_config::GridStyle,
     pub auto_focus: bool,
     pub zoom_step: f32,
+    /// "Two-finger scroll pans": a pixel-delta scroll pans instead of zooming.
+    pub trackpad_pan: bool,
     /// Preview rubber-banded wires while a selection floats (mirrors the
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
@@ -924,26 +928,12 @@ pub enum CanvasEvent {
     },
 }
 
-impl CanvasEvent {
-    /// Whether the event is the user acting on the canvas with the pointer:
-    /// a click, a box select, a drag-move, a wheel zoom or a pan. A hover,
-    /// and the fit / centre commands a key or the menu sends, are not.
-    pub fn is_user_gesture(&self) -> bool {
-        matches!(
-            self,
-            Self::Clicked { .. }
-                | Self::CtrlClicked { .. }
-                | Self::DoubleClicked { .. }
-                | Self::BoxSelect { .. }
-                | Self::MoveSelected { .. }
-                | Self::MovePicked { .. }
-                | Self::ViewMoved
-        )
-    }
-}
+mod gesture;
 
 #[cfg(test)]
 mod active_bar_hit;
+#[cfg(test)]
+mod draw_order_tests;
 #[cfg(test)]
 mod gpu_mount_drag_tests;
 #[cfg(test)]
@@ -996,6 +986,7 @@ mod tests {
             grid_style: crate::render_config::GridStyle::Dots,
             auto_focus: false,
             zoom_step: 1.1,
+            trackpad_pan: false,
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             current_tool: crate::app::Tool::Select,

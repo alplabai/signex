@@ -751,7 +751,11 @@ impl Signex {
                 }
                 match event {
                     iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                        Some(Message::Ui(UiMsg::DragMove(position.x, position.y)))
+                        Some(Message::Ui(UiMsg::DragMovedIn {
+                            window,
+                            x: position.x,
+                            y: position.y,
+                        }))
                     }
                     iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                         iced::mouse::Button::Left,
@@ -813,6 +817,7 @@ impl Signex {
         // A window's OS scale changed (moved to another screen, or the
         // system setting changed): every window, with its id (#1887).
         let window_rescale = iced::window::events().filter_map(|(id, event)| match event {
+            iced::window::Event::Moved(_) => Some(Message::Window(WindowMsg::WindowMoved(id))),
             iced::window::Event::Rescaled(scale) => {
                 Some(Message::Window(WindowMsg::WindowScaleChanged(id, scale)))
             }

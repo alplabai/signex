@@ -24,6 +24,7 @@ mod text_edit;
 mod tool;
 mod ui;
 pub(in crate::app) mod window_action;
+mod window_surfaces;
 
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {
@@ -124,17 +125,22 @@ impl Signex {
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
+                let settle = self.note_window_geometry_changed(id);
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
                 // that would otherwise clobber the main-window state.
                 if self.ui_state.main_window_id == Some(id) {
                     self.ui_state.window_size = (w, h);
-                    return self.main_window_mode_task(id);
+                    return Task::batch([settle, self.main_window_mode_task(id)]);
                 }
                 // An undocked tab window's own size places its overlays.
                 self.ui_state.set_undocked_window_size(id, (w, h));
-                Task::none()
+                settle
             }
+            WindowMsg::WindowMoved(id) => self.note_window_geometry_changed(id),
+            WindowMsg::WindowGeometrySettled(id) => self.window_geometry_settled(id),
+            WindowMsg::WindowGeometryRead(readout) => self.window_geometry_read(*readout),
+            WindowMsg::WindowGeometrySaved(result) => self.window_geometry_saved(result),
             WindowMsg::WindowScaleChanged(id, scale) => {
                 // The CPU canvas caches its geometry, which was drawn with the
                 // old scale; a move to another display keeps the logical
@@ -179,7 +185,8 @@ impl Signex {
                 // to run after the HWND is alive, hence here rather than
                 // in bootstrap.
                 let corners_task = crate::chrome::apply_rounded_corners::<Message>(id);
-                iced::Task::batch([size_task, scale_task, corners_task])
+                let settle = self.note_window_geometry_changed(id);
+                iced::Task::batch([size_task, scale_task, corners_task, settle])
             }
             WindowMsg::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
@@ -187,6 +194,7 @@ impl Signex {
                     return self.flush_quit_writes_then(iced::exit());
                 }
                 self.ui_state.forget_window_os_scale(id);
+                self.forget_window_geometry(id);
                 self.ui_state.forget_undocked_window_size(id);
                 self.close_overlays_owned_by(id);
                 if self.ui_state.focused_window == Some(id) {
@@ -536,6 +544,8 @@ impl Signex {
                 // the unsaved-changes guard, a detached modal through its
                 // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {
+                    // The window is gone before another read could finish.
+                    self.persist_main_geometry_on_close();
                     self.handle_app_quit_requested()
                 } else if let Some(super::state::WindowKind::DetachedModal(modal)) =
                     self.ui_state.windows.get(&id).cloned()

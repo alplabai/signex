@@ -91,6 +91,7 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
 
     // A dirty draft makes Restore a two-click confirm: the first click
     // only arms it, the second reloads.
+    crate::settle_support::list_active_history(&mut app);
     panel(
         &mut app,
         PanelMsg::HistoryRestoreClicked { sha: sha.clone() },

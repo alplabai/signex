@@ -675,6 +675,7 @@ fn tree_root_rows(
         x: 0.0,
         y: 0.0,
         key: Some(vec![id]),
+        window: None,
     };
     app.project_tree_entries(&ctx)
         .expect("the project row has a menu")
@@ -701,6 +702,7 @@ fn tree_save_row_writes_the_active_schematic() {
             x: 0.0,
             y: 0.0,
             key: None,
+            window: None,
         });
     settle(&mut app, live_row(&rows, "save_document"));
 

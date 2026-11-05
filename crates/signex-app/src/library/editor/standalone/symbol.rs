@@ -349,6 +349,7 @@ fn symbol_canvas<'a>(
     )
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
+    .with_trackpad_pan(editor.trackpad_pan)
     .with_device_px_per_logical_px(device_px_per_logical_px)
 }
 
@@ -437,6 +438,9 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
         CanvasAction::DeleteSelected => SymbolEditorMsg::DeleteSelected,
         CanvasAction::Pan { dx, dy } => SymbolEditorMsg::Pan { dx, dy },
         CanvasAction::Zoom { sx, sy, delta } => SymbolEditorMsg::Zoom { sx, sy, delta },
+        CanvasAction::ZoomFactor { sx, sy, factor } => {
+            SymbolEditorMsg::ZoomFactor { sx, sy, factor }
+        }
         CanvasAction::Fit => SymbolEditorMsg::Fit,
         CanvasAction::ViewportMeasured {
             width,

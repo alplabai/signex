@@ -77,6 +77,7 @@ fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
         msg,
         SymbolEditorMsg::Pan { .. }
             | SymbolEditorMsg::Zoom { .. }
+            | SymbolEditorMsg::ZoomFactor { .. }
             | SymbolEditorMsg::CursorAt { .. }
             | SymbolEditorMsg::ShowContextMenu { .. }
             | SymbolEditorMsg::CloseContextMenu
@@ -435,6 +436,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Camera / viewport (no undo) ──────────────────────────
         SymbolEditorMsg::Pan { .. }
         | SymbolEditorMsg::Zoom { .. }
+        | SymbolEditorMsg::ZoomFactor { .. }
         | SymbolEditorMsg::Fit
         | SymbolEditorMsg::ViewportMeasured { .. }
         | SymbolEditorMsg::CursorAt { .. } => apply_symbol_camera(editor, msg),

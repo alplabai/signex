@@ -4,7 +4,8 @@
 use crate::test_support::test_sheet;
 use crate::{Command, Engine, EngineError};
 use signex_types::schematic::{
-    Junction, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, Symbol, Wire,
+    Junction, LibPin, LibSymbol, LinkStamp, NoConnect, Pin, PinDirection, PinShapeStyle, Point,
+    RowStamp, StampValues, Symbol, Wire,
 };
 
 const ID: &str = "L:S";
@@ -338,7 +339,7 @@ fn replace_stamps_library_versions_in_the_same_undo_step() {
     engine
         .execute(Command::ReplaceLibSymbol {
             lib_symbol: fresh,
-            library_versions: vec![(uuid, "2.0.0".into())],
+            library_versions: vec![(uuid, LinkStamp::version("2.0.0"))],
         })
         .unwrap();
     assert_eq!(engine.document().symbols[0].library_version, "2.0.0");
@@ -364,7 +365,10 @@ fn only_instances_of_the_replaced_lib_id_are_stamped() {
     engine
         .execute(Command::ReplaceLibSymbol {
             lib_symbol: fresh,
-            library_versions: vec![(mine, "2.0.0".into()), (theirs, "2.0.0".into())],
+            library_versions: vec![
+                (mine, LinkStamp::version("2.0.0")),
+                (theirs, LinkStamp::version("2.0.0")),
+            ],
         })
         .unwrap();
     assert_eq!(engine.document().symbols[0].library_version, "2.0.0");
@@ -378,7 +382,7 @@ fn refusal_leaves_the_version_untouched() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
     let err = engine.execute(Command::ReplaceLibSymbol {
         lib_symbol: fresh,
-        library_versions: vec![(uuid, "2.0.0".into())],
+        library_versions: vec![(uuid, LinkStamp::version("2.0.0"))],
     });
     assert!(err.is_err());
     assert_eq!(engine.document().symbols[0].library_version, "");
@@ -499,4 +503,44 @@ fn undo_snapshots_share_lib_symbols_and_a_replace_does_not_bleed_into_them() {
     engine.redo().unwrap();
     assert_eq!(engine.document().lib_symbols[ID].description, "new");
     assert_eq!(held[ID].description, "old");
+}
+
+/// The stamp alone moved: the copy is the same, the version is the same, the
+/// part's last-agreed values are not (#2004).
+#[test]
+fn a_stamp_only_replace_records_an_undo_step_and_undo_restores_the_old_stamp() {
+    let mut engine = engine_with_wired_pin_2();
+    let mut doc = engine.document().clone();
+    let (uuid, row) = (doc.symbols[0].uuid, uuid::Uuid::from_u128(9));
+    doc.symbols[0].row_id = Some(row);
+    doc.symbols[0].library_version = "1.0.0".into();
+    let old = RowStamp {
+        mpn: Some("OLD".into()),
+        version: Some("1.0.0".into()),
+        ..RowStamp::new(row)
+    };
+    doc.symbols[0].library_stamp = Some(old.clone());
+    engine.set_document(doc);
+    let same_copy = lib_symbol("old", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    let result = engine
+        .execute(Command::ReplaceLibSymbol {
+            lib_symbol: same_copy,
+            library_versions: vec![(
+                uuid,
+                LinkStamp {
+                    version: "1.0.0".into(),
+                    values: StampValues {
+                        mpn: Some("NEW".into()),
+                        ..Default::default()
+                    },
+                },
+            )],
+        })
+        .unwrap();
+    assert!(result.changed, "a stamp-only change is a change");
+    let stamp = engine.document().symbols[0].library_stamp.clone().unwrap();
+    assert_eq!(stamp.mpn.as_deref(), Some("NEW"));
+    assert!(engine.can_undo());
+    engine.undo().unwrap();
+    assert_eq!(engine.document().symbols[0].library_stamp, Some(old));
 }

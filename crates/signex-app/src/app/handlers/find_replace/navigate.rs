@@ -54,7 +54,16 @@ impl Signex {
                     y: position.y,
                     item: Some(found.hit.item),
                 };
-                return self.open_sheet(sheet, SheetOpen::at(placement).then(then));
+                let open = SheetOpen::at(placement).then(then);
+                // A window cannot switch sheets inside its swap: the open is
+                // queued to the main window, as a descent is.
+                if self.interaction_state.acting_window.is_some() {
+                    return Task::done(Message::Project(ProjectMsg::SheetOpenRequested {
+                        path: sheet,
+                        open: Box::new(open),
+                    }));
+                }
+                return self.open_sheet(sheet, open);
             }
         }
         self.handle_focus_at(position.x, position.y, Some(found.hit.item))

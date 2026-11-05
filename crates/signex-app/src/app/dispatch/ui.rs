@@ -17,10 +17,28 @@ impl Signex {
                 self.run_menu_command(&id, Some(window))
             }
             UiMsg::HistoryLoaded {
+                window: None,
                 generation,
                 path,
                 result,
             } => self.apply_history_loaded(generation, path, result),
+            UiMsg::HistoryLoaded {
+                window: Some(window),
+                generation,
+                path,
+                result,
+            } => {
+                if !self.is_document_window(window) {
+                    crate::diagnostics::log_info(format!(
+                        "History for {} was dropped: the window that asked for it has closed.",
+                        path.display()
+                    ));
+                    return Task::none();
+                }
+                self.run_in_window(window, false, |app| {
+                    app.apply_history_loaded(generation, path, result)
+                })
+            }
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();
@@ -50,6 +68,10 @@ impl Signex {
             UiMsg::DragStart(target) => {
                 self.handle_layout_drag_started(target);
                 self.finish_update()
+            }
+            UiMsg::DragMovedIn { window, x, y } => {
+                self.interaction_state.pointer_window = Some(window);
+                self.dispatch_update(Message::Ui(UiMsg::DragMove(x, y)))
             }
             UiMsg::DragMove(x, y) => {
                 self.handle_layout_drag_moved(x, y);
@@ -87,6 +109,7 @@ impl Signex {
             UiMsg::DragEnd(released_in) => {
                 let dropped = self.finish_components_row_drag(released_in);
                 self.handle_layout_drag_finished();
+                self.interaction_state.pointer_window = None;
                 Task::batch([dropped, self.finish_update()])
             }
             UiMsg::GridCycle => {
@@ -502,6 +525,13 @@ impl Signex {
             .remove(&window_id)
             .unwrap_or_else(|| self.new_window_panel_ctx(window_id));
         std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
+        // So does its History panel state (generation, pending restore).
+        let mut swapped_history = self
+            .document_state
+            .window_history
+            .remove(&window_id)
+            .unwrap_or_default();
+        std::mem::swap(&mut self.document_state.history, &mut swapped_history);
         let saved_active_path = self.document_state.active_path.take();
         let revision_before = self
             .document_state
@@ -524,11 +554,15 @@ impl Signex {
         }));
         self.interaction_state.acting_window = saved_acting;
         std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
+        std::mem::swap(&mut self.document_state.history, &mut swapped_history);
         // The handler may have closed the window (Close Document): its
         // context and canvas are then dropped, not put back, and the drafts
         // typed in it move to the main context.
         let window_alive = self.ui_state.windows.contains_key(&window_id);
         if window_alive {
+            self.document_state
+                .window_history
+                .insert(window_id, swapped_history);
             self.document_state
                 .window_panel_ctx
                 .insert(window_id, swapped_ctx);

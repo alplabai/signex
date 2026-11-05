@@ -5,7 +5,7 @@
 use super::pin_changes::{instance_pin_changes, shown_pins, unit_missing};
 use crate::*;
 use signex_net::connected_points;
-use signex_types::schematic::LibSymbol;
+use signex_types::schematic::{LibSymbol, LinkStamp};
 
 /// `"<reference> pin <key>"` for every pin of a placed instance of
 /// `fresh.id` that would lose its connection (an old connected pin that
@@ -47,7 +47,7 @@ impl Engine {
         &mut self,
         before: SchematicSheet,
         lib_symbol: LibSymbol,
-        library_versions: Vec<(uuid::Uuid, String)>,
+        library_versions: Vec<(uuid::Uuid, LinkStamp)>,
     ) -> Result<CommandResult, EngineError> {
         let gone = removed_units(&self.document, &lib_symbol);
         if !gone.is_empty() {
@@ -74,11 +74,8 @@ impl Engine {
             if sym.lib_id != lib_symbol.id {
                 continue;
             }
-            if let Some((_, v)) = library_versions.iter().find(|(u, _)| *u == sym.uuid)
-                && sym.library_version != *v
-            {
-                sym.library_version = v.clone();
-                stamped = true;
+            if let Some((_, link)) = library_versions.iter().find(|(u, _)| *u == sym.uuid) {
+                stamped |= sym.apply_link_stamp(link);
             }
         }
         if same_copy && !stamped {

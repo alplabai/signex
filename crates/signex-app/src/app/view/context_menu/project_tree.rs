@@ -124,7 +124,11 @@ impl Signex {
         use crate::app::ProjectTreeAction as A;
         use signex_widgets::tree_view::{get_node, resolve_path};
 
-        let panel_ctx = &self.document_state.panel_ctx;
+        // The tree the menu was opened on: the window's own in an undocked
+        // window, else the main window's.
+        let panel_ctx = ctx
+            .window
+            .map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
         let tokens = &panel_ctx.tokens;
         let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
@@ -161,7 +165,7 @@ impl Signex {
                 // the row follows the same gate as Ctrl+S and File ▸ Save,
                 // not the clicked project's own state.
                 let can_save = crate::keymap::AppCommandId::new("save_document").is_ok_and(|id| {
-                    crate::app::command::is_enabled(&id, &self.command_context(None))
+                    crate::app::command::is_enabled(&id, &self.command_context(ctx.window))
                 });
 
                 v.push(dd_planned(None, "Make Project Available Online...", None));

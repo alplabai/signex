@@ -35,6 +35,8 @@ impl Signex {
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
             draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+            draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
+            draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
             draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
             draft_increment_step: ui.preferences_draft_increment_step,
             draft_paste_designators: ui.preferences_draft_paste_designators,
@@ -70,9 +72,16 @@ impl Signex {
     }
 
     /// Find & Replace dialog.
-    pub(in crate::app::view) fn find_replace_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn find_replace_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.find_replace.open || self.modal_detached(crate::app::state::ModalId::FindReplace) {
+            return None;
+        }
+        // Only the window Find was opened in paints it (#2037).
+        if !self.overlay_belongs_to(ui.find_replace.window, window_id) {
             return None;
         }
         Some(
@@ -545,8 +554,14 @@ impl Signex {
     /// above every other modal layer; click-outside dismisses via the
     /// standard dismiss_layer pattern. Pushes the dismiss layer then the
     /// dropdown.
-    pub(in crate::app::view) fn command_palette_overlay(&self) -> Vec<Element<'_, Message>> {
-        if !self.ui_state.command_palette.open {
+    pub(in crate::app::view) fn command_palette_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
+        // Only the window the palette was opened in paints it (#2037).
+        if !self.ui_state.command_palette.open
+            || !self.overlay_belongs_to(self.ui_state.command_palette.window, window_id)
+        {
             return Vec::new();
         }
         vec![

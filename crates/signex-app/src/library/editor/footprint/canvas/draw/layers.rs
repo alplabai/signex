@@ -11,7 +11,7 @@ use crate::library::editor::footprint::layers::{FpLayer, LayerVisibility};
 use crate::library::editor::footprint::state::{CourtyardRect, EditorPad};
 
 use super::super::FootprintCanvasState;
-use super::pad::{PadLabels, draw_pad};
+use super::pad::{PadLabels, draw_pad, draw_pad_number};
 use super::silk::draw_silk_graphics;
 
 /// Everything the content layers read. Selection fields are empty/None
@@ -85,6 +85,12 @@ pub(crate) fn draw_pads(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i
             continue;
         }
         let is_selected = i.selected_pad == Some(idx) || i.selected_pads_extra.contains(&idx);
-        draw_pad(frame, cam, pad, is_selected, i.pad_labels);
+        draw_pad(frame, cam, pad, is_selected);
+    }
+    // Numbers last so no pad body covers a neighbour's number.
+    for pad in i.pads {
+        if i.visibility.get(pad.primary_layer()) {
+            draw_pad_number(frame, cam, pad, i.pad_labels);
+        }
     }
 }

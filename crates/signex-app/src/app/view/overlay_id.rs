@@ -395,10 +395,11 @@ impl Signex {
                 self.context_menu_overlay(window_id),
                 self.overlay_owner(window_id),
             )),
-            OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay()),
-            OverlayId::ProjectTreeContextMenu => {
-                layers.extend(self.project_tree_context_menu_overlay())
-            }
+            OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay(window_id)),
+            OverlayId::ProjectTreeContextMenu => layers.extend(scoped_to_window(
+                self.project_tree_context_menu_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
             OverlayId::ComponentsRowContextMenu => {
                 layers.extend(self.components_row_context_menu_overlay(window_id))
             }
@@ -410,7 +411,7 @@ impl Signex {
             }
             OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay(window_id)),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
-            OverlayId::FindReplace => layers.extend(self.find_replace_overlay()),
+            OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
@@ -443,7 +444,7 @@ impl Signex {
             OverlayId::StockCopy => layers.extend(self.stock_copy_overlay()),
             OverlayId::CloseLibraryConfirm => layers.extend(self.close_library_confirm_overlay()),
             OverlayId::LibraryRecovery => layers.extend(self.library_recovery_overlay()),
-            OverlayId::CommandPalette => layers.extend(self.command_palette_overlay()),
+            OverlayId::CommandPalette => layers.extend(self.command_palette_overlay(window_id)),
             OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip(window_id)),
             OverlayId::LibraryUpdates => layers.extend(self.library_updates_overlay()),
         }

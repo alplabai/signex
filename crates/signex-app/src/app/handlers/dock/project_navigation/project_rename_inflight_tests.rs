@@ -135,7 +135,7 @@ fn history_restore_is_refused_in_a_moving_project() {
     let id = fx.app.document_state.projects[0].id;
     fx.app.document_state.mark_documents_clean_where(|_| true);
     fx.app.document_state.project_folder_renames.insert(id);
-    drop(fx.app.handle_history_restore_clicked("abc123"));
+    drop(fx.app.click_restore_on_listed_history("abc123"));
     let notice = fx.app.document_state.error_notice.take().expect("notice");
     assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
 }

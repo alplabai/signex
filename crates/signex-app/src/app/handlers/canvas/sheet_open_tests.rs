@@ -58,8 +58,16 @@ impl Signex {
         finish_read(self, task);
     }
 
-    /// [`Self::ascend_to_parent_sheet`], read to the end.
+    /// Finish the off-thread Navigator rebuild the open tabs call for, as
+    /// the runtime would before the user presses Up Hierarchy.
+    pub(crate) fn settle_hierarchy(&mut self) {
+        self.refresh_panel_ctx();
+        self.settle_navigator();
+    }
+
+    /// [`Self::ascend_to_parent_sheet`] on a settled hierarchy, read to the end.
     pub(crate) fn ascend_settled(&mut self) {
+        self.settle_hierarchy();
         let task = self.ascend_to_parent_sheet();
         finish_read(self, task);
     }

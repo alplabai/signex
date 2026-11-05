@@ -300,10 +300,11 @@ pub enum Command {
     /// nothing is mutated then. One undo step.
     ReplaceLibSymbol {
         lib_symbol: LibSymbol,
-        /// `(placed symbol uuid, library_version)` stamps applied in the
-        /// same undo step: the version is informational, the content is the
-        /// truth (#950).
-        library_versions: Vec<(uuid::Uuid, String)>,
+        /// `(placed symbol uuid, link stamp)` stamps applied in the same
+        /// undo step: the pinned version (informational, the content is the
+        /// truth, #950) and the row values the part last agreed with, which
+        /// move together (#2004).
+        library_versions: Vec<(uuid::Uuid, signex_types::schematic::LinkStamp)>,
     },
     /// Swap the placed symbol `symbol_id` for another library part
     /// ("Change Component...", #1260): register the part's drawing, re-key

@@ -24,6 +24,14 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: SymbolEditorMsg) 
                 editor.canvas_cache.clear();
             }
         }
+        SymbolEditorMsg::ZoomFactor { sx, sy, factor } => {
+            if editor
+                .camera
+                .zoom_by_factor(iced::Point::new(sx, sy), factor)
+            {
+                editor.canvas_cache.clear();
+            }
+        }
         // Queue only: the canvas reports its real size next event and
         // `ViewportMeasured` does the fit against it.
         SymbolEditorMsg::Fit => {

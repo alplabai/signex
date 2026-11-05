@@ -420,6 +420,7 @@ fn deliver(
             grid_style: signex_app::render_config::GridStyle::Dots,
             auto_focus: false,
             zoom_step: 1.1,
+            trackpad_pan: false,
             draw_mode: signex_app::app::DrawMode::Ortho90,
             current_tool: signex_app::app::Tool::Select,
             window_width: 1400.0,

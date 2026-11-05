@@ -8,12 +8,15 @@
 //! completion, one undo step per `lib_id`.
 
 use super::*;
-use crate::library::drift::{
-    ApplyInput, SymbolRead, SymbolsRead, VERSION_NOT_STAMPED, apply_input, rebound_row_warning,
-    row_binds_lib_id,
-};
+use crate::library::drift::{ApplyInput, CapturedStamp, SymbolRead, SymbolsRead, apply_input};
 use crate::library::part_sync::PartSync;
-use signex_types::schematic::LibSymbol;
+use signex_types::schematic::{LibSymbol, LinkStamp};
+
+mod scan;
+use scan::{
+    Instance, InstanceRow, PersonalUpdates, PlacedLibrarySymbol, blocker, bound_instances,
+    modal_entry, personal_link,
+};
 
 // ─────────────────────────────────────────────────────────────────────
 // Stage 16 — Library Updates Available scan + apply (§3.5)
@@ -27,6 +30,19 @@ impl Signex {
     ) -> Task<Message> {
         if let Some(state) = self.library.library_updates.as_mut() {
             state.toggle(symbol_uuid);
+        }
+        Task::none()
+    }
+
+    /// The user answered one conflict of a part in the Library Updates modal.
+    pub(super) fn handle_library_updates_conflict_answered(
+        &mut self,
+        symbol_uuid: uuid::Uuid,
+        field: signex_types::schematic::StampField,
+        choice: crate::library::part_sync::Choice,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_updates.as_mut() {
+            state.answer_conflict(symbol_uuid, field, choice);
         }
         Task::none()
     }
@@ -179,39 +195,57 @@ impl Signex {
         let mut team_entries = Vec::new();
         let mut personal_apply: PersonalUpdates = std::collections::BTreeMap::new();
         for (lib_id, group) in by_lib {
-            let stale = stale_bound(&group, &lib_id, &mut any_failed);
-            if stale.is_empty() {
+            let bound = bound_instances(&group, &lib_id, &mut any_failed);
+            if bound.is_empty() {
                 continue;
             }
-            let team = stale
-                .iter()
-                .any(|(_, r)| r.mode != signex_library::WorkflowMode::Personal);
-            let blocked = group
-                .iter()
-                .find_map(|(s, r)| blocker(s, r.as_ref(), &lib_id));
-            if team {
-                team_entries.extend(stale.into_iter().map(|(s, r)| team_entry(s.clone(), r)));
-            } else if let Some(why) = blocked {
+            // Only the moved parts say whose mode rules; with none moved,
+            // the parts that hold a conflict do.
+            let any_stale = bound.iter().any(|(_, r)| r.stale);
+            let team = bound.iter().any(|(_, r)| {
+                (r.stale || !any_stale) && r.mode != signex_library::WorkflowMode::Personal
+            });
+            // The shared copy cannot move, and only a moved copy needs the
+            // check below.
+            let blocked = (!team && any_stale)
+                .then(|| {
+                    group
+                        .iter()
+                        .find_map(|(s, r)| blocker(s, r.as_ref(), &lib_id))
+                })
+                .flatten();
+            if let Some(why) = blocked {
                 crate::diagnostics::log_warning(why);
                 any_failed = true;
-            } else {
-                // Built once per `lib_id`: the stamps, the opened library and
-                // each row's footprint name serve every instance of it.
-                let mut sync_check = self.part_sync_check(&schematic_path, &lib_id);
-                for (symbol, row) in stale {
-                    // A part that does not hold its row's footprint /
-                    // Manufacturer / MPN yet keeps its old stamp: restamping
-                    // would read as "row unchanged" and hide that drift.
-                    let restamp = !sync_check
-                        .as_mut()
-                        .is_some_and(|check| check.pending(symbol.uuid, &row.row));
-                    any_failed |= !self.collect_personal_update(
-                        symbol.clone(),
-                        restamp.then_some(row.row.version.as_str()),
-                        &mut read_cache,
-                        &mut personal_apply,
-                    );
+                continue;
+            }
+            // Built once per `lib_id`: the stamps, the opened library and
+            // each row's footprint name serve every instance of it.
+            // ponytail: this opens libraries and reads footprints inline, like
+            // `instance_row`; the whole scan moves off-thread under #893.
+            let mut sync_check = self.part_sync_check(&schematic_path, &lib_id);
+            for (symbol, row) in bound {
+                let eval = sync_check
+                    .as_mut()
+                    .and_then(|check| check.eval(symbol.uuid, &row.row));
+                let conflicts = eval.as_ref().map(|e| e.conflicts()).unwrap_or_default();
+                if !row.stale && conflicts.is_empty() {
+                    continue;
                 }
+                if team || !conflicts.is_empty() {
+                    team_entries.push(modal_entry(symbol.clone(), row, conflicts));
+                }
+                if team || !row.stale {
+                    continue;
+                }
+                let link =
+                    personal_link(row.row.version.clone(), sync_check.is_some(), eval.as_ref());
+                any_failed |= !self.collect_personal_update(
+                    symbol.clone(),
+                    link,
+                    &mut read_cache,
+                    &mut personal_apply,
+                );
             }
         }
 
@@ -401,7 +435,7 @@ impl Signex {
     fn collect_personal_update(
         &self,
         symbol: PlacedLibrarySymbol,
-        latest_version: Option<&str>,
+        link: Option<LinkStamp>,
         read_cache: &mut std::collections::HashMap<String, Result<LibSymbol, String>>,
         queue: &mut PersonalUpdates,
     ) -> bool {
@@ -413,8 +447,8 @@ impl Signex {
                 let entry = queue
                     .entry(symbol.lib_id.clone())
                     .or_insert_with(|| (fresh.clone(), Vec::new()));
-                if let Some(version) = latest_version {
-                    entry.1.push((symbol.uuid, version.to_string()));
+                if let Some(link) = link {
+                    entry.1.push((symbol.uuid, link));
                 }
                 true
             }
@@ -571,15 +605,26 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    let lines: Vec<String> = r.part_syncs.iter().map(PartSync::describe).collect();
-                    let landed = self.adopt_library_symbol(
-                        sheet,
-                        &r.lib_id,
-                        fresh,
-                        r.stamps,
-                        r.part_syncs,
-                        true,
-                    );
+                    let (stamps, relinked) = self.stamps_still_linked(sheet, r.stamps);
+                    let mut part_syncs = r.part_syncs;
+                    part_syncs.retain(|sync| !relinked.contains(&sync.symbol));
+                    let (mut stamps, part_syncs, held) =
+                        match self.document_state.engines.get(sheet) {
+                            Some(engine) => crate::library::part_sync::hold_back_locked(
+                                engine, stamps, part_syncs,
+                            ),
+                            None => (stamps, part_syncs, Vec::new()),
+                        };
+                    for reference in &held {
+                        crate::diagnostics::log_warning(format!(
+                            "{reference} is locked; its footprint/MPN was not updated from the library. Unlock it to apply."
+                        ));
+                        all_applied = false;
+                    }
+                    let part_syncs = self.revalidated_part_syncs(sheet, part_syncs, &mut stamps);
+                    let lines: Vec<String> = part_syncs.iter().flat_map(PartSync::lines).collect();
+                    let landed = self
+                        .adopt_library_symbol(sheet, &r.lib_id, fresh, stamps, part_syncs, true);
                     if landed {
                         lines.iter().for_each(crate::diagnostics::log_info);
                     }
@@ -599,6 +644,75 @@ impl Signex {
         all_applied
     }
 
+    /// The worker decided each part against the values captured at Apply;
+    /// check them against the parts as they are now, so an edit made while
+    /// the worker ran is never overwritten (#2070). A part no longer on the
+    /// sheet loses its sync.
+    fn revalidated_part_syncs(
+        &self,
+        sheet: &std::path::Path,
+        syncs: Vec<PartSync>,
+        stamps: &mut [(uuid::Uuid, LinkStamp)],
+    ) -> Vec<PartSync> {
+        let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
+            return Vec::new();
+        };
+        crate::library::part_sync::revalidate_parts(syncs, stamps, doc)
+    }
+
+    /// The stamps for parts still on the row and version they were computed
+    /// for (#2070), as `(placed symbol, stamp)`, and the parts that were
+    /// re-linked while the worker ran: those get neither stamp nor sync, and
+    /// a Messages line.
+    fn stamps_still_linked(
+        &self,
+        sheet: &std::path::Path,
+        stamps: Vec<CapturedStamp>,
+    ) -> (Vec<(uuid::Uuid, LinkStamp)>, Vec<uuid::Uuid>) {
+        let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
+            return (Vec::new(), Vec::new());
+        };
+        // One part is one link: a re-linked unit takes its siblings with it.
+        let groups = signex_types::schematic::group_into_parts(
+            doc.symbols
+                .iter()
+                .map(signex_types::schematic::Symbol::part_key),
+        );
+        let mut relinked = Vec::new();
+        for c in &stamps {
+            let Some(index) = doc.symbols.iter().position(|s| s.uuid == c.symbol) else {
+                continue;
+            };
+            let live = &doc.symbols[index];
+            if relinked.contains(&c.symbol)
+                || (live.row_id == Some(c.row_id) && live.library_version == c.library_version)
+            {
+                continue;
+            }
+            crate::diagnostics::log_warning(format!(
+                "{} was re-linked while the update ran; its update was skipped",
+                live.reference
+            ));
+            let unit_ids = groups
+                .iter()
+                .find(|g| g.contains(&index))
+                .into_iter()
+                .flatten()
+                .map(|&i| doc.symbols[i].uuid);
+            for id in unit_ids {
+                if !relinked.contains(&id) {
+                    relinked.push(id);
+                }
+            }
+        }
+        let kept = stamps
+            .into_iter()
+            .filter(|c| !relinked.contains(&c.symbol))
+            .map(|c| (c.symbol, c.link))
+            .collect();
+        (kept, relinked)
+    }
+
     /// Adopt `fresh` as the embedded copy of `lib_id` on `sheet` and stamp
     /// `stamps` (`(placed symbol, row version)`) in one step. The engine
     /// refuses when a connected pin would vanish or move: then the copy and
@@ -611,7 +725,7 @@ impl Signex {
         sheet: &std::path::Path,
         lib_id: &str,
         fresh: LibSymbol,
-        stamps: Vec<(uuid::Uuid, String)>,
+        stamps: Vec<(uuid::Uuid, LinkStamp)>,
         part_syncs: Vec<PartSync>,
         record_history: bool,
     ) -> bool {
@@ -694,102 +808,5 @@ impl Signex {
                 true
             }
         }
-    }
-}
-
-/// A library-backed symbol placed on the sheet being scanned.
-#[derive(Clone)]
-struct PlacedLibrarySymbol {
-    uuid: uuid::Uuid,
-    reference: String,
-    library_id: uuid::Uuid,
-    row_id: RowId,
-    version: String,
-    lib_id: String,
-}
-
-/// A placed symbol's library row.
-struct InstanceRow {
-    /// Its version differs from the placed symbol's.
-    stale: bool,
-    mode: signex_library::WorkflowMode,
-    library_name: String,
-    library_path: std::path::PathBuf,
-    row: signex_library::ComponentRow,
-}
-
-/// Per `lib_id`: the library's symbol and the `(placed symbol, version)`
-/// stamps to apply with it.
-type PersonalUpdates = std::collections::BTreeMap<String, (LibSymbol, Vec<(uuid::Uuid, String)>)>;
-
-/// A placed instance with its row (`None`: unreadable).
-type Instance = (PlacedLibrarySymbol, Option<InstanceRow>);
-
-/// The stale instances of `lib_id` whose row still binds it. A stale row
-/// re-bound to another symbol is logged and counted in `any_failed`.
-fn stale_bound<'a>(
-    group: &'a [Instance],
-    lib_id: &str,
-    any_failed: &mut bool,
-) -> Vec<(&'a PlacedLibrarySymbol, &'a InstanceRow)> {
-    let mut stale = Vec::new();
-    for (symbol, row) in group {
-        let Some(row) = row.as_ref().filter(|r| r.stale) else {
-            continue;
-        };
-        if row_binds_lib_id(&row.row, lib_id) {
-            stale.push((symbol, row));
-        } else {
-            crate::diagnostics::log_warning(rebound_row_warning(
-                &symbol.reference,
-                symbol.row_id,
-                lib_id,
-                VERSION_NOT_STAMPED,
-            ));
-            *any_failed = true;
-        }
-    }
-    stale
-}
-
-/// Why `symbol` stops its `lib_id` from being auto-applied: the shared copy
-/// moves only when every instance has a readable Personal-mode row that
-/// still binds it. The Messages line names the instance.
-fn blocker(
-    symbol: &PlacedLibrarySymbol,
-    row: Option<&InstanceRow>,
-    lib_id: &str,
-) -> Option<String> {
-    let reason = match row {
-        None => "its library row is unreadable",
-        Some(r) if !row_binds_lib_id(&r.row, lib_id) => "its row binds a different symbol",
-        Some(r) if r.mode != signex_library::WorkflowMode::Personal => "its library is Team-mode",
-        Some(_) => return None,
-    };
-    Some(format!(
-        "{}: {reason}, so the shared copy was not auto-updated ({lib_id}).",
-        symbol.reference
-    ))
-}
-
-/// The Team-mode modal row for a stale `symbol`.
-fn team_entry(
-    symbol: PlacedLibrarySymbol,
-    stale: &InstanceRow,
-) -> crate::library::updates_dialog::LibraryUpdateEntry {
-    let bump_kind =
-        crate::library::updates_dialog::classify_bump(&symbol.version, &stale.row.version);
-    crate::library::updates_dialog::LibraryUpdateEntry {
-        symbol_uuid: symbol.uuid,
-        ref_des: symbol.reference,
-        lib_id: symbol.lib_id,
-        library_id: symbol.library_id,
-        library_name: stale.library_name.clone(),
-        row_id: symbol.row_id,
-        library_path: stale.library_path.clone(),
-        current_version: symbol.version,
-        latest_version: stale.row.version.clone(),
-        bump_kind,
-        selected: false,
     }
 }

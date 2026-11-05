@@ -5,8 +5,8 @@ use iced::widget::operation;
 
 use super::super::*;
 use crate::app::command_palette::{
-    COMMAND_PALETTE_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, catalog_stamp,
-    rank_results,
+    COMMAND_PALETTE_INPUT_ID, COMMAND_PALETTE_WINDOW_INPUT_ID, CommandAction, MAX_RESULTS,
+    build_catalog, catalog_stamp, rank_results,
 };
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
@@ -16,19 +16,34 @@ impl Signex {
         message: CommandPaletteMsg,
     ) -> Task<Message> {
         match message {
-            CommandPaletteMsg::Open => self.open_command_palette(),
+            CommandPaletteMsg::Open => {
+                self.ui_state.command_palette.window = None;
+                self.open_command_palette()
+            }
+            CommandPaletteMsg::OpenInWindow(window) => {
+                self.ui_state.command_palette.window = self.overlay_owner(window);
+                self.open_command_palette()
+            }
             CommandPaletteMsg::Close => {
                 self.ui_state.command_palette.open = false;
                 Task::none()
             }
             CommandPaletteMsg::QueryChanged(q) => {
-                self.ui_state.command_palette.query = q;
-                self.ui_state.command_palette.selected_index = 0;
                 // First keystroke promotes a passive (placeholder)
-                // chrome bar into a live palette.
-                self.ui_state.command_palette.open = true;
-                self.refresh_command_palette_results();
-                self.start_palette_index()
+                // chrome bar into a live palette. The bar is the main
+                // window's, so the typed query is the main window's.
+                self.ui_state.command_palette.window = None;
+                self.change_palette_query(q)
+            }
+            CommandPaletteMsg::QueryTypedInWindow(window, q) => {
+                // A late keystroke for a palette that closed or moved to
+                // another window is stale.
+                if !self.ui_state.command_palette.open
+                    || self.ui_state.command_palette.window != Some(window)
+                {
+                    return Task::none();
+                }
+                self.change_palette_query(q)
             }
             CommandPaletteMsg::IndexBuilt { generation, result } => {
                 self.apply_palette_index(generation, &result);
@@ -46,15 +61,28 @@ impl Signex {
         }
     }
 
+    fn change_palette_query(&mut self, query: String) -> Task<Message> {
+        self.ui_state.command_palette.query = query;
+        self.ui_state.command_palette.selected_index = 0;
+        self.ui_state.command_palette.open = true;
+        self.refresh_command_palette_results();
+        self.start_palette_index()
+    }
+
     fn open_command_palette(&mut self) -> Task<Message> {
         self.ui_state.command_palette.open = true;
         self.ui_state.command_palette.selected_index = 0;
         self.refresh_command_palette_results();
+        let input = if self.ui_state.command_palette.window.is_some() {
+            COMMAND_PALETTE_WINDOW_INPUT_ID.clone()
+        } else {
+            COMMAND_PALETTE_INPUT_ID.clone()
+        };
         // Focus + select-all so a fresh `Ctrl+Shift+P` can be typed
         // over without the user clearing the previous query manually.
         Task::batch([
-            operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
-            operation::text_input::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            operation::focus(input.clone()),
+            operation::text_input::select_all(input),
             // The project-wide rows come from an index built off-thread.
             self.start_palette_index(),
         ])
@@ -123,6 +151,7 @@ impl Signex {
         // Close palette before dispatching so re-entrant updates
         // (e.g. a menu that itself opens a modal) don't fight an
         // open dropdown.
+        let window = self.ui_state.command_palette.window;
         self.ui_state.command_palette.open = false;
         self.ui_state.command_palette.query.clear();
         self.ui_state.command_palette.selected_index = 0;
@@ -134,13 +163,15 @@ impl Signex {
             // between `build_catalog` and here is a no-op rather than a
             // panic; `core_to_message` logs which one and why.
             CommandAction::Command(command) => {
-                self.dispatch_command(&command, crate::app::command::CommandArgs::none(), None)
+                self.dispatch_command(&command, crate::app::command::CommandArgs::none(), window)
             }
             CommandAction::Panel(panel) => {
                 Task::done(Message::Overlay(OverlayMsg::OpenPanel(panel)))
             }
             CommandAction::OpenFile(path) => Task::done(Message::File(FileMsg::Opened(Some(path)))),
-            CommandAction::FocusSymbol { reference } => self.focus_symbol_by_reference(&reference),
+            CommandAction::FocusSymbol { reference } => {
+                self.focus_symbol_by_reference(&reference, window)
+            }
             CommandAction::Reveal {
                 path,
                 placement,
@@ -201,8 +232,14 @@ impl Signex {
     /// engine and dispatch a `FocusAt` to centre + select it. No-op
     /// when nothing matches (e.g. the symbol was deleted between
     /// catalog build and Enter press).
-    fn focus_symbol_by_reference(&self, reference: &str) -> Task<Message> {
-        let Some(active_path) = self.document_state.active_path.clone() else {
+    fn focus_symbol_by_reference(
+        &mut self,
+        reference: &str,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        // A palette opened in an undocked window offers that window's
+        // symbols: they are found and focused on its sheet.
+        let Some(active_path) = self.palette_sheet_path(window) else {
             return Task::none();
         };
         let Some(engine) = self.document_state.engines.get(&active_path) else {
@@ -216,14 +253,38 @@ impl Signex {
         else {
             return Task::none();
         };
-        Task::done(Message::Overlay(OverlayMsg::FocusAt {
-            world_x: symbol.position.x,
-            world_y: symbol.position.y,
-            select: Some(signex_types::schematic::SelectedItem {
-                uuid: symbol.uuid,
-                kind: signex_types::schematic::SelectedKind::Symbol,
-            }),
-        }))
+        let (x, y) = (symbol.position.x, symbol.position.y);
+        let item = signex_types::schematic::SelectedItem {
+            uuid: symbol.uuid,
+            kind: signex_types::schematic::SelectedKind::Symbol,
+        };
+        match window.filter(|w| self.is_document_window(*w)) {
+            Some(window) => {
+                self.run_in_window_document(window, |app| app.handle_focus_at(x, y, Some(item)))
+            }
+            None => Task::done(Message::Overlay(OverlayMsg::FocusAt {
+                world_x: x,
+                world_y: y,
+                select: Some(item),
+            })),
+        }
+    }
+
+    /// The sheet a palette opened in `window` reads symbols from.
+    fn palette_sheet_path(&self, window: Option<iced::window::Id>) -> Option<std::path::PathBuf> {
+        match window.and_then(|w| self.ui_state.windows.get(&w)) {
+            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => Some(path.clone()),
+            _ => self.document_state.active_path.clone(),
+        }
+    }
+
+    /// The panel context whose placed symbols the palette lists: the window's
+    /// it was opened in, else the main window's.
+    pub(crate) fn palette_panel_ctx(&self) -> &crate::panels::PanelContext {
+        match self.ui_state.command_palette.window {
+            Some(window) => self.panel_ctx_for(window),
+            None => &self.document_state.panel_ctx,
+        }
     }
 }
 

@@ -6,24 +6,7 @@ use signex_widgets::tree_view::{TreeMsg, resolve_path, toggle};
 
 use super::super::super::*;
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
-use crate::app::project_sheets::assemble_project_sheets;
-use crate::app::sheet_hierarchy::{
-    SheetNodeKind, parent_sheet, parent_sheet_placing, symbol_centre, symbol_referencing,
-};
-
-/// The sheet symbol `symbol` on `parent`, with its centre.
-fn symbol_on(
-    sheets: &std::collections::HashMap<std::path::PathBuf, signex_types::schematic::SchematicSheet>,
-    parent: &std::path::Path,
-    symbol: uuid::Uuid,
-) -> Option<(uuid::Uuid, signex_types::schematic::Point)> {
-    let found = sheets
-        .get(parent)?
-        .child_sheets
-        .iter()
-        .find(|cs| cs.uuid == symbol)?;
-    Some((found.uuid, symbol_centre(found)))
-}
+use crate::app::sheet_hierarchy::SheetNodeKind;
 
 impl Signex {
     /// `None` when `panel_msg` is not a Navigator message, so the dock
@@ -133,69 +116,68 @@ impl Signex {
 
     /// Move from the focused sheet to the sheet that references it.
     ///
-    /// A file instantiated from several parents has several; the first by
-    /// path is taken (see [`parent_sheet`]). The root, and a sheet nothing
-    /// references, have no parent — said in the Messages panel, not silently
-    /// ignored.
+    /// Read from the cached Navigator hierarchy, never from disk. A file
+    /// instantiated from several parents has several; the placement the tab
+    /// was entered by names one, else the first by path is taken. The root,
+    /// a sheet nothing references, and a project whose hierarchy is not
+    /// cached are said in the Messages panel, not silently ignored. This only
+    /// reads, so a hierarchy mid-rebuild is used as cached; a stale placement
+    /// is rejected by `parent_through`.
     pub(crate) fn ascend_to_parent_sheet(&mut self) -> Task<Message> {
         let Some(active) = self.active_tab_path() else {
             crate::diagnostics::log_warning("Up Hierarchy: no sheet is focused");
             return Task::none();
         };
-        let Some((root, pages, fold)) = self.navigator_project_scope() else {
+        if self.navigator_project_scope().is_none() {
             crate::diagnostics::log_warning(
                 "Up Hierarchy: the focused sheet is not part of a loaded project",
             );
             return Task::none();
-        };
-        let set = assemble_project_sheets(&self.document_state, &pages, &root, fold);
-        // A recorded placement names the exact sheet symbol the user came
-        // through, so it also names the parent; without one the first parent
-        // by path is taken. The parent then inherits the placement one level up.
-        let came_through = self
-            .document_state
-            .tab_placements
-            .get(&active)
-            .cloned()
-            .and_then(|placement| Some((placement.chain().last().copied()?, placement)));
-        let placed_parent = came_through.as_ref().and_then(|(symbol, placement)| {
-            Some((
-                parent_sheet_placing(&set.sheets, *symbol)?,
-                placement.parent(),
-            ))
-        });
-        let (parent, symbol, open) = match placed_parent {
-            Some((parent, placement)) => {
-                let symbol = came_through
-                    .as_ref()
-                    .and_then(|(symbol, _)| symbol_on(&set.sheets, &parent, *symbol));
-                (parent, symbol, SheetOpen::at(placement))
+        }
+        let step = {
+            let navigator = &self.document_state.panel_ctx.navigator;
+            let Some(hierarchy) = navigator.hierarchy.as_ref() else {
+                let wording = if self.document_state.navigator_job.is_exhausted() {
+                    "the project hierarchy could not be read"
+                } else {
+                    "the project hierarchy has not been read yet"
+                };
+                crate::diagnostics::log_warning(format!("Up Hierarchy: {wording}"));
+                return Task::none();
+            };
+            // A recorded placement names the exact sheet symbol the user came
+            // through, so it also names the parent, which then inherits the
+            // placement one level up.
+            let through = self
+                .document_state
+                .tab_placements
+                .get(&active)
+                .and_then(|placement| hierarchy.parent_through(placement, &active));
+            match through {
+                Some(step) => Some((SheetOpen::at(Some(step.placement.clone())), step)),
+                None => hierarchy
+                    .first_parent_of(&active)
+                    .map(|step| (SheetOpen::plain(), step)),
             }
-            None => match parent_sheet(&set.sheets, &active, fold) {
-                Some(parent) => {
-                    let symbol = symbol_referencing(&set.sheets, &parent, &active, fold);
-                    (parent, symbol, SheetOpen::plain())
-                }
-                None => {
-                    crate::diagnostics::log_warning(format!(
-                        "{} has no parent sheet: it is the project root or no sheet references it",
-                        active.display()
-                    ));
-                    return Task::none();
-                }
-            },
+        };
+        let Some((open, step)) = step else {
+            let reason = if self.navigator_is_settled() {
+                "it is the project root, no sheet references it, or it lies past the hierarchy's size limit"
+            } else {
+                "the project hierarchy is still being read"
+            };
+            crate::diagnostics::log_warning(format!(
+                "Up Hierarchy: {} has no parent sheet: {reason}",
+                active.display()
+            ));
+            return Task::none();
         };
         // Land on the sheet symbol that instantiates the sheet just left, once
         // the parent is showing.
-        let then = symbol.map_or(AfterOpen::Nothing, |(symbol, centre)| AfterOpen::FocusAt {
-            x: centre.x,
-            y: centre.y,
-            item: Some(signex_types::schematic::SelectedItem::new(
-                symbol,
-                signex_types::schematic::SelectedKind::ChildSheet,
-            )),
-        });
-        self.open_sheet(parent, open.then(then))
+        let then = AfterOpen::FocusSymbol {
+            symbol: step.symbol,
+        };
+        self.open_sheet(step.parent, open.then(then))
     }
 }
 
@@ -468,6 +450,41 @@ mod tests {
             recorded.map(ToString::to_string),
             Some(format!("/{replacement}"))
         );
+    }
+
+    #[test]
+    fn ascend_resolves_the_parent_from_the_cached_hierarchy_not_the_disk() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, [_, mid, leaf]) = three_level_project(&dir, &[]);
+        app.open_or_focus_sheet_path(leaf);
+        app.settle_hierarchy();
+        // The cache still places Leaf under Mid; the file no longer does, so
+        // only a disk read of the closed sheets would lose the parent.
+        write_sheet(dir.path(), "mid.snxsch", &[]);
+
+        let task = app.ascend_to_parent_sheet();
+        crate::app::handlers::canvas::sheet_open_tests::finish_read(&mut app, task);
+
+        assert_eq!(active_tab(&app), Some(mid));
+    }
+
+    #[test]
+    fn ascend_right_after_descending_does_not_wait_for_the_rebuild() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, [root, mid, _]) = three_level_project(&dir, &[]);
+        app.open_or_focus_sheet_path(root.clone());
+        app.refresh_panel_ctx();
+        app.settle_navigator();
+
+        double_click(&mut app, &[0, 0]);
+        app.refresh_panel_ctx();
+        assert_eq!(active_tab(&app), Some(mid), "descended into Mid");
+        assert!(!app.navigator_is_settled(), "precondition: rebuild pending");
+
+        let task = app.ascend_to_parent_sheet();
+        crate::app::handlers::canvas::sheet_open_tests::finish_read(&mut app, task);
+
+        assert_eq!(active_tab(&app), Some(root));
     }
 
     #[test]

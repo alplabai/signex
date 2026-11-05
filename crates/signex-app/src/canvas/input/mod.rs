@@ -41,9 +41,14 @@ impl SchematicCanvas<'_> {
     ) -> Option<canvas::Action<Message>> {
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let action = self.update_wheel_scrolled(delta, bounds, cursor);
+                let action = self.update_wheel_scrolled(delta, state.zoom_modifier, bounds, cursor);
                 // A zoom changes the ghost's step (`ghost_delta`); without
                 // this the drag shows the plain shift until the cursor moves.
+                self.refresh_drag_ghost(state);
+                action
+            }
+            Event::Mouse(mouse::Event::PinchGesture { delta }) => {
+                let action = self.update_pinch_gesture(*delta, bounds, cursor);
                 self.refresh_drag_ghost(state);
                 action
             }

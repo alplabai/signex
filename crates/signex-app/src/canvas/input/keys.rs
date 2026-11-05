@@ -8,6 +8,7 @@ impl SchematicCanvas<'_> {
         mods: &iced::keyboard::Modifiers,
     ) -> Option<canvas::Action<Message>> {
         state.ctrl_held = mods.command();
+        state.zoom_modifier = mods.command() || mods.control();
         state.shift_held = mods.shift();
         let alt_changed = state.alt_held != mods.alt();
         state.alt_held = mods.alt();

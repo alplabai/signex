@@ -354,11 +354,9 @@ fn only_commands_that_edit_the_shown_sheet_run_in_a_windows_swap() {
 }
 
 #[test]
-fn history_restore_and_erc_focus_from_an_undocked_window_run_on_the_main_window() {
+fn erc_focus_and_library_rows_from_an_undocked_window_run_on_the_main_window() {
     let f = fixture();
     for message in [
-        crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
-        crate::panels::PanelMsg::HistoryRestoreCancelled,
         crate::panels::PanelMsg::FocusErcViolation(0),
         crate::panels::PanelMsg::FocusNextErcDiagnostic,
         crate::panels::PanelMsg::FocusPrevErcDiagnostic,
@@ -371,23 +369,6 @@ fn history_restore_and_erc_focus_from_an_undocked_window_run_on_the_main_window(
             "{message:?} would run inside the window's swap"
         );
     }
-}
-
-#[test]
-fn a_history_restore_click_in_an_undocked_window_leaves_that_windows_sheet_alone() {
-    let mut f = fixture();
-    let before = f.app.document_state.engines[&f.window_path].revision();
-    let sent = f.app.scope_dock_message(
-        f.window,
-        dock(crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() }),
-    );
-    let _ = f.app.update(sent);
-    assert_eq!(
-        f.app.document_state.engines[&f.window_path].revision(),
-        before
-    );
-    assert_eq!(wires_shown_in(&f.app, f.window), Some(1));
-    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
 }
 
 #[test]
@@ -1257,3 +1238,6 @@ fn a_descent_from_a_window_reaches_an_open_child_that_is_not_on_disk() {
 
 #[path = "window_action_context_tests.rs"]
 mod context;
+
+#[path = "window_surface_tests.rs"]
+mod surfaces;

@@ -133,6 +133,8 @@ pub struct SymbolCanvas<'a> {
     /// (`UiState::device_px_per_logical_px`); the stroke floor works in it
     /// (#1887). Set with [`Self::with_device_px_per_logical_px`].
     pub device_px_per_logical_px: f32,
+    /// "Two-finger scroll pans" preference. Set with [`Self::with_trackpad_pan`].
+    pub trackpad_pan: bool,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -190,6 +192,7 @@ impl<'a> SymbolCanvas<'a> {
             text_color: palette.text,
             axis_color: palette.axis,
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+            trackpad_pan: false,
         }
     }
 
@@ -201,6 +204,12 @@ impl<'a> SymbolCanvas<'a> {
     /// Draw with the stroke floor of a window with this display scale.
     pub fn with_device_px_per_logical_px(mut self, device_px_per_logical_px: f32) -> Self {
         self.device_px_per_logical_px = device_px_per_logical_px;
+        self
+    }
+
+    /// Let a pixel-delta (trackpad) scroll pan instead of zoom.
+    pub fn with_trackpad_pan(mut self, trackpad_pan: bool) -> Self {
+        self.trackpad_pan = trackpad_pan;
         self
     }
 
@@ -428,7 +437,14 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             }
             Event::Mouse(mouse::Event::CursorLeft) => self.on_cursor_left(state),
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                self.on_wheel_scrolled(delta, bounds, cursor)
+                self.on_wheel_scrolled(state, delta, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::PinchGesture { delta }) => {
+                self.on_pinch_gesture(*delta, bounds, cursor)
+            }
+            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
+                state.zoom_modifier = mods.command() || mods.control();
+                None
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 self.on_left_release(state)

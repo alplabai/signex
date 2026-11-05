@@ -127,11 +127,17 @@ impl Signex {
         }
 
         let size = iced::Size::new(1400.0, 900.0);
+        let position = self.new_window_position(
+            size,
+            crate::app::handlers::window_placement::Anchor::SourceCenter,
+            iced::window::Position::Default,
+        );
         let (id, open_task) = iced::window::open(iced::window::Settings {
             size,
             resizable: true,
             decorations: true,
             exit_on_close_request: false,
+            position,
             ..Default::default()
         });
         // Stash immediately so the first frame in the new window has a
@@ -184,11 +190,17 @@ impl Signex {
         // its drop preview goes with it.
         self.document_state.dock.drop_preview = None;
 
+        let position = self.new_window_position(
+            size,
+            crate::app::handlers::window_placement::Anchor::SourceCenter,
+            iced::window::Position::Default,
+        );
         let (id, open_task) = iced::window::open(iced::window::Settings {
             size,
             resizable: true,
             decorations: true,
             exit_on_close_request: false,
+            position,
             ..Default::default()
         });
         self.ui_state.windows.insert(
@@ -338,8 +350,14 @@ impl Signex {
             return Task::none();
         }
 
-        let (id, open_task) =
-            iced::window::open(modal_window_settings(modal, self.modal_window_size(modal)));
+        let size = self.modal_window_size(modal);
+        let mut settings = modal_window_settings(modal, size);
+        settings.position = self.new_window_position(
+            size,
+            crate::app::handlers::window_placement::Anchor::MonitorCenter,
+            settings.position,
+        );
+        let (id, open_task) = iced::window::open(settings);
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.

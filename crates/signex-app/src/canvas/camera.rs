@@ -3,7 +3,17 @@
 //! World coordinates are in mm (Standard internal units).
 //! Screen coordinates are in pixels.
 
+use iced::mouse::ScrollDelta;
 use iced::{Point, Rectangle};
+
+/// What one scroll event should do to a camera.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ScrollIntent {
+    /// Zoom about the cursor by this many wheel notches.
+    Zoom { notches: f32 },
+    /// Pan the view by this many screen pixels.
+    Pan { dx: f32, dy: f32 },
+}
 
 /// Camera state for pan and zoom.
 #[derive(Debug, Clone)]
@@ -104,7 +114,14 @@ impl Camera {
         }
 
         let factor = Self::zoom_factor_for_scroll(step, scroll_y);
-        if !factor.is_finite() || factor == 1.0 {
+        self.zoom_by_factor(screen_pos, factor)
+    }
+
+    /// Multiply the scale by `factor` (clamped to the scale range), keeping
+    /// the world point under `screen_pos` fixed. Returns whether the camera
+    /// changed; a non-finite or non-positive factor is ignored.
+    pub fn zoom_by_factor(&mut self, screen_pos: Point, factor: f32) -> bool {
+        if !factor.is_finite() || factor <= 0.0 || factor == 1.0 {
             return false;
         }
 
@@ -120,6 +137,60 @@ impl Camera {
         self.offset.y = screen_pos.y - (screen_pos.y - self.offset.y) * actual_factor;
         self.scale = new_scale;
         true
+    }
+
+    /// Scale factor for one trackpad pinch event (`mouse::Event::PinchGesture`
+    /// delta, positive = zoom in): `1 + delta`, clamped to `[0.5, 2.0]` so one
+    /// event cannot jump the view; a non-finite delta means "no zoom".
+    pub fn pinch_factor(delta: f32) -> f32 {
+        if !delta.is_finite() {
+            return 1.0;
+        }
+        (1.0 + delta).clamp(0.5, 2.0)
+    }
+
+    /// Decide what a scroll event does. A line delta (mouse wheel) and any
+    /// scroll with `zoom_modifier` (Ctrl/Cmd) zoom; a pixel delta (a
+    /// trackpad's two-finger scroll) pans when `trackpad_pan` is on and
+    /// zooms otherwise, as before. `pixels_per_notch` converts a pixel
+    /// delta to notches for the zoom case. Non-finite pan deltas become 0.
+    pub fn scroll_intent(
+        delta: &ScrollDelta,
+        pixels_per_notch: f32,
+        trackpad_pan: bool,
+        zoom_modifier: bool,
+    ) -> ScrollIntent {
+        match *delta {
+            ScrollDelta::Lines { y, .. } => ScrollIntent::Zoom { notches: y },
+            ScrollDelta::Pixels { x, y } if trackpad_pan && !zoom_modifier => ScrollIntent::Pan {
+                dx: if x.is_finite() { x } else { 0.0 },
+                dy: if y.is_finite() { y } else { 0.0 },
+            },
+            ScrollDelta::Pixels { y, .. } => ScrollIntent::Zoom {
+                notches: y / pixels_per_notch,
+            },
+        }
+    }
+
+    /// Apply a scroll event: zoom about `cursor_pos` or pan. Returns whether
+    /// the camera changed.
+    pub fn apply_scroll(
+        &mut self,
+        cursor_pos: Point,
+        intent: ScrollIntent,
+        step: f32,
+        bounds: Rectangle,
+    ) -> bool {
+        match intent {
+            ScrollIntent::Zoom { notches } => self.zoom_at(cursor_pos, notches, step, bounds),
+            ScrollIntent::Pan { dx, dy } => {
+                if dx == 0.0 && dy == 0.0 {
+                    return false;
+                }
+                self.pan(dx, dy);
+                true
+            }
+        }
     }
 
     /// Pan so `world` sits at the viewport centre, keeping the zoom (#525).
@@ -295,5 +366,114 @@ mod tests {
                 "ui_scale {ui_scale}: {before:?} moved to {after:?}"
             );
         }
+    }
+
+    #[test]
+    fn pinch_factor_is_one_plus_delta_clamped_and_ignores_non_finite() {
+        assert!((Camera::pinch_factor(0.1) - 1.1).abs() < 1e-6);
+        assert!((Camera::pinch_factor(-0.1) - 0.9).abs() < 1e-6);
+        assert_eq!(Camera::pinch_factor(0.0), 1.0);
+        assert_eq!(Camera::pinch_factor(5.0), 2.0);
+        assert_eq!(Camera::pinch_factor(-5.0), 0.5);
+        assert_eq!(Camera::pinch_factor(f32::NAN), 1.0);
+        assert_eq!(Camera::pinch_factor(f32::INFINITY), 1.0);
+        assert_eq!(Camera::pinch_factor(f32::NEG_INFINITY), 1.0);
+    }
+
+    #[test]
+    fn zoom_by_factor_keeps_the_anchor_point_fixed() {
+        let mut camera = mid_camera();
+        let anchor = Point::new(321.0, 123.0);
+        let before = camera.screen_to_world(anchor, BOUNDS);
+        let scale_before = camera.scale;
+
+        let changed = camera.zoom_by_factor(anchor, 1.5);
+
+        assert!(changed);
+        assert!((camera.scale / scale_before - 1.5).abs() < 1e-4);
+        let after = camera.screen_to_world(anchor, BOUNDS);
+        assert!((after.x - before.x).abs() < 1e-3 && (after.y - before.y).abs() < 1e-3);
+    }
+
+    #[test]
+    fn zoom_by_factor_clamps_the_scale_and_reports_no_change_at_the_limit() {
+        let mut camera = mid_camera();
+        camera.zoom_by_factor(Point::new(10.0, 10.0), 1.0e6);
+        assert_eq!(camera.scale, Camera::MAX_SCALE);
+        let snapshot = camera.clone();
+        assert!(!camera.zoom_by_factor(Point::new(10.0, 10.0), 2.0));
+        assert_eq!(camera.offset, snapshot.offset);
+
+        camera.zoom_by_factor(Point::new(10.0, 10.0), 1.0e-6);
+        assert_eq!(camera.scale, Camera::MIN_SCALE);
+    }
+
+    #[test]
+    fn zoom_by_factor_ignores_nan_zero_negative_and_unit_factors() {
+        let mut camera = mid_camera();
+        let (offset, scale) = (camera.offset, camera.scale);
+        for factor in [f32::NAN, f32::INFINITY, 0.0, -1.0, 1.0] {
+            assert!(!camera.zoom_by_factor(Point::new(5.0, 5.0), factor));
+        }
+        assert_eq!((camera.offset, camera.scale), (offset, scale));
+    }
+
+    #[test]
+    fn pixel_scroll_zooms_by_default_and_pans_when_trackpad_pan_is_on() {
+        let pixels = ScrollDelta::Pixels { x: 10.0, y: 100.0 };
+        assert_eq!(
+            Camera::scroll_intent(&pixels, 50.0, false, false),
+            ScrollIntent::Zoom { notches: 2.0 }
+        );
+        assert_eq!(
+            Camera::scroll_intent(&pixels, 50.0, true, false),
+            ScrollIntent::Pan {
+                dx: 10.0,
+                dy: 100.0
+            }
+        );
+    }
+
+    #[test]
+    fn lines_and_modified_scroll_keep_zooming_with_trackpad_pan_on() {
+        let lines = ScrollDelta::Lines { x: 0.0, y: 1.0 };
+        assert_eq!(
+            Camera::scroll_intent(&lines, 50.0, true, false),
+            ScrollIntent::Zoom { notches: 1.0 }
+        );
+        let pixels = ScrollDelta::Pixels { x: 0.0, y: 50.0 };
+        assert_eq!(
+            Camera::scroll_intent(&pixels, 50.0, true, true),
+            ScrollIntent::Zoom { notches: 1.0 }
+        );
+    }
+
+    #[test]
+    fn a_non_finite_pan_delta_becomes_zero_and_changes_nothing() {
+        let pixels = ScrollDelta::Pixels {
+            x: f32::NAN,
+            y: f32::INFINITY,
+        };
+        let intent = Camera::scroll_intent(&pixels, 50.0, true, false);
+        assert_eq!(intent, ScrollIntent::Pan { dx: 0.0, dy: 0.0 });
+        let mut camera = mid_camera();
+        let before = camera.offset;
+        assert!(!camera.apply_scroll(Point::new(1.0, 1.0), intent, 1.1, BOUNDS));
+        assert_eq!(camera.offset, before);
+    }
+
+    #[test]
+    fn applying_a_pan_intent_moves_the_offset_and_keeps_the_scale() {
+        let mut camera = mid_camera();
+        let (offset, scale) = (camera.offset, camera.scale);
+        let changed = camera.apply_scroll(
+            Point::new(1.0, 1.0),
+            ScrollIntent::Pan { dx: 7.0, dy: -3.0 },
+            1.1,
+            BOUNDS,
+        );
+        assert!(changed);
+        assert_eq!(camera.offset, Point::new(offset.x + 7.0, offset.y - 3.0));
+        assert_eq!(camera.scale, scale);
     }
 }
