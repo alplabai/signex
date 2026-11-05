@@ -90,6 +90,7 @@ fn default_opts() -> PdfOptions {
         global_bookmarks: false,
         palette: SchematicPalette::classic(),
         net_class_styles: Default::default(),
+        schematic_defaults: Default::default(),
     }
 }
 

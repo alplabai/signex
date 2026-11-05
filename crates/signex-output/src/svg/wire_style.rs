@@ -5,8 +5,8 @@
 //!
 //! - **colour** - the sheet's per-net colour override, else the net class
 //!   colour, else the palette's wire colour;
-//! - **width** - the class width, else the wire's own width, else 0.254 mm; never under the
-//!   0.15 mm floor;
+//! - **width** - the wire's own width, else the class width, else the
+//!   project default, else 0.254 mm; never under the 0.15 mm floor;
 //! - **line style** - the class line style, else solid.
 //!
 //! A dashed or dotted wire is emitted as a run of short sub-paths in one
@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 
 use signex_types::net_class::{NetClassStyle, NetLineStyle};
-use signex_types::schematic::{Junction, Wire};
+use signex_types::schematic::{Junction, SchematicDefaults, Wire};
 use signex_types::theme::Color;
 use uuid::Uuid;
 
@@ -69,8 +69,12 @@ pub(super) fn junction_rgb(
 }
 
 /// The stroke width of `wire` in mm: the one the canvas draws it at.
-pub(super) fn wire_width_mm(wire: &Wire, class: Option<&NetClassStyle>) -> f64 {
-    signex_types::schematic::wire_stroke_mm(
+pub(super) fn wire_width_mm(
+    wire: &Wire,
+    class: Option<&NetClassStyle>,
+    defaults: &SchematicDefaults,
+) -> f64 {
+    defaults.wire_mm(
         wire.stroke_width,
         class.and_then(|style| style.wire_width_mm),
     )
@@ -147,15 +151,24 @@ mod tests {
     }
 
     #[test]
-    fn class_width_replaces_own_and_default_width() {
+    fn own_width_beats_class_beats_default_width() {
+        let b = &SchematicDefaults::BUILT_IN;
         // A default wire exports at the width the canvas draws it at (#1946).
-        assert_eq!(wire_width_mm(&wire(1, 0.0), None), 0.254);
-        assert_eq!(wire_width_mm(&wire(1, 0.3), None), 0.3);
+        assert_eq!(wire_width_mm(&wire(1, 0.0), None, b), 0.254);
+        assert_eq!(wire_width_mm(&wire(1, 0.3), None, b), 0.3);
+        // #2026: an explicit width beats the class; the class fills an unset one.
         assert_eq!(
-            wire_width_mm(&wire(1, 0.3), Some(&style(None, Some(0.8)))),
+            wire_width_mm(&wire(1, 0.3), Some(&style(None, Some(0.8))), b),
+            0.3
+        );
+        assert_eq!(
+            wire_width_mm(&wire(1, 0.0), Some(&style(None, Some(0.8))), b),
             0.8
         );
-        assert_eq!(wire_width_mm(&wire(1, 0.3), Some(&style(None, None))), 0.3);
+        assert_eq!(
+            wire_width_mm(&wire(1, 0.3), Some(&style(None, None)), b),
+            0.3
+        );
     }
 
     #[test]

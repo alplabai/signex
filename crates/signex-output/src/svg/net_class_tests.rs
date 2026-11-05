@@ -90,13 +90,16 @@ fn class_colour_and_width_reach_the_stroke() {
         line: NetLineStyle::Solid,
     });
 
-    let (commands, style) = wire_path(&sheet_with_wire(), &opts);
+    // An unset width, so the class width applies: an explicit one beats it (#2026).
+    let mut sheet = sheet_with_wire();
+    sheet.schematic.wires[0].stroke_width = 0.0;
+    let (commands, style) = wire_path(&sheet, &opts);
 
     assert_eq!(commands.len(), 2);
     assert_eq!(style.stroke_rgb, Some((1.0, 0.0, 0.0)));
     // The page scale is the same for both, so the widths keep the mm ratio.
-    let (_, plain) = wire_path(&sheet_with_wire(), &PdfOptions::default());
-    let expected = plain.stroke_width * (0.5 / 0.15) as f32;
+    let (_, plain) = wire_path(&sheet, &PdfOptions::default());
+    let expected = plain.stroke_width * (0.5 / 0.254) as f32;
     assert!((style.stroke_width - expected).abs() < 1e-3);
 }
 

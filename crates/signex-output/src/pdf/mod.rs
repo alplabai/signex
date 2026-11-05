@@ -155,6 +155,9 @@ pub struct PdfOptions {
     /// draws every wire in the palette colour at its own width, solid.
     pub net_class_styles:
         std::collections::HashMap<uuid::Uuid, signex_types::net_class::NetClassStyle>,
+    /// The project's resolved defaults for unset widths and sizes (#2026),
+    /// the same value the canvas draws with. Built-in by default.
+    pub schematic_defaults: signex_types::schematic::SchematicDefaults,
 }
 
 #[derive(Debug, Clone)]
@@ -261,6 +264,7 @@ impl Default for PdfOptions {
             global_bookmarks: false,
             palette: SchematicPalette::classic(),
             net_class_styles: std::collections::HashMap::new(),
+            schematic_defaults: Default::default(),
         }
     }
 }
