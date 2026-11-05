@@ -110,18 +110,18 @@ fn drawn_part(content: &str) -> &str {
 /// culled before any shaping, so a frame never shapes more than a few short
 /// lines per near-screen text. Its corners are rotated about the anchor.
 ///
-/// `frame_origin` is where the frame's top-left sits in the coordinates
+/// The frame's top-left is `options.frame_origin`, in the coordinates
 /// `position` is in: the retained content layer is drawn into a frame that
 /// reaches a viewport past the viewport on every side, and the fork's
 /// `Frame::size()` does not say where it starts.
 pub(crate) fn on_screen(
     frame: &canvas::Frame,
-    frame_origin: Point,
+    options: crate::renderer_scene_canvas::SceneDrawOptions,
     text: &TextItem,
     position: Point,
     size_px: f32,
 ) -> bool {
-    let rect = iced::Rectangle::new(frame_origin, frame.size());
+    let rect = iced::Rectangle::new(options.frame_origin, frame.size());
     on_screen_in(rect, text, position, size_px)
 }
 

@@ -608,13 +608,7 @@ fn draw_text_items<'a, F>(
             // iced draws it as outlines past its own atlas limit; nothing
             // reaches it that cannot be seen, and what does is bounded.
             TextRaster::Oversize => {
-                if !crate::oversize_text::on_screen(
-                    frame,
-                    options.frame_origin,
-                    text,
-                    position,
-                    size_px,
-                ) {
+                if !crate::oversize_text::on_screen(frame, options, text, position, size_px) {
                     continue;
                 }
                 match budget.admit(&text.content) {
@@ -1188,9 +1182,7 @@ mod line_geometry_tests {
                 let options = SceneDrawOptions {
                     scale_px_per_mm: scale,
                     device_px_per_logical_px: dpr,
-                    text_min_px: 1.0,
-                    text_max_px: 100.0,
-                    frame_origin: Point::ORIGIN,
+                    ..options()
                 };
                 let to_screen = |p: [f32; 2]| Point::new(p[0] * scale + 0.37, p[1] * scale + 0.61);
                 let (_, _, wire) =
