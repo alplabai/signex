@@ -62,12 +62,13 @@ impl SchematicCanvas<'_> {
         self.draw_sheet_frame(frame, &cam, bounds, frame_color);
     }
 
-    /// The sheet's own paper colour (#2034), else the theme's.
+    /// The sheet's own paper colour (#2034), else the theme's. Paper is
+    /// opaque: a stored alpha is ignored here as export ignores it.
     pub(in crate::canvas) fn paper_color(&self) -> Color {
         self.active_snapshot()
             .and_then(|sheet| sheet.page.color)
             .map_or(self.prefs.theme_paper, |color| {
-                crate::render_config::to_iced(&color)
+                crate::render_config::to_iced(&signex_types::theme::Color { a: 0xff, ..color })
             })
     }
 

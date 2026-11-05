@@ -160,10 +160,21 @@ impl Signex {
             return;
         };
         let tab = document.project_tabs.entry(project_id).or_default();
+        let defaults_before = project.data.schematic_defaults.clone();
         if tab.general_history.apply(&mut project.data, command) {
+            let defaults_moved = project.data.schematic_defaults != defaults_before;
             document.sync_project_history_dirty(project_id, true);
-            self.refresh_panel_ctx();
+            self.after_project_general_change(defaults_moved);
         }
+    }
+
+    /// A General-history change landed: refresh the panel, and redraw every
+    /// schematic window when the schematic defaults moved (#2026).
+    fn after_project_general_change(&mut self, defaults_moved: bool) {
+        if defaults_moved {
+            self.clear_schematic_content_caches();
+        }
+        self.refresh_panel_ctx();
     }
 
     /// The project whose Project tab is the active tab.
@@ -197,17 +208,19 @@ impl Signex {
         let Some(tab) = document.project_tabs.get_mut(&project_id) else {
             return false;
         };
+        let defaults_before = project.data.schematic_defaults.clone();
         let moved = if undo {
             tab.general_history.undo(&mut project.data)
         } else {
             tab.general_history.redo(&mut project.data)
         };
+        let defaults_moved = project.data.schematic_defaults != defaults_before;
         // The boxes show the stored values again.
         tab.default_drafts.clear();
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);
-            self.refresh_panel_ctx();
+            self.after_project_general_change(defaults_moved);
         }
         moved
     }

@@ -344,7 +344,7 @@ impl Signex {
         }
     }
 
-    fn clear_schematic_content_caches(&mut self) {
+    pub(crate) fn clear_schematic_content_caches(&mut self) {
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
             canvas.clear_content_cache();
         }

@@ -188,26 +188,73 @@ fn placed_text_stores_the_project_font() {
     assert_eq!(doc.text_notes[0].font_family.as_deref(), Some("Roboto"));
 }
 
-/// #2034: the pre-placement X/Y readout shows Y from the page origin.
+/// #2034: the pre-placement X/Y readout shows Y from the page origin, and
+/// follows an origin change while the tool is armed.
 #[test]
 fn the_pre_placement_readout_reads_y_from_the_page_origin() {
-    use signex_types::schematic::PageOrigin;
-    let (mut app, sheet, _window) = app();
+    use crate::panels::PageOrigin;
+    let (mut app, _sheet, _window) = app();
+    app.document_state.panel_ctx.pre_placement = Some(app.document_state.new_pre_placement(
+        String::new(),
+        crate::panels::PrePlacementKind::Other,
+        String::new(),
+        (7.0, 8.0),
+    ));
     let readout = |app: &Signex| {
-        let pre = app.document_state.new_pre_placement(
-            String::new(),
-            crate::panels::PrePlacementKind::Other,
-            String::new(),
-            (7.0, 8.0),
-        );
-        (pre.cursor_x_mm, pre.cursor_y_mm)
+        let pre = app
+            .document_state
+            .panel_ctx
+            .pre_placement
+            .as_ref()
+            .expect("armed");
+        crate::panels::pre_placement_readout(pre, &app.document_state.panel_ctx)
     };
-    assert_eq!(readout(&app), (7.0, 210.0 - 8.0), "Lower Left, A4");
-    let engine = app.document_state.engines.get_mut(&sheet).expect("engine");
-    engine
-        .execute(signex_engine::Command::SetPageOrigin {
-            origin: PageOrigin::UpperLeft,
-        })
-        .expect("origin");
-    assert_eq!(readout(&app), (7.0, 8.0));
+    app.refresh_panel_ctx();
+    assert_eq!(readout(&app), "7.00, 202.00", "Lower Left, A4");
+    let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::SetPageOrigin(PageOrigin::UpperLeft),
+    )));
+    assert_eq!(readout(&app), "7.00, 8.00");
+}
+
+/// Review of #2026: every defaults change (an edit, a pick, an undo) redraws
+/// every schematic window, the undocked ones too.
+#[test]
+fn a_defaults_change_clears_every_schematic_canvas() {
+    let (mut app, _sheet, _window) = app();
+    let undocked = iced::window::Id::unique();
+    app.interaction_state
+        .canvases
+        .insert(undocked, crate::canvas::CanvasSlot::new());
+    let clears = |app: &Signex| {
+        (
+            app.interaction_state.canvas.content_cache_clears,
+            app.interaction_state.canvases[&undocked].content_cache_clears,
+        )
+    };
+    let project_id = app.document_state.projects[0].id;
+    let check = |app: &mut Signex, change: &dyn Fn(&mut Signex)| {
+        let before = clears(app);
+        change(app);
+        let after = clears(app);
+        assert!(
+            after.0 > before.0 && after.1 > before.1,
+            "{before:?} -> {after:?}"
+        );
+    };
+    check(&mut app, &|app| {
+        edit(app, SchematicDefaultField::WireWidth, "1.0")
+    });
+    check(&mut app, &|app| {
+        tab(
+            app,
+            ProjectTabMsg::SchematicDefaultLineStylePicked {
+                project_id,
+                line: Some(signex_types::net_class::NetLineStyle::Dotted),
+            },
+        )
+    });
+    check(&mut app, &|app| {
+        assert!(app.step_project_tab_history(project_id, true));
+    });
 }

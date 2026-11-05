@@ -35,8 +35,8 @@ pub struct PrePlacementData {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
-    /// Cursor position for the X/Y readout, as the sheet shows it: Y from
-    /// its page origin (#2034).
+    /// Stored cursor position for the X/Y readout; shown through the sheet's
+    /// page origin by [`pre_placement_readout`].
     pub cursor_x_mm: f64,
     pub cursor_y_mm: f64,
     /// Stroke width for the shape tools (Line / Rect / Circle / Arc /
@@ -348,6 +348,14 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     scrollable(col).width(Length::Fill).boxed()
 }
 
+/// The pre-placement X/Y readout: Y from the active sheet's page origin
+/// (#2034), read when drawn so an origin change shows at once.
+pub(crate) fn pre_placement_readout(pp: &PrePlacementData, ctx: &PanelContext) -> String {
+    let paper_h = signex_types::schematic::paper_height_mm(&ctx.paper_size);
+    let y = ctx.page_origin.map_y(pp.cursor_y_mm, paper_h);
+    format!("{:.2}, {y:.2}", pp.cursor_x_mm)
+}
+
 /// Pre-placement properties — shown when TAB pressed during a placement tool.
 fn view_pre_placement<'a>(
     pp: &PrePlacementData,
@@ -363,7 +371,7 @@ fn view_pre_placement<'a>(
     let rotation = pp.rotation;
     let tool_name = pp.tool_name.clone();
     let kind = pp.kind;
-    let pos_str = format!("{:.2}, {:.2}", pp.cursor_x_mm, pp.cursor_y_mm);
+    let pos_str = pre_placement_readout(pp, ctx);
     let rot_label = format!("{:.0} Degrees", rotation);
     let font = pp.font.clone();
     let font_size_pt = pp.font_size_pt;

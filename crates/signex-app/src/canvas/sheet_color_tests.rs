@@ -49,3 +49,17 @@ fn a_set_sheet_colour_does_not_follow_a_theme_switch() {
     assert_eq!(paper(&slot, ThemeId::Signex), want);
     assert_eq!(paper(&slot, ThemeId::CatppuccinMocha), want);
 }
+
+/// Review of #2034: paper is opaque on the canvas, as in export, whatever
+/// alpha the file stores.
+#[test]
+fn a_translucent_sheet_colour_draws_opaque() {
+    let half = signex_types::theme::Color::new(0xd0, 0xd0, 0xd0, 0x80);
+    let slot = slot_for(Some(half));
+    let paper = paper(&slot, ThemeId::Signex);
+    assert_eq!(paper.a, 1.0);
+    assert_eq!(
+        paper,
+        crate::render_config::to_iced(&signex_types::theme::Color { a: 0xff, ..half })
+    );
+}

@@ -976,8 +976,13 @@ impl DocumentState {
         label_text: String,
         cursor_mm: (f64, f64),
     ) -> crate::panels::PrePlacementData {
-        let (x, y) = self.shown_point(cursor_mm);
-        let mut data = crate::panels::PrePlacementData::new(tool_name, kind, label_text, x, y);
+        let mut data = crate::panels::PrePlacementData::new(
+            tool_name,
+            kind,
+            label_text,
+            cursor_mm.0,
+            cursor_mm.1,
+        );
         let defaults = self.active_schematic_defaults();
         data.font_size_pt = defaults.text_size_pt.round() as u32;
         data.shape_fill = defaults.shape_fill;
@@ -985,15 +990,6 @@ impl DocumentState {
             data.font = self.schematic_default_font_for(path);
         }
         data
-    }
-
-    /// A stored point as the active sheet shows it: Y from its page origin
-    /// (#2034). Unchanged when no schematic is active.
-    pub fn shown_point(&self, (x, y): (f64, f64)) -> (f64, f64) {
-        let y = self
-            .active_engine()
-            .map_or(y, |engine| engine.document().page_y(y));
-        (x, y)
     }
 
     /// The font a label or note placed on the active document stores: the
