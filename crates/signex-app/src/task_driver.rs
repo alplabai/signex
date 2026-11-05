@@ -4,12 +4,13 @@
 //! The driver answers every iced `Action` a signex task can ask for that has a
 //! sensible window-less answer: clipboard reads and writes go to an in-memory
 //! clipboard, `window::open` is acknowledged with the id it asked for (so the
-//! app sees `MainWindowOpened`), window size and scale queries get fixed
+//! app sees `MainWindowOpened`), `window::close` reports the close the way the
+//! close-events subscription does, window size and scale queries get fixed
 //! answers, and `iced::exit()` ends the session. Anything else is dropped with
-//! a log line.
+//! a warning.
 //!
-//! Messages are fed back through `update` in the order they are produced
-//! (first in, first out), the order the iced runtime delivers them.
+//! Messages are fed back through `update` in a deterministic first-in,
+//! first-out order: each task's messages in turn, then their follow-ups.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -19,7 +20,7 @@ use iced::futures::StreamExt as _;
 use iced_runtime::Action;
 use iced_runtime::core::clipboard::{Content, Error as ClipboardError, Kind};
 
-use crate::app::{Message, Signex};
+use crate::app::{Message, Signex, WindowMsg};
 use crate::ignore::IgnoreResult as _;
 
 /// `oneshot::Sender::send` fails only when the task stopped listening.
@@ -208,7 +209,7 @@ impl Effects {
         match action {
             Action::Output(message) => return Some(message),
             Action::Clipboard(action) => self.clipboard(action),
-            Action::Window(action) => self.window(action),
+            Action::Window(action) => return self.window(action),
             Action::Exit => self.has_exited = true,
             other => dropped(action_kind(&other)),
         }
@@ -237,9 +238,12 @@ impl Effects {
         }
     }
 
-    fn window(&mut self, action: iced_runtime::window::Action) {
+    /// The message a window action produces, when it produces one.
+    fn window(&mut self, action: iced_runtime::window::Action) -> Option<Message> {
         use iced_runtime::window::Action as Win;
         match action {
+            // What `bootstrap::subscription`'s `close_events` delivers.
+            Win::Close(id) => return Some(Message::Window(WindowMsg::SecondaryWindowClosed(id))),
             Win::Open(id, _settings, channel) => channel.send(id).ignore(UNANSWERED),
             Win::GetSize(_, channel) => channel.send(HEADLESS_WINDOW_SIZE).ignore(UNANSWERED),
             Win::GetScaleFactor(_, channel) => {
@@ -247,11 +251,12 @@ impl Effects {
             }
             _ => dropped("window"),
         }
+        None
     }
 }
 
 fn dropped(kind: &'static str) {
-    tracing::info!(
+    tracing::warn!(
         target: "signex::task_driver",
         kind,
         "dropped an iced action a headless run does not perform"
@@ -278,7 +283,8 @@ fn action_kind(action: &Action<Message>) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{UiMsg, WindowMsg};
+    use crate::app::UiMsg;
+    use crate::menu_bar::MenuMessage;
 
     fn noop() -> Message {
         Message::Ui(UiMsg::Noop)
@@ -359,6 +365,18 @@ mod tests {
                 .expect("after exit")
                 .is_empty()
         );
+    }
+
+    /// File > Exit closes the main window; its close event ends the session.
+    #[test]
+    fn file_exit_ends_a_booted_session() {
+        let (mut app, boot) = Signex::new();
+        let mut driver = TaskDriver::new();
+        driver.settle(&mut app, boot).expect("boot settled");
+        driver
+            .send(&mut app, Message::Menu(MenuMessage::Exit))
+            .expect("exit settled");
+        assert!(driver.has_exited());
     }
 
     #[test]

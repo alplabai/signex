@@ -130,7 +130,7 @@ impl NativeMenuState {
         }
         // AppKit panics off the main thread, where a headless driver or a
         // test runs `update` (#1927); the in-window menu stays instead.
-        if std::thread::current().name() != Some("main") {
+        if objc2::MainThreadMarker::new().is_none() {
             self.failed = true;
             log_info("Main menu: not on the main thread; using the in-window menu");
             return;

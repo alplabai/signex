@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use signex_app::app::{FileMsg, Message, Signex};
+use signex_app::autosave::AutosaveMsg;
 use signex_app::config_root::{
     ConfigRootOverrideError, config_root, default_config_root, set_config_root_override,
 };
@@ -21,8 +22,8 @@ use signex_app::task_driver::TaskDriver;
 use signex_library::{ClientUnavailable, DistributorSource};
 
 const PROBE_ENV: &str = "SIGNEX_CONFIG_ROOT_PROBE";
-/// What the paste-designators migration rewrites: the old default.
-const OLD_PASTE_PREFS: &str = r#"{"paste_designators":"Keep"}"#;
+/// The old paste default the migration rewrites, and autosave on.
+const OLD_PASTE_PREFS: &str = r#"{"paste_designators":"Keep","autosave_enabled":true}"#;
 
 fn run_probe(scenario: &str) {
     let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
@@ -77,6 +78,7 @@ fn untouched() {
         Err(ConfigRootOverrideError::AlreadySet(_))
     ));
     assert_eq!(config_root().as_deref(), Some(isolated.path()));
+    assert_every_resolver_under(isolated.path());
     std::fs::write(isolated.path().join("prefs.json"), OLD_PASTE_PREFS).expect("seed prefs");
 
     let work = tempfile::tempdir().expect("work dir");
@@ -123,6 +125,14 @@ fn untouched() {
     );
     app.document_state.mark_document_dirty(&sheet);
     driver
+        .send(&mut app, Message::Autosave(AutosaveMsg::Ticked))
+        .expect("autosave settled");
+    let recovery = isolated.path().join("recovery");
+    assert!(
+        std::fs::read_dir(&recovery).is_ok_and(|mut entries| entries.next().is_some()),
+        "the autosave pass writes a recovery copy under the override"
+    );
+    driver
         .send(&mut app, Message::Menu(MenuMessage::SaveAll))
         .expect("save settled");
     assert!(!app.document_state.is_document_dirty(&sheet), "saved");
@@ -139,6 +149,39 @@ fn untouched() {
         "the paste migration must not run under an override: {isolated_prefs}"
     );
     assert_eq!(snapshot(&real), before, "the real config root changed");
+}
+
+/// Every config path resolver answers under the override root, including the
+/// ones a short run only reads.
+fn assert_every_resolver_under(root: &Path) {
+    let resolved = [
+        ("prefs.json", Some(signex_app::fonts::prefs_file_path())),
+        ("recovery", signex_app::autosave::default_recovery_dir()),
+        ("shortcuts", signex_app::keymap::config_path()),
+        (
+            "window geometry",
+            signex_app::app::window_geometry::file_path(),
+        ),
+        ("rule profiles", signex_app::rule_profiles::profiles_dir()),
+        (
+            "global libraries",
+            signex_app::panels::components_panel::global_prefs::prefs_path(),
+        ),
+        (
+            "distributors",
+            signex_app::library::settings::persistence::config_path(),
+        ),
+        ("sample project", signex_app::sample_project::sample_root()),
+    ];
+    for (name, path) in resolved {
+        let path = path.unwrap_or_else(|| panic!("{name} resolves under an override"));
+        assert!(
+            path.starts_with(root),
+            "{name} resolves to {} outside the override {}",
+            path.display(),
+            root.display()
+        );
+    }
 }
 
 /// The OS keyring is the user's real credential store: under an override a

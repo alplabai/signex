@@ -5320,6 +5320,7 @@ dependencies = [
  "log",
  "muda",
  "num-traits",
+ "objc2",
  "rfd",
  "same-file",
  "serde",

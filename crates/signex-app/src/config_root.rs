@@ -23,8 +23,7 @@
 //! its own behaviour; see their own doc comments.
 
 use std::path::PathBuf;
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 /// True when the test/dev redirect gate is active for this build:
 /// signex-app's own unit-test build (`cfg(test)`) or the
@@ -58,29 +57,47 @@ pub(crate) fn is_test_redirect_active() -> bool {
 /// A [`set_config_root_override`] beats both: every config file then lives
 /// under that root, in a test build too.
 pub fn config_root() -> Option<PathBuf> {
-    HAS_RESOLVED.store(true, Ordering::SeqCst);
-    if let Some(root) = OVERRIDE.get() {
-        return Some(root.clone());
+    let mut state = lock_state();
+    match &*state {
+        RootState::Overridden(root) => return Some(root.clone()),
+        RootState::Unread => *state = RootState::Read,
+        RootState::Read => {}
     }
-    default_config_root()
+    drop(state);
+    unoverridden_root()
 }
 
-/// Where [`config_root`] points without an override: the test redirect in a
-/// test build, the OS config directory otherwise. Does not count as a config
-/// read, so a headless run can name the root it must leave alone.
+/// The root a test run's override must leave alone: the per-process test
+/// redirect. Test builds only, so production code cannot bypass an override.
+/// Does not count as a config read.
+#[cfg(any(test, feature = "test-prefs-redirect"))]
 pub fn default_config_root() -> Option<PathBuf> {
+    unoverridden_root()
+}
+
+/// The test redirect in a test build, the OS config directory otherwise.
+fn unoverridden_root() -> Option<PathBuf> {
     if is_test_redirect_active() {
         return Some(test_redirect_root().clone());
     }
     dirs::config_dir().map(|dir| config_root_for_dir(&dir))
 }
 
-/// The process-wide config root a headless run sets (#1926).
-static OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+/// Whether the process has read a config path yet, or runs under a headless
+/// override (#1926). One lock, so a first read and an override cannot race:
+/// an override set after a read would leave earlier readers (the cached
+/// prefs path) pointing at the real root.
+enum RootState {
+    Unread,
+    Read,
+    Overridden(PathBuf),
+}
 
-/// Set by the first [`config_root`] call. An override set later would leave
-/// earlier readers (the cached prefs path) pointing at the real root.
-static HAS_RESOLVED: AtomicBool = AtomicBool::new(false);
+static STATE: Mutex<RootState> = Mutex::new(RootState::Unread);
+
+fn lock_state() -> std::sync::MutexGuard<'static, RootState> {
+    STATE.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// Why [`set_config_root_override`] refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,20 +132,23 @@ impl std::error::Error for ConfigRootOverrideError {}
 /// projects, keyboard shortcuts, `global_libraries.toml`,
 /// `distributors.toml`, rule profiles, window geometry) at `root`, for a
 /// headless run that must not touch the user's real config. Call it once,
-/// first thing in `main`, before any other thread starts: it is refused once
-/// any config path has been resolved. Under an override the legacy-prefs and
+/// first thing in `main`: it is refused once any config path has been
+/// resolved. Under an override the legacy-prefs and
 /// paste-designators migrations do not run and the OS keyring is not used
 /// (see [`is_override_active`]). The folder is not created here.
 pub fn set_config_root_override(root: PathBuf) -> Result<(), ConfigRootOverrideError> {
     if !root.is_absolute() {
         return Err(ConfigRootOverrideError::NotAbsolute(root));
     }
-    if HAS_RESOLVED.load(Ordering::SeqCst) {
-        return Err(ConfigRootOverrideError::AfterFirstRead);
+    let mut state = lock_state();
+    match &*state {
+        RootState::Unread => {
+            *state = RootState::Overridden(root);
+            Ok(())
+        }
+        RootState::Read => Err(ConfigRootOverrideError::AfterFirstRead),
+        RootState::Overridden(set) => Err(ConfigRootOverrideError::AlreadySet(set.clone())),
     }
-    OVERRIDE.set(root).map_err(|_| {
-        ConfigRootOverrideError::AlreadySet(OVERRIDE.get().cloned().unwrap_or_default())
-    })
 }
 
 /// What a credential lookup answers under an override: the OS keyring is the
@@ -140,7 +160,7 @@ pub const KEYRING_UNUSED_UNDER_OVERRIDE: &str =
 /// that would reach user state outside the config root (the OS keyring) or
 /// rewrite the user's files (a migration) checks this and stays off.
 pub fn is_override_active() -> bool {
-    OVERRIDE.get().is_some()
+    matches!(*lock_state(), RootState::Overridden(_))
 }
 
 /// The per-process test redirect root, emptied once per process on first

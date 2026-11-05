@@ -5,7 +5,7 @@
 //! when `PROBE_ENV` names a path and is a no-op otherwise.
 
 use signex_app::app::Signex;
-use signex_app::fonts::catalog::{FontSet, install_before_boot};
+use signex_app::fonts::catalog::{FontSet, FontsAlreadyInstalled, install_before_boot};
 use signex_app::task_driver::TaskDriver;
 use signex_types::schematic::{HAlign, SCHEMATIC_TEXT_MM, VAlign, text_aabb};
 
@@ -58,7 +58,12 @@ fn probe() {
         }
         // A headless run installs the fonts first and drives nothing.
         "headless" => {
-            install_before_boot(FontSet::System);
+            install_before_boot(FontSet::System).expect("first install");
+            assert_eq!(
+                install_before_boot(FontSet::BundledOnly),
+                Err(FontsAlreadyInstalled),
+                "a second set must not be kept silently"
+            );
             let (_app, _boot) = Signex::new();
         }
         "none" => {
