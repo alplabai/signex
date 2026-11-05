@@ -405,14 +405,14 @@ impl Engine {
                     color,
                     ..self.document.page
                 };
-                self.set_sheet_page(before, page)
+                self.set_sheet_page(before, page, "color")
             }
             Command::SetPageOrigin { origin } => {
                 let page = signex_types::schematic::SheetPageSettings {
                     origin,
                     ..self.document.page
                 };
-                self.set_sheet_page(before, page)
+                self.set_sheet_page(before, page, "origin")
             }
             Command::SetTitleBlockField { key, value } => {
                 let current = self.document.title_block.get(&key);
@@ -453,16 +453,19 @@ impl Engine {
     }
 
     /// Store the sheet's page settings (#2034) as one undo step on the PAPER
-    /// patch; the same settings again change nothing.
+    /// patch. The pick replaces a raw `key` value kept from the file; the same
+    /// settings again, with no raw value to replace, change nothing.
     fn set_sheet_page(
         &mut self,
         before: SchematicSheet,
         page: signex_types::schematic::SheetPageSettings,
+        key: &str,
     ) -> Result<CommandResult, EngineError> {
-        if self.document.page == page {
+        if self.document.page == page && !self.document.unknown.page.contains_key(key) {
             return Ok(CommandResult::unchanged());
         }
         self.document.page = page;
+        self.document.unknown.page.remove(key);
         let patch_pair = PatchPair {
             semantic: SemanticPatch::StyleUpdated,
             document: DocumentPatch::PAPER,

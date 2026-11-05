@@ -150,13 +150,13 @@ impl ProjectGeneralHistory {
                 data.schematic_defaults = data.schematic_defaults.with(field, value);
             }
             ProjectGeneralCommand::SetSchematicDefaultFont(font) => {
-                data.schematic_defaults.font_family = font.filter(|f| !f.trim().is_empty());
+                data.schematic_defaults.set_font_family(font);
             }
             ProjectGeneralCommand::SetSchematicDefaultLineStyle(line) => {
-                data.schematic_defaults.wire_line_style = line;
+                data.schematic_defaults.set_wire_line_style(line);
             }
             ProjectGeneralCommand::SetSchematicDefaultShapeFill(fill) => {
-                data.schematic_defaults.shape_fill = fill;
+                data.schematic_defaults.set_shape_fill(fill);
             }
         }
         if GeneralSnapshot::of(data) == before {
