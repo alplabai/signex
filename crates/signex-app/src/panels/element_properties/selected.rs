@@ -1186,30 +1186,40 @@ mod tests {
         /// position. Edges are anti-aliased, so an exact match is too strict.
         fn best_match(&self, frame: &[u8], frame_width: usize) -> f32 {
             let rows = frame.len() / 4 / frame_width;
-            let total = self.width * self.height;
-            let mut best = 0usize;
-            for y in 0..=rows - self.height {
-                for x in 0..=frame_width - self.width {
-                    let mut same = 0usize;
-                    let mut misses = 0usize;
-                    'rows: for r in 0..self.height {
-                        for c in 0..self.width {
-                            let a = ((y + r) * frame_width + x + c) * 4;
-                            let b = (r * self.width + c) * 4;
-                            if (0..3).all(|k| frame[a + k].abs_diff(self.pixels[b + k]) <= 6) {
-                                same += 1;
-                            } else {
-                                misses += 1;
-                                if misses > total - best {
-                                    break 'rows;
-                                }
-                            }
-                        }
+            // The fraction of every `step`-th pixel of the block equal at (x, y).
+            let at = |x: usize, y: usize, step: usize| {
+                let (mut same, mut seen) = (0usize, 0usize);
+                for r in (0..self.height).step_by(step) {
+                    for c in (0..self.width).step_by(step) {
+                        let a = ((y + r) * frame_width + x + c) * 4;
+                        let b = (r * self.width + c) * 4;
+                        seen += 1;
+                        same += usize::from(
+                            (0..3).all(|k| frame[a + k].abs_diff(self.pixels[b + k]) <= 6),
+                        );
                     }
-                    best = best.max(same);
+                }
+                same as f32 / seen as f32
+            };
+            // Coarse over every 4th position on a sampled block, then the
+            // full block around the best of them.
+            let (mut best_at, mut best) = ((0, 0), -1.0_f32);
+            for y in (0..=rows - self.height).step_by(4) {
+                for x in (0..=frame_width - self.width).step_by(4) {
+                    let score = at(x, y, 4);
+                    if score > best {
+                        (best_at, best) = ((x, y), score);
+                    }
                 }
             }
-            best as f32 / total as f32
+            let mut refined = 0.0_f32;
+            for y in best_at.1.saturating_sub(4)..=(best_at.1 + 4).min(rows - self.height) {
+                for x in best_at.0.saturating_sub(4)..=(best_at.0 + 4).min(frame_width - self.width)
+                {
+                    refined = refined.max(at(x, y, 1));
+                }
+            }
+            refined
         }
     }
 
