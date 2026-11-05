@@ -472,7 +472,7 @@ mod tests {
     use super::*;
 
     use crate::canvas::tests::test_prefs_styled;
-    use signex_types::net_class::{NetClassStyle, NetLineStyle};
+    use signex_types::net_class::NetClassStyle;
     use signex_types::schematic::{Point as SheetPoint, SchematicSheet, Wire};
 
     const WIRE: uuid::Uuid = uuid::Uuid::from_u128(11);
