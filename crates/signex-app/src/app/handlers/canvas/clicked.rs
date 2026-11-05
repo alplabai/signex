@@ -609,8 +609,10 @@ impl Signex {
                     text: note_text.clone(),
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: 0.0,
-                    font_size: self.document_state.active_schematic_defaults().text_size_pt
-                        * signex_types::schematic::SCHEMATIC_PT_TO_MM,
+                    font_size: self
+                        .document_state
+                        .active_schematic_defaults()
+                        .placed_text_mm(),
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
                     font_family: self.document_state.placed_font_family(),
@@ -669,8 +671,9 @@ impl Signex {
                     })
                     .unwrap_or((
                         0.0,
-                        self.document_state.active_schematic_defaults().text_size_pt
-                            * signex_types::schematic::SCHEMATIC_PT_TO_MM,
+                        self.document_state
+                            .active_schematic_defaults()
+                            .placed_text_mm(),
                         signex_types::schematic::HAlign::Left,
                         signex_types::schematic::VAlign::Bottom,
                     ));

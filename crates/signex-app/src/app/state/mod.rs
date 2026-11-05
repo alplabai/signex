@@ -984,7 +984,7 @@ impl DocumentState {
             cursor_mm.1,
         );
         let defaults = self.active_schematic_defaults();
-        data.font_size_pt = defaults.text_size_pt.round() as u32;
+        data.font_size_pt = defaults.placed_text_pt();
         data.shape_fill = defaults.shape_fill;
         if let Some(path) = self.active_path.as_deref() {
             data.font = self.schematic_default_font_for(path);

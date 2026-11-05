@@ -55,6 +55,14 @@ pub(in crate::app::project_tab) fn view<'a>(
             .padding(sp.s)
             .width(Length::Fill);
         body = body.push(labelled(field.label(), input, tokens));
+        if let Some(note) = super::clamp_note(field, draft) {
+            body = body.push(
+                text(note)
+                    .size(ts.caption)
+                    .color(crate::styles::ti(tokens.text_secondary))
+                    .boxed(),
+            );
+        }
     }
     let font = text_input(
         overrides.font_family(),

@@ -22,14 +22,15 @@ impl Signex {
     /// Store `token` as the active sheet's `paper_size`. The write is an
     /// engine command, so it persists with the document and undoes like any
     /// other edit; an unchanged token records nothing. Undo and redo redraw
-    /// the page through the mutation gateway.
+    /// the page through the mutation gateway. The Position rows show Y from
+    /// the paper height under a Lower Left origin, so they are refreshed.
     fn set_sheet_paper_token(&mut self, token: String) {
         self.document_state.panel_ctx.paper_size = token.clone();
         self.apply_page_dimensions_to_canvas();
         self.apply_engine_command(
             signex_engine::Command::SetPaperSize { paper_size: token },
             false,
-            false,
+            true,
         );
     }
 

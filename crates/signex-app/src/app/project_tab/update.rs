@@ -78,7 +78,7 @@ impl Signex {
                 field,
                 text,
             } => {
-                let value = super::schematic_defaults::parse_override(&text);
+                let value = super::schematic_defaults::parse_override(field, &text);
                 self.document_state
                     .project_tabs
                     .entry(project_id)

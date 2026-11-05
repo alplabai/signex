@@ -174,6 +174,8 @@ fn placed_text_stores_the_project_font() {
             text: "Roboto".into(),
         },
     );
+    // A size placement holds in whole points: every path rounds it alike.
+    edit(&mut app, SchematicDefaultField::TextSize, "10.4");
     for (tool, at) in [(Tool::Label, (20.32, 20.32)), (Tool::Text, (40.64, 40.64))] {
         let _ = app.update(Message::Tool(ToolMessage::SelectTool(tool)));
         let _ = app.update(Message::CanvasEvent(crate::canvas::CanvasEvent::Clicked {
@@ -186,6 +188,18 @@ fn placed_text_stores_the_project_font() {
     assert_eq!(doc.labels[0].font_family.as_deref(), Some("Roboto"));
     assert_eq!(doc.text_notes.len(), 1, "a note was placed");
     assert_eq!(doc.text_notes[0].font_family.as_deref(), Some("Roboto"));
+    let pp_mm = f64::from(
+        app.document_state
+            .new_pre_placement(
+                String::new(),
+                crate::panels::PrePlacementKind::NetLabel,
+                String::new(),
+                (0.0, 0.0),
+            )
+            .font_size_pt,
+    ) * signex_types::schematic::SCHEMATIC_PT_TO_MM;
+    assert_eq!(doc.labels[0].font_size, pp_mm, "label size = form size");
+    assert_eq!(doc.text_notes[0].font_size, pp_mm, "note size = form size");
 }
 
 /// #2034: the pre-placement X/Y readout shows Y from the page origin, and
@@ -257,4 +271,54 @@ fn a_defaults_change_clears_every_schematic_canvas() {
     check(&mut app, &|app| {
         assert!(app.step_project_tab_history(project_id, true));
     });
+}
+
+/// Review of #2026: a typed default outside its range is stored clamped,
+/// the field says so, and a file value out of range resolves clamped
+/// without being rewritten.
+#[test]
+fn an_out_of_range_default_is_clamped_and_reported() {
+    use signex_types::project::MAX_DEFAULT_WIDTH_MM;
+    let (mut app, _sheet, _window) = app();
+    edit(&mut app, SchematicDefaultField::WireWidth, "12");
+    let stored = app.document_state.projects[0]
+        .data
+        .schematic_defaults
+        .wire_width_mm;
+    assert_eq!(stored, Some(MAX_DEFAULT_WIDTH_MM));
+    let draft = "12".to_string();
+    let note =
+        super::schematic_defaults::clamp_note(SchematicDefaultField::WireWidth, Some(&draft));
+    assert!(
+        note.is_some_and(|n| n.contains("5")),
+        "the field reports the clamp"
+    );
+    edit(&mut app, SchematicDefaultField::WireWidth, "0.01");
+    assert_eq!(
+        app.document_state.projects[0]
+            .data
+            .schematic_defaults
+            .wire_width_mm,
+        Some(0.15)
+    );
+    // Text: a tiny size never places at 0 pt.
+    edit(&mut app, SchematicDefaultField::TextSize, "0.2");
+    let pre = app.document_state.new_pre_placement(
+        String::new(),
+        crate::panels::PrePlacementKind::Other,
+        String::new(),
+        (0.0, 0.0),
+    );
+    assert_eq!(pre.font_size_pt, 1);
+
+    let raw = signex_types::project::SchematicDefaultOverrides {
+        bus_width_mm: Some(50.0),
+        ..Default::default()
+    };
+    assert_eq!(
+        raw.resolve().bus_width_mm,
+        10.0,
+        "a file value resolves clamped"
+    );
+    assert_eq!(raw.bus_width_mm, Some(50.0), "and is not rewritten");
 }

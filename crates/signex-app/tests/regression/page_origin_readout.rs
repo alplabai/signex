@@ -2,9 +2,9 @@
 //! coordinates read Y from the chosen corner, the stored point never moves.
 //! The default (no origin in the file) is Lower Left.
 
-use signex_app::app::{Message, Signex, TabInfo, TabKind};
+use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
-use signex_app::panels::{DrawingFieldId, PageOrigin, PanelMsg};
+use signex_app::panels::{DrawingFieldId, PageOrigin, PanelMsg, PaperEdge};
 use signex_types::schematic::{
     Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem, SelectedKind,
 };
@@ -126,5 +126,55 @@ fn a_typed_y_is_read_from_the_chosen_corner() {
             panic!("a line");
         };
         assert!((start.y - 70.0).abs() < 1e-9, "{origin:?}: {start:?}");
+    }
+}
+
+/// The Position row, if one is shown, agrees with the sheet's current paper:
+/// a stale row would move the item when its Y is typed back.
+fn position_matches_paper(app: &Signex, path: &PathBuf, raw_y: f64) {
+    let doc = app.document_state.engines[path].document();
+    let want = format!("10.00, {:.2}", doc.page_y(raw_y));
+    if let Some((_, shown)) = app
+        .document_state
+        .panel_ctx
+        .selection_info
+        .iter()
+        .find(|(k, _)| k == "Position")
+    {
+        assert_eq!(shown, &want, "paper {}", doc.paper_size);
+    }
+}
+
+/// Review of #2034: under Lower Left the shown Y follows a paper change
+/// (named size, custom edge) and its undo.
+#[test]
+fn the_position_row_follows_a_paper_change() {
+    let id = uuid::Uuid::now_v7();
+    let (mut app, path) = app_with(label(id, 10.0, 30.0), line(uuid::Uuid::now_v7()));
+    select(
+        &mut app,
+        SelectedItem::new(id, SelectedKind::Label),
+        PageOrigin::LowerLeft,
+    );
+    assert_eq!(position_row(&app), "10.00, 180.00", "A4");
+
+    panel(&mut app, PanelMsg::SetPaperSize("A3".into()));
+    assert_eq!(position_row(&app), "10.00, 267.00", "A3");
+
+    panel(&mut app, PanelMsg::SetPaperSize("User:200x150".into()));
+    panel(
+        &mut app,
+        PanelMsg::CustomPaperEdgeTyping(PaperEdge::Height, "100".into()),
+    );
+    panel(&mut app, PanelMsg::CommitCustomPaperEdge(PaperEdge::Height));
+    assert_eq!(position_row(&app), "10.00, 70.00", "custom 100 mm high");
+
+    for _ in 0..3 {
+        let _ = app.update(Message::Edit(EditMsg::Undo));
+        position_matches_paper(&app, &path, 30.0);
+    }
+    for _ in 0..3 {
+        let _ = app.update(Message::Edit(EditMsg::Redo));
+        position_matches_paper(&app, &path, 30.0);
     }
 }
