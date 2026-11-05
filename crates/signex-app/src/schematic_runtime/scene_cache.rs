@@ -22,6 +22,15 @@ use std::sync::Arc;
 use super::*;
 use crate::scene_generation::next_scene_generation;
 
+/// How far the camera offset may drift from a scene's build offset, per axis,
+/// before the scene stops covering the viewport: one viewport. The single
+/// rule behind the scene's build rectangle, its reuse test and the retained
+/// content geometry of the canvas.
+#[must_use]
+pub(crate) fn pan_reach(viewport: iced::Size) -> iced::Vector {
+    iced::Vector::new(viewport.width, viewport.height)
+}
+
 /// What a built scene depends on, captured when it was built.
 pub(crate) struct SceneInputs {
     scale: f32,
@@ -111,10 +120,10 @@ impl ContentSceneCache {
                 .fits(transform, colors, bounds.size(), focus_set, overrides)
         });
         if !reusable {
-            let margin = bounds.size();
+            let reach = pan_reach(bounds.size());
             let build_bounds = Rectangle::new(
-                iced::Point::new(-margin.width, -margin.height),
-                iced::Size::new(margin.width * 3.0, margin.height * 3.0),
+                iced::Point::new(-reach.x, -reach.y),
+                iced::Size::new(bounds.width + 2.0 * reach.x, bounds.height + 2.0 * reach.y),
             );
             let scene = build_schematic_scene(
                 &sheet(),
@@ -220,6 +229,7 @@ impl SceneInputs {
         // built in, must stay inside the built (inflated) rectangle.
         let dx = self.offset.0 - transform.offset_x;
         let dy = self.offset.1 - transform.offset_y;
-        dx.abs() <= viewport.width && dy.abs() <= viewport.height
+        let reach = pan_reach(viewport);
+        dx.abs() <= reach.x && dy.abs() <= reach.y
     }
 }

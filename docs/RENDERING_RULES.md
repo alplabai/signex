@@ -202,6 +202,29 @@ drawing, and stay a fixed pixel width.
 
 ---
 
+## sch-pan-reuse — Panning moves retained content (#2078)
+
+The CPU schematic canvas tessellates the content layer once and moves it
+by a translation while the camera pans. `canvas::SchematicSurface` mirrors
+iced's `Canvas` widget; only `draw` differs: every layer is drawn inside one
+`with_layer(bounds)` (clip, and one renderer layer so their order holds), and
+the content layer inside an extra `with_translation(delta)`.
+
+The geometry is built with `Cache::draw_with_bounds` over a clip rectangle
+that reaches past the viewport by `pan_reach` (one viewport, cut down to whole
+device pixels), at the camera offset of the build. It is reused while:
+
+- the zoom, the display scale and the viewport size are unchanged;
+- the scene it replays is the same one (`ContentSceneCache::generation`), which
+  also covers a document, theme or focus change on a pan frame; the
+  app clears it on those as well;
+- the pan from the build offset is within the clip margin;
+- that pan is a whole number of device pixels (within 1e-3). Hairline
+  snapping works on the frame's device pixel grid and only commutes with
+  whole-pixel shifts. A pan off the grid tessellates again, as before.
+
+The move-drag layers do not use it.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's
