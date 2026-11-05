@@ -386,11 +386,11 @@ pub fn identity_fields(fields: &[(String, String)]) -> HashMap<String, String> {
 /// stamp. A locked part with nothing to sync keeps its stamp, since nothing
 /// was held back. Returns the stamps and syncs left and the references held
 /// back.
-pub fn hold_back_locked(
+pub fn hold_back_locked<S>(
     engine: &signex_engine::Engine,
-    stamps: Vec<(Uuid, String)>,
+    stamps: Vec<(Uuid, S)>,
     part_syncs: Vec<PartSync>,
-) -> (Vec<(Uuid, String)>, Vec<PartSync>, Vec<String>) {
+) -> (Vec<(Uuid, S)>, Vec<PartSync>, Vec<String>) {
     let locked = engine.edit_locked_part_units();
     let (held, kept): (Vec<PartSync>, Vec<PartSync>) = part_syncs
         .into_iter()
@@ -588,12 +588,15 @@ mod tests {
     }
 
     fn footprint_sync(n: u128, reference: &str) -> PartSync {
-        let have = id("", "", "");
         PartSync {
             symbol: Uuid::from_u128(n),
             reference: reference.into(),
-            change: have.changes_to(&id("SOIC-8", "", "")),
-            have,
+            have: PartIdentity::default(),
+            change: PartChange {
+                footprint: Some("SOIC-8".into()),
+                ..PartChange::default()
+            },
+            kept: Vec::new(),
         }
     }
 
