@@ -79,6 +79,14 @@ impl Signex {
                 text,
             } => {
                 use super::schematic_defaults::DefaultInput;
+                // A late message for a closed project must not recreate its
+                // tab state.
+                if self.document_state.project_by_id(project_id).is_none() {
+                    crate::diagnostics::log_warning(
+                        "Project tab: the project was closed; the edit was dropped",
+                    );
+                    return;
+                }
                 let input = super::schematic_defaults::parse_override(field, &text);
                 self.document_state
                     .project_tabs

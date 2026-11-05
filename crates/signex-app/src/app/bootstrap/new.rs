@@ -383,6 +383,7 @@ impl Signex {
                 erc_waived_hidden: std::collections::BTreeMap::new(),
                 erc_waived_findings: Vec::new(),
                 erc_lapsed_waivers: std::collections::BTreeSet::new(),
+                erc_page_frames: Default::default(),
                 erc_waive_draft: None,
                 erc_focus_global_index: None,
                 erc_epoch: 0,

@@ -376,3 +376,20 @@ fn a_junction_default_below_the_floor_is_clamped_and_noted() {
         Some(0.7)
     );
 }
+
+/// Review of #2026: a late edit for a project that is no longer loaded
+/// creates no tab state for it.
+#[test]
+fn a_late_edit_for_a_closed_project_leaves_no_tab_state() {
+    let (mut app, _sheet, _window) = app();
+    let gone = app.document_state.mint_project_id();
+    tab(
+        &mut app,
+        ProjectTabMsg::SchematicDefaultEdited {
+            project_id: gone,
+            field: SchematicDefaultField::WireWidth,
+            text: "0.3".into(),
+        },
+    );
+    assert!(!app.document_state.project_tabs.contains_key(&gone));
+}

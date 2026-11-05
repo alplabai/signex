@@ -26,7 +26,7 @@ mod stale_findings_tests;
 
 pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
-pub(crate) use erc_job::{ErcRunOutcome, WaivedFinding};
+pub(crate) use erc_job::{ErcRunOutcome, PageFrames, WaivedFinding};
 pub(crate) use reprefix_confirm::ReprefixConfirm;
 pub(crate) use reprefix_job::ReprefixSheets;
 mod machine_rules;
