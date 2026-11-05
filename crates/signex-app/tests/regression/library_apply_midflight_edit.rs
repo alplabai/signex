@@ -237,3 +237,103 @@ fn an_edit_on_one_unit_leaves_the_field_alone_on_every_unit() {
         "untouched fields still follow on every unit"
     );
 }
+
+/// Two units of one part, the row moved, the worker run: the messages still
+/// to be delivered.
+fn two_unit_apply() -> (Fixture, Signex, Vec<Message>) {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let engine = app.document_state.active_engine_mut().unwrap();
+    let mut sheet = engine.document().clone();
+    let mut unit_b = sheet.symbols[0].clone();
+    unit_b.uuid = Uuid::now_v7();
+    unit_b.unit = 2;
+    sheet.symbols.push(unit_b);
+    engine.set_document(sheet);
+    move_row(&f);
+    scan(&mut app);
+    select_all_updates(&mut app);
+    let task = click_apply(&mut app);
+    let messages = run_task(task);
+    (f, app, messages)
+}
+
+#[test]
+fn a_unit_skipped_for_its_siblings_edit_keeps_its_base_and_flag() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (_f, mut app, messages) = two_unit_apply();
+    set_field(&mut app, "MPN", "EDITED-9"); // unit A only
+    for m in messages {
+        let _ = app.update(m);
+    }
+    let (a, b) = (&doc(&app).symbols[0], &doc(&app).symbols[1]);
+    assert_eq!(b.fields.get("MPN").map(String::as_str), Some("TWO-1"));
+    assert_eq!(
+        b.valid_stamp().and_then(|s| s.mpn.as_deref()),
+        Some("TWO-1"),
+        "unit 2 never took ROW-NEW; its base must not claim it did, or its drift is hidden"
+    );
+    // The unit the user edited reads the edit as an override.
+    assert_eq!(
+        a.valid_stamp().and_then(|s| s.mpn.as_deref()),
+        Some("ROW-NEW"),
+        "the edited unit's base advances"
+    );
+    // The part is still flagged: unit 2 holds TWO-1 against a row at ROW-NEW.
+    check_drift(&mut app);
+    let sheet = app.document_state.active_path.clone().unwrap();
+    assert!(
+        app.library
+            .drift
+            .drifted
+            .get(&sheet)
+            .is_some_and(|d| !d.is_empty()),
+        "unit 2 still differs from the row, and the part is still flagged"
+    );
+}
+
+#[test]
+fn a_multi_unit_part_names_the_edited_unit_and_not_a_kept_your_line() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (_f, mut app, messages) = two_unit_apply();
+    set_field(&mut app, "MPN", "EDITED-9");
+    for m in messages {
+        let _ = app.update(m);
+    }
+    assert!(logged(
+        "U1: kept the MPN edited on unit A while the update ran"
+    ));
+    assert!(logged("no unit took the library value \"ROW-NEW\""));
+    assert!(
+        !logged("kept your MPN \"TWO-1\""),
+        "unit 2 never held a user value"
+    );
+}
+
+#[test]
+fn re_linking_one_unit_skips_the_whole_part() {
+    let _ = signex_app::diagnostics::init_logging();
+    let (_f, mut app, messages) = two_unit_apply();
+    let other = Uuid::now_v7();
+    let engine = app.document_state.active_engine_mut().unwrap();
+    let mut sheet = engine.document().clone();
+    let b = &mut sheet.symbols[1];
+    b.row_id = Some(other);
+    b.library_version = "5.0.0".into();
+    engine.set_document(sheet);
+    let before = doc(&app).symbols[0].clone();
+    for m in messages {
+        let _ = app.update(m);
+    }
+    let a = &doc(&app).symbols[0];
+    assert_eq!(
+        a.library_version, before.library_version,
+        "unit A keeps its version: the part was re-linked"
+    );
+    assert_eq!(
+        a.fields.get("Manufacturer"),
+        before.fields.get("Manufacturer"),
+        "unit A takes no value from the old row"
+    );
+}

@@ -605,10 +605,10 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    let (stamps, relinked) = self.stamps_still_linked(sheet, r.stamps);
+                    let (mut stamps, relinked) = self.stamps_still_linked(sheet, r.stamps);
                     let mut part_syncs = r.part_syncs;
                     part_syncs.retain(|sync| !relinked.contains(&sync.symbol));
-                    let part_syncs = self.revalidated_part_syncs(sheet, part_syncs);
+                    let part_syncs = self.revalidated_part_syncs(sheet, part_syncs, &mut stamps);
                     let lines: Vec<String> = part_syncs.iter().flat_map(PartSync::lines).collect();
                     let landed = self
                         .adopt_library_symbol(sheet, &r.lib_id, fresh, stamps, part_syncs, true);
@@ -639,11 +639,12 @@ impl Signex {
         &self,
         sheet: &std::path::Path,
         syncs: Vec<PartSync>,
+        stamps: &mut [(uuid::Uuid, LinkStamp)],
     ) -> Vec<PartSync> {
         let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
             return Vec::new();
         };
-        crate::library::part_sync::revalidate_parts(syncs, doc)
+        crate::library::part_sync::revalidate_parts(syncs, stamps, doc)
     }
 
     /// The stamps for parts still on the row and version they were computed
@@ -658,23 +659,44 @@ impl Signex {
         let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
             return (Vec::new(), Vec::new());
         };
-        let mut kept = Vec::new();
+        // One part is one link: a re-linked unit takes its siblings with it.
+        let groups = signex_types::schematic::group_into_parts(
+            doc.symbols
+                .iter()
+                .map(signex_types::schematic::Symbol::part_key),
+        );
         let mut relinked = Vec::new();
-        for c in stamps {
-            match doc.symbols.iter().find(|s| s.uuid == c.symbol) {
-                Some(live)
-                    if live.row_id != Some(c.row_id)
-                        || live.library_version != c.library_version =>
-                {
-                    crate::diagnostics::log_warning(format!(
-                        "{} was re-linked while the update ran; its update was skipped",
-                        live.reference
-                    ));
-                    relinked.push(c.symbol);
+        for c in &stamps {
+            let Some(index) = doc.symbols.iter().position(|s| s.uuid == c.symbol) else {
+                continue;
+            };
+            let live = &doc.symbols[index];
+            if relinked.contains(&c.symbol)
+                || (live.row_id == Some(c.row_id) && live.library_version == c.library_version)
+            {
+                continue;
+            }
+            crate::diagnostics::log_warning(format!(
+                "{} was re-linked while the update ran; its update was skipped",
+                live.reference
+            ));
+            let unit_ids = groups
+                .iter()
+                .find(|g| g.contains(&index))
+                .into_iter()
+                .flatten()
+                .map(|&i| doc.symbols[i].uuid);
+            for id in unit_ids {
+                if !relinked.contains(&id) {
+                    relinked.push(id);
                 }
-                _ => kept.push((c.symbol, c.link)),
             }
         }
+        let kept = stamps
+            .into_iter()
+            .filter(|c| !relinked.contains(&c.symbol))
+            .map(|c| (c.symbol, c.link))
+            .collect();
         (kept, relinked)
     }
 

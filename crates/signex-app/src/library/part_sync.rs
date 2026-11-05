@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use signex_engine::Command;
 use signex_types::schematic::{
-    RowStamp, SchematicSheet, StampField, StampValues, Symbol, Theirs, Verdict, base_of,
+    LinkStamp, RowStamp, SchematicSheet, StampField, StampValues, Symbol, Theirs, Verdict, base_of,
     group_into_parts, resolve,
 };
 use uuid::Uuid;
@@ -343,16 +343,20 @@ impl PartSync {
     /// This update checked against the part as it is now (#2070): a field
     /// the user edited since is not rewritten; the edit stays and a line
     /// says so.
-    pub fn revalidated(self, live: &PartIdentity) -> Self {
+    pub fn revalidated(mut self, live: &PartIdentity) -> Self {
         let edited = self.edited_fields(live);
-        self.skipping(&edited, live)
+        for d in self.skipping(&edited, live) {
+            let line = kept_own_line(&self.reference, d.field, live.get(d.field), &d.theirs);
+            self.kept.push(line);
+        }
+        self
     }
 
-    /// Leave `fields` as the part holds them now. A field whose live value
-    /// already is the row's needs no line; one only a sibling unit's edit
-    /// put on the list says so.
-    fn skipping(mut self, fields: &[StampField], live: &PartIdentity) -> Self {
+    /// Leave `fields` as the part holds them now and return what that
+    /// dropped. A field whose live value already is the row's drops nothing.
+    fn skipping(&mut self, fields: &[StampField], live: &PartIdentity) -> Vec<Dropped> {
         let own = self.edited_fields(live);
+        let mut dropped = Vec::new();
         for &field in fields {
             let slot = match field {
                 StampField::Footprint => &mut self.change.footprint,
@@ -363,24 +367,14 @@ impl PartSync {
             if live.get(field) == theirs {
                 continue;
             }
-            let why = if own.contains(&field) {
-                "it changed while the update ran".to_owned()
-            } else {
-                format!(
-                    "another unit of {} changed it while the update ran",
-                    self.reference
-                )
-            };
-            self.kept.push(format!(
-                "{}: kept your {} {:?}; {why} (library {:?})",
-                self.reference,
-                field.label(),
-                live.get(field),
-                theirs
-            ));
+            dropped.push(Dropped {
+                field,
+                theirs,
+                own: own.contains(&field),
+            });
         }
         self.have = live.clone();
-        self
+        dropped
     }
 
     /// The field the new MPN goes into: the alias the part already uses.
@@ -424,32 +418,98 @@ impl PartSync {
     }
 }
 
-/// `syncs` checked against `doc` as it is now (#2070). A part no longer on
-/// the sheet loses its sync. A field edited on any unit of a part is left
-/// alone on every unit of it, so the units never diverge.
-pub fn revalidate_parts(syncs: Vec<PartSync>, doc: &SchematicSheet) -> Vec<PartSync> {
+/// A field an update left alone because the part (or a sibling unit) changed
+/// it meanwhile.
+struct Dropped {
+    field: StampField,
+    /// The row's value that did not land.
+    theirs: String,
+    /// The unit itself was edited; otherwise only a sibling unit was.
+    own: bool,
+}
+
+fn kept_own_line(reference: &str, field: StampField, live: &str, theirs: &str) -> String {
+    format!(
+        "{reference}: kept your {} {live:?}; it changed while the update ran (library {theirs:?})",
+        field.label()
+    )
+}
+
+/// Unit 1 reads "A".
+fn unit_label(unit: u32) -> String {
+    match unit {
+        1..=26 => char::from(b'A' + (unit - 1) as u8).to_string(),
+        n => n.to_string(),
+    }
+}
+
+/// `syncs` checked against `doc` as it is now (#2070), together with the
+/// `stamps` that go with them. A part no longer on the sheet loses its sync.
+/// A field edited on any unit of a part is left alone on every unit of it, so
+/// the units never diverge; a unit that never took a user value for it keeps
+/// its old base for that field, so its drift stays flagged. A multi-unit
+/// part gets one line per field, naming the unit that was edited.
+pub fn revalidate_parts(
+    syncs: Vec<PartSync>,
+    stamps: &mut [(Uuid, LinkStamp)],
+    doc: &SchematicSheet,
+) -> Vec<PartSync> {
     let groups = group_into_parts(doc.symbols.iter().map(Symbol::part_key));
     let group_of = |index: usize| groups.iter().position(|g| g.contains(&index));
-    let live: Vec<(PartSync, usize, PartIdentity)> = syncs
+    let live: Vec<(PartSync, usize, PartIdentity, u32)> = syncs
         .into_iter()
         .filter_map(|sync| {
             let index = doc.symbols.iter().position(|s| s.uuid == sync.symbol)?;
             let identity = PartIdentity::of_symbol(&doc.symbols[index]);
-            Some((sync, group_of(index)?, identity))
+            Some((sync, group_of(index)?, identity, doc.symbols[index].unit))
         })
         .collect();
-    let mut edited: HashMap<usize, Vec<StampField>> = HashMap::new();
-    for (sync, group, identity) in &live {
+    // Per part: each field edited on some unit, and on which units.
+    let mut edited: HashMap<usize, Vec<(StampField, Vec<u32>)>> = HashMap::new();
+    for (sync, group, identity, unit) in &live {
         let fields = edited.entry(*group).or_default();
         for field in sync.edited_fields(identity) {
-            if !fields.contains(&field) {
-                fields.push(field);
+            match fields.iter_mut().find(|(f, _)| *f == field) {
+                Some((_, units)) => units.push(*unit),
+                None => fields.push((field, vec![*unit])),
             }
         }
     }
-    live.into_iter()
-        .map(|(sync, group, identity)| sync.skipping(&edited[&group], &identity))
-        .collect()
+    let mut said: Vec<(usize, StampField)> = Vec::new();
+    let mut out = Vec::new();
+    for (mut sync, group, identity, _) in live {
+        let fields: Vec<StampField> = edited[&group].iter().map(|(f, _)| *f).collect();
+        for d in sync.skipping(&fields, &identity) {
+            if !d.own
+                && let Some((_, link)) = stamps.iter_mut().find(|(id, _)| *id == sync.symbol)
+            {
+                link.values.set(d.field, None);
+            }
+            if said.contains(&(group, d.field)) {
+                continue;
+            }
+            said.push((group, d.field));
+            let line = if groups[group].len() == 1 {
+                kept_own_line(&sync.reference, d.field, identity.get(d.field), &d.theirs)
+            } else {
+                let units = edited[&group]
+                    .iter()
+                    .find(|(f, _)| *f == d.field)
+                    .map(|(_, units)| units.iter().map(|u| unit_label(*u)).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                format!(
+                    "{}: kept the {} edited on unit {} while the update ran; no unit took the library value {:?}",
+                    sync.reference,
+                    d.field.label(),
+                    units.join(", "),
+                    d.theirs
+                )
+            };
+            sync.kept.push(line);
+        }
+        out.push(sync);
+    }
+    out
 }
 
 /// The Manufacturer and MPN a fresh placement stamps (an empty one is left
@@ -629,6 +689,62 @@ mod tests {
         assert_eq!(
             sync.kept,
             ["U1: kept your MPN \"EDITED\"; it changed while the update ran (library \"NEW\")"]
+        );
+    }
+
+    fn unit(uuid: u128, unit: u32, mpn: &str) -> Symbol {
+        Symbol {
+            uuid: Uuid::from_u128(uuid),
+            unit,
+            ..part("", "", mpn)
+        }
+    }
+
+    fn follow_mpn(symbol: &Symbol) -> PartSync {
+        PartSync {
+            symbol: symbol.uuid,
+            reference: symbol.reference.clone(),
+            have: PartIdentity::of_symbol(&unit(symbol.uuid.as_u128(), symbol.unit, "OLD")),
+            change: PartChange {
+                mpn: Some("NEW".into()),
+                ..PartChange::default()
+            },
+            kept: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_sibling_skipped_for_another_units_edit_keeps_its_base_and_one_line_is_logged() {
+        let (a, b) = (unit(1, 1, "EDITED"), unit(2, 2, "OLD"));
+        let syncs = vec![follow_mpn(&a), follow_mpn(&b)];
+        let link = |mpn: &str| LinkStamp {
+            version: "2".into(),
+            values: StampValues {
+                mpn: Some(mpn.into()),
+                ..StampValues::default()
+            },
+        };
+        let mut stamps = vec![(a.uuid, link("NEW")), (b.uuid, link("NEW"))];
+        let doc = SchematicSheet {
+            symbols: vec![a.clone(), b.clone()],
+            ..Default::default()
+        };
+        let out = revalidate_parts(syncs, &mut stamps, &doc);
+        assert_eq!(
+            stamps[0].1.values.mpn.as_deref(),
+            Some("NEW"),
+            "edited unit"
+        );
+        assert_eq!(
+            stamps[1].1.values.mpn, None,
+            "the sibling keeps its old base"
+        );
+        let lines: Vec<String> = out.iter().flat_map(PartSync::lines).collect();
+        assert_eq!(
+            lines,
+            [
+                "U1: kept the MPN edited on unit A while the update ran; no unit took the library value \"NEW\""
+            ]
         );
     }
 
