@@ -8,7 +8,7 @@
 //! completion, one undo step per `lib_id`.
 
 use super::*;
-use crate::library::drift::{ApplyInput, SymbolRead, SymbolsRead, apply_input};
+use crate::library::drift::{ApplyInput, CapturedStamp, SymbolRead, SymbolsRead, apply_input};
 use crate::library::part_sync::PartSync;
 use signex_types::schematic::{LibSymbol, LinkStamp};
 
@@ -605,16 +605,13 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    let lines: Vec<String> =
-                        r.part_syncs.iter().flat_map(PartSync::lines).collect();
-                    let landed = self.adopt_library_symbol(
-                        sheet,
-                        &r.lib_id,
-                        fresh,
-                        r.stamps,
-                        r.part_syncs,
-                        true,
-                    );
+                    let (mut stamps, relinked) = self.stamps_still_linked(sheet, r.stamps);
+                    let mut part_syncs = r.part_syncs;
+                    part_syncs.retain(|sync| !relinked.contains(&sync.symbol));
+                    let part_syncs = self.revalidated_part_syncs(sheet, part_syncs, &mut stamps);
+                    let lines: Vec<String> = part_syncs.iter().flat_map(PartSync::lines).collect();
+                    let landed = self
+                        .adopt_library_symbol(sheet, &r.lib_id, fresh, stamps, part_syncs, true);
                     if landed {
                         lines.iter().for_each(crate::diagnostics::log_info);
                     }
@@ -632,6 +629,75 @@ impl Signex {
             }
         }
         all_applied
+    }
+
+    /// The worker decided each part against the values captured at Apply;
+    /// check them against the parts as they are now, so an edit made while
+    /// the worker ran is never overwritten (#2070). A part no longer on the
+    /// sheet loses its sync.
+    fn revalidated_part_syncs(
+        &self,
+        sheet: &std::path::Path,
+        syncs: Vec<PartSync>,
+        stamps: &mut [(uuid::Uuid, LinkStamp)],
+    ) -> Vec<PartSync> {
+        let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
+            return Vec::new();
+        };
+        crate::library::part_sync::revalidate_parts(syncs, stamps, doc)
+    }
+
+    /// The stamps for parts still on the row and version they were computed
+    /// for (#2070), as `(placed symbol, stamp)`, and the parts that were
+    /// re-linked while the worker ran: those get neither stamp nor sync, and
+    /// a Messages line.
+    fn stamps_still_linked(
+        &self,
+        sheet: &std::path::Path,
+        stamps: Vec<CapturedStamp>,
+    ) -> (Vec<(uuid::Uuid, LinkStamp)>, Vec<uuid::Uuid>) {
+        let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
+            return (Vec::new(), Vec::new());
+        };
+        // One part is one link: a re-linked unit takes its siblings with it.
+        let groups = signex_types::schematic::group_into_parts(
+            doc.symbols
+                .iter()
+                .map(signex_types::schematic::Symbol::part_key),
+        );
+        let mut relinked = Vec::new();
+        for c in &stamps {
+            let Some(index) = doc.symbols.iter().position(|s| s.uuid == c.symbol) else {
+                continue;
+            };
+            let live = &doc.symbols[index];
+            if relinked.contains(&c.symbol)
+                || (live.row_id == Some(c.row_id) && live.library_version == c.library_version)
+            {
+                continue;
+            }
+            crate::diagnostics::log_warning(format!(
+                "{} was re-linked while the update ran; its update was skipped",
+                live.reference
+            ));
+            let unit_ids = groups
+                .iter()
+                .find(|g| g.contains(&index))
+                .into_iter()
+                .flatten()
+                .map(|&i| doc.symbols[i].uuid);
+            for id in unit_ids {
+                if !relinked.contains(&id) {
+                    relinked.push(id);
+                }
+            }
+        }
+        let kept = stamps
+            .into_iter()
+            .filter(|c| !relinked.contains(&c.symbol))
+            .map(|c| (c.symbol, c.link))
+            .collect();
+        (kept, relinked)
     }
 
     /// Adopt `fresh` as the embedded copy of `lib_id` on `sheet` and stamp
