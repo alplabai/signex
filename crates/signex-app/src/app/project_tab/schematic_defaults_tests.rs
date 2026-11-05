@@ -79,6 +79,12 @@ fn the_sheet_draws_with_the_project_default() {
     assert_eq!(defaults.wire_width_mm, 0.3);
     assert_eq!(defaults.bus_mm(), 0.9);
     assert_eq!(defaults.symbol_line_width_mm, 0.3, "pins follow the wire");
+    // Clicks are hit at the drawn width, on the canvas and in app handlers.
+    assert_eq!(
+        app.canvas_view_prefs(window).wire_widths().defaults,
+        defaults
+    );
+    assert_eq!(app.active_wire_widths().defaults, defaults);
 }
 
 #[test]
