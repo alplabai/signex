@@ -109,3 +109,29 @@ fn a_pending_title_block_draft_is_committed_and_reported_at_session_end() {
     });
     assert!(reported, "the committed edit is reported as unsaved");
 }
+
+/// While a rename or delete runs the session does not end, as the GUI quit
+/// is held; the hold is reported.
+#[test]
+fn a_session_does_not_end_while_a_path_op_runs() {
+    // Already installed by another test of this binary: fine.
+    signex_app::diagnostics::init_logging().ok();
+    let (mut app, _boot) = Signex::new();
+    let _held = app.document_state.pending_path_ops.begin(
+        signex_app::app::path_ops::PathOpKind::Rename,
+        vec![PathBuf::from("/zq-held/sheet.snxsch")],
+        signex_app::app::CaseFold::default(),
+    );
+    let before = signex_app::diagnostics::newest_entry_id();
+
+    let end = app.end_headless_session();
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, end).expect("settled");
+
+    assert!(!driver.has_exited(), "the session ended mid-rename");
+    let reported = signex_app::diagnostics::entries_since(before)
+        .entries
+        .iter()
+        .any(|e| e.message.contains("A rename or delete is still running"));
+    assert!(reported, "the hold is reported");
+}
