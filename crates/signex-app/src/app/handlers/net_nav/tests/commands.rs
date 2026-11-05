@@ -74,6 +74,7 @@ fn the_up_commands_go_to_the_parent_sheet() {
     for id in ["leave_sheet", "navigate_up_hierarchy"] {
         let mut p = project();
         p.focus(&p.mid.clone());
+        p.app.settle_hierarchy();
         run(&mut p, id);
         assert_eq!(p.active(), Some(p.root.clone()), "{id}");
     }
@@ -85,6 +86,7 @@ fn the_up_commands_go_to_the_parent_sheet() {
 fn the_up_commands_on_a_top_level_sheet_say_there_is_no_parent() {
     for id in ["leave_sheet", "navigate_up_hierarchy"] {
         let mut p = project();
+        p.app.settle_hierarchy();
         run(&mut p, id);
         assert_eq!(p.active(), Some(p.root.clone()), "{id}");
         assert!(logged(&["no parent sheet"]), "{id}");

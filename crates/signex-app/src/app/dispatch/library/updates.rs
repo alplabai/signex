@@ -605,9 +605,22 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    let (mut stamps, relinked) = self.stamps_still_linked(sheet, r.stamps);
+                    let (stamps, relinked) = self.stamps_still_linked(sheet, r.stamps);
                     let mut part_syncs = r.part_syncs;
                     part_syncs.retain(|sync| !relinked.contains(&sync.symbol));
+                    let (mut stamps, part_syncs, held) =
+                        match self.document_state.engines.get(sheet) {
+                            Some(engine) => crate::library::part_sync::hold_back_locked(
+                                engine, stamps, part_syncs,
+                            ),
+                            None => (stamps, part_syncs, Vec::new()),
+                        };
+                    for reference in &held {
+                        crate::diagnostics::log_warning(format!(
+                            "{reference} is locked; its footprint/MPN was not updated from the library. Unlock it to apply."
+                        ));
+                        all_applied = false;
+                    }
                     let part_syncs = self.revalidated_part_syncs(sheet, part_syncs, &mut stamps);
                     let lines: Vec<String> = part_syncs.iter().flat_map(PartSync::lines).collect();
                     let landed = self
