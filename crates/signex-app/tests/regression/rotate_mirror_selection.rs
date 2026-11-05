@@ -593,6 +593,7 @@ fn a_box_selected_lone_symbol_turns_in_place() {
         &Default::default(),
         &Aabb::new(0.0, 0.0, 30.0, 30.0),
         SelectionMode::Touching,
+        Default::default(),
     );
     assert!(
         selected.contains(&SelectedItem::new(uuid, SelectedKind::Symbol))

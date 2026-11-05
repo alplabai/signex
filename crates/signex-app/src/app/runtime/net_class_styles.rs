@@ -335,6 +335,15 @@ impl Signex {
         self.ui_state.net_class_styles.styles_in(placement.as_ref())
     }
 
+    /// The widths wires and buses of the active sheet are drawn, and so hit
+    /// and boxed, at: its net classes and its project defaults (#2026).
+    pub(crate) fn active_wire_widths(&self) -> crate::schematic_runtime::WireWidths<'_> {
+        crate::schematic_runtime::WireWidths {
+            class_styles: Some(self.active_class_styles()),
+            defaults: self.document_state.active_schematic_defaults(),
+        }
+    }
+
     fn clear_schematic_content_caches(&mut self) {
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
             canvas.clear_content_cache();

@@ -98,12 +98,14 @@ fn hit_test_rect_mode_distinguishes_inside_and_touching() {
         &Default::default(),
         &rect,
         hit_test::SelectionMode::Inside,
+        Default::default(),
     );
     let touching = hit_test::hit_test_rect_mode(
         &snapshot,
         &Default::default(),
         &rect,
         hit_test::SelectionMode::Touching,
+        Default::default(),
     );
 
     assert!(!inside.contains(&SelectedItem::new(wire_uuid, SelectedKind::Wire)));
@@ -704,7 +706,10 @@ fn a_drawn_designator_is_hit_across_its_drawn_width() {
         long.max_y + 0.1,
     );
     let inside = hit_test::SelectionMode::Inside;
-    assert!(hit_test::hit_test_rect_mode(&snapshot, &drawn, &around_long, inside).contains(&field));
+    assert!(
+        hit_test::hit_test_rect_mode(&snapshot, &drawn, &around_long, inside, Default::default())
+            .contains(&field)
+    );
     let around_short = Aabb::new(
         short.min_x - 0.1,
         short.min_y - 0.1,
@@ -712,7 +717,8 @@ fn a_drawn_designator_is_hit_across_its_drawn_width() {
         short.max_y + 0.1,
     );
     assert!(
-        !hit_test::hit_test_rect_mode(&snapshot, &drawn, &around_short, inside).contains(&field),
+        !hit_test::hit_test_rect_mode(&snapshot, &drawn, &around_short, inside, Default::default())
+            .contains(&field),
         "the drawn text no longer fits the stored text's box"
     );
 }

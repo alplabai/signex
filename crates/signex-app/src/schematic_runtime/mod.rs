@@ -38,7 +38,7 @@ pub use scene_cache::ContentSceneCache;
 pub(crate) use scene_cache::{SceneInputs, pan_reach};
 pub use snapshot::build_renderer_snapshot;
 pub use wire_style::{
-    WireClassStyles, WireStyling, drawn_wire_width_mm, junction_color, wire_color,
+    WireClassStyles, WireStyling, WireWidths, drawn_wire_width_mm, junction_color, wire_color,
 };
 
 pub type SchematicRenderSnapshot = SchematicSheet;
@@ -597,8 +597,9 @@ struct ItemBound {
 fn collect_item_bounds(
     snapshot: &SchematicRenderSnapshot,
     designators: &Designators,
+    widths: WireWidths<'_>,
 ) -> Vec<ItemBound> {
-    collect_item_bounds_with(snapshot, true, designators)
+    collect_item_bounds_with(snapshot, true, designators, widths)
 }
 
 /// `symbol_bodies = false` leaves out the symbol body entries, which are the
@@ -607,6 +608,7 @@ fn collect_item_bounds_with(
     snapshot: &SchematicRenderSnapshot,
     symbol_bodies: bool,
     designators: &Designators,
+    widths: WireWidths<'_>,
 ) -> Vec<ItemBound> {
     let mut out = Vec::new();
     let document_family = snapshot.font_family.as_deref();
@@ -657,13 +659,8 @@ fn collect_item_bounds_with(
     for wire in &snapshot.wires {
         out.push(ItemBound {
             item: SelectedItem::new(wire.uuid, SelectedKind::Wire),
-            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y).expand(
-                drawn_wire_width_mm(
-                    wire,
-                    None,
-                    &signex_types::schematic::SchematicDefaults::BUILT_IN,
-                ) * 0.5,
-            ),
+            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y)
+                .expand(widths.wire_mm(wire) * 0.5),
             anchor: Point::new(
                 (wire.start.x + wire.end.x) * 0.5,
                 (wire.start.y + wire.end.y) * 0.5,
@@ -674,8 +671,7 @@ fn collect_item_bounds_with(
     for bus in &snapshot.buses {
         out.push(ItemBound {
             item: SelectedItem::new(bus.uuid, SelectedKind::Bus),
-            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y)
-                .expand(signex_types::schematic::SchematicDefaults::BUILT_IN.bus_mm()),
+            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y).expand(widths.bus_mm()),
             anchor: Point::new(
                 (bus.start.x + bus.end.x) * 0.5,
                 (bus.start.y + bus.end.y) * 0.5,
@@ -816,6 +812,7 @@ fn selected_aabbs(
     snapshot: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     designators: &Designators,
+    widths: WireWidths<'_>,
 ) -> Vec<Option<Aabb>> {
     let symbols = std::cell::OnceCell::new();
     let others = std::cell::OnceCell::new();
@@ -836,7 +833,7 @@ fn selected_aabbs(
             }
             let index: &HashMap<SelectedItem, Aabb> = others.get_or_init(|| {
                 let mut index = HashMap::new();
-                for entry in collect_item_bounds_with(snapshot, false, designators) {
+                for entry in collect_item_bounds_with(snapshot, false, designators, widths) {
                     index.entry(entry.item).or_insert(entry.bbox);
                 }
                 index

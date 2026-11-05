@@ -176,7 +176,7 @@ impl SchematicCanvas<'_> {
                     &self.designators,
                     wx,
                     wy,
-                    self.prefs.wire_class_styles,
+                    self.prefs.wire_widths(),
                 )
                 .filter(|h| crate::app::passes_filter(h, snapshot, self.prefs.selection_filters))
             });

@@ -23,6 +23,14 @@ fn sheet_with_wire() -> SchematicRenderSnapshot {
 
 /// The same wire with its width unset, so a class width applies to it: an
 /// explicit width beats the class (#2026).
+/// Hit-test widths from a class map alone, at the built-in defaults.
+fn class_widths(styles: &WireClassStyles) -> WireWidths<'_> {
+    WireWidths {
+        class_styles: Some(styles),
+        defaults: Default::default(),
+    }
+}
+
 fn sheet_with_unset_wire() -> SchematicRenderSnapshot {
     let mut sheet = sheet_with_wire();
     sheet.wires[0].stroke_width = 0.0;
@@ -210,9 +218,45 @@ fn a_class_width_widens_the_hit_area_to_the_drawn_width() {
     assert!(hit_test::hit_test(&sheet, &Designators::new(), x, y).is_none());
 
     let wide = class_style(NetLineStyle::Solid, Some(2.0), None);
-    let hit = hit_test::hit_test_styled(&sheet, &Designators::new(), x, y, &wide);
+    let hit = hit_test::hit_test_styled(&sheet, &Designators::new(), x, y, class_widths(&wide));
 
     assert_eq!(hit.map(|h| h.uuid), Some(WIRE_ID));
+}
+
+/// #2026: a wide project wire width widens an unset wire's hit area and its
+/// box, as a class width does.
+#[test]
+fn a_project_wire_width_widens_the_hit_area_and_the_box() {
+    let sheet = sheet_with_unset_wire();
+    let wide = WireWidths {
+        class_styles: None,
+        defaults: signex_types::schematic::SchematicDefaults {
+            wire_width_mm: 2.0,
+            ..signex_types::schematic::SchematicDefaults::BUILT_IN
+        },
+    };
+    let none = Designators::new();
+    let hit = |widths| hit_test::hit_test_styled(&sheet, &none, 30.0, 11.5, widths);
+    assert!(hit(WireWidths::default()).is_none());
+    assert_eq!(hit(wide).map(|h| h.uuid), Some(WIRE_ID));
+
+    // A box just around the thin wire holds it; the wide wire sticks out.
+    let tight = Aabb::new(9.5, 9.5, 60.5, 10.5);
+    let inside = |widths| {
+        hit_test::hit_test_rect_mode(
+            &sheet,
+            &none,
+            &tight,
+            hit_test::SelectionMode::Inside,
+            widths,
+        )
+    };
+    assert!(
+        inside(WireWidths::default())
+            .iter()
+            .any(|h| h.uuid == WIRE_ID)
+    );
+    assert!(!inside(wide).iter().any(|h| h.uuid == WIRE_ID));
 }
 
 #[test]
@@ -220,8 +264,26 @@ fn a_style_without_width_keeps_the_default_hit_area() {
     let sheet = sheet_with_wire();
     let dashed = class_style(NetLineStyle::Dashed, None, None);
 
-    assert!(hit_test::hit_test_styled(&sheet, &Designators::new(), 30.0, 11.5, &dashed).is_none());
-    assert!(hit_test::hit_test_styled(&sheet, &Designators::new(), 30.0, 10.1, &dashed).is_some());
+    assert!(
+        hit_test::hit_test_styled(
+            &sheet,
+            &Designators::new(),
+            30.0,
+            11.5,
+            class_widths(&dashed)
+        )
+        .is_none()
+    );
+    assert!(
+        hit_test::hit_test_styled(
+            &sheet,
+            &Designators::new(),
+            30.0,
+            10.1,
+            class_widths(&dashed)
+        )
+        .is_some()
+    );
 }
 
 const JUNCTION_ID: uuid::Uuid = uuid::Uuid::from_u128(8);

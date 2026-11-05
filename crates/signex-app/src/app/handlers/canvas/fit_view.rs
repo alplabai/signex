@@ -41,6 +41,7 @@ impl Signex {
                 snapshot,
                 &selected,
                 &self.interaction_state.active_canvas().designators,
+                self.active_wire_widths(),
             )
         });
         let Some(b) = bounds else {

@@ -175,7 +175,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.active_class_styles(),
+                        self.active_wire_widths(),
                     );
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
@@ -235,6 +235,7 @@ impl Signex {
                             &self.interaction_state.active_canvas().designators,
                             &rect,
                             mode,
+                            self.active_wire_widths(),
                         )
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
@@ -253,7 +254,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.active_class_styles(),
+                        self.active_wire_widths(),
                     );
                     if let Some(item) = hit {
                         self.interaction_state.active_canvas_mut().selected =

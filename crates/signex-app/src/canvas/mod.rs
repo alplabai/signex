@@ -574,6 +574,15 @@ pub struct CanvasViewPrefs<'a> {
 }
 
 impl CanvasViewPrefs<'_> {
+    /// The widths wires and buses are drawn, hit and boxed at.
+    #[must_use]
+    pub fn wire_widths(&self) -> crate::schematic_runtime::WireWidths<'_> {
+        crate::schematic_runtime::WireWidths {
+            class_styles: Some(self.wire_class_styles),
+            defaults: self.schematic_defaults,
+        }
+    }
+
     /// The wire styling the renderer draws with: the per-net colour
     /// override over the net-class style.
     #[must_use]

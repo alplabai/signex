@@ -43,21 +43,21 @@ pub fn hit_test(
         designators,
         world_x,
         world_y,
-        &WireClassStyles::new(),
+        WireWidths::default(),
     )
 }
 
-/// [`hit_test`] with each wire hit at the width it is drawn at, which a net
-/// class can change.
+/// [`hit_test`] with each wire and bus hit at the width it is drawn at, which
+/// a net class and the project defaults can change.
 pub fn hit_test_styled(
     snapshot: &SchematicRenderSnapshot,
     designators: &Designators,
     world_x: f64,
     world_y: f64,
-    class_styles: &WireClassStyles,
+    widths: WireWidths<'_>,
 ) -> Option<SelectedItem> {
     let point = Point::new(world_x, world_y);
-    hit_test_items(snapshot, designators, point, class_styles)
+    hit_test_items(snapshot, designators, point, widths)
         .into_iter()
         .next()
 }
@@ -70,9 +70,9 @@ pub fn hit_test_polygon(
         return Vec::new();
     }
 
-    // Anchors only: the text a designator draws does not move its anchor.
+    // Anchors only: neither a designator's text nor a wire's width moves one.
     let mut out = Vec::new();
-    for item in collect_item_bounds(snapshot, &Designators::new()) {
+    for item in collect_item_bounds(snapshot, &Designators::new(), WireWidths::default()) {
         if point_in_polygon((item.anchor.x, item.anchor.y), polygon) {
             out.push(item.item);
         }
@@ -85,10 +85,11 @@ pub fn hit_test_rect_mode(
     designators: &Designators,
     rect: &Aabb,
     mode: SelectionMode,
+    widths: WireWidths<'_>,
 ) -> Vec<SelectedItem> {
     let mut out = Vec::new();
 
-    for item in collect_item_bounds(snapshot, designators) {
+    for item in collect_item_bounds(snapshot, designators, widths) {
         let inside = rect.contains(item.bbox.min_x, item.bbox.min_y)
             && rect.contains(item.bbox.max_x, item.bbox.max_y);
         let touching = aabb_overlaps(rect, &item.bbox);
@@ -110,7 +111,7 @@ fn hit_test_items(
     snapshot: &SchematicRenderSnapshot,
     designators: &Designators,
     point: Point,
-    class_styles: &WireClassStyles,
+    widths: WireWidths<'_>,
 ) -> Vec<SelectedItem> {
     let mut out = Vec::new();
     // `collect_item_bounds` emits one Wire (Bus) entry per `snapshot.wires`
@@ -119,15 +120,18 @@ fn hit_test_items(
     let mut wire_index = snapshot.wires.len();
     let mut bus_index = snapshot.buses.len();
 
-    for item in collect_item_bounds(snapshot, designators).into_iter().rev() {
+    for item in collect_item_bounds(snapshot, designators, widths)
+        .into_iter()
+        .rev()
+    {
         let hit = match item.item.kind {
             SelectedKind::Wire => {
                 wire_index -= 1;
-                hit_wire(&snapshot.wires[wire_index], point, class_styles)
+                hit_wire(&snapshot.wires[wire_index], point, widths)
             }
             SelectedKind::Bus => {
                 bus_index -= 1;
-                hit_bus(&snapshot.buses[bus_index], point)
+                hit_bus(&snapshot.buses[bus_index], point, widths)
             }
             _ => item.bbox.expand(0.25).contains(point.x, point.y),
         };
@@ -139,23 +143,16 @@ fn hit_test_items(
     out
 }
 
-fn hit_wire(
-    wire: &signex_types::schematic::Wire,
-    point: Point,
-    class_styles: &WireClassStyles,
-) -> bool {
-    // shortcut: hit-test uses the built-in default, not the project's; thread
-    // the project defaults here if a project sets a very wide wire.
-    let tolerance = drawn_wire_width_mm(
-        wire,
-        class_styles.get(&wire.uuid),
-        &signex_types::schematic::SchematicDefaults::BUILT_IN,
-    )
-    .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
+fn hit_wire(wire: &signex_types::schematic::Wire, point: Point, widths: WireWidths<'_>) -> bool {
+    let tolerance = widths
+        .wire_mm(wire)
+        .max(signex_types::schematic::SCHEMATIC_HIT_WIRE_TOLERANCE_MM);
     point_to_segment_distance(point, wire.start, wire.end) <= tolerance
 }
 
-fn hit_bus(bus: &signex_types::schematic::Bus, point: Point) -> bool {
-    point_to_segment_distance(point, bus.start, bus.end)
-        <= signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM
+fn hit_bus(bus: &signex_types::schematic::Bus, point: Point, widths: WireWidths<'_>) -> bool {
+    let tolerance = widths
+        .bus_mm()
+        .max(signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM);
+    point_to_segment_distance(point, bus.start, bus.end) <= tolerance
 }

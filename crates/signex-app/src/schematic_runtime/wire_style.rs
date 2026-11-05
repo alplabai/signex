@@ -97,6 +97,30 @@ pub fn junction_color(styling: Option<WireStyling<'_>>, junction: Uuid) -> Optio
     )
 }
 
+/// What a wire's drawn width depends on besides the wire: its net class and
+/// the project defaults (#2026). Hit test and item bounds take it, so a wire
+/// is grabbed and boxed at the width it is drawn at.
+#[derive(Clone, Copy, Default)]
+pub struct WireWidths<'a> {
+    pub class_styles: Option<&'a WireClassStyles>,
+    pub defaults: SchematicDefaults,
+}
+
+impl WireWidths<'_> {
+    /// The width `wire` is drawn at.
+    #[must_use]
+    pub fn wire_mm(&self, wire: &Wire) -> f64 {
+        let class = self.class_styles.and_then(|styles| styles.get(&wire.uuid));
+        drawn_wire_width_mm(wire, class, &self.defaults)
+    }
+
+    /// The width a bus is drawn at.
+    #[must_use]
+    pub fn bus_mm(&self) -> f64 {
+        self.defaults.bus_mm()
+    }
+}
+
 /// The width in mm a wire is drawn at, and so the width it is hit at.
 #[must_use]
 pub fn drawn_wire_width_mm(

@@ -135,13 +135,17 @@ fn a_library_placed_power_port_draws_no_designator() {
     };
     let port = power_port(Some(visible));
     assert!(!reference_drawn(&port));
-    let bounds = collect_item_bounds(&SchematicSheet::default(), &Default::default());
+    let bounds = collect_item_bounds(
+        &SchematicSheet::default(),
+        &Default::default(),
+        Default::default(),
+    );
     assert!(bounds.is_empty());
     let sheet = SchematicSheet {
         symbols: vec![port],
         ..SchematicSheet::default()
     };
-    let has_ref_box = collect_item_bounds(&sheet, &Default::default())
+    let has_ref_box = collect_item_bounds(&sheet, &Default::default(), Default::default())
         .iter()
         .any(|b| b.item.kind == signex_types::schematic::SelectedKind::SymbolRefField);
     assert!(!has_ref_box, "an undrawn designator must not be selectable");

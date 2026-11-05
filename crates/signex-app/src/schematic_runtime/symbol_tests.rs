@@ -108,7 +108,7 @@ fn symbols_without_geometry_lists_each_missing_library_id_once() {
 
 /// The box of one item, through the batch entry point the overlay uses.
 fn item_aabb(sheet: &SchematicRenderSnapshot, item: &SelectedItem) -> Option<Aabb> {
-    selected_aabbs(sheet, &[*item], &Default::default())[0]
+    selected_aabbs(sheet, &[*item], &Default::default(), Default::default())[0]
 }
 
 #[test]

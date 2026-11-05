@@ -257,7 +257,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.active_class_styles(),
+                        self.active_wire_widths(),
                     )
                     && crate::app::handlers::selection_workflow::passes_filter(
                         &hit,
