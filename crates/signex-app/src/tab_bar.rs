@@ -172,7 +172,7 @@ pub fn view<'a>(
             .align_y(iced::alignment::Vertical::Center),
         )
         .padding(0)
-        .style(styles::subtle_button_with_rest(tokens, text_muted))
+        .style(styles::close_x_button(tokens, text_muted))
         .on_press(TabMessage::CloseClicked(i));
         let inner = container(
             content
@@ -292,8 +292,8 @@ const TAB_FONT_SIZE: f32 = TS.body;
 /// Close x glyph size and square hit target, both relative to the tab
 /// text so they scale with the base font size. The hit target is rounded up
 /// to a whole pixel so the strip height built from it stays whole.
-const CLOSE_GLYPH_SIZE: f32 = TAB_FONT_SIZE * 1.25;
-const CLOSE_HIT_SIZE: f32 = (TAB_FONT_SIZE * 1.5).ceil();
+const CLOSE_GLYPH_SIZE: f32 = TAB_FONT_SIZE * 1.6;
+const CLOSE_HIT_SIZE: f32 = (TAB_FONT_SIZE * 1.75).ceil();
 
 /// Dirty dot diameter as a fraction of the tab font size.
 const DIRTY_DOT_EM: f32 = 0.6;
@@ -601,7 +601,7 @@ mod tests {
         for &id in signex_types::theme::ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(id);
             let rest_text = crate::styles::ti(tokens.text_secondary);
-            let style = crate::styles::subtle_button_with_rest(&tokens, rest_text);
+            let style = crate::styles::close_x_button(&tokens, rest_text);
             let theme = iced::Theme::Dark;
             let active = style(&theme, Status::Active);
             let hovered = style(&theme, Status::Hovered);

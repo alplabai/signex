@@ -331,7 +331,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // border (matches the breathing room Altium leaves below its
         // panel tabs).
         container({
-            let mut tree = TreeView::new(&ctx.project_tree, &ctx.tokens);
+            let mut tree = TreeView::new(&ctx.project_tree, &ctx.tokens).text_size(TS.body);
             if let Some(sel) = ctx.project_tree_selected.as_deref() {
                 tree = tree.selected(sel);
             }
@@ -366,7 +366,7 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .boxed(),
         );
     } else {
-        let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens);
+        let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens).text_size(TS.body);
         let selected_key = ctx
             .navigator
             .selected

@@ -427,31 +427,31 @@ pub fn canvas_font_popup<'a>(
             row![
                 text("Canvas Font Settings").size(TS.body).color(label_c),
                 Space::new().width(Length::Fill),
-                iced::widget::button(text("Close").size(TS.caption))
+                iced::widget::button(text("Close").size(TS.body))
                     .on_press(PanelMsg::CloseCanvasFontPopup)
                     .padding([SP.xs, 6.0])
             ]
             .align_y(iced::Alignment::Center),
             row![
-                text("Family").size(TS.caption).color(label_c).width(56),
+                text("Family").size(TS.body).color(label_c).width(56),
                 family_pick,
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             row![
-                text("Size").size(TS.caption).color(label_c).width(56),
+                text("Size").size(TS.body).color(label_c).width(56),
                 size_input,
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             row![
-                text("Style").size(TS.caption).color(label_c).width(56),
+                text("Style").size(TS.body).color(label_c).width(56),
                 row![
                     iced::widget::checkbox(bold)
                         .on_toggle(PanelMsg::SetCanvasFontBold)
                         .size(TS.label)
                         .spacing(SP.s),
-                    text("Bold").size(TS.caption).color(label_c),
+                    text("Bold").size(TS.body).color(label_c),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
@@ -460,7 +460,7 @@ pub fn canvas_font_popup<'a>(
                         .on_toggle(PanelMsg::SetCanvasFontItalic)
                         .size(TS.label)
                         .spacing(SP.s),
-                    text("Italic").size(TS.caption).color(label_c),
+                    text("Italic").size(TS.body).color(label_c),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),

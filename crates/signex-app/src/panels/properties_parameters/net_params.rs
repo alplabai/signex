@@ -110,11 +110,11 @@ pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, Pan
     container(
         row![
             text("Name".to_string())
-                .size(TS.caption)
+                .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(2)),
             text("Value".to_string())
-                .size(TS.caption)
+                .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(3)),
         ]
@@ -141,7 +141,7 @@ pub fn empty_section_row<'a>(
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     container(
-        container(text(label.to_string()).size(TS.caption).color(label_c))
+        container(text(label.to_string()).size(TS.body).color(label_c))
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
     )
