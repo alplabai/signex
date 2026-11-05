@@ -138,6 +138,8 @@ impl SymbolCanvas<'_> {
                                                 p,
                                                 cross_arm,
                                                 crate::canvas::grid::MINOR_GRID_LINE_PX,
+                                                // No device scale reaches this canvas yet.
+                                                1.0,
                                                 dot_color,
                                             );
                                         }
