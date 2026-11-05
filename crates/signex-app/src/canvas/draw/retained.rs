@@ -77,9 +77,7 @@ impl RetainedContent {
 }
 
 /// How far the clip rectangle reaches past the viewport on each side: the
-/// pan reach cut down to whole device pixels, so the rectangle's origin keeps
-/// the fraction of the viewport's and the mesh snap of the renderer lands the
-/// geometry where it lands without the margin.
+/// pan reach cut down to whole device pixels.
 fn clip_margin(viewport: iced::Size, device_px_per_logical_px: f32) -> iced::Vector {
     let reach = pan_reach(viewport);
     let whole = |v: f32| (v * device_px_per_logical_px).floor() / device_px_per_logical_px;
