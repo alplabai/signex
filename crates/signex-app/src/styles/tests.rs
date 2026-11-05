@@ -192,3 +192,18 @@ fn outline_button_rest_fill_is_faint_overlay() {
         );
     }
 }
+
+#[test]
+fn status_bar_has_a_top_only_border_in_the_theme_border_colour() {
+    for (id, t) in builtin_tokens() {
+        let style = super::status_bar(&t)(&Theme::Dark);
+        let b = style.border;
+        let width = |side: iced::border::Side| side.width.unwrap_or(b.width);
+        assert_eq!(width(b.top), 1.0, "{id:?} top");
+        assert_eq!(width(b.right), 0.0, "{id:?} right");
+        assert_eq!(width(b.bottom), 0.0, "{id:?} bottom");
+        assert_eq!(width(b.left), 0.0, "{id:?} left");
+        assert_eq!(b.top.color.unwrap_or(b.color), ti(t.border), "{id:?}");
+        assert_eq!(b.radius, 0.0.into(), "{id:?} radius");
+    }
+}

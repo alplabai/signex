@@ -1,17 +1,15 @@
-//! Custom tab pill widget — three-sided border (top + sides) plus a
-//! 2-px accent strip below for the active marker.
+//! Custom tab pill widget — a 1-px outlined, half-rounded quad plus a
+//! 2-px accent strip for the active marker.
 //!
-//! Built as a real `iced::Widget` because iced 0.14's standard `Border`
-//! is uniform on all four sides — we can't draw "top + sides only" via
-//! the built-in container style. Trying to fake it with a stacked
-//! accent-bg outer + rounded-top inner caused the accent colour to
-//! bleed through the rounded corners; the widget below paints only the
-//! three edges + accent strip directly via `renderer.fill_quad`.
+//! Built as a widget so the pill owns its bg fill and can overlap the
+//! next pill by one border width (shared divider) and overlay the strip
+//! baseline with the accent. The outline uses the fork's per-side
+//! `border::Side` API (see `pill_border`).
 //!
 //! Geometry:
 //!
 //! ```text
-//!  ┌─────────────┐  ← top + side borders (1 px, `border` colour)
+//!  ┌─────────────┐  ← 1 px outline, `border` colour
 //!  │             │
 //!  │   content   │  ← caller-supplied child (text + icons + ...)
 //!  │             │
@@ -28,7 +26,7 @@ use iced::advanced::renderer::Quad;
 use iced::advanced::widget::{self, Tree, Widget};
 use iced::advanced::{Shell, overlay, renderer};
 use iced::mouse::{self, Cursor};
-use iced::{Background, Border, Color, Element, Event, Length, Rectangle, Size, Vector};
+use iced::{Background, Border, Color, Element, Event, Length, Rectangle, Size, Vector, border};
 
 /// Where the accent stripe sits on the pill — `Bottom` for document
 /// tabs that hang from above (rounded top corners, accent line at
@@ -78,6 +76,72 @@ fn pill_quad_bounds(bounds: Rectangle, style: &TabPillStyle) -> Rectangle {
             ..bounds
         }
     }
+}
+
+/// Border of the pill quad: 1 px in the `border` colour on every side
+/// (the edge opposite the rounded corners merges with the strip
+/// baseline, which has the same colour and y), with the two corners that
+/// face away from the strip rounded.
+///
+/// Per-side widths are set explicitly through the fork's `border::Side`
+/// so the intent is visible at the call site. A per-side accent edge
+/// (width 2, accent colour) was evaluated and rejected: the mitred
+/// corner joins of a 1 px side next to a 2 px side anti-alias differently
+/// from the flat strip drawn today, so the strip stays a separate quad.
+fn pill_border(style: &TabPillStyle) -> Border {
+    let radius = match style.accent_position {
+        AccentPosition::Bottom => border::Radius::default()
+            .top_left(TOP_RADIUS)
+            .top_right(TOP_RADIUS),
+        AccentPosition::Top => border::Radius::default()
+            .bottom_left(TOP_RADIUS)
+            .bottom_right(TOP_RADIUS),
+    };
+    let side = border::Side::default()
+        .color(style.border)
+        .width(BORDER_WIDTH);
+    Border {
+        color: style.border,
+        width: BORDER_WIDTH,
+        radius,
+        top: side,
+        right: side,
+        bottom: side,
+        left: side,
+    }
+}
+
+/// Every quad the pill paints, in paint order.
+fn pill_quads(bounds: Rectangle, style: &TabPillStyle) -> Vec<(Quad, Background)> {
+    let mut quads = vec![(
+        Quad {
+            bounds: pill_quad_bounds(bounds, style),
+            border: pill_border(style),
+            ..Quad::default()
+        },
+        Background::Color(style.fill),
+    )];
+    if style.is_active {
+        // Accent strip at the edge opposite the rounded corners; it
+        // overlays the outline there (and the strip baseline beyond).
+        let accent_y = match style.accent_position {
+            AccentPosition::Bottom => bounds.y + bounds.height - ACCENT_HEIGHT,
+            AccentPosition::Top => bounds.y,
+        };
+        quads.push((
+            Quad {
+                bounds: Rectangle {
+                    x: bounds.x,
+                    y: accent_y,
+                    width: bounds.width,
+                    height: ACCENT_HEIGHT,
+                },
+                ..Quad::default()
+            },
+            Background::Color(style.accent),
+        ));
+    }
+    quads
 }
 
 pub struct TabPill<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
@@ -193,58 +257,11 @@ where
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let bounds = layout.bounds();
-
-        // Bg fill + bordered outline with per-corner radius via
-        // iced's Border. Document tabs round the TOP corners (hang
-        // from above); panel tabs round the BOTTOM corners (hang
-        // from below). Either way the opposite edge merges with
-        // the strip's baseline (same colour, same y) so there's
-        // no visible double-line at the join.
-        let radius = match self.style.accent_position {
-            AccentPosition::Bottom => iced::border::Radius::default()
-                .top_left(TOP_RADIUS)
-                .top_right(TOP_RADIUS),
-            AccentPosition::Top => iced::border::Radius::default()
-                .bottom_left(TOP_RADIUS)
-                .bottom_right(TOP_RADIUS),
-        };
-        renderer.fill_quad(
-            Quad {
-                bounds: pill_quad_bounds(bounds, &self.style),
-                border: Border {
-                    width: BORDER_WIDTH,
-                    radius,
-                    color: self.style.border,
-                    ..Border::default()
-                },
-                ..Quad::default()
-            },
-            Background::Color(self.style.fill),
-        );
-        if self.style.is_active {
-            // Accent strip — drawn inside the pill at the edge
-            // opposite the rounded corners on the active tab only.
-            // Sits over the bordered outline so it visually
-            // replaces the strip baseline at the active tab's
-            // position. Inactive tabs let the strip baseline show
-            // through.
-            let accent_y = match self.style.accent_position {
-                AccentPosition::Bottom => bounds.y + bounds.height - ACCENT_HEIGHT,
-                AccentPosition::Top => bounds.y,
-            };
-            renderer.fill_quad(
-                Quad {
-                    bounds: Rectangle {
-                        x: bounds.x,
-                        y: accent_y,
-                        width: bounds.width,
-                        height: ACCENT_HEIGHT,
-                    },
-                    ..Quad::default()
-                },
-                Background::Color(self.style.accent),
-            );
+        // Pill quads (bg + outline, then the accent strip on the active
+        // tab) come from `pill_quads` so the geometry is testable
+        // without a renderer.
+        for (quad, background) in pill_quads(layout.bounds(), &self.style) {
+            renderer.fill_quad(quad, background);
         }
 
         // Child content draws last so any text / icons paint over the
@@ -268,41 +285,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn style(is_last: bool) -> TabPillStyle {
-        TabPillStyle {
-            fill: Color::BLACK,
-            border: Color::WHITE,
-            accent: Color::WHITE,
-            is_active: false,
-            is_last,
-            accent_position: AccentPosition::Bottom,
-        }
-    }
-
-    fn bounds() -> Rectangle {
-        Rectangle {
-            x: 10.0,
-            y: 0.0,
-            width: 80.0,
-            height: 24.0,
-        }
-    }
-
-    #[test]
-    fn last_tab_quad_matches_its_layout_bounds() {
-        assert_eq!(pill_quad_bounds(bounds(), &style(true)), bounds());
-    }
-
-    #[test]
-    fn non_last_tab_right_border_lands_under_the_next_tab_left_border() {
-        let quad = pill_quad_bounds(bounds(), &style(false));
-        let next_left_border_x = bounds().x + bounds().width;
-        // The quad's right border spans [right - BORDER_WIDTH, right]; it must
-        // be exactly the next tab's left border column, not a second column.
-        assert_eq!(quad.x + quad.width - BORDER_WIDTH, next_left_border_x);
-        assert_eq!(quad.x, bounds().x);
-    }
-}
+mod tests;

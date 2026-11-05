@@ -141,6 +141,10 @@ pub enum SymbolEditorMsg {
     /// in, negative zooms out. Updates `editor.camera`.
     Zoom { sx: f32, sy: f32, delta: f32 },
 
+    /// Trackpad pinch: zoom centred on `(sx, sy)` by an absolute scale
+    /// `factor` (greater than 1 zooms in). Updates `editor.camera`.
+    ZoomFactor { sx: f32, sy: f32, factor: f32 },
+
     /// Fit the active symbol's bounding box into the viewport.
     /// Bound to the Home key + the Fit button on the toolbar.
     Fit,

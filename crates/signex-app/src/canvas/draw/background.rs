@@ -113,66 +113,75 @@ impl SchematicCanvas<'_> {
                         .with_line_cap(canvas::LineCap::Square),
                 );
             };
-        for primitive in primitives {
-            match primitive {
-                FramePrimitive::Line { from, to, width_mm } => line(frame, *from, *to, *width_mm),
-                FramePrimitive::Rect {
-                    x,
-                    y,
-                    w,
-                    h,
-                    width_mm,
-                } => {
-                    let (x0, y0, x1, y1) = (*x, *y, x + w, y + h);
-                    for (from, to) in [
-                        ((x0, y0), (x1, y0)),
-                        ((x1, y0), (x1, y1)),
-                        ((x1, y1), (x0, y1)),
-                        ((x0, y1), (x0, y0)),
-                    ] {
-                        line(frame, from, to, *width_mm);
-                    }
+        // Shapes first, text last: a Frame draws in call order (fork #18), so a
+        // zone letter or title-block string must follow every border line.
+        for text_pass in [false, true] {
+            for primitive in primitives {
+                if matches!(primitive, FramePrimitive::Text { .. }) != text_pass {
+                    continue;
                 }
-                FramePrimitive::Text {
-                    x,
-                    y,
-                    size_mm,
-                    style,
-                    anchor,
-                    text,
-                } => {
-                    let size_px = *size_mm as f32 * cam.scale;
-                    // Too small to read: skip rather than draw a smear.
-                    if size_px < 3.0 {
-                        continue;
+                match primitive {
+                    FramePrimitive::Line { from, to, width_mm } => {
+                        line(frame, *from, *to, *width_mm)
                     }
-                    let (align_x, align_y) = match anchor {
-                        FrameTextAnchor::TopLeft => (
-                            iced::alignment::Horizontal::Left,
-                            iced::alignment::Vertical::Top,
-                        ),
-                        FrameTextAnchor::Center => (
-                            iced::alignment::Horizontal::Center,
-                            iced::alignment::Vertical::Center,
-                        ),
-                    };
-                    let weight = match style {
-                        FontStyle::Bold | FontStyle::BoldItalic => iced::font::Weight::Bold,
-                        FontStyle::Normal | FontStyle::Italic => iced::font::Weight::Normal,
-                    };
-                    frame.fill_text(canvas::Text {
-                        content: text.clone(),
-                        position: at(*x, *y),
-                        color,
-                        size: iced::Pixels(size_px),
-                        font: iced::Font {
-                            weight,
-                            ..crate::render_config::IOSEVKA
-                        },
-                        align_x: align_x.into(),
-                        align_y,
-                        ..canvas::Text::default()
-                    });
+                    FramePrimitive::Rect {
+                        x,
+                        y,
+                        w,
+                        h,
+                        width_mm,
+                    } => {
+                        let (x0, y0, x1, y1) = (*x, *y, x + w, y + h);
+                        for (from, to) in [
+                            ((x0, y0), (x1, y0)),
+                            ((x1, y0), (x1, y1)),
+                            ((x1, y1), (x0, y1)),
+                            ((x0, y1), (x0, y0)),
+                        ] {
+                            line(frame, from, to, *width_mm);
+                        }
+                    }
+                    FramePrimitive::Text {
+                        x,
+                        y,
+                        size_mm,
+                        style,
+                        anchor,
+                        text,
+                    } => {
+                        let size_px = *size_mm as f32 * cam.scale;
+                        // Too small to read: skip rather than draw a smear.
+                        if size_px < 3.0 {
+                            continue;
+                        }
+                        let (align_x, align_y) = match anchor {
+                            FrameTextAnchor::TopLeft => (
+                                iced::alignment::Horizontal::Left,
+                                iced::alignment::Vertical::Top,
+                            ),
+                            FrameTextAnchor::Center => (
+                                iced::alignment::Horizontal::Center,
+                                iced::alignment::Vertical::Center,
+                            ),
+                        };
+                        let weight = match style {
+                            FontStyle::Bold | FontStyle::BoldItalic => iced::font::Weight::Bold,
+                            FontStyle::Normal | FontStyle::Italic => iced::font::Weight::Normal,
+                        };
+                        frame.fill_text(canvas::Text {
+                            content: text.clone(),
+                            position: at(*x, *y),
+                            color,
+                            size: iced::Pixels(size_px),
+                            font: iced::Font {
+                                weight,
+                                ..crate::render_config::IOSEVKA
+                            },
+                            align_x: align_x.into(),
+                            align_y,
+                            ..canvas::Text::default()
+                        });
+                    }
                 }
             }
         }

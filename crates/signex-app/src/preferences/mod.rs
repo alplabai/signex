@@ -5,12 +5,11 @@
 //! Right side: settings panel for the selected category.
 
 use crate::render_config::{GridStyle, PinSelectionMode};
-use iced::widget::{Column, Space, Widget, button, column, container, row, scrollable, svg, text};
+use iced::widget::{Column, Space, Widget, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 
 use crate::app::view::dialogs::{
-    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
 };
 use crate::styles::{MODAL_CORNER_RADIUS, Spacing, TypeScale};
@@ -20,6 +19,7 @@ const SP: Spacing = Spacing::DEFAULT;
 
 mod annotation;
 mod appearance;
+mod close_button;
 mod component_classes;
 mod distributors;
 mod editing;
@@ -29,6 +29,7 @@ mod widgets;
 
 use annotation::content_annotation;
 use appearance::content_appearance;
+use close_button::close_btn;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
 use editing::content_editing;
@@ -146,6 +147,10 @@ pub enum PrefMsg {
     DraftDragDirectionSelect(bool),
     /// Toggle "Show net info on hover". Persisted on Save.
     DraftNetHoverEnabled(bool),
+    /// Toggle "Two-finger scroll pans". Persisted on Save.
+    DraftTrackpadPan(bool),
+    /// Toggle "Remember window size and position". Persisted on Save.
+    DraftRememberWindowGeometry(bool),
     /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
     DraftIncrementStep(i32),
     /// Choose what a pasted part is called. Persisted on Save.
@@ -304,6 +309,8 @@ pub struct PrefsView<'a> {
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,
+    pub draft_trackpad_pan: bool,
+    pub draft_remember_window_geometry: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,
     pub draft_paste_designators: crate::paste_prefs::PasteDesignators,
@@ -675,56 +682,6 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             ..container::Style::default()
         })
         .boxed()
-}
-
-/// Canonical close-X — same SVG glyph and red hover footprint as the
-/// shared `view::dialogs::close_x_button`, generic over the modal's
-/// message type so this version can compose into a `PrefMsg`
-/// element. Matches the main-window chrome close (white glyph,
-/// 46×28 hit-box, top-right rounded hover, Windows-native red).
-fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
-    let handle = crate::icons::icon_chrome_window_close(theme_id);
-    button(
-        container(
-            svg(handle)
-                .width(MODAL_CLOSE_X_ICON)
-                .height(MODAL_CLOSE_X_ICON)
-                // Resolve against the theme so the glyph stays legible on a
-                // light header; the red hover footprint contrasts with the
-                // near-white/near-black text colour on both palettes.
-                .style(move |theme: &Theme, _| svg::Style {
-                    color: Some(theme.palette().background.base.text),
-                }),
-        )
-        .width(MODAL_CLOSE_X_HIT_W)
-        .height(MODAL_CLOSE_X_HIT_H)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center),
-    )
-    .padding(0)
-    .on_press(PrefMsg::Close)
-    .style(move |_: &Theme, status: button::Status| {
-        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-        button::Style {
-            background: if hovered {
-                Some(Background::Color(MODAL_CLOSE_X_HOVER))
-            } else {
-                None
-            },
-            text_color: Color::WHITE,
-            border: Border {
-                radius: iced::border::Radius {
-                    top_left: 0.0,
-                    top_right: 4.0,
-                    bottom_left: 0.0,
-                    bottom_right: 0.0,
-                },
-                ..Border::default()
-            },
-            ..button::Style::default()
-        }
-    })
-    .boxed()
 }
 
 /// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).

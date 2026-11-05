@@ -83,7 +83,9 @@ impl FootprintCanvas<'_> {
         None
     }
 
-    /// Scroll-wheel zoom, anchored on the cursor.
+    /// Scroll-wheel zoom, anchored on the cursor. With "Two-finger scroll
+    /// pans" on, a pixel-delta (trackpad) scroll pans instead, unless
+    /// Ctrl/Cmd is held.
     pub(in crate::library::editor::footprint::canvas) fn on_wheel_scrolled(
         &self,
         cstate: &mut FootprintCanvasState,
@@ -91,19 +93,58 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        let scroll_y = match delta {
-            mouse::ScrollDelta::Lines { y, .. } => *y,
-            mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
-        };
+        let intent = crate::canvas::Camera::scroll_intent(
+            delta,
+            50.0,
+            self.trackpad_pan,
+            cstate.current_modifiers.command() || cstate.current_modifiers.control(),
+        );
         let cursor_pos = cursor.position_in(bounds)?;
-        if scroll_y == 0.0 {
-            return None;
+        match intent {
+            crate::canvas::ScrollIntent::Zoom { notches } => {
+                if notches == 0.0 {
+                    return None;
+                }
+                let factor = crate::canvas::Camera::zoom_factor_for_scroll(self.zoom_step, notches);
+                if !factor.is_finite() || factor == 1.0 {
+                    return None;
+                }
+                cstate.zoom_about(cursor_pos, factor, MIN_SCALE);
+            }
+            crate::canvas::ScrollIntent::Pan { dx, dy } => {
+                if dx == 0.0 && dy == 0.0 {
+                    return None;
+                }
+                cstate.pan_by(iced::Vector::new(dx, dy));
+            }
         }
-        let factor = crate::canvas::Camera::zoom_factor_for_scroll(self.zoom_step, scroll_y);
-        if !factor.is_finite() || factor == 1.0 {
+        Some(self.publish_view_changed(cstate, cursor_pos))
+    }
+
+    /// Trackpad pinch zoom, anchored on the cursor (ignored outside the
+    /// canvas).
+    pub(in crate::library::editor::footprint::canvas) fn on_pinch_gesture(
+        &self,
+        cstate: &mut FootprintCanvasState,
+        delta: f32,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        let cursor_pos = cursor.position_in(bounds)?;
+        let factor = crate::canvas::Camera::pinch_factor(delta);
+        if factor == 1.0 {
             return None;
         }
         cstate.zoom_about(cursor_pos, factor, MIN_SCALE);
+        Some(self.publish_view_changed(cstate, cursor_pos))
+    }
+
+    /// Redraw after a zoom or pan, and publish the cursor world position.
+    fn publish_view_changed(
+        &self,
+        cstate: &FootprintCanvasState,
+        cursor_pos: Point,
+    ) -> canvas::Action<LibraryMessage> {
         self.cache.clear();
         // v0.14.2: same as the panning fix — publish a
         // lightweight cursor-position message + capture so
@@ -111,19 +152,17 @@ impl FootprintCanvas<'_> {
         // alone froze the canvas at the pre-zoom scale until
         // some unrelated frame fired.
         let world = cstate.screen_to_world(cursor_pos);
-        Some(
-            canvas::Action::publish(LibraryMessage::EditorEvent {
-                library_path: self.address.library_path.clone(),
-                table: self.address.table.clone(),
-                row_id: self.address.row_id,
-                msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
-                    x_mm: world.0,
-                    y_mm: world.1,
-                    px_per_mm: cstate.scale,
-                }),
-            })
-            .and_capture(),
-        )
+        canvas::Action::publish(LibraryMessage::EditorEvent {
+            library_path: self.address.library_path.clone(),
+            table: self.address.table.clone(),
+            row_id: self.address.row_id,
+            msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
+                x_mm: world.0,
+                y_mm: world.1,
+                px_per_mm: cstate.scale,
+            }),
+        })
+        .and_capture()
     }
 
     /// Middle/right-drag pan step. Returns `Some(action)` when a pan

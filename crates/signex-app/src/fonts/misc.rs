@@ -256,6 +256,47 @@ pub fn write_net_hover_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Trackpad two-finger pan / remember window geometry
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Two-finger scroll pans" (opt-in). Defaults to off when the key is
+/// missing or not a boolean.
+pub fn read_trackpad_pan_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["trackpad_pan"].as_bool())
+        .unwrap_or(false)
+}
+
+pub fn write_trackpad_pan_pref(enabled: bool) {
+    write_trackpad_pan_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_trackpad_pan_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "trackpad_pan", |prefs| {
+        prefs.insert("trackpad_pan".to_string(), serde_json::json!(enabled));
+    })
+}
+
+/// Read "Remember window size and position" (opt-in). Defaults to off when
+/// the key is missing or not a boolean.
+pub fn read_remember_window_geometry_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["remember_window_geometry"].as_bool())
+        .unwrap_or(false)
+}
+
+pub fn write_remember_window_geometry_pref(enabled: bool) {
+    write_remember_window_geometry_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_remember_window_geometry_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, "remember_window_geometry", |prefs| {
+        prefs.insert(
+            "remember_window_geometry".to_string(),
+            serde_json::json!(enabled),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Select by drag direction
 // ──────────────────────────────────────────────────────────────────────────
 

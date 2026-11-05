@@ -141,6 +141,8 @@ impl Signex {
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
+        let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
+        let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
@@ -238,6 +240,11 @@ impl Signex {
         // the first open.
         let keymap_editor = crate::keymap::KeymapEditorModel::new(keymap_profiles.clone());
 
+        // Only a preference that is on reads the file; the record is checked
+        // against the real monitors once the window exists.
+        let restored_geometry = remember_window_geometry
+            .then(crate::app::window_geometry::load)
+            .flatten();
         let mut app = Self {
             ui_state: UiState {
                 // Persisted user-toggleable state (UX §1.5). Reads
@@ -305,6 +312,10 @@ impl Signex {
                 preferences_draft_move_keeps_wires: move_keeps_wires,
                 net_hover_enabled,
                 preferences_draft_net_hover_enabled: net_hover_enabled,
+                trackpad_pan,
+                preferences_draft_trackpad_pan: trackpad_pan,
+                remember_window_geometry,
+                preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
                 preferences_draft_drag_direction_select: drag_direction_select,
                 increment_step,
@@ -396,6 +407,10 @@ impl Signex {
                 modal_dragging: None,
                 tab_dragging: None,
                 main_window_id: None,
+                window_geometry:
+                    crate::app::handlers::window_geometry_events::GeometryTracker::with_restore(
+                        restored_geometry.clone(),
+                    ),
                 windows: std::collections::HashMap::new(),
                 passive_calculator: signex_widgets::passive_calculator::CalculatorControl::default(
                 ),
@@ -706,14 +721,18 @@ impl Signex {
         // modal off the main window, and Phase 3 will do the same for
         // undocked tabs. The returned Task produces the settled Id once
         // winit confirms the window is mapped.
-        let (main_id, open_task) = iced::window::open(main_window_settings(
+        let mut main_settings = main_window_settings(
             crate::chrome::controls::resolve(
                 crate::chrome::controls::ChromePlatform::current(),
                 window_controls_placement,
                 None,
             )
             .is_native(),
-        ));
+        );
+        if let Some(saved) = &restored_geometry {
+            crate::app::window_geometry::apply_to_settings(&mut main_settings, saved);
+        }
+        let (main_id, open_task) = iced::window::open(main_settings);
         app.ui_state.main_window_id = Some(main_id);
         let boot_task = iced::Task::batch([
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
