@@ -44,6 +44,26 @@ impl Signex {
         }
     }
 
+    /// End a headless session (#1932) the way the quit path ends the GUI:
+    /// every pending and in-flight write is flushed, then the app exits.
+    /// Unsaved documents are not saved, as there is nobody to ask; each is
+    /// reported.
+    pub fn end_headless_session(&mut self) -> Task<Message> {
+        let mut unsaved: Vec<_> = self
+            .document_state
+            .dirty_document_paths()
+            .into_iter()
+            .collect();
+        unsaved.sort();
+        for path in unsaved {
+            crate::diagnostics::log_warning(format!(
+                "Headless session ended with unsaved changes in {}",
+                path.display()
+            ));
+        }
+        self.flush_quit_writes_then(iced::exit())
+    }
+
     /// Quit path: flush every debounced preference write (dock layout, then
     /// search boxes, then in-flight document saves, then in-flight autosave
     /// writes), wait for the ones in flight, then run `next`.
