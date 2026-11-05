@@ -194,7 +194,7 @@ impl Default for Body3D {
 }
 
 /// Net reference — string for now, will become a UUID once nets are
-/// first-class library citizens (v0.16+). v0.14 introduces this as a
+/// first-class library citizens. v0.14 introduced this as a
 /// thin wrapper so future migration can be one-shot.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -264,7 +264,7 @@ pub enum KeepoutForbid {
     Copper,
 }
 
-/// DRC keepout zone. v0.14 stores the polygon + layer + forbid kind.
+/// DRC keepout zone. Stores the polygon + layer + forbid kind.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FpKeepout {
     pub boundary: Polygon,
@@ -419,17 +419,19 @@ pub struct Footprint {
     /// serialised. The editor that opens the footprint reports and clears it.
     #[serde(skip)]
     pub load_repairs: Vec<LoadRepair>,
-    /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
+    /// Copper pour / region polygons. v0.14+; fill generation lands with
+    /// the PCB Routing plan (Copper Pour).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<FpPour>,
-    /// DRC keepout zones. v0.14 records; v0.15 enforces.
+    /// DRC keepout zones. Recorded only; enforcement lands with the
+    /// Advanced PCB plan.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keepouts: Vec<FpKeepout>,
     /// Board cutouts. v0.14 records; outline subtraction at PCB-export.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cutouts: Vec<FpCutout>,
-    /// V-score panelisation hints. v0.14 records; panelisation tool
-    /// consumes them in v0.16+.
+    /// V-score panelisation hints. Recorded only; the panelisation tool
+    /// (Advanced Output plan, Panelization) consumes them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub v_scores: Vec<FpVScore>,
     /// Standalone solder-mask openings (separate from pad mask margins).

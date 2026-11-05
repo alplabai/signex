@@ -4,12 +4,12 @@
 //! Mirrors Altium's PCB Library editor active-bar layout: Select +
 //! Place Pad / Track / Arc / String / Polygon / Hole, an Auto-fit
 //! Courtyard toggle, and a Sketch-mode entry button. Tools that
-//! aren't wired in v0.14.x ship as stubs (greyed icons, no
+//! aren't wired yet ship as stubs (greyed icons, no
 //! `on_press`) so the bar reads as the eventual finished surface,
 //! not a half-built one.
 //!
 //! The full set is intentional Altium parity — every pad/track/poly
-//! placement lands as wiring goes in. The minimal v0.14.2 wiring is:
+//! placement lands as wiring goes in. The current wiring is:
 //! - Select: cursor (no specific message; the canvas's empty-space
 //!   click already adds a pad in this mode, so "Place Pad" stays
 //!   visually present in the bar but acts as a discoverability
@@ -32,7 +32,7 @@ use crate::icons;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
-/// v0.14.2 — standalone floating mode-switch widget rendered at the
+/// Standalone floating mode-switch widget rendered at the
 /// top-left of the canvas via `Stack` overlay (separate from the
 /// active bar's tools). Three connected segments in **Sketch /
 /// Pads / 3D** order; the active segment paints with the accent
@@ -273,14 +273,14 @@ pub fn items(
         ..ActiveBarButton::default()
     });
 
-    // v0.14.2: Auto-fit Courtyard moved to the Properties panel
+    // Auto-fit Courtyard moved to the Properties panel
     // default body (Settings section). The active bar stays focused
     // on placement/edit tools.
 
-    // v0.14.2: dedicated "Edit Sketch" button removed — mode
+    // Dedicated "Edit Sketch" button removed — mode
     // segments at the left of the bar drive mode switching.
 
-    // v0.13 — Pads-mode active bar simplified. Pure graphics
+    // Pads-mode active bar simplified. Pure graphics
     // (Line / Arc / Polygon / Region) live in Sketch mode only;
     // PlaceHole is folded into PlacePad (the user picks `kind` via
     // the Properties panel). Place Via is the new through-hole tool.

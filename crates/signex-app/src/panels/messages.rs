@@ -529,17 +529,16 @@ pub enum PanelMsg {
     /// live on the v0.18.14 unified active bar; the Properties
     /// panel surfaces the toggle through this same message.
     FpEditorToggleSelectionFilter(crate::library::editor::footprint::state::SelectionFilterKind),
-    /// v0.18.13 — open the Custom Selection Filter modal. Stubbed
-    /// until v0.18.14 ships the modal body alongside the active
-    /// bar pills.
+    /// v0.18.13 — open the Custom Selection Filter modal (routes to
+    /// `SelectionFilterMsg::OpenCustom`).
     FpEditorOpenSelectionFilterCustom,
     /// v0.18.13 — Snap Options sub-tab switch (Grids / Guides / Axes).
     FpEditorSetSnapSubTab(crate::library::editor::footprint::state::SnapSubTab),
     /// v0.18.13 — Snapping mode 3-state toggle.
     FpEditorSetSnappingMode(crate::library::editor::footprint::state::SnappingMode),
     /// v0.18.13 — `Add` button on the Grid Manager table (placeholder
-    /// for the multi-grid CRUD that lands with the v0.18.14 grid
-    /// system). Dispatch logs a warn for now.
+    /// for multi-grid CRUD, not built yet). Dispatch logs a warn for
+    /// now.
     FpEditorGridManagerAdd,
     /// v0.18.13 — `Properties` button on the Grid Manager row;
     /// reuses the Ctrl+G Cartesian Grid Editor modal.
