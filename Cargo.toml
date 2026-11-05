@@ -174,7 +174,7 @@ unused_must_use = "deny"
 # level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 # Signex fork of iced (upstream master + cherry-picked PRs, see FORK.md in alplabai/iced).
-# Tag iced-signex-v0.15.0-alpha.4 = commit a94392b0b (branch `signex`). Pinned by rev, not tag: a tag can be moved.
+# Tag iced-signex-v0.15.0-alpha.4 = fork commit a94392b0b (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on.
 [patch.crates-io]
 iced_fonts = { path = "vendor/iced_fonts" }
 iced = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }

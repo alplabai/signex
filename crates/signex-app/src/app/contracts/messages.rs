@@ -12,6 +12,16 @@ pub enum WindowMsg {
     /// can drop non-main-window resizes before they touch
     /// `ui_state.window_size`.
     WindowResizedFor(iced::window::Id, f32, f32),
+    /// A window moved. Only marks the window for a settled re-read, see
+    /// `handlers::window_geometry_events`.
+    WindowMoved(iced::window::Id),
+    /// A window has been still long enough: read its geometry.
+    WindowGeometrySettled(iced::window::Id),
+    /// The settled geometry of a window and the monitors at that time.
+    WindowGeometryRead(Box<crate::app::handlers::window_geometry_events::GeometryReadout>),
+    /// The background write of the main-window geometry finished: the record
+    /// on success, the error text on failure.
+    WindowGeometrySaved(Result<crate::app::window_geometry::SavedGeometry, String>),
     /// Fired once `iced::window::open` completes for the initial main
     /// window — lets us stash the id so `view(id)` knows which window is
     /// the primary app shell versus a detached modal / undocked tab.

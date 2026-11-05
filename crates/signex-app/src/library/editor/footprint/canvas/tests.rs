@@ -243,6 +243,7 @@ mod drag_track_end {
             silk_f: &[],
             silk_b: &[],
             zoom_step: 1.1,
+            trackpad_pan: false,
         }
     }
 
@@ -523,6 +524,7 @@ mod wheel_zoom {
             silk_f: &[],
             silk_b: &[],
             zoom_step: step,
+            trackpad_pan: false,
         };
         let mut cstate = FootprintCanvasState::default();
         let before = cstate.scale;
@@ -608,6 +610,7 @@ mod initial_fit {
             silk_f: &[],
             silk_b: &[],
             zoom_step: 1.1,
+            trackpad_pan: false,
         };
         let mut cstate = FootprintCanvasState::default();
         let event = Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
@@ -651,6 +654,7 @@ mod initial_fit {
             silk_f: &[],
             silk_b: &[],
             zoom_step: 1.1,
+            trackpad_pan: false,
         };
         let mut cstate = FootprintCanvasState::default();
         let message = fpc

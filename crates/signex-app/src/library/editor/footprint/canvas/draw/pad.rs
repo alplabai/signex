@@ -26,14 +26,13 @@ impl PadLabels {
     }
 }
 
-/// Render a single pad — copper outline, drilled hole, and pad number
-/// (when zoomed in enough to read).
+/// Render a single pad — copper outline and drilled hole. The number is
+/// [`draw_pad_number`], drawn after all pads.
 pub(super) fn draw_pad(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
     pad: &EditorPad,
     is_selected: bool,
-    labels: PadLabels,
 ) {
     use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
@@ -207,11 +206,20 @@ pub(super) fn draw_pad(
             );
         }
     });
+}
 
-    // Pad number — deliberately OUTSIDE the saved transform. Inside it
-    // the label would turn with the pad and read upside down at 180°.
+/// A pad's number, drawn outside the pad's saved transform so it stays
+/// upright at every rotation. Callers draw every pad first and the numbers
+/// after (a Frame draws in call order, fork #18), so a neighbouring pad never
+/// covers a number.
+pub(super) fn draw_pad_number(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    pad: &EditorPad,
+    labels: PadLabels,
+) {
     if labels.shows(cstate.scale, pad.size_mm) && !pad.number.is_empty() {
-        let centre = screen_centre;
+        let centre = cstate.world_to_screen(pad.position_mm);
         let text_size = (cstate.scale * 0.35).clamp(8.0, 16.0);
         frame.fill_text(canvas::Text {
             content: pad.number.clone(),

@@ -277,3 +277,91 @@ fn a_mount_rescan_after_a_row_footprint_edit_keeps_the_drift() {
         s.footprint
     );
 }
+
+#[test]
+fn update_from_library_keeps_a_locked_part_drifted_and_updates_the_rest() {
+    locked_part_update(false);
+}
+
+/// The same click, but another tab is showing when the library read lands:
+/// the update goes through the parked-sheet path.
+#[test]
+fn update_from_library_keeps_a_locked_part_on_a_background_sheet() {
+    locked_part_update(true);
+}
+
+fn locked_part_update(background: bool) {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    bind_footprint(&f, "SOIC-8");
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    crate::library_place_symbol::complete(
+        &mut app,
+        &f,
+        "place-364.snxsch",
+        crate::library_place_symbol::resolve(&f, f.row_id),
+    );
+    crate::library_place_symbol::click(&mut app, (50.8, 38.1));
+    assert_eq!(doc(&app).symbols.len(), 2, "two parts of the same row");
+    let (locked, free) = (doc(&app).symbols[0].uuid, doc(&app).symbols[1].uuid);
+    let stamped = doc(&app).symbols[0].library_version.clone();
+    let path = app.document_state.active_path.clone().unwrap();
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .unwrap()
+        .execute(signex_engine::Command::SetSymbolLocked {
+            symbol_id: locked,
+            locked: true,
+        })
+        .unwrap();
+
+    bind_footprint(&f, "TSSOP-8");
+    select_first(&mut app);
+    check_drift(&mut app);
+    assert!(is_drifted(&app));
+    if background {
+        let task = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
+            signex_app::panels::PanelMsg::UpdateSymbolFromLibrary(locked),
+        )));
+        app.document_state.active_path = Some(std::path::PathBuf::from("elsewhere.snxsch"));
+        for message in crate::library_symbol_drift::run_task(task) {
+            let _ = app.update(message);
+        }
+        app.document_state.active_path = Some(path.clone());
+    } else {
+        click_update(&mut app, locked);
+    }
+
+    let part = |app: &Signex, id| {
+        doc(app)
+            .symbols
+            .iter()
+            .find(|s| s.uuid == id)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(
+        part(&app, free).footprint,
+        "TSSOP-8",
+        "the unlocked part updates"
+    );
+    assert_ne!(part(&app, free).library_version, stamped);
+    assert_eq!(part(&app, locked).footprint, "SOIC-8", "the lock holds");
+    assert_eq!(
+        part(&app, locked).library_version,
+        stamped,
+        "the locked part keeps its old stamp"
+    );
+    let locked_reference = part(&app, locked).reference;
+    check_drift(&mut app);
+    assert!(is_drifted(&app), "the locked part is still flagged");
+    let entries = signex_app::diagnostics::recent_entries();
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.message.contains("is locked") && e.message.contains(&locked_reference)),
+        "a warning names the locked part"
+    );
+}

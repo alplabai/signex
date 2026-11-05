@@ -15,6 +15,10 @@ use signex_types::theme::ThemeId;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+const TRACKPAD_PAN_HELP: &str = "When on, a two-finger trackpad scroll pans the schematic, PCB, symbol and footprint canvases instead of zooming them. Pinching and Ctrl/Cmd + scroll still zoom, and a mouse wheel notch still zooms. Off by default.";
+
+const REMEMBER_GEOMETRY_HELP: &str = "When on, Signex reopens the main window at the size and position it had when you last closed it. Off by default.";
+
 pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
         draft_theme,
@@ -26,6 +30,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
+        draft_trackpad_pan,
+        draft_remember_window_geometry,
         draft_ui_scale_percent,
         draft_window_controls_placement,
         window_controls_restart_note,
@@ -431,6 +437,50 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 .align_x(iced::alignment::Horizontal::Right),
         ]
         .spacing(10)
+        .align_y(iced::Alignment::Center)
+        .boxed(),
+    );
+    col = col.push(Space::new().height(14).boxed());
+    col = col.push(
+        row![
+            column![
+                text("Two-finger scroll pans")
+                    .size(TS.label)
+                    .style(text_primary),
+                text(TRACKPAD_PAN_HELP).size(TS.caption).style(text_muted),
+            ]
+            .spacing(3)
+            .width(320),
+            Space::new().width(Length::Fill),
+            iced::widget::checkbox(draft_trackpad_pan)
+                .size(TS.heading)
+                .on_toggle(PrefMsg::DraftTrackpadPan),
+        ]
+        .align_y(iced::Alignment::Center)
+        .boxed(),
+    );
+    col = col.push(Space::new().height(20).boxed());
+
+    // ── Section: Window ──
+    col = col.push(section_title("Window"));
+    col = col.push(Space::new().height(10).boxed());
+    col = col.push(
+        row![
+            column![
+                text("Remember window size and position")
+                    .size(TS.label)
+                    .style(text_primary),
+                text(REMEMBER_GEOMETRY_HELP)
+                    .size(TS.caption)
+                    .style(text_muted),
+            ]
+            .spacing(3)
+            .width(320),
+            Space::new().width(Length::Fill),
+            iced::widget::checkbox(draft_remember_window_geometry)
+                .size(TS.heading)
+                .on_toggle(PrefMsg::DraftRememberWindowGeometry),
+        ]
         .align_y(iced::Alignment::Center)
         .boxed(),
     );

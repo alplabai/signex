@@ -17,7 +17,7 @@ use super::*;
 
 /// A renderer that only builds wgpu frames, so the draw order is observable
 /// without a GPU.
-struct MeshOnly;
+pub(super) struct MeshOnly;
 
 impl CoreRenderer for MeshOnly {
     fn start_layer(&mut self, _bounds: Rectangle) {}

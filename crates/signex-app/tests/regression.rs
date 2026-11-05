@@ -90,6 +90,8 @@ mod annotate_undo_scope;
 #[path = "regression/prefs.rs"]
 mod prefs;
 
+#[path = "regression/gesture_prefs.rs"]
+mod gesture_prefs;
 #[path = "regression/net_nav.rs"]
 mod net_nav;
 

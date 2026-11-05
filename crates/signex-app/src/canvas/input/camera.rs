@@ -18,30 +18,46 @@ impl SchematicCanvas<'_> {
         None
     }
 
-    /// Mouse-wheel zoom about the cursor.
+    /// Mouse-wheel zoom about the cursor. With "Two-finger scroll pans" on, a
+    /// pixel-delta (trackpad) scroll pans instead, unless Ctrl/Cmd is held.
     pub(in crate::canvas) fn update_wheel_scrolled(
         &self,
         delta: &mouse::ScrollDelta,
+        zoom_modifier: bool,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        let scroll_y = match delta {
-            mouse::ScrollDelta::Lines { y, .. } => *y,
-            mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
-        };
+        let intent = Camera::scroll_intent(delta, 50.0, self.prefs.trackpad_pan, zoom_modifier);
 
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             let changed =
                 self.camera_mut()
-                    .zoom_at(cursor_pos, scroll_y, self.prefs.zoom_step, bounds);
+                    .apply_scroll(cursor_pos, intent, self.prefs.zoom_step, bounds);
             if !changed {
                 return None;
             }
-            // Grid + content need redraw on zoom
+            // Grid + content need redraw on zoom or pan
             return Some(
                 canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved)).and_capture(),
             );
         }
         None
+    }
+
+    /// Trackpad pinch zoom about the cursor (ignored outside the canvas).
+    pub(in crate::canvas) fn update_pinch_gesture(
+        &self,
+        delta: f32,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<Message>> {
+        let cursor_pos = cursor.position_in(bounds)?;
+        let changed = self
+            .camera_mut()
+            .zoom_by_factor(cursor_pos, Camera::pinch_factor(delta));
+        if !changed {
+            return None;
+        }
+        Some(canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved)).and_capture())
     }
 }

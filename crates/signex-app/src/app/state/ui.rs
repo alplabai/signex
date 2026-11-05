@@ -167,6 +167,16 @@ pub struct UiState {
     pub net_hover_enabled: bool,
     /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
     pub preferences_draft_net_hover_enabled: bool,
+    /// Saved "Two-finger scroll pans" preference: a trackpad scroll (pixel
+    /// deltas) pans the canvas instead of zooming. Pinch and Ctrl/Cmd+scroll
+    /// still zoom. Off by default.
+    pub trackpad_pan: bool,
+    /// Draft mirror of [`Self::trackpad_pan`] for the Preferences dialog.
+    pub preferences_draft_trackpad_pan: bool,
+    /// Saved "Remember window size and position" preference. Off by default.
+    pub remember_window_geometry: bool,
+    /// Draft mirror of [`Self::remember_window_geometry`] for Preferences.
+    pub preferences_draft_remember_window_geometry: bool,
     /// Saved "Select by drag direction" preference (#1257): a box drag to
     /// the right selects what it fully contains, to the left what it touches.
     /// Off falls back to the global `selection_mode`. Default on.
@@ -583,6 +593,9 @@ pub struct UiState {
     /// decide whether it's rendering the main shell or a secondary
     /// (detached modal / undocked tab) window.
     pub main_window_id: Option<iced::window::Id>,
+    /// Settled geometry of every window, and the remembered main-window
+    /// geometry (`remember_window_geometry`).
+    pub window_geometry: crate::app::handlers::window_geometry_events::GeometryTracker,
     /// Every non-main window Signex owns, keyed by its iced id. Lets
     /// `view(id)` dispatch between the main shell, detached modals, and
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
@@ -654,6 +667,8 @@ impl UiState {
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
             || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
+            || self.preferences_draft_trackpad_pan != self.trackpad_pan
+            || self.preferences_draft_remember_window_geometry != self.remember_window_geometry
             || self.preferences_draft_drag_direction_select != self.drag_direction_select
             || self.preferences_draft_increment_step != self.increment_step
             || self.preferences_draft_paste_designators != self.paste_designators

@@ -93,7 +93,13 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if matches!(event, Event::Mouse(mouse::Event::WheelScrolled { .. })) {
+        // Zoom input only: scroll, pinch, and the modifier state that decides
+        // whether a scroll zooms or pans.
+        if matches!(
+            event,
+            Event::Mouse(mouse::Event::WheelScrolled { .. } | mouse::Event::PinchGesture { .. })
+                | Event::Keyboard(iced::keyboard::Event::ModifiersChanged(_))
+        ) {
             self.content
                 .update(tree, event, layout, cursor, renderer, shell, viewport);
         }

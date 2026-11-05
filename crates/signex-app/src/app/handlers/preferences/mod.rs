@@ -109,6 +109,9 @@ impl Signex {
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
+        self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
+        self.ui_state.preferences_draft_remember_window_geometry =
+            self.ui_state.remember_window_geometry;
         self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
         self.ui_state.preferences_draft_increment_step = self.ui_state.increment_step;
         self.ui_state.preferences_draft_paste_designators = self.ui_state.paste_designators;
@@ -312,6 +315,9 @@ impl Signex {
                 self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
                 self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
+                self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;
+                self.ui_state.remember_window_geometry =
+                    self.ui_state.preferences_draft_remember_window_geometry;
                 self.ui_state.drag_direction_select =
                     self.ui_state.preferences_draft_drag_direction_select;
                 self.ui_state.increment_step = self.ui_state.preferences_draft_increment_step;
@@ -521,6 +527,14 @@ impl Signex {
             }
             PrefMsg::DraftNetHoverEnabled(enabled) => {
                 self.ui_state.preferences_draft_net_hover_enabled = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftTrackpadPan(enabled) => {
+                self.ui_state.preferences_draft_trackpad_pan = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftRememberWindowGeometry(enabled) => {
+                self.ui_state.preferences_draft_remember_window_geometry = enabled;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftIncrementStep(step) => {
