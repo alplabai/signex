@@ -55,10 +55,39 @@ pub fn symbol_pin_at(
     if inside_body(&lower_symbol(&lib, sym), at) {
         return None;
     }
+    pin_lines(&lib, sym)
+        .filter_map(|line| {
+            let distance_sq = point_to_segment_distance_sq(
+                (at.x, at.y),
+                (line.tip.x, line.tip.y),
+                (line.inner.x, line.inner.y),
+            );
+            (distance_sq <= tolerance_mm * tolerance_mm)
+                .then_some((distance_sq, PickedPin { key: line.key }))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, pin)| pin)
+}
+
+/// The drawn line of one visible pin of a placed symbol, in sheet mm.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PinLine {
+    /// Pin number, else its name (as [`PickedPin::key`]).
+    pub key: String,
+    /// The connecting end.
+    pub tip: Point,
+    /// The end at the body.
+    pub inner: Point,
+}
+
+fn pin_lines<'a>(
+    lib: &'a super::LibSymbol,
+    sym: &'a super::Symbol,
+) -> impl Iterator<Item = PinLine> + 'a {
     let xform = SymbolTransform::from_symbol(sym);
-    instance_pins(&lib, sym)
+    instance_pins(lib, sym)
         .filter(|lp| lp.pin.visible)
-        .filter_map(|lp| {
+        .map(move |lp| {
             let pin = &lp.pin;
             let (dx, dy) = pin_direction(pin.rotation);
             let len = if pin.length > 0.0 {
@@ -66,24 +95,28 @@ pub fn symbol_pin_at(
             } else {
                 PIN_LENGTH_MM
             };
-            let tip = xform.apply(pin.position);
-            let inner = xform.apply(Point::new(
-                pin.position.x + dx * len,
-                pin.position.y + dy * len,
-            ));
-            let distance_sq =
-                point_to_segment_distance_sq((at.x, at.y), (tip.x, tip.y), (inner.x, inner.y));
-            (distance_sq <= tolerance_mm * tolerance_mm).then(|| {
-                let key = if pin.number.is_empty() {
+            PinLine {
+                key: if pin.number.is_empty() {
                     pin.name.clone()
                 } else {
                     pin.number.clone()
-                };
-                (distance_sq, PickedPin { key })
-            })
+                },
+                tip: xform.apply(pin.position),
+                inner: xform.apply(Point::new(
+                    pin.position.x + dx * len,
+                    pin.position.y + dy * len,
+                )),
+            }
         })
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, pin)| pin)
+}
+
+/// The line of the first visible pin of `symbol` whose key is `key`: what a
+/// pin click highlights.
+#[must_use]
+pub fn symbol_pin_line(document: &SchematicSheet, symbol: Uuid, key: &str) -> Option<PinLine> {
+    let sym = document.symbols.iter().find(|s| s.uuid == symbol)?;
+    let lib = document.resolve_lib_symbol(sym)?;
+    pin_lines(&lib, sym).find(|line| line.key == key)
 }
 
 /// Whether `at` is inside the drawn body: the box through the middle of its

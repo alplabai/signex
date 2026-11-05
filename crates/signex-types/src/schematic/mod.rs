@@ -824,7 +824,8 @@ pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, She
 pub use stroke::*;
 mod hotspot;
 pub use hotspot::{
-    SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot, snap_to_hotspot,
+    MoveHotspots, SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot,
+    snap_to_hotspot,
 };
 mod power_port_symbol;
 pub use power_port_symbol::{
@@ -833,7 +834,7 @@ pub use power_port_symbol::{
 mod pin_pick;
 pub use pin_pick::{
     PickedPin, SCHEMATIC_PIN_PICK_TOLERANCE_MM, SCHEMATIC_PIN_PICK_TOLERANCE_PX,
-    pin_pick_tolerance_mm, symbol_pin_at,
+    PinLine, pin_pick_tolerance_mm, symbol_pin_at, symbol_pin_line,
 };
 mod pin_labels;
 pub use pin_labels::{

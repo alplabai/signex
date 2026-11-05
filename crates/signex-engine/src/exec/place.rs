@@ -3,6 +3,23 @@
 use crate::*;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
+/// A moved symbol carries its designator and value texts, so a field item
+/// whose symbol is in the same move is dropped: moving it too would shift the
+/// text twice (#2087).
+fn drop_fields_of_moved_symbols(moves: &mut Vec<(SelectedItem, f64, f64)>) {
+    let symbols: std::collections::HashSet<uuid::Uuid> = moves
+        .iter()
+        .filter(|(item, _, _)| item.kind == SelectedKind::Symbol)
+        .map(|(item, _, _)| item.uuid)
+        .collect();
+    moves.retain(|(item, _, _)| {
+        !(matches!(
+            item.kind,
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+        ) && symbols.contains(&item.uuid))
+    });
+}
+
 impl Engine {
     /// Reconcile junction dots after a command mutated wire geometry (move /
     /// rotate / mirror), removed wires (delete), or added one (place), and
@@ -121,6 +138,7 @@ impl Engine {
         mut moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     ) -> Result<CommandResult, EngineError> {
+        drop_fields_of_moved_symbols(&mut moves);
         // A dragged bus carries the entries sitting on it (and, with
         // `keep_wires`, the wire ends on their far side).
         let followers = self.bus_followers(&moves, keep_wires);

@@ -347,6 +347,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 })
                 .collect();
 
+            col = super::pins::push_focused_pin_section(col, ctx, muted, border_c);
             if let Some(id) = uuid {
                 // General section — editable
                 col = col.push(

@@ -95,16 +95,129 @@ pub fn snap_move_to_hotspot(
     delta: (f64, f64),
     radius: f64,
 ) -> (f64, f64) {
-    let mut best: Option<(f64, (f64, f64))> = None;
-    for p in moved_points {
-        let landing = Point::new(p.x + delta.0, p.y + delta.1);
-        if let Some((dist, h)) = nearest_hotspot(sheet, landing, radius, excluded, moved_points)
-            && best.is_none_or(|(d, _)| dist < d)
+    MoveHotspots::new(sheet, moved_points, excluded, radius).snap(moved_points, delta)
+}
+
+/// The hotspots a move can snap to, gathered once so each cursor step of a
+/// drag only looks at the few near a landing point (#2077). The answer is the
+/// one [`snap_move_to_hotspot`] gives for the same inputs.
+#[derive(Debug, Clone)]
+pub struct MoveHotspots {
+    /// Candidates in the order the full scan meets them (symbol pin tips,
+    /// wire ends, junctions), so equal distances break the same way.
+    points: Vec<Point>,
+    radius: f64,
+    /// Candidate indices by `radius`-sized cell.
+    cells: std::collections::HashMap<(i64, i64), Vec<usize>>,
+}
+
+impl MoveHotspots {
+    /// The hotspots of everything but `excluded`, less those on a moved
+    /// point's own position, for capture within `radius`.
+    #[must_use]
+    pub fn new(
+        sheet: &SchematicSheet,
+        moved_points: &[Point],
+        excluded: &[uuid::Uuid],
+        radius: f64,
+    ) -> Self {
+        let excluded: std::collections::HashSet<uuid::Uuid> = excluded.iter().copied().collect();
+        let mut points = Vec::new();
+        let mut consider = |candidate: Point| {
+            if !moved_points
+                .iter()
+                .any(|p| (p.x - candidate.x).abs() < 1e-6 && (p.y - candidate.y).abs() < 1e-6)
+            {
+                points.push(candidate);
+            }
+        };
+        for sym in sheet.symbols.iter().filter(|s| !excluded.contains(&s.uuid)) {
+            let Some(lib) = sheet.resolve_lib_symbol(sym) else {
+                continue;
+            };
+            let xform = SymbolTransform::from_symbol(sym);
+            for lp in instance_pins(&lib, sym) {
+                consider(xform.apply(lp.pin.position));
+            }
+        }
+        for wire in sheet.wires.iter().filter(|w| !excluded.contains(&w.uuid)) {
+            consider(wire.start);
+            consider(wire.end);
+        }
+        for junction in sheet
+            .junctions
+            .iter()
+            .filter(|j| !excluded.contains(&j.uuid))
         {
-            best = Some((dist, (h.x - p.x, h.y - p.y)));
+            consider(junction.position);
+        }
+        let mut cells: std::collections::HashMap<(i64, i64), Vec<usize>> =
+            std::collections::HashMap::new();
+        if Self::usable(radius) {
+            for (index, point) in points.iter().enumerate() {
+                cells
+                    .entry(Self::cell(*point, radius))
+                    .or_default()
+                    .push(index);
+            }
+        }
+        Self {
+            points,
+            radius,
+            cells,
         }
     }
-    best.map_or(delta, |(_, d)| d)
+
+    fn usable(radius: f64) -> bool {
+        radius > 0.0 && radius.is_finite()
+    }
+
+    fn cell(point: Point, radius: f64) -> (i64, i64) {
+        (
+            (point.x / radius).floor() as i64,
+            (point.y / radius).floor() as i64,
+        )
+    }
+
+    /// The hotspot nearest `point` strictly within the radius; the first in
+    /// scan order of two equally near ones.
+    fn nearest(&self, point: Point) -> Option<(f64, Point)> {
+        if !Self::usable(self.radius) {
+            return None;
+        }
+        let (cx, cy) = Self::cell(point, self.radius);
+        let mut best: Option<(f64, usize)> = None;
+        for gx in cx - 1..=cx + 1 {
+            for gy in cy - 1..=cy + 1 {
+                for &index in self.cells.get(&(gx, gy)).into_iter().flatten() {
+                    let candidate = self.points[index];
+                    let dist = (candidate.x - point.x).hypot(candidate.y - point.y);
+                    if dist < self.radius
+                        && best.is_none_or(|(d, i)| dist < d || (dist == d && index < i))
+                    {
+                        best = Some((dist, index));
+                    }
+                }
+            }
+        }
+        best.map(|(dist, index)| (dist, self.points[index]))
+    }
+
+    /// [`snap_move_to_hotspot`] for `moved_points` (the ones this was built
+    /// with) moved by `delta`.
+    #[must_use]
+    pub fn snap(&self, moved_points: &[Point], delta: (f64, f64)) -> (f64, f64) {
+        let mut best: Option<(f64, (f64, f64))> = None;
+        for p in moved_points {
+            let landing = Point::new(p.x + delta.0, p.y + delta.1);
+            if let Some((dist, h)) = self.nearest(landing)
+                && best.is_none_or(|(d, _)| dist < d)
+            {
+                best = Some((dist, (h.x - p.x, h.y - p.y)));
+            }
+        }
+        best.map_or(delta, |(_, d)| d)
+    }
 }
 
 #[cfg(test)]
@@ -222,5 +335,60 @@ mod tests {
         let sheet = sheet_with_wire((0.0, 0.0), (10.0, 5.0));
         let d = snap_move_to_hotspot(&sheet, &[Point::new(10.0, 5.0)], &[], (0.4, 0.2), 1.27);
         assert_eq!(d, (0.4, 0.2));
+    }
+
+    /// The pre-index scan, kept as the oracle for [`MoveHotspots`].
+    fn scan_snap(
+        sheet: &SchematicSheet,
+        moved_points: &[Point],
+        excluded: &[uuid::Uuid],
+        delta: (f64, f64),
+        radius: f64,
+    ) -> (f64, f64) {
+        let mut best: Option<(f64, (f64, f64))> = None;
+        for p in moved_points {
+            let landing = Point::new(p.x + delta.0, p.y + delta.1);
+            if let Some((dist, h)) = nearest_hotspot(sheet, landing, radius, excluded, moved_points)
+                && best.is_none_or(|(d, _)| dist < d)
+            {
+                best = Some((dist, (h.x - p.x, h.y - p.y)));
+            }
+        }
+        best.map_or(delta, |(_, d)| d)
+    }
+
+    #[test]
+    fn the_index_snaps_exactly_as_the_full_scan() {
+        let mut sheet = SchematicSheet::default();
+        // A lattice of wires with off-grid ends, some coincident.
+        for i in 0..12u32 {
+            for j in 0..6u32 {
+                let x = f64::from(i) * 2.3 + 0.07 * f64::from(j);
+                let y = f64::from(j) * 3.1;
+                sheet.wires.push(Wire {
+                    unknown_columns: Default::default(),
+                    uuid: uuid::Uuid::from_u128(u128::from(i * 100 + j + 1)),
+                    start: Point::new(x, y),
+                    end: Point::new(x + 1.27, y + 0.635),
+                    stroke_width: 0.0,
+                    locked: false,
+                });
+            }
+        }
+        let moved = [Point::new(0.0, 0.0), Point::new(1.27, 0.635)];
+        let excluded = [uuid::Uuid::from_u128(1)];
+        for radius in [0.635, 1.27] {
+            let index = MoveHotspots::new(&sheet, &moved, &excluded, radius);
+            for step_x in -20..60 {
+                for step_y in -10..40 {
+                    let delta = (f64::from(step_x) * 0.4, f64::from(step_y) * 0.45);
+                    assert_eq!(
+                        index.snap(&moved, delta),
+                        scan_snap(&sheet, &moved, &excluded, delta, radius),
+                        "delta {delta:?} radius {radius}"
+                    );
+                }
+            }
+        }
     }
 }
