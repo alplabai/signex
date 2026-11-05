@@ -13,10 +13,25 @@ use super::{
     Point, SCHEMATIC_TEXT_MM, SchematicSheet, Symbol, TextProp, VAlign,
 };
 
-/// Length of the stem from the connection point to the symbol head, mm.
-const STEM_MM: f64 = 1.27;
-/// Half width of the head, mm.
-const HEAD_HALF_MM: f64 = 0.635;
+/// Length of the stem from the connection point to the symbol head, mm: the
+/// stock library's pin stub (two 1.27 mm grid steps). The connection point
+/// is the pin tip at the origin and never moves; only the far end does.
+const STEM_MM: f64 = 2.54;
+/// Half width of a bar, arrow or circle head, mm.
+const HEAD_HALF_MM: f64 = 1.016;
+/// Half widths of the three ground bars, widest first, mm (the stock GND).
+const GROUND_BAR_HALVES_MM: [f64; 3] = [1.27, 0.762, 0.254];
+/// Distance between ground bars, mm.
+const GROUND_BAR_STEP_MM: f64 = 0.508;
+/// Depth of an arrow or signal-ground triangle, mm.
+const TRIANGLE_DEPTH_MM: f64 = 1.27;
+/// Half width of the signal-ground triangle and the earth bar, mm.
+const GROUND_HALF_MM: f64 = 1.27;
+/// Depth of the earth hatch, mm.
+const EARTH_HATCH_MM: f64 = 0.762;
+/// Height of the wave head's offset and swing, mm.
+const WAVE_OFFSET_MM: f64 = 0.508;
+const WAVE_SWING_MM: f64 = 0.4;
 
 /// Style of a power port, read from its `lib_id`. This one classifier is
 /// shared by the built-in body below and the Properties panel's Style row,
@@ -127,8 +142,8 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
     match style {
         PowerPortStyle::PowerGround => {
             let mut out = Vec::new();
-            for (i, half) in [0.9525, 0.6, 0.25].into_iter().enumerate() {
-                let y = -top - 0.5 * i as f64;
+            for (i, half) in GROUND_BAR_HALVES_MM.into_iter().enumerate() {
+                let y = -top - GROUND_BAR_STEP_MM * i as f64;
                 out.push(line((-half, y), (half, y)));
             }
             out
@@ -138,7 +153,7 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
             points: vec![
                 Point::new(-HEAD_HALF_MM, top),
                 Point::new(HEAD_HALF_MM, top),
-                Point::new(0.0, top + 1.0),
+                Point::new(0.0, top + TRIANGLE_DEPTH_MM),
                 Point::new(-HEAD_HALF_MM, top),
             ],
             width: 0.0,
@@ -152,30 +167,33 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
         }],
         PowerPortStyle::SignalGround => vec![Graphic::Polyline {
             points: vec![
-                Point::new(-0.9525, -top),
-                Point::new(0.9525, -top),
-                Point::new(0.0, -top - 1.0),
-                Point::new(-0.9525, -top),
+                Point::new(-GROUND_HALF_MM, -top),
+                Point::new(GROUND_HALF_MM, -top),
+                Point::new(0.0, -top - TRIANGLE_DEPTH_MM),
+                Point::new(-GROUND_HALF_MM, -top),
             ],
             width: 0.0,
             fill: FillType::None,
         }],
         PowerPortStyle::Earth => {
-            let mut out = vec![line((-0.9525, -top), (0.9525, -top))];
-            for x in [-0.9525, 0.0, 0.9525] {
-                out.push(line((x, -top), (x - 0.5, -top - 0.6)));
+            let mut out = vec![line((-GROUND_HALF_MM, -top), (GROUND_HALF_MM, -top))];
+            for x in [-GROUND_HALF_MM, 0.0, GROUND_HALF_MM] {
+                out.push(line(
+                    (x, -top),
+                    (x - 0.6 * EARTH_HATCH_MM, -top - EARTH_HATCH_MM),
+                ));
             }
             out
         }
         PowerPortStyle::Wave => {
-            let y = top + 0.4;
+            let y = top + WAVE_OFFSET_MM;
             vec![Graphic::Polyline {
                 points: (0..=8)
                     .map(|i| {
                         let t = i as f64 / 8.0;
                         Point::new(
                             (t - 0.5) * 2.0 * HEAD_HALF_MM,
-                            y + 0.3 * (t * std::f64::consts::TAU).sin(),
+                            y + WAVE_SWING_MM * (t * std::f64::consts::TAU).sin(),
                         )
                     })
                     .collect(),
@@ -193,12 +211,11 @@ const VALUE_GAP_MM: f64 = 0.254;
 fn head_reach_mm(style: PowerPortStyle) -> f64 {
     match style {
         PowerPortStyle::Bar => STEM_MM,
-        PowerPortStyle::Arrow | PowerPortStyle::PowerGround | PowerPortStyle::SignalGround => {
-            STEM_MM + 1.0
-        }
+        PowerPortStyle::Arrow | PowerPortStyle::SignalGround => STEM_MM + TRIANGLE_DEPTH_MM,
+        PowerPortStyle::PowerGround => STEM_MM + GROUND_BAR_STEP_MM * 2.0,
         PowerPortStyle::Circle => STEM_MM + 2.0 * HEAD_HALF_MM,
-        PowerPortStyle::Wave => STEM_MM + 0.7,
-        PowerPortStyle::Earth => STEM_MM + 0.6,
+        PowerPortStyle::Wave => STEM_MM + WAVE_OFFSET_MM + WAVE_SWING_MM,
+        PowerPortStyle::Earth => STEM_MM + EARTH_HATCH_MM,
     }
 }
 
@@ -344,6 +361,24 @@ mod tests {
             } else {
                 assert!(highest > 0.0 && lowest >= 0.0, "{lib_id} should rise");
             }
+        }
+    }
+
+    /// #2091 - the stem is a stock pin long and the connection point is the
+    /// pin tip at the symbol origin for every style and both directions: a
+    /// saved wire ends on that point, so it must never move.
+    #[test]
+    fn the_stem_is_a_stock_pin_and_the_tip_stays_on_the_origin() {
+        for style in PowerPortStyle::ALL {
+            let lib = power_port_lib_symbol(&format!("power:{}", style.lib_tag()));
+            let pin = &lib.pins[0].pin;
+            assert_eq!((pin.position.x, pin.position.y), (0.0, 0.0));
+            assert_eq!(pin.length, 2.54, "{style:?}");
+            let stem = power_port_graphics(&format!("power:{}", style.lib_tag()));
+            let Graphic::Polyline { points, .. } = &stem[0] else {
+                panic!("the first graphic is the stem");
+            };
+            assert_eq!((points[0].x, points[0].y), (0.0, 0.0));
         }
     }
 

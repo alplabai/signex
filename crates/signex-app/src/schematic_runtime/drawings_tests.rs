@@ -245,3 +245,30 @@ fn a_drawings_refresh_copies_the_placements() {
         DrawingPlacement::Above
     );
 }
+
+/// #2091 - a drawing stored with width 0 draws at the default 0.254 mm, the
+/// same as a stock symbol graphic; an explicit width keeps its value.
+#[test]
+fn a_width_zero_drawing_draws_at_the_default_stroke() {
+    let mut zero_line = line(0.0);
+    let mut zero_rect = rect(FillType::None);
+    if let SchDrawing::Line { width, .. } | SchDrawing::Rect { width, .. } = &mut zero_line {
+        *width = 0.0;
+    }
+    if let SchDrawing::Line { width, .. } | SchDrawing::Rect { width, .. } = &mut zero_rect {
+        *width = 0.0;
+    }
+    let scene = scene_of(vec![zero_line, zero_rect, line(20.0)]);
+    let [
+        OrderedItem::Line(zero),
+        OrderedItem::Polygon(outline),
+        OrderedItem::Line(explicit),
+    ] = &scene.drawings[..]
+    else {
+        panic!("expected line, polygon, line, got {:?}", scene.drawings);
+    };
+    let default = signex_types::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM as f32;
+    assert_eq!(zero.width, default);
+    assert_eq!(outline.stroke_width, default);
+    assert_eq!(explicit.width, 0.25, "an explicit width keeps its value");
+}

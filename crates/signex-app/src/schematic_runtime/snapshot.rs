@@ -187,12 +187,19 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
+        // A power port draws body, pin and Value in the theme's power colour
+        // (#2091); the reference stays body-coloured.
         let stroke_color = focus_color(to_iced(&colors.body), focus_set, symbol.uuid);
+        let (body_rgb, pin_rgb, value_rgb) = if symbol.is_power {
+            (&colors.power, &colors.power, &colors.power)
+        } else {
+            (&colors.body, &colors.pin, &colors.value)
+        };
         let style = symbol::SymbolStyle {
             id: renderer_id(symbol.uuid),
-            stroke: stroke_color,
+            stroke: focus_color(to_iced(body_rgb), focus_set, symbol.uuid),
             fill: focus_color(to_iced(&colors.body_fill), focus_set, symbol.uuid),
-            pin: focus_color(to_iced(&colors.pin), focus_set, symbol.uuid),
+            pin: focus_color(to_iced(pin_rgb), focus_set, symbol.uuid),
             missing: focus_color(to_iced(&colors.no_connect), focus_set, symbol.uuid),
             scale: transform.scale,
             family: resolve_family(None, document_family),
@@ -218,7 +225,7 @@ pub fn build_renderer_snapshot(
             },
         ));
 
-        let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);
+        let value_color = focus_color(to_iced(value_rgb), focus_set, symbol.uuid);
         let reference = overrides
             .designators
             .and_then(|d| d.get(&symbol.uuid))
@@ -276,7 +283,8 @@ pub fn build_renderer_snapshot(
             ],
             fill_color: [0.0, 0.0, 0.0, 0.0],
             stroke_color: Some(to_rgba(color)),
-            stroke_width_mm: signex_types::schematic::SCHEMATIC_SHEET_FRAME_STROKE_MM as f32,
+            stroke_width_mm: signex_types::schematic::symbol_graphic_stroke_mm(sheet.stroke_width)
+                as f32,
         });
 
         parameter_texts.push(TextInput {

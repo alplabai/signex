@@ -147,13 +147,18 @@ Source: `crates/signex-types/src/schematic/stroke.rs`, applied by the CPU
 replay (`renderer_scene_canvas::SceneDrawOptions::stroke_px`), the GPU
 surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
 
-1. **Every stroke is a world width in mm.** Wires use their own or their net
-   class width, symbol bodies their library width, pins the symbol's library
-   width (the most common width among its stroked graphics), buses 0.45 mm,
-   the no-connect X and No-ERC diamond 0.2 mm, global / hierarchical label
-   markers and child sheet frames 0.15 mm. A stored width of `0` and
-   anything thinner draw at 0.15 mm on screen. These widths do not change
-   with zoom.
+1. **Every stroke is a world width in mm, and one rule resolves a stored
+   width (#2091).** A stored width of `0` (or not a finite number) draws at
+   0.254 mm (10 mil, the stock symbols' width); an explicit width is floored
+   at 0.15 mm. The rule is `symbol_graphic_stroke_mm` / `wire_stroke_mm` and
+   covers symbol bodies, pins (the symbol's most common graphic width),
+   drawings (line, rectangle, circle, arc, polyline), child sheet frames,
+   wires and bus entries, and their previews and ghosts (the placed-wire
+   preview, the bus-entry ghost, the power-port ghost), on screen and in
+   SVG / PDF / print. Fixed widths that are not stored strokes: buses
+   0.45 mm, the no-connect X and No-ERC diamond 0.2 mm, global /
+   hierarchical label markers 0.15 mm, and the page frame lines (lowered
+   from the title-block frame). These widths do not change with zoom.
 2. **Screen width is `mm * scale`**, so the ratio between any two kinds is the
    same at every zoom. Before #1858 each kind had its own curve (a per-kind
    px width times zoom, clamped), and pins ignored their library width, so
@@ -192,13 +197,24 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    device pixel too. Only a surface with no window uses
    `UNSCALED_DEVICE_PX_PER_LOGICAL_PX` (one device pixel per logical pixel).
 6. **Output** (PDF, SVG, print) uses mm widths only, with no pixel floor and
-   no snap. Output keeps each item's stored width (a width of `0` gets the
-   exporter's default); the 0.15 mm minimum of rule 1 is the screen rule.
+   no snap. Output resolves each stored width through the rule of item 1.
 
 The mm values for markers, labels and sheet frames were picked so the
 drawing looks the same as before at 400 % zoom after the snap. Selection
 outlines, handles and axes are screen-constant chrome, not strokes of the
 drawing, and stay a fixed pixel width.
+
+### Power ports (#2091)
+
+A power port (`Symbol::is_power`) draws its body strokes, its pin and its
+Value text in the theme's `power` colour, on the canvas and in SVG / PDF
+(still through the focus dimming). The reference keeps the body colour. The
+placement ghost keeps the single ghost colour. Built-in power port heads are
+sized to the stock library: the stem is one stock pin (2.54 mm) and the
+heads (bar half width 1.016 mm, ground bars 2.54 / 1.524 / 0.508 mm) sit in
+proportion. The connection point is the pin tip at the symbol origin and
+never moves; a sheet's own saved library entry keeps the size it was placed
+with.
 
 ---
 
