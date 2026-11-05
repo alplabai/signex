@@ -1,7 +1,12 @@
 //! The indexed `dangling_wire` must report exactly what the original
-//! all-pairs scan reported (issue #1366), including at the `same()` epsilon.
+//! all-pairs scan reported (issue #1366), including at the `pt_key` bucket edges.
 use super::*;
 use crate::context::{ErcBusEntry, ErcNoConnect};
+
+/// "Same point" is the shared 1 um key, as in the netlist (#2105).
+fn same(a: &Point, b: &Point) -> bool {
+    pt_key(a) == pt_key(b)
+}
 
 /// The pre-index implementation, kept verbatim as the oracle.
 fn dangling_wire_scan(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
@@ -174,4 +179,49 @@ fn on_any_wire_timing() {
     let indexed = t.elapsed();
     assert_eq!(old, new);
     println!("6000 labels x 6000 wires: scan {scan:?}, indexed {indexed:?}");
+}
+
+/// The dangling check shares the netlist's 1 um bucket (#2105): ends that land
+/// in one bucket connect, and a pair straddling a bucket edge does not.
+#[test]
+fn dangling_wire_uses_the_netlist_point_key() {
+    let wire = |id: u128, start: (f64, f64), end: (f64, f64)| ErcWire {
+        uuid: Uuid::from_u128(id),
+        start: Point {
+            x: start.0,
+            y: start.1,
+        },
+        end: Point { x: end.0, y: end.1 },
+    };
+    let dangling = |wires: Vec<ErcWire>| {
+        let c = ctx(wires, Vec::new(), Vec::new(), Vec::new());
+        let mut out = Vec::new();
+        dangling_wire(&c, &mut out);
+        out.len()
+    };
+    // Same bucket, 0.2 um apart (past the old 0.1 um epsilon): connected, so
+    // only the two far ends dangle.
+    assert_eq!(
+        dangling(vec![
+            wire(1, (0.0, 0.0), (10.0, 0.0)),
+            wire(2, (10.0002, 0.0), (20.0, 0.0)),
+        ]),
+        2
+    );
+    // Same bucket, 0.4 um apart: connected too.
+    assert_eq!(
+        dangling(vec![
+            wire(1, (0.0, 0.0), (10.0, 0.0)),
+            wire(2, (10.0004, 0.0), (20.0, 0.0)),
+        ]),
+        2
+    );
+    // A tiny gap across a bucket edge is a dangle on both sides.
+    assert_eq!(
+        dangling(vec![
+            wire(1, (0.0, 0.0), (10.0004, 0.0)),
+            wire(2, (10.0006, 0.0), (20.0, 0.0)),
+        ]),
+        4
+    );
 }
