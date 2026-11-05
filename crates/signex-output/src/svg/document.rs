@@ -9,7 +9,7 @@
 //! motion, zero behaviour change.
 
 use super::drawings::push_placed_drawings;
-use super::family::alias_for_family;
+use super::family::{alias_for_family, export_face};
 use super::geometry::{circle_path, path_to_tiny_skia, rect_path};
 use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
@@ -218,7 +218,8 @@ impl SvgRenderContext {
 
         let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
-            let font_alias = alias_for_family(label.font_family.as_deref(), document_family, "F3");
+            let (font_alias, measure_family) =
+                export_face(label.font_family.as_deref(), document_family, "F3");
             let size_pt = label_size_pt(label.font_size, xform.mm_to_unit, &opts.scale, font_alias);
             let spin = label_spin_style(label.justify, label.rotation);
             let (off_x, off_y) = match label.label_type {
@@ -226,16 +227,9 @@ impl SvgRenderContext {
                 LabelType::Global => {
                     schematic_text_offset_global(&label.shape, spin, label.font_size)
                 }
-                LabelType::Hierarchical => schematic_text_offset_hier(
-                    &label.text,
-                    label.font_size,
-                    spin,
-                    signex_types::font::resolve_family(
-                        label.font_family.as_deref(),
-                        document_family,
-                    )
-                    .as_deref(),
-                ),
+                LabelType::Hierarchical => {
+                    schematic_text_offset_hier(&label.text, label.font_size, spin, measure_family)
+                }
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
