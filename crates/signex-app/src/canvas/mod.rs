@@ -783,7 +783,8 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        self.draw_surface(state, renderer, bounds, cursor, false).layers
+        self.draw_surface(state, renderer, bounds, cursor, false)
+            .layers
     }
 
     fn mouse_interaction(
