@@ -21,6 +21,7 @@ use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
+use crate::markup_escape::escape_markup;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use crate::pdf::{ColourMode, PdfOptions};
@@ -602,7 +603,7 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
                     out,
                     "  <text x=\"{x}\" y=\"{y}\" text-anchor=\"{anchor}\" dominant-baseline=\"{baseline}\"{transform} fill=\"{}\" font-size=\"{size_pt}\">{}</text>",
                     rgb_css(*fill_rgb),
-                    escape_xml(text)
+                    escape_markup(text)
                 );
             }
         }
@@ -640,13 +641,4 @@ fn to_svg_path_d(commands: &[SvgPathCommand]) -> String {
 fn rgb_css((r, g, b): (f32, f32, f32)) -> String {
     let to_u8 = |v: f32| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round() as u8 };
     format!("rgb({},{},{})", to_u8(r), to_u8(g), to_u8(b))
-}
-
-fn escape_xml(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
 }
