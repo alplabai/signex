@@ -7,7 +7,8 @@
 //!   colour, else the palette's wire colour;
 //! - **width** - the wire's own width, else the class width, else the
 //!   project default, else 0.254 mm; never under the 0.15 mm floor;
-//! - **line style** - the class line style, else solid.
+//! - **line style** - the class line style, else the project default, else
+//!   solid.
 //!
 //! A dashed or dotted wire is emitted as a run of short sub-paths in one
 //! path element, so the page model needs no dash attribute and every output
