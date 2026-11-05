@@ -348,3 +348,18 @@ fn a_pan_far_from_the_origin_still_reuses() {
     assert_eq!(rebuilds, 0);
     assert_eq!(shift, Some(Vector::new(3.0, -2.0)));
 }
+
+#[test]
+fn pans_in_device_pixel_steps_reuse_at_every_common_scale() {
+    for dpr in [1.0, 1.25, 1.5, 1.75, 2.0, 2.5] {
+        let sheet = Sheet::new(dpr);
+        sheet.frame();
+        for step in 1..=60 {
+            // A cursor-driven pan: whole device pixels, not whole logical ones.
+            sheet.pan(4.0 / dpr, 3.0 / dpr);
+            let (rebuilds, shift) = sheet.frame();
+            assert_eq!(rebuilds, 0, "dpr {dpr}, step {step}");
+            assert!(shift.is_some(), "dpr {dpr}, step {step}");
+        }
+    }
+}

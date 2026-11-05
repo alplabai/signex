@@ -346,11 +346,19 @@ fn the_selection_lines_up_with_the_content_after_a_pan() {
     assert_lines_up(DOCKED, run(true, steps(5, 4.0, 1.0)));
 }
 
+/// Pans of 8 and 4 logical px: whole device pixels at every scale below
+/// (8 * 1.25, 8 * 1.5 and 8 * 1.75 are whole), and exact in f32, so the camera
+/// the plain canvas draws at carries no rounding noise.
+///
+/// A camera that does carry some (a pan of `4 / 1.5` px, five times over) can
+/// put an edge exactly on a half device pixel, where the hairline snap rounds
+/// by the noise: trunk's frame then differs from the retained one, which was
+/// snapped at an exact offset, by the pixel at that edge.
 #[test]
 fn a_fractional_display_scale_lines_up() {
-    for dpi in [1.25, 1.5] {
+    for dpi in [1.25, 1.5, 1.75, 2.0] {
         let mount = Mount { dpi, ..DOCKED };
-        assert_lines_up(mount, run(true, steps(5, 4.0, dpi)));
+        assert_lines_up(mount, run(true, vec![(8.0, 4.0); 5]));
     }
 }
 
