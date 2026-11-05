@@ -13,6 +13,9 @@ file, and the stored name is never rewritten.
 | Text note | `TextNote.font_family` | `[extras.sheet.note_font_families]`, note uuid to family |
 | Net / global / hierarchical label | `Label.font_family` | optional `font_family` column of the `[sheets.labels]` TSV block |
 
+The width each text measured is stored beside the families, in
+`[extras.sheet.text_extents]`; see `snxsch-text-extents.md`.
+
 Every field is `Option<String>`. `None` writes nothing, so a file that sets no
 family is byte-identical to what a build without the field wrote (pinned
 against the output of trunk before the field). A blank name is not stored.

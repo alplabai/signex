@@ -393,7 +393,7 @@ mod stored_widths {
         let doc = engine.document();
         let family = doc.font_family.as_deref();
         let width = |b: Aabb| b.max_x - b.min_x;
-        let stored = label_aabb_with(Some(&doc.text_widths), &doc.labels[0], family);
+        let stored = label_aabb_with(Some(WidthSources::of(&doc)), &doc.labels[0], family);
         let fresh = label_aabb(&doc.labels[0], family);
         (width(stored), width(fresh))
     }
@@ -460,7 +460,7 @@ mod stored_widths {
         let mut doc = engine.document().clone();
         let (before, _) = widths(&engine);
         let stored = |doc: &SchematicSheet| {
-            let b = label_aabb_with(Some(&doc.text_widths), &doc.labels[0], None);
+            let b = label_aabb_with(Some(WidthSources::of(&doc)), &doc.labels[0], None);
             b.max_x - b.min_x
         };
         assert!((stored(&doc) - before).abs() < 1e-9);

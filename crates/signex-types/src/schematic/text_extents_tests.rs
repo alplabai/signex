@@ -159,7 +159,7 @@ fn a_face_that_is_installed_and_final_measures_live() {
     let probe = first_probe(&sheet);
     let stored = measured(&sheet);
     // requested "Sheet Face", resolved to itself.
-    let got = decide_width_mm(&probe, Some("sheet face"), &stored, (5.0, true));
+    let got = decide_width_mm(&probe, Some("sheet face"), &stored, || (5.0, true));
     assert_eq!(got, (5.0, true));
 }
 
@@ -168,7 +168,7 @@ fn a_missing_face_with_a_matching_record_uses_the_stored_width() {
     let sheet = sheet();
     let probe = first_probe(&sheet);
     let stored = measured(&sheet);
-    let got = decide_width_mm(&probe, None, &stored, (5.0, true));
+    let got = decide_width_mm(&probe, None, &stored, || (5.0, true));
     assert_eq!(got, (2.0, false), "stored, and never cached");
 }
 
@@ -178,14 +178,14 @@ fn a_missing_face_without_a_usable_record_uses_the_substitute() {
     let probe = first_probe(&sheet);
     let none = TextExtents::default();
     assert_eq!(
-        decide_width_mm(&probe, None, &none, (5.0, true)),
+        decide_width_mm(&probe, None, &none, || (5.0, true)),
         (5.0, true)
     );
     let mut stale = sheet.clone();
     stale.labels[0].text = "OTHER".into();
     let stored = measured(&stale);
     assert_eq!(
-        decide_width_mm(&probe, None, &stored, (5.0, true)),
+        decide_width_mm(&probe, None, &stored, || (5.0, true)),
         (5.0, true)
     );
 }
@@ -195,7 +195,7 @@ fn an_installed_face_before_its_measurement_is_final_falls_back_to_the_record() 
     let sheet = sheet();
     let probe = first_probe(&sheet);
     let stored = measured(&sheet);
-    let got = decide_width_mm(&probe, Some("Sheet Face"), &stored, (5.0, false));
+    let got = decide_width_mm(&probe, Some("Sheet Face"), &stored, || (5.0, false));
     assert_eq!(got, (2.0, false));
 }
 
@@ -207,7 +207,7 @@ fn the_default_face_counts_as_installed_however_it_is_spelled() {
     let probe = first_probe(&sheet);
     let stored = measured(&sheet);
     assert_eq!(
-        decide_width_mm(&probe, None, &stored, (5.0, true)),
+        decide_width_mm(&probe, None, &stored, || (5.0, true)),
         (5.0, true)
     );
 }

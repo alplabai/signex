@@ -856,7 +856,7 @@ pub use symbol_geometry::{
     primitives_bounds, primitives_bounds_in, text_aabb, text_aabb_with_width, text_height_mm,
 };
 pub use text_extents::{
-    StoredTextExtent, TextExtents, TextProbe, decide_width_mm, probes, text_hash,
+    StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,
 };
 pub use text_widths::{MeasuredText, TextField, TextWidths};
 

@@ -105,6 +105,11 @@ impl TextExtents {
         self.0.iter()
     }
 
+    /// Whether a record exists for `id`'s `field`, valid or not.
+    pub fn contains(&self, id: Uuid, field: TextField) -> bool {
+        self.0.contains_key(&(id, field))
+    }
+
     /// The record of `id`'s `field` if it was measured from these inputs.
     pub fn matching(&self, probe: &TextProbe<'_>) -> Option<&StoredTextExtent> {
         let size_nm = mm_as_stored_nm(probe.size_mm)?;
@@ -205,7 +210,7 @@ pub fn probes(sheet: &SchematicSheet) -> Vec<TextProbe<'_>> {
 }
 
 /// Whether the face a text asked for is the one it was measured in.
-fn face_is_available(requested: Option<&str>, resolved: Option<&str>) -> bool {
+pub fn face_is_available(requested: Option<&str>, resolved: Option<&str>) -> bool {
     let is_default = |name: Option<&str>| {
         name.is_none_or(|name| name.eq_ignore_ascii_case(BUNDLED_DEFAULT_FAMILY))
     };
@@ -226,14 +231,21 @@ pub fn decide_width_mm(
     probe: &TextProbe<'_>,
     resolved: Option<&str>,
     stored: &TextExtents,
-    live: (f64, bool),
+    live: impl FnOnce() -> (f64, bool),
 ) -> (f64, bool) {
-    if face_is_available(probe.requested, resolved) && live.1 {
-        return live;
+    if face_is_available(probe.requested, resolved) {
+        let measured = live();
+        if measured.1 {
+            return measured;
+        }
+        return match stored.matching(probe) {
+            Some(record) => (record.width_mm(), false),
+            None => measured,
+        };
     }
     match stored.matching(probe) {
         Some(record) => (record.width_mm(), false),
-        None => live,
+        None => live(),
     }
 }
 
