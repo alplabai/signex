@@ -258,7 +258,7 @@ pub fn items(
         ..ActiveBarButton::default()
     });
 
-    // Place Pad — wired in v0.15. Activate the tool, then click an
+    // Place Pad. Activate the tool, then click an
     // empty area of the canvas to drop a pad there.
     let place_pad_path = path.clone();
     let place_pad = ActiveBarItem::Button(ActiveBarButton {

@@ -14,9 +14,9 @@
 //!   - `no_routing`    → `Tracks`
 //!   - `no_vias`       → `Vias`
 //!   - `no_copper`     → `Copper`
-//!   - `no_pours`      → `Copper` (closest match in v0.14.1 enum)
-//!   - `no_drilling`   → `All` (no dedicated drill-only variant in
-//!     v0.14.1 — the lib enum can grow in v0.15+)
+//!   - `no_pours`      → `Copper` (closest match in the current enum)
+//!   - `no_drilling`   → `All` (no dedicated drill-only variant yet —
+//!     the lib enum can grow one)
 //! - No bits set → `KeepoutForbid::All` (defensive default — an
 //!   untyped keepout zone forbids everything).
 
