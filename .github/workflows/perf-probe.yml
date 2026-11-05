@@ -29,5 +29,5 @@ jobs:
           # inert.rs tests use `()` as renderer, which only exists with debug assertions.
           sed -i '155s/#\[cfg(test)\]/#[cfg(any())]/' crates/signex-app/src/library/editor/inert.rs
           sed -n 155p crates/signex-app/src/library/editor/inert.rs
-          cargo test --release -p signex-app --lib busy_sheet_probe -- --ignored --nocapture 2>&1 | tee probe.log
-          grep '^PERF' probe.log > "$GITHUB_STEP_SUMMARY" || true
+          cargo test --release -p signex-app --lib perf_probe -- --ignored --nocapture --test-threads=1 2>&1 | tee probe.log
+          grep -E "^(PERF|SPAN)" probe.log > "$GITHUB_STEP_SUMMARY" || true

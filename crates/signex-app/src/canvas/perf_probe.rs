@@ -360,3 +360,47 @@ fn busy_sheet_probe() {
         r = run(nx, ny, r);
     }
 }
+
+#[test]
+#[ignore = "perf probe"]
+fn drag_step_breakdown() {
+    for (nx, ny) in [(4, 3), (8, 6)] {
+        let sheet = busy_sheet(nx, ny);
+        let tag = format!("{} symbols {} wires", sheet.symbols.len(), sheet.wires.len());
+        let sel = vec![SelectedItem::new(sheet.symbols[0].uuid, SelectedKind::Symbol)];
+        const N: u32 = 30;
+        let t = Instant::now();
+        for _ in 0..N {
+            drop(std::hint::black_box(sheet.clone()));
+        }
+        eprintln!("SPAN [{tag}] sheet.clone()+drop            {:8.3} ms", t.elapsed().as_secs_f64() * 1000.0 / N as f64);
+        let t = Instant::now();
+        for _ in 0..N {
+            drop(std::hint::black_box(signex_engine::before_nets(&sheet)));
+        }
+        eprintln!("SPAN [{tag}] before_nets (one net derive)  {:8.3} ms", t.elapsed().as_secs_f64() * 1000.0 / N as f64);
+        let preview = signex_engine::MovePreview::new(&sheet);
+        let colors = Default::default();
+        let moved_ids = super::drag_layers::moved_item_ids(&sheet, &sel);
+        let _ = signex_engine::perf_spans::take();
+        let (mut total, mut split) = (Duration::ZERO, Duration::ZERO);
+        for i in 0..N {
+            let d = 1.27 * (i as f64 + 1.0);
+            let moves = vec![(sel[0], d, (i % 3) as f64 * 1.27)];
+            let t = Instant::now();
+            let (moved, _held) = preview.moved_with(&moves, true, &colors);
+            total += t.elapsed();
+            let t = Instant::now();
+            let f = super::drag_layers::split_ghost(&sheet, &moved, &moved_ids);
+            split += t.elapsed();
+            drop(f);
+            drop(moved);
+        }
+        let per = |d: Duration, n: u32| d.as_secs_f64() * 1000.0 / n as f64;
+        eprintln!("SPAN [{tag}] moved_with total / step       {:8.3} ms", per(total, N));
+        eprintln!("SPAN [{tag}] split_ghost / step            {:8.3} ms", per(split, N));
+        for (name, (d, c)) in signex_engine::perf_spans::take() {
+            eprintln!("SPAN [{tag}]   {name:<28} {:8.3} ms/step  ({c} calls)", per(d, N));
+        }
+    }
+}

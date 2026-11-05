@@ -197,13 +197,13 @@ impl Guard {
             .flat_map(|net| net.sheet_pins.iter().copied())
             .collect();
         Self {
-            before_sheet: before_sheet.clone(),
-            plain_sheet: plain_sheet.clone(),
+            before_sheet: crate::perf_spans::time("g1 before_clone", || before_sheet.clone()),
+            plain_sheet: crate::perf_spans::time("g2 plain_clone", || plain_sheet.clone()),
             before,
-            plain_view: PlainView::of(plain_sheet, tips),
+            plain_view: crate::perf_spans::time("g3 plain_view", || PlainView::of(plain_sheet, tips)),
             seen_terminals,
             seen_sheet_pins,
-            only_symbols_moved: same_wiring(before_sheet, plain_sheet),
+            only_symbols_moved: crate::perf_spans::time("g4 same_wiring", || same_wiring(before_sheet, plain_sheet)),
         }
     }
 
@@ -499,11 +499,11 @@ impl Guard {
         let (want, extra) = self.reference(tips, &skip, policy);
         // Pins with an undefined plain connection stay out of both sides;
         // skipped pins are compared against where the plain move left them.
-        let sigs = if skip.power_out.is_empty() {
+        let sigs = crate::perf_spans::time("g5 check_net_signatures", || if skip.power_out.is_empty() {
             net_signatures(candidate)
         } else {
             net_signatures(&Self::strip(candidate, &skip.power_out))
-        };
+        });
         let got = Self::project(&sigs, &extra);
         if want == got {
             return None;

@@ -43,21 +43,21 @@ impl Engine {
         followed: &[SelectedItem],
     ) -> DocumentPatch {
         const MAX_ROUNDS: usize = 6;
-        let base = self.document.clone();
+        let base = crate::perf_spans::time("c5 base_clone", || self.document.clone());
         // What a plain move leaves: the reference for the user's own edits.
-        let plain_reference = {
+        let plain_reference = crate::perf_spans::time("c6 plain_reference", || {
             self.reconciled_patch(&[items, followed].concat());
             std::mem::replace(&mut self.document, base.clone())
-        };
-        let guard = crate::Guard::new(before, &plain_reference, tips, self.preset_before.clone());
+        });
+        let guard = crate::perf_spans::time("c7 guard_new", || crate::Guard::new(before, &plain_reference, tips, self.preset_before.clone()));
         let mut policy = crate::Policy::default();
         for round in 0.. {
-            self.document = base.clone();
-            let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
+            self.document = crate::perf_spans::time("c8 round_clone", || base.clone());
+            let follow = crate::perf_spans::time("c9 follow", || crate::follow_moved_pins(&mut self.document, tips, items, &policy));
             let mut touched = [items, followed].concat();
             touched.extend(follow.touched);
-            let patch = self.reconciled_patch(&touched);
-            let Some(blamed) = guard.check(&self.document, tips, &policy, &follow.edited_tips)
+            let patch = crate::perf_spans::time("ca reconcile", || self.reconciled_patch(&touched));
+            let Some(blamed) = crate::perf_spans::time("cb check", || guard.check(&self.document, tips, &policy, &follow.edited_tips))
             else {
                 self.warn_plain_pins(&guard, tips, &policy);
                 return patch;
@@ -127,9 +127,9 @@ impl Engine {
         moves.extend(followers.entries.iter().copied());
         let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
-        let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
+        let tips = crate::perf_spans::time("c2 tips", || keep_wires.then(|| crate::moved_pin_tips(&self.document, &items)));
         // So must the wires already meeting end to end, which a merge leaves.
-        let adjacent = self.touching_wire_pairs();
+        let adjacent = crate::perf_spans::time("c3 adjacent", || self.touching_wire_pairs());
 
         let mut changed = false;
         for (item, dx, dy) in &moves {
@@ -147,12 +147,12 @@ impl Engine {
             Some(tips) => self.rubber_band_guarded(&before, &tips, &items, &followed),
             None => self.reconciled_patch(&[items, followed].concat()),
         };
-        patch |= self.merge_after_edit(&adjacent);
+        patch |= crate::perf_spans::time("cc merge", || self.merge_after_edit(&adjacent));
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
             document: patch,
         };
-        self.record_history(before, patch_pair);
+        crate::perf_spans::time("cd record_history", || self.record_history(before, patch_pair));
         Ok(CommandResult::changed(patch_pair))
     }
 

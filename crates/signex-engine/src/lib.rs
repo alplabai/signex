@@ -20,6 +20,7 @@ mod sheet;
 mod sheet_entry;
 mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
+pub mod perf_spans;
 mod sheet_placement;
 mod transform;
 
@@ -231,27 +232,27 @@ impl MovePreview {
         keep_wires: bool,
         wire_colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     ) -> (SchematicSheet, Vec<String>) {
-        let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
+        let Ok(mut engine) = crate::perf_spans::time("a engine_new(clone)", || Engine::new(self.sheet.clone())) else {
             return (self.sheet.clone(), Vec::new());
         };
         engine.preset_before = Some(self.before.clone());
         engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
-        let (command, held) = engine.without_locked_naming(
+        let (command, held) = crate::perf_spans::time("b without_locked", || engine.without_locked_naming(
             Command::MoveEach {
                 moves: moves.to_vec(),
                 keep_wires,
             },
             &|symbol| format!("a wire on {symbol}'s pin ({symbol} is locked)"),
-        );
+        ));
         let Some(command) = command else {
             return (self.sheet.clone(), held);
         };
-        if engine.execute(command).is_err() {
+        if crate::perf_spans::time("c execute", || engine.execute(command)).is_err() {
             return (self.sheet.clone(), held);
         }
-        (engine.document().clone(), held)
+        (crate::perf_spans::time("z final_clone", || engine.document().clone()), held)
     }
 }
 
@@ -583,7 +584,7 @@ impl Engine {
         {
             self.pre_image_clones += 1;
         }
-        self.document.clone()
+        crate::perf_spans::time("c1 pre_image", || self.document.clone())
     }
 
     pub fn document(&self) -> &SchematicSheet {
