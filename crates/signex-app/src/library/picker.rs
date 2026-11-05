@@ -17,13 +17,13 @@
 //! └────────────────────────────────────────────────────────┘
 //! ```
 
-use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
+use iced::widget::{button, column, container, row, scrollable, text, text_input};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
-use super::modal_chrome::close_x;
+use super::modal_chrome::{footer_strip, header, primary_btn_if, secondary_btn};
 use super::placed_part::{change_preview_view, datasheet_choice_view};
 use super::range_filter::range_filter_bar;
 use super::state::{PickerMode, PickerState};
@@ -52,24 +52,17 @@ pub fn view<'a>(
     let changing = matches!(picker.mode, PickerMode::ChangeComponent(_));
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
-    let header = container(
-        row![
-            text(if changing {
-                "Change Component"
-            } else {
-                "Place Component"
-            })
-            .size(TS.heading)
-            .color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(LibraryMessage::ClosePicker, tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        if changing {
+            "Change Component"
+        } else {
+            "Place Component"
+        },
+        LibraryMessage::ClosePicker,
+        windowed,
+        tokens,
+    );
 
     let search = text_input("Search internal PN / MPN / description…", &picker.filter)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
@@ -158,67 +151,23 @@ pub fn view<'a>(
     .height(Length::Fill);
 
     let place_enabled = picker.selected.is_some();
-    let place_bg = if place_enabled {
-        iced::Color::from_rgb(0.00, 0.47, 0.84)
-    } else {
-        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-    };
-    let place_fg = if place_enabled {
-        iced::Color::WHITE
-    } else {
-        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
-    };
-    let mut place_btn = button(
-        container(
-            text(if changing { "Next" } else { "Place" })
-                .size(TS.body)
-                .color(place_fg),
-        )
-        .padding([SP.s, 14.0]),
-    )
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(place_bg)),
-        text_color: place_fg,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
-    if place_enabled {
-        place_btn = place_btn.on_press(if changing {
-            LibraryMessage::PlacedPart(PlacedPartMsg::ChangePartPicked)
-        } else {
-            LibraryMessage::Picker(PickerMsg::PlaceSelected)
-        });
-    }
-
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
-            button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
-                .on_press(LibraryMessage::ClosePicker)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04
-                    ))),
-                    text_color: text_c,
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                }),
-            Space::new().width(8),
-            place_btn,
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
+            secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens),
+            primary_btn_if(
+                if changing { "Next" } else { "Place" },
+                if changing {
+                    LibraryMessage::PlacedPart(PlacedPartMsg::ChangePartPicked)
+                } else {
+                    LibraryMessage::Picker(PickerMsg::PlaceSelected)
+                },
+                place_enabled,
+                tokens,
+            ),
+        ],
+        tokens,
+    );
 
     // Range filters on the measurement columns (#1572, phase 4).
     let range_bar = range_filter_bar(

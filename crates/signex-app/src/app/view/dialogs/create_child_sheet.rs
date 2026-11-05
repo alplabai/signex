@@ -5,9 +5,10 @@
 use iced::widget::{Space, column, container, row, text, text_input};
 use iced::{Element, Length, Widget};
 
-use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
+use super::widgets::{close_x_button, wrap_modal};
 use super::*;
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
 
 impl Signex {
     pub(in crate::app::view) fn view_create_child_sheet_confirm(&self) -> Element<'_, Message> {
@@ -28,8 +29,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-        let error_c = iced::Color::from_rgb(0.90, 0.35, 0.30);
         fn msg(m: ProjectMsg) -> Message {
             Message::Project(m)
         }
@@ -82,30 +81,35 @@ impl Signex {
             .size(TS.label)
             .width(Length::Fill);
         let note: Element<'_, Message> = match &confirm.error {
-            Some(error) => text(error.clone()).size(TS.body).color(error_c).boxed(),
+            Some(error) => text(error.clone())
+                .size(TS.body)
+                .color(crate::styles::tokens::danger(tokens))
+                .boxed(),
             None => Space::new().height(0).boxed(),
         };
         let confirm_button: Element<'_, Message> = if confirm.exists {
-            primary_button(
+            dialog_button(
                 "Open it",
+                DialogButtonKind::Primary,
                 Some(msg(ProjectMsg::CreateChildSheetOpenExisting)),
-                border_c,
+                tokens,
             )
         } else {
-            primary_button("Create", Some(create), border_c)
+            dialog_button("Create", DialogButtonKind::Primary, Some(create), tokens)
         };
 
         container(
             column![
                 header,
-                container(
+                dialog_body(
                     column![
-                        text(format!(
-                            "Sheet '{}' has no file yet. Where should it be created?",
-                            confirm.name
-                        ))
-                        .size(TS.body)
-                        .color(text_muted),
+                        dialog_message(
+                            format!(
+                                "Sheet '{}' has no file yet. Where should it be created?",
+                                confirm.name
+                            ),
+                            tokens,
+                        ),
                         iced::widget::tooltip(
                             text(format!("Relative to {folder}"))
                                 .size(TS.caption)
@@ -115,30 +119,23 @@ impl Signex {
                         ),
                         row![
                             field,
-                            secondary_button(
+                            dialog_button(
                                 "Browse...",
-                                msg(ProjectMsg::CreateChildSheetBrowse),
-                                text_c,
-                                border_c,
+                                DialogButtonKind::Secondary,
+                                Some(msg(ProjectMsg::CreateChildSheetBrowse)),
+                                tokens,
                             ),
                         ]
-                        .spacing(8)
+                        .spacing(SP.m)
                         .align_y(iced::Alignment::Center),
                         note,
                     ]
-                    .spacing(8),
-                )
-                .padding([14, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button("Later", later, text_c, border_c),
-                        Space::new().width(8),
-                        confirm_button,
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14]),
+                    .spacing(SP.m),
+                ),
+                dialog_footer(vec![
+                    dialog_button("Later", DialogButtonKind::Secondary, Some(later), tokens),
+                    confirm_button,
+                ]),
             ]
             .width(Length::Fill)
             .height(Length::Fill),

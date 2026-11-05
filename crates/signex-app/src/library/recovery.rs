@@ -41,15 +41,16 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, button, column, container, row, text};
-use iced::{Border, Element, Length, Padding, Theme, Widget};
+use iced::widget::{Space, column, container, text};
+use iced::{Element, Widget};
 use signex_library::PrimitiveKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{close_x, primary_btn, secondary_btn};
+use super::modal_chrome::{danger_btn, footer_strip, header, primary_btn, secondary_btn};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_hint, dialog_message};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -146,65 +147,47 @@ fn library_missing_view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-
-    let header = container(
-        row![
-            text("Library Missing").size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        "Library Missing",
+        LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
+        windowed,
+        tokens,
+    );
 
     let body = column![
-        text(
+        dialog_message(
             "Signex couldn't find the library's .snxlib file. \
-             It may have been moved, renamed, or deleted."
-        )
-        .size(TS.body)
-        .color(muted),
-        Space::new().height(8),
-        text(format!("Expected: {}", path.display()))
-            .size(TS.body)
-            .color(muted),
+             It may have been moved, renamed, or deleted.",
+            tokens,
+        ),
+        dialog_hint(format!("Expected: {}", path.display()), tokens),
     ]
-    .spacing(SP.xs);
+    .spacing(SP.m);
 
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
             secondary_btn(
                 "Cancel",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
                 tokens,
             ),
-            Space::new().width(8),
-            secondary_btn(
+            danger_btn(
                 "Remove from project",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::RemoveFromProject),
                 tokens,
             ),
-            Space::new().width(8),
             primary_btn(
                 "Locate\u{2026}",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Locate),
                 tokens,
             ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+        ],
+        tokens,
+    );
 
     container(
-        column![header, container(body).padding([14.0, SP.xl]), footer]
+        column![header, dialog_body(body), Space::new().height(SP.l), footer]
             .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
@@ -219,62 +202,39 @@ fn git_missing_view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
+    let danger = theme_ext::error_color(tokens);
 
-    let header = container(
-        row![
-            text("Git Repository Missing")
-                .size(TS.heading)
-                .color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        "Git Repository Missing",
+        LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
+        windowed,
+        tokens,
+    );
 
     let mut summary_lines = column![
-        text(
+        dialog_message(
             "The library's .snxlib file is intact, but its .git/ \
              directory is missing. Past per-primitive history can't \
-             be read until the repository is restored."
-        )
-        .size(TS.body)
-        .color(muted),
-        Space::new().height(8),
-        text(format!("Library: {}", path.display()))
-            .size(TS.body)
-            .color(muted),
+             be read until the repository is restored.",
+            tokens,
+        ),
+        dialog_hint(format!("Library: {}", path.display()), tokens),
     ]
-    .spacing(SP.xs);
+    .spacing(SP.m);
 
     if let Some(url) = remote {
-        summary_lines = summary_lines.push(Space::new().height(4).boxed());
-        summary_lines = summary_lines.push(
-            text(format!("Remote: {}", url))
-                .size(TS.body)
-                .color(muted)
-                .boxed(),
-        );
+        summary_lines = summary_lines.push(dialog_hint(format!("Remote: {}", url), tokens));
     }
 
     if let Some(reason) = error {
-        summary_lines = summary_lines.push(Space::new().height(8).boxed());
         summary_lines = summary_lines.push(
             text(format!("Re-init failed: {reason}"))
                 .size(TS.body)
-                .color(iced::Color::from_rgb(0.86, 0.40, 0.36))
+                .color(danger)
                 .boxed(),
         );
     }
 
-    summary_lines = summary_lines.push(Space::new().height(10).boxed());
     summary_lines = summary_lines.push(
         text(
             "Re-init creates a fresh repository at the parent \
@@ -282,51 +242,55 @@ fn git_missing_view<'a>(
              from this point forward.",
         )
         .size(TS.body)
-        .color(iced::Color::from_rgb(0.86, 0.40, 0.36))
+        .color(danger)
         .boxed(),
     );
 
+    // Restoring is the affirmative action once a remote is known; until
+    // then it is drawn disabled.
     let restore_button: Element<'a, LibraryMessage> = if remote.is_some() {
-        secondary_btn(
+        primary_btn(
             "Restore from remote",
             LibraryMessage::RecoveryGitMissing(GitMissingChoice::RestoreFromRemote),
             tokens,
         )
     } else {
-        disabled_btn("Restore from remote", text_c, border)
+        dialog_button(
+            "Restore from remote",
+            DialogButtonKind::Secondary,
+            None,
+            tokens,
+        )
     };
 
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
             secondary_btn(
                 "Cancel",
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
                 tokens,
             ),
-            Space::new().width(8),
             secondary_btn(
                 "Skip (read-only)",
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip),
                 tokens,
             ),
-            Space::new().width(8),
             restore_button,
-            Space::new().width(8),
-            destructive_btn(
+            danger_btn(
                 "Re-init (lose history)",
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::ReInit),
+                tokens,
             ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+        ],
+        tokens,
+    );
 
     container(
         column![
             header,
-            container(summary_lines).padding([14.0, SP.xl]),
+            dialog_body(summary_lines),
+            Space::new().height(SP.l),
             footer
         ]
         .width(super::card_len(windowed, MODAL_W)),
@@ -345,9 +309,6 @@ fn broken_binding_view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-
     let kind_label = match kind {
         PrimitiveKind::Symbol => "Symbol",
         PrimitiveKind::Footprint => "Footprint",
@@ -357,128 +318,59 @@ fn broken_binding_view<'a>(
         _ => "Primitive",
     };
 
-    let header = container(
-        row![
-            text(format!("Broken {} Binding", kind_label))
-                .size(TS.heading)
-                .color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        &format!("Broken {} Binding", kind_label),
+        LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
+        windowed,
+        tokens,
+    );
 
     let body = column![
-        text(format!(
-            "A row in '{}' references a {} that no longer exists on disk.",
-            table,
-            kind_label.to_lowercase()
-        ))
-        .size(TS.body)
-        .color(muted),
-        Space::new().height(8),
-        text(format!("Library: {}", library_path.display()))
-            .size(TS.body)
-            .color(muted),
-        text(format!("Row: {}", row_id)).size(TS.body).color(muted),
-        text(format!("Missing UUID: {}", missing_uuid))
-            .size(TS.body)
-            .color(muted),
+        dialog_message(
+            format!(
+                "A row in '{}' references a {} that no longer exists on disk.",
+                table,
+                kind_label.to_lowercase()
+            ),
+            tokens,
+        ),
+        column![
+            dialog_hint(format!("Library: {}", library_path.display()), tokens),
+            dialog_hint(format!("Row: {}", row_id), tokens),
+            dialog_hint(format!("Missing UUID: {}", missing_uuid), tokens),
+        ]
+        .spacing(SP.xs),
     ]
-    .spacing(SP.xs);
+    .spacing(SP.m);
 
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
             secondary_btn(
                 "Cancel",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
                 tokens,
             ),
-            Space::new().width(8),
-            secondary_btn(
+            danger_btn(
                 "Remove row",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::RemoveRow),
                 tokens,
             ),
-            Space::new().width(8),
             primary_btn(
                 "Re-bind\u{2026}",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Rebind),
                 tokens,
             ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+        ],
+        tokens,
+    );
 
     container(
-        column![header, container(body).padding([14.0, SP.xl]), footer]
+        column![header, dialog_body(body), Space::new().height(SP.l), footer]
             .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .boxed()
-}
-
-/// Destructive button — used for *Re-init (lose history)*. Painted
-/// muted-red so the lossy semantics read at a glance. Confirm with
-/// the user before tweaking the colour.
-fn destructive_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
-    let bg = iced::Color::from_rgb(0.74, 0.25, 0.22);
-    let fg = iced::Color::WHITE;
-    button(
-        container(text(label.to_string()).size(TS.body).color(fg))
-            .padding(Padding::from([SP.s, 14.0])),
-    )
-    .on_press(message)
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(bg)),
-        text_color: fg,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    })
-    .boxed()
-}
-
-fn disabled_btn<'a>(
-    label: &'a str,
-    text_color: iced::Color,
-    border: iced::Color,
-) -> Element<'a, LibraryMessage> {
-    let muted = iced::Color {
-        a: text_color.a * 0.5,
-        ..text_color
-    };
-    container(
-        container(text(label.to_string()).size(TS.body).color(muted))
-            .padding(Padding::from([SP.s, 14.0])),
-    )
-    .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.02,
-        ))),
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: iced::Color {
-                a: border.a * 0.5,
-                ..border
-            },
-            ..Border::default()
-        },
-        ..Default::default()
-    })
     .boxed()
 }
 

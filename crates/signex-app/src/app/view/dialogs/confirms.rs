@@ -6,12 +6,16 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
-use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
+use super::widgets::{close_x_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 use crate::app::path_ops::PlacingSymbol;
+use crate::styles::{
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_hint, dialog_list,
+    dialog_message,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -148,14 +152,10 @@ impl Signex {
         }
         let remove_options: Element<'_, Message> = remove_options.boxed();
 
-        let mut prompt = column![
-            text(format!(
-                "Please choose how to remove file \"{}\"",
-                st.display_name
-            ))
-            .size(TS.body)
-            .color(text_muted),
-        ]
+        let mut prompt = column![dialog_message(
+            format!("Please choose how to remove file \"{}\"", st.display_name),
+            tokens,
+        )]
         .spacing(SP.s);
         if !blockers.other_parents.is_empty() {
             prompt = prompt.push(
@@ -234,18 +234,13 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(prompt).padding([14, 14]),
-                container(remove_options).padding([0, 14]),
-                container(row![
-                    Space::new().width(Length::Fill),
-                    secondary_button(
-                        "Cancel",
-                        Message::Remove(RemoveMsg::Close),
-                        text_c,
-                        border_c,
-                    ),
-                ])
-                .padding([14, 14]),
+                dialog_body(column![prompt, remove_options].spacing(SP.m)),
+                dialog_footer(vec![dialog_button(
+                    "Cancel",
+                    DialogButtonKind::Secondary,
+                    Some(Message::Remove(RemoveMsg::Close)),
+                    tokens,
+                )]),
             ]
             .width(self.dialog_width(super::super::super::state::ModalId::RemoveDialog, 560.0)),
         )
@@ -262,46 +257,36 @@ impl Signex {
         header: Element<'a, Message>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
         // Discard is withheld when another open project shares the target.
-        let mut buttons = row![
-            Space::new().width(Length::Fill),
-            secondary_button(
-                "Cancel",
-                Message::Remove(RemoveMsg::Close),
-                text_c,
-                border_c
-            ),
-        ]
-        .align_y(iced::Alignment::Center);
+        let mut buttons = vec![dialog_button(
+            "Cancel",
+            DialogButtonKind::Secondary,
+            Some(Message::Remove(RemoveMsg::Close)),
+            tokens,
+        )];
         if can_discard {
-            buttons = buttons
-                .push(Space::new().width(8).boxed())
-                .push(secondary_button(
-                    "Discard",
-                    Message::Remove(RemoveMsg::ExcludeDirty(
-                        crate::app::ExcludeDirtyChoice::Discard,
-                    )),
-                    text_c,
-                    border_c,
-                ));
-        }
-        buttons = buttons
-            .push(Space::new().width(8).boxed())
-            .push(primary_button(
-                "Save",
+            buttons.push(dialog_button(
+                "Discard",
+                DialogButtonKind::Danger,
                 Some(Message::Remove(RemoveMsg::ExcludeDirty(
-                    crate::app::ExcludeDirtyChoice::Save,
+                    crate::app::ExcludeDirtyChoice::Discard,
                 ))),
-                border_c,
+                tokens,
             ));
+        }
+        buttons.push(dialog_button(
+            "Save",
+            DialogButtonKind::Primary,
+            Some(Message::Remove(RemoveMsg::ExcludeDirty(
+                crate::app::ExcludeDirtyChoice::Save,
+            ))),
+            tokens,
+        ));
         container(
             column![
                 header,
-                container(text(body).size(TS.body).color(text_muted)).padding([14, 14]),
-                container(buttons).padding([14, 14]),
+                dialog_body(dialog_message(body, tokens)),
+                dialog_footer(buttons),
             ]
             .width(560),
         )
@@ -329,7 +314,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
 
         let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = container(
@@ -355,103 +339,76 @@ impl Signex {
             super::super::super::state::ModalId::ProjectCloseConfirm,
         );
 
-        // List of dirty filenames, scrollable in case the project
-        // has dozens of unsaved sheets. Filenames only — paths would
-        // overflow narrow modals and the project context already
-        // implies the parent dir.
+        // Filenames only: paths would overflow narrow modals and the project
+        // context already implies the parent dir.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
-        let file_list = scrollable(column(file_rows).spacing(0))
-            .height(Length::Shrink)
-            .width(Length::Fill);
 
         // An unreadable sheet hides its children: no Discard All, and why.
         let discard_blocked = st.sheet_refs.discard_blocked_reason();
-        let discard_note: Element<'_, Message> = match &discard_blocked {
-            Some(reason) => container(text(reason.clone()).size(TS.body).color(text_muted))
-                .padding([10, 14])
-                .boxed(),
-            None => Space::new().height(0).boxed(),
-        };
-        let discard_button: Element<'_, Message> = if discard_blocked.is_some() {
-            Space::new().width(0).boxed()
-        } else {
-            secondary_button(
-                "Discard All",
-                Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::DiscardAll)),
-                text_c,
-                border_c,
-            )
-        };
-        let discard_gap: Element<'_, Message> = if discard_blocked.is_some() {
-            Space::new().width(0).boxed()
-        } else {
-            Space::new().width(8).boxed()
-        };
 
+        let mut body = column![
+            dialog_message(
+                format!(
+                    "'{}' has {}. What would you like to do?",
+                    st.project_name,
+                    unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len())
+                ),
+                tokens,
+            ),
+            container(dialog_list(file_rows, tokens)).height(Length::Fit.max(
+                crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
+                    + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
+            )),
+        ]
+        .spacing(SP.m);
         // Kept documents stay open and are never discarded; say so, by name.
-        let kept_note: Element<'_, Message> = if st.kept_paths.is_empty() {
-            Space::new().height(0).boxed()
-        } else {
+        if !st.kept_paths.is_empty() {
             let names: Vec<String> = st
                 .kept_paths
                 .iter()
                 .map(|p| crate::app::state::sheet_refs::file_label(p))
                 .collect();
-            container(
-                text(format!(
+            body = body.push(dialog_hint(
+                format!(
                     "Kept open, not provably this project's alone: {}",
                     crate::app::state::sheet_refs::bounded_names(&names)
-                ))
-                .size(TS.body)
-                .color(text_muted),
-            )
-            .padding([10, 14])
-            .boxed()
-        };
+                ),
+                tokens,
+            ));
+        }
+        if let Some(reason) = &discard_blocked {
+            body = body.push(dialog_hint(reason.clone(), tokens));
+        }
+
+        let mut buttons = vec![dialog_button(
+            "Cancel",
+            DialogButtonKind::Secondary,
+            Some(Message::Project(ProjectMsg::CloseConfirm(
+                ProjectCloseChoice::Cancel,
+            ))),
+            tokens,
+        )];
+        if discard_blocked.is_none() {
+            buttons.push(dialog_button(
+                "Discard All",
+                DialogButtonKind::Danger,
+                Some(Message::Project(ProjectMsg::CloseConfirm(
+                    ProjectCloseChoice::DiscardAll,
+                ))),
+                tokens,
+            ));
+        }
+        buttons.push(dialog_button(
+            "Save All",
+            DialogButtonKind::Primary,
+            Some(Message::Project(ProjectMsg::CloseConfirm(
+                ProjectCloseChoice::SaveAll,
+            ))),
+            tokens,
+        ));
 
         let dialog = container(
-            column![
-                header,
-                container(
-                    text(format!(
-                        "'{}' has {}. What would you like to do?",
-                        st.project_name,
-                        unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len())
-                    ))
-                    .size(TS.body)
-                    .color(text_muted)
-                )
-                .padding([14, 14]),
-                container(file_list)
-                    .height(Length::Fit.max(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT))
-                    .padding([0, 14]),
-                kept_note,
-                discard_note,
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        discard_button,
-                        discard_gap,
-                        primary_button(
-                            "Save All",
-                            Some(Message::Project(ProjectMsg::CloseConfirm(
-                                ProjectCloseChoice::SaveAll,
-                            ))),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([14, 14]),
-            ]
-            .width(self.dialog_width(
+            column![header, dialog_body(body), dialog_footer(buttons)].width(self.dialog_width(
                 super::super::super::state::ModalId::ProjectCloseConfirm,
                 520.0,
             )),
@@ -512,7 +469,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
 
         let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = container(
@@ -541,80 +497,62 @@ impl Signex {
             super::super::super::state::ModalId::AppQuitConfirm,
         );
 
-        // List of dirty filenames across the whole workspace,
-        // scrollable in case many files are unsaved. Basenames only —
-        // full paths would overflow the modal.
+        // Basenames only: full paths would overflow the modal.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
-        let file_list = scrollable(column(file_rows).spacing(0))
-            .height(Length::Shrink)
-            .width(Length::Fill);
 
-        let refreshed_note: Element<'_, Message> = if self.ui_state.quit_confirm_refreshed {
-            container(
+        let mut body = column![].spacing(SP.m);
+        if self.ui_state.quit_confirm_refreshed {
+            body = body.push(
                 text("The unsaved list changed; review and confirm again.")
                     .size(TS.body)
-                    .color(iced::Color::from_rgb(0.90, 0.35, 0.30)),
-            )
-            .padding([10, 14])
-            .boxed()
-        } else {
-            Space::new().height(0).boxed()
-        };
+                    .color(crate::styles::tokens::danger(tokens)),
+            );
+        }
+        body = body
+            .push(dialog_message(
+                format!(
+                    "You have {}. Save before {}?",
+                    unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
+                    if cfg!(target_os = "macos") {
+                        "quitting"
+                    } else {
+                        "exiting"
+                    }
+                ),
+                tokens,
+            ))
+            .push(
+                container(dialog_list(file_rows, tokens)).height(Length::Fit.max(
+                    crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
+                        + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
+                )),
+            );
+
+        let choose = |choice| Message::Project(ProjectMsg::AppQuitConfirm(choice));
+        let buttons = vec![
+            dialog_button(
+                "Cancel",
+                DialogButtonKind::Secondary,
+                Some(choose(ProjectCloseChoice::Cancel)),
+                tokens,
+            ),
+            dialog_button(
+                "Discard All",
+                DialogButtonKind::Danger,
+                Some(choose(ProjectCloseChoice::DiscardAll)),
+                tokens,
+            ),
+            dialog_button(
+                "Save All",
+                DialogButtonKind::Primary,
+                Some(choose(ProjectCloseChoice::SaveAll)),
+                tokens,
+            ),
+        ];
         let dialog = container(
-            column![
-                header,
-                refreshed_note,
-                container(
-                    text(format!(
-                        "You have {}. Save before {}?",
-                        unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
-                        if cfg!(target_os = "macos") {
-                            "quitting"
-                        } else {
-                            "exiting"
-                        }
-                    ))
-                    .size(TS.body)
-                    .color(text_muted)
-                )
-                .padding([14, 14]),
-                container(file_list)
-                    .height(Length::Fit.max(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT))
-                    .padding([0, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::Project(ProjectMsg::AppQuitConfirm(
-                                ProjectCloseChoice::Cancel
-                            )),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        secondary_button(
-                            "Discard All",
-                            Message::Project(ProjectMsg::AppQuitConfirm(
-                                ProjectCloseChoice::DiscardAll,
-                            )),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            "Save All",
-                            Some(Message::Project(ProjectMsg::AppQuitConfirm(
-                                ProjectCloseChoice::SaveAll,
-                            ))),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([14, 14]),
-            ]
-            .width(self.dialog_width(super::super::super::state::ModalId::AppQuitConfirm, 520.0)),
+            column![header, dialog_body(body), dialog_footer(buttons)].width(
+                self.dialog_width(super::super::super::state::ModalId::AppQuitConfirm, 520.0),
+            ),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

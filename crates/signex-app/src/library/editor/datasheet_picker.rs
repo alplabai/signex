@@ -21,6 +21,7 @@ use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
 use super::inert::unless_read_only_veiled as veiled;
 use super::kit::{self, SP, TS};
+use crate::panels::{PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION};
 
 /// One-line hint under the section title.
 const INTRO: &str = "The first document is the primary; the schematic opens it.";
@@ -134,8 +135,8 @@ fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
     }
 }
 
-/// The left column of a card's form rows: a muted, fixed-share label so
-/// the fields of every row line up.
+/// A card's form row: a muted label and its control, split by the same
+/// portions as the Properties panel's `form_input_row` so the columns match.
 fn field_row<'a>(
     label: &'a str,
     field: Element<'a, LibraryMessage>,
@@ -147,9 +148,12 @@ fn field_row<'a>(
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
         )
-        .width(Length::FillPortion(1))
+        .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+        .clip(true)
         .boxed(),
-        container(field).width(Length::FillPortion(6)).boxed(),
+        container(field)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+            .boxed(),
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center)
@@ -257,21 +261,29 @@ fn view_document<'a>(
         tokens,
     ));
 
-    // Open only reads, so it sits outside the read-only veil.
+    // Open only reads, so it must stay live. On a read-only library the
+    // whole card is veiled like the other tabs, so Open moves out of it.
     let open = kit::secondary_button(
         "Open",
         can_open.then(|| event(&address, DatasheetMsg::Open(index))),
         tokens,
     );
-    let header = row![
+    let (header_open, open_below) = if read_only {
+        (None, Some(open))
+    } else {
+        (Some(open), None)
+    };
+    let mut header = row![
         pill(role_label(index), index == 0, tokens),
         pill(mode_label(mode), false, tokens),
         Space::new().width(Length::Fill).boxed(),
-        open,
-        veiled(read_only, veil, actions.boxed()),
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
+    if let Some(open) = header_open {
+        header = header.push(open);
+    }
+    header = header.push(actions.boxed());
 
     let (value_label, value_row): (&str, Element<'a, LibraryMessage>) = match mode {
         DatasheetMode::Url => ("URL", view_url_input(index, &doc.source, address.clone())),
@@ -281,17 +293,13 @@ fn view_document<'a>(
         ),
     };
 
-    let fields = veiled(
-        read_only,
-        veil,
-        column![
-            field_row("Label", label_input, tokens),
-            field_row("Source", mode_picker, tokens),
-            field_row(value_label, value_row, tokens),
-        ]
-        .spacing(SP.m)
-        .boxed(),
-    );
+    let fields = column![
+        field_row("Label", label_input, tokens),
+        field_row("Source", mode_picker, tokens),
+        field_row(value_label, value_row, tokens),
+    ]
+    .spacing(SP.m)
+    .boxed();
     let mut body: Column<Element<'a, LibraryMessage>> =
         column![header.boxed(), fields].spacing(SP.m);
     if let Some(reason) = error {
@@ -303,7 +311,18 @@ fn view_document<'a>(
         );
     }
 
-    kit::card(body.boxed(), tokens)
+    // The veil covers the whole card, as the other tabs veil their cards,
+    // so no part of the card's surface is darker than the rest.
+    let card = veiled(read_only, veil, kit::card(body.boxed(), tokens));
+    match open_below {
+        Some(open) => column![
+            card,
+            row![Space::new().width(Length::Fill).boxed(), open].align_y(iced::Alignment::Center)
+        ]
+        .spacing(SP.s)
+        .boxed(),
+        None => card,
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────

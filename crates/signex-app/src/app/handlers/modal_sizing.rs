@@ -8,16 +8,22 @@ use crate::app::state::{ModalId, Signex};
 
 /// The most a list area grows to before it scrolls, in logical pixels.
 pub(crate) const LIST_MAX_HEIGHT: f32 = 160.0;
+/// Padding and border of the bordered list box around the rows
+/// (`dialog_list`: 2 x `Spacing::s` + 2 x 1 px).
+pub(crate) const LIST_BOX_CHROME: f32 = 10.0;
 /// Height of one row of a dirty-document list.
-const ROW_HEIGHT: f32 = 22.5;
-/// Window height of a list dialog with an empty list: title area, message,
-/// footer buttons and their padding.
-const LIST_DIALOG_BASE: f32 = 112.0;
+const ROW_HEIGHT: f32 = 24.5;
+/// Window height of a list dialog with an empty list: message, the list
+/// box chrome, footer buttons and the dialog padding.
+const LIST_DIALOG_BASE: f32 = 98.0;
 /// One extra note line (kept documents, refresh notice, blocked discard).
-const NOTE_HEIGHT: f32 = 32.0;
+const NOTE_HEIGHT: f32 = 25.0;
 /// Height of one line of message text, and the lines shown before it scrolls.
 const MESSAGE_LINE: f32 = 16.0;
 const MESSAGE_MAX: f32 = 200.0;
+/// Window height of Copy to Library when no library is writable: the intro,
+/// the one-line hint and the footer, with no list area.
+const STOCK_COPY_EMPTY: f32 = 160.0;
 
 fn list_height(rows: usize) -> f32 {
     (rows as f32 * ROW_HEIGHT).min(LIST_MAX_HEIGHT)
@@ -61,7 +67,7 @@ impl Signex {
                     }
             }),
             ModalId::ErrorNotice => self.document_state.error_notice.as_ref().map(|n| {
-                148.0 + (wrapped_lines(&n.detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX)
+                130.0 + (wrapped_lines(&n.detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX)
             }),
             ModalId::NetlistIncompletePrompt => self
                 .document_state
@@ -69,8 +75,16 @@ impl Signex {
                 .as_ref()
                 .map(|p| {
                     let lines = wrapped_lines(&p.messages.join("\n"), 70) as f32;
-                    262.0 + (lines * 14.0).min(120.0)
+                    236.0 + (lines * 14.0).min(120.0)
                 }),
+            ModalId::LibraryStockCopy => self.library.stock_copy.as_ref().and_then(|c| {
+                if !self.library.writable_libraries().is_empty() {
+                    return None;
+                }
+                let notes =
+                    usize::from(c.previous_unavailable.is_some()) + usize::from(c.error.is_some());
+                Some(STOCK_COPY_EMPTY + notes as f32 * NOTE_HEIGHT)
+            }),
             _ => None,
         };
         let logical = height.map_or(fixed, |h| Size::new(fixed.width, h.ceil()));
