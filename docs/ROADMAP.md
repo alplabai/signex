@@ -53,7 +53,7 @@ have this section and drifted six versions away from reality as a result.
 | Next tag | The first CalVer release, `vYY.MM.MICRO` (or `-rc.N`), dated per §3 (the month of its first release candidate, or the month it ships if there is none). `1.0.0` final is never cut |
 | `workspace.package.version` | **1.0.0-rc.1** until the first CalVer release-prep PR sets it |
 | Latest CHANGELOG section | **1.0.0-rc.1** — dated 2026-10-29; the summary is the release page, the full list sits under "Detailed changes in 1.0.0-rc.1" |
-| Current work | Command Registry & Symbol Units milestone: one open issue left, #271 (menu rows keyed off one label/shortcut table). Community Preview milestone: #859 (synchronous IO still in `update`), #661 (one document model epic), #322 (this user guide). Release prep for the first CalVer release follows |
+| Current work | Command Registry & Symbol Units milestone: 0 open issues; it shipped in 1.0.0-rc.1, and its test follow-up #1727 landed after the tag and ships in the next release. Community Preview milestone, 6 open issues as of 2026-11-04: #2021, #2004, #1972, #1952, #661 (one document model epic), #322 (the user guide). Release prep for the first CalVer release follows |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
 **shipped**. The work since v0.9 — the Apache-clean native-format
@@ -212,7 +212,7 @@ load-bearing. (v0.15.0 shipped 2026-07-23 — see §6.)
 
 | Plan | Scope | Milestone |
 |------|-------|-----------|
-| **Command Registry & Symbol Units** | Command catalog groundwork (menus read one label/shortcut table, #271), root `Message` namespacing (#162), table/settings write cost (#416), and the symbol multi-unit tail. The full Command Registry epic (#278: dispatch, palette, CLI, plugins) moved to Advanced Schematic. | `Command Registry & Symbol Units` |
+| **Command Registry & Symbol Units** | Command catalog groundwork (menus read one label/shortcut table, #271), root `Message` namespacing (#162), table/settings write cost (#416), and the symbol multi-unit tail. The full Command Registry epic (#278: dispatch, palette, CLI, plugins) moved to Advanced Schematic. **Shipped in 1.0.0-rc.1; test follow-up #1727 landed after the tag and ships in the next release.** The milestone is closed. | `Command Registry & Symbol Units` |
 | Later plans | Not enumerated | *(get names when they get milestones)* |
 
 **v0.14.0 is one release, not two.** Its CHANGELOG section was written
@@ -239,8 +239,9 @@ Strategic. Undated by policy. A gate ships when its exit criteria pass.
 
 **Not every plan here is a gate.** The gates are Community Preview, PCB
 Viewer, Community Release, Pro Release, Simulation, and Signex 365 (the
-former v1.0, v2.0, v2.2, v3.0, v4.0 and v5.0), in that order — they carry
-exit criteria and block what follows. Everything else is a planned
+former v1.0, v2.0, v2.2, v3.0, v4.0 and v5.0), in that order — they block
+what follows. The first four carry exit criteria below; the exit criteria of
+the Simulation and Signex 365 gates are written when their band is planned. Everything else is a planned
 release: real, scoped, and publishable, but it gates nothing. Certainty
 decreases as the list goes on. Which release number carries a plan is known
 only when it ships (§3). Read the tier
@@ -478,8 +479,9 @@ binaries both build clean from a single workspace.
 > contributors can see what is already scoped and avoid duplicating it —
 > **not** because they are committed. Sub-release boundaries here are
 > working guesses; expect them to merge, split, and reorder. Nothing in
-> Signal AI Core → PLM Advanced carries exit criteria, and no plan below
-> gates anything.
+> Apart from the Simulation and Signex 365 gates, no plan below gates
+> anything; those two gates' exit criteria are written when their band is
+> planned.
 
 ### Signal AI Core (Pro)
 
@@ -515,7 +517,7 @@ plan, per §12.
 | **Presence & Cursors** | Per-user canvas cursors (coloured + name label); presence panel with online status and follow mode; sheet / region / layer / net locking |
 | **Storage & Review** | Cloud project storage, version history + edit attribution; comments pinned to canvas locations with a review workflow; offline support (local SQLite op queue, replay on reconnect); server-side merge / notify / lock functions |
 
-### Simulation View + SPICE
+### Simulation (gate) — Simulation View + SPICE
 
 Simulation uses a **dedicated Simulation View** — a block-diagram
 composition workspace separate from the schematic editor. See
@@ -561,7 +563,7 @@ the [import companion repository](https://github.com/alplabai/signex-kicad-impor
 | **Auto-Router & Advanced Routing** | Auto-router (topological) and semi-automatic ActiveRoute; copper balancing / thieving, backdrilling; thermal-aware routing, placement heatmap |
 | **Advanced Geometry & Import** | Rigid-flex board, embedded components (cavity); OrCAD / PADS / Mentor import companions (separate repos, one-way); 3D clearance checking (body-to-body); antenna simulation (pattern, gain); interactive on-canvas impedance calculator |
 
-### PLM Core
+### Signex 365 (gate) — PLM Core
 
 Signex 365 is the cloud platform connecting the desktop editor to the
 PLM. See `PLM_INTEGRATION.md`.
@@ -757,3 +759,21 @@ Planned for a **small team**: 2–3 engineers up to the Community Preview, scali
 - **Quarterly review**, and reconcile against `CHANGELOG.md` + `git tag`
   every time. If this document and the tags disagree, the tags are right
   and this document is broken — fix it the same day and add a line to §9.
+
+### Milestone convention
+
+- **Title = plan name only:** Title Case, unique, no version number, no date.
+  Sub-plans are named by their own content; prefix "<Parent>: " only when
+  the name alone would be ambiguous (e.g. "Router: Walkaround").
+- **Roadmap first:** a new milestone is added here (row or heading with the
+  exact same name), then to `.github/milestones.yml` in the same PR.
+- **Description:** one user-facing line of what it delivers; a gate's starts
+  with "Gate:" (applies to new milestones).
+- **Rename** = change the title and append the old title to `aliases`; never
+  edit on GitHub by hand.
+- **No due dates:** milestones are scope, not schedule; the CalVer version
+  records when it shipped.
+- **Shipping:** when its last issue closes and the work is in a release, set
+  `state: closed` and end the description with "Shipped in YY.MM.MICRO." The
+  title keeps the plan name; milestones closed before 2026-11 keep their
+  version titles as history.

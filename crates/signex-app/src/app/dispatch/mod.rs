@@ -24,6 +24,7 @@ mod text_edit;
 mod tool;
 mod ui;
 pub(in crate::app) mod window_action;
+mod window_surfaces;
 
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {

@@ -506,6 +506,13 @@ pub enum LibraryMessage {
     /// Toggle one row's checkbox in the modal — the symbol_uuid keys
     /// the entry inside the modal state's `entries` vec.
     LibraryUpdatesToggleSelection(uuid::Uuid),
+    /// The user answered a conflict of one part: keep its own value or take
+    /// the library's (#2004).
+    LibraryUpdatesConflictAnswered {
+        symbol_uuid: uuid::Uuid,
+        field: signex_types::schematic::StampField,
+        choice: crate::library::part_sync::Choice,
+    },
     /// User clicked Update Selected Components — apply the picked
     /// updates to the schematic engine + dirty-mark + close modal.
     LibraryUpdatesApply,
@@ -621,6 +628,9 @@ pub struct ResolvedPlacement {
     pub library_id: uuid::Uuid,
     pub row_id: uuid::Uuid,
     pub library_version: String,
+    /// The row values the placed part starts in agreement with; it travels
+    /// with `library_version` so the two are stamped together (#2004).
+    pub stamp: signex_types::schematic::RowStamp,
     pub internal_pn: String,
     pub value: String,
     /// The symbol is a power port: the placed instance is `is_power` and

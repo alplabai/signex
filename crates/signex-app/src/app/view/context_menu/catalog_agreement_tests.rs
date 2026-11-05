@@ -342,6 +342,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     x: 0.0,
                     y: 0.0,
                     key: Some(key),
+                    window: None,
                 };
                 let rows = app
                     .project_tree_entries(&ctx)

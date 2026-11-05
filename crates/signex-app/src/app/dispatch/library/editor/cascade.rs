@@ -34,6 +34,7 @@
 
 use super::container_save::ContainerWrite;
 use crate::app::Signex;
+pub(super) use other_libraries::OtherLibrary;
 use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_library::{
     CascadeKind, CascadeReport, FootprintFile, LibraryError, PrimitiveSave, RowId, SymbolFile,
@@ -151,12 +152,89 @@ impl Signex {
         rows: &[RowId],
     ) -> iced::Task<crate::app::Message> {
         match self.cascade_root(path, rows) {
-            Some(root) => iced::Task::batch([
-                self.refresh_clean_editors(&root, rows),
-                self.rebase_dirty_editors(&root, rows),
-            ]),
+            Some(root) => self.refresh_editors_in_library(&root, rows),
             None => iced::Task::none(),
         }
+    }
+
+    /// The same refresh for rows of the library at `root` (#2004).
+    pub(in crate::app::dispatch::library) fn refresh_editors_in_library(
+        &mut self,
+        root: &std::path::Path,
+        rows: &[RowId],
+    ) -> iced::Task<crate::app::Message> {
+        iced::Task::batch([
+            self.refresh_clean_editors(root, rows),
+            self.rebase_dirty_editors(root, rows),
+        ])
+    }
+
+    /// [`Self::refresh_editors_in_library`] on this thread.
+    pub(in crate::app::dispatch::library) fn refresh_editors_in_library_blocking(
+        &mut self,
+        root: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        self.refresh_clean_editors_blocking(root, rows);
+        self.rebase_dirty_editors_blocking(root, rows);
+    }
+
+    /// A library the cascade wrote rows into: reload its caches and re-run
+    /// the drift check, as for the library saved in, so the next poll finds
+    /// its stamp already observed and does not report our write (#2004).
+    pub(in crate::app::dispatch::library) fn refresh_cascaded_library(
+        &mut self,
+        root: &std::path::Path,
+        rows: &[RowId],
+    ) -> iced::Task<crate::app::Message> {
+        self.library.drift.check_pending = true;
+        iced::Task::batch([
+            self.refresh_library_task(root, crate::library::refresh::RefreshFollowUp::Nothing),
+            self.refresh_editors_in_library(root, rows),
+        ])
+    }
+
+    /// [`Self::refresh_cascaded_library`] on this thread.
+    pub(in crate::app::dispatch::library) fn refresh_cascaded_library_blocking(
+        &mut self,
+        root: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        if let Err(error) = self.library.refresh_components(root) {
+            crate::diagnostics::log_warning(format!(
+                "[library] refresh of {} failed ({error}); its cache may be stale",
+                root.display()
+            ));
+        }
+        self.library.drift.check_pending = true;
+        self.refresh_editors_in_library_blocking(root, rows);
+    }
+
+    /// A place in the write order of every open library except the one the
+    /// save goes through, for the cascade into their rows (#2004). Only a
+    /// Merge save cascades.
+    pub(super) fn other_library_turns(
+        &mut self,
+        target: Option<&std::path::Path>,
+        mode: ContainerWrite,
+    ) -> Vec<(PathBuf, crate::library::writes::Turn)> {
+        if mode != ContainerWrite::Merge {
+            return Vec::new();
+        }
+        let roots: Vec<PathBuf> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|lib| lib.root.clone())
+            .filter(|root| Some(root.as_path()) != target && !self.library.is_read_only(root))
+            .collect();
+        roots
+            .into_iter()
+            .map(|root| {
+                let turn = self.library.writes.turn(&root);
+                (root, turn)
+            })
+            .collect()
     }
 
     /// [`Self::refresh_editors_after_cascade`] on this thread, for the save
@@ -167,8 +245,7 @@ impl Signex {
         rows: &[RowId],
     ) {
         if let Some(root) = self.cascade_root(path, rows) {
-            self.refresh_clean_editors_blocking(&root, rows);
-            self.rebase_dirty_editors_blocking(&root, rows);
+            self.refresh_editors_in_library_blocking(&root, rows);
         }
     }
 
@@ -272,6 +349,9 @@ pub(super) struct CascadeOutcome {
     /// Saved primitives whose rows a retry can still move: the next Save
     /// runs the cascade for them again even when they have no new edits.
     pub owed: Vec<Uuid>,
+    /// Rows it moved in the other open libraries, per library, for the same
+    /// refresh of their open Component Previews.
+    pub bumped_elsewhere: Vec<(PathBuf, Vec<RowId>)>,
 }
 
 /// Move the component rows that use each saved primitive onto its saved
@@ -283,6 +363,7 @@ pub(super) fn cascade_after_container_save(
     kind: SavedKind,
     saved: &[SavedPrimitive],
     own: Option<&crate::library::writes::OwnRevisions>,
+    others: &[OtherLibrary<'_>],
 ) -> CascadeOutcome {
     let mut outcome = CascadeOutcome::default();
     if write != ContainerWrite::Merge || saved.is_empty() {
@@ -324,31 +405,78 @@ pub(super) fn cascade_after_container_save(
             let Some(adapter) = library.adapter() else {
                 return outcome;
             };
-            let mode = adapter.manifest().workflow.mode;
             let library_id = adapter.manifest().library.library_id;
-            let saves: Vec<PrimitiveSave> = saved
-                .iter()
-                .map(|p| PrimitiveSave {
-                    kind: kind.cascade_kind(),
-                    library_id,
-                    uuid: p.uuid,
-                    version: p.version.clone(),
-                })
-                .collect();
-            let before = own.map(|_| rows_before(adapter));
-            let result = signex_library::cascade_after_saves(adapter, &saves, mode);
-            if let Ok(report) = &result {
-                outcome.bumped = report.auto_bumped.clone();
-                if let (Some(own), Some(before)) = (own, before) {
-                    record_cascade_steps(own, adapter, &before, &report.auto_bumped);
-                }
-            }
-            if retry_can_help(&result) {
+            let saves = saves_in(kind, library_id, saved);
+            let step = cascade_in_adapter(adapter, &saves, own, &label, version);
+            outcome.bumped = step.bumped;
+            if step.owed {
                 owes_all(&mut outcome);
             }
-            summarize(&label, version, &result)
+            let mut lines = step.lines;
+            lines.extend(other_libraries::cascade_into(
+                library_id,
+                kind,
+                saved,
+                others,
+                (&label, version),
+                &mut outcome,
+            ));
+            lines
         }
     };
+    log_lines(lines);
+    outcome
+}
+
+/// The saves of one container write, as the cascade takes them. `library_id`
+/// is the library the primitives live in, whichever library's rows are moved.
+fn saves_in(kind: SavedKind, library_id: Uuid, saved: &[SavedPrimitive]) -> Vec<PrimitiveSave> {
+    saved
+        .iter()
+        .map(|p| PrimitiveSave {
+            kind: kind.cascade_kind(),
+            library_id,
+            uuid: p.uuid,
+            version: p.version.clone(),
+        })
+        .collect()
+}
+
+/// One adapter's cascade: the rows it moved, whether a retry could move
+/// more, and what to tell the user.
+struct AdapterCascade {
+    bumped: Vec<RowId>,
+    owed: bool,
+    lines: Vec<(Level, String)>,
+}
+
+/// Run the cascade over the rows of `adapter`, recording the steps it took in
+/// `own` (#1840).
+fn cascade_in_adapter(
+    adapter: &dyn LibraryAdapter,
+    saves: &[PrimitiveSave],
+    own: Option<&crate::library::writes::OwnRevisions>,
+    label: &str,
+    version: Option<&str>,
+) -> AdapterCascade {
+    let mode = adapter.manifest().workflow.mode;
+    let before = own.map(|_| rows_before(adapter));
+    let result = signex_library::cascade_after_saves(adapter, saves, mode);
+    let mut bumped = Vec::new();
+    if let Ok(report) = &result {
+        bumped = report.auto_bumped.clone();
+        if let (Some(own), Some(before)) = (own, before) {
+            record_cascade_steps(own, adapter, &before, &report.auto_bumped);
+        }
+    }
+    AdapterCascade {
+        bumped,
+        owed: retry_can_help(&result),
+        lines: summarize(label, version, &result),
+    }
+}
+
+fn log_lines(lines: Vec<(Level, String)>) {
     for (level, line) in lines {
         match level {
             Level::Info => tracing::info!(target: "signex::library", "{line}"),
@@ -356,7 +484,6 @@ pub(super) fn cascade_after_container_save(
             Level::Error => tracing::error!(target: "signex::library", "{line}"),
         }
     }
-    outcome
 }
 
 /// Every row with its table as it stands before a cascade (#1840), so what
@@ -576,6 +703,9 @@ fn failed_rows_line(report: &CascadeReport) -> String {
 
 #[cfg(test)]
 mod ledger_tests;
+mod other_libraries;
+#[cfg(test)]
+mod other_libraries_tests;
 
 #[cfg(test)]
 mod tests {

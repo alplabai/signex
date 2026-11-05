@@ -56,7 +56,7 @@ pub fn bake_body3d(
     }
     if body_top_planes.len() > 1 {
         warnings.push(format!(
-            "{} BodyTop planes found; only the first contributes to body_3d (multi-plane stack-up lands in v0.15)",
+            "{} BodyTop planes found; only the first contributes to body_3d (multi-plane stack-up is not supported yet)",
             body_top_planes.len()
         ));
     }

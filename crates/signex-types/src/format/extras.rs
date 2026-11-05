@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use super::unknown::UnknownFields;
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
-use crate::schematic::{Junction, SchematicSheet, Symbol};
+use crate::schematic::{Junction, RowStamp, SchematicSheet, Symbol};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub(in crate::format) struct SchExtrasRaw {
@@ -151,6 +151,12 @@ pub(in crate::format) struct SymbolExtras {
         skip_serializing_if = "Option::is_none"
     )]
     pub(in crate::format) row_id: Option<Uuid>,
+    /// The stamp table as read, converted in `sch_rows::symbol_from_row`: a
+    /// table that is not a stamp loads as none, is reported, and stays among
+    /// the unknown keys so a save keeps it. Writing never sets this; the
+    /// stamp goes out as an unknown table (`stamp_for_write`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::format) library_stamp: Option<toml::Value>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -184,6 +190,7 @@ impl Default for SymbolExtras {
             library_id: None,
             row_id: None,
             library_version: String::new(),
+            library_stamp: None,
             unknown: UnknownFields::default(),
         }
     }
@@ -219,10 +226,12 @@ impl SymbolExtras {
             && self.library_id.is_none()
             && self.row_id.is_none()
             && self.library_version.is_empty()
+            && self.library_stamp.is_none()
             && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_symbol(s: &Symbol) -> Self {
+        let stamp_table = stamp_for_write(s.library_stamp.as_ref());
         SymbolExtras {
             footprint: s.footprint.clone(),
             datasheet: s.datasheet.clone(),
@@ -258,12 +267,16 @@ impl SymbolExtras {
             library_id: s.library_id,
             row_id: s.row_id,
             library_version: s.library_version.clone(),
+            library_stamp: None,
             unknown: {
                 // A chosen body owns the key; a preserved unreadable value
                 // must not be written beside it.
                 let mut unknown = s.unknown.clone();
                 if !s.body_style.is_normal() {
                     unknown.remove("body_style");
+                }
+                if let Some(table) = stamp_table {
+                    unknown.insert_value("library_stamp", table);
                 }
                 unknown
             },
@@ -461,6 +474,41 @@ where
         );
     }
     Ok(parsed)
+}
+
+/// The stamp as it is written: a table among the unknown keys, so it sorts
+/// where a build without the field re-saves it and a re-save changes no
+/// byte (docs/architecture/snxsch-library-link.md, "Value stamp").
+fn stamp_for_write(stamp: Option<&RowStamp>) -> Option<toml::Value> {
+    match toml::Value::try_from(stamp?) {
+        Ok(table) => Some(table),
+        Err(error) => {
+            tracing::warn!(target: "signex::format", "library_stamp not written: {error}");
+            None
+        }
+    }
+}
+
+/// Convert the stamp table read from a file. A table that is not a stamp (a
+/// wrong type, a `row_id` that is not a UUID) is reported and put back among
+/// `unknown`, so the sheet opens and a save keeps it for a build that reads it.
+pub(in crate::format) fn stamp_from_read(
+    read: Option<toml::Value>,
+    unknown: &mut UnknownFields,
+) -> Option<RowStamp> {
+    let value = read?;
+    match value.clone().try_into::<RowStamp>() {
+        Ok(stamp) => Some(stamp),
+        Err(error) => {
+            tracing::warn!(
+                target: "signex::format",
+                "[extras.symbols] library_stamp = {value} is not a value stamp ({error}); \
+                 the symbol loads without one"
+            );
+            unknown.insert_value("library_stamp", value);
+            None
+        }
+    }
 }
 
 fn default_true() -> bool {

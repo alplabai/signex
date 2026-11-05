@@ -2,7 +2,7 @@
 //! merge into the file on disk, the library commit and the version
 //! cascade. Runs on a worker, never on the UI thread.
 
-use super::cascade::{self, SaveLibrary, SavedKind};
+use super::cascade::{self, OtherLibrary, SaveLibrary, SavedKind};
 use super::container_save::{self, ContainerWrite, SaveOptions};
 use crate::persist::{PrimitiveWritten, WrittenContainer};
 use signex_library::{FootprintFile, LibraryError, SymbolFile};
@@ -39,6 +39,10 @@ pub(super) struct PrimitiveWrite {
     /// worker waits for it, so the write neither overtakes nor is
     /// overtaken by the library's row writes.
     pub turn: Option<crate::library::writes::Turn>,
+    /// The other open libraries, each with its place in its write order: a
+    /// row of one of them may use a primitive of the library saved in, so the
+    /// cascade moves those rows too (#2004).
+    pub others: Vec<(std::path::PathBuf, crate::library::writes::Turn)>,
 }
 
 /// What both container kinds' writes share.
@@ -50,6 +54,7 @@ struct WriteContext<'a> {
     /// The ledger of this app's writes to the owning library, when the
     /// write holds a place in its order.
     own: Option<&'a crate::library::writes::OwnRevisions>,
+    others: Vec<OtherLibrary<'a>>,
 }
 
 impl PrimitiveWrite {
@@ -84,24 +89,35 @@ impl PrimitiveWrite {
         if let Some(turn) = &self.turn {
             turn.wait();
         }
-        self.write()
+        self.write(&|turn| {
+            turn.wait();
+            true
+        })
     }
 
     /// [`Self::run`] on the UI thread: gives up when the turn does not come
     /// within `limit`, writing nothing.
     pub(super) fn run_within(self, limit: std::time::Duration) -> Result<PrimitiveWritten, String> {
+        // One deadline for every turn this save waits on, not `limit` each.
+        let deadline = std::time::Instant::now() + limit;
+        let left = move || deadline.saturating_duration_since(std::time::Instant::now());
         if let Some(turn) = &self.turn
-            && !turn.wait_within(limit)
+            && !turn.wait_within(left())
         {
             return Err(format!(
                 "{}: the library is still busy reading; the save was not made, try again",
                 self.path.display()
             ));
         }
-        self.write()
+        self.write(&|turn| turn.wait_within(left()))
     }
 
-    fn write(self) -> Result<PrimitiveWritten, String> {
+    /// `wait` takes an other library's place in its write order: `false` when
+    /// it did not come in time.
+    fn write(
+        self,
+        wait: &dyn Fn(&crate::library::writes::Turn) -> bool,
+    ) -> Result<PrimitiveWritten, String> {
         let (path, mounted) = self.route();
         let library = SaveLibrary::resolve(&path, mounted.as_deref());
         let context = WriteContext {
@@ -113,6 +129,15 @@ impl PrimitiveWrite {
                 bump_versions: library.bumps_versions(self.mode),
             },
             own: self.turn.as_ref().map(|turn| turn.own_revisions()),
+            others: self
+                .others
+                .iter()
+                .map(|(root, turn)| OtherLibrary {
+                    root,
+                    own: Some(turn.own_revisions()),
+                    ready: Box::new(move || wait(turn)),
+                })
+                .collect(),
         };
         let written = match self.snapshot {
             Snapshot::Symbol {
@@ -169,6 +194,7 @@ fn write_symbol(
         SavedKind::Symbol,
         &cascade::saved_symbols(&file, &with_owed(&save.merge.changed, owed)),
         context.own,
+        &context.others,
     );
     Ok(PrimitiveWritten {
         file: WrittenContainer::Symbol(file),
@@ -176,6 +202,7 @@ fn write_symbol(
         commit_message: format!("Save symbol {name}"),
         cascaded_rows: outcome.bumped,
         cascade_owed: outcome.owed,
+        cascaded_elsewhere: outcome.bumped_elsewhere,
     })
 }
 
@@ -215,6 +242,7 @@ fn write_footprint(
         SavedKind::Footprint,
         &cascade::saved_footprints(&file, &with_owed(&save.merge.changed, owed)),
         context.own,
+        &context.others,
     );
     Ok(PrimitiveWritten {
         file: WrittenContainer::Footprint(file),
@@ -222,6 +250,7 @@ fn write_footprint(
         commit_message: format!("Save footprint {name}"),
         cascaded_rows: outcome.bumped,
         cascade_owed: outcome.owed,
+        cascaded_elsewhere: outcome.bumped_elsewhere,
     })
 }
 
