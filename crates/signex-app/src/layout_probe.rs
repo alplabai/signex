@@ -138,6 +138,43 @@ pub(crate) fn root_size<M>(
     tree.size
 }
 
+/// `element` drawn by the headless software renderer into RGBA pixels, for
+/// comparing what two views look like (a selected control, not just a label).
+pub(crate) fn draw_pixels<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+) -> Vec<u8> {
+    use iced::advanced::renderer::Headless as _;
+    let mut renderer = headless_renderer();
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    let size = tree.size;
+    element.draw(
+        &tree,
+        &mut renderer,
+        &Theme::Dark,
+        &renderer::Style {
+            text_color: iced::Color::WHITE,
+        },
+        Layout::new(size),
+        iced::advanced::mouse::Cursor::Unavailable,
+        &Rectangle::with_size(window),
+    );
+    let iced::Renderer::Secondary(software) = &mut renderer else {
+        panic!("the probe renderer is the software one");
+    };
+    software.screenshot(
+        Size::new(window.width as u32, window.height as u32),
+        1.0,
+        iced::Color::BLACK,
+    )
+}
+
 /// The text widget whose content is exactly `label`.
 pub(crate) fn find<'t>(texts: &'t [LaidOutText], label: &str) -> &'t LaidOutText {
     texts

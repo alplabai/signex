@@ -108,6 +108,7 @@ mod tests {
             text_notes: vec![
                 note(1.27),
                 note(25.0),
+                note(150.0),
                 note(1.0e5),
                 note(f64::MAX),
                 note(f64::NAN),
@@ -116,18 +117,21 @@ mod tests {
         };
         let repairs = clamp_oversize_text(&mut sheet);
         let sizes: Vec<f64> = sheet.text_notes.iter().map(|n| n.font_size).collect();
+        // The ceiling is a contract, not just a name: 100 mm.
+        assert_eq!(MAX_TEXT_SIZE_MM, 100.0);
         assert_eq!(
             sizes,
             [
                 1.27,
                 25.0,
+                100.0,
                 MAX_TEXT_SIZE_MM,
                 MAX_TEXT_SIZE_MM,
                 crate::schematic::SCHEMATIC_TEXT_MM
             ],
             "an oversize size is capped, a non-finite one reads as the default"
         );
-        assert_eq!(repairs.len(), 3);
+        assert_eq!(repairs.len(), 4);
         assert!(repairs[0].describe().contains("text note big #3"));
     }
 

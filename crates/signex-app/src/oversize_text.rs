@@ -15,11 +15,18 @@ const MAX_OVERSIZE_TEXTS_PER_FRAME: usize = 64;
 const MAX_OVERSIZE_TEXT_CHARS: usize = 256;
 
 /// What one frame has spent of the oversize-text bounds.
-#[derive(Default)]
 pub(crate) struct OversizeBudget {
     drawn: usize,
     /// A text was left out or cut this frame.
     capped: bool,
+    /// Counts the cap notices; the warning goes out on the first.
+    latch: &'static std::sync::atomic::AtomicUsize,
+}
+
+impl Default for OversizeBudget {
+    fn default() -> Self {
+        Self::with_latch(&OVERSIZE_WARNINGS)
+    }
 }
 
 /// Messages warnings issued; one per run, not one per frame.
@@ -38,30 +45,46 @@ pub(crate) fn rearm_warning() {
 }
 
 impl OversizeBudget {
+    /// A budget that counts its cap notices on `latch` instead of the
+    /// process-global one.
+    fn with_latch(latch: &'static std::sync::atomic::AtomicUsize) -> Self {
+        Self {
+            drawn: 0,
+            capped: false,
+            latch,
+        }
+    }
+
     /// The content to draw for the next oversize text, cut to the length
     /// bound, or `None` once the per-frame count is spent.
     pub(crate) fn admit<'a>(&mut self, content: &'a str) -> Option<&'a str> {
         if self.drawn >= MAX_OVERSIZE_TEXTS_PER_FRAME {
-            self.capped = true;
-            warn_oversize_capped_once();
+            self.note_capped();
             return None;
         }
         self.drawn += 1;
         let shown = drawn_part(content);
         if shown.len() < content.len() {
-            self.capped = true;
-            warn_oversize_capped_once();
+            self.note_capped();
         }
         Some(shown)
     }
+
+    /// Record a cap; the first one after the latch was armed warns.
+    fn note_capped(&mut self) {
+        self.capped = true;
+        if first_notice(self.latch) {
+            crate::diagnostics::log_warning(
+                "This sheet has more or longer oversize text than can be drawn; \
+                 the rest is left out",
+            );
+        }
+    }
 }
 
-fn warn_oversize_capped_once() {
-    if OVERSIZE_WARNINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
-        crate::diagnostics::log_warning(
-            "This sheet has more or longer oversize text than can be drawn; the rest is left out",
-        );
-    }
+/// Whether this is the first notice on `latch` since it was armed.
+fn first_notice(latch: &std::sync::atomic::AtomicUsize) -> bool {
+    latch.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0
 }
 
 /// No glyph of any face in use is wider than this many em; a box built on it
@@ -88,9 +111,14 @@ pub(crate) fn on_screen(
     position: Point,
     size_px: f32,
 ) -> bool {
+    on_screen_in(frame.size(), text, position, size_px)
+}
+
+/// [`on_screen`] for a frame of `frame_size`.
+fn on_screen_in(frame_size: iced::Size, text: &TextItem, position: Point, size_px: f32) -> bool {
     let shown = drawn_part(&text.content);
     let upper = shown.chars().count() as f32 * MAX_GLYPH_ADVANCE_EM * size_px;
-    if !box_touches_frame(frame, text, position, size_px, upper) {
+    if !box_touches(frame_size, text, position, size_px, upper) {
         return false;
     }
     let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
@@ -102,12 +130,13 @@ pub(crate) fn on_screen(
         })
         .fold(0.0_f32, f32::max)
         * size_px;
-    box_touches_frame(frame, text, position, size_px, width)
+    box_touches(frame_size, text, position, size_px, width)
 }
 
-/// Whether `text`, `width` px wide, anchored at `position`, can touch the frame.
-fn box_touches_frame(
-    frame: &canvas::Frame,
+/// Whether `text`, `width` px wide, anchored at `position`, can touch a frame
+/// of `frame_size`.
+fn box_touches(
+    frame_size: iced::Size,
     text: &TextItem,
     position: Point,
     size_px: f32,
@@ -152,7 +181,7 @@ fn box_touches_frame(
     // Padded by one em each side: the shaper's box can sit short of what it
     // draws, and a visible tail must never be culled.
     let pad = size_px;
-    let size = frame.size();
+    let size = frame_size;
     max_x + pad >= 0.0
         && min_x - pad <= size.width
         && max_y + pad >= 0.0
@@ -168,8 +197,9 @@ mod tests {
     /// bound, and warns once.
     #[test]
     fn a_flood_of_long_oversize_texts_is_bounded_and_warns_once() {
+        static LATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let long = "W".repeat(10_000);
-        let mut budget = OversizeBudget::default();
+        let mut budget = OversizeBudget::with_latch(&LATCH);
         let drawn: Vec<&str> = (0..10_000).filter_map(|_| budget.admit(&long)).collect();
         assert_eq!(drawn.len(), MAX_OVERSIZE_TEXTS_PER_FRAME);
         assert!(
@@ -180,6 +210,13 @@ mod tests {
         // The budget's own flag, not the process-global warning latch, which
         // other tests re-arm in parallel.
         assert!(budget.capped, "the bound was hit");
+        // This test's own latch: every cap notice reached it, and only the
+        // first of them warns.
+        assert!(LATCH.load(std::sync::atomic::Ordering::Relaxed) > 0);
+        let fresh = std::sync::atomic::AtomicUsize::new(0);
+        assert!(first_notice(&fresh), "the first notice warns");
+        assert!(!first_notice(&fresh), "later ones do not");
+        assert!(!first_notice(&fresh));
         let short = "R1";
         let mut next_frame = OversizeBudget::default();
         assert_eq!(
@@ -188,5 +225,60 @@ mod tests {
             "a new frame starts clean"
         );
         assert!(!next_frame.capped);
+    }
+
+    const FRAME: iced::Size = iced::Size::new(200.0, 100.0);
+
+    fn note(rotation: f32) -> TextItem {
+        TextItem {
+            content: "NOTE".into(),
+            rotation,
+            ..Default::default()
+        }
+    }
+
+    /// Off-screen oversize text never reaches iced: a box fully off the frame
+    /// is culled, one whose one-em padding reaches the frame is kept, and a
+    /// rotated box is judged by its rotated corners.
+    #[test]
+    fn oversize_text_off_the_frame_is_culled_and_a_visible_tail_is_kept() {
+        let em = 10.0;
+        let at = |x: f32, y: f32, rotation: f32| {
+            box_touches(FRAME, &note(rotation), Point::new(x, y), em, 100.0)
+        };
+        assert!(at(10.0, 10.0, 0.0), "on the frame");
+        assert!(!at(-300.0, 10.0, 0.0), "far left");
+        assert!(!at(500.0, 10.0, 0.0), "far right");
+        assert!(!at(10.0, -300.0, 0.0), "far above");
+        assert!(
+            at(-105.0, 10.0, 0.0),
+            "the box ends 5 px left, inside the em of padding"
+        );
+        assert!(!at(-115.0, 10.0, 0.0), "the box ends 15 px left, past it");
+        // A 100 px run turned a quarter turn hangs 100 px below its anchor.
+        let quarter = std::f32::consts::FRAC_PI_2;
+        assert!(!at(50.0, -60.0, 0.0), "flat above the frame");
+        assert!(
+            at(50.0, -60.0, quarter),
+            "turned, it reaches into the frame"
+        );
+    }
+
+    /// The full predicate culls without needing a measured width: a text
+    /// far from the frame is off, one on it is on.
+    #[test]
+    fn on_screen_culls_a_far_text_and_keeps_a_near_one() {
+        assert!(!on_screen_in(
+            FRAME,
+            &note(0.0),
+            Point::new(10_000.0, 10_000.0),
+            10.0
+        ));
+        assert!(on_screen_in(
+            FRAME,
+            &note(0.0),
+            Point::new(10.0, 10.0),
+            10.0
+        ));
     }
 }

@@ -12,6 +12,9 @@ use iced::advanced::{Renderer as CoreRenderer, image};
 use iced::{Background, Rectangle, Size, Transformation};
 use iced_wgpu::Geometry;
 
+use crate::canvas::grid::draw_grid;
+use crate::render_config::GridStyle;
+
 use super::tests::test_prefs;
 use super::*;
 
@@ -222,4 +225,95 @@ fn grid_tessellation_cost() {
         "background: {vertices} vertices, {:?} per tessellation",
         started.elapsed() / runs
     );
+}
+
+/// Every vertex the grid draws at `dpr`, as the real call sites emit them.
+fn drawn_grid_vertices(style: GridStyle, dpr: f32) -> Vec<[f32; 2]> {
+    let camera = Camera {
+        offset: iced::Point::new(13.3, 9.7),
+        scale: 2.37,
+    };
+    let bounds = Rectangle::with_size(Size::new(1000.0, 700.0));
+    let mut frame = canvas::Frame::<MeshOnly>::new(&MeshOnly, bounds.size());
+    draw_grid(
+        &mut frame,
+        &camera,
+        2.54,
+        bounds,
+        Color::WHITE,
+        297.0,
+        210.0,
+        style,
+        dpr,
+    );
+    let Geometry::Live { sections } = frame.into_geometry() else {
+        panic!("a fresh frame is live geometry");
+    };
+    sections
+        .iter()
+        .flat_map(|section| section.meshes.iter())
+        .filter_map(|mesh| match mesh {
+            Mesh::Solid { buffers, .. } => Some(buffers.vertices.iter()),
+            Mesh::Gradient { .. } => None,
+        })
+        .flatten()
+        .map(|v| v.position)
+        .collect()
+}
+
+fn whole_device_pixel(coordinate: f32, dpr: f32) -> bool {
+    let device = coordinate * dpr;
+    (device - device.round()).abs() < 1e-3
+}
+
+/// At a fractional display scale the grid's lines have every edge on a whole
+/// device pixel, and its dots are centred on a device pixel middle: the call
+/// sites in `draw_grid_within` really snap, which the pure helpers alone do
+/// not show.
+#[test]
+fn the_grid_lands_on_device_pixels_at_one_and_a_half_times() {
+    let dpr = 1.5;
+    let lines = drawn_grid_vertices(GridStyle::Lines, dpr);
+    assert!(!lines.is_empty(), "the grid drew lines");
+    for [x, y] in &lines {
+        assert!(
+            whole_device_pixel(*x, dpr) && whole_device_pixel(*y, dpr),
+            "a line vertex off the device grid: ({x}, {y})"
+        );
+    }
+
+    let dots = drawn_grid_vertices(GridStyle::Dots, dpr);
+    assert!(
+        dots.len() >= 4 && dots.len() % 4 == 0,
+        "{} dot vertices",
+        dots.len()
+    );
+    let mut dots_checked = 0;
+    for square in dots.chunks(4) {
+        let extent = |axis: usize| {
+            let values = square.iter().map(|v| v[axis]);
+            values.clone().fold(f32::NEG_INFINITY, f32::max) - values.fold(f32::INFINITY, f32::min)
+        };
+        // The major lines drawn over the dots are long; a dot is a few px.
+        if extent(0) > 8.0 || extent(1) > 8.0 {
+            continue;
+        }
+        dots_checked += 1;
+        let mid = |axis: usize| {
+            let lo = square.iter().map(|v| v[axis]).fold(f32::INFINITY, f32::min);
+            let hi = square
+                .iter()
+                .map(|v| v[axis])
+                .fold(f32::NEG_INFINITY, f32::max);
+            (lo + hi) / 2.0
+        };
+        for centre in [mid(0), mid(1)] {
+            let device = centre * dpr;
+            assert!(
+                ((device - 0.5) - (device - 0.5).round()).abs() < 1e-3,
+                "a dot centred off a device pixel middle: {centre}"
+            );
+        }
+    }
+    assert!(dots_checked > 10, "only {dots_checked} dots were found");
 }

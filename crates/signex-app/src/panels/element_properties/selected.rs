@@ -1103,6 +1103,40 @@ mod tests {
             .collect()
     }
 
+    /// What the Label view looks like drawn, with its justification row set
+    /// to `row`: the anchor picker highlights the cell the row selects.
+    fn label_pixels(row: &str) -> Vec<u8> {
+        use super::view_selected_element_properties;
+        let (app, _task) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selected_kind = Some(signex_types::schematic::SelectedKind::Label);
+        ctx.selected_uuid = Some(uuid::Uuid::nil());
+        ctx.selection_info = vec![
+            ("Rotation".to_string(), "0".to_string()),
+            (
+                signex_engine::info_keys::JUSTIFY_H.to_string(),
+                row.to_string(),
+            ),
+        ];
+        let view = view_selected_element_properties(
+            &ctx,
+            iced::Color::WHITE,
+            iced::Color::WHITE,
+            iced::Color::BLACK,
+        );
+        crate::layout_probe::draw_pixels(view, iced::Size::new(400.0, 1200.0))
+    }
+
+    /// #2024 - the label view selects the anchor cell its justification row
+    /// names: a Left row and a Right row draw differently. A view that read
+    /// the row under another key would see neither and draw both the same.
+    #[test]
+    fn the_label_view_selects_the_cell_its_justification_row_names() {
+        let (left, right) = (label_pixels("Left"), label_pixels("Right"));
+        assert!(left.iter().any(|b| *b != 0), "something was drawn");
+        assert_ne!(left, right, "Left and Right select different cells");
+    }
+
     fn justify_info() -> Vec<(String, String)> {
         vec![
             (

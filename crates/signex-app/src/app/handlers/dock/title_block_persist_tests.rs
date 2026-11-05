@@ -742,3 +742,50 @@ fn close_library_save_all_commits_no_schematic_draft() {
     assert_eq!(drawn_by_in_engine(&app, &sheet), None);
     assert!(!app.document_state.is_document_dirty(&sheet));
 }
+
+/// Save As commits the document being saved; another sheet's draft stays
+/// pending (the Save As twin of `save_commits_only_the_saved_documents_draft`).
+#[test]
+fn save_as_commits_only_the_saved_documents_draft() {
+    let (mut app, p_sheet, _p, _recorder) = project_with_draft();
+    let (q_sheet, _q) = add_project_q(&mut app);
+    // The write itself may be refused or deferred; the commit comes first.
+    drop(app.save_active_document_as(&p_sheet, PathBuf::from("/w/p/copy.snxsch")));
+    assert_eq!(drawn_by_in_engine(&app, &p_sheet).as_deref(), Some("X"));
+    assert_eq!(
+        app.document_state
+            .drafts
+            .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
+            .as_deref(),
+        Some("Q")
+    );
+    assert_eq!(drawn_by_in_engine(&app, &q_sheet), None);
+    assert!(!app.document_state.is_document_dirty(&q_sheet));
+}
+
+/// A field typed while the Close Project prompt is up is committed when the
+/// user answers Save All, so the saved file has it.
+#[test]
+fn a_field_typed_behind_the_close_prompt_is_saved_by_save_all() {
+    use crate::app::{ProjectCloseChoice, ProjectMsg};
+    let (mut app, sheet, id, recorder) = project_with_draft();
+    close_project_to_gate(&mut app, id);
+    assert!(app.ui_state.project_close_confirm.is_some(), "the prompt");
+    app.document_state.drafts.set_title_block(
+        &sheet,
+        TitleBlockField::DocumentNumber,
+        "TYPED-BEHIND",
+    );
+    let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::SaveAll,
+    )));
+    settle(&mut app, task);
+    let bytes = recorder.0.lock().unwrap().last().cloned().expect("a write");
+    let saved = signex_types::format::SnxSchematic::parse(&bytes)
+        .expect("reopens")
+        .sheet;
+    assert_eq!(
+        saved.title_block.get("document_number").map(String::as_str),
+        Some("TYPED-BEHIND")
+    );
+}

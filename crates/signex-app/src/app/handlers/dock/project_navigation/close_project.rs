@@ -600,6 +600,9 @@ impl Signex {
             self.refresh_panel_ctx();
             return Task::none();
         }
+        // A field typed while the prompt was up is an edit of this project
+        // too: commit it before the scan below, so Save All writes it.
+        self.commit_drafts_of_project(state.project_id);
         // A project opened since the references were read has disk-only
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.
