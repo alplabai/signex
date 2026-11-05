@@ -518,6 +518,40 @@ fn fixed_dialogs_fit_their_content_without_large_slack() {
     }
 }
 
+/// Copy to Library with no writable library is a short dialog, not the tall
+/// window of the list case: the hint sits just above the footer.
+#[test]
+fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
+    let (mut app, _main) = test_app();
+    open(&mut app, ModalId::LibraryStockCopy);
+    let _ = app.sync_detached_modals();
+    let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
+    let size = app.modal_window_size(ModalId::LibraryStockCopy);
+    let list_case = crate::app::handlers::erc::modal_size(ModalId::LibraryStockCopy);
+    assert!(
+        size.height < list_case.height * app.ui_state.ui_scale,
+        "empty list: {} is shorter than the list case {}",
+        size.height,
+        list_case.height
+    );
+    let texts = lay_out_texts(app.view(id), size);
+    let hint = texts
+        .iter()
+        .find(|t| t.text.contains("No writable library"))
+        .expect("the empty-list hint");
+    let footer_top = texts
+        .iter()
+        .filter(|t| t.text == "Cancel")
+        .map(|t| t.bounds.y)
+        .fold(f32::MAX, f32::min);
+    let gap = footer_top - (hint.bounds.y + hint.bounds.height);
+    assert!(gap >= 0.0, "the hint overlaps the footer by {}", -gap);
+    assert!(
+        gap <= 70.0,
+        "{gap} px of empty window between hint and footer"
+    );
+}
+
 fn quit_with_rows(rows: usize) -> (Signex, iced::window::Id) {
     let (mut app, _main) = test_app();
     app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {

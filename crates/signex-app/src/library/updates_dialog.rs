@@ -46,7 +46,7 @@ use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{primary_btn_if, secondary_btn};
+use super::modal_chrome::{header_with_note, primary_btn_if, secondary_btn};
 use super::part_sync::{Choice, Choices, ConflictView};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -294,18 +294,7 @@ pub fn view<'a>(
         .map(|s| s.to_string())
         .unwrap_or_else(|| state.schematic_path.display().to_string());
 
-    let header = container(
-        row![
-            text("Library Updates Available")
-                .size(TS.heading)
-                .color(text_c),
-            Space::new().width(Length::Fill),
-            text(title_label).size(TS.body).color(muted),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header_with_note("Library Updates Available", title_label, windowed, tokens);
 
     // Build the drift list. Each row is checkbox + ref_des + library
     // name + version pair + bump-kind badge.

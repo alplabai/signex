@@ -13,7 +13,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
-use super::modal_chrome::close_x;
+use super::modal_chrome::{header, header_title_only};
 use super::state::{DeleteConfirmState, EditRowModalState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -67,22 +67,15 @@ pub fn view<'a>(
     let border = theme_ext::border_color(tokens);
 
     let title = format!("Edit Component — {}", edit.draft.internal_pn.as_str());
-    let header = container(
-        row![
-            text(title).size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::BrowserEdit {
-                    library_path: library_path.to_path_buf(),
-                    msg: BrowserEditMsg::Cancel,
-                },
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        &title,
+        LibraryMessage::BrowserEdit {
+            library_path: library_path.to_path_buf(),
+            msg: BrowserEditMsg::Cancel,
+        },
+        windowed,
+        tokens,
+    );
 
     let lib_for_msg = library_path.to_path_buf();
     let send = move |m: BrowserEditMsg| LibraryMessage::BrowserEdit {
@@ -433,15 +426,7 @@ pub fn view_delete_confirm<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let header = container(
-        row![
-            text("Delete Component?").size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header_title_only("Delete Component?", windowed, tokens);
 
     let msg_label = format!(
         "Delete row {} from {}? This cannot be undone from the UI.",

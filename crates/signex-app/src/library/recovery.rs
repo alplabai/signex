@@ -49,7 +49,7 @@ use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{close_x, primary_btn, secondary_btn};
+use super::modal_chrome::{header, primary_btn, secondary_btn};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -146,22 +146,14 @@ fn library_missing_view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let header = container(
-        row![
-            text("Library Missing").size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        "Library Missing",
+        LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
+        windowed,
+        tokens,
+    );
 
     let body = column![
         text(
@@ -223,21 +215,12 @@ fn git_missing_view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let header = container(
-        row![
-            text("Git Repository Missing")
-                .size(TS.heading)
-                .color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        "Git Repository Missing",
+        LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
+        windowed,
+        tokens,
+    );
 
     let mut summary_lines = column![
         text(
@@ -345,7 +328,6 @@ fn broken_binding_view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
     let kind_label = match kind {
@@ -357,21 +339,12 @@ fn broken_binding_view<'a>(
         _ => "Primitive",
     };
 
-    let header = container(
-        row![
-            text(format!("Broken {} Binding", kind_label))
-                .size(TS.heading)
-                .color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        &format!("Broken {} Binding", kind_label),
+        LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
+        windowed,
+        tokens,
+    );
 
     let body = column![
         text(format!(

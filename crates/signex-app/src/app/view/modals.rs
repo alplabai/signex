@@ -124,6 +124,29 @@ impl Signex {
         .boxed()
     }
 
+    /// Header of the custom net colour card: the in-window strip with its
+    /// close button, the empty slot once the dialog has its own OS window.
+    fn net_color_custom_header(&self) -> Element<'_, Message> {
+        use iced::widget::{Space, Widget, container, row, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        if self.modal_detached(crate::app::state::ModalId::NetColorCustom) {
+            return super::dialogs::os_title_bar_slot();
+        }
+        container(
+            row![
+                text("Pick Net Color")
+                    .size(TS.title)
+                    .color(crate::styles::ti(tokens.text)),
+                Space::new().width(iced::Length::Fill),
+                self.view_close_x(Message::NetColor(NetColorMsg::CustomShow(false))),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([10, 14])
+        .style(crate::styles::toolbar_strip(tokens))
+        .boxed()
+    }
+
     /// Compact X close button shared by the detached-modal bodies.
     fn view_close_x(&self, message: Message) -> Element<'_, Message> {
         use iced::widget::{Widget, button, container, text};
@@ -540,18 +563,7 @@ impl Signex {
 
         let card = container(
             column![
-                container(
-                    row![
-                        text("Pick Net Color").size(TS.title).color(text_c),
-                        Space::new().width(iced::Length::Fill),
-                        self.view_close_x(Message::NetColor(NetColorMsg::CustomShow(false))),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14])
-                .style(crate::styles::toolbar_strip(
-                    &self.document_state.panel_ctx.tokens
-                )),
+                self.net_color_custom_header(),
                 container(body).padding([14, 14]),
                 container(footer).padding([10, 14]),
             ]
@@ -560,6 +572,15 @@ impl Signex {
         .style(crate::styles::context_menu(
             &self.document_state.panel_ctx.tokens,
         ));
+
+        // In its own window the card is the dialog: flat surface, no anchor.
+        if self.modal_detached(crate::app::state::ModalId::NetColorCustom) {
+            return card
+                .style(crate::styles::modal_card(
+                    &self.document_state.panel_ctx.tokens,
+                ))
+                .boxed();
+        }
 
         // Anchor below the Active Bar Net Color button (rightmost icon).
         let (ww, _wh) = self.ui_state.window_size;

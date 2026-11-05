@@ -18,6 +18,9 @@ const NOTE_HEIGHT: f32 = 32.0;
 /// Height of one line of message text, and the lines shown before it scrolls.
 const MESSAGE_LINE: f32 = 16.0;
 const MESSAGE_MAX: f32 = 200.0;
+/// Window height of Copy to Library when no library is writable: the intro,
+/// the one-line hint and the footer, with no list area.
+const STOCK_COPY_EMPTY: f32 = 160.0;
 
 fn list_height(rows: usize) -> f32 {
     (rows as f32 * ROW_HEIGHT).min(LIST_MAX_HEIGHT)
@@ -71,6 +74,14 @@ impl Signex {
                     let lines = wrapped_lines(&p.messages.join("\n"), 70) as f32;
                     262.0 + (lines * 14.0).min(120.0)
                 }),
+            ModalId::LibraryStockCopy => self.library.stock_copy.as_ref().and_then(|c| {
+                if !self.library.writable_libraries().is_empty() {
+                    return None;
+                }
+                let notes =
+                    usize::from(c.previous_unavailable.is_some()) + usize::from(c.error.is_some());
+                Some(STOCK_COPY_EMPTY + notes as f32 * NOTE_HEIGHT)
+            }),
             _ => None,
         };
         let logical = height.map_or(fixed, |h| Size::new(fixed.width, h.ceil()));

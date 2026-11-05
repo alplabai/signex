@@ -20,7 +20,7 @@ use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::{CloseLibraryChoice, LibraryMessage};
-use super::modal_chrome::{close_x, primary_btn, secondary_btn};
+use super::modal_chrome::{header, primary_btn, secondary_btn};
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
 /// How a confirm modal names an unsaved file: relative to its library's
@@ -56,21 +56,12 @@ pub fn view<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let header = container(
-        row![
-            text("Close Library — Unsaved Drafts")
-                .size(ts.heading)
-                .color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        "Close Library — Unsaved Drafts",
+        LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::Cancel),
+        windowed,
+        tokens,
+    );
 
     let summary = text(format!(
         "'{}' has {} unsaved draft(s). What would you like to do?",

@@ -17,6 +17,7 @@ use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
+use super::modal_chrome::header_with_note;
 use super::state::DocumentOptionsModalState;
 use crate::panels::SheetColor;
 
@@ -30,18 +31,12 @@ pub fn view<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let header = container(
-        row![
-            text("Document Options").size(ts.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            text(format!("Library: {}", state.library_name))
-                .size(ts.body)
-                .color(muted),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header_with_note(
+        "Document Options",
+        format!("Library: {}", state.library_name),
+        windowed,
+        tokens,
+    );
 
     let row_field =
         |label: &'a str, value: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {

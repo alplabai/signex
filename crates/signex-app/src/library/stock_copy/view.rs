@@ -8,7 +8,7 @@ use signex_widgets::theme_ext;
 
 use super::{StockCopyMsg, StockCopyState};
 use crate::library::messages::LibraryMessage;
-use crate::library::modal_chrome::{close_x, primary_btn, secondary_btn};
+use crate::library::modal_chrome::{header, primary_btn, secondary_btn};
 use crate::library::state::LibraryState;
 use crate::styles::{Spacing, TypeScale};
 
@@ -27,16 +27,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let cancel = LibraryMessage::StockCopy(StockCopyMsg::Cancelled);
 
-    let header = container(
-        row![
-            text("Copy to Library").size(ts.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(cancel.clone(), tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header("Copy to Library", cancel.clone(), windowed, tokens);
 
     let intro = text(format!(
         "{} is part of the stock library, which is read-only. Pick the library to copy \

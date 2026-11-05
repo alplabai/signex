@@ -30,7 +30,7 @@ use signex_widgets::theme_ext;
 use super::browser::{OVERSCAN_ROWS, visible_range};
 use super::loose_symbols::LooseSymbol;
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
-use super::modal_chrome::{close_x, secondary_btn};
+use super::modal_chrome::{header, secondary_btn};
 use super::state::{LibraryState, PrimitivePickerState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -241,19 +241,12 @@ pub fn view<'a>(
         _ => "Pick Primitive",
     };
 
-    let header = container(
-        row![
-            text(title).size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
-                tokens
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        title,
+        LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
+        windowed,
+        tokens,
+    );
 
     let search = text_input("Filter…", &picker.filter)
         .on_input(|s| LibraryMessage::PrimitivePicker(PrimitivePickerMsg::SetFilter(s)))

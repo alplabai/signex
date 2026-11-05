@@ -93,14 +93,18 @@ pub fn modal_header_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
     let bg = ti(tokens.toolbar_bg);
     let text = ti(tokens.text);
     let border = ti(tokens.border);
-    move |_| container::Style {
+    move |theme| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
         border: Border {
             width: 0.0,
-            radius: iced::border::Radius::default()
-                .top_left(MODAL_CORNER_RADIUS)
-                .top_right(MODAL_CORNER_RADIUS),
+            radius: if is_dialog_window(theme) {
+                iced::border::Radius::default()
+            } else {
+                iced::border::Radius::default()
+                    .top_left(MODAL_CORNER_RADIUS)
+                    .top_right(MODAL_CORNER_RADIUS)
+            },
             color: border,
             ..Border::default()
         },
@@ -118,14 +122,18 @@ pub fn modal_footer_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
     let bg = ti(tokens.toolbar_bg);
     let text = ti(tokens.text);
     let border = ti(tokens.border);
-    move |_| container::Style {
+    move |theme| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
         border: Border {
             width: 0.0,
-            radius: iced::border::Radius::default()
-                .bottom_left(MODAL_CORNER_RADIUS)
-                .bottom_right(MODAL_CORNER_RADIUS),
+            radius: if is_dialog_window(theme) {
+                iced::border::Radius::default()
+            } else {
+                iced::border::Radius::default()
+                    .bottom_left(MODAL_CORNER_RADIUS)
+                    .bottom_right(MODAL_CORNER_RADIUS)
+            },
             color: border,
             ..Border::default()
         },

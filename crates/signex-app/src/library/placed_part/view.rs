@@ -10,7 +10,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{LibraryMessage, PlacedPartMsg};
-use crate::library::modal_chrome::close_x;
+use crate::library::modal_chrome::header;
 use crate::library::state::{ChangePreview, DatasheetChoice};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -124,17 +124,7 @@ fn card<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let header = container(
-        row![
-            text(title.to_string()).size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(LibraryMessage::ClosePicker, tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(title, LibraryMessage::ClosePicker, windowed, tokens);
     let footer = container(footer)
         .padding([10, 14])
         .style(crate::styles::modal_footer_strip(tokens));

@@ -23,7 +23,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
-use super::modal_chrome::close_x;
+use super::modal_chrome::header;
 use super::placed_part::{change_preview_view, datasheet_choice_view};
 use super::range_filter::range_filter_bar;
 use super::state::{PickerMode, PickerState};
@@ -54,22 +54,16 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let header = container(
-        row![
-            text(if changing {
-                "Change Component"
-            } else {
-                "Place Component"
-            })
-            .size(TS.heading)
-            .color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(LibraryMessage::ClosePicker, tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        if changing {
+            "Change Component"
+        } else {
+            "Place Component"
+        },
+        LibraryMessage::ClosePicker,
+        windowed,
+        tokens,
+    );
 
     let search = text_input("Search internal PN / MPN / description…", &picker.filter)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))

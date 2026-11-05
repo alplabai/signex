@@ -7,8 +7,8 @@
 //! one definition built on [`crate::styles`] tokens, so a theme change
 //! reaches all of them.
 
-use iced::widget::{button, container, text};
-use iced::{Element, Widget};
+use iced::widget::{Space, button, container, row, text};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -38,6 +38,92 @@ pub(crate) fn close_x<'a>(
     .on_press(message)
     .style(crate::styles::outline_button(tokens))
     .boxed()
+}
+
+/// What sits at the right end of a dialog header.
+enum HeaderEnd {
+    Nothing,
+    Close(LibraryMessage),
+    Note(String),
+}
+
+fn header_strip<'a>(
+    title: &str,
+    end: HeaderEnd,
+    windowed: bool,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    // In its own OS window the native title bar carries the title and the
+    // close: the slot stays empty (docs/DETACHED_MODALS.md).
+    let ts = TypeScale::default();
+    if windowed {
+        // A note (the library or file the dialog acts on) is not in the
+        // native title, so it stays, as a muted line above the body.
+        return match end {
+            HeaderEnd::Note(note) => container(
+                text(note)
+                    .size(ts.body)
+                    .color(theme_ext::text_secondary(tokens)),
+            )
+            .padding([6, 14])
+            .boxed(),
+            _ => Space::new().height(0).boxed(),
+        };
+    }
+    let mut line = row![
+        text(title.to_string())
+            .size(ts.heading)
+            .color(theme_ext::text_primary(tokens)),
+        Space::new().width(Length::Fill),
+    ]
+    .align_y(iced::Alignment::Center);
+    match end {
+        HeaderEnd::Nothing => {}
+        HeaderEnd::Close(message) => line = line.push(close_x(message, tokens)),
+        HeaderEnd::Note(note) => {
+            line = line.push(
+                text(note)
+                    .size(ts.body)
+                    .color(theme_ext::text_secondary(tokens))
+                    .boxed(),
+            );
+        }
+    }
+    container(line)
+        .padding([10, 14])
+        .style(crate::styles::modal_header_strip(tokens))
+        .boxed()
+}
+
+/// Header of a Library dialog: title and a close button, or the empty slot
+/// when `windowed` (the OS window's title bar carries both). Every Library
+/// dialog builds its header here.
+pub(crate) fn header<'a>(
+    title: &str,
+    on_close: LibraryMessage,
+    windowed: bool,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    header_strip(title, HeaderEnd::Close(on_close), windowed, tokens)
+}
+
+/// Header with a muted note at the right end instead of a close button.
+pub(crate) fn header_with_note<'a>(
+    title: &str,
+    note: String,
+    windowed: bool,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    header_strip(title, HeaderEnd::Note(note), windowed, tokens)
+}
+
+/// Header with the title alone (no close button).
+pub(crate) fn header_title_only<'a>(
+    title: &str,
+    windowed: bool,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    header_strip(title, HeaderEnd::Nothing, windowed, tokens)
 }
 
 /// Bordered secondary footer action (Cancel, Skip, ...).
@@ -93,6 +179,11 @@ mod tests {
         for id in ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(*id);
             let _ = close_x(LibraryMessage::ClosePicker, &tokens);
+            for windowed in [false, true] {
+                let _ = header("Title", LibraryMessage::ClosePicker, windowed, &tokens);
+                let _ = header_with_note("Title", "note".into(), windowed, &tokens);
+                let _ = header_title_only("Title", windowed, &tokens);
+            }
             let _ = secondary_btn("Cancel", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn("OK", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn_if("OK", LibraryMessage::ClosePicker, false, &tokens);
