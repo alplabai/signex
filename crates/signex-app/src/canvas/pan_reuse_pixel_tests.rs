@@ -38,7 +38,7 @@ const DOCKED: Mount = Mount {
 
 #[derive(Clone, Copy, PartialEq)]
 enum Path {
-    /// Trunk's mount.
+    /// Trunk's mount, with the content drawn as trunk drew it.
     Plain,
     /// The retained-layer widget.
     Surface,
@@ -119,9 +119,14 @@ fn last_frame(
     run: &Run,
 ) -> (Frame, u32) {
     let mut slot = slot_with(sheet);
-    if run.select {
-        slot.selected = vec![SelectedItem::new(sheet.wires[0].uuid, SelectedKind::Wire)];
+    if run.select
+        && let Some(wire) = sheet.wires.first()
+    {
+        slot.selected = vec![SelectedItem::new(wire.uuid, SelectedKind::Wire)];
     }
+    // The reference draws its content as trunk did: a frame of the canvas
+    // size, so its clip starts at the canvas origin.
+    slot.trunk_content.set(path == Path::Plain);
     let overrides = Default::default();
     let filters = Default::default();
     let mut prefs = test_prefs(&overrides, &filters);
@@ -162,6 +167,15 @@ fn differing(a: &Frame, b: &Frame) -> Vec<(u32, u32)> {
     out
 }
 
+fn max_channel_diff(a: &Frame, b: &Frame) -> u8 {
+    a.data
+        .iter()
+        .zip(&b.data)
+        .map(|(p, q)| p.abs_diff(*q))
+        .max()
+        .unwrap_or(0)
+}
+
 /// The frame is not blank: the sheet's wires, arc and circles are in it.
 fn assert_drawn(gpu: &mut Gpu, mount: Mount, run: &Run, frame: &Frame) {
     let blank = last_frame(gpu, Path::Plain, mount, &SchematicSheet::default(), run).0;
@@ -172,17 +186,85 @@ fn assert_drawn(gpu: &mut Gpu, mount: Mount, run: &Run, frame: &Frame) {
     );
 }
 
+/// Where the last frame's camera puts world `(x, y)` mm, in physical pixels.
+fn window_px(mount: Mount, run: &Run, x: f32, y: f32) -> (f32, f32) {
+    let (dx, dy) = run
+        .pans
+        .iter()
+        .fold((0.0, 0.0), |(ax, ay), (px, py)| (ax + px, ay + py));
+    (
+        (mount.pad.0 + run.start.x + dx + x * SCALE) * mount.dpi,
+        (mount.pad.1 + run.start.y + dy + y * SCALE) * mount.dpi,
+    )
+}
+
+/// Centre `(x, y)` of the pixels near `want` inside `[x0, x1] x [y0, y1]`,
+/// with how many there are.
+fn centre_of(
+    frame: &Frame,
+    want: [u8; 3],
+    (x0, y0, x1, y1): (f32, f32, f32, f32),
+) -> Option<((f32, f32), usize)> {
+    let (mut sx, mut sy, mut n) = (0.0, 0.0, 0usize);
+    for y in y0.max(0.0) as u32..(y1 as u32).min(frame.height) {
+        for x in x0.max(0.0) as u32..(x1 as u32).min(frame.width) {
+            let px = frame.px(x, y);
+            if (0..3).all(|c| px[c].abs_diff(want[c]) <= 24) {
+                sx += x as f32 + 0.5;
+                sy += y as f32 + 0.5;
+                n += 1;
+            }
+        }
+    }
+    (n > 0).then(|| ((sx / n as f32, sy / n as f32), n))
+}
+
+/// Offset of the selection highlight's centre from the wire's centre, read
+/// off one frame: the two layers drawn together.
+fn selection_offset(frame: &Frame, mount: Mount, run: &Run) -> (f32, f32) {
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let of = |c: signex_types::theme::Color| [c.r, c.g, c.b];
+    // The first wire, run from (5, 5) to (20, 5) mm, and a band around it
+    // that stays clear of the second wire at y = 8 mm.
+    let (x0, y0) = window_px(mount, run, 4.0, 3.8);
+    let (x1, y1) = window_px(mount, run, 21.0, 6.2);
+    let band = (x0, y0, x1, y1);
+    let (wire, wire_n) = centre_of(frame, of(colors.wire), band).expect("no wire pixels");
+    let (sel, sel_n) = centre_of(frame, of(colors.selection), band).expect("no selection pixels");
+    eprintln!("wire centre {wire:?} ({wire_n} px), selection centre {sel:?} ({sel_n} px)");
+    (sel.0 - wire.0, sel.1 - wire.1)
+}
+
 fn assert_lines_up(mount: Mount, run: Run) {
     let mut gpu = gpu();
     let sheet = fixture();
-    let (plain, _) = last_frame(&mut gpu, Path::Plain, mount, &sheet, &run);
-    assert_drawn(&mut gpu, mount, &run, &plain);
+    assert!(!sheet.wires.is_empty(), "the fixture has a wire");
+    let (trunk, _) = last_frame(&mut gpu, Path::Plain, mount, &sheet, &run);
+    assert_drawn(&mut gpu, mount, &run, &trunk);
     let (surface, rebuilds) = last_frame(&mut gpu, Path::Surface, mount, &sheet, &run);
     assert_eq!(rebuilds, 1, "the pans rebuilt the content");
-    let off = differing(&surface, &plain);
+    let off = differing(&surface, &trunk);
+    eprintln!(
+        "dpi {}: {} pixels differ from trunk, max channel diff {}",
+        mount.dpi,
+        off.len(),
+        max_channel_diff(&surface, &trunk)
+    );
+    if run.select {
+        let (tx, ty) = selection_offset(&trunk, mount, &run);
+        let (sx, sy) = selection_offset(&surface, mount, &run);
+        eprintln!("selection minus wire: trunk ({tx:.2}, {ty:.2}), surface ({sx:.2}, {sy:.2})");
+        let allowed = 0.5 * mount.dpi;
+        assert!(
+            (sx - tx).abs() <= allowed && (sy - ty).abs() <= allowed,
+            "the selection sits ({:.2}, {:.2}) px off the wire against trunk",
+            sx - tx,
+            sy - ty
+        );
+    }
     assert!(
         off.is_empty(),
-        "{} pixels differ from the plain canvas, first at {:?}",
+        "{} pixels differ from trunk, first at {:?}",
         off.len(),
         off.first()
     );
