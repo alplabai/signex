@@ -500,12 +500,13 @@ impl Signex {
         // Basenames only: full paths would overflow the modal.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
 
-        let mut body = column![].spacing(SP.m);
+        let mut body: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.m);
         if self.ui_state.quit_confirm_refreshed {
             body = body.push(
                 text("The unsaved list changed; review and confirm again.")
                     .size(TS.body)
-                    .color(crate::styles::tokens::danger(tokens)),
+                    .color(crate::styles::tokens::danger(tokens))
+                    .boxed(),
             );
         }
         body = body
@@ -522,10 +523,12 @@ impl Signex {
                 tokens,
             ))
             .push(
-                container(dialog_list(file_rows, tokens)).height(Length::Fit.max(
-                    crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
-                        + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
-                )),
+                container(dialog_list(file_rows, tokens))
+                    .height(Length::Fit.max(
+                        crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
+                            + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
+                    ))
+                    .boxed(),
             );
 
         let choose = |choice| Message::Project(ProjectMsg::AppQuitConfirm(choice));

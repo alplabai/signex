@@ -340,7 +340,7 @@ impl Signex {
             (None, false) => format!("{} page(s)", preview.pages.len()),
         };
         let footer = dialog_footer_split(
-            vec![text(footer_caption).size(TS.body).color(text_muted).into()],
+            vec![text(footer_caption).size(TS.body).color(text_muted).boxed()],
             vec![dialog_button(
                 "Export PDF",
                 DialogButtonKind::Primary,

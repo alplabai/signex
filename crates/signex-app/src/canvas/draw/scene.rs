@@ -1,7 +1,7 @@
 use super::super::*;
 
 /// Width (px) of the line drawn over a clicked pin.
-const FOCUSED_PIN_STROKE_PX: f32 = 3.0;
+const FOCUSED_PIN_LINE_PX: f32 = 3.0;
 /// Radius (px) of the dot on a clicked pin's connecting end.
 const FOCUSED_PIN_TIP_PX: f32 = 3.5;
 
@@ -490,7 +490,7 @@ impl SchematicCanvas<'_> {
             &canvas::Path::line(tip, inner),
             canvas::Stroke::default()
                 .with_color(colour)
-                .with_width(FOCUSED_PIN_STROKE_PX)
+                .with_width(FOCUSED_PIN_LINE_PX)
                 .with_line_cap(canvas::LineCap::Round),
         );
         frame.fill(&canvas::Path::circle(tip, FOCUSED_PIN_TIP_PX), colour);

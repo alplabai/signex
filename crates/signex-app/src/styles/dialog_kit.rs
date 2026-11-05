@@ -3,7 +3,7 @@
 //! drift. Generic over the message type; sizes derive from the type scale.
 //! Header and close come from the header helpers of each dialog family.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, Widget, button, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
@@ -35,7 +35,7 @@ pub fn dialog_message<'a, M: 'a>(message: impl ToString, tokens: &ThemeTokens) -
     text(message.to_string())
         .size(TS.body)
         .color(ti(tokens.text))
-        .into()
+        .boxed()
 }
 
 /// A hint or note under the message: muted text, body size.
@@ -43,25 +43,29 @@ pub fn dialog_hint<'a, M: 'a>(hint: impl ToString, tokens: &ThemeTokens) -> Elem
     text(hint.to_string())
         .size(TS.body)
         .color(tokens::muted_text(tokens))
-        .into()
+        .boxed()
 }
 
 /// Dialog body above a [`dialog_footer`]: [`SP`]`.l` on top and sides; the
 /// footer's own padding supplies the bottom gap.
-pub fn dialog_body<'a, M: 'a>(content: impl Into<Element<'a, M>>) -> Element<'a, M> {
-    container(content.into())
+pub fn dialog_body<'a, M: 'a>(
+    content: impl Widget<M, Theme, iced::Renderer> + 'a,
+) -> Element<'a, M> {
+    container(content.boxed())
         .padding(iced::Padding {
             top: SP.l,
             right: SP.l,
             bottom: 0.0,
             left: SP.l,
         })
-        .into()
+        .boxed()
 }
 
 /// Standard dialog body padding around `content`.
-pub fn dialog_section<'a, M: 'a>(content: impl Into<Element<'a, M>>) -> Element<'a, M> {
-    container(content.into()).padding(SP.l).into()
+pub fn dialog_section<'a, M: 'a>(
+    content: impl Widget<M, Theme, iced::Renderer> + 'a,
+) -> Element<'a, M> {
+    container(content.boxed()).padding(SP.l).boxed()
 }
 
 /// A bordered list box (input background, 1 px border) holding `items`;
@@ -86,7 +90,7 @@ pub fn dialog_list<'a, M: 'a>(items: Vec<Element<'a, M>>, tokens: &ThemeTokens) 
         },
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 /// A dialog button of the given role: compact, height and min width from
@@ -121,7 +125,7 @@ pub fn dialog_button<'a, M: Clone + 'a>(
         DialogButtonKind::Secondary => btn.style(outline_button(tokens)),
         DialogButtonKind::Danger => btn.style(danger_button(tokens)),
     }
-    .into()
+    .boxed()
 }
 
 /// Right-aligned button row with the standard gaps and padding.
@@ -139,7 +143,7 @@ pub fn dialog_footer_split<'a, M: 'a>(
     container(row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center))
         .padding(SP.l)
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Height of a footer built by [`dialog_footer`]: the button plus padding.

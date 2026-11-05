@@ -130,7 +130,7 @@ impl Signex {
         let secondary = |label: &str, message: Option<Message>| {
             dialog_button(label, DialogButtonKind::Secondary, message, tokens)
         };
-        let mut extras: Vec<Element<'_, Message>> = vec![scope.into()];
+        let mut extras: Vec<Element<'_, Message>> = vec![scope.boxed()];
         // A rule set from a newer Signex sits unread in the file; storing
         // would replace it on save, so the action is not offered.
         if has_project && stored.is_none() && !unreadable {

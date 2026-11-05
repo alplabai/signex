@@ -10,7 +10,7 @@
 
 use super::drawings::push_placed_drawings;
 use super::family::alias_for_family;
-use super::geometry::{circle_path, path_to_tiny_skia, rect_path};
+use super::geometry::{path_to_tiny_skia, rect_path};
 use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
@@ -163,9 +163,9 @@ impl SvgRenderContext {
         }
 
         for j in &sheet.schematic.junctions {
-            // The canvas rule: a filled disc, never under the minimum radius.
-            let radius_mm = (j.diameter * 0.5)
-                .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM);
+            let dia_mm = if j.diameter > 0.0 { j.diameter } else { 0.7 };
+            let side = (dia_mm * xform.mm_to_unit) as f32;
+            let half = side / 2.0;
             let cx = xform.x(j.position.x);
             let cy = xform.px_y(j.position.y);
             let junction_rgb = wire_style::junction_rgb(
@@ -174,14 +174,15 @@ impl SvgRenderContext {
                 &opts.net_class_styles,
                 palette.junction,
             );
-            elements.push(circle_path(
-                cx,
-                cy,
-                (radius_mm * xform.mm_to_unit) as f32,
+            elements.push(rect_path(
+                cx - half,
+                cy - half,
+                side,
+                side,
                 SvgStyle {
-                    stroke_rgb: None,
+                    stroke_rgb: Some(junction_rgb),
                     fill_rgb: Some(junction_rgb),
-                    stroke_width: 0.0,
+                    stroke_width: 0.8,
                 },
             ));
         }

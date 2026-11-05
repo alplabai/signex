@@ -10,9 +10,18 @@ use uuid::Uuid;
 
 use super::*;
 use crate::SheetSnapshot;
-use crate::pdf::PdfOptions;
+use crate::pdf::{PdfOptions, PdfScale};
 
 const MM_TO_UNIT: f32 = 72.0 / 25.4;
+
+/// Real size, so a width in the page's units is the mm width times
+/// `MM_TO_UNIT` (the default fit-to-page shrinks the sheet).
+fn options() -> PdfOptions {
+    PdfOptions {
+        scale: PdfScale::OneToOne,
+        ..PdfOptions::default()
+    }
+}
 
 fn sheet() -> SheetSnapshot {
     SheetSnapshot {
@@ -74,7 +83,7 @@ fn symbol_marks(is_power: bool, opts: &PdfOptions) -> (Vec<SvgStyle>, Vec<(f32, 
 
 #[test]
 fn a_power_port_strokes_and_labels_in_the_power_colour() {
-    let opts = PdfOptions::default();
+    let opts = options();
     let power = opts.palette.power_label;
     let (styles, texts) = symbol_marks(true, &opts);
     assert!(!styles.is_empty());
@@ -84,7 +93,7 @@ fn a_power_port_strokes_and_labels_in_the_power_colour() {
 
 #[test]
 fn a_power_port_strokes_at_the_default_width_like_a_stock_symbol() {
-    let opts = PdfOptions::default();
+    let opts = options();
     let (styles, _) = symbol_marks(true, &opts);
     let expected = SCHEMATIC_DEFAULT_WIRE_STROKE_MM as f32 * MM_TO_UNIT;
     assert!(
@@ -96,7 +105,7 @@ fn a_power_port_strokes_at_the_default_width_like_a_stock_symbol() {
 
 #[test]
 fn a_normal_part_keeps_the_body_and_value_colours() {
-    let opts = PdfOptions::default();
+    let opts = options();
     let (styles, texts) = symbol_marks(false, &opts);
     // A part that is not a power port with this lib id has no built-in body,
     // so the Value text is the only mark to check.
@@ -121,7 +130,7 @@ fn child(stroke_width: f64) -> ChildSheet {
 }
 
 fn frame_width(stroke_width: f64) -> f32 {
-    let opts = PdfOptions::default();
+    let opts = options();
     let mut sheet = sheet();
     sheet.schematic.child_sheets.push(child(stroke_width));
     elements_of(&sheet, &opts)
