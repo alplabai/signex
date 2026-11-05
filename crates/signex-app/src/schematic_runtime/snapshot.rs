@@ -41,8 +41,9 @@ pub fn build_renderer_snapshot(
             width_mm: drawn_wire_width_mm(wire, class, &overrides.defaults) as f32,
             explicit_color: Some(to_rgba(color)),
         });
-        if let Some(class) = class.filter(|c| c.line != NetLineStyle::Solid) {
-            wire_line_styles.insert(renderer_id(wire.uuid), class.line);
+        let line = overrides.defaults.wire_line(class.map(|c| c.line));
+        if line != NetLineStyle::Solid {
+            wire_line_styles.insert(renderer_id(wire.uuid), line);
         }
     }
 

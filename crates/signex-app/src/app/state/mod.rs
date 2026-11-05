@@ -976,18 +976,33 @@ impl DocumentState {
         label_text: String,
         cursor_mm: (f64, f64),
     ) -> crate::panels::PrePlacementData {
-        let mut data = crate::panels::PrePlacementData::new(
-            tool_name,
-            kind,
-            label_text,
-            cursor_mm.0,
-            cursor_mm.1,
-        );
-        data.font_size_pt = self.active_schematic_defaults().text_size_pt.round() as u32;
+        let (x, y) = self.shown_point(cursor_mm);
+        let mut data = crate::panels::PrePlacementData::new(tool_name, kind, label_text, x, y);
+        let defaults = self.active_schematic_defaults();
+        data.font_size_pt = defaults.text_size_pt.round() as u32;
+        data.shape_fill = defaults.shape_fill;
         if let Some(path) = self.active_path.as_deref() {
             data.font = self.schematic_default_font_for(path);
         }
         data
+    }
+
+    /// A stored point as the active sheet shows it: Y from its page origin
+    /// (#2034). Unchanged when no schematic is active.
+    pub fn shown_point(&self, (x, y): (f64, f64)) -> (f64, f64) {
+        let y = self
+            .active_engine()
+            .map_or(y, |engine| engine.document().page_y(y));
+        (x, y)
+    }
+
+    /// The font a label or note placed on the active document stores: the
+    /// project's default font when it names one, else `None` (#2026).
+    pub fn placed_font_family(&self) -> Option<String> {
+        self.active_path
+            .as_deref()
+            .and_then(|path| self.document_project(path))
+            .and_then(|p| p.data.schematic_defaults.placed_font_family())
     }
 
     /// The font new text on `sheet` is placed in (#2026).

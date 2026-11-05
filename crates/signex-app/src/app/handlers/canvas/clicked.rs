@@ -613,7 +613,7 @@ impl Signex {
                         * signex_types::schematic::SCHEMATIC_PT_TO_MM,
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
-                    font_family: None,
+                    font_family: self.document_state.placed_font_family(),
                     locked: false,
                 };
                 if self.apply_engine_command(
@@ -686,7 +686,7 @@ impl Signex {
                     font_size: pp_fs_mm,
                     justify: pp_justify_h,
                     justify_v: pp_justify_v,
-                    font_family: None,
+                    font_family: self.document_state.placed_font_family(),
                     locked: false,
                 };
                 if self.apply_engine_command(

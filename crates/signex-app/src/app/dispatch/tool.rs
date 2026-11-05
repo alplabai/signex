@@ -208,6 +208,9 @@ impl Signex {
                         String::new(),
                         (0.0, 0.0),
                     );
+                    let shown_cursor = self
+                        .document_state
+                        .shown_point((self.ui_state.cursor_x, self.ui_state.cursor_y));
                     let prev = self.document_state.panel_ctx.pre_placement.as_ref();
                     let prev_rotation = on_cursor_part
                         .map(|f| f.rotation)
@@ -234,8 +237,8 @@ impl Signex {
                             bold: false,
                             italic: false,
                             underline: false,
-                            cursor_x_mm: self.ui_state.cursor_x,
-                            cursor_y_mm: self.ui_state.cursor_y,
+                            cursor_x_mm: shown_cursor.0,
+                            cursor_y_mm: shown_cursor.1,
                             shape_width_mm: prev_shape_width,
                             shape_fill: prev_shape_fill,
                         });

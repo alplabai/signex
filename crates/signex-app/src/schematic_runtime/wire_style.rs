@@ -7,7 +7,8 @@
 //!   colour;
 //! - **width** - the wire's own `stroke_width`, else the class width, else
 //!   the project default, else the built-in (#2026);
-//! - **line style** - the class line style, else solid.
+//! - **line style** - the class line style, else the project default, else
+//!   solid.
 //!
 //! The class styles arrive resolved, keyed by element uuid, from the net
 //! join (`signex_net::element_class_styles`); nothing here reads the project.

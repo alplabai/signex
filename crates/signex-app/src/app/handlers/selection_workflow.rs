@@ -315,7 +315,7 @@ impl Signex {
                 .pre_placement
                 .as_ref()
                 .map(|pp| pp.shape_fill)
-                .unwrap_or(signex_types::schematic::FillType::None);
+                .unwrap_or(self.document_state.active_schematic_defaults().shape_fill);
             let pts = std::mem::take(&mut self.interaction_state.polyline_points);
             let drawing = signex_types::schematic::SchDrawing::Polyline {
                 uuid: uuid::Uuid::now_v7(),

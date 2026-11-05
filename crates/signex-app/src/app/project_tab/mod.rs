@@ -125,6 +125,16 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         text: String,
     },
+    /// The wire line style default picked (#2026); `None` is built-in.
+    SchematicDefaultLineStylePicked {
+        project_id: ProjectId,
+        line: Option<signex_types::net_class::NetLineStyle>,
+    },
+    /// The shape fill default picked (#2026); `None` is built-in.
+    SchematicDefaultShapeFillPicked {
+        project_id: ProjectId,
+        fill: Option<signex_types::schematic::FillType>,
+    },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {
         project_id: ProjectId,

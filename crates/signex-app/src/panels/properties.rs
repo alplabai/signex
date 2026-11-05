@@ -35,7 +35,8 @@ pub struct PrePlacementData {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
-    /// Most-recent cursor world position (for the X/Y readout).
+    /// Cursor position for the X/Y readout, as the sheet shows it: Y from
+    /// its page origin (#2034).
     pub cursor_x_mm: f64,
     pub cursor_y_mm: f64,
     /// Stroke width for the shape tools (Line / Rect / Circle / Arc /

@@ -14,7 +14,11 @@ fn app() -> (Signex, PathBuf, iced::window::Id) {
     let dir = std::env::temp_dir().join(format!("signex-prj-def-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
     let sheet = dir.join("root.snxsch");
-    open_with(&mut app.document_state, &sheet, Default::default());
+    let a4 = signex_types::schematic::SchematicSheet {
+        paper_size: "A4".into(),
+        ..Default::default()
+    };
+    open_with(&mut app.document_state, &sheet, a4);
     app.open_project_tab(0);
     app.document_state.active_path = Some(sheet.clone());
     let window = iced::window::Id::unique();
@@ -103,4 +107,101 @@ fn placement_starts_from_the_project_defaults() {
             .shape_stroke_mm(0.0),
         0.4
     );
+}
+
+fn tab(app: &mut Signex, msg: ProjectTabMsg) {
+    let _ = app.update(Message::Project(ProjectMsg::Tab(msg)));
+}
+
+#[test]
+fn line_style_and_shape_fill_defaults_reach_drawing_and_placement() {
+    use signex_types::net_class::NetLineStyle;
+    use signex_types::schematic::FillType;
+    let (mut app, _sheet, window) = app();
+    let project_id = app.document_state.projects[0].id;
+    tab(
+        &mut app,
+        ProjectTabMsg::SchematicDefaultLineStylePicked {
+            project_id,
+            line: Some(NetLineStyle::Dashed),
+        },
+    );
+    tab(
+        &mut app,
+        ProjectTabMsg::SchematicDefaultShapeFillPicked {
+            project_id,
+            fill: Some(FillType::Background),
+        },
+    );
+    assert!(project_dirty(&app));
+    let defaults = app.canvas_view_prefs(window).schematic_defaults;
+    assert_eq!(defaults.wire_line(None), NetLineStyle::Dashed);
+    let pre = app.document_state.new_pre_placement(
+        String::new(),
+        crate::panels::PrePlacementKind::Other,
+        String::new(),
+        (0.0, 0.0),
+    );
+    assert_eq!(pre.shape_fill, FillType::Background);
+    assert!(app.step_project_tab_history(project_id, true));
+    assert!(app.step_project_tab_history(project_id, true));
+    assert!(
+        app.document_state.projects[0]
+            .data
+            .schematic_defaults
+            .is_empty()
+    );
+}
+
+/// #2026: a label and a note placed on a project sheet store the project's
+/// default font, as their size follows its default text size.
+#[test]
+fn placed_text_stores_the_project_font() {
+    use crate::app::Tool;
+    use crate::toolbar::ToolMessage;
+    let (mut app, sheet, _window) = app();
+    let project_id = app.document_state.projects[0].id;
+    tab(
+        &mut app,
+        ProjectTabMsg::SchematicDefaultFontEdited {
+            project_id,
+            text: "Roboto".into(),
+        },
+    );
+    for (tool, at) in [(Tool::Label, (20.32, 20.32)), (Tool::Text, (40.64, 40.64))] {
+        let _ = app.update(Message::Tool(ToolMessage::SelectTool(tool)));
+        let _ = app.update(Message::CanvasEvent(crate::canvas::CanvasEvent::Clicked {
+            world_x: at.0,
+            world_y: at.1,
+        }));
+    }
+    let doc = app.document_state.engines[&sheet].document();
+    assert_eq!(doc.labels.len(), 1, "a label was placed");
+    assert_eq!(doc.labels[0].font_family.as_deref(), Some("Roboto"));
+    assert_eq!(doc.text_notes.len(), 1, "a note was placed");
+    assert_eq!(doc.text_notes[0].font_family.as_deref(), Some("Roboto"));
+}
+
+/// #2034: the pre-placement X/Y readout shows Y from the page origin.
+#[test]
+fn the_pre_placement_readout_reads_y_from_the_page_origin() {
+    use signex_types::schematic::PageOrigin;
+    let (mut app, sheet, _window) = app();
+    let readout = |app: &Signex| {
+        let pre = app.document_state.new_pre_placement(
+            String::new(),
+            crate::panels::PrePlacementKind::Other,
+            String::new(),
+            (7.0, 8.0),
+        );
+        (pre.cursor_x_mm, pre.cursor_y_mm)
+    };
+    assert_eq!(readout(&app), (7.0, 210.0 - 8.0), "Lower Left, A4");
+    let engine = app.document_state.engines.get_mut(&sheet).expect("engine");
+    engine
+        .execute(signex_engine::Command::SetPageOrigin {
+            origin: PageOrigin::UpperLeft,
+        })
+        .expect("origin");
+    assert_eq!(readout(&app), (7.0, 8.0));
 }

@@ -46,7 +46,8 @@ fn pre_placement_shape(
 ) -> (f64, signex_types::schematic::FillType) {
     // An unset width is written as the project's shape default (#2026), so
     // the placed shape shows the width it draws at.
-    let default_mm = doc.active_schematic_defaults().shape_stroke_mm(0.0);
+    let defaults = doc.active_schematic_defaults();
+    let default_mm = defaults.shape_stroke_mm(0.0);
     doc.panel_ctx
         .pre_placement
         .as_ref()
@@ -58,7 +59,7 @@ fn pre_placement_shape(
             };
             (w, pp.shape_fill)
         })
-        .unwrap_or((default_mm, signex_types::schematic::FillType::None))
+        .unwrap_or((default_mm, defaults.shape_fill))
 }
 
 impl Signex {

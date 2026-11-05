@@ -3,9 +3,11 @@
 
 use std::collections::HashMap;
 
-use iced::widget::{column, container, text, text_input};
+use iced::widget::{column, container, pick_list, text, text_input};
 use iced::{Element, Length, Widget};
+use signex_types::net_class::NetLineStyle;
 use signex_types::project::SchematicDefaultField;
+use signex_types::schematic::FillType;
 use signex_types::theme::ThemeTokens;
 
 use crate::app::Message;
@@ -65,5 +67,79 @@ pub(in crate::app::project_tab) fn view<'a>(
     .padding(sp.s)
     .width(Length::Fill);
     body = body.push(labelled("Font", font, tokens));
+    let line = pick_list(
+        Some(LineChoice(overrides.wire_line_style)),
+        LineChoice::ALL,
+        LineChoice::to_string,
+    )
+    .on_select(move |choice: LineChoice| {
+        tab_message(ProjectTabMsg::SchematicDefaultLineStylePicked {
+            project_id,
+            line: choice.0,
+        })
+    })
+    .text_size(ts.label)
+    .width(Length::Fill);
+    body = body.push(labelled("Wire line style", line, tokens));
+    let fill = pick_list(
+        Some(FillChoice(overrides.shape_fill)),
+        FillChoice::ALL,
+        FillChoice::to_string,
+    )
+    .on_select(move |choice: FillChoice| {
+        tab_message(ProjectTabMsg::SchematicDefaultShapeFillPicked {
+            project_id,
+            fill: choice.0,
+        })
+    })
+    .text_size(ts.label)
+    .width(Length::Fill);
+    body = body.push(labelled("New shape fill", fill, tokens));
     container(body).padding([sp.xl, sp.xl]).boxed()
+}
+
+/// A wire line style choice; `None` is the built-in Solid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LineChoice(Option<NetLineStyle>);
+
+impl LineChoice {
+    const ALL: [Self; 4] = [
+        Self(None),
+        Self(Some(NetLineStyle::Solid)),
+        Self(Some(NetLineStyle::Dashed)),
+        Self(Some(NetLineStyle::Dotted)),
+    ];
+}
+
+impl std::fmt::Display for LineChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(line) => f.write_str(line.label()),
+            None => f.write_str("Built-in (Solid)"),
+        }
+    }
+}
+
+/// A new-shape fill choice; `None` is the built-in no fill.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FillChoice(Option<FillType>);
+
+impl FillChoice {
+    const ALL: [Self; 4] = [
+        Self(None),
+        Self(Some(FillType::None)),
+        Self(Some(FillType::Outline)),
+        Self(Some(FillType::Background)),
+    ];
+}
+
+impl std::fmt::Display for FillChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self.0 {
+            None => "Built-in (No fill)",
+            Some(FillType::None) => "No fill",
+            Some(FillType::Outline) => "Outline colour",
+            Some(FillType::Background) => "Background colour",
+        })
+    }
 }

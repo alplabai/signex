@@ -174,3 +174,58 @@ fn a_defaults_change_rebuilds_the_cached_scene_once() {
     assert_eq!(build(project()), 2, "the project default changed");
     assert_eq!(build(project()), 2);
 }
+
+/// #2026: a project line style strokes a classless wire on the canvas and
+/// in export alike.
+#[test]
+fn a_project_line_style_dashes_the_wire_on_canvas_and_in_export() {
+    use signex_types::net_class::NetLineStyle;
+    let dashed = SchematicDefaults {
+        wire_line_style: NetLineStyle::Dashed,
+        ..SchematicDefaults::BUILT_IN
+    };
+    let canvas = |defaults| {
+        build_renderer_snapshot(
+            &sheet(),
+            &transform(),
+            &canvas_colors(ThemeId::Signex),
+            bounds(),
+            None,
+            SceneOverrides {
+                defaults,
+                ..SceneOverrides::default()
+            },
+        )
+        .wire_line_styles
+        .get(&renderer_id(WIRE))
+        .copied()
+    };
+    assert_eq!(canvas(SchematicDefaults::BUILT_IN), None, "solid");
+    assert_eq!(canvas(dashed), Some(NetLineStyle::Dashed));
+
+    let export_segments = |defaults| {
+        let snapshot = SheetSnapshot {
+            path: "t.snxsch".into(),
+            schematic: sheet(),
+            sheet_name: "t".into(),
+            sheet_number: 1,
+            sheet_count: 1,
+            placement: Default::default(),
+        };
+        let opts = PdfOptions {
+            schematic_defaults: defaults,
+            ..PdfOptions::default()
+        };
+        let page = SvgRenderContext::from_sheet(&snapshot, &opts, 297.0, 210.0, 1.0, None);
+        match &page.elements[2] {
+            SvgElement::Path { commands, .. } => commands.len(),
+            SvgElement::Text { .. } => panic!("a path"),
+        }
+    };
+    assert_eq!(
+        export_segments(SchematicDefaults::BUILT_IN),
+        2,
+        "one solid segment"
+    );
+    assert!(export_segments(dashed) > 2, "dashes");
+}

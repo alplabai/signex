@@ -96,6 +96,18 @@ impl Signex {
                     ProjectGeneralCommand::SetSchematicDefaultFont(Some(text)),
                 );
             }
+            ProjectTabMsg::SchematicDefaultLineStylePicked { project_id, line } => {
+                self.apply_project_general(
+                    project_id,
+                    ProjectGeneralCommand::SetSchematicDefaultLineStyle(line),
+                );
+            }
+            ProjectTabMsg::SchematicDefaultShapeFillPicked { project_id, fill } => {
+                self.apply_project_general(
+                    project_id,
+                    ProjectGeneralCommand::SetSchematicDefaultShapeFill(fill),
+                );
+            }
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
