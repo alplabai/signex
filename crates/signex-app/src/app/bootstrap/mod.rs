@@ -52,7 +52,7 @@ impl Signex {
             {
                 return notice.title.clone();
             }
-            return crate::app::view::detached_title::detached_modal_title(*modal).to_owned();
+            return self.detached_modal_title(*modal);
         }
         let version = env!("CARGO_PKG_VERSION");
         let dirty_count = self.document_state.dirty_document_count();

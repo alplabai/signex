@@ -101,7 +101,9 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
+    let disabled = on_press.is_none();
     let color = match kind {
+        _ if disabled => ti(tokens.text_secondary),
         DialogButtonKind::Primary => tokens::on_accent(tokens),
         DialogButtonKind::Secondary => ti(tokens.text),
         DialogButtonKind::Danger => tokens::danger(tokens),
@@ -121,11 +123,36 @@ pub fn dialog_button<'a, M: Clone + 'a>(
         .height(Length::Fixed(TS.body * BUTTON_HEIGHT_EM))
         .on_press_maybe(on_press);
     match kind {
+        _ if disabled => btn.style(disabled_button(tokens)),
         DialogButtonKind::Primary => btn.style(accent_button(tokens)),
         DialogButtonKind::Secondary => btn.style(outline_button(tokens)),
         DialogButtonKind::Danger => btn.style(danger_button(tokens)),
     }
     .boxed()
+}
+
+/// A button without an action: no fill, a half-strength border, the muted
+/// label set by [`dialog_button`]. The same for every role, so none reads as
+/// clickable.
+fn disabled_button(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let border = iced::Color {
+        a: 0.5,
+        ..ti(tokens.border)
+    };
+    let text = ti(tokens.text_secondary);
+    move |_: &Theme, _: button::Status| button::Style {
+        background: None,
+        text_color: text,
+        border: Border {
+            width: 1.0,
+            radius: RADIUS.into(),
+            color: border,
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
 }
 
 /// Right-aligned button row with the standard gaps and padding.

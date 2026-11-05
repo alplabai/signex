@@ -33,14 +33,14 @@ impl Signex {
         let err_red = crate::styles::tokens::danger(tokens);
 
         let mut buttons = notice_choice_buttons(notice, tokens);
-        let ok_label = if buttons.is_empty() { "OK" } else { "Cancel" };
+        let (ok_label, ok_kind) = if buttons.is_empty() {
+            ("OK", DialogButtonKind::Primary)
+        } else {
+            ("Cancel", DialogButtonKind::Secondary)
+        };
         buttons.push(dialog_button(
             ok_label,
-            if ok_label == "OK" {
-                DialogButtonKind::Primary
-            } else {
-                DialogButtonKind::Secondary
-            },
+            ok_kind,
             Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
             tokens,
         ));
@@ -387,7 +387,7 @@ fn notice_choice_buttons<'a>(
         DiskDrift::Changed => vec![
             choice(
                 "Reload from disk",
-                DialogButtonKind::Primary,
+                DialogButtonKind::Danger,
                 OverlayMsg::DiskConflictReloadChosen,
             ),
             choice(

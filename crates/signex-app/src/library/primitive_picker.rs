@@ -224,6 +224,17 @@ fn row_button<'a>(
     .boxed()
 }
 
+/// Title of the picker for `kind`; the native window title of a detached
+/// picker reads the same.
+pub(crate) fn title(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => "Pick Symbol",
+        PrimitiveKind::Footprint => "Pick Footprint",
+        PrimitiveKind::Sim => "Pick Sim Model",
+        _ => "Pick Primitive",
+    }
+}
+
 pub fn view<'a>(
     state: &'a LibraryState,
     picker: &'a PrimitivePickerState,
@@ -234,15 +245,8 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let hover = crate::styles::tokens::hover_overlay(tokens);
 
-    let title = match picker.kind {
-        PrimitiveKind::Symbol => "Pick Symbol",
-        PrimitiveKind::Footprint => "Pick Footprint",
-        PrimitiveKind::Sim => "Pick Sim Model",
-        _ => "Pick Primitive",
-    };
-
     let header = header(
-        title,
+        title(picker.kind),
         LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
         windowed,
         tokens,

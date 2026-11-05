@@ -225,8 +225,55 @@ fn head_reach_mm(style: PowerPortStyle) -> f64 {
 /// hangs on.
 #[must_use]
 pub fn power_port_value_field(lib_id: &str, at: Point) -> TextProp {
-    let style = PowerPortStyle::of(lib_id);
-    let reach = head_reach_mm(style) + VALUE_GAP_MM;
+    power_port_value_field_for(&power_port_lib_symbol(lib_id), at)
+}
+
+/// How far the entry `lib` reaches past the connection point along its stem,
+/// mm, read from its own pin and graphics. An entry without geometry reaches
+/// as far as the built-in head of its style.
+fn lib_head_reach_mm(lib: &LibSymbol, style: PowerPortStyle) -> f64 {
+    // Library space is Y-up; the grounds hang to negative y.
+    let dir = if style.hangs_down() { -1.0 } else { 1.0 };
+    let mut reach: f64 = 0.0;
+    let mut take = |y: f64| reach = reach.max(dir * y);
+    for lib_graphic in &lib.graphics {
+        match &lib_graphic.graphic {
+            Graphic::Polyline { points, .. } => points.iter().for_each(|p| take(p.y)),
+            Graphic::Rectangle { start, end, .. } => {
+                take(start.y);
+                take(end.y);
+            }
+            Graphic::Circle { center, radius, .. } => {
+                take(center.y + radius);
+                take(center.y - radius);
+            }
+            Graphic::Arc {
+                start, mid, end, ..
+            } => {
+                take(start.y);
+                take(mid.y);
+                take(end.y);
+            }
+            _ => {}
+        }
+    }
+    for lib_pin in &lib.pins {
+        let pin = &lib_pin.pin;
+        take(pin.position.y + pin.length * pin.rotation.to_radians().sin());
+    }
+    if reach > 0.0 {
+        reach
+    } else {
+        head_reach_mm(style)
+    }
+}
+
+/// [`power_port_value_field`] for the entry the sheet actually holds for the
+/// port: the text clears that entry's head, whatever its geometry.
+#[must_use]
+pub fn power_port_value_field_for(lib: &LibSymbol, at: Point) -> TextProp {
+    let style = PowerPortStyle::of(&lib.id);
+    let reach = lib_head_reach_mm(lib, style) + VALUE_GAP_MM;
     // Schematic space is Y-down: a rising head is at smaller y.
     let (dy, justify_v) = if style.hangs_down() {
         (reach, VAlign::Top)
@@ -421,6 +468,38 @@ mod tests {
                 format!("{:?}", crate::schematic::primitives_bounds(&lowered)),
                 format!("{:?}", crate::schematic::primitives_bounds(&fallback)),
                 "{lib_id}"
+            );
+        }
+    }
+
+    /// A port placed on a sheet that holds an older, shorter entry (1.27 mm
+    /// stem) puts its Value text beyond that entry's head, not the new one's.
+    #[test]
+    fn value_text_follows_the_entry_the_sheet_holds() {
+        for style in PowerPortStyle::ALL {
+            let lib_id = format!("power:{}", style.lib_tag());
+            let mut old = power_port_lib_symbol(&lib_id);
+            let dir = if style.hangs_down() { -1.0 } else { 1.0 };
+            old.graphics.clear();
+            old.pins[0].pin.length = 1.27;
+            old.graphics.push(LibGraphic {
+                unit: 0,
+                body_style: 1,
+                graphic: line((-1.0, dir * 1.27), (1.0, dir * 1.27)),
+            });
+            let at = Point::new(10.0, 20.0);
+            let value = power_port_value_field_for(&old, at);
+            let expected = 1.27 + VALUE_GAP_MM;
+            let dy = if style.hangs_down() {
+                expected
+            } else {
+                -expected
+            };
+            assert!((value.position.y - (at.y + dy)).abs() < 1e-9, "{lib_id}");
+            let built_in = power_port_value_field(&lib_id, at);
+            assert!(
+                (built_in.position.y - at.y).abs() > expected,
+                "{lib_id}: the built-in entry reaches further"
             );
         }
     }

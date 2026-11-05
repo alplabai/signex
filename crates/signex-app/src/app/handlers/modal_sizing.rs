@@ -17,7 +17,7 @@ const ROW_HEIGHT: f32 = 24.5;
 /// box chrome, footer buttons and the dialog padding.
 const LIST_DIALOG_BASE: f32 = 98.0;
 /// One extra note line (kept documents, refresh notice, blocked discard).
-const NOTE_HEIGHT: f32 = 25.0;
+pub(crate) const NOTE_HEIGHT: f32 = 25.0;
 /// Height of one line of message text, and the lines shown before it scrolls.
 const MESSAGE_LINE: f32 = 16.0;
 const MESSAGE_MAX: f32 = 200.0;

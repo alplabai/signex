@@ -830,6 +830,7 @@ pub use hotspot::{
 mod power_port_symbol;
 pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
+    power_port_value_field_for,
 };
 mod pin_pick;
 pub use pin_pick::{

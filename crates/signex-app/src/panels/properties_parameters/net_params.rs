@@ -141,7 +141,7 @@ pub fn empty_section_row<'a>(
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     container(
-        container(text(label.to_string()).size(TS.body).color(label_c))
+        container(text(label.to_string()).size(TS.caption).color(label_c))
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
     )
@@ -166,7 +166,7 @@ pub fn net_params_add_bar<'a>(
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
-        iced::widget::button(text(label.to_string()).size(TS.body).color(label_c))
+        iced::widget::button(text(label.to_string()).size(TS.caption).color(label_c))
             .padding([SP.s, SP.m])
             .on_press(PanelMsg::Noop)
             .style(move |_: &Theme, _| iced::widget::button::Style {

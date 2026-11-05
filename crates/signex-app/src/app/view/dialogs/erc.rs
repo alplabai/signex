@@ -302,7 +302,7 @@ impl Signex {
                     row![
                         dialog_button(
                             "Overwrite",
-                            DialogButtonKind::Primary,
+                            DialogButtonKind::Danger,
                             (!dialog.busy)
                                 .then_some(Message::Erc(ErcMsg::ProfileSaveOverwriteConfirmed)),
                             tokens,

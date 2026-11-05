@@ -32,6 +32,19 @@ use super::state::{PickerMode, PickerState};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+pub(crate) const TITLE_CHANGE_COMPONENT: &str = "Change Component";
+pub(crate) const TITLE_OPEN_DATASHEET: &str = "Open Datasheet";
+
+/// Title of the picker modal's current stage; the native window title of
+/// a detached picker reads the same.
+pub(crate) fn title(mode: &PickerMode) -> &'static str {
+    match mode {
+        PickerMode::Place => "Place Component",
+        PickerMode::ChangeComponent(_) | PickerMode::ChangePreview(_) => TITLE_CHANGE_COMPONENT,
+        PickerMode::Datasheets(_) => TITLE_OPEN_DATASHEET,
+    }
+}
+
 const PICKER_W: f32 = 720.0;
 const PICKER_H: f32 = 480.0;
 
@@ -54,11 +67,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
 
     let header = header(
-        if changing {
-            "Change Component"
-        } else {
-            "Place Component"
-        },
+        title(&picker.mode),
         LibraryMessage::ClosePicker,
         windowed,
         tokens,

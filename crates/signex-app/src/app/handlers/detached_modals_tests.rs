@@ -552,6 +552,46 @@ fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
     );
 }
 
+/// Copy to Library with no writable library grows by one note line for each
+/// note shown (an unavailable previous library, an error), and the notes
+/// stay above the footer.
+#[test]
+fn copy_to_library_notes_each_add_a_line_and_stay_above_the_footer() {
+    let height_with = |previous: bool, error: bool| {
+        let (mut app, _main) = test_app();
+        open(&mut app, ModalId::LibraryStockCopy);
+        if let Some(copy) = app.library.stock_copy.as_mut() {
+            copy.previous_unavailable = previous.then(|| "/gone/Gone.snxlib".into());
+            copy.error = error.then(|| "The copy could not be written".to_owned());
+        }
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
+        let size = app.modal_window_size(ModalId::LibraryStockCopy);
+        let texts = lay_out_texts(app.view(id), size);
+        let footer_top = texts
+            .iter()
+            .filter(|t| t.text == "Cancel")
+            .map(|t| t.bounds.y)
+            .fold(f32::MAX, f32::min);
+        let above = texts
+            .iter()
+            .filter(|t| t.text != "Cancel" && t.bounds.y < footer_top)
+            .map(|t| t.bounds.y + t.bounds.height)
+            .fold(0.0_f32, f32::max);
+        assert!(above <= footer_top, "a note overlaps the footer");
+        (size.height, app.ui_state.ui_scale)
+    };
+    let (none, scale) = height_with(false, false);
+    let (one, _) = height_with(false, true);
+    let (two, _) = height_with(true, true);
+    let line = crate::app::handlers::modal_sizing::NOTE_HEIGHT * scale;
+    assert!(
+        (one - none - line).abs() <= 2.0,
+        "one note: {none} -> {one}"
+    );
+    assert!((two - one - line).abs() <= 2.0, "two notes: {one} -> {two}");
+}
+
 fn quit_with_rows(rows: usize) -> (Signex, iced::window::Id) {
     let (mut app, _main) = test_app();
     app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
@@ -707,6 +747,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
                     | ModalId::RemoveDialog
                     | ModalId::RenameDialog
                     | ModalId::CreateChildSheet
+                    | ModalId::NetColorCustom
             ) {
                 let right = lay_out_texts(app.view(id), size)
                     .iter()

@@ -79,7 +79,8 @@ impl Signex {
             .unwrap_or_else(|| offer.path.display().to_string());
         let mut body = column![dialog_message(
             format!(
-                "Signex found a recovery copy of {name} written {} that differs from the                  saved file.",
+                "Signex found a recovery copy of {name} written {} that differs from the \
+                 saved file.",
                 describe_age(offer.age_secs)
             ),
             tokens,
@@ -88,7 +89,8 @@ impl Signex {
         if offer.older_than_file {
             body = body.push(
                 text(format!(
-                    "{name} was saved after this copy was written. Restore replaces that                      newer saved work in the editor with the older copy."
+                    "{name} was saved after this copy was written. Restore replaces that \
+                     newer saved work in the editor with the older copy."
                 ))
                 .size(TS.body)
                 .color(crate::styles::ti(tokens.warning))
@@ -96,7 +98,11 @@ impl Signex {
             );
         }
         body = body.push(dialog_hint(
-            "Restore loads the copy as unsaved edits; nothing is written to the file until              you save. Restoring replaces the open document and cannot be undone with              Ctrl+Z. Discard deletes the copy. Decide later keeps it for the next time              this file is opened, and pauses autosave for this document for the rest of the              session.",
+            "Restore loads the copy as unsaved edits; nothing is written to the file until \
+                 you save. Restoring replaces the open document and cannot be undone with \
+                 Ctrl+Z. Discard deletes the copy. Decide later keeps it for the next time \
+                 this file is opened, and pauses autosave for this document for the rest of the \
+                 session.",
             tokens,
         ));
 

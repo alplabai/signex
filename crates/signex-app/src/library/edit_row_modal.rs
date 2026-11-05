@@ -310,7 +310,12 @@ pub fn view<'a>(
             text("Discard your edits and reload?")
                 .size(TS.body)
                 .color(text_c),
-            plain_btn("Reload", BrowserEditMsg::ReloadConfirmed),
+            crate::styles::dialog_button(
+                "Reload",
+                crate::styles::DialogButtonKind::Danger,
+                Some(send.clone()(BrowserEditMsg::ReloadConfirmed)),
+                tokens,
+            ),
             plain_btn("Keep editing", BrowserEditMsg::ReloadCancelled),
         ]
         .spacing(SP.s)

@@ -72,6 +72,13 @@ a built-in one are the same size (2.54 mm stem, #2091). Their committed
 files were edited in place to match the generator, which keeps any other
 edit made in Signex.
 
+No symbol version was bumped for it, for the reason given under Chip
+passives below: drift is decided by content hash, not by version. A sheet
+that embedded a copy of one of the four from the Stock library reads it as
+drifted, which is correct since the library changed, and shows the library
+update notice for it. A placed port keeps connecting: its tip stays at the
+origin and the sheet's own entry wins.
+
 ## Chip passives
 
 R, C, L, Ferrite and Fuse default to `Chip-0805`; D, D_Schottky, D_Zener

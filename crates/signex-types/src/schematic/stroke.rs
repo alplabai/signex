@@ -39,14 +39,12 @@ const _: () = assert!(SCHEMATIC_MIN_STROKE_DEVICE_PX >= 1.0);
 /// headless draws): the floor and snap then work in logical pixels.
 pub const UNSCALED_DEVICE_PX_PER_LOGICAL_PX: f32 = 1.0;
 
-/// The one stored-stroke rule (#2091): `0` draws at 0.254 mm, an explicit
-/// width is floored at 0.15 mm. Drawings, symbol graphics, pins, child sheet
-/// frames and wires all resolve through this (wires via [`wire_stroke_mm`]).
-/// Fixed-width kinds (bus, no-connect, label marker) are not stored strokes.
-///
-/// The world width a symbol stroke (outline or pin) stored as `width_mm` draws
-/// at: a `0` or non-finite width is the default, [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`]
-/// (#2025); an explicit width is raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`].
+/// The one stored-stroke rule (#2091, #2025): a `0` or non-finite `width_mm`
+/// draws at [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`] (0.254 mm), an explicit
+/// width is raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`] (0.15 mm).
+/// Drawings, symbol graphics, pins, child sheet frames and wires all resolve
+/// through this (wires via [`wire_stroke_mm`]). Fixed-width kinds (bus,
+/// no-connect, label marker) are not stored strokes.
 #[must_use]
 pub fn symbol_graphic_stroke_mm(width_mm: f64) -> f64 {
     if width_mm.is_finite() && width_mm > 0.0 {

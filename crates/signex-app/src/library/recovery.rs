@@ -111,6 +111,32 @@ pub enum BrokenBindingChoice {
     Cancel,
 }
 
+/// Title of the recovery dialog; the native window title of a detached one
+/// reads the same.
+const TITLE_LIBRARY_MISSING: &str = "Library Missing";
+const TITLE_GIT_MISSING: &str = "Git Repository Missing";
+
+pub(crate) fn title(dialog: &RecoveryDialog) -> String {
+    match dialog {
+        RecoveryDialog::LibraryMissing { .. } => TITLE_LIBRARY_MISSING.to_owned(),
+        RecoveryDialog::GitMissing { .. } => TITLE_GIT_MISSING.to_owned(),
+        RecoveryDialog::BrokenPrimitiveBinding { kind, .. } => {
+            format!("Broken {} Binding", binding_kind_label(*kind))
+        }
+    }
+}
+
+fn binding_kind_label(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => "Symbol",
+        PrimitiveKind::Footprint => "Footprint",
+        PrimitiveKind::Sim => "Sim Model",
+        // PrimitiveKind is #[non_exhaustive]; future variants render
+        // generically until the dialog gets a per-kind override.
+        _ => "Primitive",
+    }
+}
+
 /// Render the active recovery dialog.
 pub fn view<'a>(
     dialog: &'a RecoveryDialog,
@@ -148,7 +174,7 @@ fn library_missing_view<'a>(
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let header = header(
-        "Library Missing",
+        TITLE_LIBRARY_MISSING,
         LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
         windowed,
         tokens,
@@ -205,7 +231,7 @@ fn git_missing_view<'a>(
     let danger = theme_ext::error_color(tokens);
 
     let header = header(
-        "Git Repository Missing",
+        TITLE_GIT_MISSING,
         LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
         windowed,
         tokens,
@@ -309,14 +335,7 @@ fn broken_binding_view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let kind_label = match kind {
-        PrimitiveKind::Symbol => "Symbol",
-        PrimitiveKind::Footprint => "Footprint",
-        PrimitiveKind::Sim => "Sim Model",
-        // PrimitiveKind is #[non_exhaustive]; future variants render
-        // generically until the dialog gets a per-kind override.
-        _ => "Primitive",
-    };
+    let kind_label = binding_kind_label(kind);
 
     let header = header(
         &format!("Broken {} Binding", kind_label),

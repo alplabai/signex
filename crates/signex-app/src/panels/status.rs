@@ -182,15 +182,15 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .color(theme_ext::text_primary(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
             text(format!("{errors} errors"))
-                .size(TS.body)
+                .size(TS.caption)
                 .color(theme_ext::error_color(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
             text(format!("{warnings} warnings"))
-                .size(TS.body)
+                .size(TS.caption)
                 .color(theme_ext::warning_color(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
             text(format!("{infos} info"))
-                .size(TS.body)
+                .size(TS.caption)
                 .color(theme_ext::accent(&ctx.tokens)),
             Space::new().width(Length::Fill).height(Length::Shrink),
             iced::widget::button(text("<").size(TS.body))
@@ -367,7 +367,7 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             row![
                 text(format!("{}  net {}  ({note})", w.rule_id, w.net))
-                    .size(TS.body)
+                    .size(TS.caption)
                     .color(muted),
                 Space::new().width(Length::Fill).height(Length::Shrink),
                 iced::widget::button(
@@ -501,7 +501,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             .width(Length::Fixed(64.0)),
                         container(cell(entry.code.as_str().to_string(), muted, TS.body))
                             .width(Length::Fixed(180.0)),
-                        container(cell(entry.message.as_str().to_string(), primary, 12.0))
+                        container(cell(entry.message.as_str().to_string(), primary, TS.body))
                             .width(Length::Fill),
                     ]
                     .align_y(iced::Alignment::Center),

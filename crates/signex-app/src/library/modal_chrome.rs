@@ -67,7 +67,7 @@ fn header_strip<'a>(
             )
             .padding([6, 14])
             .boxed(),
-            _ => Space::new().height(0).boxed(),
+            HeaderEnd::Nothing | HeaderEnd::Close(_) => Space::new().height(0).boxed(),
         };
     }
     let mut line = row![

@@ -589,7 +589,6 @@ impl Signex {
                         signex_engine::AnnotateMode::ResetAndRenumber,
                     ))),
                 ),
-                secondary("Close", Some(Message::Annotate(AnnotateMsg::CloseDialog))),
                 dialog_button(
                     "Accept Changes",
                     DialogButtonKind::Primary,
@@ -602,6 +601,7 @@ impl Signex {
                     },
                     tokens,
                 ),
+                secondary("Close", Some(Message::Annotate(AnnotateMsg::CloseDialog))),
             ],
         );
 
@@ -710,7 +710,7 @@ This cannot be undone through Ctrl+Z alone — consider saving first.",
                     ),
                     dialog_button(
                         "Reset & Renumber",
-                        DialogButtonKind::Primary,
+                        DialogButtonKind::Danger,
                         (!self.ui_state.annotate_runs.is_running()).then_some(Message::Annotate(
                             AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber),
                         )),

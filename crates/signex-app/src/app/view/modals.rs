@@ -496,16 +496,17 @@ impl Signex {
             ),
         ]);
 
+        let windowed = self.modal_detached(crate::app::state::ModalId::NetColorCustom);
         let card = container(
             column![self.net_color_custom_header(), dialog_body(body), footer,]
-                .width(iced::Length::Fixed(430.0)),
+                .width(crate::library::card_len(windowed, 430.0)),
         )
         .style(crate::styles::context_menu(
             &self.document_state.panel_ctx.tokens,
         ));
 
         // In its own window the card is the dialog: flat surface, no anchor.
-        if self.modal_detached(crate::app::state::ModalId::NetColorCustom) {
+        if windowed {
             return card
                 .style(crate::styles::modal_card(
                     &self.document_state.panel_ctx.tokens,

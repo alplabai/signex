@@ -198,7 +198,7 @@ pub fn change_preview_view<'a>(
         ),
     ];
     card(
-        "Change Component",
+        crate::library::picker::TITLE_CHANGE_COMPONENT,
         scrollable(lines).width(Length::Fill).boxed(),
         buttons,
         tokens,
@@ -231,7 +231,7 @@ pub fn datasheet_choice_view<'a>(
     }
     let buttons = vec![secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens)];
     card(
-        "Open Datasheet",
+        crate::library::picker::TITLE_OPEN_DATASHEET,
         scrollable(list).width(Length::Fill).boxed(),
         buttons,
         tokens,
