@@ -76,14 +76,15 @@ impl Signex {
                     PrimitiveKind::Sim => ("Pick Sim Model (*.snxsim)", "snxsim"),
                     _ => ("Pick Primitive", ""),
                 };
+                let picker = self.ui_state.io.picker.clone();
                 Task::perform(
                     async move {
-                        rfd::AsyncFileDialog::new()
+                        picker
+                            .dialog()
                             .set_title(label)
                             .add_filter(ext, &[ext])
                             .pick_file()
                             .await
-                            .map(|f| f.path().to_path_buf())
                     },
                     |path| {
                         Message::Library(LibraryMessage::PrimitivePicker(

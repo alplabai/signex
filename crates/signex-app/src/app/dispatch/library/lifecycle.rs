@@ -7,16 +7,17 @@
 use super::*;
 
 impl Signex {
-    /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog` on
+    /// File ▸ Library ▸ Open Library… — runs the file picker on
     /// the directory level and lands in [`LibraryMessage::OpenLibraryAt`].
     pub(super) fn handle_open_library_dialog(&mut self) -> Task<Message> {
+        let picker = self.ui_state.io.picker.clone();
         Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
+            async move {
+                picker
+                    .dialog()
                     .set_title("Open Library (*.snxlib/)")
                     .pick_folder()
                     .await
-                    .map(|f| f.path().to_path_buf())
             },
             |path| Message::Library(LibraryMessage::OpenLibraryAt(path)),
         )

@@ -387,6 +387,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_discarded_tasks.sh
 
+      # Only the native adapter (crates/signex-app/src/io_ports/native.rs) may
+      # open a file dialog, a browser or a launcher; a headless run answers
+      # dialogs from arguments and refuses launches (#1931). Hard gate.
+      - name: Native-side-effect gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_io_ports.sh
+
+      - name: Native-side-effect gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_io_ports.sh
+
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its
       # own `[lints.clippy] let_underscore_must_use` that the workspace

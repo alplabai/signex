@@ -92,7 +92,7 @@ impl Signex {
             return Task::none();
         };
         let address = address.clone();
-        Task::perform(pick_pdf(), move |file| {
+        Task::perform(pick_pdf(self.ui_state.io.picker.clone()), move |file| {
             Message::Library(LibraryMessage::EditorEvent {
                 library_path: address.library_path.clone(),
                 table: address.table.clone(),
@@ -140,6 +140,7 @@ impl Signex {
             location,
             part,
             self.library.datasheet_opener,
+            self.ui_state.io.opener,
         )
     }
 
@@ -390,20 +391,27 @@ impl Signex {
 
 /// The file dialog, then the read and the validation of the chosen file.
 /// `None` when the dialog is cancelled.
-async fn pick_pdf() -> Option<Result<PickedFile, String>> {
-    let handle = rfd::AsyncFileDialog::new()
+async fn pick_pdf(picker: crate::io_ports::Picker) -> Option<Result<PickedFile, String>> {
+    let path = picker
+        .dialog()
         .set_title("Pin datasheet PDF")
         .add_filter("PDF", &["pdf"])
         .pick_file()
         .await?;
-    let filename = handle.file_name();
+    let filename = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
     // Refused from the file's size, before it is read into memory.
-    if let Ok(meta) = tokio::fs::metadata(handle.path()).await
+    if let Ok(meta) = tokio::fs::metadata(&path).await
         && let Err(reason) = refuse_oversize(meta.len(), &filename)
     {
         return Some(Err(reason));
     }
-    let bytes = handle.read().await;
+    let bytes = match tokio::fs::read(&path).await {
+        Ok(bytes) => bytes,
+        Err(error) => return Some(Err(format!("{filename} could not be read: {error}"))),
+    };
     let checked = tokio::task::spawn_blocking(move || picked_file(bytes, filename))
         .await
         .unwrap_or_else(|join_error| Err(format!("the PDF check failed: {join_error}")));

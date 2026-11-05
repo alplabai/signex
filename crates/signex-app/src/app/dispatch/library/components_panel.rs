@@ -367,13 +367,14 @@ impl Signex {
         // Open `*.snxlib` directory picker — landing message is
         // `ComponentsPanelAddLibraryAt` so the dispatcher knows
         // which source bucket the result belongs to.
+        let picker = self.ui_state.io.picker.clone();
         Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
+            async move {
+                picker
+                    .dialog()
                     .set_title("Add Library (*.snxlib)")
                     .pick_folder()
                     .await
-                    .map(|f| f.path().to_path_buf())
             },
             move |path| {
                 Message::Library(LibraryMessage::ComponentsPanelAddLibraryAt { source, path })

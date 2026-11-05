@@ -276,9 +276,12 @@ impl Signex {
                     self.tree_path_to_file_path(&tree_path)
                 };
                 if let Some(path) = target
-                    && let Err(err) = reveal_in_file_manager(&path)
+                    && let Err(err) = self.ui_state.io.opener.reveal(&path)
                 {
-                    crate::diagnostics::log_error("Failed to reveal in file manager", &err);
+                    crate::diagnostics::log_error(
+                        "Failed to reveal in file manager",
+                        &anyhow::anyhow!("{err}"),
+                    );
                 }
             }
             ProjectTreeAction::PrintActive => {
@@ -347,63 +350,6 @@ fn set_expanded_recursive(nodes: &mut [signex_widgets::tree_view::TreeNode], exp
     for node in nodes {
         node.expanded = expanded;
         set_expanded_recursive(&mut node.children, expanded);
-    }
-}
-
-/// Open the OS file manager at `path`, selecting the file when the
-/// platform supports it (Windows `explorer /select,` and macOS `open
-/// -R`). Linux/Unix fallback uses `xdg-open` on the parent directory
-/// since most file managers don't accept a select-file argument.
-fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
-    use std::process::Command;
-
-    #[cfg(target_os = "windows")]
-    {
-        // `explorer /select,<path>` opens the containing folder with the
-        // file highlighted. If the path is a directory, explorer.exe
-        // just opens it. Use a trailing comma so paths with spaces are
-        // interpreted as a single argument.
-        let arg = if path.is_dir() {
-            path.as_os_str().to_owned()
-        } else {
-            let mut s = std::ffi::OsString::from("/select,");
-            s.push(path.as_os_str());
-            s
-        };
-        Command::new("explorer")
-            .arg(arg)
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("explorer.exe failed to spawn: {e}"))?;
-        Ok(())
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // `open -R <path>` reveals the file in Finder; plain `open
-        // <dir>` opens a directory.
-        let mut cmd = Command::new("open");
-        if path.is_file() {
-            cmd.arg("-R");
-        }
-        cmd.arg(path)
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("open failed to spawn: {e}"))?;
-        Ok(())
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        // Linux / BSD: fall back to xdg-open on the parent directory.
-        let target = if path.is_file() {
-            path.parent().unwrap_or(path)
-        } else {
-            path
-        };
-        Command::new("xdg-open")
-            .arg(target)
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("xdg-open failed to spawn: {e}"))?;
-        Ok(())
     }
 }
 

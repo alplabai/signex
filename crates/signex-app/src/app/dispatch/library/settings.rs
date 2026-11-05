@@ -55,6 +55,7 @@ impl Signex {
                 let (client_id, client_secret) = digikey_oauth::read_env_credentials();
                 let auth_url = DIGIKEY_AUTH_URL.to_string();
                 let token_url = DIGIKEY_TOKEN_URL.to_string();
+                let opener = self.ui_state.io.opener;
                 return Task::perform(
                     async move {
                         let cancel = digikey_oauth::CancelHandle::from_flag(cancel_flag);
@@ -65,7 +66,7 @@ impl Signex {
                                 auth_url,
                                 token_url,
                                 cancel,
-                                true,
+                                Some(opener),
                             )
                         })
                         .await

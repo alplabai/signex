@@ -239,6 +239,7 @@ impl Signex {
         };
         let (filter_label, filter_exts) = format_filter;
         let target = self.save_target(Some(&source));
+        let picker = self.ui_state.io.picker.clone();
         let default_name_owned = target.file_name("bom", "-bom", ext);
         let filter_label_owned = filter_label.to_string();
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
@@ -254,13 +255,12 @@ impl Signex {
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
                 target
-                    .dialog("Export Bill of Materials")
+                    .dialog(picker, "Export Bill of Materials")
                     .await
                     .add_filter(filter_label_owned.as_str(), &exts_refs)
                     .set_file_name(default_name_owned.as_str())
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             move |path| {
                 Message::Export(ExportMsg::BomFinished {

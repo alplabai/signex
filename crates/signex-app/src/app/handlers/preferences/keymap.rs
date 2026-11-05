@@ -232,20 +232,22 @@ impl Signex {
                 }
             }
             PrefMsg::KeymapImportProfile => {
-                return Task::future(async {
-                    let picked = rfd::AsyncFileDialog::new()
+                let picker = self.ui_state.io.picker.clone();
+                return Task::future(async move {
+                    let picked = picker
+                        .dialog()
                         .set_title("Import Signex Keyboard Shortcuts")
                         .add_filter("Signex Keyboard Shortcuts", &["toml"])
                         .pick_file()
                         .await;
-                    if let Some(f) = picked {
-                        let bytes = f.read().await;
-                        let source = String::from_utf8_lossy(&bytes).to_string();
-                        Message::Preferences(PreferencesMsg::Inner(PrefMsg::KeymapProfileLoaded(
-                            source,
-                        )))
-                    } else {
-                        Message::noop()
+                    let Some(path) = picked else {
+                        return Message::noop();
+                    };
+                    match super::read_picked(&path).await {
+                        Some(source) => Message::Preferences(PreferencesMsg::Inner(
+                            PrefMsg::KeymapProfileLoaded(source),
+                        )),
+                        None => Message::noop(),
                     }
                 });
             }
@@ -281,24 +283,25 @@ impl Signex {
                         // Same reset as the theme export: the status line
                         // must describe this attempt, not the last one.
                         self.ui_state.preferences_keymap_status.clear();
+                        let picker = self.ui_state.io.picker.clone();
                         return Task::future(async move {
-                            let picked = rfd::AsyncFileDialog::new()
+                            let picked = picker
+                                .dialog()
                                 .set_title("Export Signex Keyboard Shortcuts")
                                 .add_filter("Signex Keyboard Shortcuts", &["toml"])
                                 .set_file_name(&filename)
                                 .save_file()
                                 .await;
-                            let Some(f) = picked else {
+                            let Some(path) = picked else {
                                 return Message::noop();
                             };
-                            let path = f.path().to_path_buf();
                             // The serialization failure below already
                             // reported through `preferences_keymap_status`;
                             // the write failure was the half that vanished
                             // (#533). Same `io::Result<()>` shape as the
                             // theme export — see that arm for why there is
                             // no short write to handle.
-                            let outcome = match f.write(source.as_bytes()).await {
+                            let outcome = match tokio::fs::write(&path, source.as_bytes()).await {
                                 Ok(()) => Ok(path),
                                 Err(error) => {
                                     Err(format!("{path}: {error}", path = path.display()))

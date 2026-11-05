@@ -100,7 +100,10 @@ impl Signex {
                 | super::super::super::TabKind::FootprintEditor(path) => {
                     let path = path.clone();
                     if !path.exists() {
-                        return Ok(super::spawn_save_as_for_primitive(path));
+                        return Ok(super::spawn_save_as_for_primitive(
+                            self.ui_state.io.picker.clone(),
+                            path,
+                        ));
                     }
                     // The write runs off the UI thread; the completion logs
                     // it, clears the dirty marker and queues the git commit.

@@ -145,16 +145,17 @@ impl Signex {
             .to_path_buf();
         let project_path = loaded.path.clone();
 
+        let picker = self.ui_state.io.picker.clone();
         Task::perform(
             async move {
-                rfd::AsyncFileDialog::new()
+                picker
+                    .dialog()
                     .set_title("New Component Library")
                     .add_filter("Signex Component Library", &["snxlib"])
                     .set_directory(&dialog_dir)
                     .set_file_name(&suggested_filename)
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             move |picked| match picked {
                 Some(lib_path) => Message::Library(LibraryMessage::CreateLibraryAtPath {

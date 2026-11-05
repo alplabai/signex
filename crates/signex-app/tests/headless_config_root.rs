@@ -208,7 +208,7 @@ fn assert_credentials_unused() {
         "http://127.0.0.1:9/authorize".into(),
         "http://127.0.0.1:9/token".into(),
         cancel,
-        false,
+        None,
     );
     assert!(
         matches!(&connect, digikey_oauth::Outcome::Failed { reason } if reason.contains("keyring")),

@@ -204,11 +204,12 @@ impl Signex {
             return Task::none();
         }
         let target = self.save_target(None);
+        let picker = self.ui_state.io.picker.clone();
         let file_name = target.file_name("erc-report", "-erc-report", "html");
         Task::perform(
             async move {
                 target
-                    .dialog("Export ERC Report")
+                    .dialog(picker, "Export ERC Report")
                     .await
                     .add_filter("HTML (.html)", &["html", "htm"])
                     .add_filter("PDF (.pdf)", &["pdf"])
@@ -218,7 +219,6 @@ impl Signex {
                     .set_file_name(file_name)
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             |path| match path {
                 Some(path) => Message::Export(ExportMsg::ErcReportPathChosen(Ok(path))),

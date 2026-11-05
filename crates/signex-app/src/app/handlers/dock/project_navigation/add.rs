@@ -16,9 +16,11 @@ impl Signex {
         let Some(project_id) = self.project_id_for_tree_path(&tree_path) else {
             return iced::Task::none();
         };
+        let picker = self.ui_state.io.picker.clone();
         iced::Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
+            async move {
+                picker
+                    .dialog()
                     .set_title("Add Existing to Project")
                     .add_filter(
                         "All Supported",
@@ -31,12 +33,6 @@ impl Signex {
                     .add_filter("Signex Footprint", &["snxfpt"])
                     .pick_files()
                     .await
-                    .map(|files| {
-                        files
-                            .into_iter()
-                            .map(|file| file.path().to_path_buf())
-                            .collect::<Vec<_>>()
-                    })
             },
             move |paths| Message::Project(ProjectMsg::AddExistingFilePicked { project_id, paths }),
         )
@@ -60,16 +56,17 @@ impl Signex {
             None => return iced::Task::none(),
         };
         let default_name = unique_name_in(&project_dir, "Sheet", "snxsch");
+        let picker = self.ui_state.io.picker.clone();
         iced::Task::perform(
             async move {
-                rfd::AsyncFileDialog::new()
+                picker
+                    .dialog()
                     .set_title("Add New Schematic to Project")
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
                     .add_filter("Signex Schematic", &["snxsch"])
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             move |path| Message::Project(ProjectMsg::AddNewSchematicPicked { project_id, path }),
         )
@@ -95,16 +92,17 @@ impl Signex {
             None => return iced::Task::none(),
         };
         let default_name = unique_name_in(&project_dir, "SymbolLibrary", "snxsym");
+        let picker = self.ui_state.io.picker.clone();
         iced::Task::perform(
             async move {
-                rfd::AsyncFileDialog::new()
+                picker
+                    .dialog()
                     .set_title("New Symbol Library")
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
                     .add_filter("Signex Symbol Library", &["snxsym"])
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             move |picked| match picked {
                 Some(path) => {
@@ -136,16 +134,17 @@ impl Signex {
             None => return iced::Task::none(),
         };
         let default_name = unique_name_in(&project_dir, "FootprintLibrary", "snxfpt");
+        let picker = self.ui_state.io.picker.clone();
         iced::Task::perform(
             async move {
-                rfd::AsyncFileDialog::new()
+                picker
+                    .dialog()
                     .set_title("New PCB Library")
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
                     .add_filter("Signex Footprint Library", &["snxfpt"])
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             move |picked| match picked {
                 Some(path) => Message::Library(

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::app::Signex;
 use crate::app::state::scope::{CaseFold, path_is_under};
+use crate::io_ports::{FileDialog, Picker};
 
 /// The panels a [`SaveTarget`] starts differently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,24 +85,24 @@ impl SaveTarget {
     }
 
     /// A save panel titled `title`, started in the project folder when known.
-    pub(crate) async fn dialog(self, title: &str) -> rfd::AsyncFileDialog {
-        self.panel(title, Panel::Export).await
+    pub(crate) async fn dialog(self, picker: Picker, title: &str) -> FileDialog {
+        self.panel(picker, title, Panel::Export).await
     }
 
     /// A Save As panel, started in the document's own folder.
-    pub(crate) async fn save_as_dialog(self, title: &str) -> rfd::AsyncFileDialog {
-        self.panel(title, Panel::SaveAs).await
+    pub(crate) async fn save_as_dialog(self, picker: Picker, title: &str) -> FileDialog {
+        self.panel(picker, title, Panel::SaveAs).await
     }
 
     /// A New Project panel, started beside the open project's folder.
-    pub(crate) async fn new_project_dialog(self, title: &str) -> rfd::AsyncFileDialog {
-        self.panel(title, Panel::NewProject).await
+    pub(crate) async fn new_project_dialog(self, picker: Picker, title: &str) -> FileDialog {
+        self.panel(picker, title, Panel::NewProject).await
     }
 
     /// The start folder is resolved on a blocking thread, so a stale network
     /// share cannot stall the UI or the task's executor. The panel still waits
     /// for that decision: a stalled share delays the panel, not the window.
-    async fn panel(self, title: &str, panel: Panel) -> rfd::AsyncFileDialog {
+    async fn panel(self, picker: Picker, title: &str, panel: Panel) -> FileDialog {
         let dir = tokio::task::spawn_blocking(move || self.start_dir(panel))
             .await
             .unwrap_or_else(|e| {
@@ -110,7 +111,7 @@ impl SaveTarget {
                 ));
                 None
             });
-        let dialog = rfd::AsyncFileDialog::new().set_title(title);
+        let dialog = picker.dialog().set_title(title);
         match dir {
             Some(dir) => dialog.set_directory(dir),
             None => dialog,
