@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_app::app::{FileMsg, Message, ProjectCloseChoice, ProjectMsg, Signex, TabInfo, TabKind};
+use signex_app::app::{FileMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::autosave::{AutosaveMsg, sidecar};
 use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{HAlign, Label, LabelType, Point, SchematicSheet, VAlign};
