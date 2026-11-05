@@ -333,12 +333,15 @@ mod primitive_save_cascade;
 mod reload_and_switch_state;
 #[path = "regression/save_all_menu.rs"]
 mod save_all_menu;
+
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
 #[path = "regression/symbol_body_style.rs"]
 mod symbol_body_style;
+#[path = "regression/text_extents_save.rs"]
+mod text_extents_save;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
