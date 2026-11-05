@@ -9,7 +9,7 @@
 //! `app/view/mod.rs::collect_overlays` when
 //! `LibraryState::document_options.is_some()`.
 
-use iced::widget::{Space, button, column, container, pick_list, row, text};
+use iced::widget::{button, column, container, pick_list, row, text};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -17,7 +17,7 @@ use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::header_with_note;
+use super::modal_chrome::{footer_strip, header_with_note, primary_btn, secondary_btn};
 use super::state::DocumentOptionsModalState;
 use crate::panels::SheetColor;
 
@@ -95,30 +95,14 @@ pub fn view<'a>(
     ]
     .spacing(sp.xs);
 
-    let cancel = button(text("Cancel").size(ts.body).color(text_c))
-        .padding([sp.s, sp.l])
-        .on_press(LibraryMessage::DocumentOptionsCancel)
-        .style(crate::styles::outline_button(tokens));
-    let apply = button(
-        text("Apply")
-            .size(ts.body)
-            .color(crate::styles::tokens::on_accent(tokens)),
-    )
-    .padding([sp.s, sp.l])
-    .on_press(LibraryMessage::DocumentOptionsApply)
-    .style(crate::styles::accent_button(tokens));
-
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
-            cancel,
-            Space::new().width(sp.m),
-            apply
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_footer_strip(tokens));
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
+            secondary_btn("Cancel", LibraryMessage::DocumentOptionsCancel, tokens),
+            primary_btn("Apply", LibraryMessage::DocumentOptionsApply, tokens),
+        ],
+        tokens,
+    );
 
     container(
         column![header, container(body).padding([sp.s, 0.0]), footer].width(super::card_len(

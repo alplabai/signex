@@ -12,15 +12,15 @@
 //! `modal_header_strip` / `modal_footer_strip`) for visual parity
 //! across the Library subsystem.
 
-use iced::widget::{Space, column, container, row, scrollable, text};
+use iced::widget::{Space, column, container, text};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
-use crate::styles::{Spacing, TypeScale};
+use crate::styles::{Spacing, TypeScale, dialog_body, dialog_list, dialog_message};
 use signex_widgets::theme_ext;
 
 use super::messages::{CloseLibraryChoice, LibraryMessage};
-use super::modal_chrome::{header, primary_btn, secondary_btn};
+use super::modal_chrome::{danger_btn, footer_strip, header, primary_btn, secondary_btn};
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
 /// How a confirm modal names an unsaved file: relative to its library's
@@ -54,7 +54,6 @@ pub fn view<'a>(
     let ts = TypeScale::default();
     let sp = Spacing::default();
     let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
 
     let header = header(
         "Close Library — Unsaved Drafts",
@@ -63,13 +62,14 @@ pub fn view<'a>(
         tokens,
     );
 
-    let summary = text(format!(
-        "'{}' has {} unsaved draft(s). What would you like to do?",
-        confirm.library_name,
-        confirm.dirty_editors.len() + confirm.dirty_paths.len()
-    ))
-    .size(ts.body)
-    .color(muted);
+    let summary = dialog_message(
+        format!(
+            "'{}' has {} unsaved draft(s). What would you like to do?",
+            confirm.library_name,
+            confirm.dirty_editors.len() + confirm.dirty_paths.len()
+        ),
+        tokens,
+    );
 
     // List of dirty drafts by display_internal_pn. We look each one
     // up in `state.editors` (keyed by `EditorAddress`) so the modal
@@ -100,41 +100,31 @@ pub fn view<'a>(
             .boxed(),
         );
     }
-    let list = scrollable(column(rows).spacing(0))
-        .height(Length::Fixed(140.0))
-        .width(Length::Fill);
+    let list = container(dialog_list(rows, tokens)).height(Length::Fixed(140.0));
 
-    let body = column![
-        container(summary).padding([sp.l, sp.xl]),
-        container(list).padding([0.0, sp.xl]),
-    ]
-    .spacing(0);
+    let body = dialog_body(column![summary, list].spacing(sp.m));
 
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
             secondary_btn(
                 "Cancel",
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::Cancel),
                 tokens,
             ),
-            Space::new().width(sp.m),
-            secondary_btn(
+            danger_btn(
                 "Discard All",
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::DiscardAll),
                 tokens,
             ),
-            Space::new().width(sp.m),
             primary_btn(
                 "Save All",
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::SaveAll),
                 tokens,
             ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_footer_strip(tokens));
+        ],
+        tokens,
+    );
 
     container(
         column![header, body, Space::new().height(Length::Fill), footer]

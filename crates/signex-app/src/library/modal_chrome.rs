@@ -13,7 +13,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use crate::styles::{Spacing, TypeScale};
+use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split};
 
 /// Fixed widths of the Library modals that size themselves (the others
 /// take the picker / dialog default). One home so a resize is one edit.
@@ -132,13 +132,7 @@ pub(crate) fn secondary_btn<'a>(
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let text_color = theme_ext::text_primary(tokens);
-    button(container(text(label.to_string()).size(ts.body).color(text_color)).padding([sp.s, sp.l]))
-        .on_press(message)
-        .style(crate::styles::outline_button(tokens))
-        .boxed()
+    dialog_button(label, DialogButtonKind::Secondary, Some(message), tokens)
 }
 
 /// Accent-filled primary footer action.
@@ -158,13 +152,33 @@ pub(crate) fn primary_btn_if<'a>(
     enabled: bool,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let fg = crate::styles::tokens::on_accent(tokens);
-    let btn =
-        button(container(text(label.to_string()).size(ts.body).color(fg)).padding([sp.s, sp.l]));
-    let btn = if enabled { btn.on_press(message) } else { btn };
-    btn.style(crate::styles::accent_button(tokens)).boxed()
+    dialog_button(
+        label,
+        DialogButtonKind::Primary,
+        enabled.then_some(message),
+        tokens,
+    )
+}
+
+/// Footer of a Library dialog on the flat footer strip: `extras` at the
+/// left end, `buttons` right-aligned with the standard gaps.
+pub(crate) fn footer_strip<'a>(
+    extras: Vec<Element<'a, LibraryMessage>>,
+    buttons: Vec<Element<'a, LibraryMessage>>,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    container(dialog_footer_split(extras, buttons))
+        .style(crate::styles::modal_footer_strip(tokens))
+        .boxed()
+}
+
+/// Destructive footer action (Delete, Discard): error-coloured outline.
+pub(crate) fn danger_btn<'a>(
+    label: &str,
+    message: LibraryMessage,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    dialog_button(label, DialogButtonKind::Danger, Some(message), tokens)
 }
 
 #[cfg(test)]
@@ -187,6 +201,7 @@ mod tests {
             let _ = secondary_btn("Cancel", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn("OK", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn_if("OK", LibraryMessage::ClosePicker, false, &tokens);
+            let _ = danger_btn("Delete", LibraryMessage::ClosePicker, &tokens);
         }
     }
 }

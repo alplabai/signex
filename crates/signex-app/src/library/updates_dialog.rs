@@ -37,7 +37,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, checkbox, column, container, radio, row, scrollable, text};
+use iced::widget::{Space, checkbox, column, container, radio, row, text};
 use iced::{Element, Length, Widget};
 use signex_library::RowId;
 use signex_types::schematic::StampField;
@@ -46,8 +46,9 @@ use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{header_with_note, primary_btn_if, secondary_btn};
+use super::modal_chrome::{footer_strip, header_with_note, primary_btn_if, secondary_btn};
 use super::part_sync::{Choice, Choices, ConflictView};
+use crate::styles::{dialog_body, dialog_list, dialog_message};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -298,48 +299,48 @@ pub fn view<'a>(
 
     // Build the drift list. Each row is checkbox + ref_des + library
     // name + version pair + bump-kind badge.
-    let mut rows: iced::widget::Column<Element<'a, LibraryMessage>> = column![].spacing(SP.xs);
-    for entry in &state.entries {
-        let row_view = render_entry_row(entry, text_c, muted, tokens);
-        rows = rows.push(row_view);
-    }
+    let rows: Vec<Element<'a, LibraryMessage>> = state
+        .entries
+        .iter()
+        .map(|entry| render_entry_row(entry, text_c, muted, tokens))
+        .collect();
 
     let body = column![
-        text(format!(
-            "{} placed component{} drifted from the library since this schematic was last saved.",
-            state.entries.len(),
-            if state.entries.len() == 1 { "" } else { "s" }
-        ))
-        .size(TS.body)
-        .color(muted),
-        Space::new().height(8),
-        scrollable(rows).height(Length::Fixed(LIST_MAX_H)),
+        dialog_message(
+            format!(
+                "{} placed component{} drifted from the library since this schematic was last saved.",
+                state.entries.len(),
+                if state.entries.len() == 1 { "" } else { "s" }
+            ),
+            tokens,
+        ),
+        container(dialog_list(rows, tokens)).height(Length::Fixed(LIST_MAX_H)),
     ]
-    .spacing(SP.xs);
+    .spacing(SP.m);
 
     let selected = state.selected_count();
     let update_label = format!("Update Selected Components ({})", selected);
 
-    let footer = container(
-        row![
-            secondary_btn("Skip All", LibraryMessage::LibraryUpdatesSkipAll, tokens,),
-            Space::new().width(Length::Fill),
-            secondary_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens,),
-            Space::new().width(8),
+    let footer = footer_strip(
+        vec![secondary_btn(
+            "Skip All",
+            LibraryMessage::LibraryUpdatesSkipAll,
+            tokens,
+        )],
+        vec![
+            secondary_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens),
             primary_btn_if(
                 &update_label,
                 LibraryMessage::LibraryUpdatesApply,
                 selected > 0,
                 tokens,
             ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+        ],
+        tokens,
+    );
 
     container(
-        column![header, container(body).padding([14.0, SP.xl]), footer]
+        column![header, dialog_body(body), Space::new().height(SP.l), footer]
             .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))

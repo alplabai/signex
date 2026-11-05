@@ -7,6 +7,7 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -17,11 +18,9 @@ impl Signex {
     /// OK / Cancel. No header on the body: the dialog opens in its own
     /// OS window, whose native title bar carries the title and close.
     pub(super) fn view_move_selection_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, Widget, button, column, container, row, text, text_input};
+        use iced::widget::{Space, Widget, column, container, row, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
         let ms = &self.ui_state.move_selection;
         let selection_count = self.interaction_state.active_canvas().selected.len();
 
@@ -41,78 +40,37 @@ impl Signex {
             .boxed()
         };
 
-        let body = container(
+        let body = dialog_body(
             column![
-                text(format!("{} item(s) selected", selection_count))
-                    .size(TS.body)
-                    .color(text_muted),
-                Space::new().height(12),
+                dialog_message(format!("{} item(s) selected", selection_count), tokens),
                 row![
                     field("ΔX (mm)", &ms.dx, |s| {
                         Message::MoveSelection(MoveSelectionMsg::DxChanged(s))
                     }),
-                    Space::new().width(14),
+                    Space::new().width(SP.l),
                     field("ΔY (mm)", &ms.dy, |s| {
                         Message::MoveSelection(MoveSelectionMsg::DyChanged(s))
                     }),
                 ]
                 .align_y(iced::Alignment::Start),
             ]
-            .spacing(0),
-        )
-        .padding([14, 14]);
+            .spacing(SP.m),
+        );
 
-        let ok_enabled = selection_count > 0;
-        let ok_bg = if ok_enabled {
-            iced::Color::from_rgb(0.00, 0.47, 0.84)
-        } else {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-        };
-        let ok_fg = if ok_enabled {
-            iced::Color::WHITE
-        } else {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.4)
-        };
-        let mut ok_btn =
-            button(container(text("Apply").size(TS.body).color(ok_fg)).padding([SP.s, 14.0]))
-                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(ok_bg)),
-                    border: iced::Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        ..iced::Border::default()
-                    },
-                    text_color: ok_fg,
-                    ..iced::widget::button::Style::default()
-                });
-        if ok_enabled {
-            ok_btn = ok_btn.on_press(Message::MoveSelection(MoveSelectionMsg::Apply));
-        }
-
-        let footer = container(
-            row![
-                Space::new().width(iced::Length::Fill),
-                button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
-                    .on_press(Message::MoveSelection(MoveSelectionMsg::Close))
-                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04
-                        ),)),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border_c,
-                            ..iced::Border::default()
-                        },
-                        text_color: text_c,
-                        ..iced::widget::button::Style::default()
-                    }),
-                Space::new().width(8),
-                ok_btn,
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([10, 14]);
+        let footer = dialog_footer(vec![
+            dialog_button(
+                "Cancel",
+                DialogButtonKind::Secondary,
+                Some(Message::MoveSelection(MoveSelectionMsg::Close)),
+                tokens,
+            ),
+            dialog_button(
+                "Apply",
+                DialogButtonKind::Primary,
+                (selection_count > 0).then_some(Message::MoveSelection(MoveSelectionMsg::Apply)),
+                tokens,
+            ),
+        ]);
 
         container(
             column![body, footer]
@@ -523,51 +481,24 @@ impl Signex {
             rgb_col,
         ];
 
-        let footer = row![
-            Space::new().width(iced::Length::Fill),
-            button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]),)
-                .on_press(Message::NetColor(NetColorMsg::CustomShow(false)))
-                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    border: iced::Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border_c,
-                        ..iced::Border::default()
-                    },
-                    text_color: text_c,
-                    ..iced::widget::button::Style::default()
-                }),
-            Space::new().width(8),
-            button(
-                container(text("Use Color").size(TS.body).color(iced::Color::WHITE))
-                    .padding([SP.s, 14.0]),
-            )
-            .on_press(Message::NetColor(NetColorMsg::CustomSubmit(draft)))
-            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
-                ))),
-                border: iced::Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..iced::Border::default()
-                },
-                text_color: iced::Color::WHITE,
-                ..iced::widget::button::Style::default()
-            }),
-        ]
-        .align_y(iced::Alignment::Center);
+        let footer = dialog_footer(vec![
+            dialog_button(
+                "Cancel",
+                DialogButtonKind::Secondary,
+                Some(Message::NetColor(NetColorMsg::CustomShow(false))),
+                &self.document_state.panel_ctx.tokens,
+            ),
+            dialog_button(
+                "Use Color",
+                DialogButtonKind::Primary,
+                Some(Message::NetColor(NetColorMsg::CustomSubmit(draft))),
+                &self.document_state.panel_ctx.tokens,
+            ),
+        ]);
 
         let card = container(
-            column![
-                self.net_color_custom_header(),
-                container(body).padding([14, 14]),
-                container(footer).padding([10, 14]),
-            ]
-            .width(iced::Length::Fixed(430.0)),
+            column![self.net_color_custom_header(), dialog_body(body), footer,]
+                .width(iced::Length::Fixed(430.0)),
         )
         .style(crate::styles::context_menu(
             &self.document_state.panel_ctx.tokens,

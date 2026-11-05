@@ -11,10 +11,9 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length, Widget};
 
-use super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button_themed, wrap_modal,
-};
+use super::widgets::{close_x_button, draggable_header, os_title_bar_slot, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use crate::styles::{DialogButtonKind, dialog_button};
 
 mod rules;
 mod sidebar;
@@ -232,16 +231,16 @@ impl Signex {
                 Space::new().width(Length::Fill),
                 issue_badge,
                 Space::new().width(12),
-                primary_button_themed(
+                dialog_button(
                     "Export\u{2026}",
+                    DialogButtonKind::Primary,
                     Some(Message::BomPreview(BomPreviewMsg::Export)),
-                    border_c,
-                    Some(crate::styles::ti(tokens.accent)),
+                    tokens,
                 ),
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([6, 14])
+        .padding([SP.s, SP.l])
         .width(Length::Fill)
         .style(crate::styles::modal_footer_strip(tokens));
 

@@ -9,11 +9,16 @@ use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
 
 mod buttons;
+mod dialog_kit;
 pub mod tokens;
 pub mod typography;
 
 pub use buttons::{
-    accent_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
+    accent_button, danger_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
+};
+pub use dialog_kit::{
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_height,
+    dialog_footer_split, dialog_hint, dialog_list, dialog_message, dialog_section,
 };
 pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
 

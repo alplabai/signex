@@ -134,3 +134,39 @@ pub fn accent_button(
         ..button::Style::default()
     }
 }
+
+/// Destructive action (Discard, Delete, Remove): an outline in the theme
+/// `error` colour with `error` text, never a fill. Hover and press tint the
+/// inside with the error colour at low alpha.
+pub fn danger_button(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let danger = tokens::danger(tokens);
+    let disabled = ti(tokens.text_secondary);
+    let faint = Color { a: 0.0, ..danger };
+    let hover = Color { a: 0.14, ..danger };
+    let pressed = Color { a: 0.24, ..danger };
+    move |_: &Theme, status: button::Status| button::Style {
+        background: fill(match status {
+            button::Status::Hovered => hover,
+            button::Status::Pressed => pressed,
+            _ => faint,
+        }),
+        text_color: if status == button::Status::Disabled {
+            disabled
+        } else {
+            danger
+        },
+        border: Border {
+            width: 1.0,
+            radius: RADIUS.into(),
+            color: if status == button::Status::Disabled {
+                disabled
+            } else {
+                danger
+            },
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}

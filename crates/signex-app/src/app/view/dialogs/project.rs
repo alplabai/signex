@@ -7,10 +7,11 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row, text};
-use iced::{Color, Element, Length};
+use iced::{Element, Length};
 
-use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
+use super::widgets::{close_x_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -46,8 +47,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-        let error_c = Color::from_rgb(0.90, 0.35, 0.30);
+        let error_c = crate::styles::tokens::danger(tokens);
 
         let theme_id = self.ui_state.effective_theme_id();
         let title = if st.is_project_rename {
@@ -97,7 +97,7 @@ impl Signex {
         };
 
         let mut body: iced::widget::Column<Element<'_, Message>> = column![
-            text(prompt).size(TS.body).color(text_muted),
+            dialog_message(prompt, tokens),
             text_input(placeholder, &st.buffer)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
                 .on_submit(Message::Rename(RenameMsg::Submit))
@@ -114,26 +114,21 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(body).padding([14, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::Rename(RenameMsg::Close),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            "Rename",
-                            Some(Message::Rename(RenameMsg::Submit)),
-                            border_c
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14]),
+                dialog_body(body),
+                dialog_footer(vec![
+                    dialog_button(
+                        "Cancel",
+                        DialogButtonKind::Secondary,
+                        Some(Message::Rename(RenameMsg::Close)),
+                        tokens
+                    ),
+                    dialog_button(
+                        "Rename",
+                        DialogButtonKind::Primary,
+                        Some(Message::Rename(RenameMsg::Submit)),
+                        tokens
+                    ),
+                ]),
             ]
             .width(self.dialog_width(super::super::super::state::ModalId::RenameDialog, 420.0)),
         )
@@ -164,7 +159,6 @@ impl Signex {
         let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
 
         let header_content: Element<'_, Message> = container(
             row![
@@ -190,7 +184,7 @@ impl Signex {
         );
 
         let scope = st.scope;
-        let intro = text(st.intro_text.as_str()).size(TS.body).color(text_muted);
+        let intro: Element<'_, Message> = dialog_message(st.intro_text.as_str(), tokens);
         let summary_label = match scope {
             crate::app::VersionControlScope::Project => "Project",
             crate::app::VersionControlScope::Library => "Library",
@@ -274,7 +268,7 @@ impl Signex {
             body_col = body_col.push(
                 text(err.clone())
                     .size(TS.body)
-                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3))
+                    .color(crate::styles::tokens::danger(tokens))
                     .boxed(),
             );
         }
@@ -282,28 +276,25 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(body_col).padding([14.0, SP.xl]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::EnableVersionControl(EnableVersionControlMsg::Close),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            if st.working { "Enabling…" } else { "Enable" },
-                            (!st.working && !st.scanning).then_some(Message::EnableVersionControl(
-                                EnableVersionControlMsg::Confirm
-                            )),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14]),
+                dialog_body(body_col),
+                dialog_footer(vec![
+                    dialog_button(
+                        "Cancel",
+                        DialogButtonKind::Secondary,
+                        Some(Message::EnableVersionControl(
+                            EnableVersionControlMsg::Close
+                        )),
+                        tokens
+                    ),
+                    dialog_button(
+                        if st.working { "Enabling…" } else { "Enable" },
+                        DialogButtonKind::Primary,
+                        (!st.working && !st.scanning).then_some(Message::EnableVersionControl(
+                            EnableVersionControlMsg::Confirm
+                        )),
+                        tokens
+                    ),
+                ]),
             ]
             .width(self.dialog_width(
                 super::super::super::state::ModalId::EnableVersionControl,
@@ -484,26 +475,21 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(body).padding([14.0, SP.xl]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::GridProperties(GridPropertiesMsg::Close),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            "Apply",
-                            Some(Message::GridProperties(GridPropertiesMsg::Apply)),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14]),
+                dialog_body(body),
+                dialog_footer(vec![
+                    dialog_button(
+                        "Cancel",
+                        DialogButtonKind::Secondary,
+                        Some(Message::GridProperties(GridPropertiesMsg::Close)),
+                        tokens
+                    ),
+                    dialog_button(
+                        "Apply",
+                        DialogButtonKind::Primary,
+                        Some(Message::GridProperties(GridPropertiesMsg::Apply)),
+                        tokens
+                    ),
+                ]),
             ]
             .width(self.dialog_width(super::super::super::state::ModalId::GridProperties, 480.0)),
         )
@@ -537,7 +523,6 @@ impl Signex {
         let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
 
         let header_content: Element<'_, Message> = container(
             row![
@@ -618,26 +603,21 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(body).padding([SP.l, 14.0]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::SelectionFilter(SelectionFilterMsg::CloseCustom),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            "Apply",
-                            Some(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom)),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14]),
+                dialog_body(body),
+                dialog_footer(vec![
+                    dialog_button(
+                        "Cancel",
+                        DialogButtonKind::Secondary,
+                        Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom)),
+                        tokens
+                    ),
+                    dialog_button(
+                        "Apply",
+                        DialogButtonKind::Primary,
+                        Some(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom)),
+                        tokens
+                    ),
+                ]),
             ]
             .width(self.dialog_width(
                 super::super::super::state::ModalId::SelectionFilterCustom,
