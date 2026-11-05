@@ -211,7 +211,7 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
                 baseline_offset: 0.0,
                 overbar: false,
             },
-            // TODO(v0.x): visual decoration for bold/italic/strike
+            // TODO: visual decoration for bold/italic/strike
             RichSegment::Bold(t) | RichSegment::Italic(t) | RichSegment::Strike(t) => PdfTextRun {
                 text: t,
                 scale: 1.0,

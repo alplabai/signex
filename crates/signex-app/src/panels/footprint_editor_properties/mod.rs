@@ -253,7 +253,7 @@ fn render_fp_settings_and_hint<'a>(
         // v0.26-I — auto-courtyard toggle removed. The courtyard is
         // an authored shape (silk / sketch entity), not an auto-
         // derived bbox. Section header kept (other settings can
-        // land here in v0.27+).
+        // land here later).
         let _ = fp.auto_fit_courtyard;
     }
 

@@ -485,8 +485,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 );
 
                 // Parameters section — custom fields carried on the symbol
-                // instance. Read-only for v0.6; editing per-field lands in
-                // v0.7 with the parameter-manager dialog.
+                // instance. Read-only here; per-field editing belongs to the
+                // Parameter Manager dialog.
                 let header_label = if params.is_empty() {
                     "Parameters (none)".to_string()
                 } else {
