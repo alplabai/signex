@@ -82,8 +82,8 @@ pub fn shaped_advance_em(text: &str, family: &str) -> Option<f32> {
     Some(em)
 }
 
-/// The bundled faces only, so tests do not depend on the machine's fonts.
-#[cfg(test)]
+/// The bundled faces only, so tests and headless runs do not depend on the
+/// machine's fonts.
 pub fn install_hermetic() {
     MEASURER.get_or_init(|| Mutex::new(TextMeasurer::new(&super::bundled::BUNDLED_FONTS, false)));
     signex_types::font::set_cap_height_resolver(cap_height_per_em);

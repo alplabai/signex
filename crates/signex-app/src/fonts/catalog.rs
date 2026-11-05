@@ -120,6 +120,34 @@ pub fn installed_blocking() -> &'static FontCatalog {
     INSTALLED.get_or_init(FontCatalog::scan_system)
 }
 
+/// The fonts a headless run measures and resolves text with (#1929).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontSet {
+    /// The machine's fonts plus the bundled ones: what the GUI ends up with.
+    System,
+    /// The bundled faces only, so the result does not depend on the host.
+    BundledOnly,
+}
+
+/// Install the catalog and the text measurer on the calling thread, so text is
+/// measured with real faces from the first `update`. Call it before boot; the
+/// startup scan then finds both installed and does nothing. `System` walks
+/// the font directories and is slow.
+pub fn install_before_boot(set: FontSet) {
+    match set {
+        FontSet::System => {
+            installed_blocking();
+            super::measure::install_blocking();
+        }
+        FontSet::BundledOnly => {
+            // An already-installed catalog stays: the measurer below then
+            // also keeps the faces it was built with.
+            install(FontCatalog::from_families::<_, &str>([]));
+            super::measure::install_hermetic();
+        }
+    }
+}
+
 /// The scan, as a future for `Task::perform`: the blocking directory walk
 /// runs on a `spawn_blocking` worker, never in `update`. Resolves at once
 /// when the catalog is already cached.
