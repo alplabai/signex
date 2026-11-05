@@ -202,6 +202,47 @@ drawing, and stay a fixed pixel width.
 
 ---
 
+## sch-pan-reuse — Panning moves retained content (#2078)
+
+The CPU schematic canvas tessellates the content layer once and moves it
+by a translation while the camera pans. `canvas::SchematicSurface` mirrors
+iced's `Canvas` widget; only `draw` differs: every layer is drawn inside one
+`with_layer(bounds)` (clip, and one renderer layer so their order holds), and
+the content layer inside an extra `with_translation(delta)`.
+
+The geometry is built with `Cache::draw_with_bounds` over a clip rectangle
+that reaches past the viewport by `pan_reach` (one viewport, cut down to whole
+device pixels), at the camera offset of the build. It is reused while:
+
+- the zoom, the display scale and the viewport size are unchanged;
+- the scene it replays is the same one (`ContentSceneCache::generation`), which
+  also covers a document, theme or focus change on a pan frame; the
+  app clears it on those as well;
+- the pan from the build offset is within the clip margin;
+- that pan is a whole number of device pixels (within 1e-3). Hairline
+  snapping works on the frame's device pixel grid and only commutes with
+  whole-pixel shifts. A pan off the grid tessellates again, as before.
+
+The move-drag layers do not use it.
+
+Two things follow from the widget drawing in its own clip layer:
+
+- A sibling drawn over the canvas area after it, outside a `Stack`, would
+  render under the canvas. None exists: the badge and every overlay are
+  `Stack` children, which iced draws in layers of their own.
+- On the tiny-skia fallback the damage diff of text ignores the group
+  transformation, so a translated cached text-only region may not repaint
+  until something else dirties it. The wgpu renderer is the shipped path.
+- A hairline edge that lands exactly on a half-device-pixel tie is rounded
+  where it fell at the build offset, so a reused frame can differ from a
+  freshly built one by one device pixel at that edge. A fresh build decides
+  the same tie by the f32 noise in the live offset, so neither is more exact.
+
+The retained clip starts a margin further up and left than the canvas-origin
+clip the plain canvas uses. `canvas::pan_reuse_pixel_tests` renders both on a
+canvas docked off the window origin and compares them pixel for pixel, with
+the plain side drawn as the plain canvas draws it.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's
