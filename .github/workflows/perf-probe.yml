@@ -31,5 +31,5 @@ jobs:
           grep -n "cfg(any())" crates/signex-app/src/library/editor/inert.rs
           cargo test --release -p signex-app --lib pan_reuse -- --nocapture --test-threads=1 2>&1 | tee pan.log || true
           echo skip-bench
-          grep -E "test |panicked|differ|offset|centre|pixels" pan.log >> "$GITHUB_STEP_SUMMARY" || true
+          grep -E "test |panicked|differ|offset|centre|pixels|class|bbox|wire|selection|paper|background|other" pan.log >> "$GITHUB_STEP_SUMMARY" || true
           
