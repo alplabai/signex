@@ -529,7 +529,8 @@ pub fn identity_fields(fields: &[(String, String)]) -> HashMap<String, String> {
 /// a part whose footprint / MPN the lock kept (that would hide the drift). A
 /// part is held whole: one locked unit holds back every unit's sync and
 /// stamp. A locked part with nothing to sync keeps its stamp, since nothing
-/// was held back. Returns the stamps and syncs left and the references held
+/// was held back; so does one whose sync only reports kept values (a
+/// conflict left on "Keep mine" changes nothing the lock protects). Returns the stamps and syncs left and the references held
 /// back.
 pub fn hold_back_locked<S>(
     engine: &signex_engine::Engine,
@@ -539,7 +540,7 @@ pub fn hold_back_locked<S>(
     let locked = engine.edit_locked_part_units();
     let (held, kept): (Vec<PartSync>, Vec<PartSync>) = part_syncs
         .into_iter()
-        .partition(|p| locked.contains(&p.symbol));
+        .partition(|p| locked.contains(&p.symbol) && !p.change.is_empty());
     let held_units: std::collections::HashSet<Uuid> = held
         .iter()
         .flat_map(|p| signex_engine::placed_unit_ids(engine.document(), p.symbol))
@@ -854,6 +855,24 @@ mod tests {
             Vec::new(),
         );
         assert_eq!((stamps.len(), syncs.len(), held.len()), (1, 0, 0));
+    }
+
+    #[test]
+    fn a_locked_part_whose_sync_only_keeps_values_is_not_held_back() {
+        let engine = two_unit_engine(2);
+        let mut kept_only = footprint_sync(2, "U1");
+        kept_only.change = PartChange::default();
+        kept_only.kept = vec!["U1: kept your MPN \"MINE\"; library now \"LIB\"".into()];
+
+        let (stamps, syncs, held) = hold_back_locked(
+            &engine,
+            vec![(Uuid::from_u128(2), "2".to_owned())],
+            vec![kept_only],
+        );
+
+        assert!(held.is_empty(), "nothing the lock protects would change");
+        assert_eq!(syncs.len(), 1, "the kept line still reaches Messages");
+        assert_eq!(stamps.len(), 1, "the stamp still lands");
     }
 
     #[test]
