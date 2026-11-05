@@ -48,7 +48,7 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
 
 /// Fixed widths of the grid lines and crosses, in logical px (not a zoom law). A line or arm
 /// is kept off the paper edge by half of its width (#1940).
-const MINOR_GRID_LINE_PX: f32 = 0.6;
+pub(crate) const MINOR_GRID_LINE_PX: f32 = 0.6;
 const MAJOR_GRID_LINE_PX: f32 = 0.5;
 
 /// One grid dot, as a filled square with the area of a `radius` circle.
@@ -62,7 +62,9 @@ pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
     radius: f32,
     color: Color,
 ) {
-    let side = radius * std::f32::consts::PI.sqrt();
+    // At least 1 px, so the square always holds a pixel centre: tiny-skia
+    // fills rectangles without anti-aliasing and would drop a smaller one.
+    let side = (radius * std::f32::consts::PI.sqrt()).max(1.0);
     frame.fill_rectangle(
         Point::new(centre.x - side / 2.0, centre.y - side / 2.0),
         iced::Size::new(side, side),
@@ -72,7 +74,9 @@ pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
 
 /// One small "+" grid glyph, as two filled bars `width` thick reaching `arm`
 /// past `centre` (the same footprint as two butt-capped strokes, without the
-/// per-glyph stroke tessellation).
+/// per-glyph stroke tessellation). Each bar's thin axis is centred on a pixel
+/// centre: tiny-skia fills rectangles without anti-aliasing, and a bar under
+/// 1 px thick between two pixel centres would not draw.
 pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
     frame: &mut canvas::Frame<R>,
     centre: Point,
@@ -81,13 +85,14 @@ pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
     color: Color,
 ) {
     let half = width / 2.0;
+    let on_pixel = |v: f32| v.floor() + 0.5;
     frame.fill_rectangle(
-        Point::new(centre.x - arm, centre.y - half),
+        Point::new(centre.x - arm, on_pixel(centre.y) - half),
         iced::Size::new(arm * 2.0, width),
         color,
     );
     frame.fill_rectangle(
-        Point::new(centre.x - half, centre.y - arm),
+        Point::new(on_pixel(centre.x) - half, centre.y - arm),
         iced::Size::new(width, arm * 2.0),
         color,
     );

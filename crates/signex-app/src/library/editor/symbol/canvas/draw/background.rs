@@ -76,7 +76,7 @@ impl SymbolCanvas<'_> {
                     let grid_style = self.grid_style;
                     let minor_stroke = canvas::Stroke::default()
                         .with_color(dot_color)
-                        .with_width(0.6);
+                        .with_width(crate::canvas::grid::MINOR_GRID_LINE_PX);
 
                     // Precompute vertical span shared by both Lines and major.
                     let top_sy = w2s(0.0, world_y1).y.max(0.0);
@@ -134,7 +134,11 @@ impl SymbolCanvas<'_> {
                                         }
                                         crate::render_config::GridStyle::SmallCrosses => {
                                             crate::canvas::grid::fill_grid_cross(
-                                                frame, p, cross_arm, 0.6, dot_color,
+                                                frame,
+                                                p,
+                                                cross_arm,
+                                                crate::canvas::grid::MINOR_GRID_LINE_PX,
+                                                dot_color,
                                             );
                                         }
                                         crate::render_config::GridStyle::Lines => unreachable!(),
