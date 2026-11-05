@@ -31,6 +31,15 @@ Display only. Stored coordinates are always measured from the upper-left
 corner of the paper, Y down; no coordinate is rewritten when the origin
 changes. With Lower Left, the shown Y is `paper_height_mm - y`, the paper
 height coming from the sheet's paper size (Custom included). The status bar,
-Properties ▸ Position (and Start / End / Center rows) and typed drawing
-coordinates go through one mapping, `SchematicSheet::page_y`, which is its own
+Properties ▸ Position (and Start / End / Center rows), the pre-placement X/Y
+readout and typed drawing coordinates go through one mapping, `SchematicSheet::page_y`, which is its own
 inverse. X never changes.
+
+## Known gaps
+
+- Arc start and end angles in Properties are measured with stored Y (down),
+  whatever the origin.
+- ERC marker contrast is tuned against the theme paper, not a custom sheet
+  colour.
+- A page value of the wrong type (a newer build's origin name, say) reads as
+  the default and is not written back.

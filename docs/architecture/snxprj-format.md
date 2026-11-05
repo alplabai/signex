@@ -205,7 +205,8 @@ the Project tab's Schematic defaults section, added without bumping the
 
 - Keys: `wire_width_mm`, `bus_width_mm`, `symbol_line_width_mm` (symbol lines,
   and so pins), `shape_stroke_mm`, `junction_diameter_mm`, `text_size_pt`,
-  `font_family`. Every key is optional; a missing key, or a number that is not
+  `font_family`, `wire_line_style` (`solid` / `dashed` / `dotted`),
+  `shape_fill` (`none` / `outline` / `background`). Every key is optional; a missing key, or a number that is not
   above zero, falls back to the built-in table
   (`signex_types::schematic::SchematicDefaults::BUILT_IN`: 0.254, 0.45, the
   wire width, 0.15, 0.7 mm, 10 pt, Iosevka). An unset symbol line follows the
@@ -214,8 +215,15 @@ the Project tab's Schematic defaults section, added without bumping the
   explicit value in a sheet is never rewritten. A wire resolves explicit width
   > net class width > project > built-in; a bus stores no width and has no
   class, so project > built-in.
-- The canvas and every export resolve through the same table; placement tools
-  start from the project's text size, font and shape stroke.
+- The canvas, every export, hit test and selection boxes resolve through the
+  same table; placement tools start from the project's text size, font, shape
+  stroke and shape fill.
+- Line style: a wire stores none, so a wire whose net class sets none (a
+  class writes Solid as "none") strokes in the project's `wire_line_style`.
+- Shape fill and font apply to placement only: a placed shape always stores
+  its fill, and a placed label or note stores the project font (or no font,
+  the sheet default, when the project names none). Stored values are never
+  reinterpreted.
 - Omitted when nothing is set. Keys a newer build wrote inside the object are
   kept. A section this build cannot read is kept verbatim, not applied, and
   replaced once a default is edited here.
