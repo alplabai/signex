@@ -128,11 +128,8 @@ pub fn prop_kv_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(key.to_string())
-                .size(TS.caption)
-                .color(key_c)
-                .width(84),
-            text(value.to_string()).size(TS.caption).color(val_c),
+            text(key.to_string()).size(TS.body).color(key_c).width(84),
+            text(value.to_string()).size(TS.body).color(val_c),
         ]
         .spacing(SP.s),
     )
@@ -191,11 +188,11 @@ pub fn part_tree_row<'a>(
             // Tree-expander indent: 18 px gutter + a faint glyph so
             // the part rows visually nest under the symbol.
             text("\u{2514}")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::Fixed(18.0)),
             text(label.to_string())
-                .size(TS.caption)
+                .size(TS.body)
                 .color(label_color)
                 .width(Length::Fill),
         ]
@@ -231,9 +228,9 @@ pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Elem
     property_label_sized(label, color, TS.body, PROPERTY_LABEL_PORTION)
 }
 
-/// Like `property_label`, but for size-10 labels (used by `form_edit_row_f64`).
+/// Like `property_label`, but with a narrower label column (used by `form_edit_row_f64`).
 fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    property_label_sized(label, color, TS.caption, 2)
+    property_label_sized(label, color, TS.body, 2)
 }
 
 fn property_label_sized<'a, M: 'a>(
@@ -282,7 +279,7 @@ pub fn shape_fill_row<'a>(
     use iced::widget::{button, row, text};
     use signex_types::schematic::FillType;
     let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        button(text(label).size(TS.caption))
+        button(text(label).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
@@ -308,7 +305,7 @@ pub fn shape_fill_row<'a>(
     };
     row![
         text("Fill")
-            .size(TS.caption)
+            .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![

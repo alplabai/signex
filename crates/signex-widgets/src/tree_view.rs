@@ -341,8 +341,11 @@ const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
 const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon (Altium parity)
 const CHEVRON_W: f32 = 8.0; // triangle column — half-step smaller to match smaller icon
 const ICON_SZ: f32 = 12.0; // Chamfered SVG silhouettes — Altium parity at compact density
-const FONT_SZ: f32 = 10.5; // body text — Altium project tree is typically 9-10pt
+/// Default row label size; the metrics below are tuned for it and scale
+/// with `TreeView::text_size` relative to it.
+const FONT_SZ: f32 = 10.5;
 const BADGE_SZ: f32 = 9.0; // muted counts — track FONT_SZ down a half-step
+const EMPTY_SZ: f32 = 11.0; // "(empty)" placeholder
 const PAD_V: u16 = 2; // Altium-ish: 16-18px row height — 1-2 px breathing room above + below the icon
 /// Foreground for the selected row's label, chevron and open-dot. Kept
 /// literal: it must contrast with `tokens.selection` on every theme and
@@ -358,6 +361,33 @@ const DIRTY_DOT_SZ: f32 = 6.0;
 /// Spacer between the label / badge and the right-side indicators.
 const RIGHT_INDICATOR_GAP: f32 = 6.0;
 
+/// Row sizes derived from the label size so rows stay proportioned.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Metrics {
+    font: f32,
+    badge: f32,
+    empty: f32,
+    indent: f32,
+    chevron: f32,
+    icon: f32,
+    pad_v: f32,
+}
+
+impl Metrics {
+    fn for_text_size(font: f32) -> Self {
+        let k = font / FONT_SZ;
+        Self {
+            font,
+            badge: BADGE_SZ * k,
+            empty: EMPTY_SZ * k,
+            indent: INDENT_PER_DEPTH * k,
+            chevron: CHEVRON_W * k,
+            icon: ICON_SZ * k,
+            pad_v: f32::from(PAD_V) * k,
+        }
+    }
+}
+
 // ─── TreeView (COSMIC composition struct) ─────────────────────
 
 /// Composable tree view widget.
@@ -372,6 +402,7 @@ pub struct TreeView<'a> {
     roots: &'a [TreeNode],
     selected: Option<&'a [String]>,
     tokens: &'a ThemeTokens,
+    text_size: f32,
 }
 
 impl<'a> TreeView<'a> {
@@ -380,7 +411,14 @@ impl<'a> TreeView<'a> {
             roots,
             selected: None,
             tokens,
+            text_size: FONT_SZ,
         }
+    }
+
+    /// Row label size in px; badge, "(empty)", indent, icon and padding scale with it.
+    pub fn text_size(mut self, size: f32) -> Self {
+        self.text_size = size;
+        self
     }
 
     pub fn selected(mut self, key: &'a [String]) -> Self {
@@ -390,6 +428,7 @@ impl<'a> TreeView<'a> {
 
     /// Build the tree into a scrollable Element.
     pub fn view(self) -> Element<'static, TreeMsg> {
+        let metrics = Metrics::for_text_size(self.text_size);
         let mut col: Column<Element<'static, TreeMsg>> =
             Column::new().spacing(0.0).width(Length::Fill);
         for node in self.roots {
@@ -400,6 +439,7 @@ impl<'a> TreeView<'a> {
                 std::slice::from_ref(&node.key),
                 self.selected,
                 self.tokens,
+                metrics,
             );
         }
         // Right-click on the scrollable body (below the last row or in any
@@ -422,6 +462,7 @@ fn render_node(
     key: &[String],
     selected: Option<&[String]>,
     tokens: &ThemeTokens,
+    m: Metrics,
 ) -> Column<Element<'static, TreeMsg>> {
     let is_sel = selected.is_some_and(|s| s == key);
     let has_kids = !node.children.is_empty();
@@ -448,7 +489,7 @@ fn render_node(
     let hov_bg = theme_ext::hover_color(tokens);
 
     // --- Assemble row ---
-    let pad_left = (depth as f32) * INDENT_PER_DEPTH + BASE_PAD_LEFT;
+    let pad_left = (depth as f32) * m.indent + BASE_PAD_LEFT;
 
     let mut r: Row<Element<'static, TreeMsg>> = Row::new()
         .spacing(ELEM_GAP)
@@ -468,15 +509,15 @@ fn render_node(
         };
         r = r.push(
             svg(handle)
-                .width(CHEVRON_W)
-                .height(CHEVRON_W)
+                .width(m.chevron)
+                .height(m.chevron)
                 .style(|_: &Theme, _| svg::Style {
                     color: Some(FG_ON_SELECTION),
                 })
                 .boxed(),
         );
     } else {
-        r = r.push(Space::new().width(CHEVRON_W).boxed());
+        r = r.push(Space::new().width(m.chevron).boxed());
     }
 
     // Icon — full-colour bundled SVG. Cached per variant; render via
@@ -489,7 +530,7 @@ fn render_node(
     // relying solely on the bold-label cue. svg::Style.color flat-tints
     // the SVG, which is what we want at this size — the silhouette
     // stays readable, the colour signals "this is active".
-    let icon_w = svg(node.icon.svg()).width(ICON_SZ).height(ICON_SZ);
+    let icon_w = svg(node.icon.svg()).width(m.icon).height(m.icon);
     let icon_w = if node.accent && depth == 0 {
         let accent = theme_ext::accent(tokens);
         icon_w.style(move |_: &Theme, _| svg::Style {
@@ -510,7 +551,7 @@ fn render_node(
     // render bold so the user can scan the workspace at a glance; inner
     // depths ignore the flag.
     let mut label = text(node.label.clone())
-        .size(FONT_SZ)
+        .size(m.font)
         .color(txt_c)
         .line_height(iced::widget::text::LineHeight::Relative(1.0))
         .wrapping(iced::widget::text::Wrapping::None);
@@ -527,7 +568,7 @@ fn render_node(
         r = r.push(iced::widget::space::horizontal().boxed());
         r = r.push(
             text(badge.clone())
-                .size(BADGE_SZ)
+                .size(m.badge)
                 .color(badge_c)
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
@@ -596,7 +637,12 @@ fn render_node(
         Color::from_rgba(s.r, s.g, s.b, 0.45)
     };
     let row_btn = button(r)
-        .padding([PAD_V, PAD_R])
+        .padding(iced::Padding {
+            top: m.pad_v,
+            right: f32::from(PAD_R),
+            bottom: m.pad_v,
+            left: f32::from(PAD_R),
+        })
         .width(Length::Fill)
         .on_press(msg)
         .style(move |_theme: &Theme, status: button::Status| {
@@ -631,18 +677,17 @@ fn render_node(
             for child in &node.children {
                 let mut child_key = key.to_vec();
                 child_key.push(child.key.clone());
-                col = render_node(col, child, depth + 1, &child_key, selected, tokens);
+                col = render_node(col, child, depth + 1, &child_key, selected, tokens, m);
             }
         } else {
             // "(empty)" indicator — matches React's italic muted placeholder
-            let empty_pad =
-                ((depth + 1) as f32) * INDENT_PER_DEPTH + BASE_PAD_LEFT + CHEVRON_W + ELEM_GAP;
+            let empty_pad = ((depth + 1) as f32) * m.indent + BASE_PAD_LEFT + m.chevron + ELEM_GAP;
             let muted = theme_ext::text_secondary(tokens);
             let empty_c = Color::from_rgba(muted.r, muted.g, muted.b, 0.3);
             col = col.push(
                 container(
                     text("(empty)")
-                        .size(11.0)
+                        .size(m.empty)
                         .color(empty_c)
                         .wrapping(iced::widget::text::Wrapping::None),
                 )
@@ -737,6 +782,20 @@ mod tests {
                 ],
             )],
         )]
+    }
+
+    #[test]
+    fn text_size_defaults_to_the_compact_tree_size_and_is_overridable() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let roots = tree();
+        let view = TreeView::new(&roots, &tokens);
+        assert_eq!(view.text_size, 10.5);
+        assert_eq!(Metrics::for_text_size(view.text_size).font, 10.5);
+        let view = view.text_size(12.0);
+        let m = Metrics::for_text_size(view.text_size);
+        assert_eq!(view.text_size, 12.0);
+        assert_eq!(m.font, 12.0);
+        assert!(m.badge < m.font && m.icon > ICON_SZ);
     }
 
     fn key(parts: &[&str]) -> TreeKey {

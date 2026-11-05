@@ -30,7 +30,7 @@ pub(super) fn view_graphic_selection<'a>(
             container(
                 row![
                     text(label.to_string())
-                        .size(TS.caption)
+                        .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
                     numeric_input(
@@ -109,7 +109,7 @@ pub(super) fn view_graphic_selection<'a>(
             let content_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Content")
-                        .size(TS.caption)
+                        .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
                     iced::widget::text_input("text", content.as_str())
@@ -136,7 +136,7 @@ pub(super) fn view_graphic_selection<'a>(
             let vertices_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Vertices")
-                        .size(TS.caption)
+                        .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
                     text(vertex_count.to_string())

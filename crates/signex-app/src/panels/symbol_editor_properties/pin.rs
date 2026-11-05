@@ -56,7 +56,7 @@ fn view_pin_symbol_picker<'a>(
     container(
         row![
             text(label.to_string())
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             container(picker).width(Length::FillPortion(3)),
@@ -85,7 +85,7 @@ pub(super) fn view_pin_selection<'a>(
     let designator_row: Element<'a, PanelMsg> = container(
         row![
             text("Designator")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("number", pin.number.as_str())
@@ -106,7 +106,7 @@ pub(super) fn view_pin_selection<'a>(
     let name_row: Element<'a, PanelMsg> = container(
         row![
             text("Name")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("name", pin.name.as_str())
@@ -159,7 +159,7 @@ pub(super) fn view_pin_selection<'a>(
     let electrical_row: Element<'a, PanelMsg> = container(
         row![
             text("Electrical")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             container(electrical_picker).width(Length::FillPortion(3)),
@@ -178,7 +178,7 @@ pub(super) fn view_pin_selection<'a>(
     let pos_x_row: Element<'a, PanelMsg> = container(
         row![
             text("X")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             numeric_input("mm", NumericFieldKey::PinX(pin_idx), pos_x, draft)
@@ -196,7 +196,7 @@ pub(super) fn view_pin_selection<'a>(
     let pos_y_row: Element<'a, PanelMsg> = container(
         row![
             text("Y")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             numeric_input("mm", NumericFieldKey::PinY(pin_idx), pos_y, draft)
@@ -238,7 +238,7 @@ pub(super) fn view_pin_selection<'a>(
     let orientation_row: Element<'a, PanelMsg> = container(
         row![
             text("Orientation")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             container(orientation_picker).width(Length::FillPortion(3)),
@@ -255,7 +255,7 @@ pub(super) fn view_pin_selection<'a>(
     let length_row: Element<'a, PanelMsg> = container(
         row![
             text("Length")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             numeric_input("mm", NumericFieldKey::PinLength(pin_idx), pin.length, draft)
@@ -275,7 +275,7 @@ pub(super) fn view_pin_selection<'a>(
     let part_row: Element<'a, PanelMsg> = container(
         row![
             text("Part Number")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("1, or 0 for shared", part_now.to_string())
@@ -302,7 +302,7 @@ pub(super) fn view_pin_selection<'a>(
     let description_row: Element<'a, PanelMsg> = container(
         row![
             text("Description")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("free text", pin.details.description.as_str())
@@ -324,7 +324,7 @@ pub(super) fn view_pin_selection<'a>(
     let function_row: Element<'a, PanelMsg> = container(
         row![
             text("Function")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("alt-names, comma-separated", function_csv)
@@ -348,7 +348,7 @@ pub(super) fn view_pin_selection<'a>(
                 .size(TS.heading)
                 .on_toggle(move |_| msg.clone())
                 .boxed(),
-            text(label.to_string()).size(TS.caption).color(muted),
+            text(label.to_string()).size(TS.body).color(muted),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center)
