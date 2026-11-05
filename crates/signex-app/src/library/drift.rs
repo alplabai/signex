@@ -401,13 +401,24 @@ pub fn apply_input(
     })
 }
 
+/// A version stamp with the link it was computed for (#2070): the completion
+/// applies it only to a part still on that row at that version.
+#[derive(Debug, Clone)]
+pub struct CapturedStamp {
+    pub symbol: Uuid,
+    /// The row and pinned version the part held when the user clicked.
+    pub row_id: Uuid,
+    pub library_version: String,
+    pub link: LinkStamp,
+}
+
 /// One `lib_id`'s fresh library symbol (or why it could not be read) and the
 /// `(placed symbol, row version)` stamps that go with it.
 #[derive(Debug, Clone)]
 pub struct SymbolRead {
     pub lib_id: String,
     pub symbol: Result<LibSymbol, String>,
-    pub stamps: Vec<(Uuid, LinkStamp)>,
+    pub stamps: Vec<CapturedStamp>,
     /// One line per instance whose version is not stamped, saying why.
     pub skipped: Vec<String>,
     /// Instances whose footprint, manufacturer or MPN differs from their row
@@ -514,7 +525,7 @@ fn stamp_or_reason(
     lib_id: &str,
     libraries: &mut HashMap<Uuid, Opened>,
     libs: &[MountedLibrary],
-) -> Result<((Uuid, LinkStamp), Option<PartSync>), NoStamp> {
+) -> Result<(CapturedStamp, Option<PartSync>), NoStamp> {
     let nothing = VERSION_NOT_STAMPED;
     let (reference, row) = (&w.reference, w.row_id);
     let opened = libraries
@@ -545,7 +556,13 @@ fn stamp_or_reason(
                     },
                     values: settled.values,
                 };
-                Ok(((w.symbol, link), settled.sync))
+                let captured = CapturedStamp {
+                    symbol: w.symbol,
+                    row_id: w.row_id,
+                    library_version: w.stamped_version.clone(),
+                    link,
+                };
+                Ok((captured, settled.sync))
             }
         },
         RowRead::Found(_) => Err(why(rebound_row_warning(reference, row, lib_id, nothing))),
@@ -599,7 +616,7 @@ fn row_offer(
 
 /// What the stamp decisions of one `lib_id` came to.
 struct Decided {
-    stamps: Vec<(Uuid, LinkStamp)>,
+    stamps: Vec<CapturedStamp>,
     part_syncs: Vec<PartSync>,
     skipped: Vec<String>,
     /// "U1 moved to X since you approved Y" per approved instance whose row

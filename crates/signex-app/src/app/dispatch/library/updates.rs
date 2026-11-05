@@ -8,7 +8,7 @@
 //! completion, one undo step per `lib_id`.
 
 use super::*;
-use crate::library::drift::{ApplyInput, SymbolRead, SymbolsRead, apply_input};
+use crate::library::drift::{ApplyInput, CapturedStamp, SymbolRead, SymbolsRead, apply_input};
 use crate::library::part_sync::PartSync;
 use signex_types::schematic::{LibSymbol, LinkStamp};
 
@@ -605,10 +605,13 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    let part_syncs = self.revalidated_part_syncs(sheet, r.part_syncs);
+                    let (stamps, relinked) = self.stamps_still_linked(sheet, r.stamps);
+                    let mut part_syncs = r.part_syncs;
+                    part_syncs.retain(|sync| !relinked.contains(&sync.symbol));
+                    let part_syncs = self.revalidated_part_syncs(sheet, part_syncs);
                     let lines: Vec<String> = part_syncs.iter().flat_map(PartSync::lines).collect();
                     let landed = self
-                        .adopt_library_symbol(sheet, &r.lib_id, fresh, r.stamps, part_syncs, true);
+                        .adopt_library_symbol(sheet, &r.lib_id, fresh, stamps, part_syncs, true);
                     if landed {
                         lines.iter().for_each(crate::diagnostics::log_info);
                     }
@@ -638,15 +641,41 @@ impl Signex {
         syncs: Vec<PartSync>,
     ) -> Vec<PartSync> {
         let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
-            return syncs;
+            return Vec::new();
         };
-        syncs
-            .into_iter()
-            .filter_map(|sync| {
-                let live = doc.symbols.iter().find(|s| s.uuid == sync.symbol)?;
-                Some(sync.revalidated(&crate::library::part_sync::PartIdentity::of_symbol(live)))
-            })
-            .collect()
+        crate::library::part_sync::revalidate_parts(syncs, doc)
+    }
+
+    /// The stamps for parts still on the row and version they were computed
+    /// for (#2070), as `(placed symbol, stamp)`, and the parts that were
+    /// re-linked while the worker ran: those get neither stamp nor sync, and
+    /// a Messages line.
+    fn stamps_still_linked(
+        &self,
+        sheet: &std::path::Path,
+        stamps: Vec<CapturedStamp>,
+    ) -> (Vec<(uuid::Uuid, LinkStamp)>, Vec<uuid::Uuid>) {
+        let Some(doc) = self.document_state.engines.get(sheet).map(|e| e.document()) else {
+            return (Vec::new(), Vec::new());
+        };
+        let mut kept = Vec::new();
+        let mut relinked = Vec::new();
+        for c in stamps {
+            match doc.symbols.iter().find(|s| s.uuid == c.symbol) {
+                Some(live)
+                    if live.row_id != Some(c.row_id)
+                        || live.library_version != c.library_version =>
+                {
+                    crate::diagnostics::log_warning(format!(
+                        "{} was re-linked while the update ran; its update was skipped",
+                        live.reference
+                    ));
+                    relinked.push(c.symbol);
+                }
+                _ => kept.push((c.symbol, c.link)),
+            }
+        }
+        (kept, relinked)
     }
 
     /// Adopt `fresh` as the embedded copy of `lib_id` on `sheet` and stamp

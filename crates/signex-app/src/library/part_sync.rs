@@ -10,7 +10,8 @@ use std::collections::HashMap;
 
 use signex_engine::Command;
 use signex_types::schematic::{
-    RowStamp, StampField, StampValues, Symbol, Theirs, Verdict, base_of, resolve,
+    RowStamp, SchematicSheet, StampField, StampValues, Symbol, Theirs, Verdict, base_of,
+    group_into_parts, resolve,
 };
 use uuid::Uuid;
 
@@ -326,34 +327,57 @@ impl PartSync {
             .collect()
     }
 
-    /// This update checked against the part as it is now (#2070): the worker
-    /// decided against `have`, captured when the user clicked. A field the
-    /// user edited since is not rewritten; the edit stays and a line says so.
-    pub fn revalidated(mut self, live: &PartIdentity) -> Self {
-        let edited = |field: StampField| {
-            self.have.get(field) != live.get(field)
-                || (field == StampField::Mpn && self.have.mpn_key != live.mpn_key)
-        };
-        let skip: Vec<StampField> = StampField::ALL
+    /// The fields the user changed since the worker decided (#2070): the
+    /// worker compared against `have`, captured when they clicked.
+    pub fn edited_fields(&self, live: &PartIdentity) -> Vec<StampField> {
+        StampField::ALL
             .iter()
             .copied()
-            .filter(|&field| edited(field))
-            .collect();
-        for field in skip {
+            .filter(|&field| {
+                self.have.get(field) != live.get(field)
+                    || (field == StampField::Mpn && self.have.mpn_key != live.mpn_key)
+            })
+            .collect()
+    }
+
+    /// This update checked against the part as it is now (#2070): a field
+    /// the user edited since is not rewritten; the edit stays and a line
+    /// says so.
+    pub fn revalidated(self, live: &PartIdentity) -> Self {
+        let edited = self.edited_fields(live);
+        self.skipping(&edited, live)
+    }
+
+    /// Leave `fields` as the part holds them now. A field whose live value
+    /// already is the row's needs no line; one only a sibling unit's edit
+    /// put on the list says so.
+    fn skipping(mut self, fields: &[StampField], live: &PartIdentity) -> Self {
+        let own = self.edited_fields(live);
+        for &field in fields {
             let slot = match field {
                 StampField::Footprint => &mut self.change.footprint,
                 StampField::Manufacturer => &mut self.change.manufacturer,
                 StampField::Mpn => &mut self.change.mpn,
             };
-            if let Some(theirs) = slot.take() {
-                self.kept.push(format!(
-                    "{}: kept your {} {:?}; it changed while the update ran (library {:?})",
-                    self.reference,
-                    field.label(),
-                    live.get(field),
-                    theirs
-                ));
+            let Some(theirs) = slot.take() else { continue };
+            if live.get(field) == theirs {
+                continue;
             }
+            let why = if own.contains(&field) {
+                "it changed while the update ran".to_owned()
+            } else {
+                format!(
+                    "another unit of {} changed it while the update ran",
+                    self.reference
+                )
+            };
+            self.kept.push(format!(
+                "{}: kept your {} {:?}; {why} (library {:?})",
+                self.reference,
+                field.label(),
+                live.get(field),
+                theirs
+            ));
         }
         self.have = live.clone();
         self
@@ -398,6 +422,34 @@ impl PartSync {
             parts.join(", ")
         )
     }
+}
+
+/// `syncs` checked against `doc` as it is now (#2070). A part no longer on
+/// the sheet loses its sync. A field edited on any unit of a part is left
+/// alone on every unit of it, so the units never diverge.
+pub fn revalidate_parts(syncs: Vec<PartSync>, doc: &SchematicSheet) -> Vec<PartSync> {
+    let groups = group_into_parts(doc.symbols.iter().map(Symbol::part_key));
+    let group_of = |index: usize| groups.iter().position(|g| g.contains(&index));
+    let live: Vec<(PartSync, usize, PartIdentity)> = syncs
+        .into_iter()
+        .filter_map(|sync| {
+            let index = doc.symbols.iter().position(|s| s.uuid == sync.symbol)?;
+            let identity = PartIdentity::of_symbol(&doc.symbols[index]);
+            Some((sync, group_of(index)?, identity))
+        })
+        .collect();
+    let mut edited: HashMap<usize, Vec<StampField>> = HashMap::new();
+    for (sync, group, identity) in &live {
+        let fields = edited.entry(*group).or_default();
+        for field in sync.edited_fields(identity) {
+            if !fields.contains(&field) {
+                fields.push(field);
+            }
+        }
+    }
+    live.into_iter()
+        .map(|(sync, group, identity)| sync.skipping(&edited[&group], &identity))
+        .collect()
 }
 
 /// The Manufacturer and MPN a fresh placement stamps (an empty one is left
