@@ -165,6 +165,15 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
+        if let Some(tab) = self.document_state.tabs.get(idx) {
+            let path = tab.path.clone();
+            if park_dirty {
+                // The user's own close: this sheet's drafts become its edit,
+                // so the sheet parks dirty like any other edit. Another
+                // sheet's drafts stay pending.
+                self.commit_title_block_drafts_where(|sheet| sheet == path);
+            }
+        }
         if idx >= self.document_state.tabs.len() {
             tracing::warn!(
                 target: "signex::tabs",

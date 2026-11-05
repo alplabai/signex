@@ -139,6 +139,8 @@ pub enum PrefMsg {
     /// Toggle the experimental PCB GPU render. Applies as live preview,
     /// persisted on Save.
     DraftPcbGpuRender(bool),
+    /// Anti-aliasing on or off; applies at the next start.
+    DraftAntialiasing(bool),
     /// Choose the undo scope of an annotate run. Persisted on Save.
     DraftAnnotateUndo(crate::annotate_undo::AnnotateUndo),
     /// Toggle "Keep wires connected when moving". Persisted on Save.
@@ -306,6 +308,7 @@ pub struct PrefsView<'a> {
     pub draft_font: &'a str,
     pub draft_grid_style: GridStyle,
     pub draft_pcb_gpu_render: bool,
+    pub draft_antialiasing: bool,
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,

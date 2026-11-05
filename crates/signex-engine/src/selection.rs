@@ -16,6 +16,10 @@ pub mod info_keys {
     pub const PIN_PREFIX: &str = "Pin: ";
     /// The pin the click that selected the symbol landed on (its key).
     pub const FOCUSED_PIN: &str = "Focused Pin";
+    /// A text item's horizontal justification (`Left`, `Center`, `Right`).
+    pub const JUSTIFY_H: &str = "Horizontal Justification";
+    /// A text item's vertical justification (`Top`, `Center`, `Bottom`).
+    pub const JUSTIFY_V: &str = "Vertical Justification";
     /// Prefix of the net a pin sits on, `Pin Net: <number>`; absent when open.
     pub const PIN_NET_PREFIX: &str = "Pin Net: ";
 }
@@ -325,7 +329,7 @@ impl Engine {
                     info.push(("Font Family".into(), family.clone()));
                 }
                 info.push((
-                    "Horizontal Justification".into(),
+                    info_keys::JUSTIFY_H.into(),
                     h_align_label(label.justify).into(),
                 ));
             }
@@ -389,11 +393,11 @@ impl Engine {
                     info.push(("Font Family".into(), family.clone()));
                 }
                 info.push((
-                    "Horizontal Justification".into(),
+                    info_keys::JUSTIFY_H.into(),
                     h_align_label(text_note.justify_h).into(),
                 ));
                 info.push((
-                    "Vertical Justification".into(),
+                    info_keys::JUSTIFY_V.into(),
                     v_align_label(text_note.justify_v).into(),
                 ));
             }
@@ -564,11 +568,11 @@ impl Engine {
                     info.push(("Font Family".into(), family.clone()));
                 }
                 info.push((
-                    "Horizontal Justification".into(),
+                    info_keys::JUSTIFY_H.into(),
                     h_align_label(ref_text.justify_h).into(),
                 ));
                 info.push((
-                    "Vertical Justification".into(),
+                    info_keys::JUSTIFY_V.into(),
                     v_align_label(ref_text.justify_v).into(),
                 ));
                 info.push((
@@ -617,11 +621,11 @@ impl Engine {
                     info.push(("Font Family".into(), family.clone()));
                 }
                 info.push((
-                    "Horizontal Justification".into(),
+                    info_keys::JUSTIFY_H.into(),
                     h_align_label(value_text.justify_h).into(),
                 ));
                 info.push((
-                    "Vertical Justification".into(),
+                    info_keys::JUSTIFY_V.into(),
                     v_align_label(value_text.justify_v).into(),
                 ));
                 info.push((
@@ -793,5 +797,41 @@ mod tests {
             .find(|(k, _)| k == "Direction")
             .map(|(_, v)| v.as_str());
         assert_eq!(direction, Some("input"));
+    }
+
+    /// #2024 - the justification rows carry the keys the properties panel
+    /// reads (`info_keys`), for a label and a text note alike.
+    #[test]
+    fn left_justified_text_reports_left_under_the_shared_key() {
+        use signex_types::schematic::{HAlign, Point, SchematicSheet, TextNote, VAlign};
+        let id = uuid::Uuid::now_v7();
+        let note = TextNote {
+            uuid: id,
+            text: "n".into(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            font_family: None,
+            justify_h: HAlign::Left,
+            justify_v: VAlign::Top,
+            locked: false,
+        };
+        let engine = Engine::new(SchematicSheet {
+            text_notes: vec![note],
+            ..Default::default()
+        })
+        .expect("engine");
+        let details = engine
+            .describe_single_selection(&[SelectedItem::new(id, SelectedKind::TextNote)])
+            .expect("details");
+        let get = |key: &str| {
+            details
+                .info
+                .iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.as_str())
+        };
+        assert_eq!(get(info_keys::JUSTIFY_H), Some("Left"));
+        assert_eq!(get(info_keys::JUSTIFY_V), Some("Top"));
     }
 }

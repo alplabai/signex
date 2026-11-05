@@ -38,7 +38,14 @@ impl SchematicCanvas<'_> {
         if self.trunk_content.get() && drag_offset.is_none() {
             let geometry = self.content_cache.draw(renderer, bounds.size(), |frame| {
                 if let Some(snapshot) = effective_snapshot {
-                    self.render_content_scene(frame, snapshot, &live_transform, bounds, focus_ref);
+                    self.render_content_scene(
+                        frame,
+                        iced::Point::ORIGIN,
+                        snapshot,
+                        &live_transform,
+                        bounds,
+                        focus_ref,
+                    );
                 }
             });
             return super::retained::RetainedLayer {
@@ -134,10 +141,13 @@ impl SchematicCanvas<'_> {
         [static_layer, moving.into_geometry()]
     }
 
-    /// Draw `snapshot` through the camera-independent scene cache.
+    /// Draw `snapshot` through the camera-independent scene cache. `frame_origin`
+    /// is where `frame` starts in screen space (the retained layer's frame
+    /// starts a viewport up and left of the viewport).
     pub(in crate::canvas) fn render_content_scene(
         &self,
         frame: &mut canvas::Frame,
+        frame_origin: iced::Point,
         snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
         transform: &crate::schematic_runtime::ScreenTransform,
         bounds: Rectangle,
@@ -154,11 +164,21 @@ impl SchematicCanvas<'_> {
         ) {
             match self.mode {
                 ContentMode::Cpu => {
-                    crate::schematic_runtime::draw_built_scene(frame, scene, transform);
+                    crate::schematic_runtime::draw_built_scene(
+                        frame,
+                        scene,
+                        transform,
+                        frame_origin,
+                    );
                 }
                 // The GPU shader beneath draws everything else.
                 ContentMode::GpuOverlay => {
-                    crate::schematic_runtime::draw_rotated_text_fallback(frame, scene, transform);
+                    crate::schematic_runtime::draw_canvas_text_fallback(
+                        frame,
+                        scene,
+                        transform,
+                        frame_origin,
+                    );
                 }
             }
         }

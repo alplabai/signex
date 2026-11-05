@@ -17,7 +17,7 @@ use crate::canvas::Camera;
 use crate::canvas::paper::{PaperLook, paint_paper_and_grid};
 use crate::render_config::{GridStyle, to_iced};
 use crate::schematic_runtime::{
-    SCHEMATIC_TEXT_SIZE, SceneOverrides, ScreenTransform, build_schematic_scene, draw_built_scene,
+    SceneOverrides, ScreenTransform, build_schematic_scene, schematic_draw_options_with,
     symbol_bounds,
 };
 
@@ -30,6 +30,17 @@ const TEXT_MARGIN_EM: f32 = 2.0;
 const TEXT_HEIGHT_MM: f32 = 1.27;
 /// The most a small part is magnified, in text heights at the max text size.
 const MAX_SCALE_TEXT_HEIGHTS: f32 = 4.0;
+/// The preview is a thumbnail, so its text keeps a readability clamp the sheet no longer has.
+const PREVIEW_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
+/// The replay options of the preview: the sheet's, with the thumbnail's text
+/// clamp.
+fn preview_draw_options(
+    transform: &ScreenTransform,
+) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    schematic_draw_options_with(transform, PREVIEW_TEXT_SIZE)
+}
+
 /// The part is placed on a multiple of this, mm, near the paper's centre.
 const PLACEMENT_GRID_MM: f64 = 2.54;
 
@@ -107,12 +118,12 @@ fn preview_sheet(lib: &LibSymbol) -> (SchematicSheet, Symbol) {
 
 /// The margin kept free on each side of the extent along one axis, px.
 fn fit_margin(side: f32) -> f32 {
-    (side * (1.0 - FILL_RATIO) / 2.0).max(SCHEMATIC_TEXT_SIZE.min_px * TEXT_MARGIN_EM)
+    (side * (1.0 - FILL_RATIO) / 2.0).max(PREVIEW_TEXT_SIZE.min_px * TEXT_MARGIN_EM)
 }
 
 /// The largest scale, px per mm, a part is fitted to.
 fn max_scale() -> f32 {
-    SCHEMATIC_TEXT_SIZE.max_px / (TEXT_HEIGHT_MM * MAX_SCALE_TEXT_HEIGHTS)
+    PREVIEW_TEXT_SIZE.max_px / (TEXT_HEIGHT_MM * MAX_SCALE_TEXT_HEIGHTS)
 }
 
 /// The transform that centres `extent` in `size` and scales it to fit.
@@ -207,7 +218,12 @@ impl SymbolSheetPreview {
             None,
             SceneOverrides::default(),
         ) {
-            draw_built_scene(frame, &scene, &transform);
+            crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+                frame,
+                &scene,
+                |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+                preview_draw_options(&transform),
+            );
         }
     }
 }

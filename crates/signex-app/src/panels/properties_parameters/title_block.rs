@@ -95,16 +95,16 @@ pub fn view_title_block_section<'a>(
             let mut c = Column::new().spacing(0).width(Length::Fill);
             for field in TitleBlockField::ALL {
                 let draft = ctx
-                    .title_block_drafts
-                    .iter()
-                    .find(|d| d.field == field && ctx.title_block_sheet.as_ref() == Some(&d.sheet));
+                    .title_block_sheet
+                    .as_deref()
+                    .and_then(|sheet| ctx.drafts.title_block_text(sheet, field));
                 let own = ctx
                     .title_block
                     .get(field.key())
                     .cloned()
                     .unwrap_or_default();
                 let value = match draft {
-                    Some(draft) => draft.text.clone(),
+                    Some(draft) => draft,
                     None => own.clone(),
                 };
                 // The project's value, shown greyed while the sheet leaves

@@ -163,7 +163,8 @@ impl PlacementGhost {
             *built = Some((key, scene));
         }
         if let Some((_, Some(scene))) = built.as_ref() {
-            draw_built_scene(frame, scene, &Self::transform_at(camera, anchor));
+            let transform = Self::transform_at(camera, anchor);
+            draw_built_scene(frame, scene, &transform, iced::Point::ORIGIN);
         }
     }
 }

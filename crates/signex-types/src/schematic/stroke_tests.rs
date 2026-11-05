@@ -90,8 +90,27 @@ fn a_symbol_strokes_at_its_most_common_library_width() {
     assert_eq!(symbol_stroke_mm([0.254, 0.254, 0.5]), 0.254);
     assert_eq!(symbol_stroke_mm([0.254, 0.5]), 0.5, "a tie takes the wider");
     assert_eq!(
-        symbol_stroke_mm([0.0, 0.0, 0.254]),
+        symbol_stroke_mm([0.0, 0.0, 0.5]),
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    );
+    assert_eq!(symbol_stroke_mm([]), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
+}
+
+/// #2025 - a width-0 symbol stroke is the default wire width, not the floor;
+/// explicit widths keep the floor.
+#[test]
+fn a_zero_symbol_stroke_is_the_default_wire_width() {
+    assert_eq!(
+        symbol_graphic_stroke_mm(0.0),
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    );
+    assert_eq!(
+        symbol_graphic_stroke_mm(f64::NAN),
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    );
+    assert_eq!(symbol_graphic_stroke_mm(0.5), 0.5);
+    assert_eq!(
+        symbol_graphic_stroke_mm(0.01),
         SCHEMATIC_RENDER_MIN_STROKE_MM
     );
-    assert_eq!(symbol_stroke_mm([]), SCHEMATIC_RENDER_MIN_STROKE_MM);
 }

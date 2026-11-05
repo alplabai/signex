@@ -236,6 +236,7 @@ impl Signex {
     /// File ▸ Save All: every dirty document and row through the shared
     /// Save All flow, with nothing to do afterwards.
     fn save_all_dirty(&mut self) -> Task<Message> {
+        self.commit_pending_title_block_drafts();
         let rows = self.library.dirty_editors();
         let mut paths: Vec<std::path::PathBuf> = self
             .document_state

@@ -117,6 +117,7 @@ mod tests {
         use signex_types::schematic::{
             Aabb, field_effective_style, lower_placed_symbol, primitives_bounds, text_aabb,
         };
+        crate::fonts::measure::install_hermetic();
         let sheet = SnxSchematic::parse(SHEET_SOURCE)
             .expect("sample parses")
             .sheet;
@@ -152,6 +153,10 @@ mod tests {
                     rotation,
                     h,
                     v,
+                    signex_types::font::requested_family(
+                        prop.font_family.as_deref(),
+                        sheet.font_family.as_deref(),
+                    ),
                 );
                 assert!(
                     touches(&text).is_none(),
@@ -169,6 +174,10 @@ mod tests {
                 label.rotation,
                 label.justify,
                 label.justify_v,
+                signex_types::font::requested_family(
+                    label.font_family.as_deref(),
+                    sheet.font_family.as_deref(),
+                ),
             );
             assert!(
                 touches(&text).is_none(),

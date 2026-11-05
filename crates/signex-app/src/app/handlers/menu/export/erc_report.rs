@@ -197,6 +197,8 @@ impl Signex {
 
     /// Menu entry: refuse if ERC never ran, otherwise ask where to save.
     pub(crate) fn handle_erc_report_requested(&mut self) -> Task<Message> {
+        let anchor = self.document_state.active_path.clone();
+        self.commit_drafts_in_scope_of(anchor.as_deref());
         if !self.erc_has_been_run() {
             self.refuse_erc_report_before_run();
             return Task::none();

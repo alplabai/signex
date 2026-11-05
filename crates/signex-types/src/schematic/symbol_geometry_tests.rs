@@ -312,9 +312,9 @@ fn arc_polyline_runs_start_to_end_through_the_bulge() {
 #[test]
 fn caller_width_replaces_the_monospace_estimate() {
     let (anchor, size) = ((10.0, 5.0), 2.0);
-    let estimate = text_aabb("abcd", size, anchor, 0.0, HAlign::Left, VAlign::Top);
+    let estimate = text_aabb("abcd", size, anchor, 0.0, HAlign::Left, VAlign::Top, None);
     let same = text_aabb_with_width(
-        text_height_mm(size) * 0.6 * 4.0,
+        crate::font::family_width_mm("abcd", None, text_height_mm(size)),
         size,
         anchor,
         0.0,
@@ -411,4 +411,22 @@ fn pins_carry_the_symbols_library_stroke_width() {
         })
         .expect("a pin");
     assert_eq!(pin_width, 0.254);
+}
+
+/// #2025 - a width-0 symbol's pins draw at the default wire width, like its
+/// width-0 outline, not at the render floor.
+#[test]
+fn a_width_zero_symbol_strokes_its_pins_at_the_default_wire_width() {
+    let primitives = lower_symbol(
+        &lib(vec![rect(4.0, 2.0)], vec![pin(-4.0, 0.0, 0.0, 2.0)]),
+        &placed(0.0, 0.0, 0.0),
+    );
+    let pin_width = primitives.iter().find_map(|p| match p {
+        SymbolPrimitive::Pin { width, .. } => Some(*width),
+        _ => None,
+    });
+    assert_eq!(
+        pin_width,
+        Some(crate::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM)
+    );
 }

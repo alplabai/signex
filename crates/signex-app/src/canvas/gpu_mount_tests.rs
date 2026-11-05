@@ -458,7 +458,11 @@ fn fixture_has_a_rotated_text_the_fallback_must_draw() {
         )
         .expect("scene")
         .clone();
-    let rotated: Vec<&str> = crate::renderer_scene_canvas::rotated_texts(&scene)
+    let options = crate::schematic_runtime::schematic_draw_options(&transform);
+    let rotated: Vec<&str> = scene
+        .texts
+        .iter()
+        .filter(|t| crate::renderer_scene_canvas::cpu_draws_beside_gpu(t, options))
         .map(|t| t.content.as_str())
         .collect();
     assert_eq!(rotated, ["NETB"], "the 90 degree label is rotated text");

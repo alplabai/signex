@@ -9,6 +9,8 @@ use super::super::super::super::*;
 
 impl Signex {
     pub(crate) fn handle_export_pdf_open_dialog(&mut self) -> iced::Task<Message> {
+        let anchor = self.document_state.active_path.clone();
+        self.commit_drafts_in_scope_of(anchor.as_deref());
         if !self.document_state.has_active_engine() {
             log::warn!("PDF export: no active schematic");
             return iced::Task::none();
@@ -104,6 +106,8 @@ impl Signex {
     }
 
     pub(crate) fn handle_export_netlist_requested(&mut self) -> Option<Task<Message>> {
+        let anchor = self.document_state.active_path.clone();
+        self.commit_drafts_in_scope_of(anchor.as_deref());
         if !self.document_state.has_active_engine() {
             log::warn!("Netlist export: no active schematic");
             return Some(Task::none());

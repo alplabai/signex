@@ -15,8 +15,8 @@ use signex_renderer::theme::ResolvedTheme;
 use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, DrawingPlacement, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet,
-    SelectedItem, SelectedKind, Symbol, TextNote, TextProp, VAlign, circumcircle,
-    field_effective_style, text_aabb_with_width, text_height_mm,
+    SelectedItem, SelectedKind, Symbol, TextField, TextNote, TextProp, TextWidths, VAlign,
+    circumcircle, field_effective_style, text_aabb_with_width, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -32,7 +32,6 @@ mod snapshot;
 mod symbol;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 pub mod text;
-mod text_width;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
@@ -297,7 +296,7 @@ pub fn draw_power_port_preview(
 
     // The body is the placed port's own lowering, so the ghost shows the
     // shape the click will commit.
-    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol);
+    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol, None);
     let mut wires = Vec::new();
     let mut arcs = Vec::new();
     let mut polygons = Vec::new();
@@ -410,7 +409,7 @@ fn render_schematic_with_renderer(
     if let Some(scene) =
         build_schematic_scene(snapshot, transform, colors, bounds, focus_set, overrides)
     {
-        draw_built_scene(frame, &scene, transform);
+        draw_built_scene(frame, &scene, transform, iced::Point::ORIGIN);
     }
 }
 
@@ -455,50 +454,69 @@ pub fn build_schematic_scene(
     Some(scene)
 }
 
-/// Readability limits on schematic text, in logical pixels. The one source for
-/// the CPU replay below and for `scene_shader::SchematicSurface`, so the two
-/// paths clamp glyphs identically.
+/// Sheet text is its true size at every zoom, no on-screen clamp (#2022, docs/DECISIONS.md).
+/// The one source for the CPU replay below and `scene_shader::SchematicSurface`.
 pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
-    signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
+    signex_gfx::primitive::text::TextSizePolicy::UNCLAMPED;
 
 /// The replay options of the schematic CPU path at `transform`.
 pub fn schematic_draw_options(
     transform: &ScreenTransform,
 ) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    schematic_draw_options_with(transform, SCHEMATIC_TEXT_SIZE)
+}
+
+/// [`schematic_draw_options`] with a surface's own text limits.
+pub(crate) fn schematic_draw_options_with(
+    transform: &ScreenTransform,
+    text_size: signex_gfx::primitive::text::TextSizePolicy,
+) -> crate::renderer_scene_canvas::SceneDrawOptions {
     crate::renderer_scene_canvas::SceneDrawOptions {
         scale_px_per_mm: transform.scale,
         device_px_per_logical_px: transform.device_px_per_logical_px,
-        text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
-        text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
+        text_min_px: text_size.min_px,
+        text_max_px: text_size.max_px,
+        frame_origin: iced::Point::ORIGIN,
     }
 }
 
-/// Replay a built scene through the live `transform`.
+/// Replay a built scene through the live `transform`. `frame_origin` is where
+/// `frame` starts in screen space: the origin, except for the retained content
+/// layer, whose frame reaches past the viewport on every side.
 pub(crate) fn draw_built_scene(
     frame: &mut canvas::Frame,
     scene: &Scene,
     transform: &ScreenTransform,
+    frame_origin: iced::Point,
 ) {
     crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        schematic_draw_options(transform),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            frame_origin,
+            ..schematic_draw_options(transform)
+        },
     );
 }
 
-/// The CPU half of a GPU-mounted sheet: only the texts the GPU glyph atlas
-/// cannot rotate, through the same transform and options as the full replay.
-pub(crate) fn draw_rotated_text_fallback(
+/// The canvas half of a GPU-mounted sheet: only the texts the GPU glyph atlas
+/// cannot draw, the rotated and the oversize ones, through the same transform
+/// and options as the full replay.
+pub(crate) fn draw_canvas_text_fallback(
     frame: &mut canvas::Frame,
     scene: &Scene,
     transform: &ScreenTransform,
+    frame_origin: iced::Point,
 ) {
-    crate::renderer_scene_canvas::draw_rotated_texts(
+    crate::renderer_scene_canvas::draw_canvas_texts(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        schematic_draw_options(transform),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            frame_origin,
+            ..schematic_draw_options(transform)
+        },
     );
 }
 
@@ -532,7 +550,7 @@ fn draw_renderer_snapshot(
 ) {
     let mut scene = Scene::default();
     SchematicRenderer::build_scene(snapshot, theme, dirty, &mut scene);
-    draw_built_scene(frame, &scene, transform);
+    draw_built_scene(frame, &scene, transform, iced::Point::ORIGIN);
 }
 
 fn to_rgba(color: Color) -> [f32; 4] {
@@ -599,7 +617,9 @@ fn collect_item_bounds_with(
         {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
-                bbox: text_prop_aabb(
+                bbox: text_prop_aabb_with(
+                    Some(&snapshot.text_widths),
+                    TextField::SymbolReference,
                     designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
                     ref_text,
                     symbol,
@@ -611,7 +631,14 @@ fn collect_item_bounds_with(
         if let Some(val_text) = symbol.val_text.as_ref().filter(|p| !p.hidden) {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
-                bbox: text_prop_aabb(&symbol.value, val_text, symbol, document_family),
+                bbox: text_prop_aabb_with(
+                    Some(&snapshot.text_widths),
+                    TextField::SymbolValue,
+                    &symbol.value,
+                    val_text,
+                    symbol,
+                    document_family,
+                ),
                 anchor: val_text.position,
             });
         }
@@ -698,7 +725,7 @@ fn collect_item_bounds_with(
     for label in &snapshot.labels {
         out.push(ItemBound {
             item: SelectedItem::new(label.uuid, SelectedKind::Label),
-            bbox: label_aabb(label, document_family),
+            bbox: label_aabb_with(Some(&snapshot.text_widths), label, document_family),
             anchor: label.position,
         });
     }
@@ -706,7 +733,7 @@ fn collect_item_bounds_with(
     for note in &snapshot.text_notes {
         out.push(ItemBound {
             item: SelectedItem::new(note.uuid, SelectedKind::TextNote),
-            bbox: note_aabb(note, document_family),
+            bbox: note_aabb_with(Some(&snapshot.text_widths), note, document_family),
             anchor: note.position,
         });
     }
@@ -813,7 +840,30 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
     }
 }
 
+/// Where a text's measured width is kept: the sheet's table, the item and
+/// which of its texts.
+type WidthSlot<'a> = Option<(&'a TextWidths, uuid::Uuid, TextField)>;
+
+#[cfg(test)]
 fn text_prop_aabb(
+    text: &str,
+    prop: &TextProp,
+    symbol: &Symbol,
+    document_family: Option<&str>,
+) -> Aabb {
+    text_prop_aabb_with(
+        None,
+        TextField::SymbolReference,
+        text,
+        prop,
+        symbol,
+        document_family,
+    )
+}
+
+fn text_prop_aabb_with(
+    widths: Option<&TextWidths>,
+    field: TextField,
     text: &str,
     prop: &TextProp,
     symbol: &Symbol,
@@ -821,6 +871,7 @@ fn text_prop_aabb(
 ) -> Aabb {
     let (rot, h_align, v_align) = field_effective_style(prop, symbol);
     drawn_text_aabb(
+        widths.map(|w| (w, symbol.uuid, field)),
         text,
         resolve_family(prop.font_family.as_deref(), document_family).as_deref(),
         prop.font_size,
@@ -831,9 +882,12 @@ fn text_prop_aabb(
     )
 }
 
-/// `text_aabb` for a text drawn in `family`: the box geometry is the shared
-/// `signex_types` one, only the width is measured in the drawn face.
+/// `text_aabb` for a text drawn in `family` (the resolved face). With a
+/// `slot` the width is the stored one, measured again only when the text,
+/// face or size changed.
+#[allow(clippy::too_many_arguments)]
 fn drawn_text_aabb(
+    slot: WidthSlot<'_>,
     text: &str,
     family: Option<&str>,
     font_size: f64,
@@ -842,14 +896,27 @@ fn drawn_text_aabb(
     h_align: HAlign,
     v_align: VAlign,
 ) -> Aabb {
-    let chars = text.chars().count().max(1) as f64;
-    let h = text_height_mm(font_size);
-    let w = text_width::text_width_mm(text, family, h, h * 0.6 * chars);
-    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align)
+    let size_mm = text_height_mm(font_size);
+    let measure = || signex_types::font::family_width_mm_checked(text, family, size_mm);
+    let width = match slot {
+        Some((widths, id, field)) => widths.width_mm(id, field, text, family, size_mm, measure),
+        None => measure().0,
+    };
+    text_aabb_with_width(width, font_size, anchor, rotation_deg, h_align, v_align)
 }
 
+#[cfg(test)]
 fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
+    note_aabb_with(None, note, document_family)
+}
+
+fn note_aabb_with(
+    widths: Option<&TextWidths>,
+    note: &TextNote,
+    document_family: Option<&str>,
+) -> Aabb {
     drawn_text_aabb(
+        widths.map(|w| (w, note.uuid, TextField::Note)),
         &note.text,
         resolve_family(note.font_family.as_deref(), document_family).as_deref(),
         note.font_size,
@@ -863,7 +930,16 @@ fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
 /// Hit/selection box of a label, derived from the same geometry the draw
 /// path uses so the two cannot disagree: the flag outline for global and
 /// hierarchical labels, the justified text box for the rest.
+#[cfg(test)]
 fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
+    label_aabb_with(None, label, document_family)
+}
+
+fn label_aabb_with(
+    widths: Option<&TextWidths>,
+    label: &Label,
+    document_family: Option<&str>,
+) -> Aabb {
     if label::is_flag(label) {
         let mut verts = label::marker_vertices(label, document_family).into_iter();
         let (x0, y0) = verts.next().expect("marker has vertices");
@@ -872,6 +948,7 @@ fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
         });
     }
     drawn_text_aabb(
+        widths.map(|w| (w, label.uuid, TextField::Label)),
         &label.text,
         resolve_family(label.font_family.as_deref(), document_family).as_deref(),
         label.font_size,

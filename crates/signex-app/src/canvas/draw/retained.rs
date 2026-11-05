@@ -140,17 +140,21 @@ impl SchematicCanvas<'_> {
         if rebuild {
             retained.cache.clear();
         }
-        let geometry = retained.cache.draw_with_bounds(
-            renderer,
-            clip_rect(viewport, transform.device_px_per_logical_px),
-            |frame| {
-                #[cfg(test)]
-                retained.rebuilds.set(retained.rebuilds.get() + 1);
-                if let Some(snapshot) = snapshot {
-                    self.render_content_scene(frame, snapshot, transform, bounds, focus_set);
-                }
-            },
-        );
+        let clip = clip_rect(viewport, transform.device_px_per_logical_px);
+        let geometry = retained.cache.draw_with_bounds(renderer, clip, |frame| {
+            #[cfg(test)]
+            retained.rebuilds.set(retained.rebuilds.get() + 1);
+            if let Some(snapshot) = snapshot {
+                self.render_content_scene(
+                    frame,
+                    clip.position(),
+                    snapshot,
+                    transform,
+                    bounds,
+                    focus_set,
+                );
+            }
+        });
         if rebuild {
             retained.built = Some(BuiltAt {
                 offset: (transform.offset_x, transform.offset_y),

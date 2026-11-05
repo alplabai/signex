@@ -272,7 +272,7 @@ fn a_bar_power_port_rises_above_the_connection_point() {
 #[test]
 fn the_power_port_placement_ghost_draws_the_same_geometry_as_the_placed_port() {
     let (_, sym) = placed_power_port("power:arrow");
-    let (ghost, ghost_box) = symbol_geometry_of(None, &sym);
+    let (ghost, ghost_box) = symbol_geometry_of(None, &sym, None);
     let mut with_sym = SchematicSheet::default();
     with_sym.symbols.push(sym.clone());
     let (placed, placed_box) = symbol_geometry(&with_sym, &sym);
