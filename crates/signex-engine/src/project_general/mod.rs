@@ -50,6 +50,10 @@ pub enum ProjectGeneralCommand {
     },
     /// The font new text is placed in (#2026); `None` clears it.
     SetSchematicDefaultFont(Option<String>),
+    /// The line style of wires whose class sets none (#2026).
+    SetSchematicDefaultLineStyle(Option<signex_types::net_class::NetLineStyle>),
+    /// The fill new shapes are placed with (#2026).
+    SetSchematicDefaultShapeFill(Option<signex_types::schematic::FillType>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -112,7 +116,12 @@ impl ProjectGeneralHistory {
     /// no-op records nothing.
     pub fn apply(&mut self, data: &mut ProjectData, command: ProjectGeneralCommand) -> bool {
         let before = GeneralSnapshot::of(data);
-        let is_pick = matches!(command, ProjectGeneralCommand::SetDesignatorStandard(_));
+        let is_pick = matches!(
+            command,
+            ProjectGeneralCommand::SetDesignatorStandard(_)
+                | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
+                | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
+        );
         if is_pick {
             self.run_open = false;
         }
@@ -142,6 +151,12 @@ impl ProjectGeneralHistory {
             }
             ProjectGeneralCommand::SetSchematicDefaultFont(font) => {
                 data.schematic_defaults.font_family = font.filter(|f| !f.trim().is_empty());
+            }
+            ProjectGeneralCommand::SetSchematicDefaultLineStyle(line) => {
+                data.schematic_defaults.wire_line_style = line;
+            }
+            ProjectGeneralCommand::SetSchematicDefaultShapeFill(fill) => {
+                data.schematic_defaults.shape_fill = fill;
             }
         }
         if GeneralSnapshot::of(data) == before {
