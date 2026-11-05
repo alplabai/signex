@@ -271,10 +271,12 @@ same section. Naming rule and examples: [`changelog.d/README.md`](changelog.d/RE
 
 Check yours with `bash scripts/changelog_assemble.sh --check`. The
 `lint · repo gates` CI job runs that check on every PR (a malformed fragment
-fails it), warns when a PR into `trunk` edits `CHANGELOG.md` directly (it
-becomes an error after a transition window; same-repo release PRs — head
-branch `chore/release-*` or `release/*` — are exempt) and warns when a
-`feat`/`fix` PR has no fragment. At release time the maintainer runs
+fails it) and fails a PR into `trunk` that edits `CHANGELOG.md` directly
+(same-repo release PRs — head branch `chore/release-*` or `release/*` — are
+exempt) or whose `feat`/`fix`/`perf` title comes with no fragment; a change
+that is not user-visible takes another commit type. A breaking change is a
+`changed` or `removed` fragment whose bullet starts with **Breaking:**. Details:
+[`changelog.d/README.md`](changelog.d/README.md). At release time the maintainer runs
 `scripts/changelog_assemble.sh --version X.Y.Z --date YYYY-MM-DD`, which folds
 the fragments in and opens the dated section `release.yml` extracts. The
 release PR then still adds by hand the headline, the install block and the
