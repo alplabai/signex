@@ -233,6 +233,10 @@ Two things follow from the widget drawing in its own clip layer:
 - On the tiny-skia fallback the damage diff of text ignores the group
   transformation, so a translated cached text-only region may not repaint
   until something else dirties it. The wgpu renderer is the shipped path.
+- A hairline edge that lands exactly on a half-device-pixel tie is rounded
+  where it fell at the build offset, so a reused frame can differ from a
+  freshly built one by one device pixel at that edge. A fresh build decides
+  the same tie by the f32 noise in the live offset, so neither is more exact.
 
 The retained clip starts a margin further up and left than the canvas-origin
 clip the plain canvas uses. `canvas::pan_reuse_pixel_tests` renders both on a

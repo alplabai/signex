@@ -321,6 +321,7 @@ fn a_net_highlight_change_rebuilds_once() {
     sheet.slot.set_net_highlight(Some(std::sync::Arc::new(
         [sheet.wire].into_iter().collect(),
     )));
+    sheet.pan(3.0, 0.0);
     assert_eq!(sheet.frame(), (1, None));
 }
 
