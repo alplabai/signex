@@ -15,47 +15,67 @@ use super::*;
 
 const START: f32 = 20.0;
 
-/// One draw of `slot` as the widget does, at `dpr`, in `theme`.
-fn draw(
-    slot: &CanvasSlot,
-    renderer: &iced::Renderer,
+/// What a frame is drawn with, besides the slot.
+struct Look {
+    size: iced::Size,
     dpr: f32,
     theme: signex_types::theme::ThemeId,
+    auto_focus: bool,
+    wire_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    allow_shift: bool,
+}
+
+/// One draw of `slot` as the widget does.
+fn draw_with(
+    slot: &CanvasSlot,
+    renderer: &iced::Renderer,
+    state: &CanvasState,
+    look: &Look,
 ) -> SurfaceLayers {
-    let overrides = Default::default();
     let filters = Default::default();
-    let mut prefs = test_prefs(&overrides, &filters);
-    prefs.device_px_per_logical_px = dpr;
-    prefs.canvas_colors = signex_types::theme::canvas_colors(theme);
-    let bounds = Rectangle::with_size(iced::Size::new(WIDTH as f32, HEIGHT as f32));
+    let mut prefs = test_prefs(&look.wire_overrides, &filters);
+    prefs.device_px_per_logical_px = look.dpr;
+    prefs.canvas_colors = signex_types::theme::canvas_colors(look.theme);
+    prefs.auto_focus = look.auto_focus;
     SchematicCanvas::new(slot, prefs).draw_surface(
-        &CanvasState::default(),
+        state,
         renderer,
-        bounds,
+        Rectangle::with_size(look.size),
         mouse::Cursor::Unavailable,
-        true,
+        look.allow_shift,
     )
 }
 
 struct Sheet {
     slot: CanvasSlot,
     renderer: iced::Renderer,
-    dpr: f32,
-    theme: signex_types::theme::ThemeId,
+    look: Look,
+    state: CanvasState,
+    /// A wire of the sheet.
+    wire: uuid::Uuid,
 }
 
 impl Sheet {
     fn new(dpr: f32) -> Self {
+        let sheet = fixture();
         Self {
-            slot: slot_with(&fixture()),
+            wire: sheet.wires[0].uuid,
+            slot: slot_with(&sheet),
             renderer: crate::layout_probe::headless_renderer(),
-            dpr,
-            theme: signex_types::theme::ThemeId::Signex,
+            look: Look {
+                size: iced::Size::new(WIDTH as f32, HEIGHT as f32),
+                dpr,
+                theme: signex_types::theme::ThemeId::Signex,
+                auto_focus: false,
+                wire_overrides: Default::default(),
+                allow_shift: true,
+            },
+            state: CanvasState::default(),
         }
     }
 
     fn draw(&self) -> SurfaceLayers {
-        draw(&self.slot, &self.renderer, self.dpr, self.theme)
+        draw_with(&self.slot, &self.renderer, &self.state, &self.look)
     }
 
     /// Draw, and say how many content rebuilds that took and where the
@@ -157,12 +177,12 @@ fn an_edit_rebuilds_once() {
 fn a_theme_change_rebuilds_once() {
     let mut sheet = Sheet::new(1.0);
     sheet.frame();
-    sheet.theme = signex_types::theme::ThemeId::Nord;
+    sheet.look.theme = signex_types::theme::ThemeId::Nord;
     sheet.slot.clear_content_cache();
     assert_eq!(sheet.frame(), (1, None));
 
     // And on a pan frame, without the clear.
-    sheet.theme = signex_types::theme::ThemeId::Signex;
+    sheet.look.theme = signex_types::theme::ThemeId::Signex;
     sheet.pan(3.0, 0.0);
     assert_eq!(sheet.frame(), (1, None));
 }
@@ -225,4 +245,106 @@ fn a_panned_frame_matches_a_fresh_one() {
         0,
         "the panned frame differs from a fresh render at the same camera"
     );
+}
+
+#[test]
+fn a_viewport_resize_between_build_and_pan_rebuilds_once() {
+    let mut sheet = Sheet::new(1.0);
+    sheet.frame();
+    sheet.look.size = iced::Size::new(WIDTH as f32 - 40.0, HEIGHT as f32);
+    sheet.pan(3.0, 0.0);
+    assert_eq!(sheet.frame(), (1, None));
+    assert_eq!(sheet.frame(), (0, None));
+}
+
+#[test]
+fn a_display_scale_change_rebuilds_once() {
+    let mut sheet = Sheet::new(1.0);
+    sheet.frame();
+    sheet.look.dpr = 2.0;
+    assert_eq!(sheet.frame(), (1, None));
+    // Moving between displays while panning is the same input change.
+    sheet.look.dpr = 1.0;
+    sheet.pan(4.0, 0.0);
+    assert_eq!(sheet.frame(), (1, None));
+}
+
+#[test]
+fn a_caller_that_does_not_allow_a_shift_never_gets_one() {
+    let mut sheet = Sheet::new(1.0);
+    sheet.frame();
+    sheet.pan(6.0, 0.0);
+    sheet.look.allow_shift = false;
+    assert_eq!(sheet.frame(), (1, None), "a pan rebuilds instead");
+    assert_eq!(sheet.frame(), (0, None));
+}
+
+#[test]
+fn a_move_drag_does_not_touch_the_retained_layer() {
+    let mut sheet = Sheet::new(1.0);
+    sheet.frame();
+    let built = sheet.slot.content_surface.borrow().rebuilds();
+    sheet.state.move_dragging = true;
+    sheet.state.move_origin = Some((0.0, 0.0));
+    sheet.state.move_current = Some((3.0, 0.0));
+
+    // Nothing selected: the content draws live, shifted by the drag.
+    sheet.pan(6.0, 0.0);
+    assert_eq!(sheet.draw().content_shift, None);
+
+    // Something selected: the drag layers take over.
+    sheet.slot.selected = vec![signex_types::schematic::SelectedItem::new(
+        sheet.wire,
+        signex_types::schematic::SelectedKind::Wire,
+    )];
+    assert_eq!(sheet.draw().content_shift, None);
+    assert_eq!(sheet.slot.content_surface.borrow().rebuilds(), built);
+}
+
+#[test]
+fn a_focus_change_on_a_pan_frame_rebuilds_once() {
+    let mut sheet = Sheet::new(1.0);
+    sheet.slot.selected = vec![signex_types::schematic::SelectedItem::new(
+        sheet.wire,
+        signex_types::schematic::SelectedKind::Wire,
+    )];
+    sheet.frame();
+    sheet.look.auto_focus = true;
+    sheet.pan(3.0, 0.0);
+    assert_eq!(sheet.frame(), (1, None));
+}
+
+#[test]
+fn a_net_highlight_change_rebuilds_once() {
+    let mut sheet = Sheet::new(1.0);
+    sheet.frame();
+    sheet.slot.set_net_highlight(Some(std::sync::Arc::new(
+        [sheet.wire].into_iter().collect(),
+    )));
+    assert_eq!(sheet.frame(), (1, None));
+}
+
+#[test]
+fn a_wire_style_change_on_a_pan_frame_rebuilds_once() {
+    let mut sheet = Sheet::new(1.0);
+    sheet.frame();
+    sheet
+        .look
+        .wire_overrides
+        .insert(sheet.wire, signex_types::theme::Color::new(255, 0, 0, 255));
+    sheet.pan(3.0, 0.0);
+    assert_eq!(sheet.frame(), (1, None));
+}
+
+#[test]
+fn a_pan_far_from_the_origin_still_reuses() {
+    // Zoomed far into a big sheet the offsets pass 1e5 px, where one step of
+    // an f32 is far above 1e-3.
+    let sheet = Sheet::new(1.0);
+    sheet.slot.camera_mut().offset = iced::Point::new(-300_000.0, 120_000.0);
+    sheet.frame();
+    sheet.pan(3.0, -2.0);
+    let (rebuilds, shift) = sheet.frame();
+    assert_eq!(rebuilds, 0);
+    assert_eq!(shift, Some(Vector::new(3.0, -2.0)));
 }

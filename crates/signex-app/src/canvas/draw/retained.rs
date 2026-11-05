@@ -9,7 +9,9 @@ use super::super::*;
 use crate::schematic_runtime::{ScreenTransform, pan_reach};
 
 /// Tolerance, in device pixels, for a pan to count as a whole number of them.
-const WHOLE_PX_TOLERANCE: f32 = 1e-3;
+/// Widened to the f32 resolution of the offsets when they are large (a sheet
+/// zoomed far in), where 1e-3 is below one step of the camera.
+const WHOLE_PX_TOLERANCE: f64 = 1e-3;
 
 /// What the retained geometry was built from.
 #[derive(Clone, Copy)]
@@ -59,10 +61,13 @@ impl RetainedContent {
         }
         let reach = clip_margin(viewport, dpr);
         let axis = |from: f32, to: f32, limit: f32| {
-            let moved = (to - from) * dpr;
+            // Exact: the difference of two f32 fits an f64.
+            let moved = (f64::from(to) - f64::from(from)) * f64::from(dpr);
             let whole = moved.round();
-            ((moved - whole).abs() < WHOLE_PX_TOLERANCE && (whole / dpr).abs() <= limit)
-                .then_some(whole / dpr)
+            let step = f64::from(f32::EPSILON) * f64::from(to.abs().max(from.abs()));
+            let tolerance = WHOLE_PX_TOLERANCE.max(2.0 * step * f64::from(dpr));
+            let shift = (whole / f64::from(dpr)) as f32;
+            ((moved - whole).abs() < tolerance && shift.abs() <= limit).then_some(shift)
         };
         Some(iced::Vector::new(
             axis(built.offset.0, live.offset_x, reach.x)?,
@@ -120,16 +125,14 @@ impl SchematicCanvas<'_> {
         // had to build another, the geometry is of the old one.
         if shift.is_some_and(|s| s.x != 0.0 || s.y != 0.0) {
             let generation = snapshot.and_then(|snapshot| {
-                let mut scenes = self.content_scene.borrow_mut();
-                let _ = scenes.scene_for(
+                self.content_scene.borrow_mut().generation_for(
                     snapshot,
                     transform,
                     &self.prefs.canvas_colors,
                     bounds,
                     focus_set,
                     self.scene_overrides(),
-                );
-                scenes.generation()
+                )
             });
             if retained.built.map(|b| b.scene_generation) != Some(generation) {
                 shift = None;
