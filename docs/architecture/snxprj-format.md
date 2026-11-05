@@ -224,9 +224,14 @@ the Project tab's Schematic defaults section, added without bumping the
   its fill, and a placed label or note stores the project font (or no font,
   the sheet default, when the project names none). Stored values are never
   reinterpreted.
-- Omitted when nothing is set. Keys a newer build wrote inside the object are
-  kept. A section this build cannot read is kept verbatim, not applied, and
-  replaced once a default is edited here.
+- Omitted when nothing is set. Read key by key: every readable key applies;
+  a key this build does not know, or a known key whose value it cannot read
+  (a newer build's line style name, say), is kept raw and written back on
+  every save, edits of other keys included, until that same default is set
+  here. A section that is not an object is kept verbatim and not applied.
+- Known gap: the symbol hit box and the PDF page bounding box still use the
+  built-in symbol line width (`schematic_runtime/symbol.rs`,
+  `signex-output` `pdf/layout.rs`); only drawing uses the project's.
 
 ## Description (`description`) and the name (#1202)
 
