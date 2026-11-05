@@ -145,7 +145,7 @@ impl Signex {
         let job = match ext.as_str() {
             "snxsym" => crate::app::document_read::ReadJob::Symbol { from_tree },
             "snxfpt" => {
-                // v0.13.0 — footprint editor gated off for release.
+                // Footprint editor gated off for release.
                 // A `.snxfpt` opened from the tree / file dialog must
                 // not push an editable FootprintEditor tab. Read-only
                 // preview + Pick-Footprint binding of existing files
@@ -157,7 +157,7 @@ impl Signex {
                     tracing::info!(
                         target: "signex::library",
                         path = %path.display(),
-                        "open primitive: footprint editor disabled (v0.13.0) — ignoring .snxfpt open",
+                        "open primitive: footprint editor disabled (release gate) — ignoring .snxfpt open",
                     );
                     return Ok(Task::none());
                 }

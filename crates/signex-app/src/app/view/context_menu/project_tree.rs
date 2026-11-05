@@ -291,7 +291,7 @@ impl Signex {
                     "",
                     Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
                 ));
-                // v0.13.0 — footprint editor gated off; hide the create
+                // Footprint editor gated off for release; hide the create
                 // entry so the user never reaches a dead flow.
                 if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
                     v.push(dd_msg(
