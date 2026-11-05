@@ -485,21 +485,11 @@ pub(crate) fn draw_built_scene(
     scene: &Scene,
     transform: &ScreenTransform,
 ) {
-    draw_built_scene_with(frame, scene, transform, SCHEMATIC_TEXT_SIZE);
-}
-
-/// [`draw_built_scene`] with a surface's own text limits.
-pub(crate) fn draw_built_scene_with(
-    frame: &mut canvas::Frame,
-    scene: &Scene,
-    transform: &ScreenTransform,
-    text_size: signex_gfx::primitive::text::TextSizePolicy,
-) {
     crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        schematic_draw_options_with(transform, text_size),
+        schematic_draw_options(transform),
     );
 }
 

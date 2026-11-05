@@ -18,6 +18,8 @@ const MAX_OVERSIZE_TEXT_CHARS: usize = 256;
 #[derive(Default)]
 pub(crate) struct OversizeBudget {
     drawn: usize,
+    /// A text was left out or cut this frame.
+    capped: bool,
 }
 
 /// Messages warnings issued; one per run, not one per frame.
@@ -40,17 +42,17 @@ impl OversizeBudget {
     /// bound, or `None` once the per-frame count is spent.
     pub(crate) fn admit<'a>(&mut self, content: &'a str) -> Option<&'a str> {
         if self.drawn >= MAX_OVERSIZE_TEXTS_PER_FRAME {
+            self.capped = true;
             warn_oversize_capped_once();
             return None;
         }
         self.drawn += 1;
-        match content.char_indices().nth(MAX_OVERSIZE_TEXT_CHARS) {
-            Some((end, _)) => {
-                warn_oversize_capped_once();
-                Some(&content[..end])
-            }
-            None => Some(content),
+        let shown = drawn_part(content);
+        if shown.len() < content.len() {
+            self.capped = true;
+            warn_oversize_capped_once();
         }
+        Some(shown)
     }
 }
 
@@ -62,18 +64,37 @@ fn warn_oversize_capped_once() {
     }
 }
 
-/// Whether an oversize text can touch the frame, from its cached advance (no
-/// shaping): its corners rotated about the anchor. Off-screen oversize text is
-/// never handed to iced, so a hostile file cannot make a frame cost more.
+/// No glyph of any face in use is wider than this many em; a box built on it
+/// holds any shaping of the text, so it can cull without shaping.
+// shortcut: a flat 2 em per char, wider than any real glyph; tighten only if a
+// face with wider glyphs shows up.
+const MAX_GLYPH_ADVANCE_EM: f32 = 2.0;
+
+/// The part of `content` that is drawn, per the length bound.
+fn drawn_part(content: &str) -> &str {
+    match content.char_indices().nth(MAX_OVERSIZE_TEXT_CHARS) {
+        Some((end, _)) => &content[..end],
+        None => content,
+    }
+}
+
+/// Whether an oversize text can touch the frame. Only the part that is drawn
+/// is measured, and a text whose widest possible box misses the frame is
+/// culled before any shaping, so a frame never shapes more than a few short
+/// lines per near-screen text. Its corners are rotated about the anchor.
 pub(crate) fn on_screen(
     frame: &canvas::Frame,
     text: &TextItem,
     position: Point,
     size_px: f32,
 ) -> bool {
+    let shown = drawn_part(&text.content);
+    let upper = shown.chars().count() as f32 * MAX_GLYPH_ADVANCE_EM * size_px;
+    if !box_touches_frame(frame, text, position, size_px, upper) {
+        return false;
+    }
     let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
-    let width = text
-        .content
+    let width = shown
         .split('\n')
         .map(|line| {
             signex_types::font::shaped_advance_em(line, Some(family))
@@ -81,7 +102,18 @@ pub(crate) fn on_screen(
         })
         .fold(0.0_f32, f32::max)
         * size_px;
-    let height = text.content.split('\n').count() as f32
+    box_touches_frame(frame, text, position, size_px, width)
+}
+
+/// Whether `text`, `width` px wide, anchored at `position`, can touch the frame.
+fn box_touches_frame(
+    frame: &canvas::Frame,
+    text: &TextItem,
+    position: Point,
+    size_px: f32,
+    width: f32,
+) -> bool {
+    let height = drawn_part(&text.content).split('\n').count() as f32
         * size_px
         * signex_gfx::primitive::text::LINE_HEIGHT_EM;
     let x0 = match text.h_align {
@@ -138,7 +170,6 @@ mod tests {
     fn a_flood_of_long_oversize_texts_is_bounded_and_warns_once() {
         let long = "W".repeat(10_000);
         let mut budget = OversizeBudget::default();
-        let before = OVERSIZE_WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
         let drawn: Vec<&str> = (0..10_000).filter_map(|_| budget.admit(&long)).collect();
         assert_eq!(drawn.len(), MAX_OVERSIZE_TEXTS_PER_FRAME);
         assert!(
@@ -146,8 +177,9 @@ mod tests {
                 .iter()
                 .all(|c| c.chars().count() <= MAX_OVERSIZE_TEXT_CHARS)
         );
-        let after = OVERSIZE_WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
-        assert!(after > before, "the bound was hit");
+        // The budget's own flag, not the process-global warning latch, which
+        // other tests re-arm in parallel.
+        assert!(budget.capped, "the bound was hit");
         let short = "R1";
         let mut next_frame = OversizeBudget::default();
         assert_eq!(
@@ -155,5 +187,6 @@ mod tests {
             Some(short),
             "a new frame starts clean"
         );
+        assert!(!next_frame.capped);
     }
 }

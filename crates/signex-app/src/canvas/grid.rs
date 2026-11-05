@@ -74,10 +74,11 @@ pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
 
 /// One small "+" grid glyph, as two filled bars `width` thick reaching `arm`
 /// past `centre` (the same footprint as two butt-capped strokes, without the
-/// per-glyph stroke tessellation). Each bar's thin axis is centred on a
-/// device pixel centre (`device_scale` device px per logical px): tiny-skia
-/// fills rectangles without anti-aliasing, and a bar under 1 px thick between
-/// two pixel centres would not draw.
+/// per-glyph stroke tessellation). Every bar edge is a whole device pixel
+/// (`device_scale` device px per logical px) and each bar is at least one
+/// device pixel thick: a bar that covers part of a pixel draws at part
+/// intensity under multisampling, and tiny-skia fills rectangles without
+/// anti-aliasing, so it would drop a sub-pixel bar.
 pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
     frame: &mut canvas::Frame<R>,
     centre: Point,
@@ -86,19 +87,30 @@ pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
     device_scale: f32,
     color: Color,
 ) {
-    let half = width / 2.0;
+    for bar in grid_cross_bars(centre, arm, width, device_scale) {
+        frame.fill_rectangle(bar.position(), bar.size(), color);
+    }
+}
+
+/// The two bars of a "+" glyph, horizontal then vertical, on whole device
+/// pixels (see [`fill_grid_cross`]).
+fn grid_cross_bars(centre: Point, arm: f32, width: f32, device_scale: f32) -> [iced::Rectangle; 2] {
     let k = sanitised_device_scale(device_scale);
-    let on_pixel = |v: f32| ((v * k).floor() + 0.5) / k;
-    frame.fill_rectangle(
-        Point::new(centre.x - arm, on_pixel(centre.y) - half),
-        iced::Size::new(arm * 2.0, width),
-        color,
-    );
-    frame.fill_rectangle(
-        Point::new(on_pixel(centre.x) - half, centre.y - arm),
-        iced::Size::new(width, arm * 2.0),
-        color,
-    );
+    let thickness_px = (width * k).round().max(1.0);
+    // A bar's near edge, so the bar is centred on `c` to a whole pixel.
+    let near = |c: f32| (c * k - thickness_px / 2.0).round();
+    let span = |c: f32| ((c - arm) * k).round()..((c + arm) * k).round();
+    let (x, y) = (span(centre.x), span(centre.y));
+    [
+        iced::Rectangle::new(
+            Point::new(x.start / k, near(centre.y) / k),
+            iced::Size::new((x.end - x.start) / k, thickness_px / k),
+        ),
+        iced::Rectangle::new(
+            Point::new(near(centre.x) / k, y.start / k),
+            iced::Size::new(thickness_px / k, (y.end - y.start) / k),
+        ),
+    ]
 }
 
 /// Draw the grid dots on a canvas frame.
@@ -425,7 +437,10 @@ fn draw_grid_within<R: GeometryRenderer>(
 
 #[cfg(test)]
 mod snap_tests {
-    use super::{MAJOR_GRID_LINE_PX, MINOR_GRID_LINE_PX, snapped_grid_centre, snapped_grid_line};
+    use super::{
+        MAJOR_GRID_LINE_PX, MINOR_GRID_LINE_PX, grid_cross_bars, snapped_grid_centre,
+        snapped_grid_line,
+    };
     use iced::Point;
 
     fn on_device_pixel_middle(coordinate: f32, dpr: f32) -> bool {
@@ -452,6 +467,27 @@ mod snap_tests {
                         on_device_pixel_middle(q0.y, dpr),
                         "{dpr}x horizontal at {c}"
                     );
+                }
+            }
+        }
+    }
+
+    /// A cross's bars are whole device pixels, at least one thick, at whole
+    /// and fractional display scales: no bar covers part of a pixel.
+    #[test]
+    fn grid_cross_bars_are_whole_device_pixels() {
+        for dpr in [1.0_f32, 1.25, 1.5, 2.0] {
+            for phase in 0..23 {
+                let at = snapped_grid_centre(
+                    Point::new(50.0 + phase as f32 * 0.213, 80.0 + phase as f32 * 0.171),
+                    dpr,
+                );
+                for bar in grid_cross_bars(at, 2.0, MINOR_GRID_LINE_PX, dpr) {
+                    for edge in [bar.x, bar.y, bar.x + bar.width, bar.y + bar.height] {
+                        let device = edge * dpr;
+                        assert!((device - device.round()).abs() < 1e-3, "{dpr}x {edge}");
+                    }
+                    assert!(bar.width.min(bar.height) * dpr >= 1.0 - 1e-3, "{dpr}x thin");
                 }
             }
         }

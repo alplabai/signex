@@ -1078,4 +1078,54 @@ mod tests {
         assert_eq!(justify_h_row(&details.info), "Left");
         assert_eq!(justify_v_row(&details.info), "Top");
     }
+
+    /// The text a laid-out Properties view shows for a selection of `kind`
+    /// whose info rows are `info`.
+    fn shown_texts(
+        kind: signex_types::schematic::SelectedKind,
+        info: Vec<(String, String)>,
+    ) -> Vec<String> {
+        use super::view_selected_element_properties;
+        let (app, _task) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selected_kind = Some(kind);
+        ctx.selected_uuid = Some(uuid::Uuid::now_v7());
+        ctx.selection_info = info;
+        let view = view_selected_element_properties(
+            &ctx,
+            iced::Color::WHITE,
+            iced::Color::WHITE,
+            iced::Color::BLACK,
+        );
+        crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 4000.0))
+            .into_iter()
+            .map(|t| t.text)
+            .collect()
+    }
+
+    fn justify_info() -> Vec<(String, String)> {
+        vec![
+            (
+                signex_engine::info_keys::JUSTIFY_H.to_string(),
+                "Lefty".to_string(),
+            ),
+            (
+                signex_engine::info_keys::JUSTIFY_V.to_string(),
+                "Topsy".to_string(),
+            ),
+        ]
+    }
+
+    /// #2024 - the symbol-field and text-note views show the justification
+    /// rows under the keys the engine writes.
+    #[test]
+    fn the_field_and_note_views_show_the_justification_rows() {
+        use signex_types::schematic::SelectedKind;
+        for kind in [SelectedKind::SymbolRefField, SelectedKind::TextNote] {
+            let texts = shown_texts(kind, justify_info());
+            for want in ["Lefty", "Topsy"] {
+                assert!(texts.iter().any(|t| t == want), "{kind:?} lacks {want}");
+            }
+        }
+    }
 }

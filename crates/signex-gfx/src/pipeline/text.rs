@@ -212,11 +212,21 @@ pub(crate) fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
     }
 }
 
-/// Shape `item`'s content into a buffer.
-/// Sheet text is one line per source line: wrapping at the viewport would
-/// break a deep-zoom note on the GPU only.
+/// Shape sheet text the way the pipeline draws it: one line per source line,
+/// since wrapping at the viewport would break a deep-zoom note on the GPU only.
+fn shaped_sheet_text(
+    font_system: &mut cryoglyph::FontSystem,
+    item: &TextItem,
+    metrics: cryoglyph::Metrics,
+    attrs: &cryoglyph::Attrs<'_>,
+) -> cryoglyph::Buffer {
+    shaped_buffer(font_system, item, metrics, attrs, SHEET_TEXT_WRAP_PX)
+}
+
+/// The wrap width sheet text is shaped and cached under.
 const SHEET_TEXT_WRAP_PX: [f32; 2] = [super::text_measure::NO_WRAP_PX; 2];
 
+/// Shape `item`'s content into a buffer.
 pub(crate) fn shaped_buffer(
     font_system: &mut cryoglyph::FontSystem,
     item: &TextItem,
@@ -411,10 +421,9 @@ impl GlyphonTextPipeline {
             }
             let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
             let attrs = attrs_for_item(text, family);
-            let wrap_px = SHEET_TEXT_WRAP_PX;
-            let key = ShapedKey::new(text, family, font_px, line_height_px, wrap_px);
+            let key = ShapedKey::new(text, family, font_px, line_height_px, SHEET_TEXT_WRAP_PX);
             let buffer = self.shaped.get_or_shape(font_system, key, |font_system| {
-                shaped_buffer(font_system, text, metrics, &attrs, wrap_px)
+                shaped_sheet_text(font_system, text, metrics, &attrs)
             });
 
             let text_bounds_px = measure_text_bounds_px(&buffer);
@@ -502,9 +511,9 @@ impl GlyphonTextPipeline {
 mod tests {
     use super::TextSizePolicy;
     use super::{
-        SHEET_TEXT_WRAP_PX, alignment_offset_px, anchored_top_left_px, attrs_for_item,
-        overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,
-        shaped_buffer, text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
+        alignment_offset_px, anchored_top_left_px, attrs_for_item, overlap_ratio_by_smaller_area,
+        rect_from_top_left_size, rect_intersects_viewport, shaped_buffer, shaped_sheet_text,
+        text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
     };
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 
@@ -530,7 +539,8 @@ mod tests {
             lines([800.0, 600.0], &mut fs) > 1,
             "the viewport would wrap"
         );
-        assert_eq!(lines(SHEET_TEXT_WRAP_PX, &mut fs), 1);
+        let sheet = shaped_sheet_text(&mut fs, &item, metrics, &attrs);
+        assert_eq!(sheet.layout_runs().count(), 1);
     }
 
     #[test]

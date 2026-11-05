@@ -694,3 +694,51 @@ fn save_commits_only_the_saved_documents_draft() {
     assert_eq!(drawn_by_in_engine(&app, &q_sheet), None);
     assert!(!app.document_state.is_document_dirty(&q_sheet));
 }
+
+/// Save All from Close Project's prompt writes project P and leaves project
+/// Q's draft pending and Q clean: the shared Save-All tail commits nothing.
+#[test]
+fn close_project_save_all_leaves_another_projects_draft_pending() {
+    use crate::app::{ProjectCloseChoice, ProjectMsg};
+    let (mut app, _p_sheet, p, _recorder) = project_with_draft();
+    let (q_sheet, _q) = add_project_q(&mut app);
+    close_project_to_gate(&mut app, p);
+    let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::SaveAll,
+    )));
+    settle(&mut app, task);
+    assert_eq!(
+        app.document_state
+            .drafts
+            .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
+            .as_deref(),
+        Some("Q"),
+        "Q's draft is still a draft"
+    );
+    assert_eq!(drawn_by_in_engine(&app, &q_sheet), None);
+    assert!(!app.document_state.is_document_dirty(&q_sheet));
+}
+
+/// Close Library's Save All saves library rows only: a pending schematic
+/// draft stays a draft.
+#[test]
+fn close_library_save_all_commits_no_schematic_draft() {
+    let (mut app, sheet, _p, _recorder) = project_with_draft();
+    let _ = app.begin_save_all(
+        "Close Library",
+        &[],
+        &[],
+        crate::app::contracts::SaveAllNext::CloseLibrary {
+            library_path: PathBuf::from("/w/lib"),
+        },
+    );
+    assert_eq!(
+        app.document_state
+            .drafts
+            .title_block_text(&sheet, TitleBlockField::DrawnBy)
+            .as_deref(),
+        Some("X")
+    );
+    assert_eq!(drawn_by_in_engine(&app, &sheet), None);
+    assert!(!app.document_state.is_document_dirty(&sheet));
+}
