@@ -46,13 +46,16 @@ impl SvgRenderContext {
         let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
 
         let mut elements = Vec::new();
-        // A sheet with its own paper colour (#2034) fills the page with it.
+        // A sheet with its own paper colour (#2034) fills the page with it,
+        // except in Black & White: that prints black ink on white paper
+        // whatever the sheet or theme (#1342), mapped against the theme paper.
+        let sheet_paper = sheet
+            .schematic
+            .page
+            .color
+            .filter(|_| opts.colour_mode != ColourMode::BlackAndWhite);
         let palette = &SchematicPalette {
-            paper: sheet
-                .schematic
-                .page
-                .color
-                .map_or(opts.palette.paper, wire_style::rgb),
+            paper: sheet_paper.map_or(opts.palette.paper, wire_style::rgb),
             ..opts.palette
         };
 
