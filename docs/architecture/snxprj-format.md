@@ -229,9 +229,17 @@ the Project tab's Schematic defaults section, added without bumping the
   (a newer build's line style name, say), is kept raw and written back on
   every save, edits of other keys included, until that same default is set
   here. A section that is not an object is kept verbatim and not applied.
-- Known gap: the symbol hit box and the PDF page bounding box still use the
-  built-in symbol line width (`schematic_runtime/symbol.rs`,
-  `signex-output` `pdf/layout.rs`); only drawing uses the project's.
+- Ranges: widths resolve clamped to 0.15–5 mm (bus 0.15–10 mm), text to
+  1 pt–the size the `.snxsch` loader repairs past (100 mm). The Project tab
+  stores a typed value clamped and says so under the field; a file value out
+  of range resolves clamped and is not rewritten. Placement uses whole points
+  (`SchematicDefaults::placed_text_pt`), the same on every placement path.
+- Known gaps: the symbol hit box and the PDF page bounding box still use the
+  built-in symbol line width (`schematic_runtime/symbol.rs`, `signex-output`
+  `pdf/layout.rs`); an explicit `null` key is dropped on save; clearing a
+  field also drops an unreadable value kept for that key (unlike the
+  designator-standard rule, where clearing over an unreadable section keeps
+  it).
 
 ## Description (`description`) and the name (#1202)
 

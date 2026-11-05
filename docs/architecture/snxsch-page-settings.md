@@ -18,7 +18,8 @@ every file written before the table existed, loads and re-saves unchanged
 colour that is not `#RRGGBB[AA]` or an origin this build does not know shows
 as the default and is kept raw, written back unchanged until the user picks a
 value (any pick, Default included, replaces it); keys this build does not know
-are kept too. No format-token bump.
+are kept too. A `page` value that is not a table opens the sheet, is written
+back, and gives way to a real table once a value is set. No format-token bump.
 
 ## Sheet colour
 
@@ -36,7 +37,8 @@ corner of the paper, Y down; no coordinate is rewritten when the origin
 changes. With Lower Left, the shown Y is `paper_height_mm - y`, the paper
 height coming from the sheet's paper size (Custom included). The status bar,
 Properties ▸ Position (and Start / End / Center rows), the pre-placement X/Y
-readout and typed drawing coordinates go through one mapping, `SchematicSheet::page_y`, which is its own
+readout and typed drawing coordinates go through one mapping, refreshed when
+the origin or the paper size changes, `SchematicSheet::page_y`, which is its own
 inverse. X never changes.
 
 ## Known gaps
