@@ -557,6 +557,8 @@ impl Engine {
             | Command::ModifyChildSheet { .. }
             | Command::SetPaperSize { .. }
             | Command::SetSheetFrame { .. }
+            | Command::SetSheetColor { .. }
+            | Command::SetPageOrigin { .. }
             | Command::SetTitleBlockField { .. }
             | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {

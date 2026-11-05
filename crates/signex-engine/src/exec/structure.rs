@@ -400,6 +400,20 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetSheetColor { color } => {
+                let page = signex_types::schematic::SheetPageSettings {
+                    color,
+                    ..self.document.page
+                };
+                self.set_sheet_page(before, page)
+            }
+            Command::SetPageOrigin { origin } => {
+                let page = signex_types::schematic::SheetPageSettings {
+                    origin,
+                    ..self.document.page
+                };
+                self.set_sheet_page(before, page)
+            }
             Command::SetTitleBlockField { key, value } => {
                 let current = self.document.title_block.get(&key);
                 if current.map(String::as_str).unwrap_or_default() == value {
@@ -436,5 +450,24 @@ impl Engine {
             }
             _ => unreachable!(),
         }
+    }
+
+    /// Store the sheet's page settings (#2034) as one undo step on the PAPER
+    /// patch; the same settings again change nothing.
+    fn set_sheet_page(
+        &mut self,
+        before: SchematicSheet,
+        page: signex_types::schematic::SheetPageSettings,
+    ) -> Result<CommandResult, EngineError> {
+        if self.document.page == page {
+            return Ok(CommandResult::unchanged());
+        }
+        self.document.page = page;
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::StyleUpdated,
+            document: DocumentPatch::PAPER,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
     }
 }

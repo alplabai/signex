@@ -249,7 +249,11 @@ impl Engine {
                 }
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2} mm", symbol.position.x, symbol.position.y),
+                    format!(
+                        "{:.2}, {:.2} mm",
+                        symbol.position.x,
+                        self.document.page_y(symbol.position.y)
+                    ),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}\u{00b0}", symbol.rotation)));
                 if symbol.mirror_x {
@@ -300,11 +304,15 @@ impl Engine {
                 info.push(("Type".into(), "Wire".into()));
                 info.push((
                     "Start".into(),
-                    format!("{:.2}, {:.2}", wire.start.x, wire.start.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        wire.start.x,
+                        self.document.page_y(wire.start.y)
+                    ),
                 ));
                 info.push((
                     "End".into(),
-                    format!("{:.2}, {:.2}", wire.end.x, wire.end.y),
+                    format!("{:.2}, {:.2}", wire.end.x, self.document.page_y(wire.end.y)),
                 ));
                 info.push(("Length".into(), format!("{:.2} mm", len)));
             }
@@ -315,7 +323,11 @@ impl Engine {
                 info.push(("Net Name".into(), label.text.clone()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2}", label.position.x, label.position.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        label.position.x,
+                        self.document.page_y(label.position.y)
+                    ),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
                 info.push((
@@ -342,7 +354,11 @@ impl Engine {
                 info.push(("Type".into(), "Junction".into()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2}", junction.position.x, junction.position.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        junction.position.x,
+                        self.document.page_y(junction.position.y)
+                    ),
                 ));
             }
             SelectedKind::NoConnect => {
@@ -354,7 +370,11 @@ impl Engine {
                 info.push(("Type".into(), "No Connect".into()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2}", no_connect.position.x, no_connect.position.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        no_connect.position.x,
+                        self.document.page_y(no_connect.position.y)
+                    ),
                 ));
             }
             SelectedKind::NoErcDirective => {
@@ -366,7 +386,11 @@ impl Engine {
                 info.push(("Type".into(), "No ERC Directive".into()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2}", directive.position.x, directive.position.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        directive.position.x,
+                        self.document.page_y(directive.position.y)
+                    ),
                 ));
             }
             SelectedKind::TextNote => {
@@ -379,7 +403,11 @@ impl Engine {
                 info.push(("Text".into(), text_note.text.clone()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2}", text_note.position.x, text_note.position.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        text_note.position.x,
+                        self.document.page_y(text_note.position.y)
+                    ),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
                 info.push((
@@ -414,7 +442,8 @@ impl Engine {
                     "Position".into(),
                     format!(
                         "{:.2}, {:.2}",
-                        child_sheet.position.x, child_sheet.position.y
+                        child_sheet.position.x,
+                        self.document.page_y(child_sheet.position.y)
                     ),
                 ));
                 info.push((
@@ -437,7 +466,11 @@ impl Engine {
                 info.push(("Direction".into(), sheet_pin.direction.clone()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2}", sheet_pin.position.x, sheet_pin.position.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        sheet_pin.position.x,
+                        self.document.page_y(sheet_pin.position.y)
+                    ),
                 ));
             }
             SelectedKind::Bus => {
@@ -445,9 +478,16 @@ impl Engine {
                 info.push(("Type".into(), "Bus".into()));
                 info.push((
                     "Start".into(),
-                    format!("{:.2}, {:.2}", bus.start.x, bus.start.y),
+                    format!(
+                        "{:.2}, {:.2}",
+                        bus.start.x,
+                        self.document.page_y(bus.start.y)
+                    ),
                 ));
-                info.push(("End".into(), format!("{:.2}, {:.2}", bus.end.x, bus.end.y)));
+                info.push((
+                    "End".into(),
+                    format!("{:.2}, {:.2}", bus.end.x, self.document.page_y(bus.end.y)),
+                ));
             }
             SelectedKind::BusEntry => {
                 info.push(("Type".into(), "Bus Entry".into()));
@@ -468,8 +508,14 @@ impl Engine {
                         start, end, width, ..
                     } => {
                         info.push(("Type".into(), "Line".into()));
-                        info.push(("Start".into(), format!("{:.2}, {:.2}", start.x, start.y)));
-                        info.push(("End".into(), format!("{:.2}, {:.2}", end.x, end.y)));
+                        info.push((
+                            "Start".into(),
+                            format!("{:.2}, {:.2}", start.x, self.document.page_y(start.y)),
+                        ));
+                        info.push((
+                            "End".into(),
+                            format!("{:.2}, {:.2}", end.x, self.document.page_y(end.y)),
+                        ));
                         info.push(("Width".into(), format!("{width:.3}")));
                     }
                     SchDrawing::Rect {
@@ -484,6 +530,7 @@ impl Engine {
                         let y0 = start.y.min(end.y);
                         let w = (end.x - start.x).abs();
                         let h = (end.y - start.y).abs();
+                        let y0 = self.document.page_y(y0);
                         info.push(("Position".into(), format!("{x0:.2}, {y0:.2}")));
                         info.push(("Width".into(), format!("{w:.2}")));
                         info.push(("Height".into(), format!("{h:.2}")));
@@ -498,7 +545,10 @@ impl Engine {
                         ..
                     } => {
                         info.push(("Type".into(), "Circle".into()));
-                        info.push(("Center".into(), format!("{:.2}, {:.2}", center.x, center.y)));
+                        info.push((
+                            "Center".into(),
+                            format!("{:.2}, {:.2}", center.x, self.document.page_y(center.y)),
+                        ));
                         info.push(("Radius".into(), format!("{radius:.3}")));
                         info.push(("Border".into(), format!("{width:.3}")));
                         info.push(("Fill".into(), fill_type_label(*fill).into()));
@@ -521,14 +571,24 @@ impl Engine {
                                 }
                                 t
                             };
-                            info.push(("Center".into(), format!("{cx:.2}, {cy:.2}")));
+                            let shown_cy = self.document.page_y(cy);
+                            info.push(("Center".into(), format!("{cx:.2}, {shown_cy:.2}")));
                             info.push(("Radius".into(), format!("{radius:.3}")));
                             info.push(("Start Angle".into(), format!("{:.3}", norm(sa))));
                             info.push(("End Angle".into(), format!("{:.3}", norm(ea))));
                         } else {
-                            info.push(("Start".into(), format!("{:.2}, {:.2}", start.x, start.y)));
-                            info.push(("Mid".into(), format!("{:.2}, {:.2}", mid.x, mid.y)));
-                            info.push(("End".into(), format!("{:.2}, {:.2}", end.x, end.y)));
+                            info.push((
+                                "Start".into(),
+                                format!("{:.2}, {:.2}", start.x, self.document.page_y(start.y)),
+                            ));
+                            info.push((
+                                "Mid".into(),
+                                format!("{:.2}, {:.2}", mid.x, self.document.page_y(mid.y)),
+                            ));
+                            info.push((
+                                "End".into(),
+                                format!("{:.2}, {:.2}", end.x, self.document.page_y(end.y)),
+                            ));
                         }
                         info.push(("Width".into(), format!("{width:.3}")));
                     }
@@ -553,7 +613,11 @@ impl Engine {
                 info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push((
                     "Position".into(),
-                    format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
+                    format!(
+                        "{:.2}, {:.2} mm",
+                        ref_text.position.x,
+                        self.document.page_y(ref_text.position.y)
+                    ),
                 ));
                 let effective_rot = (symbol.rotation + ref_text.rotation).rem_euclid(360.0);
                 info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
@@ -605,7 +669,8 @@ impl Engine {
                     "Position".into(),
                     format!(
                         "{:.2}, {:.2} mm",
-                        value_text.position.x, value_text.position.y
+                        value_text.position.x,
+                        self.document.page_y(value_text.position.y)
                     ),
                 ));
                 let effective_rot = (symbol.rotation + value_text.rotation).rem_euclid(360.0);

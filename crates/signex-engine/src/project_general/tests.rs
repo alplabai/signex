@@ -222,3 +222,39 @@ fn undoing_a_pick_over_an_unreadable_standard_restores_it_unchanged() {
     assert!(history.undo(&mut data));
     assert_eq!(data.annotation_state(), kept);
 }
+
+/// #2026: a schematic default is a General-history edit: it lands in the
+/// project data, a typing run is one undo step, and undo restores it.
+#[test]
+fn a_schematic_default_edit_undoes_and_redoes() {
+    use signex_types::project::SchematicDefaultField;
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    for value in [Some(0.0), Some(0.3)] {
+        history.apply(
+            &mut data,
+            ProjectGeneralCommand::SetSchematicDefault {
+                field: SchematicDefaultField::WireWidth,
+                value,
+            },
+        );
+    }
+    assert_eq!(data.schematic_defaults.wire_width_mm, Some(0.3));
+    assert_eq!(data.schematic_defaults.resolve().wire_width_mm, 0.3);
+    assert!(history.undo(&mut data));
+    assert!(
+        data.schematic_defaults.is_empty(),
+        "one step per typing run"
+    );
+    assert!(history.redo(&mut data));
+    assert_eq!(data.schematic_defaults.wire_width_mm, Some(0.3));
+
+    history.close_run();
+    assert!(history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetSchematicDefaultFont(Some("Roboto".into()))
+    ));
+    assert_eq!(data.schematic_defaults.font_family(), "Roboto");
+    assert!(history.undo(&mut data));
+    assert_eq!(data.schematic_defaults.font_family(), "Iosevka");
+}

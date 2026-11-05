@@ -1,7 +1,9 @@
 //! Command-driven editing of the project's General settings (#1202).
 //!
-//! The Project tab's General and Parameters sections edit the `.snxprj`
-//! `description`, `parameters` (#1080) and designator standard (#1421) in place on the project's one in-memory `ProjectData`. The project name is
+//! The Project tab's General, Parameters and Schematic defaults sections edit
+//! the `.snxprj` `description`, `parameters` (#1080), designator standard
+//! (#1421) and `schematic_defaults` (#2026) in place on the project's one
+//! in-memory `ProjectData`. The project name is
 //! not edited here: it is the file stem, changed only by the Rename flow.
 //! Like the net-class table, the settings are tiny, so the history keeps
 //! snapshots rather than inverse commands. A snapshot holds only the fields
@@ -16,13 +18,15 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use signex_types::designator::DesignatorStandard;
-use signex_types::project::{AnnotationState, ProjectData};
+use signex_types::project::{
+    AnnotationState, ProjectData, SchematicDefaultField, SchematicDefaultOverrides,
+};
 
 /// How many undo steps are kept.
 pub const HISTORY_LIMIT: usize = 100;
 
 /// One edit of the General section. Plain data, so a script can emit it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "command", content = "text", rename_all = "snake_case")]
 pub enum ProjectGeneralCommand {
     /// The description as typed; an empty text clears it.
@@ -38,6 +42,14 @@ pub enum ProjectGeneralCommand {
     /// An unreadable section from a newer Signex is replaced only by a real
     /// standard: picking `None` over it changes nothing.
     SetDesignatorStandard(Option<DesignatorStandard>),
+    /// A schematic default as typed in the Schematic defaults section
+    /// (#2026); `None` clears it back to the built-in value.
+    SetSchematicDefault {
+        field: SchematicDefaultField,
+        value: Option<f64>,
+    },
+    /// The font new text is placed in (#2026); `None` clears it.
+    SetSchematicDefaultFont(Option<String>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -63,6 +75,7 @@ struct GeneralSnapshot {
     description: Option<String>,
     parameters: BTreeMap<String, String>,
     annotation: AnnotationState,
+    schematic_defaults: SchematicDefaultOverrides,
 }
 
 impl GeneralSnapshot {
@@ -71,6 +84,7 @@ impl GeneralSnapshot {
             description: data.description.clone(),
             parameters: data.parameters.clone(),
             annotation: data.annotation_state(),
+            schematic_defaults: data.schematic_defaults.clone(),
         }
     }
 
@@ -79,6 +93,7 @@ impl GeneralSnapshot {
         data.description = self.description;
         data.parameters = self.parameters;
         data.restore_annotation_state(self.annotation);
+        data.schematic_defaults = self.schematic_defaults;
     }
 }
 
@@ -121,6 +136,12 @@ impl ProjectGeneralHistory {
                 if !(standard.is_none() && data.has_unreadable_annotation()) {
                     data.set_designator_standard(standard);
                 }
+            }
+            ProjectGeneralCommand::SetSchematicDefault { field, value } => {
+                data.schematic_defaults = data.schematic_defaults.with(field, value);
+            }
+            ProjectGeneralCommand::SetSchematicDefaultFont(font) => {
+                data.schematic_defaults.font_family = font.filter(|f| !f.trim().is_empty());
             }
         }
         if GeneralSnapshot::of(data) == before {
