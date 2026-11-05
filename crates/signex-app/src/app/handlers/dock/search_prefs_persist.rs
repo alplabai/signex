@@ -45,10 +45,23 @@ impl Signex {
     }
 
     /// End a headless session (#1932) the way the quit path ends the GUI:
-    /// every pending and in-flight write is flushed, then the app exits.
-    /// Unsaved documents are not saved, as there is nobody to ask; each is
-    /// reported.
+    /// the same pre-quit steps, then every pending and in-flight write is
+    /// flushed and the app exits. While a rename or delete runs the session
+    /// does not end (reported; call again once it finished). Unsaved
+    /// documents and library rows are not saved, as there is nobody to ask;
+    /// each is reported.
     pub fn end_headless_session(&mut self) -> Task<Message> {
+        if !self.prepare_quit() {
+            return Task::none();
+        }
+        for row in self.library.dirty_editors() {
+            crate::diagnostics::log_warning(format!(
+                "Headless session ended with unsaved changes in library row {} of {} in {}",
+                row.row_id,
+                row.table,
+                row.library_path.display()
+            ));
+        }
         let mut unsaved: Vec<_> = self
             .document_state
             .dirty_document_paths()

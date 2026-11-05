@@ -133,6 +133,10 @@ mod tests {
         assert!(err.contains("not a regular file"), "{err}");
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test makes a FIFO with mkfifo"
+    )]
     #[cfg(unix)]
     #[test]
     fn opening_a_fifo_with_no_writer_does_not_block_and_is_not_a_file() {
@@ -150,6 +154,10 @@ mod tests {
         assert!(!file.metadata().expect("handle metadata").is_file());
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test makes a FIFO with mkfifo"
+    )]
     #[cfg(unix)]
     #[test]
     fn a_fifo_is_never_opened() {

@@ -1,6 +1,11 @@
 //! Hostile / malformed input must be refused with a typed error, never read
 //! files outside the model directory, overflow the stack, or panic (#112).
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests run git, mkfifo and other tools as fixtures"
+)]
+
 use std::path::Path;
 
 use signex_3d_model_importer::{ModelImportError, ModelImportRequest, import_model};

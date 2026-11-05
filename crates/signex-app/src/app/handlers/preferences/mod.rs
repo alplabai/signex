@@ -620,12 +620,11 @@ impl Signex {
                     let Some(path) = picked else {
                         return Message::noop();
                     };
-                    match read_picked(&path).await {
-                        Some(s) => {
-                            Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeFileLoaded(s)))
-                        }
-                        None => Message::noop(),
-                    }
+                    let loaded = match read_picked(&path).await {
+                        Ok(s) => PrefMsg::ThemeFileLoaded(s),
+                        Err(reason) => PrefMsg::ThemeFileUnreadable(reason),
+                    };
+                    Message::Preferences(PreferencesMsg::Inner(loaded))
                 });
             }
             PrefMsg::ExportTheme => {
@@ -700,6 +699,10 @@ impl Signex {
                     Ok(path) => format!("Exported theme to {}.", path.display()),
                     Err(detail) => format!("Could not export theme: {detail}"),
                 };
+            }
+            PrefMsg::ThemeFileUnreadable(reason) => {
+                self.ui_state.preferences_theme_status =
+                    format!("Could not import theme: {reason}");
             }
             PrefMsg::ThemeFileLoaded(content) => {
                 match serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content) {
@@ -881,6 +884,7 @@ impl Signex {
             | PrefMsg::KeymapDiscardBackup
             | PrefMsg::KeymapImportProfile
             | PrefMsg::KeymapProfileLoaded(..)
+            | PrefMsg::KeymapProfileUnreadable(..)
             | PrefMsg::KeymapExportProfile
             | PrefMsg::KeymapExportFinished(..)
             | PrefMsg::KeymapRecorderOpen { .. }
@@ -899,14 +903,15 @@ impl Signex {
     }
 }
 
-/// The text of a file a dialog picked to import. A read failure is reported
-/// and gives `None`.
-async fn read_picked(path: &std::path::Path) -> Option<String> {
+/// The text of a file a dialog picked to import. A read failure is logged
+/// and returned as the reason, for the pane's status line.
+async fn read_picked(path: &std::path::Path) -> Result<String, String> {
     match tokio::fs::read(path).await {
-        Ok(bytes) => Some(String::from_utf8_lossy(&bytes).into_owned()),
+        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
         Err(error) => {
-            crate::diagnostics::log_warning(format!("Could not read {}: {error}", path.display()));
-            None
+            let reason = format!("{} could not be read: {error}", path.display());
+            crate::diagnostics::log_warning(format!("Import: {reason}"));
+            Err(reason)
         }
     }
 }

@@ -1,6 +1,12 @@
 //! The native adapters: the only code that opens an OS file dialog, a
 //! browser or a launcher process (`scripts/check_io_ports.sh`).
 
+#![allow(
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    reason = "the native adapter is the one place that may open dialogs, browsers and launchers"
+)]
+
 use std::path::{Path, PathBuf};
 
 use super::FileDialog;

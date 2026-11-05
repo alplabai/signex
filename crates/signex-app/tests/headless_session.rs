@@ -1,10 +1,18 @@
 //! #1932: a headless session reports what happened, keeps stdout clean and
 //! ends with the quit path's flush.
 
-use iced::Task;
-use signex_app::app::{Message, Signex, UiMsg};
+#![allow(
+    clippy::disallowed_methods,
+    reason = "the test re-runs its own binary as a child process"
+)]
+
+use std::path::PathBuf;
+
+use signex_app::app::{Message, Signex, TabInfo, TabKind};
 use signex_app::dock::{DockMessage, PanelPosition};
+use signex_app::panels::{PanelMsg, TitleBlockField};
 use signex_app::task_driver::TaskDriver;
+use signex_types::schematic::SchematicSheet;
 
 const PROBE_ENV: &str = "SIGNEX_SESSION_PROBE";
 const PROBE_LINE: &str = "zq-session-probe-line";
@@ -38,29 +46,66 @@ fn probe() {
     assert!(delta.entries.iter().any(|e| e.message == PROBE_LINE));
 }
 
-/// A layout change whose debounce never fired and a toggle still being
-/// written are both on disk once the session has ended.
+/// A layout change whose debounce never fired is on disk once the session
+/// has ended. A running write is covered by
+/// `prefs_async_tests::ending_a_headless_session_waits_for_a_running_preference_write`.
 #[test]
 fn a_pref_change_followed_by_session_end_is_on_disk() {
     let (mut app, _boot) = Signex::new();
     let _debounce_not_run = app.update(Message::Dock(DockMessage::ToggleCollapse(
         PanelPosition::Bottom,
     )));
-    let grid_before = app.ui_state.grid_visible;
-    let toggle = app.update(Message::Ui(UiMsg::GridToggle));
     let end = app.end_headless_session();
     let mut driver = TaskDriver::new();
-    driver
-        .settle(&mut app, Task::batch([toggle, end]))
-        .expect("session ended");
+    driver.settle(&mut app, end).expect("session ended");
     assert!(driver.has_exited());
 
     let prefs = signex_app::fonts::load_prefs_json();
     let dock = signex_app::fonts::read_dock_layout_from(prefs.as_ref()).expect("layout saved");
     assert!(dock.is_collapsed(PanelPosition::Bottom), "layout flushed");
+}
+
+/// The session end runs the GUI quit's pre-steps: a title-block draft still
+/// being typed is committed, and the edit it makes is reported as unsaved.
+#[test]
+fn a_pending_title_block_draft_is_committed_and_reported_at_session_end() {
+    // Already installed by another test of this binary: fine.
+    signex_app::diagnostics::init_logging().ok();
+    let (mut app, _boot) = Signex::new();
+    let path = PathBuf::from("zq-headless-draft.snxsch");
+    let engine = signex_engine::Engine::new(SchematicSheet::default()).expect("engine");
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "draft".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(path.clone());
+    let _typing = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::TitleBlockTyping(TitleBlockField::DrawnBy, "Headless".into()),
+    )));
+
+    let end = app.end_headless_session();
+    TaskDriver::new()
+        .settle(&mut app, end)
+        .expect("session ended");
+
+    let stored = app.document_state.engines[&path]
+        .document()
+        .title_block
+        .get("drawn_by")
+        .cloned();
     assert_eq!(
-        signex_app::fonts::read_grid_visible_pref_from(prefs.as_ref()),
-        !grid_before,
-        "toggle written"
+        stored.as_deref(),
+        Some("Headless"),
+        "the draft was committed"
     );
+    let reported = signex_app::diagnostics::recent_entries().iter().any(|e| {
+        e.message
+            .contains("unsaved changes in zq-headless-draft.snxsch")
+    });
+    assert!(reported, "the committed edit is reported as unsaved");
 }

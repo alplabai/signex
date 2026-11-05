@@ -243,13 +243,16 @@ impl Signex {
                     let Some(path) = picked else {
                         return Message::noop();
                     };
-                    match super::read_picked(&path).await {
-                        Some(source) => Message::Preferences(PreferencesMsg::Inner(
-                            PrefMsg::KeymapProfileLoaded(source),
-                        )),
-                        None => Message::noop(),
-                    }
+                    let loaded = match super::read_picked(&path).await {
+                        Ok(source) => PrefMsg::KeymapProfileLoaded(source),
+                        Err(reason) => PrefMsg::KeymapProfileUnreadable(reason),
+                    };
+                    Message::Preferences(PreferencesMsg::Inner(loaded))
                 });
+            }
+            PrefMsg::KeymapProfileUnreadable(reason) => {
+                self.ui_state.preferences_keymap_status =
+                    format!("Could not import keyboard shortcuts: {reason}");
             }
             PrefMsg::KeymapProfileLoaded(source) => {
                 // #1378 - the recorder holds a slot into the profile it was

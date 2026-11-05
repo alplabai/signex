@@ -1,5 +1,10 @@
 //! #859 — what a save completion does to git and to a parked engine.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests run git, mkfifo and other tools as fixtures"
+)]
+
 use std::path::{Path, PathBuf};
 
 use super::restore_commit_tests::restore;

@@ -1,6 +1,11 @@
 //! Font family persistence (#510): a family rides along only when set, so a
 //! sheet that never chose one writes the bytes it always did.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests run git, mkfifo and other tools as fixtures"
+)]
+
 use super::*;
 use crate::schematic::{
     HAlign, Label, LabelType, Point as SchPoint, SchematicSheet, Symbol, TextNote, TextProp, VAlign,

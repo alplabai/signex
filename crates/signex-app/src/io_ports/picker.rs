@@ -23,8 +23,12 @@ pub enum Picker {
     Headless(HeadlessAnswers),
 }
 
-/// The plain arguments a headless run answers dialogs with. Each answer is
-/// used by one dialog only, so a later dialog never reuses an earlier path.
+/// The plain arguments a headless run answers dialogs with. A dialog takes
+/// every answer there is, whatever it uses and whether it is refused, so a
+/// later dialog never inherits an earlier path or `overwrite`.
+///
+/// A path answer must be absolute but is not normalised (`..` stays): code
+/// that confines paths must resolve it, never prefix-match the raw text.
 #[derive(Debug, Clone, Default)]
 pub struct HeadlessAnswers(Arc<Mutex<BTreeMap<String, String>>>);
 
@@ -35,8 +39,13 @@ impl HeadlessAnswers {
         self.lock().insert(name.to_string(), value.into());
     }
 
-    fn take(&self, name: &str) -> Option<String> {
-        self.lock().remove(name)
+    /// Drop every answer, so a new command starts with none.
+    pub fn clear(&self) {
+        self.lock().clear();
+    }
+
+    fn take_all(&self) -> BTreeMap<String, String> {
+        std::mem::take(&mut *self.lock())
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, String>> {
@@ -93,7 +102,7 @@ impl FileDialog {
     pub async fn pick_file(self) -> Option<PathBuf> {
         match &self.picker {
             Picker::Native => native::pick_file(&self).await,
-            Picker::Headless(answers) => self.headless_path(answers, PATH_ARG),
+            Picker::Headless(answers) => self.headless_path(&mut answers.take_all()),
         }
     }
 
@@ -102,11 +111,14 @@ impl FileDialog {
         match &self.picker {
             Picker::Native => native::pick_files(&self).await,
             Picker::Headless(answers) => {
-                let Some(list) = answers.take(PATHS_ARG) else {
+                let list = answers.take_all().remove(PATHS_ARG).unwrap_or_default();
+                let lines: Vec<&str> = list.lines().filter(|line| !line.is_empty()).collect();
+                // The native dialog never returns an empty pick.
+                if lines.is_empty() {
                     return self.refuse(&format!("give the `{PATHS_ARG}` argument"));
-                };
-                list.lines()
-                    .filter(|line| !line.is_empty())
+                }
+                lines
+                    .into_iter()
                     .map(|line| self.absolute(PathBuf::from(line)))
                     .collect()
             }
@@ -117,7 +129,7 @@ impl FileDialog {
     pub async fn pick_folder(self) -> Option<PathBuf> {
         match &self.picker {
             Picker::Native => native::pick_folder(&self).await,
-            Picker::Headless(answers) => self.headless_path(answers, PATH_ARG),
+            Picker::Headless(answers) => self.headless_path(&mut answers.take_all()),
         }
     }
 
@@ -129,8 +141,9 @@ impl FileDialog {
             Picker::Native => return native::save_file(&self).await,
             Picker::Headless(answers) => answers,
         };
-        let path = self.headless_path(answers, PATH_ARG)?;
-        let may_replace = answers.take(OVERWRITE_ARG).as_deref() == Some("true");
+        let mut taken = answers.take_all();
+        let may_replace = taken.remove(OVERWRITE_ARG).as_deref() == Some("true");
+        let path = self.headless_path(&mut taken)?;
         // `symlink_metadata`, not `exists`: a dangling link is still replaced.
         if std::fs::symlink_metadata(&path).is_ok() && !may_replace {
             return self.refuse(&format!(
@@ -141,10 +154,10 @@ impl FileDialog {
         Some(path)
     }
 
-    fn headless_path(&self, answers: &HeadlessAnswers, name: &str) -> Option<PathBuf> {
-        match answers.take(name) {
+    fn headless_path(&self, taken: &mut BTreeMap<String, String>) -> Option<PathBuf> {
+        match taken.remove(PATH_ARG) {
             Some(path) => self.absolute(PathBuf::from(path)),
-            None => self.refuse(&format!("give the `{name}` argument")),
+            None => self.refuse(&format!("give the `{PATH_ARG}` argument")),
         }
     }
 

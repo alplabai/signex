@@ -18,10 +18,15 @@ use crate::menu_bar::MenuMessage;
 use crate::preferences::PrefMsg;
 use crate::task_driver::TaskDriver;
 
-fn headless_app(answers: &HeadlessAnswers) -> Signex {
+/// The refusals are counted in the shared log by dialog title, and several
+/// tests here open the same dialog, so they take turns.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn headless_app(answers: &HeadlessAnswers) -> (Signex, std::sync::MutexGuard<'static, ()>) {
+    let serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, _boot) = Signex::new();
     app.ui_state.io = IoPorts::headless(answers.clone());
-    app
+    (app, serial)
 }
 
 /// Settle `task`; the dialog titled `title` must log one refusal naming
@@ -36,7 +41,7 @@ fn assert_refused(app: &mut Signex, task: Task<Message>, title: &str, arg: &str)
 }
 
 fn refused_on_message(message: Message, title: &str) {
-    let mut app = headless_app(&HeadlessAnswers::default());
+    let (mut app, _serial) = headless_app(&HeadlessAnswers::default());
     let task = app.update(message);
     assert_refused(&mut app, task, title, "path");
 }
@@ -103,7 +108,7 @@ fn preference_dialogs_refuse_without_a_path() {
 
 #[test]
 fn the_shortcut_export_dialog_refuses_without_a_path() {
-    let mut app = headless_app(&HeadlessAnswers::default());
+    let (mut app, _serial) = headless_app(&HeadlessAnswers::default());
     // Only a custom profile can be exported.
     let create = app.update(pref(PrefMsg::KeymapCreateCustomProfile));
     TaskDriver::new().settle(&mut app, create).expect("created");
@@ -113,7 +118,7 @@ fn the_shortcut_export_dialog_refuses_without_a_path() {
 
 #[test]
 fn the_primitive_save_as_dialog_refuses_without_a_path() {
-    let mut app = headless_app(&HeadlessAnswers::default());
+    let (mut app, _serial) = headless_app(&HeadlessAnswers::default());
     let path = PathBuf::from("/nowhere/part.snxsym");
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "part".into(),
@@ -140,7 +145,7 @@ fn new_project(app: &mut Signex, answers: &HeadlessAnswers, dir: &Path) -> PathB
 fn an_answered_new_project_dialog_creates_the_project() {
     let dir = tempfile::tempdir().expect("tempdir");
     let answers = HeadlessAnswers::default();
-    let mut app = headless_app(&answers);
+    let (mut app, _serial) = headless_app(&answers);
     let project = new_project(&mut app, &answers, dir.path());
     assert!(project.is_file(), "the answered path was used");
     assert_eq!(app.document_state.projects.len(), 1);
@@ -150,7 +155,7 @@ fn an_answered_new_project_dialog_creates_the_project() {
 fn project_dialogs_refuse_without_their_argument() {
     let dir = tempfile::tempdir().expect("tempdir");
     let answers = HeadlessAnswers::default();
-    let mut app = headless_app(&answers);
+    let (mut app, _serial) = headless_app(&answers);
     new_project(&mut app, &answers, dir.path());
     let task = app.add_existing_to_project(vec![0]);
     assert_refused(&mut app, task, "Add Existing to Project", "paths");
@@ -166,7 +171,7 @@ fn project_dialogs_refuse_without_their_argument() {
 fn schematic_save_and_export_dialogs_refuse_without_a_path() {
     let dir = tempfile::tempdir().expect("tempdir");
     let answers = HeadlessAnswers::default();
-    let mut app = headless_app(&answers);
+    let (mut app, _serial) = headless_app(&answers);
     let project = new_project(&mut app, &answers, dir.path());
     let sheet = project.with_extension("snxsch");
     let task = app.update(Message::File(FileMsg::Opened(Some(sheet))));
@@ -185,7 +190,7 @@ fn a_save_answer_naming_an_existing_file_needs_overwrite() {
     let existing = dir.path().join("theme.json");
     std::fs::write(&existing, b"keep me").expect("seed");
     let answers = HeadlessAnswers::default();
-    let mut app = headless_app(&answers);
+    let (mut app, _serial) = headless_app(&answers);
     answers.set("path", existing.display().to_string());
     // The ring shortens long lines, so the needle stops at the path.
     let needle = format!(
@@ -208,7 +213,7 @@ fn a_save_answer_naming_an_existing_file_needs_overwrite() {
 #[test]
 fn an_answer_is_used_once_and_must_be_absolute() {
     let answers = HeadlessAnswers::default();
-    let mut app = headless_app(&answers);
+    let (mut app, _serial) = headless_app(&answers);
     answers.set("path", "relative/demo.snxprj");
     let needle = "Open Project or Schematic: refused in a headless run; relative/demo.snxprj is not an absolute path";
     let before = logged_count(needle);
@@ -222,7 +227,7 @@ fn an_answer_is_used_once_and_must_be_absolute() {
 
 #[test]
 fn a_headless_link_is_refused_and_reported() {
-    let mut app = headless_app(&HeadlessAnswers::default());
+    let (mut app, _serial) = headless_app(&HeadlessAnswers::default());
     let task = app.update(Message::Overlay(OverlayMsg::OpenLink(
         crate::about::ExternalLink::Documentation,
     )));
@@ -255,4 +260,92 @@ fn reveal_is_refused_headless() {
         Opener::Refuse.reveal(Path::new("/tmp")),
         Err(super::OpenError::Refused)
     ));
+}
+
+/// A refused save takes its `overwrite` answer with it: the next save, given
+/// only an existing path, must still ask (here: refuse).
+#[test]
+fn a_refused_save_does_not_leave_overwrite_behind() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let existing = dir.path().join("theme.json");
+    std::fs::write(&existing, b"keep me").expect("seed");
+    let answers = HeadlessAnswers::default();
+    let (mut app, _serial) = headless_app(&answers);
+    answers.set("path", "relative/theme.json");
+    answers.set("overwrite", "true");
+    let task = app.update(pref(PrefMsg::ExportTheme));
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+
+    answers.set("path", existing.display().to_string());
+    let task = app.update(pref(PrefMsg::ExportTheme));
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+    assert_eq!(std::fs::read(&existing).expect("read"), b"keep me");
+}
+
+/// An open dialog takes every answer too, `overwrite` included.
+#[test]
+fn an_open_dialog_takes_overwrite_with_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let existing = dir.path().join("theme.json");
+    std::fs::write(&existing, b"keep me").expect("seed");
+    let answers = HeadlessAnswers::default();
+    let (mut app, _serial) = headless_app(&answers);
+    answers.set("overwrite", "true");
+    let task = app.update(Message::Menu(MenuMessage::OpenProject));
+    assert_refused(&mut app, task, "Open Project or Schematic", "path");
+
+    answers.set("path", existing.display().to_string());
+    let task = app.update(pref(PrefMsg::ExportTheme));
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+    assert_eq!(std::fs::read(&existing).expect("read"), b"keep me");
+}
+
+#[test]
+fn cleared_answers_are_gone() {
+    let answers = HeadlessAnswers::default();
+    let (mut app, _serial) = headless_app(&answers);
+    answers.set("path", "/nowhere/project.snxprj");
+    answers.clear();
+    let task = app.update(Message::Menu(MenuMessage::ImportAltium));
+    assert_refused(&mut app, task, "Import Altium Project", "path");
+}
+
+#[test]
+fn an_empty_paths_answer_is_refused() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let answers = HeadlessAnswers::default();
+    let (mut app, _serial) = headless_app(&answers);
+    new_project(&mut app, &answers, dir.path());
+    answers.set("paths", "");
+    let task = app.add_existing_to_project(vec![0]);
+    assert_refused(&mut app, task, "Add Existing to Project", "paths");
+}
+
+/// An import whose picked file cannot be read says so on its pane's status
+/// line (a folder stands in for an unreadable file).
+#[test]
+fn an_unreadable_import_sets_the_pane_status() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let answers = HeadlessAnswers::default();
+    let (mut app, _serial) = headless_app(&answers);
+    answers.set("path", dir.path().display().to_string());
+    let task = app.update(pref(PrefMsg::ImportTheme));
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+    assert!(
+        app.ui_state
+            .preferences_theme_status
+            .starts_with("Could not import theme:"),
+        "{}",
+        app.ui_state.preferences_theme_status
+    );
+    answers.set("path", dir.path().display().to_string());
+    let task = app.update(pref(PrefMsg::KeymapImportProfile));
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+    assert!(
+        app.ui_state
+            .preferences_keymap_status
+            .starts_with("Could not import keyboard shortcuts:"),
+        "{}",
+        app.ui_state.preferences_keymap_status
+    );
 }
