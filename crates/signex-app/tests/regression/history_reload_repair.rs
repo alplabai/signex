@@ -59,6 +59,7 @@ fn repair_warnings(marker: &str) -> usize {
 }
 
 fn restore_clicked(app: &mut Signex, sha: &str) {
+    crate::settle_support::list_active_history(app);
     crate::settle_support::settle(
         app,
         Message::Dock(DockMessage::Panel(PanelMsg::HistoryRestoreClicked {

@@ -138,6 +138,9 @@ pub struct ProjectTreeContextMenuState {
     /// `Some(key)` = right-click on a specific node; `None` = right-click
     /// in empty tree area, offering only the generic actions.
     pub key: Option<signex_widgets::tree_view::TreeKey>,
+    /// The undocked window the menu was opened in (`None`: the main window).
+    /// Only that window paints it, and the tree it names is that window's.
+    pub window: Option<iced::window::Id>,
 }
 
 /// State for the "Close Project — Unsaved Edits" confirmation modal.
@@ -421,6 +424,16 @@ pub enum ProjectTreeAction {
 }
 
 impl ProjectTreeAction {
+    /// Whether the action only changes the tree an undocked window shows
+    /// (expansion, rebuild), so it runs in that window's swap. Every other
+    /// action opens a tab, a dialog or a file and runs on the main window.
+    pub fn changes_only_the_shown_tree(&self) -> bool {
+        matches!(
+            self,
+            Self::ToggleNode(_) | Self::ExpandAll | Self::CollapseAll | Self::Refresh
+        )
+    }
+
     /// The tree row this action targets, when it targets one.
     pub fn row_key(&self) -> Option<&signex_widgets::tree_view::TreeKey> {
         use ProjectTreeAction::*;

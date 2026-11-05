@@ -13,11 +13,12 @@ use crate::app::{Message, Signex};
 
 /// Whether a dock message edits the sheet an undocked window shows, so it
 /// runs in the window's swap. This is an allow-list: everything else (the
-/// dock layout, Projects, Navigator, ERC focus and quick fixes, History
-/// restore, library rows, anything that opens or activates a document, and
-/// any variant added later) runs on the main window, where the swap cannot
-/// load one sheet into another's canvas or write one sheet's history over
-/// another sheet. The Components row press is scoped to stamp its window.
+/// dock layout, Projects, Navigator, ERC focus and quick fixes, library rows,
+/// anything that opens or activates a document, and any variant added later)
+/// runs on the main window, where the swap cannot load one sheet into
+/// another's canvas or write one sheet's history over another sheet. The
+/// Components row press is scoped to stamp its window; History restore is
+/// scoped so it restores the file the window's own History panel shows.
 fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
     use crate::dock::DockMessage;
     use crate::library::LibraryMessage;
@@ -32,6 +33,11 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
         // Expanding a row only changes the window's own tree. A Navigator
         // row click opens a sheet, so it stays on the main window.
         DockMessage::Panel(P::Tree(TreeMsg::Toggle(_)) | P::Navigator(TreeMsg::Toggle(_))) => true,
+        // The Projects menu opens owned by the window it was right-clicked
+        // in; its picks are split by `ContextMenuMsg::ProjectTreeAction`.
+        DockMessage::Panel(P::Tree(TreeMsg::ContextMenu(_) | TreeMsg::BackgroundContextMenu)) => {
+            true
+        }
         DockMessage::Panel(panel) => matches!(
             panel,
             P::PropertiesTab(_)
@@ -75,6 +81,8 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditSymbolLibId(..)
                 | P::UpdateSymbolFromLibrary(_)
                 | P::PlacedPartAction(_)
+                | P::HistoryRestoreClicked { .. }
+                | P::HistoryRestoreCancelled
                 | P::ToggleChildSheetBorderPicker(_)
                 | P::ToggleChildSheetFillPicker(_)
                 | P::OpenChildSheetAdvancedPicker(..)
@@ -109,11 +117,11 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
 /// Whether the message a command resolved to edits the sheet an undocked
 /// window shows, so it runs in the window's swap. An explicit allow-list of
 /// variants (never a whole enum): sheet edits, selection, tools, in-place text
-/// edits, Active Bar actions and the view zoom.
-/// Everything else (sheet stepping, project opens, net jumps, Find with
-/// Project scope, Annotate, ERC, export, app-wide toggles, and any message
-/// added later) runs on the main window, where it cannot load one sheet into
-/// another's canvas.
+/// edits, Active Bar actions, the view zoom and opening Find (the dialog then
+/// searches that window's sheet). Everything else (sheet stepping, project
+/// opens, net jumps, Find next / previous, Annotate, ERC, export, app-wide
+/// toggles, and any message added later) runs on the main window, where it
+/// cannot load one sheet into another's canvas.
 fn command_edits_shown_sheet(message: &Message) -> bool {
     use crate::active_bar::ActiveBarMsg;
     use crate::app::selection_request::SelectionRequest as Sel;
@@ -160,8 +168,11 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
         Message::ActiveBar(ActiveBarMsg::Action(_)) => true,
         // Placed-part actions act on the selected part of the shown sheet.
         Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(_))) => true,
-        // AutoFocus dims by the shown sheet's selection; Esc resets the tool.
-        Message::Overlay(OverlayMsg::ToggleAutoFocus) => true,
+        // AutoFocus dims by the shown sheet's selection; Esc resets the tool;
+        // Find opens bound to the window, so it searches the shown sheet.
+        Message::Overlay(
+            OverlayMsg::ToggleAutoFocus | OverlayMsg::OpenFind | OverlayMsg::OpenReplace,
+        ) => true,
         Message::Input(InputMsg::EscapePressed { .. }) => true,
         Message::TextEdit(TextEditMsg::Requested(_)) => true,
         Message::Menu(menu) => matches!(menu, MenuMessage::ZoomIn | MenuMessage::ZoomOut),
@@ -276,6 +287,25 @@ impl Signex {
         window: iced::window::Id,
         message: Message,
     ) -> Task<Message> {
+        // The palette is opened for this window: its rows and the command
+        // picked follow the window's sheet (#2037).
+        if matches!(
+            message,
+            Message::CommandPalette(crate::app::CommandPaletteMsg::Open)
+        ) {
+            return self.dispatch_update(Message::CommandPalette(
+                crate::app::CommandPaletteMsg::OpenInWindow(window),
+            ));
+        }
+        if matches!(
+            message,
+            Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::NextRequested
+                    | crate::find_replace::FindReplaceMsg::PreviousRequested
+            )
+        ) {
+            return self.step_find_in_window(window, message);
+        }
         if !command_edits_shown_sheet(&message) {
             return self.dispatch_update(message);
         }

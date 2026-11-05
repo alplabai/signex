@@ -574,6 +574,7 @@ impl Signex {
                     document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
+                window_history: std::collections::HashMap::new(),
                 preview: None,
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),
@@ -631,6 +632,7 @@ impl Signex {
                 active_bar_menu: None,
                 active_bar_menu_window: None,
                 acting_window: None,
+                pointer_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
                     .copied()

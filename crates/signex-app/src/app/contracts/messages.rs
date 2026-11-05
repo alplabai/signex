@@ -111,6 +111,9 @@ pub enum CommandPaletteMsg {
     /// search bar. Bound to Ctrl+Shift+P. Already open: the highlighted
     /// row resets to 0 and the input is refocused with its text selected.
     Open,
+    /// [`Self::Open`] from a key or menu in the undocked window: its rows and
+    /// the command picked follow that window's sheet (#2037).
+    OpenInWindow(iced::window::Id),
     /// Close the dropdown without executing. Bound to Esc and to
     /// click-outside. Leaves the chrome-strip input visible (it's the
     /// always-on placeholder) but unfocused; query is preserved so a
@@ -120,6 +123,9 @@ pub enum CommandPaletteMsg {
     /// selected row to 0 because the result list reorders on every
     /// keystroke.
     QueryChanged(String),
+    /// [`Self::QueryChanged`] from the text input of an undocked window's
+    /// palette: the query changes, the palette stays that window's (#2067). Ignored unless that window still owns the palette.
+    QueryTypedInWindow(iced::window::Id, String),
     /// Move the highlighted row by `delta` (wraps around at both ends).
     /// Wired to ArrowUp / ArrowDown when the palette is open.
     MoveSelection(i32),
@@ -265,8 +271,11 @@ pub enum UiMsg {
     /// `DocumentState.history.generation` when the load was kicked off;
     /// the handler discards stale results whose generation no longer
     /// matches (the user has switched tabs since). `path` is the file
-    /// the load targeted, for diagnostic logging only.
+    /// the load targeted, for diagnostic logging only. `window` is the
+    /// undocked window whose panel asked (`None`: the main window); the
+    /// answer lands in that window's history, or is dropped if it has closed.
     HistoryLoaded {
+        window: Option<iced::window::Id>,
         generation: u32,
         path: std::path::PathBuf,
         result: Result<crate::panels::history::HistoryLoad, String>,
@@ -295,6 +304,13 @@ pub enum UiMsg {
     DragStart(DragTarget),
     /// Layout drag moved to window-space (x, y).
     DragMove(f32, f32),
+    /// [`Self::DragMove`] while a pointer drag is live, with the window the
+    /// pointer is in: its position is in that window's coordinates (#2037).
+    DragMovedIn {
+        window: iced::window::Id,
+        x: f32,
+        y: f32,
+    },
     /// Layout drag released in the given window.
     DragEnd(iced::window::Id),
     /// Main-window content resized (width, height) in logical px.

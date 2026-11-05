@@ -11,6 +11,19 @@ use crate::app::restore_job::{
     EditStamp, RestoreFailure, RestoreJob, RestoreJobDocument, RestoreKind, RestoredFile,
 };
 
+#[cfg(test)]
+impl Signex {
+    /// Test seam: show the active tab's history as a finished load leaves it,
+    /// then click Restore, so a test of the restore itself need not load a
+    /// repository first. The guard has its own tests.
+    pub(crate) fn click_restore_on_listed_history(&mut self, sha: &str) -> Task<Message> {
+        let target = self.history_target_path();
+        self.document_state.history.active_path = target;
+        self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
+        self.handle_history_restore_clicked(sha)
+    }
+}
+
 impl Signex {
     /// v0.22 Phase 8.5 — Resolve the active tab's path and project, then
     /// restore the user-picked SHA on a worker. Per kind: a schematic ends
@@ -24,7 +37,9 @@ impl Signex {
     /// successful blob read + atomic write). The result is applied by
     /// [`Self::handle_history_restore_finished`].
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) -> Task<Message> {
-        let Some(active) = self.document_state.tabs.get(self.document_state.active_tab) else {
+        // Inside an undocked window's swap this is the window's tab, never
+        // main's active one.
+        let Some(active) = self.history_tab() else {
             return Task::none();
         };
         let full_path = active.path.clone();
@@ -36,6 +51,16 @@ impl Signex {
             return Task::none();
         };
         if full_path.as_os_str().is_empty() {
+            return Task::none();
+        }
+        // A sha is only meaningful for the file whose list it came from:
+        // restore only from a loaded list that was issued for this very
+        // target (a window's panel can briefly show another file's rows).
+        if !self.history_lists_target() {
+            self.report_restore_failure(format!(
+                "The history of {} is not loaded, so the restore was refused.",
+                full_path.display()
+            ));
             return Task::none();
         }
         // Rewriting a file that is being renamed or deleted would recreate it.

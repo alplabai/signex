@@ -108,6 +108,7 @@ fn every_field_is_accounted_for() {
         library_id: _,
         row_id: _,
         library_version: _,
+        library_stamp: _,
         unknown: _,
         unknown_columns: _,
     } = Symbol::default();

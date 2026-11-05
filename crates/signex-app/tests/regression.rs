@@ -350,6 +350,8 @@ mod symbol_undo_steps;
 mod field_edit_support;
 #[path = "regression/library_alternate_symbols.rs"]
 mod library_alternate_symbols;
+#[path = "regression/library_apply_midflight_edit.rs"]
+mod library_apply_midflight_edit;
 #[path = "regression/library_browser_row_delete.rs"]
 mod library_browser_row_delete;
 #[path = "regression/library_components_panel_details.rs"]
@@ -401,6 +403,8 @@ mod library_row_documents;
 mod library_link_reopen;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
+#[path = "regression/library_value_stamp.rs"]
+mod library_value_stamp;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]

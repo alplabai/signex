@@ -110,6 +110,9 @@ pub struct InteractionState {
     /// `None` for the main window. Stamps what the action opens (a Components
     /// drag) and keeps the app-wide refreshes on the main window.
     pub acting_window: Option<iced::window::Id>,
+    /// The window the pointer was last seen in during a pointer drag; `None`
+    /// until one reports it. `last_mouse_pos` is in that window's coordinates.
+    pub pointer_window: Option<iced::window::Id>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from

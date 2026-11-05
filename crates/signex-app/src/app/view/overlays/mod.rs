@@ -15,6 +15,9 @@ use super::*;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Width of the command palette card in an undocked window.
+const WINDOW_PALETTE_WIDTH: f32 = 480.0;
+
 mod bars;
 mod modals;
 mod net_hover;
@@ -198,7 +201,7 @@ impl Signex {
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
         use crate::app::command_palette::{CommandSource, MAX_RESULTS};
-        use iced::widget::{Space, button, column, container, row, scrollable, text};
+        use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
         use iced::{Alignment, Background, Border, Color};
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -314,8 +317,33 @@ impl Signex {
         // lays the input out with, so the dropdown reads as an extension
         // of the input rather than a floating popup that happens to be
         // nearby — including after a resize shrinks the bar.
-        let (card_x, card_w) = self.chrome_search_bar_geometry();
-        let card = container(column![body, footer])
+        let in_window = self.ui_state.command_palette.window.is_some();
+        // An undocked window has no chrome bar: its palette carries the
+        // text input at the top of the card.
+        let (card_x, card_w) = if in_window {
+            (16.0, WINDOW_PALETTE_WIDTH)
+        } else {
+            self.chrome_search_bar_geometry()
+        };
+        let input: Element<'_, Message> = if let Some(window) = self.ui_state.command_palette.window
+        {
+            text_input(
+                "Search files, symbols, commands…",
+                &self.ui_state.command_palette.query,
+            )
+            .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
+            .on_input(move |q| {
+                Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
+            })
+            .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
+            .padding(SP.l)
+            .size(TS.body)
+            .width(Length::Fill)
+            .boxed()
+        } else {
+            Space::new().height(0).boxed()
+        };
+        let card = container(column![input, body, footer])
             .width(card_w)
             .height(Length::Fit.max(360.0))
             .padding(0)
@@ -330,7 +358,11 @@ impl Signex {
                 ..container::Style::default()
             });
 
-        let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
+        let y = if in_window {
+            16.0
+        } else {
+            crate::menu_bar::MENU_BAR_HEIGHT + 4.0
+        };
         super::view::translate::Translate::new(card.boxed(), (card_x, y)).boxed()
     }
 
@@ -538,7 +570,10 @@ impl Signex {
     /// Document-tab right-click menu. Rendered before the project-tree
     /// menu since the two are mutually exclusive. Pushes dismiss then the
     /// clamped menu.
-    pub(super) fn tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn tab_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let ui = &self.ui_state;
@@ -546,6 +581,11 @@ impl Signex {
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
             return self.dock_tab_context_menu_overlay();
         };
+        // Only the main window's tab strip opens this menu, so only the main
+        // window paints it (#2037).
+        if !self.overlay_belongs_to(None, window_id) {
+            return Vec::new();
+        }
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
         // the two visually align.
@@ -606,7 +646,10 @@ impl Signex {
 
     /// Projects-panel tree right-click menu (+ its AddNewToProject
     /// submenu). Pushes dismiss, menu, then the optional submenu.
-    pub(super) fn project_tree_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn project_tree_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let ui = &self.ui_state;
@@ -614,6 +657,10 @@ impl Signex {
         let Some(tree_ctx) = interaction.project_tree_context_menu.as_ref() else {
             return Vec::new();
         };
+        // Only the window whose Projects panel opened the menu paints it.
+        if !self.overlay_belongs_to(tree_ctx.window, window_id) {
+            return Vec::new();
+        }
         let menu = self.view_project_tree_context_menu(tree_ctx);
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look

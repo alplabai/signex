@@ -121,6 +121,7 @@ fn closing_a_dirty_component_preview_tab_keeps_the_draft() {
 }
 
 fn restore_clicked(app: &mut Signex) {
+    crate::settle_support::list_active_history(app);
     let task = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::HistoryRestoreClicked {
             sha: "abc123".into(),

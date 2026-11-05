@@ -27,6 +27,11 @@ use crate::panels::{ALL_PANELS, PanelKind};
 pub static COMMAND_PALETTE_INPUT_ID: LazyLock<Id> =
     LazyLock::new(|| Id::new("signex.command_palette"));
 
+/// Widget id of the text input an undocked window's palette carries (the
+/// chrome-strip one belongs to the main window).
+pub static COMMAND_PALETTE_WINDOW_INPUT_ID: LazyLock<Id> =
+    LazyLock::new(|| Id::new("signex.command_palette.window"));
+
 /// Cap on rows rendered in the dropdown. Beyond this the user sees a
 /// "More results — refine query" footer; matches VS Code's behaviour.
 pub const MAX_RESULTS: usize = 10;
@@ -58,6 +63,10 @@ pub struct CommandPaletteState {
     pub index_generation: u64,
     /// The stamp an in-flight index build is for.
     pub index_building: Option<u64>,
+    /// The undocked window the palette was opened from (`None`: the main
+    /// window). Its rows are offered by that window's context and a command
+    /// picked runs through that window's path (#2037).
+    pub window: Option<iced::window::Id>,
     /// How many times a request cloned the open documents (test probe).
     #[cfg(test)]
     pub index_snapshots_taken: u32,
@@ -69,11 +78,13 @@ pub struct CommandPaletteState {
 pub fn catalog_stamp(app: &super::Signex) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    app.document_state.panel_ctx.placed_symbols.hash(&mut h);
+    let window = app.ui_state.command_palette.window;
+    window.hash(&mut h);
+    app.palette_panel_ctx().placed_symbols.hash(&mut h);
     // #1070 — which commands the command rows offer follows the active
     // editor kind and the enablement facts, so a tab switch rebuilds.
-    app.shortcut_contexts(None).hash(&mut h);
-    app.command_context(None).hash(&mut h);
+    app.shortcut_contexts(window).hash(&mut h);
+    app.command_context(window).hash(&mut h);
     for project in &app.document_state.projects {
         let d = &project.data;
         (&d.dir, &d.name, &d.schematic_root, &d.pcb_file).hash(&mut h);
@@ -159,8 +170,9 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     // Filtered to ids the bridge can actually resolve. 71 catalog ids
     // have no dispatch arm yet (see `app::command::bridge`), and a
     // palette row that silently does nothing is worse than no row.
-    let contexts = app.shortcut_contexts(None);
-    let command_ctx = app.command_context(None);
+    let window = app.ui_state.command_palette.window;
+    let contexts = app.shortcut_contexts(window);
+    let command_ctx = app.command_context(window);
     for id in crate::keymap::all_command_ids() {
         let Ok(command) = AppCommandId::new(id) else {
             continue;
@@ -267,8 +279,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             });
         }
     } else {
-        for (reference, value, _footprint, _lib_id) in &app.document_state.panel_ctx.placed_symbols
-        {
+        for (reference, value, _footprint, _lib_id) in &app.palette_panel_ctx().placed_symbols {
             if reference.is_empty() {
                 continue;
             }

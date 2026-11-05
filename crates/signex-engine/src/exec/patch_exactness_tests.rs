@@ -12,6 +12,7 @@ use crate::{
     AnnotateMode, Command, CommandKind, DocumentPatch, Engine, MirrorAxis, ReorderDirection,
     SymbolTextField, TextTarget,
 };
+use signex_types::schematic::LinkStamp;
 use signex_types::schematic::{
     AnnotateOrder, BodyStyle, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label,
     LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDrawing,
@@ -820,7 +821,7 @@ fn samples() -> Vec<(String, Command)> {
         "ReplaceLibSymbol",
         Command::ReplaceLibSymbol {
             lib_symbol: lib_symbol("L:S", "new"),
-            library_versions: vec![(sym, "2".into())],
+            library_versions: vec![(sym, LinkStamp::version("2"))],
         },
     );
     add(
@@ -832,6 +833,7 @@ fn samples() -> Vec<(String, Command)> {
                 library_id: Some(uid(SYMBOL, 7)),
                 row_id: Some(uid(SYMBOL, 8)),
                 library_version: "2".into(),
+                stamp: None,
                 value: "NEW-MPN".into(),
                 footprint: String::new(),
                 datasheet: String::new(),

@@ -45,6 +45,7 @@ fn symbol(uuid: uuid::Uuid, ref_text: TextProp) -> Symbol {
         library_id: None,
         row_id: None,
         library_version: String::new(),
+        library_stamp: None,
     }
 }
 

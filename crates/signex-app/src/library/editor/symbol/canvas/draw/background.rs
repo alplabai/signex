@@ -76,7 +76,7 @@ impl SymbolCanvas<'_> {
                     let grid_style = self.grid_style;
                     let minor_stroke = canvas::Stroke::default()
                         .with_color(dot_color)
-                        .with_width(0.6);
+                        .with_width(crate::canvas::grid::MINOR_GRID_LINE_PX);
 
                     // Precompute vertical span shared by both Lines and major.
                     let top_sy = w2s(0.0, world_y1).y.max(0.0);
@@ -128,25 +128,19 @@ impl SymbolCanvas<'_> {
                                 {
                                     match grid_style {
                                         crate::render_config::GridStyle::Dots => {
-                                            frame.fill(
-                                                &canvas::Path::circle(p, dot_radius),
-                                                dot_color,
+                                            crate::canvas::grid::fill_grid_dot(
+                                                frame, p, dot_radius, dot_color,
                                             );
                                         }
                                         crate::render_config::GridStyle::SmallCrosses => {
-                                            frame.stroke(
-                                                &canvas::Path::line(
-                                                    iced::Point::new(p.x - cross_arm, p.y),
-                                                    iced::Point::new(p.x + cross_arm, p.y),
-                                                ),
-                                                minor_stroke,
-                                            );
-                                            frame.stroke(
-                                                &canvas::Path::line(
-                                                    iced::Point::new(p.x, p.y - cross_arm),
-                                                    iced::Point::new(p.x, p.y + cross_arm),
-                                                ),
-                                                minor_stroke,
+                                            crate::canvas::grid::fill_grid_cross(
+                                                frame,
+                                                p,
+                                                cross_arm,
+                                                crate::canvas::grid::MINOR_GRID_LINE_PX,
+                                                // No device scale reaches this canvas yet.
+                                                1.0,
+                                                dot_color,
                                             );
                                         }
                                         crate::render_config::GridStyle::Lines => unreachable!(),

@@ -15,11 +15,15 @@ impl Signex {
                 // whose home is elsewhere — Projects, Signal, ERC —
                 // grew a second copy on the right (#641).
                 self.ui_state.panel_list_open = false;
-                self.show_panel(kind)
+                let shown = self.show_panel(kind);
+                // A panel opened into an empty dock gives the undocked
+                // windows their panel contexts and History loads.
+                Task::batch([shown, self.finish_update()])
             }
             OverlayMsg::PanelToggled(kind) => {
                 self.ui_state.panel_list_open = false;
-                self.toggle_panel(kind)
+                let toggled = self.toggle_panel(kind);
+                Task::batch([toggled, self.finish_update()])
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
@@ -100,15 +104,21 @@ impl Signex {
                 self.handle_navigator_assembled(generation, assembly)
             }
             ProjectMsg::DescendRequested {
+                window,
+                from,
                 symbol,
                 path,
                 placement,
             } => {
-                let task = self.descend_to_child_sheet(symbol, path, placement);
+                let task = self.descend_requested(window, &from, symbol, path, placement);
                 Task::batch([task, self.finish_update()])
             }
             ProjectMsg::PrimitiveOpenRequested(path) => {
                 let task = self.handle_open_primitive(path);
+                Task::batch([task, self.finish_update()])
+            }
+            ProjectMsg::SheetOpenRequested { path, open } => {
+                let task = self.open_sheet(path, *open);
                 Task::batch([task, self.finish_update()])
             }
             ProjectMsg::WindowHierarchyAssembled(root, generation, assembly) => {
@@ -272,6 +282,14 @@ impl Signex {
                 ContextMenuMsg::Show(x, y) => self.run_in_window_document(window, |app| {
                     app.show_canvas_context_menu(x, y, app.overlay_owner(window))
                 }),
+                // Expanding or rebuilding the tree edits the window's own
+                // tree; opening a tab, a dialog or a file is queued to the
+                // main window like Edit Symbol (#2037).
+                ContextMenuMsg::ProjectTreeAction(action)
+                    if !action.changes_only_the_shown_tree() =>
+                {
+                    self.handle_project_tree_action(action)
+                }
                 other => self
                     .run_in_window_document(window, |app| app.dispatch_context_menu_message(other)),
             },
@@ -299,7 +317,12 @@ impl Signex {
                 self.close_all_context_menus();
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.project_tree_context_menu =
-                    Some(crate::app::ProjectTreeContextMenuState { x, y, key });
+                    Some(crate::app::ProjectTreeContextMenuState {
+                        x,
+                        y,
+                        key,
+                        window: self.interaction_state.acting_window,
+                    });
                 Task::none()
             }
             ContextMenuMsg::CloseProjectTree => {
