@@ -105,6 +105,10 @@ pub type DesignatorsKey = (
     Option<signex_types::schematic::InstancePath>,
 );
 
+/// Camera `(offset_x, offset_y, scale)` and paper colour (RGBA8) the
+/// background was built at.
+pub type BgCacheKey = ((f32, f32, f32), [u8; 4]);
+
 /// The canvas program that handles input and rendering.
 /// Holds references to app state needed for drawing (theme colors, etc).
 pub struct CanvasSlot {
@@ -122,7 +126,7 @@ pub struct CanvasSlot {
     /// drops the cache when either differs, so the paper and grid follow every
     /// camera move and sheet-colour change whatever event announced it (#1993,
     /// #2034).
-    pub bg_cache_camera: std::cell::Cell<Option<((f32, f32, f32), [u8; 4])>>,
+    pub bg_cache_camera: std::cell::Cell<Option<BgCacheKey>>,
     /// Test-only: how often the background was tessellated.
     #[cfg(test)]
     pub bg_tessellations: std::cell::Cell<u32>,
