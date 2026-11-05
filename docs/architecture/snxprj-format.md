@@ -76,9 +76,12 @@ byte-identical to before.
 - A net that matches several classes takes the **first matching class in
   table order**. There is no specificity ranking; reorder the table to change
   the winner.
-- `style.color` is `#RRGGBB` or `#RRGGBBAA`; `style.line` is `solid`
-  (default, not written), `dashed` or `dotted`; `style.wire_width_mm` is the
-  wire width in millimetres. Each is optional, and an absent value leaves the
+- `style.color` is `#RRGGBB` or `#RRGGBBAA`; `style.line` is `solid`,
+  `dashed` or `dotted`, absent meaning Default: inherit the project's
+  `schematic_defaults.wire_line_style`, then solid (#2026). Builds before
+  #2026 never wrote `solid`, so an absent key in an older file keeps its
+  meaning and an explicit `solid` overrides a dashed project default;
+  `style.wire_width_mm` is the wire width in millimetres. Each is optional, and an absent value leaves the
   wire's own look alone. A malformed colour makes the project refuse to open
   rather than silently dropping the value.
 - **PCB extension point.** The same struct carries the PCB rule block
@@ -106,8 +109,10 @@ byte-identical to before.
   the canvas never reads the project. Precedence, per property:
   - **colour**: the per-net colour override (the Active Bar net-colour tool) wins
     over the class colour, which wins over the theme's wire colour;
-  - **width**: the class width, else the wire's own `stroke_width`;
-  - **line style**: the class line style, else solid.
+  - **width**: the wire's own `stroke_width`, else the class width, else the
+    project default, else 0.254 mm (#2026; before it the class width won);
+  - **line style**: the class line style when set, else the project default,
+    else solid.
 
   A class colour also tints the junctions of its nets. Exports honour the
   persisted per-net colours (`[extras.sheet.net_colors]`) in the same order.
@@ -218,8 +223,9 @@ the Project tab's Schematic defaults section, added without bumping the
 - The canvas, every export, hit test and selection boxes resolve through the
   same table; placement tools start from the project's text size, font, shape
   stroke and shape fill.
-- Line style: a wire stores none, so a wire whose net class sets none (a
-  class writes Solid as "none") strokes in the project's `wire_line_style`.
+- Line style: a wire stores none, so a wire whose net class sets none (the
+  Net Classes panel's Default) strokes in the project's `wire_line_style`; a
+  class's explicit Solid, Dashed or Dotted overrides it.
 - Shape fill and font apply to placement only: a placed shape always stores
   its fill, and a placed label or note stores the project font (or no font,
   the sheet default, when the project names none). Stored values are never
