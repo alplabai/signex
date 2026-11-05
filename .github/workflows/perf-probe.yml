@@ -1,0 +1,29 @@
+# Temporary: runs the busy-sheet perf probe. Not for merge.
+name: perf probe
+on:
+  push:
+    branches: [perf/busy-sheet-probe]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux dependencies
+        uses: ./.github/actions/linux-deps
+        with:
+          packages: >-
+            libxkbcommon-dev libwayland-dev libvulkan-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+            mesa-vulkan-drivers
+      - name: Probe
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+        run: |
+          nproc; free -m
+          cargo test --release -p signex-app --lib busy_sheet_probe -- --ignored --nocapture 2>&1 | tee probe.log
+          grep '^PERF' probe.log > "$GITHUB_STEP_SUMMARY" || true

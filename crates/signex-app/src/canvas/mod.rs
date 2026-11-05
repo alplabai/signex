@@ -1119,3 +1119,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod perf_probe;
