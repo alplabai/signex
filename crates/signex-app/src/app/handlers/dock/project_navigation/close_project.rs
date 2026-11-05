@@ -601,8 +601,12 @@ impl Signex {
             return Task::none();
         }
         // A field typed while the prompt was up is an edit of this project
-        // too: commit it before the scan below, so Save All writes it.
-        self.commit_drafts_of_project(state.project_id);
+        // too: Save All commits it before the scan below, so it is written.
+        // Discard All must not: a refused one leaves the prompt up, and the
+        // field would already be an engine edit by then.
+        if choice == ProjectCloseChoice::SaveAll {
+            self.commit_drafts_of_project(state.project_id);
+        }
         // A project opened since the references were read has disk-only
         // children nobody resolved; read again and re-prompt rather than act
         // on stale ownership.

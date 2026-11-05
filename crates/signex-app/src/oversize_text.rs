@@ -19,6 +19,8 @@ pub(crate) struct OversizeBudget {
     drawn: usize,
     /// A text was left out or cut this frame.
     capped: bool,
+    /// Warnings this budget sent to Messages.
+    warnings: usize,
     /// Counts the cap notices; the warning goes out on the first.
     latch: &'static std::sync::atomic::AtomicUsize,
 }
@@ -51,6 +53,7 @@ impl OversizeBudget {
         Self {
             drawn: 0,
             capped: false,
+            warnings: 0,
             latch,
         }
     }
@@ -74,6 +77,7 @@ impl OversizeBudget {
     fn note_capped(&mut self) {
         self.capped = true;
         if first_notice(self.latch) {
+            self.warnings += 1;
             crate::diagnostics::log_warning(
                 "This sheet has more or longer oversize text than can be drawn; \
                  the rest is left out",
@@ -105,20 +109,27 @@ fn drawn_part(content: &str) -> &str {
 /// is measured, and a text whose widest possible box misses the frame is
 /// culled before any shaping, so a frame never shapes more than a few short
 /// lines per near-screen text. Its corners are rotated about the anchor.
+///
+/// `frame_origin` is where the frame's top-left sits in the coordinates
+/// `position` is in: the retained content layer is drawn into a frame that
+/// reaches a viewport past the viewport on every side, and the fork's
+/// `Frame::size()` does not say where it starts.
 pub(crate) fn on_screen(
     frame: &canvas::Frame,
+    frame_origin: Point,
     text: &TextItem,
     position: Point,
     size_px: f32,
 ) -> bool {
-    on_screen_in(frame.size(), text, position, size_px)
+    let rect = iced::Rectangle::new(frame_origin, frame.size());
+    on_screen_in(rect, text, position, size_px)
 }
 
-/// [`on_screen`] for a frame of `frame_size`.
-fn on_screen_in(frame_size: iced::Size, text: &TextItem, position: Point, size_px: f32) -> bool {
+/// [`on_screen`] for a frame covering `frame`.
+fn on_screen_in(frame: iced::Rectangle, text: &TextItem, position: Point, size_px: f32) -> bool {
     let shown = drawn_part(&text.content);
     let upper = shown.chars().count() as f32 * MAX_GLYPH_ADVANCE_EM * size_px;
-    if !box_touches(frame_size, text, position, size_px, upper) {
+    if !box_touches(frame, text, position, size_px, upper) {
         return false;
     }
     let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
@@ -130,13 +141,13 @@ fn on_screen_in(frame_size: iced::Size, text: &TextItem, position: Point, size_p
         })
         .fold(0.0_f32, f32::max)
         * size_px;
-    box_touches(frame_size, text, position, size_px, width)
+    box_touches(frame, text, position, size_px, width)
 }
 
 /// Whether `text`, `width` px wide, anchored at `position`, can touch a frame
-/// of `frame_size`.
+/// covering `frame`.
 fn box_touches(
-    frame_size: iced::Size,
+    frame: iced::Rectangle,
     text: &TextItem,
     position: Point,
     size_px: f32,
@@ -181,11 +192,10 @@ fn box_touches(
     // Padded by one em each side: the shaper's box can sit short of what it
     // draws, and a visible tail must never be culled.
     let pad = size_px;
-    let size = frame_size;
-    max_x + pad >= 0.0
-        && min_x - pad <= size.width
-        && max_y + pad >= 0.0
-        && min_y - pad <= size.height
+    max_x + pad >= frame.x
+        && min_x - pad <= frame.x + frame.width
+        && max_y + pad >= frame.y
+        && min_y - pad <= frame.y + frame.height
 }
 
 #[cfg(test)]
@@ -212,7 +222,8 @@ mod tests {
         assert!(budget.capped, "the bound was hit");
         // This test's own latch: every cap notice reached it, and only the
         // first of them warns.
-        assert!(LATCH.load(std::sync::atomic::Ordering::Relaxed) > 0);
+        assert!(LATCH.load(std::sync::atomic::Ordering::Relaxed) > 1);
+        assert_eq!(budget.warnings, 1, "many caps, one warning");
         let fresh = std::sync::atomic::AtomicUsize::new(0);
         assert!(first_notice(&fresh), "the first notice warns");
         assert!(!first_notice(&fresh), "later ones do not");
@@ -227,7 +238,12 @@ mod tests {
         assert!(!next_frame.capped);
     }
 
-    const FRAME: iced::Size = iced::Size::new(200.0, 100.0);
+    const FRAME: iced::Rectangle = iced::Rectangle {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 100.0,
+    };
 
     fn note(rotation: f32) -> TextItem {
         TextItem {
@@ -280,5 +296,25 @@ mod tests {
             Point::new(10.0, 10.0),
             10.0
         ));
+    }
+
+    /// The retained content layer's frame starts a viewport left of and above
+    /// the viewport: a text in that margin is inside the frame and is kept,
+    /// one past its far side is not.
+    #[test]
+    fn a_frame_that_does_not_start_at_the_origin_keeps_its_margin() {
+        let retained = iced::Rectangle::new(
+            Point::new(-1500.0, -1000.0),
+            iced::Size::new(4500.0, 3000.0),
+        );
+        let text = TextItem {
+            content: "H".into(),
+            ..Default::default()
+        };
+        let at = |x: f32, y: f32| on_screen_in(retained, &text, Point::new(x, y), 10.0);
+        assert!(at(-1300.0, 500.0), "the left margin is inside the frame");
+        assert!(at(500.0, -900.0), "so is the top margin");
+        assert!(!at(4000.0, 500.0), "past the right edge it is culled");
+        assert!(!at(-1700.0, 500.0), "and past the left one");
     }
 }

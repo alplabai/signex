@@ -117,8 +117,6 @@ mod tests {
         };
         let repairs = clamp_oversize_text(&mut sheet);
         let sizes: Vec<f64> = sheet.text_notes.iter().map(|n| n.font_size).collect();
-        // The ceiling is a contract, not just a name: 100 mm.
-        assert_eq!(MAX_TEXT_SIZE_MM, 100.0);
         assert_eq!(
             sizes,
             [

@@ -56,6 +56,7 @@ impl canvas::Program<crate::app::Message> for OneLabel {
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             text_min_px: 1.0,
             text_max_px: 400.0,
+            frame_origin: Point::ORIGIN,
         };
         let to_screen = |p: [f32; 2]| Point::new(p[0], p[1]);
         // The 0 degree label belongs to the GPU atlas on the real surface, so

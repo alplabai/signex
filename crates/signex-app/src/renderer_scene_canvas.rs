@@ -28,6 +28,7 @@ pub struct SceneDrawOptions {
     /// copy is how the replays drifted apart.
     pub text_min_px: f32,
     pub text_max_px: f32,
+    pub frame_origin: Point, // where the frame starts, for the oversize cull
 }
 
 /// Does this world→screen map flip Y?
@@ -607,7 +608,13 @@ fn draw_text_items<'a, F>(
             // iced draws it as outlines past its own atlas limit; nothing
             // reaches it that cannot be seen, and what does is bounded.
             TextRaster::Oversize => {
-                if !crate::oversize_text::on_screen(frame, text, position, size_px) {
+                if !crate::oversize_text::on_screen(
+                    frame,
+                    options.frame_origin,
+                    text,
+                    position,
+                    size_px,
+                ) {
                     continue;
                 }
                 match budget.admit(&text.content) {
@@ -1025,6 +1032,7 @@ mod rotated_text_tests {
             device_px_per_logical_px: 1.0,
             text_min_px: 0.0,
             text_max_px: f32::INFINITY,
+            frame_origin: Point::ORIGIN,
         };
         let sized = |content: &str, size_mm: f32, rotation: f32| TextItem {
             size_mm,
@@ -1117,6 +1125,7 @@ mod line_geometry_tests {
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             text_min_px: 1.0,
             text_max_px: 100.0,
+            frame_origin: Point::ORIGIN,
         }
     }
 
@@ -1181,6 +1190,7 @@ mod line_geometry_tests {
                     device_px_per_logical_px: dpr,
                     text_min_px: 1.0,
                     text_max_px: 100.0,
+                    frame_origin: Point::ORIGIN,
                 };
                 let to_screen = |p: [f32; 2]| Point::new(p[0] * scale + 0.37, p[1] * scale + 0.61);
                 let (_, _, wire) =
@@ -1218,6 +1228,7 @@ mod oversize_text_tests {
             device_px_per_logical_px: 1.0,
             text_min_px: 0.0,
             text_max_px: f32::INFINITY,
+            frame_origin: Point::ORIGIN,
         };
         let big = text_item(40.0, 0.0);
         let px = options.text_px(big.size_mm, None);

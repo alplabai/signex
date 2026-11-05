@@ -789,3 +789,43 @@ fn a_field_typed_behind_the_close_prompt_is_saved_by_save_all() {
         Some("TYPED-BEHIND")
     );
 }
+
+/// A Discard All the prompt refuses (an unreadable sheet hides ownership)
+/// leaves the prompt up and a field typed behind it a draft: it must not have
+/// become an engine edit on the way.
+#[test]
+fn a_refused_discard_all_leaves_a_field_typed_behind_the_prompt_a_draft() {
+    use crate::app::state::sheet_refs::UnreadableSheet;
+    use crate::app::{ProjectCloseChoice, ProjectMsg};
+    let (mut app, sheet, id, _recorder) = project_with_draft();
+    close_project_to_gate(&mut app, id);
+    let confirm = app.ui_state.project_close_confirm.as_mut().expect("prompt");
+    confirm.sheet_refs.unreadable.push(UnreadableSheet {
+        path: PathBuf::from("/w/p/unreadable.snxsch"),
+        reason: "is not a regular file".to_string(),
+        whole_path: false,
+    });
+    app.document_state.drafts.set_title_block(
+        &sheet,
+        TitleBlockField::DocumentNumber,
+        "TYPED-BEHIND",
+    );
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    assert!(app.ui_state.project_close_confirm.is_some(), "refused");
+    assert_eq!(
+        app.document_state
+            .drafts
+            .title_block_text(&sheet, TitleBlockField::DocumentNumber)
+            .as_deref(),
+        Some("TYPED-BEHIND"),
+        "still a draft"
+    );
+    let stored = app.document_state.engines[&sheet]
+        .document()
+        .title_block
+        .get("document_number")
+        .cloned();
+    assert_eq!(stored, None, "not an engine edit");
+}

@@ -267,7 +267,12 @@ impl SchematicCanvas<'_> {
             .drag_moving_scene(&transform, bounds)
             .and_then(|moving| moving.scene)
         {
-            crate::schematic_runtime::draw_canvas_text_fallback(&mut frame, &scene, &transform);
+            crate::schematic_runtime::draw_canvas_text_fallback(
+                &mut frame,
+                &scene,
+                &transform,
+                iced::Point::ORIGIN,
+            );
         }
         frame.into_geometry()
     }
@@ -297,7 +302,14 @@ impl SchematicCanvas<'_> {
             self.content_cache_camera
                 .set((cam.offset.x, cam.offset.y, cam.scale));
             if let Some(snapshot) = self.active_snapshot() {
-                self.render_content_scene(frame, snapshot, &transform, local, focus_set.as_ref());
+                self.render_content_scene(
+                    frame,
+                    iced::Point::ORIGIN,
+                    snapshot,
+                    &transform,
+                    local,
+                    focus_set.as_ref(),
+                );
             }
         })
     }
@@ -329,7 +341,12 @@ impl SchematicCanvas<'_> {
         );
         layers.static_cache.draw(renderer, local.size(), |target| {
             if let Some(scene) = &static_scene {
-                crate::schematic_runtime::draw_canvas_text_fallback(target, scene, &transform);
+                crate::schematic_runtime::draw_canvas_text_fallback(
+                    target,
+                    scene,
+                    &transform,
+                    iced::Point::ORIGIN,
+                );
             }
         })
     }

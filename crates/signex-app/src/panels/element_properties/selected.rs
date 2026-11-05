@@ -1132,9 +1132,85 @@ mod tests {
     /// the row under another key would see neither and draw both the same.
     #[test]
     fn the_label_view_selects_the_cell_its_justification_row_names() {
+        use signex_types::schematic::HAlign;
+        let window = (400_usize, 1200_usize);
         let (left, right) = (label_pixels("Left"), label_pixels("Right"));
-        assert!(left.iter().any(|b| *b != 0), "something was drawn");
-        assert_ne!(left, right, "Left and Right select different cells");
+        let (left_grid, right_grid) = (anchor_grid(HAlign::Left), anchor_grid(HAlign::Right));
+        assert_ne!(left_grid.pixels, right_grid.pixels, "the references differ");
+        // Each row's view holds the picker drawn for its own alignment far
+        // better than the other one's: a swapped row reading fails both.
+        let score = |block: &Block, frame: &[u8]| block.best_match(frame, window.0);
+        let (ll, lr) = (score(&left_grid, &left), score(&right_grid, &left));
+        let (rr, rl) = (score(&right_grid, &right), score(&left_grid, &right));
+        // The picker is laid out in a column with other controls, so the match
+        // is partial; the two pickers differ by two cells, a gap of about 0.17.
+        assert!(ll > lr + 0.1, "Left row: Left {ll}, Right {lr}");
+        assert!(rr > rl + 0.1, "Right row: Right {rr}, Left {rl}");
+    }
+
+    /// The anchor picker drawn alone for one alignment, cropped to its
+    /// non-background pixels.
+    struct Block {
+        pixels: Vec<u8>,
+        width: usize,
+        height: usize,
+    }
+
+    fn anchor_grid(h: signex_types::schematic::HAlign) -> Block {
+        let (app, _task) = crate::app::Signex::new();
+        let ctx = &app.document_state.panel_ctx;
+        let palette = crate::panels::palette::PanelPalette::from_tokens(&ctx.tokens);
+        let grid =
+            crate::panels::justification_grid(uuid::Uuid::nil(), 0.0, h, palette, ctx.theme_id);
+        let (w, hgt) = (120_usize, 120_usize);
+        let data = crate::layout_probe::draw_pixels(grid, iced::Size::new(w as f32, hgt as f32));
+        let lit = |x: usize, y: usize| data[(y * w + x) * 4..(y * w + x) * 4 + 3] != [0, 0, 0];
+        let xs: Vec<usize> = (0..w).filter(|&x| (0..hgt).any(|y| lit(x, y))).collect();
+        let ys: Vec<usize> = (0..hgt).filter(|&y| (0..w).any(|x| lit(x, y))).collect();
+        let (x0, x1) = (xs[0], xs[xs.len() - 1]);
+        let (y0, y1) = (ys[0], ys[ys.len() - 1]);
+        let mut pixels = Vec::new();
+        for y in y0..=y1 {
+            pixels.extend_from_slice(&data[(y * w + x0) * 4..(y * w + x1 + 1) * 4]);
+        }
+        Block {
+            pixels,
+            width: x1 - x0 + 1,
+            height: y1 - y0 + 1,
+        }
+    }
+
+    impl Block {
+        /// The best fraction of this block's pixels that equal (within a few
+        /// levels) those of `frame`, `frame_width` px wide, over every
+        /// position. Edges are anti-aliased, so an exact match is too strict.
+        fn best_match(&self, frame: &[u8], frame_width: usize) -> f32 {
+            let rows = frame.len() / 4 / frame_width;
+            let total = self.width * self.height;
+            let mut best = 0usize;
+            for y in 0..=rows - self.height {
+                for x in 0..=frame_width - self.width {
+                    let mut same = 0usize;
+                    let mut misses = 0usize;
+                    'rows: for r in 0..self.height {
+                        for c in 0..self.width {
+                            let a = ((y + r) * frame_width + x + c) * 4;
+                            let b = (r * self.width + c) * 4;
+                            if (0..3).all(|k| frame[a + k].abs_diff(self.pixels[b + k]) <= 6) {
+                                same += 1;
+                            } else {
+                                misses += 1;
+                                if misses > total - best {
+                                    break 'rows;
+                                }
+                            }
+                        }
+                    }
+                    best = best.max(same);
+                }
+            }
+            best as f32 / total as f32
+        }
     }
 
     fn justify_info() -> Vec<(String, String)> {

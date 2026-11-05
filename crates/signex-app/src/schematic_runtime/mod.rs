@@ -409,7 +409,7 @@ fn render_schematic_with_renderer(
     if let Some(scene) =
         build_schematic_scene(snapshot, transform, colors, bounds, focus_set, overrides)
     {
-        draw_built_scene(frame, &scene, transform);
+        draw_built_scene(frame, &scene, transform, iced::Point::ORIGIN);
     }
 }
 
@@ -476,20 +476,27 @@ pub(crate) fn schematic_draw_options_with(
         device_px_per_logical_px: transform.device_px_per_logical_px,
         text_min_px: text_size.min_px,
         text_max_px: text_size.max_px,
+        frame_origin: iced::Point::ORIGIN,
     }
 }
 
-/// Replay a built scene through the live `transform`.
+/// Replay a built scene through the live `transform`. `frame_origin` is where
+/// `frame` starts in screen space: the origin, except for the retained content
+/// layer, whose frame reaches past the viewport on every side.
 pub(crate) fn draw_built_scene(
     frame: &mut canvas::Frame,
     scene: &Scene,
     transform: &ScreenTransform,
+    frame_origin: iced::Point,
 ) {
     crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        schematic_draw_options(transform),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            frame_origin,
+            ..schematic_draw_options(transform)
+        },
     );
 }
 
@@ -500,12 +507,16 @@ pub(crate) fn draw_canvas_text_fallback(
     frame: &mut canvas::Frame,
     scene: &Scene,
     transform: &ScreenTransform,
+    frame_origin: iced::Point,
 ) {
     crate::renderer_scene_canvas::draw_canvas_texts(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
-        schematic_draw_options(transform),
+        crate::renderer_scene_canvas::SceneDrawOptions {
+            frame_origin,
+            ..schematic_draw_options(transform)
+        },
     );
 }
 
@@ -539,7 +550,7 @@ fn draw_renderer_snapshot(
 ) {
     let mut scene = Scene::default();
     SchematicRenderer::build_scene(snapshot, theme, dirty, &mut scene);
-    draw_built_scene(frame, &scene, transform);
+    draw_built_scene(frame, &scene, transform, iced::Point::ORIGIN);
 }
 
 fn to_rgba(color: Color) -> [f32; 4] {
