@@ -156,11 +156,7 @@ impl SymbolSheetPreview {
     fn fitted_camera(&self, size: Size) -> Camera {
         let (sheet, symbol) = preview_sheet(&self.lib);
         camera_of(&fit_transform(
-            symbol_bounds(
-                &sheet,
-                &symbol,
-                &signex_types::schematic::SchematicDefaults::BUILT_IN,
-            ),
+            symbol_bounds(&sheet, &symbol),
             size,
             self.device_px_per_logical_px,
         ))
@@ -169,11 +165,7 @@ impl SymbolSheetPreview {
     /// What the fit is keyed on: the symbol id and its body extent.
     fn fit_key(&self) -> FitKey {
         let (sheet, symbol) = preview_sheet(&self.lib);
-        let extent = symbol_bounds(
-            &sheet,
-            &symbol,
-            &signex_types::schematic::SchematicDefaults::BUILT_IN,
-        );
+        let extent = symbol_bounds(&sheet, &symbol);
         let um = |mm: f64| (mm * 1000.0).round() as i64;
         (
             self.lib.id.clone(),

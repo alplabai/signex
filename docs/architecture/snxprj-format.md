@@ -245,7 +245,10 @@ the Project tab's Schematic defaults section, added without bumping the
   stores a typed value clamped and says so under the field; a file value out
   of range resolves clamped and is not rewritten. Placement uses whole points
   (`SchematicDefaults::placed_text_pt`), the same on every placement path.
-- Known gaps: an explicit `null` key is dropped on save; clearing a field
+- Known gaps: symbol hit and selection boxes and the PDF fit-to-page box use
+  the symbol geometry and stored widths, not the resolved stroke, so with a
+  thick project symbol line width the ink can reach past them (growing them
+  needs a maintainer decision); an explicit `null` key is dropped on save; clearing a field
   also drops an unreadable value kept for that key (unlike the
   designator-standard rule, where clearing over an unreadable section keeps
   it); a polyline placed with Width untouched stores 0, not the shape default

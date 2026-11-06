@@ -26,15 +26,7 @@ fn body_symbol() -> LibSymbol {
 fn the_preview_is_a_placed_symbol_the_canvas_can_draw() {
     let (sheet, symbol) = preview_sheet(&body_symbol());
     let size = Size::new(200.0, 100.0);
-    let transform = fit_transform(
-        symbol_bounds(
-            &sheet,
-            &symbol,
-            &signex_types::schematic::SchematicDefaults::BUILT_IN,
-        ),
-        size,
-        UNSCALED,
-    );
+    let transform = fit_transform(symbol_bounds(&sheet, &symbol), size, UNSCALED);
     let scene = build_schematic_scene(
         &sheet,
         &transform,
@@ -50,11 +42,7 @@ fn the_preview_is_a_placed_symbol_the_canvas_can_draw() {
 fn the_symbol_is_centred_and_fits_inside_the_box() {
     let (sheet, symbol) = preview_sheet(&body_symbol());
     let size = Size::new(200.0, 156.0);
-    let extent = symbol_bounds(
-        &sheet,
-        &symbol,
-        &signex_types::schematic::SchematicDefaults::BUILT_IN,
-    );
+    let extent = symbol_bounds(&sheet, &symbol);
     let transform = fit_transform(extent, size, UNSCALED);
     let low = transform.world_to_screen((extent.min_x, extent.min_y));
     let high = transform.world_to_screen((extent.max_x, extent.max_y));
@@ -74,11 +62,7 @@ fn the_symbol_is_centred_and_fits_inside_the_box() {
 fn a_small_box_keeps_a_pixel_margin_for_pin_text() {
     let (sheet, symbol) = preview_sheet(&body_symbol());
     let size = Size::new(60.0, 40.0);
-    let extent = symbol_bounds(
-        &sheet,
-        &symbol,
-        &signex_types::schematic::SchematicDefaults::BUILT_IN,
-    );
+    let extent = symbol_bounds(&sheet, &symbol);
     let transform = fit_transform(extent, size, UNSCALED);
     let low = transform.world_to_screen((extent.min_x, extent.min_y));
     let high = transform.world_to_screen((extent.max_x, extent.max_y));
@@ -275,11 +259,7 @@ fn the_part_sits_on_the_paper() {
     let (sheet, symbol) = preview_sheet(&body_symbol());
     let (width, height) = sheet.paper_mm();
     assert_eq!((width, height), (297.0, 210.0));
-    let extent = symbol_bounds(
-        &sheet,
-        &symbol,
-        &signex_types::schematic::SchematicDefaults::BUILT_IN,
-    );
+    let extent = symbol_bounds(&sheet, &symbol);
     assert!(extent.min_x > 0.0 && extent.min_y > 0.0, "{extent:?}");
     assert!(extent.max_x < width && extent.max_y < height, "{extent:?}");
 }

@@ -613,7 +613,7 @@ fn collect_item_bounds_with(
         if symbol_bodies {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::Symbol),
-                bbox: symbol::symbol_bounds(snapshot, symbol, &widths.defaults),
+                bbox: symbol::symbol_bounds(snapshot, symbol),
                 anchor: symbol.position,
             });
         }
@@ -825,7 +825,7 @@ fn selected_aabbs(
                 });
                 return index
                     .get(&item.uuid)
-                    .map(|symbol| symbol::symbol_bounds(snapshot, symbol, &widths.defaults));
+                    .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
             }
             let index: &HashMap<SelectedItem, Aabb> = others.get_or_init(|| {
                 let mut index = HashMap::new();
