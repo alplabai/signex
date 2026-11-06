@@ -83,7 +83,7 @@ pub use documents::{
     TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
-pub(crate) use history::History;
+pub use history::History;
 pub(crate) use history_save_point::SavePoint;
 #[cfg(test)]
 pub(crate) use state::WindowKind;

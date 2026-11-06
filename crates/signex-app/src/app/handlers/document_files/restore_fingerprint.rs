@@ -33,7 +33,7 @@ impl Signex {
         }
         if let Some(editor) = ds.symbol_editors.get(path) {
             feed(&mut hasher, &editor.file);
-            editor.undo_snapshots.len().hash(&mut hasher);
+            editor.history.undo_len().hash(&mut hasher);
         }
         if let Some(editor) = ds.footprint_editors.get(path) {
             feed(&mut hasher, &editor.file);

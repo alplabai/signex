@@ -362,7 +362,7 @@ impl Signex {
                 .symbol_editors
                 .get(path)
                 .map_or((false, false), |e| {
-                    (!e.undo_snapshots.is_empty(), !e.redo_snapshots.is_empty())
+                    (!!e.history.can_undo(), !!e.history.can_redo())
                 }),
             Some(TabKind::FootprintEditor(path)) => document
                 .footprint_editors

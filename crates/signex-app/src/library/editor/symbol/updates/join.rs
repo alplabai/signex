@@ -256,7 +256,7 @@ mod tests {
             "new polygon is selected"
         );
         assert_eq!(
-            editor.undo_snapshots.len(),
+            editor.history.undo_len(),
             1,
             "exactly one undo snapshot for the whole composite op"
         );
@@ -300,7 +300,7 @@ mod tests {
             SymbolGraphicKind::Polygon { vertices } => assert_eq!(vertices.len(), 4),
             other => panic!("expected Polygon, got {other:?}"),
         }
-        assert_eq!(editor.undo_snapshots.len(), 1);
+        assert_eq!(editor.history.undo_len(), 1);
         assert_eq!(
             editor.status_message.as_deref(),
             Some("Closed the outline with a new 4.00 mm edge.")
@@ -383,7 +383,7 @@ mod tests {
                 .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. })),
             "no polygon appended on error"
         );
-        assert_eq!(editor.undo_snapshots.len(), 0, "no undo entry on error");
+        assert_eq!(editor.history.undo_len(), 0, "no undo entry on error");
         assert!(editor.status_message.is_some());
         assert!(editor.status_message.as_deref().unwrap().contains("branch"));
     }
@@ -414,7 +414,7 @@ mod tests {
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
         assert_eq!(editor.primitive().graphics.len(), 2, "nothing mutated");
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
         assert!(editor.status_message.is_none());
     }
 
@@ -469,7 +469,7 @@ mod tests {
         let mut editor = new_editor();
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
     }
 
     /// A selection whose sources are all shared (part 0) keeps the
@@ -514,7 +514,7 @@ mod tests {
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
         assert_eq!(editor.primitive().graphics.len(), 2, "nothing mutated");
-        assert_eq!(editor.undo_snapshots.len(), 0, "no undo entry");
+        assert_eq!(editor.history.undo_len(), 0, "no undo entry");
         assert_eq!(
             editor.status_message.as_deref(),
             Some("Selection mixes shared and unit-specific shapes")
@@ -557,7 +557,7 @@ mod tests {
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
         assert_eq!(editor.primitive().graphics.len(), 1, "nothing mutated");
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
         assert!(
             editor.status_message.is_none(),
             "silent no-op, matching the disabled menu row"

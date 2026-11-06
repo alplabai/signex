@@ -283,9 +283,6 @@ pub struct SymbolDocument {
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
     dirty: bool,
-    /// The undo depth at which this draft last equalled its file, so Undo
-    /// back to it reads clean (#1854). Unknown stays dirty.
-    pub(crate) save_point: super::SavePoint,
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
@@ -322,15 +319,11 @@ pub struct SymbolDocument {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
-    /// Snapshot stack for undo. Each entry is the whole `.snxsym`
-    /// container (symbols shared structurally between entries) at the
-    /// moment before a mutation was applied. Max 100 entries; oldest
-    /// entries are dropped when the limit is exceeded.
-    pub undo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
-    /// Snapshot stack for redo. Cleared whenever a new mutation is
-    /// recorded; populated by `SymbolUndo` so the user can step
-    /// forward again after undoing.
-    pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
+    /// Undo / redo snapshots (each the whole `.snxsym` container, symbols
+    /// shared structurally between steps) and the depth at which this draft
+    /// last equalled its file, so Undo back to it reads clean (#1854).
+    /// Capped at [`Self::HISTORY_DEPTH`]; unknown stays dirty.
+    pub history: crate::app::History<crate::app::SymbolHistorySnapshot>,
     /// Bumped by every history change: commit, undo, redo and a coalesced
     /// field edit. Unlike the stack depths it moves at `HISTORY_DEPTH` and
     /// while typing in one field, so it tells "the document changed". Starts
@@ -395,7 +388,7 @@ impl SymbolDocument {
     /// save point is forgotten; a recorded edit has already moved the depth.
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
-        self.save_point.forget_if_at(self.undo_snapshots.len());
+        self.history.forget_if_current();
     }
 
     /// Set the flag outright: a save or discard clears it.
@@ -406,7 +399,7 @@ impl SymbolDocument {
     /// A save is writing the current content: it is the state Undo and Redo
     /// return to as clean, and the flag clears until the next edit.
     pub fn mark_saved(&mut self) {
-        self.save_point.mark_saved(self.undo_snapshots.len());
+        self.history.mark_saved();
         self.dirty = false;
     }
 
@@ -434,7 +427,6 @@ impl SymbolDocument {
             ai_preview: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
-            save_point: super::SavePoint::at_start(),
             save_generation: 0,
             cascade_owed: Vec::new(),
             camera: crate::canvas::Camera::default(),
@@ -445,8 +437,7 @@ impl SymbolDocument {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
-            undo_snapshots: Vec::new(),
-            redo_snapshots: Vec::new(),
+            history: crate::app::History::at_start(Self::HISTORY_DEPTH),
             history_generation: 0,
             last_edit_key: None,
             mid_drag: false,

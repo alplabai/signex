@@ -32,10 +32,10 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             //
             // Snapshot BEFORE mutating and commit it with
             // `commit_history` only once `changed` is known, rather
-            // than `push_undo` (which clears `redo_snapshots`
+            // than `push_undo` (which clears the redo stack
             // unconditionally) followed by a pop on the no-op path: the
-            // pop used to restore `undo_snapshots` but never restored
-            // `redo_snapshots`, so a no-op align (e.g. Select-All on an
+            // pop used to restore the undo stack but never restored
+            // the redo stack, so a no-op align (e.g. Select-All on an
             // empty symbol, or a selection already on-grid) silently
             // destroyed the user's redo stack.
             let selected = editor.selected.clone();
@@ -152,7 +152,7 @@ mod tests {
             "no-op align must not dirty the document"
         );
         assert!(
-            editor.undo_snapshots.is_empty(),
+            !editor.history.can_undo(),
             "no-op align must not stack undo history"
         );
     }
@@ -173,18 +173,19 @@ mod tests {
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
-        editor.redo_snapshots.push(editor.snapshot());
+        let current = editor.snapshot();
+        editor.history.redo_steps_mut().push(current);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
         assert!(editor.is_dirty(), "a real align dirties the document");
         assert_eq!(
-            editor.undo_snapshots.len(),
+            editor.history.undo_len(),
             1,
             "exactly one undo snapshot per real align (no double-push)"
         );
         assert!(
-            editor.redo_snapshots.is_empty(),
+            !editor.history.can_redo(),
             "a real align still clears the redo stack, same as every other mutation"
         );
         assert_eq!(
@@ -199,9 +200,9 @@ mod tests {
     /// snaps zero pins/graphics, so the handler must not leave a
     /// spurious undo snapshot or dirty flag behind — and, the actual
     /// bug, must not destroy the redo stack either. `push_undo` clears
-    /// `redo_snapshots` unconditionally; the earlier fix popped the
+    /// the redo stack unconditionally; the earlier fix popped the
     /// undo snapshot back off on a no-op but never restored
-    /// `redo_snapshots`, so an ordinary no-op Align-To-Grid click (e.g.
+    /// the redo stack, so an ordinary no-op Align-To-Grid click (e.g.
     /// Ctrl+A on an empty symbol, or a selection already on-grid)
     /// silently wiped the user's redo history. Seed one redo entry up
     /// front and assert it survives the no-op.
@@ -209,7 +210,8 @@ mod tests {
     fn align_selected_to_grid_with_all_selection_on_empty_symbol_stays_clean() {
         let mut editor = new_editor();
         editor.selected = Some(SymbolSelection::All);
-        editor.redo_snapshots.push(editor.snapshot());
+        let current = editor.snapshot();
+        editor.history.redo_steps_mut().push(current);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -218,11 +220,11 @@ mod tests {
             "no-op align on an empty symbol must not dirty the document"
         );
         assert!(
-            editor.undo_snapshots.is_empty(),
+            !editor.history.can_undo(),
             "no-op align on an empty symbol must not stack undo history"
         );
         assert_eq!(
-            editor.redo_snapshots.len(),
+            editor.history.redo_len(),
             1,
             "no-op align must not clear the redo stack"
         );
@@ -278,7 +280,8 @@ mod tests {
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
-        editor.redo_snapshots.push(editor.snapshot());
+        let current = editor.snapshot();
+        editor.history.redo_steps_mut().push(current);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -287,11 +290,11 @@ mod tests {
             "aligning an already-on-grid pin must not dirty the document"
         );
         assert!(
-            editor.undo_snapshots.is_empty(),
+            !editor.history.can_undo(),
             "aligning an already-on-grid pin must not stack undo history"
         );
         assert_eq!(
-            editor.redo_snapshots.len(),
+            editor.history.redo_len(),
             1,
             "no-op align of an already-aligned pin must not clear the redo stack"
         );

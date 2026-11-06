@@ -213,10 +213,10 @@ fn every_properties_edit_records_exactly_one_step() {
         ),
     ];
     for (label, msg) in edits {
-        let before = editor(&app, &path).undo_snapshots.len();
+        let before = editor(&app, &path).history.undo_len();
         panel(&mut app, msg);
         assert_eq!(
-            editor(&app, &path).undo_snapshots.len(),
+            editor(&app, &path).history.undo_len(),
             before + 1,
             "{label} must record exactly one undo step"
         );
@@ -303,7 +303,7 @@ fn history_shares_unchanged_symbols_between_snapshots() {
     ed.file.symbols[1].name = "B2".into();
     let second = ed.snapshot();
 
-    let first = &ed.undo_snapshots[0];
+    let first = &ed.history.undo_steps()[0];
     assert!(Arc::ptr_eq(&first.symbols[0], &second.symbols[0]));
     assert!(!Arc::ptr_eq(&first.symbols[1], &second.symbols[1]));
     assert!(Arc::ptr_eq(&first.symbols[2], &second.symbols[2]));

@@ -9,7 +9,7 @@ use super::SavePoint;
 
 /// Undo and redo stacks of whole-state snapshots plus the saved position.
 #[derive(Debug)]
-pub(crate) struct History<S> {
+pub struct History<S> {
     /// Older states, newest last.
     undo: Vec<S>,
     /// States undone, the next redo last.
@@ -20,12 +20,12 @@ pub(crate) struct History<S> {
 
 impl<S> History<S> {
     /// Content freshly read from disk: the empty history is the saved state.
-    pub(crate) fn at_start(cap: usize) -> Self {
+    pub fn at_start(cap: usize) -> Self {
         Self::with_point(cap, SavePoint::at_start())
     }
 
     /// Content not known to be on disk: dirty until the next save.
-    pub(crate) fn unknown(cap: usize) -> Self {
+    pub fn unknown(cap: usize) -> Self {
         Self::with_point(cap, SavePoint::unknown())
     }
 
@@ -38,50 +38,50 @@ impl<S> History<S> {
         }
     }
 
-    pub(crate) fn can_undo(&self) -> bool {
+    pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
 
-    pub(crate) fn can_redo(&self) -> bool {
+    pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
 
-    pub(crate) fn undo_len(&self) -> usize {
+    pub fn undo_len(&self) -> usize {
         self.undo.len()
     }
 
-    pub(crate) fn redo_len(&self) -> usize {
+    pub fn redo_len(&self) -> usize {
         self.redo.len()
     }
 
     /// Older states, newest last.
-    pub(crate) fn undo_steps(&self) -> &[S] {
+    pub fn undo_steps(&self) -> &[S] {
         &self.undo
     }
 
     /// Undone states, the next redo last.
-    pub(crate) fn redo_steps(&self) -> &[S] {
+    pub fn redo_steps(&self) -> &[S] {
         &self.redo
     }
 
     /// Every state an undo or redo can restore.
-    pub(crate) fn states(&self) -> impl Iterator<Item = &S> {
+    pub fn states(&self) -> impl Iterator<Item = &S> {
         self.undo.iter().chain(self.redo.iter())
     }
 
     /// [`Self::states`] for in-place rewrites (a cascade rebase).
-    pub(crate) fn states_mut(&mut self) -> impl Iterator<Item = &mut S> {
+    pub fn states_mut(&mut self) -> impl Iterator<Item = &mut S> {
         self.undo.iter_mut().chain(self.redo.iter_mut())
     }
 
     /// The undo stack for a caller that rewrites steps by hand. It owns the
     /// save-point consequence: [`Self::forget`] or [`Self::settle_point`].
-    pub(crate) fn undo_steps_mut(&mut self) -> &mut Vec<S> {
+    pub fn undo_steps_mut(&mut self) -> &mut Vec<S> {
         &mut self.undo
     }
 
     /// The redo stack, see [`Self::undo_steps_mut`].
-    pub(crate) fn redo_steps_mut(&mut self) -> &mut Vec<S> {
+    pub fn redo_steps_mut(&mut self) -> &mut Vec<S> {
         &mut self.redo
     }
 
@@ -98,7 +98,7 @@ impl<S> History<S> {
 
     /// An edit turned `before` into the current state: one new undo step,
     /// the redo branch cut. Returns the step pushed off a full stack.
-    pub(crate) fn record(&mut self, before: S) -> Option<S> {
+    pub fn record(&mut self, before: S) -> Option<S> {
         self.point.redo_cleared(self.undo.len());
         self.redo.clear();
         self.push_undo(before)
@@ -106,7 +106,7 @@ impl<S> History<S> {
 
     /// First half of an Undo or Redo: take the state to show. The caller
     /// captures the current state, then hands it to [`Self::finish_step`].
-    pub(crate) fn begin_step(&mut self, undo: bool) -> Option<S> {
+    pub fn begin_step(&mut self, undo: bool) -> Option<S> {
         if undo {
             self.undo.pop()
         } else {
@@ -115,7 +115,7 @@ impl<S> History<S> {
     }
 
     /// Second half of an Undo or Redo: `current` goes to the opposite stack.
-    pub(crate) fn finish_step(&mut self, current: S, undo: bool) {
+    pub fn finish_step(&mut self, current: S, undo: bool) {
         if undo {
             self.redo.push(current);
             if self.redo.len() > self.cap {
@@ -128,35 +128,35 @@ impl<S> History<S> {
     }
 
     /// Move one step: the state to show, `current` going to the other stack.
-    pub(crate) fn step(&mut self, current: S, undo: bool) -> Option<S> {
+    pub fn step(&mut self, current: S, undo: bool) -> Option<S> {
         let target = self.begin_step(undo)?;
         self.finish_step(current, undo);
         Some(target)
     }
 
     /// Is the state away from the saved position (or is that unknown)?
-    pub(crate) fn is_dirty(&self) -> bool {
+    pub fn is_dirty(&self) -> bool {
         !self.point.is_at(self.undo.len())
     }
 
     /// The current state is what a save is writing.
-    pub(crate) fn mark_saved(&mut self) {
+    pub fn mark_saved(&mut self) {
         self.point.mark_saved(self.undo.len());
     }
 
     /// No state reproduces the saved copy: dirty until the next save.
-    pub(crate) fn forget(&mut self) {
+    pub fn forget(&mut self) {
         self.point.forget();
     }
 
     /// The current state changed with no step recorded: a point at it no
     /// longer describes it.
-    pub(crate) fn forget_if_current(&mut self) {
+    pub fn forget_if_current(&mut self) {
         self.point.forget_if_at(self.undo.len());
     }
 
     /// Forget a point the stacks can no longer reach, after a hand rewrite.
-    pub(crate) fn settle_point(&mut self) {
+    pub fn settle_point(&mut self) {
         self.point.limit_to(self.undo.len(), self.redo.len());
     }
 
@@ -170,7 +170,7 @@ impl<S> History<S> {
     }
 
     /// Drop every step; the current state is the saved one when `saved`.
-    pub(crate) fn restart(&mut self, saved: bool) {
+    pub fn restart(&mut self, saved: bool) {
         self.undo.clear();
         self.redo.clear();
         self.point = if saved {
