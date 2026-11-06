@@ -66,35 +66,6 @@ pub fn before_nets(sheet: &SchematicSheet) -> BeforeNets {
     Arc::new(net_signatures(sheet))
 }
 
-/// Test switch for the check in [`derive_at`]; on unless a timing bench turns
-/// it off for its own thread.
-#[cfg(test)]
-pub(crate) mod self_check {
-    use std::cell::Cell;
-
-    thread_local! {
-        static ON: Cell<bool> = const { Cell::new(true) };
-    }
-
-    pub(crate) fn enabled() -> bool {
-        ON.with(Cell::get)
-    }
-
-    /// Turn the check off for this thread until the guard drops.
-    pub(crate) fn off() -> Off {
-        Off(ON.with(|flag| flag.replace(false)))
-    }
-
-    /// Restores the setting [`off`] found.
-    pub(crate) struct Off(bool);
-
-    impl Drop for Off {
-        fn drop(&mut self) {
-            ON.with(|flag| flag.set(self.0));
-        }
-    }
-}
-
 type Derived = (Vec<NetSignature>, Vec<(Key, Option<usize>)>);
 
 /// [`net_signatures_at`] of `sheet`, found from `base` when there is one. The
@@ -632,5 +603,34 @@ fn empty_net() -> NetSignature {
         labels: BTreeSet::new(),
         sheet_pins: BTreeSet::new(),
         name: String::new(),
+    }
+}
+
+/// Test switch for the check in [`derive_at`]; on unless a timing bench turns
+/// it off for its own thread.
+#[cfg(test)]
+pub(crate) mod self_check {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ON: Cell<bool> = const { Cell::new(true) };
+    }
+
+    pub(crate) fn enabled() -> bool {
+        ON.with(Cell::get)
+    }
+
+    /// Turn the check off for this thread until the guard drops.
+    pub(crate) fn off() -> Off {
+        Off(ON.with(|flag| flag.replace(false)))
+    }
+
+    /// Restores the setting [`off`] found.
+    pub(crate) struct Off(bool);
+
+    impl Drop for Off {
+        fn drop(&mut self) {
+            ON.with(|flag| flag.set(self.0));
+        }
     }
 }
