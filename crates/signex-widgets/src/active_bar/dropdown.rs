@@ -197,13 +197,13 @@ const ROW_PAD_X: f32 = 12.0;
 const ROW_PAD_Y: f32 = 5.0;
 /// Padding of the panel around its rows.
 const PANEL_PAD: f32 = 4.0;
-/// Line height of a label, relative to its size (iced's default).
-const LINE_HEIGHT_EM: f32 = 1.3;
-
 /// Height of one item row: the label line, or the icon when the menu has
-/// icons and it is the taller, between [`ROW_PAD_Y`] above and below.
+/// icons and it is the taller, between [`ROW_PAD_Y`] above and below. The
+/// label sets no line height, so its line is iced's default one.
 pub fn row_height(has_icons: bool) -> f32 {
-    let line = LABEL_SIZE * LINE_HEIGHT_EM;
+    let line = iced::widget::text::LineHeight::default()
+        .to_absolute(iced::Pixels(LABEL_SIZE))
+        .0;
     let content = if has_icons { line.max(ICON_SIZE) } else { line };
     content + 2.0 * ROW_PAD_Y
 }
