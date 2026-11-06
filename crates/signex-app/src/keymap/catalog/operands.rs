@@ -7,7 +7,8 @@
 pub enum OperandKind {
     /// `x,y` in mm.
     Point,
-    /// A multiple of 90 degrees, the pre-placement form's choices.
+    /// A multiple of 90 degrees within ±360, stored as 0, 90, 180 or 270:
+    /// the pre-placement form's choices.
     Angle,
     /// Free text (a label text, a net name, a library id).
     Text,

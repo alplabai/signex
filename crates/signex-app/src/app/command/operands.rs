@@ -131,15 +131,18 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
                 _ => Err(invalid("x,y in mm")),
             }
         }
-        // The pre-placement form offers 0, 90, 180 and 270 only.
+        // The pre-placement form offers 0, 90, 180 and 270 only, so a right
+        // angle is stored in that form (-90 reads as 270, 360 as 0).
         OperandKind::Angle => number(text)
-            .filter(|deg| deg % 90.0 == 0.0)
-            .map(OperandValue::Angle)
+            .filter(|deg| deg % 90.0 == 0.0 && deg.abs() <= 360.0)
+            .map(|deg| OperandValue::Angle(deg.rem_euclid(360.0) + 0.0))
             .ok_or_else(|| invalid("a multiple of 90 degrees")),
         OperandKind::Text if text.chars().any(char::is_control) => {
             Err(invalid("text without control characters"))
         }
-        OperandKind::Text if text.is_empty() && operand.required => Err(invalid("non-empty text")),
+        OperandKind::Text if text.trim().is_empty() && operand.required => {
+            Err(invalid("non-empty text"))
+        }
         OperandKind::Text => Ok(OperandValue::Text(text.to_string())),
         OperandKind::Path if Path::new(text).is_absolute() => {
             Ok(OperandValue::Path(text.to_string()))
@@ -290,12 +293,30 @@ mod tests {
             panic!("no angle");
         };
         assert!(deg.is_sign_positive());
-        for deg in ["90", "180", "270", "-90"] {
-            parse(
+        for (given, stored) in [
+            ("90", 90.0),
+            ("180", 180.0),
+            ("270", 270.0),
+            ("-90", 270.0),
+            ("360", 0.0),
+        ] {
+            let args = parse(
                 "place_net_label",
-                &["at=0,0", "text=A", &format!("rotation={deg}")],
+                &["at=0,0", "text=A", &format!("rotation={given}")],
             )
             .unwrap();
+            assert_eq!(
+                args.operand("rotation"),
+                Some(&OperandValue::Angle(stored)),
+                "{given}"
+            );
+        }
+        for refused in [
+            ["at=0,0", "text=A", "rotation=1e300"],
+            ["at=0,0", "text=A", "rotation=720"],
+            ["at=0,0", "text= ", "rotation=0"],
+        ] {
+            assert!(parse("place_net_label", &refused).is_err(), "{refused:?}");
         }
     }
 
