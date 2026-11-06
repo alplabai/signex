@@ -244,37 +244,6 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
     .boxed()
 }
 
-// `detach_button` was removed once the three big modals started
-// opening as separate OS windows by default (see
-// `handle_open_annotate_dialog` et al.). Drag-off is no longer needed
-// because there is no in-window overlay to drag.
-
-#[expect(
-    dead_code,
-    reason = "dialogs are separate windows now, so no in-window overlay needs a close button"
-)]
-fn close_button(
-    label: &str,
-    message: Message,
-    text_color: Color,
-    border: Color,
-) -> Element<'_, Message> {
-    button(container(text(label.to_string()).size(TS.body).color(text_color)).padding([3, 10]))
-        .on_press(message)
-        .style(move |_: &Theme, _| button::Style {
-            background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            text_color,
-            ..button::Style::default()
-        })
-        .boxed()
-}
-
 /// Subtle section divider used inside the BOM modal's properties
 /// sidebar. Rendered as a 1-line label on a slightly tinted strip
 /// so the panel reads as a stack of named sections.

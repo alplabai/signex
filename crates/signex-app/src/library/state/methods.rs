@@ -673,20 +673,6 @@ impl LibraryState {
         // Installed so they still surface in the panel.
         ComponentsMountSource::Installed
     }
-
-    /// Existing editor for `(library_root, table, row_id)`, if any.
-    pub fn editor_for(
-        &self,
-        library_root: &Path,
-        table: &str,
-        row_id: RowId,
-    ) -> Option<&ComponentPreviewState> {
-        self.editors.get(&EditorAddress::new(
-            library_root.to_path_buf(),
-            table.to_string(),
-            row_id,
-        ))
-    }
 }
 
 /// One open `*.snxlib/` directory — display cache only. The owning

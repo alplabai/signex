@@ -341,10 +341,6 @@ impl ComponentPreviewState {
     pub fn note_edit(&mut self) {
         self.edit_epoch += 1;
     }
-
-    pub fn clear_dirty(&mut self) {
-        self.dirty = false;
-    }
 }
 
 /// Distributor APIs Settings panel state.

@@ -826,10 +826,6 @@ impl FootprintFile {
     pub fn get_footprint(&self, uuid: Uuid) -> Option<&Footprint> {
         self.footprints.iter().find(|f| f.uuid == uuid)
     }
-
-    pub fn get_footprint_mut(&mut self, uuid: Uuid) -> Option<&mut Footprint> {
-        self.footprints.iter_mut().find(|f| f.uuid == uuid)
-    }
 }
 
 impl Footprint {

@@ -28,19 +28,6 @@ pub enum PinKind {
     Unknown,
 }
 
-impl PinKind {
-    pub fn from_ai_stub(s: &str) -> Self {
-        match s.to_ascii_lowercase().as_str() {
-            "input" => PinKind::Input,
-            "output" => PinKind::Output,
-            "bidirectional" | "bidir" => PinKind::Bidirectional,
-            "power" | "power_in" | "power_out" => PinKind::Power,
-            "passive" => PinKind::Passive,
-            _ => PinKind::Unknown,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FieldKey {
     Reference,

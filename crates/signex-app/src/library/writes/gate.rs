@@ -353,13 +353,6 @@ impl LibraryWrites {
             gates: Arc::clone(&self.gates),
         }
     }
-
-    /// Whether any library has unfinished work.
-    pub fn any_pending(&self) -> bool {
-        lock_gates(&self.gates)
-            .values()
-            .any(|gate| gate.pending() > 0)
-    }
 }
 
 #[cfg(test)]
