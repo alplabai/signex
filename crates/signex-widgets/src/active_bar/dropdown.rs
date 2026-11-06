@@ -196,12 +196,6 @@ const ROW_PAD_X: f32 = 12.0;
 /// Padding of the panel around its rows.
 const PANEL_PAD: f32 = 4.0;
 
-/// Glyph advance per em the fitted width falls back to before the shaper is
-/// installed: a slight overestimate of a UI face, so a label never clips.
-const FIT_GLYPH_EM: f32 = 0.58;
-/// Margin on a shaped width, for hinting and rounding in the real layout.
-const FIT_SHAPED_MARGIN: f32 = 1.05;
-
 /// Width a menu of `entries` needs, for a context menu that fits its labels
 /// rather than a shared width, at most `max_w`. It mirrors [`view`]'s row
 /// layout: panel padding, row padding, the icon gutter only when a row has
@@ -214,11 +208,8 @@ where
     M: Clone,
 {
     let family = Some(ui_family).filter(|f| !f.trim().is_empty());
-    let advance = |text: &str, size: f32| match signex_types::font::shaped_advance_em(text, family)
-    {
-        Some(em) => em * size * FIT_SHAPED_MARGIN,
-        None => text.chars().count() as f32 * size * FIT_GLYPH_EM,
-    };
+    let advance =
+        |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let has_icons = entries
         .iter()
         .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some()));

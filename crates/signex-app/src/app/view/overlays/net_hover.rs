@@ -7,9 +7,6 @@ use crate::app::state::net_nav::HoverCard;
 
 /// Widest the card grows; below that it is as wide as its text (#2092).
 const CARD_MAX_W: f32 = 320.0;
-/// Average glyph advance per em the card is sized by: a slight overestimate
-/// of the UI face, so the text never clips.
-const GLYPH_ADVANCE_EM: f32 = 0.6;
 /// Left plus right padding of the card body.
 const CARD_PAD_W: f32 = 24.0;
 const ROW_H: f32 = 16.0;
@@ -59,7 +56,7 @@ impl Signex {
             );
         }
         let height = CARD_PAD_H + ROW_H * rows.len() as f32;
-        let width = card_width_estimate(card);
+        let width = card_width_estimate(card, &self.panel_ctx_for(window_id).ui_font_name);
 
         let body = container(column(rows).spacing(2).boxed())
             .padding(iced::Padding {
@@ -96,17 +93,18 @@ impl Signex {
 }
 
 /// The room the card needs, for keeping it inside the window: the widest of
-/// its lines at [`GLYPH_ADVANCE_EM`], plus the padding, at most
+/// its lines measured in `ui_family`, plus the padding, at most
 /// [`CARD_MAX_W`].
-fn card_width_estimate(card: &HoverCard) -> f32 {
-    let line = |chars: usize, size: f32| chars as f32 * size * GLYPH_ADVANCE_EM;
-    let mut widest = line(card.name.chars().count(), TS.label);
+fn card_width_estimate(card: &HoverCard, ui_family: &str) -> f32 {
+    let family = Some(ui_family).filter(|f| !f.trim().is_empty());
+    let line =
+        |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
+    let mut widest = line(&card.name, TS.label);
     if let Some(class) = &card.class {
-        widest = widest.max(line("Class: ".len() + class.chars().count(), TS.caption));
+        widest = widest.max(line(&format!("Class: {class}"), TS.caption));
     }
     for pin in &card.pins {
-        let chars = pin.pin.chars().count() + pin.sheet.chars().count();
-        widest = widest.max(line(chars, TS.caption) + SP.s);
+        widest = widest.max(line(&format!("{}{}", pin.pin, pin.sheet), TS.caption) + SP.s);
     }
     (widest + CARD_PAD_W + 2.0).min(CARD_MAX_W)
 }

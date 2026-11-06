@@ -697,9 +697,6 @@ impl Signex {
 /// Widest the symbol hover card grows; below that it fits its text and the
 /// values wrap (#2100).
 const SYMBOL_CARD_MAX_W: f32 = 320.0;
-/// Glyph advance per em for the label column and the placement estimate: the
-/// canvas face (Iosevka, 0.5 em) plus a margin for other picked fonts.
-const SYMBOL_CARD_GLYPH_EM: f32 = 0.55;
 /// Left (10) plus right (14) padding, plus the 1 px border on each side.
 const SYMBOL_CARD_PAD_W: f32 = 26.0;
 
@@ -708,10 +705,8 @@ const SYMBOL_CARD_PAD_W: f32 = 26.0;
 /// [`SYMBOL_CARD_MAX_W`].
 fn symbol_card_widths(fields: &[(&str, String)], family: &str) -> (f32, f32) {
     let family = Some(family).filter(|f| !f.trim().is_empty());
-    let width = |text: &str, size: f32| match signex_types::font::shaped_advance_em(text, family) {
-        Some(em) => em * size * 1.05,
-        None => text.chars().count() as f32 * size * SYMBOL_CARD_GLYPH_EM,
-    };
+    let width =
+        |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let label_w = fields
         .iter()
         .map(|(label, _)| width(label, TS.body))

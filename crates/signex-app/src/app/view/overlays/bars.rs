@@ -556,8 +556,14 @@ impl Signex {
         );
         // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
         let font_px = (camera.2 * 1.8).clamp(10.0, 64.0);
-        // Estimate width from text length to keep the input snug.
-        let approx_w = ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
+        // Estimate width from the text in the canvas face to keep the input
+        // snug, with two characters of room to type into.
+        let canvas_family =
+            Some(document.panel_ctx.canvas_font_name.as_str()).filter(|f| !f.trim().is_empty());
+        let approx_w =
+            (signex_types::font::estimate_text_width_px(&edit_state.text, font_px, canvas_family)
+                + 2.0 * font_px * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM)
+                .max(60.0);
         // Sit the input's baseline on the label text.
         let abs_x = abs_x - 2.0;
         let abs_y = abs_y - font_px - 2.0;
