@@ -651,6 +651,62 @@ impl Aabb {
 }
 
 impl SchematicSheet {
+    /// A point on `item` to anchor on: the position of a placed item, the
+    /// midpoint of a wire or bus. `None` when the sheet has no such item, or
+    /// the kind has no single point.
+    pub fn item_anchor(&self, item: &SelectedItem) -> Option<Point> {
+        let id = item.uuid;
+        let midpoint = |a: Point, b: Point| Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+        match item.kind {
+            SelectedKind::Symbol => self
+                .symbols
+                .iter()
+                .find(|s| s.uuid == id)
+                .map(|s| s.position),
+            SelectedKind::Label => self
+                .labels
+                .iter()
+                .find(|l| l.uuid == id)
+                .map(|l| l.position),
+            SelectedKind::Junction => self
+                .junctions
+                .iter()
+                .find(|j| j.uuid == id)
+                .map(|j| j.position),
+            SelectedKind::NoConnect => self
+                .no_connects
+                .iter()
+                .find(|n| n.uuid == id)
+                .map(|n| n.position),
+            SelectedKind::NoErcDirective => self
+                .no_erc_directives
+                .iter()
+                .find(|d| d.uuid == id)
+                .map(|d| d.position),
+            SelectedKind::TextNote => self
+                .text_notes
+                .iter()
+                .find(|t| t.uuid == id)
+                .map(|t| t.position),
+            SelectedKind::SheetPin => self
+                .child_sheets
+                .iter()
+                .find_map(|cs| cs.pins.iter().find(|p| p.uuid == id))
+                .map(|p| p.position),
+            SelectedKind::Wire => self
+                .wires
+                .iter()
+                .find(|w| w.uuid == id)
+                .map(|w| midpoint(w.start, w.end)),
+            SelectedKind::Bus => self
+                .buses
+                .iter()
+                .find(|b| b.uuid == id)
+                .map(|b| midpoint(b.start, b.end)),
+            _ => None,
+        }
+    }
+
     /// True when the sheet was written by a newer Signex than this build.
     /// It loads for viewing but must not be edited or saved: the writer would
     /// drop content this build has no field for. The one rule every edit,

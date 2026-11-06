@@ -281,6 +281,16 @@ impl CompiledKeymap {
         self.labels.get(command).cloned()
     }
 
+    /// The label for a command given by its string id. An unparsable,
+    /// unbound or unbound-by-the-user id has no hint, so the label is empty
+    /// (#1378).
+    pub fn shortcut_label_for_id(&self, command_id: &str) -> String {
+        AppCommandId::new(command_id)
+            .ok()
+            .and_then(|command| self.shortcut_label(&command))
+            .unwrap_or_default()
+    }
+
     /// A quadratic restatement of the label rule, kept so a test can prove
     /// the index agrees with it.
     #[cfg(test)]

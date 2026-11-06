@@ -329,7 +329,11 @@ fn a_nested_library_owns_the_paths_under_it() {
     let inside = dir.join("Inner").join("symbols").join("S.snxsym");
     let beside = dir.join("symbols").join("S.snxsym");
 
-    let owner = |p: &std::path::Path| app.library.library_containing(p).map(|l| l.root.clone());
+    let owner = |p: &std::path::Path| {
+        app.library
+            .write_target_library(p, crate::app::CaseFold::host_default())
+            .map(|l| l.root.clone())
+    };
     assert_eq!(owner(&inside), Some(inner_root));
     assert_eq!(owner(&beside), Some(file));
 }

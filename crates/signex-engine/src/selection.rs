@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, SCHEMATIC_PT_TO_MM, SchDrawing, SelectedItem, SelectedKind,
-    Symbol, TextNote, Wire, circumcircle,
+    Bus, Junction, Label, NoConnect, Point, SCHEMATIC_PT_TO_MM, SchDrawing, SelectedItem,
+    SelectedKind, Symbol, TextNote, Wire, circumcircle,
 };
 
 use super::Engine;
@@ -132,65 +132,9 @@ impl Engine {
         let mut anchors = Vec::new();
 
         for item in items {
-            let position = match item.kind {
-                SelectedKind::Symbol => self
-                    .document
-                    .symbols
-                    .iter()
-                    .find(|s| s.uuid == item.uuid)
-                    .map(|s| (s.position.x, s.position.y)),
-                SelectedKind::Label => self
-                    .document
-                    .labels
-                    .iter()
-                    .find(|l| l.uuid == item.uuid)
-                    .map(|l| (l.position.x, l.position.y)),
-                SelectedKind::Junction => self
-                    .document
-                    .junctions
-                    .iter()
-                    .find(|j| j.uuid == item.uuid)
-                    .map(|j| (j.position.x, j.position.y)),
-                SelectedKind::NoConnect => self
-                    .document
-                    .no_connects
-                    .iter()
-                    .find(|nc| nc.uuid == item.uuid)
-                    .map(|nc| (nc.position.x, nc.position.y)),
-                SelectedKind::NoErcDirective => self
-                    .document
-                    .no_erc_directives
-                    .iter()
-                    .find(|d| d.uuid == item.uuid)
-                    .map(|d| (d.position.x, d.position.y)),
-                SelectedKind::TextNote => self
-                    .document
-                    .text_notes
-                    .iter()
-                    .find(|t| t.uuid == item.uuid)
-                    .map(|t| (t.position.x, t.position.y)),
-                SelectedKind::SheetPin => self
-                    .document
-                    .child_sheets
-                    .iter()
-                    .find_map(|cs| cs.pins.iter().find(|p| p.uuid == item.uuid))
-                    .map(|p| (p.position.x, p.position.y)),
-                SelectedKind::Wire => self
-                    .document
-                    .wires
-                    .iter()
-                    .find(|w| w.uuid == item.uuid)
-                    .map(|w| ((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0)),
-                SelectedKind::Bus => self
-                    .document
-                    .buses
-                    .iter()
-                    .find(|b| b.uuid == item.uuid)
-                    .map(|b| ((b.start.x + b.end.x) / 2.0, (b.start.y + b.end.y) / 2.0)),
-                _ => None,
-            };
+            let position = self.document.item_anchor(item);
 
-            if let Some((x, y)) = position {
+            if let Some(Point { x, y }) = position {
                 anchors.push(SelectionAnchor {
                     uuid: item.uuid,
                     kind: item.kind,
@@ -493,16 +437,11 @@ impl Engine {
                 info.push(("Type".into(), "Bus Entry".into()));
             }
             SelectedKind::Drawing => {
-                let d = self.document.drawings.iter().find(|d| {
-                    let u = match d {
-                        SchDrawing::Line { uuid, .. }
-                        | SchDrawing::Rect { uuid, .. }
-                        | SchDrawing::Circle { uuid, .. }
-                        | SchDrawing::Arc { uuid, .. }
-                        | SchDrawing::Polyline { uuid, .. } => *uuid,
-                    };
-                    u == item.uuid
-                })?;
+                let d = self
+                    .document
+                    .drawings
+                    .iter()
+                    .find(|d| d.uuid() == item.uuid)?;
                 match d {
                     SchDrawing::Line {
                         start, end, width, ..

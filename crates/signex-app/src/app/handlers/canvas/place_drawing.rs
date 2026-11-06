@@ -1,4 +1,4 @@
-//! Line, rectangle, circle and arc commits as plain-value methods (#1930).
+//! Line, rectangle, circle, arc and polyline commits as plain-value methods (#1930).
 //! Points are already snapped; `width` and `fill` come from the
 //! pre-placement form. The click handler keeps the anchor state.
 
@@ -72,6 +72,22 @@ impl Signex {
             start,
             mid,
             end,
+            width,
+            fill,
+            stroke_color: None,
+            locked: false,
+        })
+    }
+
+    pub(crate) fn place_polyline_at(
+        &mut self,
+        points: Vec<Point>,
+        width: f64,
+        fill: FillType,
+    ) -> bool {
+        self.place_drawing(SchDrawing::Polyline {
+            uuid: uuid::Uuid::now_v7(),
+            points,
             width,
             fill,
             stroke_color: None,

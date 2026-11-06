@@ -39,16 +39,6 @@ pub(crate) struct DragFrame {
     pub skip: Rc<HashSet<Uuid>>,
 }
 
-fn drawing_id(drawing: &SchDrawing) -> Uuid {
-    match drawing {
-        SchDrawing::Line { uuid, .. }
-        | SchDrawing::Rect { uuid, .. }
-        | SchDrawing::Circle { uuid, .. }
-        | SchDrawing::Arc { uuid, .. }
-        | SchDrawing::Polyline { uuid, .. } => *uuid,
-    }
-}
-
 /// The ids of the whole sheet items a selection moves: a symbol field drags
 /// with its symbol's item, a sheet pin with its child sheet's.
 pub(super) fn moved_item_ids(snap: &SchematicSheet, selection: &[SelectedItem]) -> HashSet<Uuid> {
@@ -104,7 +94,7 @@ fn filtered(snap: &SchematicSheet, keep: &dyn Fn(Uuid) -> bool) -> SchematicShee
         text_notes: keep_where(&snap.text_notes, |t| t.uuid, keep),
         buses: keep_where(&snap.buses, |b| b.uuid, keep),
         bus_entries: keep_where(&snap.bus_entries, |b| b.uuid, keep),
-        drawings: keep_where(&snap.drawings, drawing_id, keep),
+        drawings: keep_where(&snap.drawings, SchDrawing::uuid, keep),
         no_erc_directives: keep_where(&snap.no_erc_directives, |d| d.uuid, keep),
         ..SchematicSheet::default()
     }
@@ -185,7 +175,7 @@ pub(super) fn split_ghost(
     kind!(text_notes, |t: &signex_types::schematic::TextNote| t.uuid);
     kind!(buses, |b: &signex_types::schematic::Bus| b.uuid);
     kind!(bus_entries, |b: &signex_types::schematic::BusEntry| b.uuid);
-    kind!(drawings, drawing_id);
+    kind!(drawings, SchDrawing::uuid);
     kind!(
         no_erc_directives,
         |d: &signex_types::schematic::NoConnect| d.uuid
@@ -500,7 +490,7 @@ mod tests {
             SelectedItem::new(moved_wire.uuid, SelectedKind::Wire),
             SelectedItem::new(moved_junction.uuid, SelectedKind::Junction),
             SelectedItem::new(moved_label.uuid, SelectedKind::Label),
-            SelectedItem::new(drawing_id(&drawing), SelectedKind::Drawing),
+            SelectedItem::new(drawing.uuid(), SelectedKind::Drawing),
         ];
         sheet.symbols.extend([moved, covering]);
         sheet.wires.extend([moved_wire, still_wire]);

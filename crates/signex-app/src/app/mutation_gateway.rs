@@ -1,3 +1,4 @@
+use super::undo_groups::StepDirection;
 use super::*;
 
 /// What an engine command did to the active document.
@@ -99,9 +100,19 @@ impl Signex {
         (kept, skipped)
     }
 
-    /// Tell the user which locked symbols an edit passed over.
-    pub(crate) fn report_locked_skips(skipped: &[String]) {
-        crate::diagnostics::log_locked_skips(skipped);
+    /// The active engine, ready for an edit: refused when the sheet is
+    /// read-only or there is none, and told the net colours so a merge keeps
+    /// wires of different colours apart.
+    fn prepare_active_engine(&mut self) -> Result<&mut signex_engine::Engine, String> {
+        if let Some(reason) = self.refuse_if_active_read_only() {
+            return Err(reason);
+        }
+        let colors = self.ui_state.wire_color_overrides.clone();
+        let Some(engine) = self.document_state.active_engine_mut() else {
+            return Err("There is no active schematic.".to_string());
+        };
+        engine.set_wire_colors(colors);
+        Ok(engine)
     }
 
     pub(crate) fn apply_engine_commands(
@@ -140,22 +151,14 @@ impl Signex {
             return (CommandOutcome::Unchanged, None);
         }
 
-        if let Some(reason) = self.refuse_if_active_read_only() {
-            return (CommandOutcome::Failed, Some(reason));
-        }
-        // The engine keeps wires of different net colours apart when it merges.
-        let colors = self.ui_state.wire_color_overrides.clone();
-        let Some(engine) = self.document_state.active_engine_mut() else {
-            return (
-                CommandOutcome::Failed,
-                Some("There is no active schematic.".to_string()),
-            );
+        let engine = match self.prepare_active_engine() {
+            Ok(engine) => engine,
+            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
         };
-        engine.set_wire_colors(colors);
 
         // A locked symbol is skipped, not allowed to cancel the batch.
         let (commands, skipped) = Self::without_locked_items(engine, commands);
-        Self::report_locked_skips(&skipped);
+        crate::diagnostics::log_locked_skips(&skipped);
         if commands.is_empty() {
             return (CommandOutcome::Unchanged, None);
         }
@@ -248,18 +251,10 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (CommandOutcome, Option<String>) {
-        if let Some(reason) = self.refuse_if_active_read_only() {
-            return (CommandOutcome::Failed, Some(reason));
-        }
-        // The engine keeps wires of different net colours apart when it merges.
-        let colors = self.ui_state.wire_color_overrides.clone();
-        let Some(engine) = self.document_state.active_engine_mut() else {
-            return (
-                CommandOutcome::Failed,
-                Some("There is no active schematic.".to_string()),
-            );
+        let engine = match self.prepare_active_engine() {
+            Ok(engine) => engine,
+            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
         };
-        engine.set_wire_colors(colors);
         let mut failed = None;
 
         // The same rule as a batch: held items are skipped and named, a
@@ -273,12 +268,12 @@ impl Signex {
             let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
             match kept.pop() {
                 Some(pruned) => {
-                    Self::report_locked_skips(&skipped);
+                    crate::diagnostics::log_locked_skips(&skipped);
                     pruned
                 }
                 None if names_locked => command,
                 None => {
-                    Self::report_locked_skips(&skipped);
+                    crate::diagnostics::log_locked_skips(&skipped);
                     return (CommandOutcome::Unchanged, None);
                 }
             }
@@ -381,24 +376,34 @@ impl Signex {
     /// also makes the `Engine::can_undo` the Edit menu reads
     /// (`app/view/mod.rs`) agree with what Undo will actually do.
     pub(crate) fn apply_engine_undo(&mut self, update_selection_info: bool) -> bool {
+        self.apply_engine_step(StepDirection::Undo, update_selection_info)
+    }
+
+    /// Redo one step of the **active** engine's own history. Mirror of
+    /// [`Signex::apply_engine_undo`].
+    pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
+        self.apply_engine_step(StepDirection::Redo, update_selection_info)
+    }
+
+    fn apply_engine_step(&mut self, direction: StepDirection, update_selection_info: bool) -> bool {
         if let Some(group) = self
             .document_state
             .active_engine()
-            .and_then(|engine| engine.next_undo_group())
+            .and_then(|engine| direction.top(engine))
         {
-            return self.apply_grouped_step(
-                group,
-                super::undo_groups::StepDirection::Undo,
-                update_selection_info,
-            );
+            return self.apply_grouped_step(group, direction, update_selection_info);
         }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
-            match engine.undo() {
+            let (stepped, failure) = match direction {
+                StepDirection::Undo => (engine.undo(), "Engine undo failed"),
+                StepDirection::Redo => (engine.redo(), "Engine redo failed"),
+            };
+            match stepped {
                 Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
                 Ok(None) => return false,
                 Err(error) => {
                     let error = anyhow::Error::new(error);
-                    crate::diagnostics::log_error("Engine undo failed", &error);
+                    crate::diagnostics::log_error(failure, &error);
                     return false;
                 }
             }
@@ -407,38 +412,6 @@ impl Signex {
         };
 
         // Undo/redo can bring back an older embedded library symbol.
-        self.library.drift.check_pending = true;
-        self.finish_schematic_mutation(invalidation, true, update_selection_info)
-    }
-
-    /// Redo one step of the **active** engine's own history. Mirror of
-    /// [`Signex::apply_engine_undo`].
-    pub(crate) fn apply_engine_redo(&mut self, update_selection_info: bool) -> bool {
-        if let Some(group) = self
-            .document_state
-            .active_engine()
-            .and_then(|engine| engine.next_redo_group())
-        {
-            return self.apply_grouped_step(
-                group,
-                super::undo_groups::StepDirection::Redo,
-                update_selection_info,
-            );
-        }
-        let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
-            match engine.redo() {
-                Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
-                Ok(None) => return false,
-                Err(error) => {
-                    let error = anyhow::Error::new(error);
-                    crate::diagnostics::log_error("Engine redo failed", &error);
-                    return false;
-                }
-            }
-        } else {
-            crate::schematic_runtime::RenderInvalidation::NONE
-        };
-
         self.library.drift.check_pending = true;
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }

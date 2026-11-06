@@ -72,10 +72,7 @@ impl Signex {
         else {
             return Task::none();
         };
-        let canvas = self.interaction_state.active_canvas_mut();
-        canvas.selected = selected;
-        canvas.clear_overlay_cache();
-        self.update_selection_info();
+        self.replace_selection(selected);
         self.interaction_state
             .canvas
             .pending_fit

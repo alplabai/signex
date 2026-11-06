@@ -20,16 +20,7 @@ impl Signex {
         else {
             return;
         };
-        self.select_on_active_canvas(item);
-    }
-
-    /// Select `item` on the active canvas, repainting its overlay.
-    pub(super) fn select_on_active_canvas(&mut self, item: signex_types::schematic::SelectedItem) {
-        self.interaction_state.active_canvas_mut().selected = vec![item];
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_overlay_cache();
-        self.update_selection_info();
+        self.replace_selection(vec![item]);
     }
 
     /// Go to result `index`: open its sheet at the placement the hit was read

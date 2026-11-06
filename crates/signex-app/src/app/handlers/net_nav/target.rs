@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use signex_net::{NetMemberKind, SheetKey};
-use signex_types::schematic::{InstancePath, Point, SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{InstancePath, Point, SelectedItem, SelectedKind};
 
 use crate::app::state::net_nav::ProjectNetData;
 
@@ -93,40 +93,6 @@ pub(super) fn net_of_hover(
         return pin.and_then(|k| pin_net(data, sheet, item.uuid, k, occurrence));
     }
     net_of_target(data, sheet, item, pin, occurrence)
-}
-
-/// Where `item` sits on `sheet`: a point on it to centre the view on.
-pub(super) fn item_position(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Point> {
-    let id = item.uuid;
-    match item.kind {
-        SelectedKind::Symbol => sheet
-            .symbols
-            .iter()
-            .find(|s| s.uuid == id)
-            .map(|s| s.position),
-        SelectedKind::Label => sheet
-            .labels
-            .iter()
-            .find(|l| l.uuid == id)
-            .map(|l| l.position),
-        SelectedKind::Junction => sheet
-            .junctions
-            .iter()
-            .find(|j| j.uuid == id)
-            .map(|j| j.position),
-        SelectedKind::Wire => sheet
-            .wires
-            .iter()
-            .find(|w| w.uuid == id)
-            .map(|w| Point::new((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0)),
-        SelectedKind::SheetPin => sheet
-            .child_sheets
-            .iter()
-            .flat_map(|cs| &cs.pins)
-            .find(|p| p.uuid == id)
-            .map(|p| p.position),
-        _ => None,
-    }
 }
 
 impl Signex {
@@ -226,7 +192,7 @@ impl Signex {
         if !is_net_kind(item.kind) {
             return None;
         }
-        let at = item_position(canvas.active_snapshot()?, item)?;
+        let at = canvas.active_snapshot()?.item_anchor(item)?;
         let sheet = self.document_state.active_path.clone()?;
         Some(NetTarget {
             sheet,
