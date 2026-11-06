@@ -34,16 +34,29 @@ impl SchematicCanvas<'_> {
                 scale: cam.scale,
                 device_px_per_logical_px: self.prefs.device_px_per_logical_px,
             };
-            let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
+            let ghost = self.power_port_ghost(&preview, &ghost_transform);
             crate::schematic_runtime::draw_power_port_preview(
                 &mut *frame,
-                &preview,
+                &ghost,
                 &ghost_transform,
-                ghost_color,
                 &self.prefs.canvas_colors,
-                &self.prefs.schematic_defaults,
             );
         }
+    }
+
+    /// The power-port ghost at `preview`, stroked with this sheet's project
+    /// defaults so it matches the placed port (#2026).
+    pub(in crate::canvas) fn power_port_ghost(
+        &self,
+        preview: &signex_types::schematic::Symbol,
+        transform: &crate::schematic_runtime::ScreenTransform,
+    ) -> signex_renderer::schematic::SchematicSnapshot {
+        crate::schematic_runtime::power_port_preview_snapshot(
+            preview,
+            transform,
+            Color::from_rgba(0.3, 0.8, 1.0, 0.7),
+            &self.prefs.schematic_defaults,
+        )
     }
 
     /// The content attached to the cursor (a library part waiting for its

@@ -40,7 +40,9 @@ Properties ▸ Position (and Start / End / Center rows), the pre-placement X/Y
 readout, the ERC panel's location label and typed drawing coordinates go
 through one mapping, refreshed when the origin or the paper size changes (a
 half-typed coordinate box is dropped then), `SchematicSheet::page_y`, which is its own
-inverse. X never changes.
+inverse. X never changes. A rectangle's Position row is its top-left corner
+(smallest stored Y), with that Y counted from the chosen origin. The exported
+ERC report's `y` column holds the same shown Y as the ERC panel.
 
 ## Known gaps
 

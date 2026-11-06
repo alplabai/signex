@@ -351,8 +351,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 /// The pre-placement X/Y readout: Y from the active sheet's page origin
 /// (#2034), read when drawn so an origin change shows at once.
 pub(crate) fn pre_placement_readout(pp: &PrePlacementData, ctx: &PanelContext) -> String {
-    let paper_h = signex_types::schematic::paper_height_mm(&ctx.paper_size);
-    let y = ctx.page_origin.map_y(pp.cursor_y_mm, paper_h);
+    let y = ctx.shown_y(pp.cursor_y_mm);
     format!("{:.2}, {y:.2}", pp.cursor_x_mm)
 }
 

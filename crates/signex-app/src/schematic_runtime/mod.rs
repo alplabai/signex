@@ -265,14 +265,31 @@ fn copy_invalidated(
     }
 }
 
+/// Draw a power-port placement ghost lowered by
+/// [`power_port_preview_snapshot`].
 pub fn draw_power_port_preview(
     frame: &mut canvas::Frame,
+    snapshot: &RendererSnapshot,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+) {
+    draw_renderer_snapshot(
+        frame,
+        snapshot,
+        &ResolvedTheme::from_canvas_colors(*colors),
+        DirtyFlags::LINES | DirtyFlags::POLYGONS | DirtyFlags::TEXT,
+        transform,
+    );
+}
+
+/// The power-port placement ghost in `color`, stroked with `defaults` so it
+/// matches the port the click places.
+pub fn power_port_preview_snapshot(
     symbol: &Symbol,
     transform: &ScreenTransform,
     color: Color,
-    colors: &CanvasColors,
     defaults: &signex_types::schematic::SchematicDefaults,
-) {
+) -> RendererSnapshot {
     let cx = symbol.position.x as f32;
     let cy = symbol.position.y as f32;
 
@@ -328,7 +345,7 @@ pub fn draw_power_port_preview(
         symbol::push_primitives(&primitives, &style, &mut sink);
     }
 
-    let snapshot = RendererSnapshot {
+    RendererSnapshot {
         wires,
         junctions: Vec::new(),
         arcs,
@@ -343,15 +360,7 @@ pub fn draw_power_port_preview(
         drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
         wire_line_styles: HashMap::new(),
-    };
-
-    draw_renderer_snapshot(
-        frame,
-        &snapshot,
-        &ResolvedTheme::from_canvas_colors(*colors),
-        DirtyFlags::LINES | DirtyFlags::POLYGONS | DirtyFlags::TEXT,
-        transform,
-    );
+    }
 }
 
 /// The widget rectangle in the frame's own space. `canvas::Program::draw`

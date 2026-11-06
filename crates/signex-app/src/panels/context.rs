@@ -240,3 +240,12 @@ pub struct SymbolChoiceItem {
     /// The placed symbol currently shows this drawing.
     pub selected: bool,
 }
+
+impl PanelContext {
+    /// A stored Y as the active sheet shows it: from its page origin, on its
+    /// paper (#2034). The one mapping every panel readout uses.
+    pub fn shown_y(&self, y: f64) -> f64 {
+        let paper_h = signex_types::schematic::paper_height_mm(&self.paper_size);
+        self.page_origin.map_y(y, paper_h)
+    }
+}

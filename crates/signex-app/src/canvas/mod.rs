@@ -910,6 +910,8 @@ mod background_reuse_tests;
 #[cfg(test)]
 mod draw_order_tests;
 #[cfg(test)]
+mod ghost_tests;
+#[cfg(test)]
 mod gpu_mount_drag_tests;
 #[cfg(test)]
 mod gpu_mount_tests;

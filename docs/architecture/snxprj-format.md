@@ -221,9 +221,11 @@ the Project tab's Schematic defaults section, added without bumping the
   explicit value in a sheet is never rewritten. A wire resolves explicit width
   > net class width > project > built-in; a bus stores no width and has no
   class, so project > built-in.
-- The canvas, every export, hit test and selection boxes resolve through the
-  same table; placement tools start from the project's text size, font, shape
-  stroke and shape fill.
+- The canvas and every export resolve through the same table, and so do the
+  hit tolerance and selection boxes of wires and buses (symbol boxes do not,
+  see the known gaps); placement tools start from the project's shape stroke
+  and shape fill, and labels and notes placed by click from its text size and
+  font.
 - Line style: a wire stores none, so a wire whose net class sets none (the
   Net Classes panel's Default) strokes in the project's `wire_line_style`; a
   class's explicit Solid, Dashed or Dotted overrides it.
@@ -245,7 +247,10 @@ the Project tab's Schematic defaults section, added without bumping the
   stores a typed value clamped and says so under the field; a file value out
   of range resolves clamped and is not rewritten. Placement uses whole points
   (`SchematicDefaults::placed_text_pt`), the same on every placement path.
-- Known gaps: symbol hit and selection boxes and the PDF fit-to-page box use
+- Known gaps: text ghosts (labels, ports, off-sheet connectors, notes) are
+  armed at a fixed 10 pt with no font while the click places at the project
+  text size, and the designator and value text of a placed part stays at the
+  built-in 1.27 mm; symbol hit and selection boxes and the PDF fit-to-page box use
   the symbol geometry and stored widths, not the resolved stroke, so with a
   thick project symbol line width the ink can reach past them (growing them
   needs a maintainer decision); an explicit `null` key is dropped on save; clearing a field

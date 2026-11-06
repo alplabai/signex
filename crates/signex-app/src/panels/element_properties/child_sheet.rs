@@ -16,6 +16,14 @@ const SP: Spacing = Spacing::DEFAULT;
 /// plus editable Border Colour, Fill Colour and Line Width with a
 /// Reset-to-default button. Colour edits open an iced_aw
 /// ColorPicker overlay anchored to a swatch button.
+/// The Position row: Y read from the sheet's page origin (#2034).
+pub(in crate::panels) fn child_sheet_position(
+    ctx: &PanelContext,
+    at: &signex_types::schematic::Point,
+) -> String {
+    format!("{:.2}, {:.2}", at.x, ctx.shown_y(at.y))
+}
+
 pub(in crate::panels) fn view_child_sheet_properties<'a>(
     ctx: &'a PanelContext,
     muted: Color,
@@ -31,10 +39,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     let id = child_sheet.uuid;
     let name = buffered_or(&ctx.child_sheet_name_buf, id, &child_sheet.name);
     let filename = buffered_or(&ctx.child_sheet_file_buf, id, &child_sheet.filename);
-    let position = format!(
-        "{:.2}, {:.2}",
-        child_sheet.position.x, child_sheet.position.y
-    );
+    let position = child_sheet_position(ctx, &child_sheet.position);
     let size = format!("{:.1} x {:.1} mm", child_sheet.size.0, child_sheet.size.1);
 
     let stroke_width = child_sheet.stroke_width;
@@ -315,4 +320,23 @@ fn child_sheet_text_row<'a>(
     .padding([SP.s, SP.m])
     .width(Length::Fill)
     .boxed()
+}
+
+#[cfg(test)]
+mod position_tests {
+    use super::*;
+
+    /// Review of #2034: an A4 sheet at the default Lower Left origin shows a
+    /// child sheet at stored y = 50 as 210 - 50 = 160.
+    #[test]
+    fn the_child_sheet_position_reads_y_from_the_page_origin() {
+        let (mut app, _task) = crate::app::Signex::new();
+        let ctx = &mut app.document_state.panel_ctx;
+        ctx.paper_size = "A4".into();
+        ctx.page_origin = signex_types::schematic::PageOrigin::LowerLeft;
+        let at = signex_types::schematic::Point::new(30.0, 50.0);
+        assert_eq!(child_sheet_position(ctx, &at), "30.00, 160.00");
+        ctx.page_origin = signex_types::schematic::PageOrigin::UpperLeft;
+        assert_eq!(child_sheet_position(ctx, &at), "30.00, 50.00");
+    }
 }
