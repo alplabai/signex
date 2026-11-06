@@ -5,6 +5,13 @@ the GPU mount (`SchematicSurface` through `scene_shader.rs`, #199). Both stay;
 this records what each costs. Measured on an Apple M2 Pro (Metal), release
 build, 2026-11-06, trunk `685badd3b`.
 
+## Decision
+
+Hakan, 2026-11-06: the schematic moves to the GPU path (#199), and the canvas
+stays the default until it does. The blocker for both paths is rotated text
+(finding 1 below): fixing it is tracked in signex #2128 and alplabai/iced#38.
+Nothing is deleted. The row is in `docs/DECISIONS.md`.
+
 ## Rerun
 
 ```text
