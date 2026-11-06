@@ -26,6 +26,8 @@ mod measure_tool;
 mod move_pick;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
+#[cfg(test)]
+mod placement_tests;
 mod status_activity;
 mod status_readout;
 mod sync_sheet_pins;
