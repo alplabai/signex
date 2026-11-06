@@ -33,6 +33,37 @@ pub fn line_box_mm(size_mm: f64, family: Option<&str>) -> f64 {
     size_mm / f64::from(mm_per_em(family)) * f64::from(TEXT_LINE_HEIGHT_EM)
 }
 
+/// Lines `text` is drawn in: one more than its line breaks (`\n`, `\r\n`
+/// or a lone `\r`), so empty and single-line text is one.
+#[must_use]
+pub fn line_count(text: &str) -> usize {
+    lines_of(text).count()
+}
+
+/// The lines of `text` split the way the shaper breaks them; a trailing break
+/// leaves a last empty line, which is drawn.
+fn lines_of(text: &str) -> impl Iterator<Item = &str> {
+    let mut rest = Some(text);
+    std::iter::from_fn(move || {
+        let current = rest?;
+        match current.find(['\n', '\r']) {
+            Some(at) => {
+                let skip = if current[at..].starts_with("\r\n") {
+                    2
+                } else {
+                    1
+                };
+                rest = Some(&current[at + skip..]);
+                Some(&current[..at])
+            }
+            None => {
+                rest = None;
+                Some(current)
+            }
+        }
+    })
+}
+
 /// OS/2 `sCapHeight / unitsPerEm` of the bundled faces, by family name.
 /// The bold cuts share their regular cut's capital height. A test in
 /// `signex-output` pins these to the font files.
@@ -140,7 +171,13 @@ pub fn family_width_mm_checked(text: &str, family: Option<&str>, size_mm: f64) -
     // Empty text keeps a one-glyph box so it can still be picked.
     let probe = if text.is_empty() { "0" } else { text };
     let shaped = shaped_advance_em(probe, family);
-    let em = shaped.unwrap_or_else(|| probe.chars().count() as f32 * BUNDLED_DEFAULT_ADVANCE_EM);
+    let em = shaped.unwrap_or_else(|| {
+        let widest = lines_of(probe)
+            .map(|l| l.chars().count())
+            .max()
+            .unwrap_or(0);
+        widest as f32 * BUNDLED_DEFAULT_ADVANCE_EM
+    });
     let name = family.map_or(BUNDLED_DEFAULT_FAMILY, str::trim);
     let ratio_known = BUNDLED_CAP_HEIGHT_PER_EM
         .iter()

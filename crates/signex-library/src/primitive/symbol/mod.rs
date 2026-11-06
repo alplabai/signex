@@ -11,23 +11,24 @@ use uuid::Uuid;
 
 use crate::param::ParamMap;
 
-/// Electrical role of a pin — drives ERC and BOM rules.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-#[non_exhaustive]
-pub enum PinDirection {
-    Input,
-    Output,
-    Bidirectional,
-    Power,
-    Passive,
-    OpenCollector,
-    OpenEmitter,
-    NotConnected,
-    /// Tri-state — high-impedance is a valid output.
-    Tristate,
-    /// Unspecified — the symbol author hasn't picked yet (default for new pins).
-    #[default]
-    Unspecified,
+/// Electrical role of a pin: the one canonical type shared with the
+/// schematic. Stored as the token table on [`PinDirection::as_token`].
+pub use signex_types::schematic::PinDirection;
+
+/// `SymbolPin::electrical` in JSON: the same tokens as the `.snxsym` file.
+mod pin_direction_serde {
+    use serde::{Deserialize, Deserializer, Serializer, de::Error};
+    use signex_types::schematic::PinDirection;
+
+    pub(super) fn serialize<S: Serializer>(v: &PinDirection, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(v.as_token())
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<PinDirection, D::Error> {
+        let token = String::deserialize(d)?;
+        PinDirection::from_token(&token)
+            .ok_or_else(|| D::Error::custom(format!("unknown PinDirection token {token:?}")))
+    }
 }
 
 /// Pin orientation — which direction the pin extends from the body.
@@ -117,6 +118,7 @@ pub struct SymbolPin {
     pub number: String,
     /// Display label drawn next to the pin ("IN+", "VCC").
     pub name: String,
+    #[serde(with = "pin_direction_serde")]
     pub electrical: PinDirection,
     /// Position of the pin's connection point in symbol-local mm coordinates.
     pub position: [f64; 2],
@@ -219,7 +221,7 @@ impl SymbolPin {
         Self {
             number: number.into(),
             name: name.into(),
-            electrical: PinDirection::Unspecified,
+            electrical: PinDirection::Unclassified,
             position: [0.0, 0.0],
             orientation: PinOrientation::Right,
             length: 2.54,

@@ -621,7 +621,7 @@ impl SelectedItem {
 // ---------------------------------------------------------------------------
 
 /// Axis-aligned bounding box in world (mm) coordinates.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Aabb {
     pub min_x: f64,
     pub min_y: f64,

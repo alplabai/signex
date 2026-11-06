@@ -3,7 +3,7 @@
 //! right, VCC (pin 14) on top and GND (pin 7) at the bottom.
 
 use signex_library::primitive::symbol::{
-    PinDirection::{Input, Output, Power},
+    PinDirection::{Input, Output, PowerInput},
     PinOrientation::{Down, Left, Right, Up},
     Symbol, SymbolPin,
 };
@@ -69,8 +69,8 @@ fn package(name: &str, what: &str, gates: &[Gate]) -> Symbol {
             Left,
         ));
     }
-    pins.push(pin("14", "VCC", Power, 0.0, half + 2.54, Down));
-    pins.push(pin("7", "GND", Power, 0.0, -half - 2.54, Up));
+    pins.push(pin("14", "VCC", PowerInput, 0.0, half + 2.54, Down));
+    pins.push(pin("7", "GND", PowerInput, 0.0, -half - 2.54, Up));
     pins.sort_by_key(|p| p.number.parse::<u8>().unwrap_or(0));
     symbol(
         name,

@@ -6,8 +6,9 @@
 use futures::StreamExt;
 use iced::Task;
 use signex_app::app::{Message, PrintPreviewMsg, Signex};
-use signex_output::{MarginEdge, Orientation, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
+use signex_output::{MarginEdge, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
 use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::SheetOrientation;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -105,7 +106,7 @@ fn an_a3_landscape_sheet_preselects_iso_a3_landscape() {
     let app = app_with_sheet("A3");
     let opts = &preview(&app).pdf_options;
     assert_eq!(opts.page_size, PageSize::IsoA3);
-    assert_eq!(opts.orientation, Orientation::Landscape);
+    assert_eq!(opts.orientation, SheetOrientation::Landscape);
     assert_eq!(opts.page_size.kind(), PageSizeKind::IsoA3);
 }
 
@@ -135,7 +136,7 @@ fn custom_size_takes_typed_millimetres_and_keeps_the_old_value_on_garbage() {
     send(
         &mut app,
         PrintPreviewMsg::SetPageSize(
-            PageSizeKind::Custom.select(PageSize::IsoA4, Orientation::Landscape),
+            PageSizeKind::Custom.select(PageSize::IsoA4, SheetOrientation::Landscape),
         ),
     );
     send(&mut app, PrintPreviewMsg::SetCustomWidth("400".into()));
@@ -169,9 +170,12 @@ fn flipping_orientation_updates_the_options_and_the_preview() {
     assert!(first_page_aspect(&app) > 1.0);
     send(
         &mut app,
-        PrintPreviewMsg::SetOrientation(Orientation::Portrait),
+        PrintPreviewMsg::SetOrientation(SheetOrientation::Portrait),
     );
-    assert_eq!(preview(&app).pdf_options.orientation, Orientation::Portrait);
+    assert_eq!(
+        preview(&app).pdf_options.orientation,
+        SheetOrientation::Portrait
+    );
     assert!(first_page_aspect(&app) < 1.0);
 }
 
@@ -282,19 +286,25 @@ fn custom_orientation_follows_the_page_shape() {
     send(
         &mut app,
         PrintPreviewMsg::SetPageSize(
-            PageSizeKind::Custom.select(PageSize::IsoA4, Orientation::Landscape),
+            PageSizeKind::Custom.select(PageSize::IsoA4, SheetOrientation::Landscape),
         ),
     );
     send(&mut app, PrintPreviewMsg::SetCustomWidth("100".into()));
     send(&mut app, PrintPreviewMsg::SetCustomHeight("200".into()));
-    assert_eq!(preview(&app).pdf_options.orientation, Orientation::Portrait);
+    assert_eq!(
+        preview(&app).pdf_options.orientation,
+        SheetOrientation::Portrait
+    );
 
     // The picker is not offered for Custom; a stray message changes nothing.
     send(
         &mut app,
-        PrintPreviewMsg::SetOrientation(Orientation::Landscape),
+        PrintPreviewMsg::SetOrientation(SheetOrientation::Landscape),
     );
-    assert_eq!(preview(&app).pdf_options.orientation, Orientation::Portrait);
+    assert_eq!(
+        preview(&app).pdf_options.orientation,
+        SheetOrientation::Portrait
+    );
     assert_eq!(
         preview(&app).pdf_options.page_size,
         PageSize::Custom {
@@ -306,7 +316,7 @@ fn custom_orientation_follows_the_page_shape() {
     send(&mut app, PrintPreviewMsg::SetCustomWidth("300".into()));
     assert_eq!(
         preview(&app).pdf_options.orientation,
-        Orientation::Landscape
+        SheetOrientation::Landscape
     );
 }
 
@@ -316,7 +326,7 @@ fn custom_page_edges_have_a_lower_bound_so_margins_cannot_collapse() {
     send(
         &mut app,
         PrintPreviewMsg::SetPageSize(
-            PageSizeKind::Custom.select(PageSize::IsoA4, Orientation::Landscape),
+            PageSizeKind::Custom.select(PageSize::IsoA4, SheetOrientation::Landscape),
         ),
     );
     let before = preview(&app).pdf_options.page_size;
@@ -423,19 +433,59 @@ fn a_huge_custom_page_previews_within_the_pixel_cap() {
 
 #[test]
 fn a_portrait_suffixed_sheet_seeds_a_consistent_custom_orientation() {
-    let app = app_with_sheet("Tabloid portrait");
-    let o = preview(&app).pdf_options.clone();
-    if let PageSize::Custom {
-        width_mm,
-        height_mm,
-    } = o.page_size
-    {
-        let expect = if width_mm >= height_mm {
-            Orientation::Landscape
-        } else {
-            Orientation::Portrait
+    // Custom sizes still arrive as `Custom`; the suffix must not override the
+    // orientation their drawn shape describes.
+    for (token, width, height, expect) in [
+        (
+            "Custom 100x200 portrait",
+            100.0,
+            200.0,
+            SheetOrientation::Portrait,
+        ),
+        (
+            "Custom 200x100 portrait",
+            200.0,
+            100.0,
+            SheetOrientation::Landscape,
+        ),
+    ] {
+        let app = app_with_sheet(token);
+        let o = preview(&app).pdf_options.clone();
+        let PageSize::Custom {
+            width_mm,
+            height_mm,
+        } = o.page_size
+        else {
+            panic!("{token} must arrive as Custom, got {:?}", o.page_size);
         };
-        assert_eq!(o.orientation, expect);
+        assert_eq!((width_mm, height_mm), (width, height), "{token}");
+        assert_eq!(o.orientation, expect, "{token}");
+    }
+}
+
+/// #2109 — B5 and Tabloid sheets open the print modal on their own preset,
+/// with the sheet's orientation, instead of a `Custom` page.
+#[test]
+fn b5_and_tabloid_sheets_open_on_their_presets() {
+    for (token, page, kind, orientation) in [
+        (
+            "Tabloid portrait",
+            PageSize::Tabloid,
+            PageSizeKind::Tabloid,
+            SheetOrientation::Portrait,
+        ),
+        (
+            "B5",
+            PageSize::IsoB5,
+            PageSizeKind::IsoB5,
+            SheetOrientation::Landscape,
+        ),
+    ] {
+        let app = app_with_sheet(token);
+        let opts = &preview(&app).pdf_options;
+        assert_eq!(opts.page_size, page, "{token}");
+        assert_eq!(opts.page_size.kind(), kind, "{token}");
+        assert_eq!(opts.orientation, orientation, "{token}");
     }
 }
 

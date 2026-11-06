@@ -306,7 +306,7 @@ pub enum FillType {
 /// open-drain polarity-tagged outputs, plus Signex-original additions
 /// (`GroundReference`, `Differential`, `Clock`) that don't appear in
 /// other EDA tools' enums.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PinDirection {
     /// Drives signal in.
@@ -338,6 +338,7 @@ pub enum PinDirection {
     /// Author has not classified the pin yet (default for new pins);
     /// collapses what other EDA tools sometimes split into "free" vs
     /// "unspecified".
+    #[default]
     Unclassified,
 }
 
@@ -815,6 +816,7 @@ pub use row_stamp::{
     LinkStamp, RowStamp, StampField, StampValues, Theirs, Verdict, base_of, resolve,
 };
 mod pin_map;
+mod pin_token;
 pub use pin_map::{PinMapping, PinMatchedBy, PinPair, map_pins, pin_key};
 mod sheet;
 pub use sheet::*;
@@ -855,7 +857,8 @@ mod text_extents;
 mod text_widths;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,
-    primitives_bounds, primitives_bounds_in, text_aabb, text_aabb_with_width, text_height_mm,
+    primitives_bounds, primitives_bounds_in, text_aabb, text_aabb_lines, text_aabb_with_width,
+    text_height_mm,
 };
 pub use text_extents::{
     StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,

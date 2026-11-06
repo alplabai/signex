@@ -7,9 +7,10 @@
 //! the complaint about another that still holds rejected text.
 
 use signex_output::{
-    MarginEdge, Orientation, PageSetupError, PageSize, PdfOptions, PdfScale, PdfScaleMode,
-    parse_custom_edge_mm, parse_percent,
+    MarginEdge, PageSetupError, PageSize, PdfOptions, PdfScale, PdfScaleMode, parse_custom_edge_mm,
+    parse_percent,
 };
+use signex_types::schematic::SheetOrientation;
 
 /// Millimetres as the shortest faithful text (`10`, `215.9`, not `10.000000`).
 ///
@@ -161,9 +162,9 @@ impl super::PreviewState {
         } = self.pdf_options.page_size
         {
             self.pdf_options.orientation = if width_mm >= height_mm {
-                Orientation::Landscape
+                SheetOrientation::Landscape
             } else {
-                Orientation::Portrait
+                SheetOrientation::Portrait
             };
         }
     }
@@ -212,7 +213,7 @@ impl super::PreviewState {
         true
     }
 
-    pub fn apply_orientation(&mut self, orientation: Orientation) -> bool {
+    pub fn apply_orientation(&mut self, orientation: SheetOrientation) -> bool {
         // A Custom page's orientation is derived from its width and height.
         if matches!(self.pdf_options.page_size, PageSize::Custom { .. })
             || self.pdf_options.orientation == orientation

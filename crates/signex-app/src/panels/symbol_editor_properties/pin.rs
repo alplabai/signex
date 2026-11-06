@@ -124,20 +124,22 @@ pub(super) fn view_pin_selection<'a>(
     col = col.push(name_row);
 
     // ── Electrical Type (pick_list) ──
+    use signex_library::PinDirection as D;
     let electrical_options = [
-        ("Input", signex_library::PinDirection::Input),
-        ("I/O", signex_library::PinDirection::Bidirectional),
-        ("Output", signex_library::PinDirection::Output),
-        (
-            "Open Collector",
-            signex_library::PinDirection::OpenCollector,
-        ),
-        ("Passive", signex_library::PinDirection::Passive),
-        ("HiZ", signex_library::PinDirection::Tristate),
-        ("Open Emitter", signex_library::PinDirection::OpenEmitter),
-        ("Power", signex_library::PinDirection::Power),
-        ("Not Connected", signex_library::PinDirection::NotConnected),
-        ("Unspecified", signex_library::PinDirection::Unspecified),
+        ("Input", D::Input),
+        ("I/O", D::Bidirectional),
+        ("Output", D::Output),
+        ("Open Collector", D::OpenDrainLow),
+        ("Passive", D::Passive),
+        ("HiZ", D::ThreeStatable),
+        ("Open Emitter", D::OpenDrainHigh),
+        ("Power Input", D::PowerInput),
+        ("Not Connected", D::DoNotConnect),
+        ("Unspecified", D::Unclassified),
+        ("Power Output", D::PowerOutput),
+        ("Ground", D::GroundReference),
+        ("Differential", D::Differential),
+        ("Clock", D::Clock),
     ];
     let electrical_selected = electrical_options
         .iter()

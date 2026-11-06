@@ -1,10 +1,8 @@
 //! Tests for PDF bookmark/outline generation.
 use super::*;
-use crate::pdf::{
-    ColourMode, Margins, Orientation, PageRange, PageSize, PdfScale, SchematicPalette,
-};
+use crate::pdf::{ColourMode, Margins, PageRange, PageSize, PdfScale, SchematicPalette};
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SheetOrientation, Symbol};
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet::default()
@@ -46,7 +44,7 @@ fn ctx_with_one_sheet() -> ExportContext {
 fn default_opts() -> PdfOptions {
     PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         colour_mode: ColourMode::Colour,
         page_range: PageRange::All,
         sheet_template: None,

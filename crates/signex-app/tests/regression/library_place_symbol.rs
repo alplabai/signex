@@ -669,7 +669,7 @@ fn gnd_symbol() -> Symbol {
     s.designator = "#PWR?".into();
     s.comment = "GND".into();
     let mut p = SymbolPin::new("1", "GND");
-    p.electrical = PinDirection::Power;
+    p.electrical = PinDirection::PowerInput;
     s.pins.push(p);
     s
 }
@@ -734,7 +734,7 @@ fn flag_symbol() -> Symbol {
     s.designator = "#FLG?".into();
     s.comment = "PWR_FLAG".into();
     let mut p = SymbolPin::new("1", "PWR_FLAG");
-    p.electrical = PinDirection::Power;
+    p.electrical = PinDirection::PowerInput;
     s.pins.push(p);
     s
 }

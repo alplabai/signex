@@ -5,20 +5,16 @@ use crate::primitive::tsv_cell::{fmt_f64, parse_finite_cell};
 
 // ---- Pin TSV codec --------------------------------------------------
 
-signex_types::token_enum! {
-    pub(super) fn pin_direction_token / pin_direction_from_token for PinDirection,
-    error SymbolFileError {
-        Input => "Input",
-        Output => "Output",
-        Bidirectional => "Bidirectional",
-        Power => "Power",
-        Passive => "Passive",
-        OpenCollector => "OpenCollector",
-        OpenEmitter => "OpenEmitter",
-        NotConnected => "NotConnected",
-        Tristate => "Tristate",
-        Unspecified => "Unspecified",
-    }
+/// The `.snxsym` text for a pin type: the one table on [`PinDirection`].
+pub(super) fn pin_direction_token(value: PinDirection) -> &'static str {
+    value.as_token()
+}
+
+pub(super) fn pin_direction_from_token(text: &str) -> Result<PinDirection, SymbolFileError> {
+    PinDirection::from_token(text).ok_or_else(|| SymbolFileError::UnknownEnumToken {
+        kind: "PinDirection",
+        got: text.to_string(),
+    })
 }
 
 signex_types::token_enum! {

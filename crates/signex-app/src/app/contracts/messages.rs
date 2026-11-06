@@ -490,7 +490,7 @@ pub enum PrintPreviewMsg {
     /// User picked a page size (a named size, or `Custom`).
     SetPageSize(signex_output::PageSize),
     /// User picked portrait or landscape.
-    SetOrientation(signex_output::Orientation),
+    SetOrientation(signex_types::schematic::SheetOrientation),
     /// User edited the Custom page width (mm).
     SetCustomWidth(String),
     /// User edited the Custom page height (mm).

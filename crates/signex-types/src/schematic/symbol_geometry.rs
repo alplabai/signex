@@ -436,11 +436,21 @@ pub fn text_aabb(
     family: Option<&str>,
 ) -> Aabb {
     let w = crate::font::family_width_mm(text, family, text_height_mm(font_size));
-    text_aabb_with_width(w, font_size, anchor, rotation_deg, h_align, v_align, family)
+    let lines = crate::font::line_count(text);
+    text_aabb_lines(
+        w,
+        lines,
+        font_size,
+        anchor,
+        rotation_deg,
+        h_align,
+        v_align,
+        family,
+    )
 }
 
-/// [`text_aabb`] for a caller-measured text width `width_mm` (a face other
-/// than the monospace estimate).
+/// [`text_aabb`] of a one-line text for a caller-measured width `width_mm`
+/// (a face other than the monospace estimate).
 pub fn text_aabb_with_width(
     width_mm: f64,
     font_size: f64,
@@ -450,8 +460,35 @@ pub fn text_aabb_with_width(
     v_align: VAlign,
     family: Option<&str>,
 ) -> Aabb {
+    text_aabb_lines(
+        width_mm,
+        1,
+        font_size,
+        anchor,
+        rotation_deg,
+        h_align,
+        v_align,
+        family,
+    )
+}
+
+/// [`text_aabb_with_width`] of a text drawn in `lines` lines, `width_mm` being
+/// its widest. The canvas aligns the whole block, so the box is `lines` line
+/// boxes tall and Top/Center/Bottom place that block, not the first line
+/// (#2120).
+#[allow(clippy::too_many_arguments)]
+pub fn text_aabb_lines(
+    width_mm: f64,
+    lines: usize,
+    font_size: f64,
+    anchor: (f64, f64),
+    rotation_deg: f64,
+    h_align: HAlign,
+    v_align: VAlign,
+    family: Option<&str>,
+) -> Aabb {
     // The drawn line box, which the text is aligned by (#2099).
-    let h = crate::font::line_box_mm(text_height_mm(font_size), family);
+    let h = crate::font::line_box_mm(text_height_mm(font_size), family) * lines.max(1) as f64;
     let w = width_mm;
     let ox = match h_align {
         HAlign::Left => 0.0,

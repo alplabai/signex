@@ -273,12 +273,12 @@ fn is_power_flag(symbol: &signex_library::primitive::Symbol) -> bool {
     signex_types::designator::placement_prefix(&symbol.designator) == "#FLG"
 }
 
-/// A power port: its only pin is a `PinDirection::Power` pin (the stock
+/// A power port: its only pin is a `PinDirection::PowerInput` pin (the stock
 /// `GND` / `VCC` symbols). Flags are handled separately.
 fn is_power_port(symbol: &signex_library::primitive::Symbol) -> bool {
     use signex_library::primitive::PinDirection;
     !is_power_flag(symbol)
-        && matches!(symbol.pins.as_slice(), [pin] if pin.electrical == PinDirection::Power)
+        && matches!(symbol.pins.as_slice(), [pin] if pin.electrical == PinDirection::PowerInput)
 }
 
 /// The global net name a power port stamps: its comment, or the pin name

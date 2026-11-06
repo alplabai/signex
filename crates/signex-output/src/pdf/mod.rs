@@ -17,6 +17,7 @@ use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
 use signex_types::markup::{
     ExpressionEvalContext, RichSegment, evaluate_expressions, parse_signex_markup,
 };
+use signex_types::schematic::SheetOrientation;
 use thiserror::Error;
 
 use crate::expression::{ExpressionTables, build_expression_tables, sheet_cell_value};
@@ -59,7 +60,7 @@ pub struct PdfExporter;
 #[derive(Debug, Clone)]
 pub struct PdfOptions {
     pub page_size: PageSize,
-    pub orientation: Orientation,
+    pub orientation: SheetOrientation,
     pub colour_mode: ColourMode,
     pub page_range: PageRange,
     pub sheet_template: Option<TemplateId>,
@@ -177,6 +178,7 @@ pub enum PageSize {
     IsoA3,
     IsoA4,
     IsoA5,
+    IsoB5,
     AnsiA,
     AnsiB,
     AnsiC,
@@ -184,13 +186,8 @@ pub enum PageSize {
     AnsiE,
     UsLetter,
     UsLegal,
+    Tabloid,
     Custom { width_mm: f64, height_mm: f64 },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Orientation {
-    Portrait,
-    Landscape,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,7 +224,7 @@ impl Default for PdfOptions {
     fn default() -> Self {
         Self {
             page_size: PageSize::IsoA4,
-            orientation: Orientation::Landscape,
+            orientation: SheetOrientation::Landscape,
             colour_mode: ColourMode::Colour,
             page_range: PageRange::All,
             sheet_template: None,
