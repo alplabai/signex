@@ -47,7 +47,7 @@ impl Signex {
         width: f64,
         fill: FillType,
     ) -> bool {
-        if radius <= MIN_CIRCLE_RADIUS_MM {
+        if radius.is_nan() || radius <= MIN_CIRCLE_RADIUS_MM {
             return false;
         }
         self.place_drawing(SchDrawing::Circle {

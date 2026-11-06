@@ -364,9 +364,16 @@ fn wire_and_bus_placements_match_their_clicks() {
         let mode = app.interaction_state.draw_mode;
         app.place_bus_at(at, grid(24.0, 20.0), mode);
     });
-    assert_method_matches_click(Tool::BusEntry, none, |app, at| {
+    // A bus half a grid step off the click: both paths snap the entry onto it.
+    let with_bus = |app: &mut Signex| {
+        let mode = app.interaction_state.draw_mode;
+        app.place_bus_at(grid(0.0, 16.5), grid(30.0, 16.5), mode);
+    };
+    assert_method_matches_click(Tool::BusEntry, with_bus, |app, at| {
         let size = app.interaction_state.bus_entry_size;
         assert!(app.place_bus_entry_at(at, size));
+        let entry = &doc(app).bus_entries[0];
+        assert_eq!(entry.position.y, grid(0.0, 16.5).y, "snapped onto the bus");
     });
 }
 
@@ -402,6 +409,10 @@ fn shape_placements_match_their_clicks() {
             assert!(
                 !app.place_circle_at(at, 0.0, 0.4, FillType::Outline),
                 "too small to see"
+            );
+            assert!(
+                !app.place_circle_at(at, f64::NAN, 0.4, FillType::Outline),
+                "a NaN radius places nothing"
             );
         },
     );
