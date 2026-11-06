@@ -149,6 +149,94 @@ fn a_label_on_a_bus_seeds_the_bus_run() {
 }
 
 #[test]
+fn a_t_joined_bus_is_one_run() {
+    let mut sheet = empty_sheet();
+    for (n, a, b) in [
+        (20, pt(0.0, 0.0), pt(20.0, 0.0)),
+        (21, pt(10.0, 0.0), pt(10.0, 10.0)),
+    ] {
+        sheet.buses.push(Bus {
+            uuid: id(n),
+            start: a,
+            end: b,
+        });
+    }
+    let got = sorted(connected_net_items(&sheet, item(20, SelectedKind::Bus)));
+    assert_eq!(
+        got,
+        vec![item(20, SelectedKind::Bus), item(21, SelectedKind::Bus)]
+    );
+}
+
+#[test]
+fn a_plain_net_label_mid_span_on_a_bus_is_not_on_the_bus() {
+    let mut sheet = empty_sheet();
+    sheet.buses.push(Bus {
+        uuid: id(20),
+        start: pt(0.0, 0.0),
+        end: pt(10.0, 0.0),
+    });
+    let mut sda = label("SDA", pt(4.0, 0.0), LabelType::Net);
+    sda.uuid = id(30);
+    sheet.labels.push(sda);
+
+    assert_eq!(
+        connected_net_items(&sheet, item(20, SelectedKind::Bus)),
+        vec![item(20, SelectedKind::Bus)]
+    );
+    assert_eq!(
+        connected_net_items(&sheet, item(30, SelectedKind::Label)),
+        vec![item(30, SelectedKind::Label)]
+    );
+}
+
+#[test]
+fn a_plain_net_label_at_a_bus_end_belongs_to_the_run() {
+    let mut sheet = empty_sheet();
+    sheet.buses.push(Bus {
+        uuid: id(20),
+        start: pt(0.0, 0.0),
+        end: pt(10.0, 0.0),
+    });
+    let mut sda = label("SDA", pt(10.0, 0.0), LabelType::Net);
+    sda.uuid = id(30);
+    sheet.labels.push(sda);
+
+    assert_eq!(
+        sorted(connected_net_items(&sheet, item(20, SelectedKind::Bus))),
+        vec![item(20, SelectedKind::Bus), item(30, SelectedKind::Label)]
+    );
+}
+
+#[test]
+fn a_junction_on_a_bus_alone_seeds_the_bus_run() {
+    let mut sheet = empty_sheet();
+    for (n, a, b) in [
+        (20, pt(0.0, 0.0), pt(20.0, 0.0)),
+        (21, pt(10.0, 0.0), pt(10.0, 10.0)),
+    ] {
+        sheet.buses.push(Bus {
+            uuid: id(n),
+            start: a,
+            end: b,
+        });
+    }
+    sheet.junctions.push(Junction {
+        uuid: id(3),
+        position: pt(10.0, 0.0),
+        ..Default::default()
+    });
+    assert_eq!(
+        sorted(connected_net_items(&sheet, item(3, SelectedKind::Junction))),
+        vec![
+            item(3, SelectedKind::Junction),
+            item(20, SelectedKind::Bus),
+            item(21, SelectedKind::Bus),
+        ]
+    );
+}
+
+#[test]
 fn an_isolated_or_unknown_seed_comes_back_alone() {
     let mut sheet = empty_sheet();
     let mut l = label("X", pt(1.0, 1.0), LabelType::Net);

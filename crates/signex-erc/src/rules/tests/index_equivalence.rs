@@ -8,7 +8,7 @@ fn same(a: &Point, b: &Point) -> bool {
     pt_key(a) == pt_key(b)
 }
 
-/// The pre-index implementation, kept verbatim as the oracle.
+/// The pre-index all-pairs scan, comparing with the shared point key, as the oracle.
 fn dangling_wire_scan(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let touched_non_wire = |p: &Point| -> bool {
         ctx.symbols
@@ -62,9 +62,10 @@ impl Rng {
     fn below(&mut self, n: u64) -> u64 {
         self.next() % n
     }
-    /// A lattice point, sometimes nudged by sub- and just-over-epsilon jitter.
+    /// A lattice point, sometimes nudged to either side of the 0.5 um edge of its
+    /// `pt_key` bucket.
     fn point(&mut self, span: u64) -> Point {
-        let jitter = [0.0, 0.0, 5e-5, -5e-5, 1.5e-4, -1.5e-4];
+        let jitter = [0.0, 0.0, 4.9e-4, -4.9e-4, 5.1e-4, -5.1e-4];
         let j = |r: &mut Rng| jitter[r.below(jitter.len() as u64) as usize];
         Point {
             x: self.below(span) as f64 + j(self),

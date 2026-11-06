@@ -154,6 +154,27 @@ mod flows {
         SelectedItem::new(Uuid::from_u128(label), SelectedKind::Label)
     }
 
+    /// #2106: Select > Connection takes the first wire-like item as its seed,
+    /// so a symbol ahead of the wire in the selection does not block it.
+    #[test]
+    fn select_connection_seeds_from_the_wire_after_a_symbol() {
+        use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
+        let tmp = TempDir::new().unwrap();
+        let (mut app, _a, _b) = open_project(tmp.path());
+        let symbol = SelectedItem::new(Uuid::from_u128(99), SelectedKind::Symbol);
+        let wire = SelectedItem::new(Uuid::from_u128(11), SelectedKind::Wire);
+        app.interaction_state.active_canvas_mut().selected = vec![symbol, wire];
+
+        let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+            ActiveBarAction::SelectConnection,
+        )));
+
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![wire, item(LABEL_A)]
+        );
+    }
+
     #[test]
     fn go_to_net_partner_jumps_to_the_other_sheet() {
         let tmp = TempDir::new().unwrap();
