@@ -6,11 +6,10 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, button, column, container, text};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
-use super::widgets::{close_x_button, wrap_modal};
-use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::widgets::modal_title_header;
 use crate::app::path_ops::PlacingSymbol;
 use crate::styles::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_hint, dialog_list,
@@ -24,13 +23,11 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 impl Signex {
     pub(in crate::app::view) fn view_remove_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_remove_dialog_body();
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::RemoveDialog)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
+        self.wrap_dialog(
+            crate::app::state::ModalId::RemoveDialog,
+            dialog,
+            (560.0, 260.0),
+        )
     }
 
     pub(in crate::app::view) fn view_remove_dialog_body(&self) -> Element<'_, Message> {
@@ -44,24 +41,16 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
 
         let theme_id = self.ui_state.effective_theme_id();
-        let header_content: Element<'_, Message> = container(
-            row![
-                text(if st.unsaved_prompt {
-                    "Exclude from Project \u{2014} Unsaved Edits"
-                } else {
-                    "Remove from Project"
-                })
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(Message::Remove(RemoveMsg::Close), theme_id, text_muted),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            if st.unsaved_prompt {
+                "Exclude from Project \u{2014} Unsaved Edits"
+            } else {
+                "Remove from Project"
+            },
+            Message::Remove(RemoveMsg::Close),
+            theme_id,
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RemoveDialog,
@@ -297,12 +286,7 @@ impl Signex {
 
     pub(in crate::app::view) fn view_project_close_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_project_close_confirm_body();
-        // Reuse the rename modal's offset slot — `RenameDialog` is
-        // never up at the same time as project-close confirm, and
-        // they're roughly the same footprint, so reusing the slot
-        // keeps modal-offset state simpler.
-        let offset = (0.0, 0.0);
-        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+        self.wrap_centred_dialog(dialog, (520.0, 360.0))
     }
 
     pub(in crate::app::view) fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
@@ -313,27 +297,14 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let theme_id = self.ui_state.effective_theme_id();
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Close Project — Unsaved Edits")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
-                    theme_id,
-                    text_muted,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Close Project — Unsaved Edits",
+            Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
+            theme_id,
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::ProjectCloseConfirm,
@@ -420,10 +391,7 @@ impl Signex {
 
     pub(in crate::app::view) fn view_app_quit_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_app_quit_confirm_body();
-        // Reuse the rename modal's centred offset slot — the app-quit
-        // confirm is never up at the same time as the rename dialog.
-        let offset = (0.0, 0.0);
-        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+        self.wrap_centred_dialog(dialog, (520.0, 360.0))
     }
 
     /// One list row per unsaved entry in a confirm modal: file
@@ -468,30 +436,17 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let theme_id = self.ui_state.effective_theme_id();
-        let header_content: Element<'_, Message> = container(
-            row![
-                text(format!(
-                    "{} Signex — Unsaved Edits",
-                    super::super::detached_title::quit_word()
-                ))
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel)),
-                    theme_id,
-                    text_muted,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            format!(
+                "{} Signex — Unsaved Edits",
+                super::super::detached_title::quit_word()
+            ),
+            Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel)),
+            theme_id,
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::AppQuitConfirm,

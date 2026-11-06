@@ -104,18 +104,9 @@ pub(super) fn pad_table_input_cell<'a>(
     text_input(placeholder, value)
         .size(TS.caption)
         .padding(SP.xs)
-        .style(move |_: &Theme, _| iced::widget::text_input::Style {
-            background: iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
-            border: iced::Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-                ..iced::Border::default()
-            },
-            placeholder: muted,
-            value: primary,
-            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-        })
+        .style(crate::panels::footprint_editor_properties::fp_field_style(
+            muted, primary, border_c,
+        ))
         .on_input(on_input)
         .boxed()
 }

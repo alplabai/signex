@@ -1,7 +1,7 @@
 //! BoardCutout role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, row, text, text_input};
-use iced::{Color, Element, Length, Theme, Widget as _};
+use iced::{Color, Element, Length, Widget as _};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -42,20 +42,9 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
                 text_input("(sharp)", radius_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                        background: iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: border_c,
-                            ..Default::default()
-                        },
-                        placeholder: muted,
-                        value: primary,
-                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                    })
+                    .style(crate::panels::footprint_editor_properties::fp_field_style(
+                        muted, primary, border_c
+                    ))
                     .on_input(move |v| PanelMsg::FpEditorSetCutoutEdgeRadius { id, value: v }),
             ]
             .spacing(6)

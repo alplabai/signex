@@ -10,6 +10,7 @@ pub mod production_date_code;
 pub mod rkm_code;
 pub mod rkm_encoder;
 pub mod solver;
+mod widgets;
 
 pub use color_code::{BandColor, ComponentColorCode, ResistorColorCode};
 pub use component_card::{ComponentCard, ComponentCardMessage};

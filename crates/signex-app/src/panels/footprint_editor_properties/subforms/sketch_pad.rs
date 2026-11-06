@@ -5,7 +5,7 @@ use iced::{Color, Element, Length, Widget as _};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row, pad_pick_row};
-use super::super::{fp_is_collapsed, props_section_header};
+use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -34,16 +34,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     let id = p.id;
 
     col = col.push(
-        props_section_header(
-            "Pad Attributes",
+        collapsible_section_header(
             "fp_sketch_pad_attrs",
+            "Pad Attributes",
             collapsed_sections,
             primary,
             border_c,
         )
         .boxed(),
     );
-    if fp_is_collapsed("fp_sketch_pad_attrs", collapsed_sections) {
+    if is_section_collapsed("fp_sketch_pad_attrs", collapsed_sections) {
         return col;
     }
 

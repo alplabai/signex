@@ -18,14 +18,11 @@ impl Signex {
         card: &HoverCard,
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
-        use iced::widget::{Widget as _, column, container, row, text};
-        use iced::{Background, Border};
+        use iced::widget::{Widget as _, row, text};
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let border_c = crate::styles::ti(tokens.border);
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(card.pins.len() + 3);
         rows.push(text(card.name.clone()).size(TS.label).color(text_c).boxed());
@@ -58,37 +55,25 @@ impl Signex {
         let height = CARD_PAD_H + ROW_H * rows.len() as f32;
         let width = card_width_estimate(card, &self.panel_ctx_for(window_id).ui_font_name);
 
-        let body = container(column(rows).spacing(2).boxed())
-            .padding(iced::Padding {
-                top: 8.0,
-                right: 14.0,
-                bottom: 8.0,
-                left: 10.0,
-            })
-            // Shrink to the text; the estimate only places the card. At the
-            // cap the card stops growing.
-            .width(if width < CARD_MAX_W {
+        // Shrink to the text; the estimate only places the card. At the cap
+        // the card stops growing.
+        let body = hover_card(
+            rows,
+            2.0,
+            if width < CARD_MAX_W {
                 Length::Shrink
             } else {
                 Length::Fixed(width)
-            })
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(Background::Color(panel_bg)),
-                border: Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            });
+            },
+            &self.document_state.panel_ctx.tokens,
+        );
 
         let (x, y) = canvas_region::place_card(
             (card.screen.0 as f32, card.screen.1 as f32),
             (width, height),
             self.card_bounds(window_id),
         );
-        super::super::translate::Translate::new(body.boxed(), (x, y)).boxed()
+        super::super::translate::Translate::new(body, (x, y)).boxed()
     }
 }
 

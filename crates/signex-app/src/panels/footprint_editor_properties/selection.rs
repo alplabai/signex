@@ -9,12 +9,13 @@ use super::pad::{
     PadEditTarget, PadFormValues, pad_check_row, pad_input_row, pad_pick_row,
     render_pad_form_pad_features, render_pad_form_pad_stack, render_pad_form_properties,
 };
+use super::props_kv_row;
 use super::silk::silk_geometry_rows;
 use super::subforms::{
     render_cutout_subform, render_keepout_subform, render_pattern_subform, render_pour_subform,
     render_sketch_pad_subform,
 };
-use super::{fp_is_collapsed, props_kv_row, props_section_header};
+use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -81,16 +82,16 @@ pub(super) fn view_selection<'a>(
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
             col = col.push(
-                props_section_header(
-                    "Sketch entity",
+                collapsible_section_header(
                     "fp_sketch_entity",
+                    "Sketch entity",
                     collapsed_sections,
                     primary,
                     border_c,
                 )
                 .boxed(),
             );
-            if !fp_is_collapsed("fp_sketch_entity", collapsed_sections) {
+            if !is_section_collapsed("fp_sketch_entity", collapsed_sections) {
                 col = props_kv_row(
                     col,
                     muted,
@@ -197,10 +198,16 @@ pub(super) fn view_selection<'a>(
             // selected; pick_list value mirrors the entity's
             // currently-attached `*Attr` slot (or `Unassigned`).
             col = col.push(
-                props_section_header("Role", "fp_role", collapsed_sections, primary, border_c)
-                    .boxed(),
+                collapsible_section_header(
+                    "fp_role",
+                    "Role",
+                    collapsed_sections,
+                    primary,
+                    border_c,
+                )
+                .boxed(),
             );
-            if !fp_is_collapsed("fp_role", collapsed_sections)
+            if !is_section_collapsed("fp_role", collapsed_sections)
                 && let Some(id) = fp.selected_sketch_entity_id
             {
                 use crate::library::messages::RoleTag;
@@ -255,16 +262,16 @@ pub(super) fn view_selection<'a>(
             // Properties panel.
             if let Some(silk) = fp.selected_silk_summary.as_ref() {
                 col = col.push(
-                    props_section_header(
-                        "Silk graphic",
+                    collapsible_section_header(
                         "fp_silk_graphic",
+                        "Silk graphic",
                         collapsed_sections,
                         primary,
                         border_c,
                     )
                     .boxed(),
                 );
-                if !fp_is_collapsed("fp_silk_graphic", collapsed_sections) {
+                if !is_section_collapsed("fp_silk_graphic", collapsed_sections) {
                     col = props_kv_row(
                         col,
                         muted,
@@ -356,16 +363,16 @@ pub(super) fn view_selection<'a>(
                     .boxed(),
                 );
                 col = col.push(
-                    props_section_header(
-                        "Footprint",
+                    collapsible_section_header(
                         "fp_footprint",
+                        "Footprint",
                         collapsed_sections,
                         primary,
                         border_c,
                     )
                     .boxed(),
                 );
-                if !fp_is_collapsed("fp_footprint", collapsed_sections) {
+                if !is_section_collapsed("fp_footprint", collapsed_sections) {
                     // Editable Name — text_input bound to the active
                     // internal footprint's `name` field via
                     // PanelMsg::FpEditorSetFootprintName.

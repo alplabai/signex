@@ -3,14 +3,12 @@
 //! like the other tool dialogs (docs/DETACHED_MODALS.md); the in-window card
 //! below is the fallback when that window is not available.
 
-use iced::widget::{Space, Widget as _, column, container, row, text};
+use iced::widget::{Widget as _, column, container};
 use iced::{Element, Length};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::passive_calculator::CalculatorControl;
 
-use crate::app::view::dialogs::{
-    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
-};
+use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
 use crate::styles;
 
@@ -46,27 +44,12 @@ fn build<'a>(
     control: &'a CalculatorControl,
     windowed: bool,
 ) -> Element<'a, Message> {
-    let text_primary = styles::ti(tokens.text);
-    let text_secondary = styles::ti(tokens.text_secondary);
-
-    let header = container(
-        row![
-            text("Passive Network Calculator")
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .color(text_primary),
-            Space::new().width(Length::Fill),
-            close_x_button(
-                Message::Overlay(OverlayMsg::ClosePassiveCalculator),
-                theme_id,
-                text_secondary,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .width(Length::Fill)
-    .height(MODAL_HEADER_HEIGHT)
-    .padding(MODAL_HEADER_PADDING)
-    .style(styles::modal_header_strip(tokens));
+    let header = modal_title_header(
+        "Passive Network Calculator",
+        Message::Overlay(OverlayMsg::ClosePassiveCalculator),
+        theme_id,
+        tokens,
+    );
 
     // The control already scrolls its own body, so this wrapper only
     // bounds it — nesting a second scrollable would swallow wheel

@@ -11,6 +11,7 @@ use iced::{Color, Element, Length, Widget};
 
 use super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
+    collapsible_section_header, is_section_collapsed,
 };
 use crate::styles::{Spacing, TypeScale};
 use pad::{
@@ -240,16 +241,16 @@ fn render_fp_settings_and_hint<'a>(
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<Element<'a, PanelMsg>> {
     col = col.push(
-        props_section_header(
-            "Settings",
+        collapsible_section_header(
             "fp_settings",
+            "Settings",
             collapsed_sections,
             primary,
             border_c,
         )
         .boxed(),
     );
-    if !fp_is_collapsed("fp_settings", collapsed_sections) {
+    if !is_section_collapsed("fp_settings", collapsed_sections) {
         // v0.26-I — auto-courtyard toggle removed. The courtyard is
         // an authored shape (silk / sketch entity), not an auto-
         // derived bbox. Section header kept (other settings can
@@ -258,9 +259,10 @@ fn render_fp_settings_and_hint<'a>(
     }
 
     col = col.push(
-        props_section_header("Hint", "fp_hint", collapsed_sections, primary, border_c).boxed(),
+        collapsible_section_header("fp_hint", "Hint", collapsed_sections, primary, border_c)
+            .boxed(),
     );
-    if !fp_is_collapsed("fp_hint", collapsed_sections) {
+    if !is_section_collapsed("fp_hint", collapsed_sections) {
         let hint = match fp.mode_kind {
             FootprintModeKind::Pads => "Click a pad to edit its properties.",
             FootprintModeKind::Sketch => {
@@ -278,27 +280,25 @@ fn render_fp_settings_and_hint<'a>(
     col
 }
 
-/// Section header — collapsible. Delegates to
-/// `super::collapsible_section_header` so every footprint Properties
-/// section gets the same clickable chevron header used by the
-/// schematic's Custom Selection Filters / General sections. Each
-/// call site supplies a unique `key` so collapsed state survives in
-/// `PanelContext.collapsed_sections`. Callers guard their body push
-/// with `if !is_section_collapsed(key, collapsed)`.
-pub(super) fn props_section_header<'a>(
-    label: &str,
-    key: &'static str,
-    collapsed: &super::CollapsedSections,
+/// Text-input style of every footprint Properties field: a faint plate, a
+/// 1 px border, and the panel's own text colours.
+pub(in crate::panels::footprint_editor_properties) fn fp_field_style(
+    muted: Color,
     primary: Color,
     border_c: Color,
-) -> iced::widget::Column<Element<'a, PanelMsg>> {
-    super::collapsible_section_header(key, label, collapsed, primary, border_c)
-}
-
-/// Returns true if the section with `key` is collapsed in
-/// `PanelContext.collapsed_sections`.
-pub(super) fn fp_is_collapsed(key: &str, collapsed: &super::CollapsedSections) -> bool {
-    super::is_section_collapsed(key, collapsed)
+) -> impl Fn(&iced::Theme, iced::widget::text_input::Status) -> iced::widget::text_input::Style {
+    move |_, _| iced::widget::text_input::Style {
+        background: iced::Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
+        border: iced::Border {
+            width: 1.0,
+            radius: 2.0.into(),
+            color: border_c,
+            ..iced::Border::default()
+        },
+        placeholder: muted,
+        value: primary,
+        selection: Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+    }
 }
 
 /// Read-only key-value row — delegates to the schematic Properties

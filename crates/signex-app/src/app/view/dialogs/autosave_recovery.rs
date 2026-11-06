@@ -4,11 +4,10 @@
 //! loads anything.
 
 use super::*;
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{column, container, text};
 use iced::{Element, Length, Widget};
 
-use super::widgets::{close_x_button, wrap_modal};
-use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::widgets::modal_title_header;
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
 use crate::styles::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_hint, dialog_message,
@@ -23,12 +22,7 @@ impl Signex {
         &self,
         offer: &RecoveryOffer,
     ) -> Element<'_, Message> {
-        wrap_modal(
-            self.autosave_recovery_card(offer, false),
-            (0.0, 0.0),
-            self.ui_state.window_size,
-            (520.0, 250.0),
-        )
+        self.wrap_centred_dialog(self.autosave_recovery_card(offer, false), (520.0, 250.0))
     }
 
     /// The prompt as the content of its own OS window (no header, fills it).
@@ -45,27 +39,14 @@ impl Signex {
         windowed: bool,
     ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
-        let header_content = container(
-            row![
-                text("Recover Unsaved Edits")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    later.clone(),
-                    self.ui_state.effective_theme_id(),
-                    text_muted
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens));
+        let header_content = modal_title_header(
+            "Recover Unsaved Edits",
+            later.clone(),
+            self.ui_state.effective_theme_id(),
+            tokens,
+        );
         let header: Element<'_, Message> = if windowed {
             super::widgets::os_title_bar_slot()
         } else {

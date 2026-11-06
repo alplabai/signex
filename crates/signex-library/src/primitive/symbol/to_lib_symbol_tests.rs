@@ -135,7 +135,7 @@ fn pin_orientation_maps_to_rotation_degrees_for_all_four_variants() {
     }
 }
 
-/// Ground-truth convention test: ties `pin_rotation_deg`'s output to the
+/// Ground-truth convention test: ties `PinOrientation::rotation_deg`'s output to the
 /// convention the actual downstream renderer uses, so the two mappings
 /// can't silently drift apart (the other rotation test above only
 /// checks self-consistency with the formula in this crate).

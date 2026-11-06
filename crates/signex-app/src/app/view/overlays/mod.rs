@@ -74,8 +74,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
-        use iced::widget::{column, container, text};
-        use iced::{Background, Border};
+        use iced::widget::text;
 
         if self.interaction_state.editing_text.is_some() {
             return None;
@@ -99,8 +98,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let border_c = crate::styles::ti(tokens.border);
         // Match the schematic's own font (Iosevka by default; whatever
         // the user picked under Preferences ▸ Canvas Font) so the
         // tooltip reads as "this is data from the canvas" rather than
@@ -170,28 +167,16 @@ impl Signex {
             .collect();
 
         let rows_len = rows.len();
-        let card = container(column(rows).spacing(3))
-            .padding(iced::Padding {
-                top: 8.0,
-                right: 14.0,
-                bottom: 8.0,
-                left: 10.0,
-            })
-            .width(if at_cap {
+        let card = hover_card(
+            rows,
+            3.0,
+            if at_cap {
                 Length::Fixed(card_w)
             } else {
                 Length::Shrink
-            })
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(Background::Color(panel_bg)),
-                border: Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            });
+            },
+            &self.document_state.panel_ctx.tokens,
+        );
 
         // Below-right of the cursor, flipped or clamped to stay on the
         // canvas (not the Properties panel beside it). Rows wrap, so the
@@ -201,7 +186,7 @@ impl Signex {
         let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let (x, y) =
             canvas_region::place_card((sx, sy), (card_w, estimated_h), self.card_bounds(window_id));
-        Some(super::view::translate::Translate::new(card.boxed(), (x, y)).boxed())
+        Some(super::view::translate::Translate::new(card, (x, y)).boxed())
     }
 
     /// Result list for the chrome-strip command palette. Anchored
@@ -392,17 +377,13 @@ impl Signex {
         // `overlay_id::swallows_scroll` marks, so scroll cannot reach the
         // canvas through an overlay regardless of whether that overlay
         // built a dismiss layer at all (#562).
-        const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(move |_: &iced::Theme| container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        0.0,
-                        0.0,
-                        0.0,
-                        BACKDROP_OPACITY,
+                    background: Some(iced::Background::Color(crate::styles::tokens::scrim(
+                        crate::styles::tokens::BACKDROP_ALPHA,
                     ))),
                     ..container::Style::default()
                 }),
@@ -692,6 +673,38 @@ impl Signex {
         }
         out
     }
+}
+
+/// The card both hover cards draw: `rows` on the panel background with a 1 px
+/// border, padded `8 14 8 10`. `width` is `Shrink` to fit the text, or fixed
+/// at the cap.
+fn hover_card<'a>(
+    rows: Vec<Element<'a, Message>>,
+    spacing: f32,
+    width: Length,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, Message> {
+    let panel_bg = crate::styles::ti(tokens.panel_bg);
+    let border_c = crate::styles::ti(tokens.border);
+    container(column(rows).spacing(spacing))
+        .padding(iced::Padding {
+            top: 8.0,
+            right: 14.0,
+            bottom: 8.0,
+            left: 10.0,
+        })
+        .width(width)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(iced::Background::Color(panel_bg)),
+            border: iced::Border {
+                color: border_c,
+                width: 1.0,
+                radius: 4.0.into(),
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// Widest the symbol hover card grows; below that it fits its text and the

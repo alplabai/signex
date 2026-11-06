@@ -19,7 +19,6 @@ const SP: Spacing = Spacing::DEFAULT;
 
 mod annotation;
 mod appearance;
-mod close_button;
 mod component_classes;
 mod distributors;
 mod editing;
@@ -29,7 +28,6 @@ mod widgets;
 
 use annotation::content_annotation;
 use appearance::content_appearance;
-use close_button::close_btn;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
 use editing::content_editing;
@@ -437,7 +435,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
                 .size(MODAL_HEADER_TITLE_SIZE)
                 .style(text_primary),
             Space::new().width(Length::Fill),
-            close_btn(theme_id),
+            crate::app::view::dialogs::close_x_button(PrefMsg::Close, theme_id),
         ]
         .align_y(iced::Alignment::Center),
     )

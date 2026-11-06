@@ -1,4 +1,4 @@
-use iced::widget::{column, container, pick_list, row, text};
+use iced::widget::{column, container, pick_list, row};
 use iced::{Alignment, Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -7,6 +7,7 @@ use super::color_code_view::color_code_representations;
 use super::domain::{ComponentKind, PreferredComponent, Tolerance};
 use super::network::format_value;
 use super::rkm_code::RkmCode;
+use super::widgets::{COMPACT_METRIC, labeled, metric, token_color};
 
 #[derive(Debug, Clone)]
 pub enum ComponentCardMessage {
@@ -49,17 +50,25 @@ impl<'a> ComponentCard<'a> {
 
         let details = row![
             metric(
+                COMPACT_METRIC,
                 "Part",
                 format!("{}{}", kind.symbol(), subscript(index + 1)),
                 tokens
             ),
-            metric("Value", format_value(component.value(), kind), tokens),
             metric(
+                COMPACT_METRIC,
+                "Value",
+                format_value(component.value(), kind),
+                tokens
+            ),
+            metric(
+                COMPACT_METRIC,
                 "RKM code",
                 RkmCode::for_component(kind, component, tolerance).to_string(),
                 tokens
             ),
             labeled(
+                11.0,
                 "Tolerance",
                 pick_list(Some(tolerance), Tolerance::ALL, Tolerance::to_string)
                     .on_select(move |tolerance| ComponentCardMessage::ToleranceChanged {
@@ -86,25 +95,6 @@ impl<'a> ComponentCard<'a> {
             .style(move |_theme| card_style(tokens))
             .boxed()
     }
-}
-
-fn labeled<'a, M: 'a>(label: &'a str, control: impl Widget<M> + 'a) -> Element<'a, M> {
-    column![text(label).size(11), control].spacing(4).boxed()
-}
-
-fn metric<'a>(
-    label: &'a str,
-    value: String,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, ComponentCardMessage> {
-    column![
-        text(label)
-            .size(10)
-            .color(token_color(tokens.text_secondary)),
-        text(value).size(11).color(token_color(tokens.text)),
-    ]
-    .spacing(2)
-    .boxed()
 }
 
 fn card_style(tokens: &ThemeTokens) -> container::Style {
@@ -138,8 +128,4 @@ fn subscript(value: usize) -> String {
             _ => character,
         })
         .collect()
-}
-
-fn token_color(color: signex_types::theme::Color) -> iced::Color {
-    iced::Color::from_rgba8(color.r, color.g, color.b, f32::from(color.a) / 255.0)
 }

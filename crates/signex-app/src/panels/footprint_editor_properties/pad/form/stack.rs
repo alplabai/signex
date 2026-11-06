@@ -5,7 +5,6 @@ use iced::widget::{Column, container, text};
 use iced::{Element, Length, Widget};
 
 use super::super::super::super::{CollapsedSections, PanelMsg, PanelPalette};
-use super::super::super::{fp_is_collapsed, props_section_header};
 use super::super::stack_preview::{
     ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
 };
@@ -14,6 +13,7 @@ use super::super::table::{
     pad_table_input_cell, pad_table_picklist_cell, pad_table_row,
 };
 use super::*;
+use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::Spacing;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -50,16 +50,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         ..
     } = palette;
     col = col.push(
-        props_section_header(
-            "Pad Stack",
+        collapsible_section_header(
             "fp_pad_stack",
+            "Pad Stack",
             collapsed_sections,
             primary,
             border_c,
         )
         .boxed(),
     );
-    if fp_is_collapsed("fp_pad_stack", collapsed_sections) {
+    if is_section_collapsed("fp_pad_stack", collapsed_sections) {
         return col;
     }
 

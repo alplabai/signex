@@ -7,6 +7,7 @@ use super::domain::{ComponentKind, ESeries, SiPrefix, Tolerance};
 use super::network::{Network, format_number, format_value};
 use super::rkm_encoder::{RkmEncoder, RkmEncoderMessage};
 use super::solver::{MAX_PARTS, SolveOptions, solve};
+use super::widgets::{COMPACT_METRIC, labeled, metric, token_color};
 
 // Control widths (px) for the target row; sized to fit the longest option.
 const TARGET_INPUT_W: f32 = 110.0;
@@ -240,6 +241,7 @@ impl CalculatorControl {
 
         let target_row = row![
             labeled(
+                11.0,
                 "Target",
                 text_input("220", &state.target_input)
                     .on_input(CalculatorMessage::TargetChanged)
@@ -248,6 +250,7 @@ impl CalculatorControl {
                     .width(TARGET_INPUT_W),
             ),
             labeled(
+                11.0,
                 "Unit",
                 pick_list(
                     Some(state.prefix),
@@ -263,6 +266,7 @@ impl CalculatorControl {
                 .size(11)
                 .color(token_color(tokens.text_secondary)),
             labeled(
+                11.0,
                 "Preferred series",
                 pick_list(Some(state.series), ESeries::ALL, ESeries::to_string)
                     .on_select(CalculatorMessage::SeriesChanged)
@@ -271,6 +275,7 @@ impl CalculatorControl {
                     .width(SERIES_PICK_W),
             ),
             labeled(
+                11.0,
                 "Maximum parts",
                 pick_list(
                     Some(state.max_components),
@@ -350,21 +355,44 @@ impl CalculatorControl {
                 .size(14)
                 .color(token_color(tokens.text)),
             row![
-                metric("Target", format_target(target, self.kind), tokens),
-                metric("Nominal", format_value(nominal, self.kind), tokens),
-                metric("Minimum", format_value(minimum, self.kind), tokens),
-                metric("Maximum", format_value(maximum, self.kind), tokens),
                 metric(
+                    COMPACT_METRIC,
+                    "Target",
+                    format_target(target, self.kind),
+                    tokens
+                ),
+                metric(
+                    COMPACT_METRIC,
+                    "Nominal",
+                    format_value(nominal, self.kind),
+                    tokens
+                ),
+                metric(
+                    COMPACT_METRIC,
+                    "Minimum",
+                    format_value(minimum, self.kind),
+                    tokens
+                ),
+                metric(
+                    COMPACT_METRIC,
+                    "Maximum",
+                    format_value(maximum, self.kind),
+                    tokens
+                ),
+                metric(
+                    COMPACT_METRIC,
                     "Nominal Δ",
                     format_optional_difference(nominal, target),
                     tokens
                 ),
                 metric(
+                    COMPACT_METRIC,
                     "Lower Δ",
                     format_optional_difference(minimum, target),
                     tokens
                 ),
                 metric(
+                    COMPACT_METRIC,
                     "Upper Δ",
                     format_optional_difference(maximum, target),
                     tokens
@@ -459,25 +487,6 @@ fn default_tolerance(series: ESeries) -> Tolerance {
     }
 }
 
-fn labeled<'a, M: 'a>(label: &'a str, control: impl Widget<M> + 'a) -> Element<'a, M> {
-    column![text(label).size(11), control].spacing(4).boxed()
-}
-
-fn metric<'a>(
-    label: &'a str,
-    value: String,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, CalculatorMessage> {
-    column![
-        text(label)
-            .size(10)
-            .color(token_color(tokens.text_secondary)),
-        text(value).size(11).color(token_color(tokens.text)),
-    ]
-    .spacing(2)
-    .boxed()
-}
-
 /// GH #599 — what a target-dependent metric reads when the target
 /// itself cannot be read. A dash says "not available"; a `0` would have
 /// read as a real, satisfied value.
@@ -516,10 +525,6 @@ pub fn format_difference(value: f64, target: f64) -> String {
         format_number(difference.abs()),
         format_number(percentage),
     )
-}
-
-fn token_color(color: signex_types::theme::Color) -> iced::Color {
-    iced::Color::from_rgba8(color.r, color.g, color.b, f32::from(color.a) / 255.0)
 }
 
 fn panel_style(tokens: &ThemeTokens) -> container::Style {
