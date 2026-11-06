@@ -255,3 +255,18 @@ fn an_isolated_or_unknown_seed_comes_back_alone() {
         vec![item(7, SelectedKind::Symbol)]
     );
 }
+
+#[test]
+fn a_wire_seed_picks_up_a_net_label_mid_span_on_it() {
+    let mut sheet = empty_sheet();
+    sheet.wires.push(wire_at(1, pt(0.0, 0.0), pt(5.0, 0.0)));
+    let mut mid = label("SDA", pt(2.5, 0.0), LabelType::Net);
+    mid.uuid = id(2);
+    sheet.labels.push(mid);
+
+    let got = sorted(connected_net_items(&sheet, item(1, SelectedKind::Wire)));
+    assert_eq!(
+        got,
+        vec![item(1, SelectedKind::Wire), item(2, SelectedKind::Label)]
+    );
+}
