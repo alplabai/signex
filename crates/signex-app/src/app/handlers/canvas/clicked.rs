@@ -632,73 +632,9 @@ impl Signex {
                 self.interaction_state.current_tool = Tool::Select;
             }
             Tool::Label => {
-                // Place net / global / hierarchical label depending on
-                // pending_port state. Default: net label named "NET".
-                let (label_type, shape, default_text) =
-                    if let Some((lt, shape)) = self.interaction_state.pending_port.clone() {
-                        let default = match lt {
-                            signex_types::schematic::LabelType::Global => "PORT",
-                            signex_types::schematic::LabelType::Hierarchical => "SHEET",
-                            _ => "NET",
-                        };
-                        (lt, shape, default.to_string())
-                    } else {
-                        (
-                            signex_types::schematic::LabelType::Net,
-                            String::new(),
-                            "NET".to_string(),
-                        )
-                    };
-                let text = self
-                    .document_state
-                    .panel_ctx
-                    .pre_placement
-                    .as_ref()
-                    .map(|pp| pp.label_text.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or(default_text);
-                // Pick up the rotation / font size / justification
-                // the user edited in the TAB pre-placement form so
-                // the first click matches what they configured.
-                let (pp_rot, pp_fs_mm, pp_justify_h, pp_justify_v) = self
-                    .document_state
-                    .panel_ctx
-                    .pre_placement
-                    .as_ref()
-                    .map(|pp| {
-                        (
-                            pp.rotation,
-                            pp.font_size_pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM,
-                            pp.justify_h,
-                            pp.justify_v,
-                        )
-                    })
-                    .unwrap_or((
-                        0.0,
-                        signex_types::schematic::SCHEMATIC_TEXT_MM,
-                        signex_types::schematic::HAlign::Left,
-                        signex_types::schematic::VAlign::Bottom,
-                    ));
-                let placed_text = text.clone();
-                let label = signex_types::schematic::Label {
-                    unknown_columns: Default::default(),
-                    uuid: uuid::Uuid::now_v7(),
-                    text,
-                    position: signex_types::schematic::Point::new(wx, wy),
-                    rotation: pp_rot,
-                    label_type,
-                    shape,
-                    font_size: pp_fs_mm,
-                    justify: pp_justify_h,
-                    justify_v: pp_justify_v,
-                    font_family: None,
-                    locked: false,
-                };
-                if self.apply_engine_command(
-                    signex_engine::Command::PlaceLabel { label },
-                    false,
-                    false,
-                ) {
+                let spec = self.label_spec_from_form();
+                let placed_text = spec.text.clone();
+                if self.place_label_at(signex_types::schematic::Point::new(wx, wy), spec) {
                     self.label_placed(&placed_text);
                 }
             }

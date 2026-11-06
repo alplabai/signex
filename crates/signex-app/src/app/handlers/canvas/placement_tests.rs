@@ -57,6 +57,45 @@ fn doc(app: &Signex) -> &SchematicSheet {
         .document()
 }
 
+/// The sheet as a value with every uuid removed, so placements made in two
+/// apps compare equal when they placed the same things.
+fn sheet_shape(app: &Signex) -> serde_json::Value {
+    fn strip(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                map.retain(|key, _| !key.ends_with("uuid") && !key.ends_with("uuids"));
+                map.values_mut().for_each(strip);
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    let mut value = serde_json::to_value(doc(app)).expect("sheet serialises");
+    strip(&mut value);
+    value
+}
+
+/// Two apps set up by `setup`: one placed by a click at `OFF_GRID`, the other
+/// by `place` with the snapped point. Their sheets must match.
+fn assert_method_matches_click(
+    tool: Tool,
+    setup: impl Fn(&mut Signex),
+    place: impl FnOnce(&mut Signex, Point),
+) {
+    let mut clicked = app_with_tool(tool);
+    setup(&mut clicked);
+    click(&mut clicked, OFF_GRID);
+    let mut direct = app_with_tool(tool);
+    setup(&mut direct);
+    place(&mut direct, on_grid());
+    assert_ne!(
+        sheet_shape(&direct),
+        sheet_shape(&app_with_tool(tool)),
+        "placed nothing"
+    );
+    assert_eq!(sheet_shape(&direct), sheet_shape(&clicked));
+}
+
 fn on_grid() -> Point {
     grid(8.0, 16.0)
 }
@@ -249,4 +288,18 @@ fn shape_tools_place_a_drawing_with_the_form_width() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn place_label_at_matches_a_label_click() {
+    let setup = |app: &mut Signex| {
+        app.interaction_state.pending_port = Some((LabelType::Global, "input".into()));
+        let mut pre = form(PrePlacementKind::GlobalPort, "CLK");
+        pre.rotation = 180.0;
+        app.document_state.panel_ctx.pre_placement = Some(pre);
+    };
+    assert_method_matches_click(Tool::Label, setup, |app, at| {
+        let spec = app.label_spec_from_form();
+        assert!(app.place_label_at(at, spec));
+    });
 }

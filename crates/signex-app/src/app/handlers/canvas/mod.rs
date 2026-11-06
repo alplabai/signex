@@ -23,6 +23,8 @@ pub(crate) use field_edit::editor_placeholder;
 pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
+mod place_label;
+pub(crate) use place_label::LabelSpec;
 mod move_pick;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
