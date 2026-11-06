@@ -418,8 +418,7 @@ fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Opti
     let Some(keymap) = ctx.active_keymap.as_ref() else {
         return (!fallback.is_empty()).then(|| fallback.to_string());
     };
-    let command = AppCommandId::new(command_id).ok()?;
-    keymap.shortcut_label(&command)
+    Some(keymap.shortcut_label_for_id(command_id)).filter(|label| !label.is_empty())
 }
 
 #[cfg(test)]

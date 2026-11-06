@@ -10,7 +10,7 @@ use signex_types::schematic::{
     HAlign, Point, SchDrawing, SchematicSheet, SelectedItem, SelectedKind, VAlign,
 };
 
-use super::{Engine, autoplace_fields, drawing_uuid, normalize_degrees};
+use super::{Engine, autoplace_fields, normalize_degrees};
 use crate::command::{MirrorAxis, SelectionTransform};
 use crate::error::EngineError;
 
@@ -228,7 +228,7 @@ impl Engine {
             SelectedKind::Drawing => doc
                 .drawings
                 .iter()
-                .filter(|d| drawing_uuid(d) == id)
+                .filter(|d| d.uuid() == id)
                 .flat_map(drawing_points)
                 .collect(),
             _ => Vec::new(),
@@ -377,7 +377,7 @@ impl Engine {
         for d in doc
             .drawings
             .iter_mut()
-            .filter(|d| has(SelectedKind::Drawing, drawing_uuid(d)))
+            .filter(|d| has(SelectedKind::Drawing, d.uuid()))
         {
             match d {
                 SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {

@@ -285,7 +285,7 @@ impl Signex {
             let (commands, hits, dropped, skipped) =
                 live_replacement(engine, job, prep, &path, &listed);
             left_alone += dropped;
-            Self::report_locked_skips(&skipped);
+            crate::diagnostics::log_locked_skips(&skipped);
             let outcome = engine.execute_batch_grouped(commands, Some(group));
             for warning in engine.take_warnings() {
                 crate::diagnostics::log_warning(warning);

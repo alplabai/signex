@@ -63,7 +63,7 @@ impl Signex {
             }
             None => (carriable.clone(), Vec::new()),
         };
-        Self::report_locked_skips(&skipped);
+        crate::diagnostics::log_locked_skips(&skipped);
         kept.extend(carriable.into_iter().filter(|i| !cuttable.contains(i)));
         if cuttable.is_empty() {
             return Task::none();

@@ -24,7 +24,7 @@ use signex_types::theme::ThemeTokens;
 use signex_library::primitive::footprint::Footprint;
 
 use crate::app::FootprintDocument;
-use crate::keymap::{AppCommandId, CompiledKeymap};
+use crate::keymap::CompiledKeymap;
 use crate::library::editor::footprint::state::silk_selection::is_sketch_owned_silk;
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
@@ -81,11 +81,11 @@ pub fn view_context_menu<'a>(
 
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
     // Shortcut hints resolved from the active keymap profile.
-    let select_all_shortcut = shortcut_label(keymap, "select_all");
-    let unselect_all_shortcut = shortcut_label(keymap, "unselect_all");
-    let cut_shortcut = shortcut_label(keymap, "cut");
-    let copy_shortcut = shortcut_label(keymap, "copy");
-    let paste_shortcut = shortcut_label(keymap, "paste");
+    let select_all_shortcut = keymap.shortcut_label_for_id("select_all");
+    let unselect_all_shortcut = keymap.shortcut_label_for_id("unselect_all");
+    let cut_shortcut = keymap.shortcut_label_for_id("cut");
+    let copy_shortcut = keymap.shortcut_label_for_id("copy");
+    let paste_shortcut = keymap.shortcut_label_for_id("paste");
 
     match menu_state.target {
         FootprintContextTarget::Empty => {
@@ -352,15 +352,6 @@ pub fn view_context_menu<'a>(
     Some(card.boxed())
 }
 
-/// A command's label under the active profile; empty (no hint) when the
-/// profile does not bind it or the user unbound it (#1378).
-pub(super) fn shortcut_label(keymap: &CompiledKeymap, command_id: &str) -> String {
-    AppCommandId::new(command_id)
-        .ok()
-        .and_then(|command| keymap.shortcut_label(&command))
-        .unwrap_or_default()
-}
-
 // ── helpers ─────────────────────────────────────────────────────────
 
 fn item_msg<'a>(
@@ -518,7 +509,7 @@ fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Footprint, FootprintEditorMsg, shortcut_label, silk_delete_msg};
+    use super::{Footprint, FootprintEditorMsg, silk_delete_msg};
     use crate::keymap::{
         AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
         ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
@@ -556,9 +547,13 @@ mod tests {
                 "F4",
             ),
         ]);
-        assert_eq!(shortcut_label(&keymap, "copy"), "", "unbound by the user");
-        assert_eq!(shortcut_label(&keymap, "cut"), "", "never bound");
-        assert_eq!(shortcut_label(&keymap, "paste"), "F4");
+        assert_eq!(
+            keymap.shortcut_label_for_id("copy"),
+            "",
+            "unbound by the user"
+        );
+        assert_eq!(keymap.shortcut_label_for_id("cut"), "", "never bound");
+        assert_eq!(keymap.shortcut_label_for_id("paste"), "F4");
     }
 
     #[test]

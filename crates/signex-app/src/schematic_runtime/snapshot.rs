@@ -352,51 +352,15 @@ pub fn build_renderer_snapshot(
         }
 
         let color = focus_color(label_color(label, colors), focus_set, label.uuid);
-        if matches!(
-            label.label_type,
-            LabelType::Global | LabelType::Hierarchical
-        ) {
-            polygons.push(label_marker_polygon(
-                Some(WidthSources::of(snapshot)),
-                label,
-                color,
-                [0.0, 0.0, 0.0, 0.0],
-                document_family,
-            ));
-            let ((tx, ty), rotation, h_align) =
-                label::flag_text_with(Some(WidthSources::of(snapshot)), label, document_family);
-            labels.push(TextInput {
-                content: label.text.clone(),
-                position: [tx as f32, ty as f32],
-                size_mm: label
-                    .font_size
-                    .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
-                    as f32,
-                color: to_rgba(color),
-                bold: false,
-                italic: false,
-                family: resolve_family(label.font_family.as_deref(), document_family),
-                rotation_rad: rotation.to_radians() as f32,
-                h_align,
-                v_align: VAlign::Center,
-            });
-        } else {
-            labels.push(TextInput {
-                content: label.text.clone(),
-                position: [label.position.x as f32, label.position.y as f32],
-                size_mm: label
-                    .font_size
-                    .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
-                    as f32,
-                color: to_rgba(color),
-                bold: false,
-                italic: false,
-                family: resolve_family(label.font_family.as_deref(), document_family),
-                rotation_rad: label.rotation.to_radians() as f32,
-                h_align: label.justify,
-                v_align: label.justify_v,
-            });
-        }
+        let (polygon, text) = label::label_draw_inputs(
+            Some(WidthSources::of(snapshot)),
+            label,
+            color,
+            [0.0, 0.0, 0.0, 0.0],
+            document_family,
+        );
+        polygons.extend(polygon);
+        labels.push(text);
     }
 
     for note in &snapshot.text_notes {
@@ -411,23 +375,12 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
-        parameter_texts.push(TextInput {
-            content: match overrides.special_strings {
-                Some(special) => special.resolve(&note.text),
-                None => note.text.clone(),
-            },
-            position: [note.position.x as f32, note.position.y as f32],
-            size_mm: note
-                .font_size
-                .max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
-            color: to_rgba(focus_color(to_iced(&colors.value), focus_set, note.uuid)),
-            bold: false,
-            italic: false,
-            family: resolve_family(note.font_family.as_deref(), document_family),
-            rotation_rad: note.rotation.to_radians() as f32,
-            h_align: note.justify_h,
-            v_align: note.justify_v,
-        });
+        let content = match overrides.special_strings {
+            Some(special) => special.resolve(&note.text),
+            None => note.text.clone(),
+        };
+        let color = focus_color(to_iced(&colors.value), focus_set, note.uuid);
+        parameter_texts.push(text::note_text_input(note, content, color, document_family));
     }
 
     RendererSnapshot {

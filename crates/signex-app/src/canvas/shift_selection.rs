@@ -106,13 +106,7 @@ pub(super) fn shift_snapshot_for_selection(
         }
     }
     for d in out.drawings.iter_mut() {
-        let uuid = match d {
-            SchDrawing::Line { uuid, .. }
-            | SchDrawing::Rect { uuid, .. }
-            | SchDrawing::Circle { uuid, .. }
-            | SchDrawing::Arc { uuid, .. }
-            | SchDrawing::Polyline { uuid, .. } => *uuid,
-        };
+        let uuid = d.uuid();
         if !is_selected(uuid, SelectedKind::Drawing) {
             continue;
         }
