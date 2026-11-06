@@ -1,4 +1,4 @@
-//! The content layer, retained across pans (#2078).
+//! The content layer and the background, retained across pans (#2078, #2102).
 //!
 //! The geometry is tessellated once, at the camera it was built at, over a
 //! clip rectangle larger than the viewport. A pan then moves it by a
@@ -162,6 +162,100 @@ impl SchematicCanvas<'_> {
                 device_px_per_logical_px: transform.device_px_per_logical_px,
                 viewport,
                 scene_generation: self.content_scene.borrow().generation(),
+            });
+        }
+        RetainedLayer {
+            geometry,
+            shift: shift.unwrap_or(iced::Vector::ZERO),
+        }
+    }
+}
+
+/// What the background is drawn from besides the camera. A change rebuilds
+/// the layer without any `clear` call.
+#[derive(Clone, PartialEq)]
+struct BackgroundInputs {
+    look: super::super::paper::PaperLook,
+    paper_mm: (f32, f32),
+    frame_color: Color,
+    sheet_frame: Vec<signex_output::template::FramePrimitive>,
+}
+
+/// The sheet background (backdrop, paper, grid, frame), retained like the
+/// content: a grid of tens of thousands of dots costs milliseconds to
+/// tessellate, and a pan only moves it.
+#[derive(Default)]
+pub(in crate::canvas) struct RetainedBackground {
+    layer: RetainedContent,
+    inputs: Option<BackgroundInputs>,
+}
+
+impl SchematicCanvas<'_> {
+    /// The background for the live camera, as a layer and the translation to
+    /// draw it under. It is painted into a frame whose origin is the corner
+    /// of the clip rectangle, at the camera moved by that corner.
+    pub(in crate::canvas) fn retained_background(
+        &self,
+        renderer: &Renderer,
+        bounds: Rectangle,
+    ) -> RetainedLayer {
+        let viewport = bounds.size();
+        let live = {
+            let cam = self.camera();
+            ScreenTransform {
+                offset_x: cam.offset.x,
+                offset_y: cam.offset.y,
+                scale: cam.scale,
+                device_px_per_logical_px: self.prefs.device_px_per_logical_px,
+            }
+        };
+        let inputs = BackgroundInputs {
+            look: self.paper_look(),
+            paper_mm: (self.paper_width_mm, self.paper_height_mm),
+            frame_color: crate::render_config::to_iced(&self.prefs.canvas_colors.body),
+            sheet_frame: Vec::new(),
+        };
+        let mut retained = self.background_surface.borrow_mut();
+        // The frame list is the one input worth comparing before cloning.
+        let changed = retained.inputs.as_ref().is_none_or(|old| {
+            old.look != inputs.look
+                || old.paper_mm != inputs.paper_mm
+                || old.frame_color != inputs.frame_color
+                || old.sheet_frame != self.sheet_frame
+        });
+        if changed {
+            retained.layer.clear();
+            retained.inputs = Some(BackgroundInputs {
+                sheet_frame: self.sheet_frame.clone(),
+                ..inputs
+            });
+        }
+        let shift = retained.layer.shift_to(&live, viewport);
+        let rebuild = shift.is_none();
+        if rebuild {
+            retained.layer.cache.clear();
+        }
+        let clip = clip_rect(viewport, live.device_px_per_logical_px);
+        let geometry = retained
+            .layer
+            .cache
+            .draw_with_bounds(renderer, clip, |frame| {
+                #[cfg(test)]
+                self.bg_tessellations.set(self.bg_tessellations.get() + 1);
+                let camera = Camera {
+                    offset: iced::Point::new(live.offset_x - clip.x, live.offset_y - clip.y),
+                    scale: live.scale,
+                };
+                frame.translate(iced::Vector::new(clip.x, clip.y));
+                self.paint_background_at(frame, &camera, Rectangle::with_size(clip.size()));
+            });
+        if rebuild {
+            retained.layer.built = Some(BuiltAt {
+                offset: (live.offset_x, live.offset_y),
+                scale: live.scale,
+                device_px_per_logical_px: live.device_px_per_logical_px,
+                viewport,
+                scene_generation: None,
             });
         }
         RetainedLayer {

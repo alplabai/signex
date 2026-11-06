@@ -261,6 +261,16 @@ clip the plain canvas uses. `canvas::pan_reuse_pixel_tests` renders both on a
 canvas docked off the window origin and compares them pixel for pixel, with
 the plain side drawn as the plain canvas draws it.
 
+### Background (#2102)
+
+The backdrop, paper, grid and sheet frame are retained the same way (`RetainedBackground`, layer 0 of
+`SurfaceLayers`, `background_shift`). A grid of tens of thousands of dots costs milliseconds to
+tessellate, and it was rebuilt on every pan frame. The layer checks its own inputs (look, paper size, frame
+colour, sheet frame) next to the zoom, display and viewport, so a `clear_bg_cache` does not reach it. The
+plain canvas keeps the old `draw_background`. Over the larger clip a grid dot that would straddle the
+canvas edge shows its inside part; the plain canvas drops it. `canvas::background_reuse_tests` pins a panned
+frame to a fresh one pixel for pixel and to the plain canvas away from the edge.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's
