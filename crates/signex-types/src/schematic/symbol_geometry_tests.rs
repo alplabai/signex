@@ -496,3 +496,82 @@ fn a_text_box_is_the_line_box_of_its_face() {
         );
     }
 }
+
+/// A multi-line text's box is its line count times the line box (#2120), and
+/// the whole block is aligned, not the first line.
+#[test]
+fn a_multi_line_text_box_is_the_line_count_times_the_line_box() {
+    let line = crate::font::line_box_mm(1.27, None);
+    let one = text_aabb("ab", 1.27, (4.0, 6.0), 0.0, HAlign::Left, VAlign::Top, None);
+    let three = text_aabb(
+        "ab\ncd\nef",
+        1.27,
+        (4.0, 6.0),
+        0.0,
+        HAlign::Left,
+        VAlign::Top,
+        None,
+    );
+    assert!(((three.max_y - three.min_y) - 3.0 * line).abs() < 1e-9);
+    assert_eq!(three.min_y, 6.0);
+    assert_eq!(
+        (three.min_x, three.max_x),
+        (one.min_x, one.max_x),
+        "equal-width lines keep the one-line width"
+    );
+    assert_eq!(crate::font::line_count("a\r\nb\rc\n"), 4);
+}
+
+#[test]
+fn a_multi_line_box_is_aligned_as_a_block() {
+    let h = 3.0 * crate::font::line_box_mm(1.27, None);
+    for (v, top) in [
+        (VAlign::Top, 0.0),
+        (VAlign::Center, -h * 0.5),
+        (VAlign::Bottom, -h),
+    ] {
+        let b = text_aabb_lines(8.0, 3, 1.27, (0.0, 0.0), 0.0, HAlign::Left, v, None);
+        assert_box(b, 0.0, top, 8.0, top + h);
+    }
+}
+
+#[test]
+fn a_rotated_multi_line_box_turns_about_the_anchor() {
+    let h = 3.0 * crate::font::line_box_mm(1.27, None);
+    let b = text_aabb_lines(
+        8.0,
+        3,
+        1.27,
+        (10.0, 20.0),
+        90.0,
+        HAlign::Left,
+        VAlign::Top,
+        None,
+    );
+    assert_box(b, 10.0 - h, 20.0, 10.0, 28.0);
+}
+
+/// One line is byte-identical through the line-aware box.
+#[test]
+fn a_one_line_text_box_is_unchanged_by_the_line_count() {
+    let a = text_aabb_with_width(
+        5.5,
+        1.27,
+        (1.0, 2.0),
+        30.0,
+        HAlign::Center,
+        VAlign::Bottom,
+        None,
+    );
+    let b = text_aabb_lines(
+        5.5,
+        1,
+        1.27,
+        (1.0, 2.0),
+        30.0,
+        HAlign::Center,
+        VAlign::Bottom,
+        None,
+    );
+    assert_eq!(a, b);
+}

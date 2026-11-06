@@ -16,7 +16,7 @@ use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, DrawingPlacement, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet,
     SelectedItem, SelectedKind, Symbol, TextField, TextNote, TextProp, VAlign, circumcircle,
-    field_effective_style, text_aabb_with_width, text_height_mm,
+    field_effective_style, text_aabb_lines, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -904,8 +904,9 @@ fn drawn_text_aabb(
     v_align: VAlign,
 ) -> Aabb {
     let width = text_width::text_width_mm(slot, text, family, text_height_mm(font_size));
-    text_aabb_with_width(
+    text_aabb_lines(
         width,
+        signex_types::font::line_count(text),
         font_size,
         anchor,
         rotation_deg,
@@ -1121,6 +1122,8 @@ mod defaults_tests;
 mod drawings_tests;
 #[cfg(test)]
 mod font_geometry_tests;
+#[cfg(test)]
+mod multiline_note_tests;
 #[cfg(test)]
 mod sample_layout_tests;
 #[cfg(test)]
