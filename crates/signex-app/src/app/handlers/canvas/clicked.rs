@@ -1,6 +1,5 @@
 use iced::Task;
 
-use super::super::super::helpers::constrain_segments;
 use super::super::super::*;
 use super::pre_placement_shape;
 
@@ -254,62 +253,19 @@ impl Signex {
             Tool::Wire => {
                 let pt = signex_types::schematic::Point::new(wx, wy);
                 if !self.interaction_state.wire_drawing {
-                    self.interaction_state.wire_drawing = true;
-                    self.interaction_state.wire_points.clear();
-                    self.interaction_state.wire_points.push(pt);
-                    self.interaction_state.active_canvas_mut().wire_preview =
-                        self.interaction_state.wire_points.clone();
-                    self.interaction_state.active_canvas_mut().drawing_mode = true;
-                    self.interaction_state.active_canvas_mut().tool_preview = None;
+                    self.start_wire_drawing(pt);
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                    let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
-                    let mut wire_commands = Vec::new();
-                    for seg in &segments {
-                        let wire = signex_types::schematic::Wire {
-                            unknown_columns: Default::default(),
-                            uuid: uuid::Uuid::now_v7(),
-                            start: seg.0,
-                            end: seg.1,
-                            stroke_width: 0.0,
-                            locked: false,
-                        };
-                        wire_commands.push(signex_engine::Command::PlaceWireSegment { wire });
-                    }
-                    if !wire_commands.is_empty() {
-                        self.apply_engine_commands(wire_commands, false, false);
-                    }
-                    let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
-                    self.interaction_state.wire_points = vec![end_pt];
-                    self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
+                    let end_pt = self.place_wire_at(start, pt, self.interaction_state.draw_mode);
+                    self.continue_wire_drawing(end_pt);
                 }
             }
             Tool::Bus => {
                 let pt = signex_types::schematic::Point::new(wx, wy);
                 if !self.interaction_state.wire_drawing {
-                    self.interaction_state.wire_drawing = true;
-                    self.interaction_state.wire_points.clear();
-                    self.interaction_state.wire_points.push(pt);
-                    self.interaction_state.active_canvas_mut().wire_preview =
-                        self.interaction_state.wire_points.clone();
-                    self.interaction_state.active_canvas_mut().drawing_mode = true;
-                    self.interaction_state.active_canvas_mut().tool_preview = None;
+                    self.start_wire_drawing(pt);
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                    let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
-                    let mut bus_commands = Vec::new();
-                    for seg in &segments {
-                        let bus = signex_types::schematic::Bus {
-                            uuid: uuid::Uuid::now_v7(),
-                            start: seg.0,
-                            end: seg.1,
-                        };
-                        bus_commands.push(signex_engine::Command::PlaceBus { bus });
-                    }
-                    if !bus_commands.is_empty() {
-                        self.apply_engine_commands(bus_commands, false, false);
-                    }
-                    let end_pt = segments.last().map(|s| s.1).unwrap_or(pt);
-                    self.interaction_state.wire_points = vec![end_pt];
-                    self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
+                    let end_pt = self.place_bus_at(start, pt, self.interaction_state.draw_mode);
+                    self.continue_wire_drawing(end_pt);
                 }
             }
             Tool::Component if self.interaction_state.pending_power.is_some() => {
@@ -331,30 +287,8 @@ impl Signex {
                 self.place_no_erc_directive_at(signex_types::schematic::Point::new(wx, wy));
             }
             Tool::BusEntry => {
-                // The bus end snaps onto the nearest bus within one grid step
-                // of the click; off a bus the entry lands on the grid point.
-                let at = signex_types::schematic::Point::new(wx, wy);
-                let position = self
-                    .document_state
-                    .active_engine()
-                    .and_then(|engine| {
-                        signex_types::schematic::snap_to_bus(
-                            &engine.document().buses,
-                            at,
-                            crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
-                        )
-                    })
-                    .unwrap_or(at);
-                let be = signex_types::schematic::BusEntry {
-                    uuid: uuid::Uuid::now_v7(),
-                    position,
-                    size: self.interaction_state.bus_entry_size,
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceBusEntry { bus_entry: be },
-                    false,
-                    false,
-                );
+                let size = self.interaction_state.bus_entry_size;
+                self.place_bus_entry_at(signex_types::schematic::Point::new(wx, wy), size);
             }
             Tool::Line => {
                 // Two-click: anchor → commit. First click
@@ -552,5 +486,22 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// The first click of a wire or bus: anchor it at `pt`.
+    fn start_wire_drawing(&mut self, pt: signex_types::schematic::Point) {
+        self.interaction_state.wire_drawing = true;
+        self.interaction_state.wire_points.clear();
+        self.interaction_state.wire_points.push(pt);
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.wire_preview = vec![pt];
+        canvas.drawing_mode = true;
+        canvas.tool_preview = None;
+    }
+
+    /// After a committed segment: the next one starts at `end_pt`.
+    fn continue_wire_drawing(&mut self, end_pt: signex_types::schematic::Point) {
+        self.interaction_state.wire_points = vec![end_pt];
+        self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
     }
 }

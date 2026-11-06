@@ -27,6 +27,7 @@ mod move_pick;
 mod place_label;
 mod place_point;
 mod place_text;
+mod place_wire;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
 #[cfg(test)]

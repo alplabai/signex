@@ -82,9 +82,21 @@ fn assert_method_matches_click(
     setup: impl Fn(&mut Signex),
     place: impl FnOnce(&mut Signex, Point),
 ) {
+    assert_method_matches_clicks(tool, &[OFF_GRID], setup, place);
+}
+
+/// [`assert_method_matches_click`] for a placement made by several clicks.
+fn assert_method_matches_clicks(
+    tool: Tool,
+    clicks: &[(f64, f64)],
+    setup: impl Fn(&mut Signex),
+    place: impl FnOnce(&mut Signex, Point),
+) {
     let mut clicked = app_with_tool(tool);
     setup(&mut clicked);
-    click(&mut clicked, OFF_GRID);
+    for at in clicks {
+        click(&mut clicked, *at);
+    }
     let mut direct = app_with_tool(tool);
     setup(&mut direct);
     place(&mut direct, on_grid());
@@ -336,5 +348,24 @@ fn point_placements_match_their_clicks() {
     });
     assert_method_matches_click(Tool::NoErcDirective, none, |app, at| {
         assert!(app.place_no_erc_directive_at(at));
+    });
+}
+
+#[test]
+fn wire_and_bus_placements_match_their_clicks() {
+    let none = |_: &mut Signex| {};
+    let two = [OFF_GRID, (30.4, 25.3)];
+    assert_method_matches_clicks(Tool::Wire, &two, none, |app, at| {
+        let mode = app.interaction_state.draw_mode;
+        let end = app.place_wire_at(at, grid(24.0, 20.0), mode);
+        assert_eq!(end, grid(24.0, 20.0));
+    });
+    assert_method_matches_clicks(Tool::Bus, &two, none, |app, at| {
+        let mode = app.interaction_state.draw_mode;
+        app.place_bus_at(at, grid(24.0, 20.0), mode);
+    });
+    assert_method_matches_click(Tool::BusEntry, none, |app, at| {
+        let size = app.interaction_state.bus_entry_size;
+        assert!(app.place_bus_entry_at(at, size));
     });
 }
