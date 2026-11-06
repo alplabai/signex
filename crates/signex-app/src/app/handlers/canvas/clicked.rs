@@ -313,104 +313,22 @@ impl Signex {
                 }
             }
             Tool::Component if self.interaction_state.pending_power.is_some() => {
-                if let Some((ref net_name, ref lib_id)) = self.interaction_state.pending_power {
-                    // The sheet keeps an older entry for this style (register
-                    // inserts only when absent): the text follows that one.
-                    let held_entry = self
-                        .document_state
-                        .active_engine()
-                        .and_then(|e| e.document().lib_symbols.get(lib_id).cloned())
-                        .unwrap_or_else(|| signex_types::schematic::power_port_lib_symbol(lib_id));
-                    let sym = signex_types::schematic::Symbol {
-                        unknown_columns: Default::default(),
-                        unknown: Default::default(),
-                        uuid: uuid::Uuid::now_v7(),
-                        lib_id: lib_id.clone(),
-                        reference: "#PWR?".to_string(),
-                        value: net_name.clone(),
-                        footprint: String::new(),
-                        datasheet: String::new(),
-                        position: signex_types::schematic::Point::new(wx, wy),
-                        rotation: 0.0,
-                        mirror_x: false,
-                        mirror_y: false,
-                        unit: 1,
-                        body_style: Default::default(),
-                        is_power: true,
-                        ref_text: None,
-                        val_text: Some(signex_types::schematic::power_port_value_field_for(
-                            &held_entry,
-                            signex_types::schematic::Point::new(wx, wy),
-                        )),
-                        fields_autoplaced: true,
-                        fields_user_placed: false,
-                        dnp: false,
-                        in_bom: false,
-                        on_board: true,
-                        exclude_from_sim: false,
-                        locked: false,
-                        fields: std::collections::HashMap::new(),
-                        custom_properties: Vec::new(),
-                        pin_uuids: std::collections::HashMap::new(),
-                        instances: Vec::new(),
-                        library_id: None,
-                        row_id: None,
-                        library_version: String::new(),
-                        library_stamp: None,
-                    };
-                    self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
-                }
-            }
-            Tool::NoConnect => {
-                let nc = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::now_v7(),
-                    position: signex_types::schematic::Point::new(wx, wy),
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceNoConnect { no_connect: nc },
-                    false,
-                    false,
-                );
-            }
-            // Placed where clicked, like the other one-click placements. The
-            // net builder accepts a dot anywhere; one off a wire joins nothing.
-            Tool::Junction => {
-                // A second dot on the same point (the net builder's 1 um key)
-                // joins nothing new and would only stack in the file.
-                let at = signex_types::schematic::Point::new(wx, wy);
-                let already_there = self.document_state.active_engine().is_some_and(|engine| {
-                    engine
-                        .document()
-                        .junctions
-                        .iter()
-                        .any(|j| signex_net::pt_key(&j.position) == signex_net::pt_key(&at))
-                });
-                if !already_there {
-                    let junction = signex_types::schematic::Junction {
-                        uuid: uuid::Uuid::now_v7(),
-                        position: signex_types::schematic::Point::new(wx, wy),
-                        diameter: 0.0,
-                        minted: false,
-                        unknown: Default::default(),
-                        unknown_columns: Default::default(),
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceJunction { junction },
-                        false,
-                        false,
+                if let Some((net_name, lib_id)) = self.interaction_state.pending_power.clone() {
+                    self.place_power_at(
+                        signex_types::schematic::Point::new(wx, wy),
+                        &net_name,
+                        &lib_id,
                     );
                 }
             }
+            Tool::NoConnect => {
+                self.place_no_connect_at(signex_types::schematic::Point::new(wx, wy));
+            }
+            Tool::Junction => {
+                self.place_junction_at(signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::NoErcDirective => {
-                let directive = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::now_v7(),
-                    position: signex_types::schematic::Point::new(wx, wy),
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceNoErcDirective { directive },
-                    false,
-                    false,
-                );
+                self.place_no_erc_directive_at(signex_types::schematic::Point::new(wx, wy));
             }
             Tool::BusEntry => {
                 // The bus end snaps onto the nearest bus within one grid step

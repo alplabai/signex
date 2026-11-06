@@ -313,3 +313,28 @@ fn place_text_at_matches_a_text_click() {
         assert!(app.place_text_at(at, "Note".into()));
     });
 }
+
+#[test]
+fn place_power_at_matches_a_power_click() {
+    let setup = |app: &mut Signex| {
+        app.interaction_state.pending_power = Some(("GND".into(), "power:GND".into()));
+    };
+    assert_method_matches_click(Tool::Component, setup, |app, at| {
+        assert!(app.place_power_at(at, "GND", "power:GND"));
+    });
+}
+
+#[test]
+fn point_placements_match_their_clicks() {
+    let none = |_: &mut Signex| {};
+    assert_method_matches_click(Tool::NoConnect, none, |app, at| {
+        assert!(app.place_no_connect_at(at));
+    });
+    assert_method_matches_click(Tool::Junction, none, |app, at| {
+        assert!(app.place_junction_at(at));
+        assert!(!app.place_junction_at(at), "a second dot is not stacked");
+    });
+    assert_method_matches_click(Tool::NoErcDirective, none, |app, at| {
+        assert!(app.place_no_erc_directive_at(at));
+    });
+}
