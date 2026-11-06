@@ -206,8 +206,9 @@ pub(super) fn submenu_launcher(
     let active_bg = crate::styles::ti(tokens.selection);
     let arrow_c = crate::styles::ti(tokens.text_secondary);
 
-    // The arrow's own line would be taller than a label line at its size and
-    // stretch the row; fix it to the content height of an item row, so the
+    // The arrow and the label (`TS.title`, a little over the item label size)
+    // would each make a taller line than an item row and stretch the row; fix
+    // both to the content height of an item row, so the
     // launcher is exactly `row_height` and flyouts line up with it.
     let arrow_line =
         signex_widgets::active_bar_dropdown::row_height(icon.is_some()) - 2.0 * ROW_PAD_Y;
@@ -223,6 +224,9 @@ pub(super) fn submenu_launcher(
         .push(
             iced::widget::text(label.to_string())
                 .size(TS.title)
+                .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(
+                    arrow_line,
+                )))
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
