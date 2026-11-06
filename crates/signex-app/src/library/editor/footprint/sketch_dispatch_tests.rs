@@ -822,7 +822,7 @@ mod tests {
 
         // Exactly one undo snapshot captured for the whole click.
         assert_eq!(
-            editor.history.len(),
+            editor.history.undo_len(),
             1,
             "a split must cost exactly one undo step"
         );
@@ -1128,7 +1128,11 @@ mod tests {
 
         // Three clicks, three undo snapshots — no gesture step is
         // free, and no step is skipped either.
-        assert_eq!(editor.history.len(), 3, "each click costs one undo step");
+        assert_eq!(
+            editor.history.undo_len(),
+            3,
+            "each click costs one undo step"
+        );
 
         // One undo must reverse only the third click: back to the two
         // endpoint Points, no centre, no Arc.

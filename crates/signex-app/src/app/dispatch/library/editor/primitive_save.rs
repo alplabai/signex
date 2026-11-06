@@ -493,7 +493,7 @@ impl Signex {
                     // Older undo steps still hold the pre-bump version, so
                     // the saved depth no longer reproduces the file.
                     if editor.is_dirty() && !versions.is_empty() {
-                        editor.save_point.forget();
+                        editor.history.forget();
                     }
                     editor.is_dirty()
                 }),
@@ -506,7 +506,7 @@ impl Signex {
                     editor.baseline = saved;
                     editor.cascade_owed = owed.to_vec();
                     if editor.is_dirty() && !versions.is_empty() {
-                        editor.save_point.forget();
+                        editor.history.forget();
                     }
                     editor.is_dirty()
                 }),
@@ -690,9 +690,9 @@ impl Signex {
     fn forget_draft_save_point(&mut self, path: &std::path::Path) {
         let document = &mut self.document_state;
         if let Some(editor) = document.symbol_editors.get_mut(path) {
-            editor.save_point.forget();
+            editor.history.forget();
         } else if let Some(editor) = document.footprint_editors.get_mut(path) {
-            editor.save_point.forget();
+            editor.history.forget();
         }
     }
 

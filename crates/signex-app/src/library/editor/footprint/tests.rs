@@ -275,7 +275,7 @@ fn editor_with_pads(n: usize) -> crate::app::FootprintDocument {
         e.state.add_pad_at(i as f64 * 2.0, 0.0);
     }
     e.set_dirty(false);
-    e.history.clear();
+    e.history.undo_steps_mut().clear();
     e
 }
 
@@ -288,7 +288,7 @@ fn issue_146_rotate_with_no_selection_stays_clean() {
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarRotateSelection);
     assert!(!e.is_dirty(), "no-op rotate must not dirty the document");
     assert!(
-        e.history.is_empty(),
+        !e.history.can_undo(),
         "no-op rotate must not stack undo history"
     );
 }
@@ -302,7 +302,7 @@ fn issue_146_rotate_with_selection_dirties_and_snapshots_once() {
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarRotateSelection);
     assert!(e.is_dirty(), "a real rotate dirties the document");
     assert_eq!(
-        e.history.len(),
+        e.history.undo_len(),
         1,
         "exactly one undo snapshot per real rotate (no double-push)"
     );
@@ -316,7 +316,7 @@ fn issue_146_align_to_grid_with_no_selection_stays_clean() {
     e.state.selected_pad = None;
     apply_footprint_primitive_edit(&mut e, FootprintEditorMsg::ActiveBarAlignSelectionToGrid);
     assert!(!e.is_dirty());
-    assert!(e.history.is_empty());
+    assert!(!e.history.can_undo());
 }
 
 #[test]
@@ -381,7 +381,7 @@ fn editor_with_positions(positions: &[(f64, f64)]) -> crate::app::FootprintDocum
         e.state.selected_pads_extra = (1..positions.len()).collect();
     }
     e.set_dirty(false);
-    e.history.clear();
+    e.history.undo_steps_mut().clear();
     e
 }
 
@@ -437,7 +437,7 @@ fn align_confirm_both_axes_is_one_undo_step() {
 
     assert!(e.is_dirty(), "a real two-axis confirm dirties the document");
     assert_eq!(
-        e.history.len(),
+        e.history.undo_len(),
         1,
         "both axes under a single snapshot = exactly one undo step"
     );
@@ -449,7 +449,7 @@ fn align_confirm_both_axes_is_one_undo_step() {
     let restored: Vec<_> = e.state.pads.iter().map(|p| p.position_mm).collect();
     assert_eq!(restored, before, "one undo restores every pad centre");
     assert!(
-        e.history.is_empty(),
+        !e.history.can_undo(),
         "one undo empties the one-entry history — proving it was one step"
     );
 }
@@ -516,7 +516,7 @@ fn align_confirm_neither_axis_is_clean_noop() {
         "confirming with neither axis chosen must not dirty"
     );
     assert!(
-        e.history.is_empty(),
+        !e.history.can_undo(),
         "neither-axis confirm pushes no history entry"
     );
     assert!(
@@ -544,7 +544,7 @@ fn align_confirm_below_size_gate_pushes_no_history() {
 
     assert!(!e.is_dirty(), "a confirm that can't apply must not dirty");
     assert!(
-        e.history.is_empty(),
+        !e.history.can_undo(),
         "a below-gate confirm pushes no history"
     );
     assert!(
@@ -583,5 +583,5 @@ fn align_cancel_closes_modal_and_keeps_selection() {
     let positions_after: Vec<_> = e.state.pads.iter().map(|p| p.position_mm).collect();
     assert_eq!(positions_after, positions_before, "cancel moves no pads");
     assert!(!e.is_dirty(), "cancel does not dirty");
-    assert!(e.history.is_empty(), "cancel pushes no history");
+    assert!(!e.history.can_undo(), "cancel pushes no history");
 }

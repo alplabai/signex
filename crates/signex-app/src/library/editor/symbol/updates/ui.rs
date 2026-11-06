@@ -91,7 +91,7 @@ mod tests {
             1,
             "stash committed on tool switch"
         );
-        assert_eq!(editor.undo_snapshots.len(), 1);
+        assert_eq!(editor.history.undo_len(), 1);
         assert!(editor.polygon_vertices.is_empty());
     }
 
@@ -106,7 +106,7 @@ mod tests {
         apply_symbol_ui(&mut editor, SymbolEditorMsg::SetTool(SymbolToolMsg::Select));
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
         assert!(editor.polygon_vertices.is_empty());
     }
 
@@ -154,7 +154,7 @@ mod tests {
             "B's symbol stays untouched"
         );
         assert_eq!(
-            editor_b.undo_snapshots.len(),
+            editor_b.history.undo_len(),
             0,
             "B never pushed an undo entry"
         );
@@ -166,6 +166,6 @@ mod tests {
             SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
         );
         assert_eq!(editor_a.primitive().graphics.len(), 1);
-        assert_eq!(editor_a.undo_snapshots.len(), 1);
+        assert_eq!(editor_a.history.undo_len(), 1);
     }
 }

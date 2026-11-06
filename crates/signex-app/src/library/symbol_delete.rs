@@ -355,7 +355,7 @@ mod tests {
         assert!(ed.undo());
         assert!(!pending.is_current(&ed), "undo");
         edit(&mut ed);
-        assert_eq!(ed.undo_snapshots.len(), 1);
+        assert_eq!(ed.history.undo_len(), 1);
         assert!(!pending.is_current(&ed), "undo then edit");
     }
 

@@ -64,7 +64,7 @@ impl EditAttempt {
             snapshot,
             rejections_before: editor.state.conflict.rejections(),
             dirty_before: editor.is_dirty(),
-            point_before: editor.save_point,
+            point_before: editor.history.point(),
             is_drag_tick,
             may_be_refused: matches!(msg, FootprintEditorMsg::DeleteSilkF),
         }

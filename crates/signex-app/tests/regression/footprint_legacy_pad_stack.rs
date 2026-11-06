@@ -141,7 +141,7 @@ fn restore_enables_paste_and_thermal_in_one_undo_step() {
         assert!(pad.paste_enabled_top && pad.paste_enabled_bottom && pad.thermal_relief);
     }
     assert!(pad_stack_check::smd_pads_without_paste(&ed.state.pads).is_empty());
-    assert_eq!(ed.history.len(), 1, "exactly one undo step");
+    assert_eq!(ed.history.undo_len(), 1, "exactly one undo step");
 
     app.document_state
         .footprint_editors
@@ -173,7 +173,7 @@ fn dismissing_the_offer_changes_nothing_in_the_document() {
     let ed = editor(&app, &path);
     assert!(!ed.state.legacy_pad_stack_offered);
     assert!(!ed.is_dirty());
-    assert!(ed.history.is_empty());
+    assert!(!ed.history.can_undo());
     assert!(stacks(&app, &path).iter().all(|s| *s == pre_1052_stack()));
     // The standing warning stays: the pad still has no paste opening.
     assert_eq!(

@@ -64,7 +64,7 @@ fn footprint_editor_history_caps_at_depth_limit() {
     for _ in 0..(FootprintDocument::HISTORY_DEPTH * 2) {
         editor.push_history();
     }
-    assert_eq!(editor.history.len(), FootprintDocument::HISTORY_DEPTH);
+    assert_eq!(editor.history.undo_len(), FootprintDocument::HISTORY_DEPTH);
 }
 
 #[test]
@@ -84,10 +84,10 @@ fn footprint_editor_new_mutation_clears_redo_stack() {
         ),
     );
     editor.undo(); // moves snapshot to redo
-    assert_eq!(editor.redo.len(), 1);
+    assert_eq!(editor.history.redo_len(), 1);
 
     // A fresh push_history must clear the redo stack so the
     // history stays a single timeline.
     editor.push_history();
-    assert!(editor.redo.is_empty());
+    assert!(!editor.history.can_redo());
 }

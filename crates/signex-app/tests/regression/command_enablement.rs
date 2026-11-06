@@ -41,9 +41,9 @@ fn ctrl_z_still_undoes_in_a_footprint_editor_tab() {
     press(&mut app, "Ctrl+Z");
 
     assert!(
-        app.document_state.footprint_editors[&path]
+        !app.document_state.footprint_editors[&path]
             .history
-            .is_empty(),
+            .can_undo(),
         "Ctrl+Z must still reach the footprint editor's own history"
     );
 }
