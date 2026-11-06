@@ -1041,10 +1041,6 @@ fn focus_color(base: Color, focus_set: Option<&HashSet<uuid::Uuid>>, uuid: uuid:
     base
 }
 
-fn aabb_overlaps(a: &Aabb, b: &Aabb) -> bool {
-    !(a.max_x < b.min_x || a.min_x > b.max_x || a.max_y < b.min_y || a.min_y > b.max_y)
-}
-
 fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let min_x = p0.x.min(p1.x);
     let max_x = p0.x.max(p1.x);

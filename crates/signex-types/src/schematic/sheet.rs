@@ -661,6 +661,22 @@ impl Aabb {
         }
     }
 
+    /// Whether the two boxes share any point; boxes that only touch count.
+    pub fn intersects(&self, other: &Aabb) -> bool {
+        !(self.max_x < other.min_x
+            || self.min_x > other.max_x
+            || self.max_y < other.min_y
+            || self.min_y > other.max_y)
+    }
+
+    /// Whether the two boxes share area; boxes that only touch do not count.
+    pub fn overlaps_interior(&self, other: &Aabb) -> bool {
+        self.min_x < other.max_x
+            && self.max_x > other.min_x
+            && self.min_y < other.max_y
+            && self.max_y > other.min_y
+    }
+
     pub fn width(&self) -> f64 {
         self.max_x - self.min_x
     }
@@ -874,7 +890,7 @@ mod lib_symbol_table_tests {
 }
 
 #[cfg(test)]
-mod label_tests {
+mod label_junction_aabb_tests {
     use super::*;
 
     #[test]
@@ -891,5 +907,16 @@ mod label_tests {
         assert_eq!(label.justify_v, VAlign::Bottom);
         assert!(!label.locked);
         assert!(label.unknown_columns.is_empty());
+    }
+
+    #[test]
+    fn touching_boxes_intersect_but_share_no_interior() {
+        let a = Aabb::new(0.0, 0.0, 1.0, 1.0);
+        let touching = Aabb::new(1.0, 0.0, 2.0, 1.0);
+        let apart = Aabb::new(1.5, 0.0, 2.5, 1.0);
+        let over = Aabb::new(0.5, 0.5, 1.5, 1.5);
+        assert!(a.intersects(&touching) && !a.overlaps_interior(&touching));
+        assert!(!a.intersects(&apart) && !a.overlaps_interior(&apart));
+        assert!(a.intersects(&over) && a.overlaps_interior(&over));
     }
 }

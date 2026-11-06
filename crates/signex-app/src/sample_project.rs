@@ -133,14 +133,7 @@ mod tests {
                 primitives_bounds(&parts).map(|b| (sym.reference.clone(), b))
             })
             .collect();
-        let touches = |text: &Aabb| {
-            bodies.iter().find(|(_, b)| {
-                text.min_x < b.max_x
-                    && text.max_x > b.min_x
-                    && text.min_y < b.max_y
-                    && text.max_y > b.min_y
-            })
-        };
+        let touches = |text: &Aabb| bodies.iter().find(|(_, b)| text.overlaps_interior(b));
         for sym in sheet.symbols.iter().filter(|s| !s.is_power) {
             for (what, content, prop) in [
                 ("reference", &sym.reference, &sym.ref_text),
