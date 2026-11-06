@@ -18,3 +18,10 @@ pub(super) fn fmt_f64(v: f64) -> Option<String> {
         Some(format!("{v}"))
     }
 }
+
+/// Parse a TSV number cell as written by [`fmt_f64`]; `None` for text that is
+/// not a number or not finite. #678: rejects `NaN` / `inf`, and `1e999`
+/// which overflows to inf. Does not trim: a padded cell is not ours.
+pub(super) fn parse_finite_cell(s: &str) -> Option<f64> {
+    s.parse::<f64>().ok().filter(|v| v.is_finite())
+}

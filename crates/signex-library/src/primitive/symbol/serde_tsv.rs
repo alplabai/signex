@@ -1,114 +1,55 @@
 //! Pin TSV codec + token conversions for the symbol wire format.
 
 use super::*;
-use crate::primitive::tsv_cell::fmt_f64;
+use crate::primitive::tsv_cell::{fmt_f64, parse_finite_cell};
 
 // ---- Pin TSV codec --------------------------------------------------
 
-pub(super) fn pin_direction_token(d: PinDirection) -> &'static str {
-    match d {
-        PinDirection::Input => "Input",
-        PinDirection::Output => "Output",
-        PinDirection::Bidirectional => "Bidirectional",
-        PinDirection::Power => "Power",
-        PinDirection::Passive => "Passive",
-        PinDirection::OpenCollector => "OpenCollector",
-        PinDirection::OpenEmitter => "OpenEmitter",
-        PinDirection::NotConnected => "NotConnected",
-        PinDirection::Tristate => "Tristate",
-        PinDirection::Unspecified => "Unspecified",
+signex_types::token_enum! {
+    pub(super) fn pin_direction_token / pin_direction_from_token for PinDirection,
+    error SymbolFileError {
+        Input => "Input",
+        Output => "Output",
+        Bidirectional => "Bidirectional",
+        Power => "Power",
+        Passive => "Passive",
+        OpenCollector => "OpenCollector",
+        OpenEmitter => "OpenEmitter",
+        NotConnected => "NotConnected",
+        Tristate => "Tristate",
+        Unspecified => "Unspecified",
     }
 }
 
-pub(super) fn pin_direction_from_token(s: &str) -> Result<PinDirection, SymbolFileError> {
-    Ok(match s {
-        "Input" => PinDirection::Input,
-        "Output" => PinDirection::Output,
-        "Bidirectional" => PinDirection::Bidirectional,
-        "Power" => PinDirection::Power,
-        "Passive" => PinDirection::Passive,
-        "OpenCollector" => PinDirection::OpenCollector,
-        "OpenEmitter" => PinDirection::OpenEmitter,
-        "NotConnected" => PinDirection::NotConnected,
-        "Tristate" => PinDirection::Tristate,
-        "Unspecified" => PinDirection::Unspecified,
-        other => {
-            return Err(SymbolFileError::UnknownEnumToken {
-                kind: "PinDirection",
-                got: other.to_string(),
-            });
-        }
-    })
-}
-
-pub(super) fn pin_orientation_token(o: PinOrientation) -> &'static str {
-    match o {
-        PinOrientation::Up => "Up",
-        PinOrientation::Down => "Down",
-        PinOrientation::Left => "Left",
-        PinOrientation::Right => "Right",
+signex_types::token_enum! {
+    pub(super) fn pin_orientation_token / pin_orientation_from_token for PinOrientation,
+    error SymbolFileError {
+        Up => "Up",
+        Down => "Down",
+        Left => "Left",
+        Right => "Right",
     }
 }
 
-pub(super) fn pin_orientation_from_token(s: &str) -> Result<PinOrientation, SymbolFileError> {
-    Ok(match s {
-        "Up" => PinOrientation::Up,
-        "Down" => PinOrientation::Down,
-        "Left" => PinOrientation::Left,
-        "Right" => PinOrientation::Right,
-        other => {
-            return Err(SymbolFileError::UnknownEnumToken {
-                kind: "PinOrientation",
-                got: other.to_string(),
-            });
-        }
-    })
-}
-
-pub(super) fn pin_symbol_kind_token(k: PinSymbolKind) -> &'static str {
-    match k {
-        PinSymbolKind::None => "None",
-        PinSymbolKind::Dot => "Dot",
-        PinSymbolKind::ClockEdge => "ClockEdge",
-        PinSymbolKind::ActiveLowInput => "ActiveLowInput",
-        PinSymbolKind::ActiveLowOutput => "ActiveLowOutput",
-        PinSymbolKind::SchmittTrigger => "SchmittTrigger",
-        PinSymbolKind::Analog => "Analog",
-        PinSymbolKind::Digital => "Digital",
-        PinSymbolKind::ShiftRight => "ShiftRight",
-        PinSymbolKind::ShiftLeft => "ShiftLeft",
-        PinSymbolKind::Pi => "Pi",
-        PinSymbolKind::Sigma => "Sigma",
-        PinSymbolKind::OpenCollector => "OpenCollector",
-        PinSymbolKind::OpenEmitter => "OpenEmitter",
-        PinSymbolKind::HiZ => "HiZ",
+signex_types::token_enum! {
+    pub(super) fn pin_symbol_kind_token / pin_symbol_kind_from_token for PinSymbolKind,
+    error SymbolFileError {
+        None => "None",
+        Dot => "Dot",
+        ClockEdge => "ClockEdge",
+        ActiveLowInput => "ActiveLowInput",
+        ActiveLowOutput => "ActiveLowOutput",
+        SchmittTrigger => "SchmittTrigger",
+        Analog => "Analog",
+        Digital => "Digital",
+        ShiftRight => "ShiftRight",
+        ShiftLeft => "ShiftLeft",
+        Pi => "Pi",
+        Sigma => "Sigma",
+        OpenCollector => "OpenCollector",
+        OpenEmitter => "OpenEmitter",
+        HiZ => "HiZ",
     }
-}
-
-pub(super) fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, SymbolFileError> {
-    Ok(match s {
-        "None" => PinSymbolKind::None,
-        "Dot" => PinSymbolKind::Dot,
-        "ClockEdge" => PinSymbolKind::ClockEdge,
-        "ActiveLowInput" => PinSymbolKind::ActiveLowInput,
-        "ActiveLowOutput" => PinSymbolKind::ActiveLowOutput,
-        "SchmittTrigger" => PinSymbolKind::SchmittTrigger,
-        "Analog" => PinSymbolKind::Analog,
-        "Digital" => PinSymbolKind::Digital,
-        "ShiftRight" => PinSymbolKind::ShiftRight,
-        "ShiftLeft" => PinSymbolKind::ShiftLeft,
-        "Pi" => PinSymbolKind::Pi,
-        "Sigma" => PinSymbolKind::Sigma,
-        "OpenCollector" => PinSymbolKind::OpenCollector,
-        "OpenEmitter" => PinSymbolKind::OpenEmitter,
-        "HiZ" => PinSymbolKind::HiZ,
-        other => {
-            return Err(SymbolFileError::UnknownEnumToken {
-                kind: "PinSymbolKind",
-                got: other.to_string(),
-            });
-        }
-    })
 }
 
 /// An optional cell: `None` is an empty cell, a non-finite value is the
@@ -121,14 +62,10 @@ fn fmt_opt_f64(v: Option<f64>) -> Option<String> {
 }
 
 fn parse_f64_cell(col: &'static str, s: &str) -> Result<f64, SymbolFileError> {
-    // #678: reject `NaN` / `inf` (and `1e999`, which overflows to inf).
-    s.parse::<f64>()
-        .ok()
-        .filter(|v| v.is_finite())
-        .ok_or_else(|| SymbolFileError::InvalidNumericCell {
-            column: col,
-            value: s.to_string(),
-        })
+    parse_finite_cell(s).ok_or_else(|| SymbolFileError::InvalidNumericCell {
+        column: col,
+        value: s.to_string(),
+    })
 }
 
 fn parse_opt_f64_cell(col: &'static str, s: &str) -> Result<Option<f64>, SymbolFileError> {
