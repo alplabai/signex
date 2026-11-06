@@ -749,9 +749,7 @@ pub enum PanelMsg {
         value: f64,
     },
     /// Properties panel — set a pin's electrical type from the
-    /// Altium-spec dropdown (Input / Output / Bidirectional / Power
-    /// / Passive / Open Collector / Open Emitter / Tri-state /
-    /// Not Connected / Unspecified).
+    /// dropdown of every canonical `PinDirection`.
     SymEditorSetPinElectrical {
         pin_idx: usize,
         value: signex_library::PinDirection,

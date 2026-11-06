@@ -97,6 +97,34 @@ equivalent — typically `power_in`, `passive`, or `unspecified`. The
 Signex-native `.snxsch` format preserves all 14 variants losslessly;
 foreign formats are best-effort.
 
+## Stored tokens
+
+The `.snxsym` pin column (and the symbol file's JSON form) store
+`PinDirection::as_token`, one table for the whole workspace. The first ten
+tokens are the text the library's former 10-variant enum wrote, so those
+files re-save byte-identical and older builds read them:
+
+| Token | Variant |
+|---|---|
+| `Input` | `Input` |
+| `Output` | `Output` |
+| `Bidirectional` | `Bidirectional` |
+| `Power` | `PowerInput` |
+| `Passive` | `Passive` |
+| `OpenCollector` | `OpenDrainLow` |
+| `OpenEmitter` | `OpenDrainHigh` |
+| `NotConnected` | `DoNotConnect` |
+| `Tristate` | `ThreeStatable` |
+| `Unspecified` | `Unclassified` |
+| `PowerOutput` | `PowerOutput` |
+| `GroundReference` | `GroundReference` |
+| `Differential` | `Differential` |
+| `Clock` | `Clock` |
+
+The last four are new in the file. A build from before they existed fails
+to load a symbol file that holds one (unknown enum token); it does not
+substitute a type. A new variant needs a new token and a row here.
+
 ## Adding new variants
 
 `PinDirection` and `PinShapeStyle` are not `#[non_exhaustive]` —
