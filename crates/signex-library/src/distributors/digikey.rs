@@ -36,7 +36,7 @@ use url::Url;
 use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource, PriceBreak,
 };
-use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
+use crate::distributors::cache::DistributorCache;
 use crate::distributors::keyring::{KeyringError, KeyringStore};
 use crate::param::ParamMap;
 
@@ -565,32 +565,7 @@ impl DigiKeyAdapter {
             .header("X-DIGIKEY-Locale-Currency", &self.currency)
             .send()
             .map_err(|e| DistributorError::Network(e.to_string()))?;
-        if resp.status() == reqwest::StatusCode::UNAUTHORIZED
-            || resp.status() == reqwest::StatusCode::FORBIDDEN
-        {
-            return Err(DistributorError::Auth(format!(
-                "DigiKey rejected token (HTTP {})",
-                resp.status()
-            )));
-        }
-        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            let retry_after_seconds = resp
-                .headers()
-                .get(reqwest::header::RETRY_AFTER)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(60);
-            return Err(DistributorError::RateLimited {
-                retry_after_seconds,
-            });
-        }
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            return Err(DistributorError::NotFound);
-        }
-        if !resp.status().is_success() {
-            return Err(DistributorError::Backend(format!("HTTP {}", resp.status())));
-        }
-        Ok(resp)
+        super::http::check_response(resp, Some("DigiKey rejected token"))
     }
 }
 
@@ -625,23 +600,13 @@ impl DistributorAdapter for DigiKeyAdapter {
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
-        if let Some(cache) = &self.cache
-            && let Some(hit) = cache.get_or_warn(DIGIKEY_PROVIDER_KEY, mpn, DEFAULT_TTL)
-        {
-            return Ok(vec![hit]);
-        }
-        let hits = self.search_by_keyword(mpn)?;
-        if let (Some(cache), Some(first)) = (&self.cache, hits.first()) {
-            // H4: silenced cache writes hide disk-full / permission failures.
-            if let Err(e) = cache.put(DIGIKEY_PROVIDER_KEY, first) {
-                tracing::warn!(
-                    error = %e,
-                    mpn = %mpn,
-                    "DigiKey cache write failed; live result returned but not persisted",
-                );
-            }
-        }
-        Ok(hits)
+        super::http::cached_lookup(
+            self.cache.as_ref(),
+            DIGIKEY_PROVIDER_KEY,
+            DIGIKEY_NAME,
+            mpn,
+            || self.search_by_keyword(mpn),
+        )
     }
 
     fn refresh_pricing(
