@@ -44,8 +44,16 @@ fn approx(b: Aabb, min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> bool {
 fn large_and_small_symbols_get_distinct_boxes() {
     let (ic_sheet, ic) = sheet_with_body(20.0, 40.0, 50.0, 50.0, 0.0);
     let (r_sheet, r) = sheet_with_body(1.6, 0.8, 50.0, 50.0, 0.0);
-    let ic_box = symbol_bounds(&ic_sheet, &ic);
-    let r_box = symbol_bounds(&r_sheet, &r);
+    let ic_box = symbol_bounds(
+        &ic_sheet,
+        &ic,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
+    let r_box = symbol_bounds(
+        &r_sheet,
+        &r,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(approx(ic_box, 40.0, 30.0, 60.0, 70.0), "{ic_box:?}");
     assert!(approx(r_box, 49.2, 49.6, 50.8, 50.4), "{r_box:?}");
 }
@@ -53,7 +61,11 @@ fn large_and_small_symbols_get_distinct_boxes() {
 #[test]
 fn rotated_symbol_box_is_transformed() {
     let (sheet, sym) = sheet_with_body(4.0, 20.0, 0.0, 0.0, 90.0);
-    let bbox = symbol_bounds(&sheet, &sym);
+    let bbox = symbol_bounds(
+        &sheet,
+        &sym,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(approx(bbox, -10.0, -2.0, 10.0, 2.0), "{bbox:?}");
 }
 
@@ -269,7 +281,11 @@ fn a_power_port_without_a_library_entry_gets_its_own_body_not_the_box() {
 #[test]
 fn a_bar_power_port_rises_above_the_connection_point() {
     let (sheet, sym) = placed_power_port("power:bar");
-    let bbox = symbol_bounds(&sheet, &sym);
+    let bbox = symbol_bounds(
+        &sheet,
+        &sym,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(bbox.min_y < 50.0 && bbox.max_y >= 50.0, "{bbox:?}");
     assert!(
         bbox.width() < 3.0 && bbox.height() < 4.0,
@@ -314,7 +330,17 @@ fn a_non_power_symbol_without_a_library_entry_still_gets_the_placeholder() {
     };
     let mut sheet = SchematicSheet::default();
     sheet.symbols.push(sym.clone());
-    assert!(approx(symbol_bounds(&sheet, &sym), 6.0, 7.2, 14.0, 12.8));
+    assert!(approx(
+        symbol_bounds(
+            &sheet,
+            &sym,
+            &signex_types::schematic::SchematicDefaults::BUILT_IN
+        ),
+        6.0,
+        7.2,
+        14.0,
+        12.8
+    ));
 }
 
 fn value_prop() -> signex_types::schematic::TextProp {
@@ -413,4 +439,32 @@ fn a_child_sheet_frame_resolves_its_stored_width_through_the_one_rule() {
         let frame = snap.polygons.first().expect("the sheet frame");
         assert_eq!(frame.stroke_width_mm, drawn, "stored {stored}");
     }
+}
+
+/// Review of #2026: the selection box of a symbol is the box of the symbol
+/// as drawn with the project's defaults, not the built-in ones.
+#[test]
+fn a_project_symbol_line_width_widens_the_symbol_box_it_draws() {
+    let (sheet, sym) = sheet_with_body(20.0, 40.0, 5.0, 6.0, 0.0);
+    let thick = signex_types::schematic::SchematicDefaults {
+        symbol_line_width_mm: 2.0,
+        ..signex_types::schematic::SchematicDefaults::BUILT_IN
+    };
+    let item = SelectedItem::new(sym.uuid, SelectedKind::Symbol);
+    let widths = WireWidths {
+        class_styles: None,
+        defaults: thick,
+    };
+    let selected =
+        selected_aabbs(&sheet, &[item], &Default::default(), widths)[0].expect("symbol box");
+    let drawn = symbol_geometry(&sheet, &sym, &thick).1;
+    assert_eq!(
+        (
+            selected.min_x,
+            selected.min_y,
+            selected.max_x,
+            selected.max_y
+        ),
+        (drawn.min_x, drawn.min_y, drawn.max_x, drawn.max_y)
+    );
 }

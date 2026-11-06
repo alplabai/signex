@@ -393,3 +393,26 @@ fn a_late_edit_for_a_closed_project_leaves_no_tab_state() {
     );
     assert!(!app.document_state.project_tabs.contains_key(&gone));
 }
+
+/// Review of #2026: a shape placed on a project sheet with Width untouched
+/// stores the project's shape stroke default.
+#[test]
+fn a_rectangle_placed_on_a_project_sheet_stores_the_project_shape_stroke() {
+    use crate::app::Tool;
+    use crate::toolbar::ToolMessage;
+    use signex_types::schematic::SchDrawing;
+    let (mut app, sheet, _window) = app();
+    edit(&mut app, SchematicDefaultField::ShapeStroke, "0.4");
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+    for at in [(2.54, 2.54), (12.7, 7.62)] {
+        let _ = app.update(Message::CanvasEvent(crate::canvas::CanvasEvent::Clicked {
+            world_x: at.0,
+            world_y: at.1,
+        }));
+    }
+    let doc = app.document_state.engines[&sheet].document();
+    let [SchDrawing::Rect { width, .. }] = doc.drawings.as_slice() else {
+        panic!("expected one rectangle, got {:?}", doc.drawings);
+    };
+    assert_eq!(*width, 0.4);
+}

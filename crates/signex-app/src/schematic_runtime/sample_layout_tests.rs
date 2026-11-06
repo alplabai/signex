@@ -46,7 +46,11 @@ fn every_sample_power_port_shows_its_net_name_and_no_designator() {
 fn no_sample_field_text_overlaps_a_symbol_body() {
     let sheet = sample();
     for symbol in sheet.symbols.iter().filter(|s| !s.is_power) {
-        let body = symbol::symbol_bounds(&sheet, symbol);
+        let body = symbol::symbol_bounds(
+            &sheet,
+            symbol,
+            &signex_types::schematic::SchematicDefaults::BUILT_IN,
+        );
         let fields = [
             (&symbol.reference, symbol.ref_text.as_ref()),
             (&symbol.value, symbol.val_text.as_ref()),
@@ -69,7 +73,11 @@ fn no_sample_field_text_overlaps_a_symbol_body() {
 fn no_sample_net_label_sits_on_a_power_port_glyph() {
     let sheet = sample();
     for port in sheet.symbols.iter().filter(|s| s.is_power) {
-        let glyph = symbol::symbol_bounds(&sheet, port);
+        let glyph = symbol::symbol_bounds(
+            &sheet,
+            port,
+            &signex_types::schematic::SchematicDefaults::BUILT_IN,
+        );
         for label in &sheet.labels {
             let text = drawn_text_aabb(
                 None,

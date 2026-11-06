@@ -153,3 +153,20 @@ fn line_style_shape_fill_and_font_round_trip_and_resolve() {
         None
     );
 }
+
+/// Review of #2026: an edit of a key whose stored value was unreadable
+/// replaces the kept raw value on disk, so the edit is what reloads.
+#[test]
+fn an_edit_over_an_unreadable_value_is_what_reloads() {
+    let (path, _dir) = project_file(
+        r#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,
+            "schematic_defaults":{"wire_width_mm":"thick"}}"#,
+    );
+    let mut data = parse_project(&path).expect("the project opens");
+    data.schematic_defaults = data
+        .schematic_defaults
+        .with(SchematicDefaultField::WireWidth, Some(0.4));
+    write_project(&path, &data).unwrap();
+    let back = parse_project(&path).unwrap();
+    assert_eq!(back.schematic_defaults.wire_width_mm, Some(0.4));
+}

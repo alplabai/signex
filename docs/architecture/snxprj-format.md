@@ -245,12 +245,12 @@ the Project tab's Schematic defaults section, added without bumping the
   stores a typed value clamped and says so under the field; a file value out
   of range resolves clamped and is not rewritten. Placement uses whole points
   (`SchematicDefaults::placed_text_pt`), the same on every placement path.
-- Known gaps: the symbol hit box and the PDF page bounding box still use the
-  built-in symbol line width (`schematic_runtime/symbol.rs`, `signex-output`
-  `pdf/layout.rs`); an explicit `null` key is dropped on save; clearing a
-  field also drops an unreadable value kept for that key (unlike the
+- Known gaps: an explicit `null` key is dropped on save; clearing a field
+  also drops an unreadable value kept for that key (unlike the
   designator-standard rule, where clearing over an unreadable section keeps
-  it).
+  it); a polyline placed with Width untouched stores 0, not the shape default
+  (`selection_workflow.rs`), so it follows a later default change while other
+  shapes keep the value they were placed with.
 
 ## Description (`description`) and the name (#1202)
 

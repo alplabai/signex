@@ -51,9 +51,13 @@ pub(super) fn symbol_geometry_of(
     }
 }
 
-/// Hit-test / selection box of `symbol`.
-pub(crate) fn symbol_bounds(snapshot: &SchematicRenderSnapshot, symbol: &Symbol) -> Aabb {
-    symbol_geometry(snapshot, symbol, &SchematicDefaults::BUILT_IN).1
+/// Hit-test / selection box of `symbol`, as drawn with `defaults`.
+pub(crate) fn symbol_bounds(
+    snapshot: &SchematicRenderSnapshot,
+    symbol: &Symbol,
+    defaults: &SchematicDefaults,
+) -> Aabb {
+    symbol_geometry(snapshot, symbol, defaults).1
 }
 
 fn fallback_box(symbol: &Symbol) -> Aabb {

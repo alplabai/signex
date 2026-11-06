@@ -271,6 +271,7 @@ pub fn draw_power_port_preview(
     transform: &ScreenTransform,
     color: Color,
     colors: &CanvasColors,
+    defaults: &signex_types::schematic::SchematicDefaults,
 ) {
     let cx = symbol.position.x as f32;
     let cy = symbol.position.y as f32;
@@ -297,12 +298,7 @@ pub fn draw_power_port_preview(
 
     // The body is the placed port's own lowering, so the ghost shows the
     // shape the click will commit.
-    let (primitives, bbox) = symbol::symbol_geometry_of(
-        None,
-        symbol,
-        None,
-        &signex_types::schematic::SchematicDefaults::BUILT_IN,
-    );
+    let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol, None, defaults);
     let mut wires = Vec::new();
     let mut arcs = Vec::new();
     let mut polygons = Vec::new();
@@ -318,7 +314,7 @@ pub fn draw_power_port_preview(
         missing: color,
         scale: transform.scale,
         family: None,
-        defaults: signex_types::schematic::SchematicDefaults::BUILT_IN,
+        defaults: *defaults,
     };
     let mut sink = symbol::SymbolSink {
         wires: &mut wires,
@@ -617,7 +613,7 @@ fn collect_item_bounds_with(
         if symbol_bodies {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::Symbol),
-                bbox: symbol::symbol_bounds(snapshot, symbol),
+                bbox: symbol::symbol_bounds(snapshot, symbol, &widths.defaults),
                 anchor: symbol.position,
             });
         }
@@ -829,7 +825,7 @@ fn selected_aabbs(
                 });
                 return index
                     .get(&item.uuid)
-                    .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
+                    .map(|symbol| symbol::symbol_bounds(snapshot, symbol, &widths.defaults));
             }
             let index: &HashMap<SelectedItem, Aabb> = others.get_or_init(|| {
                 let mut index = HashMap::new();

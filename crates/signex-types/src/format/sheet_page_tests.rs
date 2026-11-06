@@ -44,6 +44,20 @@ fn changed_page_settings_round_trip() {
     let back = parse(&text);
     assert_eq!(back.page, custom());
     assert_eq!(write(&back), text, "the encoding must be stable");
+
+    // A colour alone writes no origin line: Lower Left is the default.
+    let colour_only = SheetPageSettings {
+        origin: PageOrigin::LowerLeft,
+        ..custom()
+    };
+    let text = write(&SchematicSheet {
+        page: colour_only,
+        ..Default::default()
+    });
+    let table = &text[text.find("[extras.sheet.page]").expect(&text)..];
+    assert!(table.contains("color = "), "{table}");
+    assert!(!table.contains("origin"), "{table}");
+    assert_eq!(parse(&text).page, colour_only);
 }
 
 /// A file written before the page table existed loads at the defaults and

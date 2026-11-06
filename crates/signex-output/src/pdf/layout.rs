@@ -12,7 +12,10 @@ use signex_types::schematic::{SchDrawing, arc_polyline, lower_placed_symbol, pri
 ///
 /// Returns `(x_min, y_min, x_max, y_max)`. Falls back to `(0, 0, 100, 100)`
 /// when the sheet is empty.
-pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
+pub fn schematic_bbox(
+    sheet: &SheetSnapshot,
+    defaults: &signex_types::schematic::SchematicDefaults,
+) -> (f64, f64, f64, f64) {
     let mut x_min = f64::INFINITY;
     let mut y_min = f64::INFINITY;
     let mut x_max = f64::NEG_INFINITY;
@@ -31,11 +34,8 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
     }
 
     for sym in &sheet.schematic.symbols {
-        let lowered = lower_placed_symbol(
-            sheet.schematic.lib_symbols.get(&sym.lib_id),
-            sym,
-            &signex_types::schematic::SchematicDefaults::BUILT_IN,
-        );
+        let lowered =
+            lower_placed_symbol(sheet.schematic.lib_symbols.get(&sym.lib_id), sym, defaults);
         match primitives_bounds(&lowered) {
             // The drawn body, pins and graphics, in world space.
             Some(b) => {
@@ -210,7 +210,7 @@ impl PageTransform {
         opts: &PdfOptions,
         units_per_mm: f64,
     ) -> Self {
-        let content = schematic_bbox(sheet);
+        let content = schematic_bbox(sheet, &opts.schematic_defaults);
         let bbox = if opts.include_title_block {
             let (w, h) = sheet_paper_mm(sheet);
             if sheet_is_empty(sheet) {
@@ -325,7 +325,10 @@ mod tests {
             start: Point::new(10.0, 5.0),
             end: Point::new(230.0, 120.0),
         });
-        assert_eq!(schematic_bbox(&sheet), (10.0, 5.0, 230.0, 120.0));
+        assert_eq!(
+            schematic_bbox(&sheet, &Default::default()),
+            (10.0, 5.0, 230.0, 120.0)
+        );
     }
 
     #[test]
@@ -361,7 +364,7 @@ mod tests {
             stroke_color: None,
             locked: false,
         });
-        let (x1, y1, x2, y2) = schematic_bbox(&sheet);
+        let (x1, y1, x2, y2) = schematic_bbox(&sheet, &Default::default());
         assert!(x1 <= 10.0 && y1 <= 10.0 && x2 >= 452.0 && y2 >= 300.0);
         // The symbol body reaches 2 mm right of its origin, past the drawing.
         let opts = PdfOptions {

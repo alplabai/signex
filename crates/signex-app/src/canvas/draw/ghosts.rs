@@ -41,6 +41,7 @@ impl SchematicCanvas<'_> {
                 &ghost_transform,
                 ghost_color,
                 &self.prefs.canvas_colors,
+                &self.prefs.schematic_defaults,
             );
         }
     }
