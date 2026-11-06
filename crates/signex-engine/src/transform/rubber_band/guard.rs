@@ -80,8 +80,18 @@ pub(crate) mod self_check {
         ON.with(Cell::get)
     }
 
-    pub(crate) fn set(on: bool) {
-        ON.with(|flag| flag.set(on));
+    /// Turn the check off for this thread until the guard drops.
+    pub(crate) fn off() -> Off {
+        Off(ON.with(|flag| flag.replace(false)))
+    }
+
+    /// Restores the setting [`off`] found.
+    pub(crate) struct Off(bool);
+
+    impl Drop for Off {
+        fn drop(&mut self) {
+            ON.with(|flag| flag.set(self.0));
+        }
     }
 }
 

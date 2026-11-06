@@ -223,7 +223,7 @@ fn incremental_nets_bench() {
     };
     // The guard checks every incremental answer against the full derive in
     // tests; that would be timed here too.
-    crate::transform::rubber_band::self_check::set(false);
+    let check_off = crate::transform::rubber_band::self_check::off();
     let started = Instant::now();
     let incremental = MovePreview::new(&sheet);
     let new_cost = started.elapsed().as_secs_f64() * 1000.0;
@@ -249,7 +249,7 @@ fn incremental_nets_bench() {
     );
     println!("once per drag: incremental preview setup {new_cost:.3} ms");
 
-    crate::transform::rubber_band::self_check::set(true);
+    drop(check_off);
     for &(dx, dy) in &steps {
         let moves = [(target, dx, dy)];
         assert_eq!(

@@ -96,27 +96,37 @@ impl Kinds {
     fn of(sheet: &SchematicSheet, pins: &[(Uuid, Point)]) -> Self {
         Self {
             wires: Kind::new(
-                (sheet.wires.iter())
+                sheet
+                    .wires
+                    .iter()
                     .map(|w| rec(w.uuid, (w.start, w.end)))
                     .collect(),
             ),
             junctions: Kind::new(
-                (sheet.junctions.iter())
+                sheet
+                    .junctions
+                    .iter()
                     .map(|j| rec(j.uuid, j.position))
                     .collect(),
             ),
             labels: Kind::new(
-                (sheet.labels.iter())
+                sheet
+                    .labels
+                    .iter()
                     .map(|l| rec(l.uuid, (l.position, l.label_type, l.text.clone())))
                     .collect(),
             ),
             no_connects: Kind::new(
-                (sheet.no_connects.iter())
+                sheet
+                    .no_connects
+                    .iter()
                     .map(|n| rec(n.uuid, n.position))
                     .collect(),
             ),
             symbols: Kind::new(
-                (sheet.symbols.iter())
+                sheet
+                    .symbols
+                    .iter()
                     .map(|s| rec(s.uuid, SymGeom::of(sheet, s)))
                     .collect(),
             ),
