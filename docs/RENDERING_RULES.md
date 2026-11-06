@@ -143,22 +143,26 @@ during the clean-room rewrite.
 
 ## Stroke law — one zoom-to-stroke rule (#1858)
 
-Source: `crates/signex-types/src/schematic/stroke.rs`, applied by the CPU
-replay (`renderer_scene_canvas::SceneDrawOptions::stroke_px`), the GPU
+Source: `crates/signex-types/src/schematic/stroke.rs` (the zoom law and the
+floor) and `crates/signex-types/src/schematic/defaults.rs` (the stored-width
+rule, `SchematicDefaults`), applied by the CPU replay (`renderer_scene_canvas::SceneDrawOptions::stroke_px`), the GPU
 surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
 
 1. **Every stroke is a world width in mm, and one rule resolves a stored
-   width (#2091).** A stored width of `0` (or not a finite number) draws at
-   0.254 mm (10 mil, the stock symbols' width); an explicit width is floored
-   at 0.15 mm. The rule is `symbol_graphic_stroke_mm` / `wire_stroke_mm` and
-   covers symbol bodies, pins (the symbol's most common graphic width),
-   drawings (line, rectangle, circle, arc, polyline), child sheet frames,
-   wires and bus entries, and their previews and ghosts (the placed-wire
-   preview, the bus-entry ghost, the power-port ghost), on screen and in
-   SVG / PDF / print. Fixed widths that are not stored strokes: buses
-   0.45 mm, the no-connect X and No-ERC diamond 0.2 mm, global /
-   hierarchical label markers 0.15 mm, and the page frame lines (lowered
-   from the title-block frame). These widths do not change with zoom.
+   width (#2091, #2026).** A stored width of `0` (or not a finite number)
+   draws at the default, built-in 0.254 mm (10 mil, the stock symbols'
+   width); an explicit width is floored at 0.15 mm. The rule is
+   `SchematicDefaults::{symbol_line_mm, shape_stroke_mm, wire_mm}`:
+   `symbol_line_mm` covers symbol bodies and pins (the symbol's most common
+   graphic width), `shape_stroke_mm` drawings (line, rectangle, circle, arc,
+   polyline) and child sheet frames, `wire_mm` wires and bus entries and
+   their previews and ghosts (the placed-wire preview, the bus-entry ghost),
+   on screen and in SVG / PDF / print. Buses draw at `bus_mm`, 0.45 mm
+   built in; a bus stores no width. A project's `schematic_defaults` in the
+   `.snxprj` replaces the 0.254 (per kind) and the 0.45. Fixed widths no
+   project changes: the no-connect X and No-ERC diamond 0.2 mm, global /
+   hierarchical label markers 0.15 mm, and the page frame lines (lowered from
+   the title-block frame). These widths do not change with zoom.
 2. **Screen width is `mm * scale`**, so the ratio between any two kinds is the
    same at every zoom. Before #1858 each kind had its own curve (a per-kind
    px width times zoom, clamped), and pins ignored their library width, so

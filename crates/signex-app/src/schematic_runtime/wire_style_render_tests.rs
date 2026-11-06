@@ -21,8 +21,6 @@ fn sheet_with_wire() -> SchematicRenderSnapshot {
     sheet
 }
 
-/// The same wire with its width unset, so a class width applies to it: an
-/// explicit width beats the class (#2026).
 /// Hit-test widths from a class map alone, at the built-in defaults.
 fn class_widths(styles: &WireClassStyles) -> WireWidths<'_> {
     WireWidths {
@@ -31,6 +29,8 @@ fn class_widths(styles: &WireClassStyles) -> WireWidths<'_> {
     }
 }
 
+/// The same wire with its width unset, so a class width applies to it: an
+/// explicit width beats the class (#2026).
 fn sheet_with_unset_wire() -> SchematicRenderSnapshot {
     let mut sheet = sheet_with_wire();
     sheet.wires[0].stroke_width = 0.0;
