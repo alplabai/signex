@@ -347,15 +347,15 @@ pub(crate) fn apply_footprint_primitive_edit(
     // back before the settle below clears it.
     let tick_pending = editor.state.sketch_solve.tick_pending(generation_before);
     let redo = if tick_pending {
-        std::mem::take(&mut editor.redo)
+        std::mem::take(editor.history.redo_steps_mut())
     } else {
         Vec::new()
     };
     let (kept, evicted) = attempt.settle(editor);
     if editor.state.sketch_solve.has_unsolved() {
-        let history_len = editor.history.len();
+        let history_len = editor.history.undo_len();
         let step = (tick_pending && kept && editor.state.sketch_solve.awaiting_first_step())
-            .then(|| editor.history.last().cloned())
+            .then(|| editor.history.undo_steps().last().cloned())
             .flatten();
         editor
             .state

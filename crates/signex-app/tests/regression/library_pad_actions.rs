@@ -124,7 +124,7 @@ fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
         "Cut must remove the pad from the canvas"
     );
     assert_eq!(
-        editor.history.len(),
+        editor.history.undo_len(),
         1,
         "Cut must snapshot history so undo can restore the pad"
     );

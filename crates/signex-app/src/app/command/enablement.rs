@@ -368,7 +368,7 @@ impl Signex {
                 .footprint_editors
                 .get(path)
                 .map_or((false, false), |e| {
-                    (!e.history.is_empty(), !e.redo.is_empty())
+                    (!!e.history.can_undo(), !!e.history.can_redo())
                 }),
             Some(TabKind::ComponentEditor(tab)) => self.component_history_available(tab),
             Some(TabKind::Project(project_id)) => self.project_tab_history_available(*project_id),
@@ -509,9 +509,9 @@ mod tests {
         let _ = app.dispatch_command(&id("undo"), CommandArgs::none(), None);
 
         assert!(
-            app.document_state.footprint_editors[&path]
+            !app.document_state.footprint_editors[&path]
                 .history
-                .is_empty()
+                .can_undo()
         );
         assert!(enabled(&app, "redo"));
     }
@@ -948,9 +948,9 @@ mod tests {
         let engine = &app.document_state.engines[&path];
         assert!(engine.can_redo(), "the undocked sheet was undone");
         assert!(
-            !app.document_state.footprint_editors[&footprint]
+            app.document_state.footprint_editors[&footprint]
                 .history
-                .is_empty(),
+                .can_undo(),
             "the main window's footprint editor kept its step"
         );
         assert_eq!(app.document_state.active_tab, main_tab);

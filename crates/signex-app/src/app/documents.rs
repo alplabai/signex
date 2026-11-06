@@ -530,9 +530,6 @@ pub struct FootprintDocument {
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
     dirty: bool,
-    /// The undo depth at which this draft last equalled its file, so Undo
-    /// back to it reads clean (#1854). Unknown stays dirty.
-    pub(crate) save_point: super::SavePoint,
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
@@ -540,16 +537,11 @@ pub struct FootprintDocument {
     /// left behind and a retry can still move; the next Save cascades them
     /// even with no new edit.
     pub cascade_owed: Vec<uuid::Uuid>,
-    /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
-    /// pushed by `push_history` ahead of each dispatcher mutation;
-    /// `undo()` pops the most recent and swaps it in. Capped at
-    /// [`Self::HISTORY_DEPTH`] to keep memory bounded.
-    pub history: Vec<FootprintHistorySnapshot>,
-    /// v0.24 Phase 1 (Track B) — Redo stack. Populated by `undo()`
-    /// with the snapshot it just rolled back; cleared by any new
-    /// mutation that calls `push_history` so the redo lineage stays
-    /// consistent with single-history-tree semantics.
-    pub redo: Vec<FootprintHistorySnapshot>,
+    /// Undo / redo snapshots, capped at [`Self::HISTORY_DEPTH`], and the
+    /// depth at which this draft last equalled its file, so Undo back to it
+    /// reads clean (#1854). Pre-mutation snapshots are recorded ahead of
+    /// each dispatcher mutation; a new one clears redo.
+    pub history: super::History<FootprintHistorySnapshot>,
     /// The field the last [`Self::record_edit`] changed, tagged with the
     /// footprint it belonged to: a field key names a pad index or a
     /// sketch id, which only identify something within one footprint of
@@ -606,7 +598,7 @@ impl FootprintDocument {
     /// (or restores the point from its snapshot, see [`Self::commit_history`]).
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
-        self.save_point.forget_if_at(self.history.len());
+        self.history.forget_if_current();
     }
 
     /// Set the flag outright: a save or discard clears it.
@@ -617,23 +609,21 @@ impl FootprintDocument {
     /// A save is writing the current content: it is the state Undo and Redo
     /// return to as clean, and the flag clears until the next edit.
     pub fn mark_saved(&mut self) {
-        self.save_point.mark_saved(self.history.len());
+        self.history.mark_saved();
         self.dirty = false;
     }
 
     /// An edit was rejected and the document is as `snap` captured it: give
     /// back the save point and the flag the edit's `mark_dirty` disturbed.
     pub(crate) fn give_back_rejected_edit(&mut self, point: super::SavePoint, dirty_before: bool) {
-        self.save_point = point;
+        self.history.set_point(point);
         self.dirty = dirty_before || !self.cascade_owed.is_empty();
     }
 
     /// Dirty exactly when the history is away from the saved depth (or rows
     /// are still owed): the flag after an Undo or Redo.
     fn sync_dirty_to_history(&mut self) {
-        self.save_point
-            .limit_to(self.history.len(), self.redo.len());
-        self.dirty = !self.save_point.is_at(self.history.len()) || !self.cascade_owed.is_empty();
+        self.dirty = self.history.is_dirty() || !self.cascade_owed.is_empty();
     }
 
     /// Build a fresh standalone editor state from a `FootprintFile`
@@ -686,15 +676,13 @@ impl FootprintDocument {
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,
-            save_point: if repaired {
-                super::SavePoint::unknown()
-            } else {
-                super::SavePoint::at_start()
-            },
             save_generation: 0,
             cascade_owed: Vec::new(),
-            history: Vec::new(),
-            redo: Vec::new(),
+            history: if repaired {
+                super::History::unknown(Self::HISTORY_DEPTH)
+            } else {
+                super::History::at_start(Self::HISTORY_DEPTH)
+            },
             last_edit_key: None,
         }
     }
@@ -788,14 +776,8 @@ impl FootprintDocument {
         &mut self,
         snap: FootprintHistorySnapshot,
     ) -> Option<FootprintHistorySnapshot> {
-        self.save_point = snap.point;
-        self.save_point.redo_cleared(self.history.len());
-        self.history.push(snap);
-        let evicted = (self.history.len() > Self::HISTORY_DEPTH).then(|| self.history.remove(0));
-        if evicted.is_some() {
-            self.save_point.evicted_oldest();
-        }
-        self.redo.clear();
+        self.history.set_point(snap.point);
+        let evicted = self.history.record(snap);
         self.last_edit_key = None;
         evicted
     }
@@ -848,15 +830,12 @@ impl FootprintDocument {
         // A drag still owed its solve has unsolved steps in the history;
         // settling collapses them into one solved step before undo reads it.
         self.settle_pending_solve();
-        let Some(snap) = self.history.pop() else {
+        let Some(snap) = self.history.begin_step(true) else {
             return false;
         };
         self.last_edit_key = None;
         let current = self.snapshot();
-        self.redo.push(current);
-        if self.redo.len() > Self::HISTORY_DEPTH {
-            self.redo.remove(0);
-        }
+        self.history.finish_step(current, true);
         self.restore(snap);
         self.sync_dirty_to_history();
         true
@@ -867,16 +846,12 @@ impl FootprintDocument {
     /// the redo stack is empty.
     pub fn redo(&mut self) -> bool {
         self.settle_pending_solve();
-        let Some(snap) = self.redo.pop() else {
+        let Some(snap) = self.history.begin_step(false) else {
             return false;
         };
         self.last_edit_key = None;
         let current = self.snapshot();
-        self.history.push(current);
-        if self.history.len() > Self::HISTORY_DEPTH {
-            self.history.remove(0);
-            self.save_point.evicted_oldest();
-        }
+        self.history.finish_step(current, false);
         self.restore(snap);
         self.sync_dirty_to_history();
         true
@@ -893,7 +868,7 @@ impl FootprintDocument {
             selected_pad: self.state.selected_pad,
             selected_sketch: self.state.selected_sketch,
             selected_sketch_secondary: self.state.selected_sketch_secondary,
-            point: self.save_point,
+            point: self.history.point(),
         }
     }
 

@@ -37,7 +37,7 @@ impl Signex {
         }
         if let Some(editor) = ds.footprint_editors.get(path) {
             feed(&mut hasher, &editor.file);
-            editor.history.len().hash(&mut hasher);
+            editor.history.undo_len().hash(&mut hasher);
         }
         for tab in ds.tabs.iter().filter(|t| t.path == path) {
             if let Some(crate::app::TabDocument::Pcb(board)) = &tab.cached_document {

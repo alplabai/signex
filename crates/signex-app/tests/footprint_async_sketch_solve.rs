@@ -208,7 +208,7 @@ fn a_stale_result_after_a_newer_edit_is_dropped() {
     dispatch(&mut app, &path, drag(p2, 0.5));
     let pads_before = editor(&app, &path).primitive().pads.clone();
     let warnings_before = editor(&app, &path).state.solve_warnings.clone();
-    let history_before = editor(&app, &path).history.len();
+    let history_before = editor(&app, &path).history.undo_len();
 
     dispatch(&mut app, &path, stale);
 
@@ -219,7 +219,7 @@ fn a_stale_result_after_a_newer_edit_is_dropped() {
         "a stale answer bakes nothing"
     );
     assert_eq!(e.state.solve_warnings, warnings_before);
-    assert_eq!(e.history.len(), history_before, "and records nothing");
+    assert_eq!(e.history.undo_len(), history_before, "and records nothing");
     assert!(
         e.state.sketch_solve.is_solve_owed(),
         "the newer sketch is still owed its solve"
@@ -268,7 +268,7 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
         _dir,
     } = fixture("undo-equiv");
     let original = editor(&app, &path).primitive().sketch.clone();
-    assert_eq!(editor(&app, &path).history.len(), 0);
+    assert_eq!(editor(&app, &path).history.undo_len(), 0);
     assert!(!editor(&app, &path).is_dirty());
 
     for _ in 0..2 {
@@ -279,7 +279,7 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
 
     let e = editor(&app, &path);
     assert_eq!(
-        e.history.len(),
+        e.history.undo_len(),
         2,
         "applying a result adds no step of its own"
     );
@@ -313,16 +313,21 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
         reference.set_dirty(true);
     }
     let moved = |sk: &Option<SketchData>, id| point(sk.as_ref().unwrap(), id);
-    assert_eq!(e.history.len(), reference.history.len());
+    assert_eq!(e.history.undo_len(), reference.history.undo_len());
     assert_eq!(e.is_dirty(), reference.is_dirty());
-    for (got, want) in e.history.iter().zip(&reference.history) {
+    for (got, want) in e
+        .history
+        .undo_steps()
+        .iter()
+        .zip(reference.history.undo_steps())
+    {
         assert_eq!(
             moved(&got.file.footprints[0].sketch, p2),
             moved(&want.file.footprints[0].sketch, ref_p2),
             "each undo step restores the same sketch the inline path would"
         );
     }
-    assert_eq!(e.redo.len(), reference.redo.len());
+    assert_eq!(e.history.redo_len(), reference.history.redo_len());
     assert_eq!(
         moved(&e.primitive().sketch, p2),
         moved(&reference.primitive().sketch, ref_p2),
@@ -419,7 +424,11 @@ fn a_conflicting_drag_is_rejected_like_the_inline_path_rejects_it() {
         good,
         "the sketch is back at its last good state"
     );
-    assert_eq!(e.history.len(), 0, "a rejected drag leaves no undo step");
+    assert_eq!(
+        e.history.undo_len(),
+        0,
+        "a rejected drag leaves no undo step"
+    );
     assert!(!e.is_dirty(), "and does not dirty the document");
     assert!(!e.state.conflict.is_empty(), "the conflict is highlighted");
     assert!(
@@ -589,9 +598,10 @@ fn an_edit_between_a_rejected_drag_and_its_result_keeps_its_own_undo_step() {
         e.is_dirty(),
         "the rename is unsaved, so the document is dirty"
     );
-    assert_eq!(e.history.len(), 1, "exactly the rename's step is left");
+    assert_eq!(e.history.undo_len(), 1, "exactly the rename's step is left");
     assert_eq!(
-        e.history[0].file.footprints[0].name, "interleaved",
+        e.history.undo_steps()[0].file.footprints[0].name,
+        "interleaved",
         "and it is the step that undoes the rename"
     );
     assert_eq!(
@@ -615,33 +625,37 @@ fn a_rejected_drag_gives_back_the_redo_stack_and_the_evicted_history() {
             e.push_history();
         }
         // A full history, and one undone step waiting to be redone.
-        assert_eq!(e.history.len(), FootprintDocument::HISTORY_DEPTH);
-        let mut undone = e.history[0].clone();
+        assert_eq!(e.history.undo_len(), FootprintDocument::HISTORY_DEPTH);
+        let mut undone = e.history.undo_steps()[0].clone();
         undone.file.footprints[0].name = "undone".into();
-        e.redo.push(undone);
+        e.history.redo_steps_mut().push(undone);
         e.set_dirty(false);
     }
     let (first, redo_name) = {
         let e = editor(&app, &path);
         (
-            e.history[0].file.footprints[0].name.clone(),
-            e.redo[0].file.footprints[0].name.clone(),
+            e.history.undo_steps()[0].file.footprints[0].name.clone(),
+            e.history.redo_steps()[0].file.footprints[0].name.clone(),
         )
     };
 
     dispatch(&mut app, &path, drag(p2, 12.0));
-    assert!(editor(&app, &path).redo.is_empty(), "the tick cleared redo");
+    assert!(
+        !editor(&app, &path).history.can_redo(),
+        "the tick cleared redo"
+    );
     let answer = solve_now(&app, &path);
     dispatch(&mut app, &path, answer);
 
     let e = editor(&app, &path);
-    assert_eq!(e.history.len(), FootprintDocument::HISTORY_DEPTH);
+    assert_eq!(e.history.undo_len(), FootprintDocument::HISTORY_DEPTH);
     assert_eq!(
-        e.history[0].file.footprints[0].name, first,
+        e.history.undo_steps()[0].file.footprints[0].name,
+        first,
         "the evicted step is back"
     );
-    assert_eq!(e.redo.len(), 1, "the redo step is back");
-    assert_eq!(e.redo[0].file.footprints[0].name, redo_name);
+    assert_eq!(e.history.redo_len(), 1, "the redo step is back");
+    assert_eq!(e.history.redo_steps()[0].file.footprints[0].name, redo_name);
 }
 
 #[test]
@@ -935,7 +949,7 @@ fn undo_after_a_drag_batch_restores_the_last_solved_state_and_saves_it() {
     let (mut app, path, centre, _dir) = chamfered_pad_editor("undo-save");
     three_ticks_with_two_solves(&mut app, &path, centre);
     // Tick 1 was solved alone; ticks 2 and 3 were one batch: two steps.
-    assert_eq!(editor(&app, &path).history.len(), 2);
+    assert_eq!(editor(&app, &path).history.undo_len(), 2);
 
     assert!(
         app.document_state
@@ -993,12 +1007,12 @@ fn a_long_drag_is_one_undo_step() {
 
     let e = editor(&app, &path);
     assert_eq!(
-        e.history.len(),
+        e.history.undo_len(),
         4,
         "three earlier steps and one for the drag"
     );
     assert!(e.is_dirty());
-    let drag_step = &e.history[3];
+    let drag_step = &e.history.undo_steps()[3];
     assert_eq!(
         point(drag_step.file.footprints[0].sketch.as_ref().unwrap(), p2),
         (8.0, 0.0),
@@ -1021,7 +1035,7 @@ fn a_drag_through_a_conflict_and_back_undoes_to_the_pre_drag_state() {
     let answer = solve_now(&app, &path);
     dispatch(&mut app, &path, answer);
     assert_eq!(
-        editor(&app, &path).history.len(),
+        editor(&app, &path).history.undo_len(),
         1,
         "one step for the drag"
     );
@@ -1061,7 +1075,7 @@ fn undo_after_a_collapsed_drag_restores_the_pre_drag_sketch_and_pads() {
     }
     let answer = solve_now(&app, &path);
     dispatch(&mut app, &path, answer);
-    assert_eq!(editor(&app, &path).history.len(), 1);
+    assert_eq!(editor(&app, &path).history.undo_len(), 1);
 
     assert!(
         app.document_state
@@ -1091,13 +1105,14 @@ fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
             e.file.footprints[0].name = format!("pre{i}");
             e.push_history();
         }
-        let mut undone = e.history[0].clone();
+        let mut undone = e.history.undo_steps()[0].clone();
         undone.file.footprints[0].name = "undone".into();
-        e.redo.push(undone);
+        e.history.redo_steps_mut().push(undone);
         e.set_dirty(false);
     }
     let before: Vec<String> = editor(&app, &path)
         .history
+        .undo_steps()
         .iter()
         .map(|s| s.file.footprints[0].name.clone())
         .collect();
@@ -1107,7 +1122,7 @@ fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
         dispatch(&mut app, &path, drag(p2, 0.1));
     }
     assert_eq!(
-        editor(&app, &path).history.len(),
+        editor(&app, &path).history.undo_len(),
         FootprintDocument::HISTORY_DEPTH,
         "the ticks filled the history"
     );
@@ -1117,6 +1132,7 @@ fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
     let e = editor(&app, &path);
     let after: Vec<String> = e
         .history
+        .undo_steps()
         .iter()
         .map(|s| s.file.footprints[0].name.clone())
         .collect();
@@ -1127,11 +1143,12 @@ fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
     );
     assert!(
         e.history
+            .undo_steps()
             .iter()
             .all(|s| point(s.file.footprints[0].sketch.as_ref().unwrap(), p2) == (8.0, 0.0)),
         "no undo step holds the rejected geometry"
     );
-    assert_eq!(e.redo.len(), 1, "the redo step is back");
+    assert_eq!(e.history.redo_len(), 1, "the redo step is back");
     assert!(!e.is_dirty());
 }
 
@@ -1209,7 +1226,7 @@ fn drag_with_idle_ticks(stem: &str, idle_between: usize, idle_last: usize) {
     dispatch(&mut app, &path, answer);
 
     assert_eq!(
-        editor(&app, &path).history.len(),
+        editor(&app, &path).history.undo_len(),
         1,
         "the drag is one undo step however many idle ticks it had"
     );
@@ -1259,7 +1276,7 @@ fn a_drag_of_only_zero_motion_ticks_records_nothing() {
 
     let e = editor(&app, &path);
     assert_eq!(
-        e.history.len(),
+        e.history.undo_len(),
         0,
         "no undo step for a drag that moved nothing"
     );
@@ -1287,6 +1304,7 @@ fn a_drag_longer_than_the_history_collapses_without_a_warning() {
     }
     let before: Vec<String> = editor(&app, &path)
         .history
+        .undo_steps()
         .iter()
         .map(|s| s.file.footprints[0].name.clone())
         .collect();
@@ -1302,6 +1320,7 @@ fn a_drag_longer_than_the_history_collapses_without_a_warning() {
     let e = editor(&app, &path);
     let names: Vec<String> = e
         .history
+        .undo_steps()
         .iter()
         .map(|s| s.file.footprints[0].name.clone())
         .collect();
@@ -1313,7 +1332,10 @@ fn a_drag_longer_than_the_history_collapses_without_a_warning() {
     assert_eq!(names[..PRE], before[..], "the earlier steps are back");
     assert_eq!(
         point(
-            e.history[PRE].file.footprints[0].sketch.as_ref().unwrap(),
+            e.history.undo_steps()[PRE].file.footprints[0]
+                .sketch
+                .as_ref()
+                .unwrap(),
             p2
         ),
         (8.0, 0.0),
@@ -1342,10 +1364,13 @@ fn a_mode_switch_during_an_accepted_drag_keeps_no_unsolved_step() {
     dispatch(&mut app, &path, set_mode_normal());
 
     let e = editor(&app, &path);
-    assert_eq!(e.history.len(), 1, "the drag is one undo step");
+    assert_eq!(e.history.undo_len(), 1, "the drag is one undo step");
     assert_eq!(
         point(
-            e.history[0].file.footprints[0].sketch.as_ref().unwrap(),
+            e.history.undo_steps()[0].file.footprints[0]
+                .sketch
+                .as_ref()
+                .unwrap(),
             centre
         ),
         (0.0, 0.0),
@@ -1393,11 +1418,11 @@ fn a_mode_switch_during_a_conflicting_drag_rolls_the_drag_back() {
         e.file.footprints[0].name.push_str("-edited");
         e.push_history();
         assert!(e.undo());
-        assert_eq!(e.redo.len(), 1);
+        assert_eq!(e.history.redo_len(), 1);
         e.set_dirty(false);
     }
     let good = editor(&app, &path).primitive().sketch.clone();
-    let history_before = editor(&app, &path).history.len();
+    let history_before = editor(&app, &path).history.undo_len();
 
     dispatch(&mut app, &path, drag(p2, 12.0));
     dispatch(&mut app, &path, set_mode_normal());
@@ -1409,11 +1434,11 @@ fn a_mode_switch_during_a_conflicting_drag_rolls_the_drag_back() {
         "the sketch is back at its last good state"
     );
     assert_eq!(
-        e.history.len(),
+        e.history.undo_len(),
         history_before,
         "the drag left no undo step"
     );
-    assert_eq!(e.redo.len(), 1, "the redo stack was given back");
+    assert_eq!(e.history.redo_len(), 1, "the redo stack was given back");
 
     save(&mut app, &path);
     assert_eq!(

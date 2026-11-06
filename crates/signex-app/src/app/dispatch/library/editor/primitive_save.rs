@@ -506,7 +506,7 @@ impl Signex {
                     editor.baseline = saved;
                     editor.cascade_owed = owed.to_vec();
                     if editor.is_dirty() && !versions.is_empty() {
-                        editor.save_point.forget();
+                        editor.history.forget();
                     }
                     editor.is_dirty()
                 }),
@@ -692,7 +692,7 @@ impl Signex {
         if let Some(editor) = document.symbol_editors.get_mut(path) {
             editor.history.forget();
         } else if let Some(editor) = document.footprint_editors.get_mut(path) {
-            editor.save_point.forget();
+            editor.history.forget();
         }
     }
 

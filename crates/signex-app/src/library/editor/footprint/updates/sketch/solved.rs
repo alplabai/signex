@@ -128,9 +128,9 @@ fn rewind_history_to_batch_start(editor: &mut FootprintDocument, batch: &mut Uns
     // A drag long enough to push its own first step off the bottom leaves
     // nothing at the anchor to compare; that is expected, not an anomaly.
     let first_step_evicted = batch.evictions > batch.history_len_before;
-    let intact = editor.history.len() >= prefix
+    let intact = editor.history.undo_len() >= prefix
         && (first_step_evicted
-            || match (&batch.first_step, editor.history.get(prefix)) {
+            || match (&batch.first_step, editor.history.undo_steps().get(prefix)) {
                 (Some(first), Some(at)) => at.file == first.file,
                 (None, None) => true,
                 _ => false,
@@ -141,10 +141,11 @@ fn rewind_history_to_batch_start(editor: &mut FootprintDocument, batch: &mut Uns
              the drag's steps were reset to the state before it",
         );
     }
-    editor.history.truncate(prefix);
+    editor.history.undo_steps_mut().truncate(prefix);
     let evicted = std::mem::take(&mut batch.evicted);
     editor
         .history
+        .undo_steps_mut()
         .splice(0..0, evicted.into_iter().take(batch.history_len_before));
 }
 
@@ -158,19 +159,19 @@ fn collapse_batch_history(editor: &mut FootprintDocument, mut batch: UnsolvedEdi
         return;
     };
     rewind_history_to_batch_start(editor, &mut batch);
-    editor.history.push(first_step);
-    if editor.history.len() > FootprintDocument::HISTORY_DEPTH {
-        editor.history.remove(0);
+    let steps = editor.history.undo_steps_mut();
+    steps.push(first_step);
+    if steps.len() > FootprintDocument::HISTORY_DEPTH {
+        steps.remove(0);
     }
     // The rewrite dropped or re-added steps by hand: a save point that sat
     // on a step it removed cannot be told from here. A batch that never
     // pushed a step off a full history kept every depth below the drag, so
     // only that case keeps the point (#1854).
     if batch.evictions > 0 {
-        editor.save_point.forget();
+        editor.history.forget();
     }
-    let (undo, redo) = (editor.history.len(), editor.redo.len());
-    editor.save_point.limit_to(undo, redo);
+    editor.history.settle_point();
 }
 
 /// The drag over-constrained the sketch: put it back as it was before the
@@ -201,9 +202,9 @@ fn reject_conflicting_edit(
         rewind_history_to_batch_start(editor, &mut unsolved);
     }
     if let Some(redo) = unsolved.redo_before.take()
-        && editor.redo.is_empty()
+        && !editor.history.can_redo()
     {
-        editor.redo = redo;
+        *editor.history.redo_steps_mut() = redo;
     }
     if let Some(dirty_before) = unsolved.dirty_before {
         // The point is given back only when the rewind restored every step

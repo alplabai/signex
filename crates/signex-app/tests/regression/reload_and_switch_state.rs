@@ -157,7 +157,7 @@ fn footprint_edits_around_a_sibling_switch_are_two_undo_steps() {
     let editor = &app.document_state.footprint_editors[&path];
     assert_eq!(editor.active_idx, 0);
     assert_eq!(
-        editor.history.len(),
+        editor.history.undo_len(),
         2,
         "the second edit of A must be its own undo step"
     );
@@ -180,5 +180,10 @@ fn footprint_typing_in_one_field_still_coalesces() {
         );
     }
 
-    assert_eq!(app.document_state.footprint_editors[&path].history.len(), 1);
+    assert_eq!(
+        app.document_state.footprint_editors[&path]
+            .history
+            .undo_len(),
+        1
+    );
 }
