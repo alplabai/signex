@@ -252,6 +252,7 @@ pub(in crate::canvas) mod tests {
             no_erc_directives: Vec::new(),
             title_block: Default::default(),
             text_widths: Default::default(),
+            text_extents: Default::default(),
             lib_symbols: Default::default(),
             net_colors: Default::default(),
             drawing_placements: Default::default(),

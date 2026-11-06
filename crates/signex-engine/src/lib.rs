@@ -441,6 +441,18 @@ impl Engine {
         &self,
         colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     ) -> Result<String, EngineError> {
+        self.serialize_with_extents(colors, |_| None)
+    }
+
+    /// [`Self::serialize_with_net_colors`] with the stored text widths
+    /// refreshed on the copy being encoded: `measure` answers for texts whose
+    /// face is installed, the others keep their loaded record (#2029). The
+    /// document itself is untouched.
+    pub fn serialize_with_extents(
+        &self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
+    ) -> Result<String, EngineError> {
         let mut sheet = self.document.clone();
         let live: std::collections::HashSet<uuid::Uuid> = sheet
             .wires
@@ -453,6 +465,7 @@ impl Engine {
             .filter(|(id, _)| live.contains(id))
             .map(|(id, color)| (*id, *color))
             .collect();
+        sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
         Self::encode(sheet)
     }
 
@@ -463,10 +476,20 @@ impl Engine {
         &mut self,
         colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     ) -> Result<Vec<u8>, EngineError> {
+        self.save_with_extents(colors, |_| None)
+    }
+
+    /// [`Self::save_with_net_colors`] refreshing the stored text widths with
+    /// `measure`; see [`Self::serialize_with_extents`].
+    pub fn save_with_extents(
+        &mut self,
+        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
+    ) -> Result<Vec<u8>, EngineError> {
         let Some(path) = self.path.clone() else {
             return Err(EngineError::MissingPath);
         };
-        let bytes = self.serialize_with_net_colors(colors)?.into_bytes();
+        let bytes = self.serialize_with_extents(colors, measure)?.into_bytes();
         signex_types::atomic_io::atomic_write_existing_dir(&path, &bytes)
             .map_err(EngineError::SaveFailed)?;
         Ok(bytes)

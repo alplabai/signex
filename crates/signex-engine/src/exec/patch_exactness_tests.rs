@@ -290,6 +290,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         // Loaded baseline only; the app owns the live overrides and no command edits them.
         // Derived measurement cache, not document state.
         text_widths: _,
+        text_extents: _,
         net_colors: _,
         drawing_placements,
         paper_size,

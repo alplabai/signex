@@ -339,6 +339,8 @@ mod save_as_by_document_kind;
 mod stable_addressing;
 #[path = "regression/symbol_body_style.rs"]
 mod symbol_body_style;
+#[path = "regression/text_extents_save.rs"]
+mod text_extents_save;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
