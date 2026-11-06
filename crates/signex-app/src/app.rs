@@ -18,6 +18,7 @@ pub mod command_palette;
 pub mod contracts;
 mod dir_listing;
 pub(crate) mod dispatch;
+mod document;
 pub mod document_read;
 mod documents;
 pub(crate) mod file_extension;
@@ -77,6 +78,7 @@ pub use contracts::{
     TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, UiMsg,
     VersionControlScope, WindowMsg,
 };
+pub(crate) use document::{Document, DocumentKey};
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,

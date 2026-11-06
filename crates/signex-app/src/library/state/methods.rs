@@ -1,7 +1,7 @@
 //! `LibraryState` / `OpenLibrary` methods (open/close/refresh/reload).
 
 use super::*;
-use crate::app::CaseFold;
+use crate::app::{CaseFold, Document};
 
 /// Move one primitive listing onto its cache, keeping the previous
 /// contents when the adapter failed.
@@ -624,7 +624,7 @@ impl LibraryState {
         let mut keys: Vec<EditorAddress> = self
             .editors
             .iter()
-            .filter(|(key, st)| st.dirty && include(key))
+            .filter(|(key, st)| Document::is_dirty(*st) && include(key))
             .map(|(key, _)| key.clone())
             .collect();
         keys.sort_by(|a, b| {
