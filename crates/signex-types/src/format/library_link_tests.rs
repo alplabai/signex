@@ -233,7 +233,10 @@ fn a_chosen_footprint_binding_round_trips_and_an_older_stamp_loads_as_the_defaul
         ..linked(1)
     };
     let text = write(&sheet(vec![chosen.clone()]));
-    assert!(text.contains("footprint_ref = \"0000aaaa:0000bbbb\""), "{text}");
+    assert!(
+        text.contains("footprint_ref = \"0000aaaa:0000bbbb\""),
+        "{text}"
+    );
     let back = SnxSchematic::parse(&text).unwrap().sheet;
     assert_eq!(stamp_of(&back), chosen.library_stamp);
     assert_eq!(write(&back), text, "the encoding must be stable");
