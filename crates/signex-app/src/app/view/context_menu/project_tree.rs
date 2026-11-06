@@ -104,32 +104,28 @@ impl Signex {
     pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
-    ) -> Element<'_, Message> {
+    ) -> (Element<'_, Message>, f32) {
         let tokens = &self.document_state.panel_ctx.tokens;
         // No entries (an empty-area click, or a row that no longer exists)
         // renders an empty placeholder so the overlay layer above has
         // something to render into.
         let Some(v) = self.project_tree_entries(ctx) else {
-            return container(iced::widget::Space::new()).boxed();
+            return (
+                container(iced::widget::Space::new()).boxed(),
+                Self::CONTEXT_MENU_WIDTH,
+            );
         };
-        let width = self.project_tree_menu_width(ctx);
-        signex_widgets::active_bar_dropdown::view(v, tokens, Some(width))
-    }
-
-    /// Width of the project-tree menu: fitted to its labels, at most the
-    /// shared context-menu width. The submenu flyout opens at this edge.
-    pub(in crate::app::view) fn project_tree_menu_width(
-        &self,
-        ctx: &crate::app::ProjectTreeContextMenuState,
-    ) -> f32 {
-        self.project_tree_entries(ctx)
-            .map_or(Self::CONTEXT_MENU_WIDTH, |v| {
-                signex_widgets::active_bar_dropdown::fitted_width(
-                    &v,
-                    Self::CONTEXT_MENU_WIDTH,
-                    &self.document_state.panel_ctx.ui_font_name,
-                )
-            })
+        // The width is fitted to the labels, at most the shared context-menu
+        // width. The submenu flyout opens at this edge.
+        let width = signex_widgets::active_bar_dropdown::fitted_width(
+            &v,
+            Self::CONTEXT_MENU_WIDTH,
+            &self.document_state.panel_ctx.ui_font_name,
+        );
+        (
+            signex_widgets::active_bar_dropdown::view(v, tokens, Some(width)),
+            width,
+        )
     }
 
     /// The pure row data behind [`Self::view_project_tree_context_menu`]:

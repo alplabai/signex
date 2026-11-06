@@ -472,9 +472,7 @@ impl SchematicCanvas<'_> {
         let Some((symbol, key)) = self.focused_pin.as_ref() else {
             return;
         };
-        if !self.selected.iter().any(|item| {
-            item.uuid == *symbol && item.kind == signex_types::schematic::SelectedKind::Symbol
-        }) {
+        if !crate::canvas::pin_focus::is_sole_selected_symbol(&self.selected, *symbol) {
             return;
         }
         let Some(line) = signex_types::schematic::symbol_pin_line(snapshot, *symbol, key) else {

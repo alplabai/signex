@@ -230,3 +230,58 @@ fn a_box_selection_of_several_parts_moves_each_text_once() {
         );
     }
 }
+
+/// A user-placed text is not turned by its part's turn (the autoplacer skips
+/// it), so its own item still turns it, once.
+#[test]
+fn a_user_placed_text_still_turns_once_with_its_part() {
+    let mut engine = engine();
+    {
+        let mut sheet = engine.document().clone();
+        sheet.symbols[0].fields_user_placed = true;
+        sheet.symbols[0].fields_autoplaced = false;
+        engine = Engine::new(sheet).expect("engine");
+    }
+    engine
+        .execute(Command::RotateSelection {
+            items: with_fields(),
+            angle_degrees: 90.0,
+            keep_wires: false,
+        })
+        .expect("rotate");
+    let s = &engine.document().symbols[0];
+    assert_eq!(
+        s.ref_text.as_ref().unwrap().rotation,
+        90.0,
+        "designator turns once"
+    );
+    assert_eq!(
+        s.val_text.as_ref().unwrap().rotation,
+        90.0,
+        "value turns once"
+    );
+}
+
+/// The part's move carries user-placed texts too, so they still move once.
+#[test]
+fn a_user_placed_text_moves_once_with_its_part() {
+    let mut engine = engine();
+    {
+        let mut sheet = engine.document().clone();
+        sheet.symbols[0].fields_user_placed = true;
+        engine = Engine::new(sheet).expect("engine");
+    }
+    engine
+        .execute(Command::MoveSelection {
+            items: with_fields(),
+            dx: 2.54,
+            dy: 5.08,
+            keep_wires: false,
+        })
+        .expect("move");
+    assert_texts(
+        &engine,
+        [(12.54, 15.08), (7.54, 13.08), (7.54, 17.08)],
+        "user-placed",
+    );
+}

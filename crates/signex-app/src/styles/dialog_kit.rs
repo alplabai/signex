@@ -102,12 +102,7 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let disabled = on_press.is_none();
-    let color = match kind {
-        _ if disabled => ti(tokens.text_secondary),
-        DialogButtonKind::Primary => tokens::on_accent(tokens),
-        DialogButtonKind::Secondary => ti(tokens.text),
-        DialogButtonKind::Danger => tokens::danger(tokens),
-    };
+    let color = label_color(kind, disabled, tokens);
     let label_w = label.chars().count() as f32 * TS.body * GLYPH_ADVANCE_EM;
     let width = (label_w + 2.0 * SP.l).max(TS.body * BUTTON_MIN_WIDTH_EM);
     let face = text(label.to_string())
@@ -129,6 +124,16 @@ pub fn dialog_button<'a, M: Clone + 'a>(
         DialogButtonKind::Danger => btn.style(danger_button(tokens)),
     }
     .boxed()
+}
+
+/// Label colour of a dialog button: muted when it has no action, whatever its role.
+fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> iced::Color {
+    match kind {
+        _ if disabled => ti(tokens.text_secondary),
+        DialogButtonKind::Primary => tokens::on_accent(tokens),
+        DialogButtonKind::Secondary => ti(tokens.text),
+        DialogButtonKind::Danger => tokens::danger(tokens),
+    }
 }
 
 /// A button without an action: no fill, a half-strength border, the muted
@@ -203,5 +208,39 @@ mod tests {
             let _: Element<'_, ()> = dialog_footer(vec![dialog_hint("x", &tokens)]);
         }
         assert!(dialog_footer_height() > TS.body * BUTTON_HEIGHT_EM);
+    }
+
+    /// A button without an action never looks clickable: no fill, no hover
+    /// fill, and the muted label, for every role and theme.
+    #[test]
+    fn a_disabled_button_has_no_fill_and_a_muted_label_for_every_theme() {
+        for id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(*id);
+            for status in [
+                button::Status::Disabled,
+                button::Status::Hovered,
+                button::Status::Pressed,
+            ] {
+                let style = disabled_button(&tokens)(&Theme::Dark, status);
+                assert!(style.background.is_none(), "{id:?} {status:?}");
+                assert_eq!(style.text_color, ti(tokens.text_secondary), "{id:?}");
+            }
+            for kind in [
+                DialogButtonKind::Primary,
+                DialogButtonKind::Secondary,
+                DialogButtonKind::Danger,
+            ] {
+                assert_eq!(
+                    label_color(kind, true, &tokens),
+                    ti(tokens.text_secondary),
+                    "{id:?} {kind:?}"
+                );
+                assert_ne!(
+                    label_color(kind, false, &tokens),
+                    ti(tokens.text_secondary),
+                    "{id:?} {kind:?}: an enabled label is not the muted one"
+                );
+            }
+        }
     }
 }

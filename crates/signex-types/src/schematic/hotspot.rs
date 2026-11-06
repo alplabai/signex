@@ -226,7 +226,44 @@ impl MoveHotspots {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schematic::{Junction, Wire};
+    use crate::schematic::{
+        Junction, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
+    };
+
+    /// A sheet with one part, whose lib entry has pins at local (0, ±4):
+    /// their tips are hotspots, off the grid the wires use.
+    fn add_part_with_pins(sheet: &mut SchematicSheet, at: (f64, f64)) {
+        let mut lib: LibSymbol =
+            serde_json::from_value(serde_json::json!({ "id": "L:S" })).expect("lib symbol");
+        lib.pins = [4.0, -4.0]
+            .into_iter()
+            .enumerate()
+            .map(|(n, y)| LibPin {
+                unit: 0,
+                body_style: 1,
+                pin: Pin {
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
+                    position: Point::new(0.0, y),
+                    rotation: 0.0,
+                    length: 1.27,
+                    name: String::new(),
+                    number: (n + 1).to_string(),
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
+                },
+            })
+            .collect();
+        sheet.lib_symbols.insert("L:S".into(), lib);
+        sheet.symbols.push(Symbol {
+            uuid: uuid::Uuid::from_u128(7_000_000),
+            lib_id: "L:S".into(),
+            position: Point::new(at.0, at.1),
+            unit: 1,
+            ..Default::default()
+        });
+    }
 
     fn sheet_with_wire(start: (f64, f64), end: (f64, f64)) -> SchematicSheet {
         let mut sheet = SchematicSheet::default();
@@ -394,6 +431,8 @@ mod tests {
                 });
             }
         }
+        // Pin tips are hotspots too, off the grid of the wires.
+        add_part_with_pins(&mut sheet, (0.31, 0.17));
         // The first moved point sits on a hotspot of its own: the scan ignores
         // it, so the index must too.
         let moved = [Point::new(-6.0 * 2.3 - 0.21, -9.3), Point::new(1.27, 0.635)];
@@ -417,6 +456,28 @@ mod tests {
                     .0
                     .is_infinite()
             );
+        }
+    }
+
+    /// A landing exactly one radius from a pin tip is not captured, as the
+    /// full scan; just inside it is.
+    #[test]
+    fn the_index_and_the_scan_agree_on_a_pin_tip_exactly_at_the_radius() {
+        let mut sheet = SchematicSheet::default();
+        add_part_with_pins(&mut sheet, (0.5, 0.25));
+        let tip = SymbolTransform::from_symbol(&sheet.symbols[0]).apply(Point::new(0.0, 4.0));
+        let moved = [Point::new(10.0, 10.0)];
+        let radius = 0.5;
+        let index = MoveHotspots::new(&sheet, &moved, &[], radius);
+        for (offset, captured) in [(0.5, false), (0.25, true)] {
+            let delta = (tip.x + offset - 10.0, tip.y - 10.0);
+            let want = scan_snap(&sheet, &moved, &[], delta, radius);
+            assert_eq!(index.snap(delta), want, "offset {offset}");
+            if captured {
+                assert_eq!(want, (tip.x - 10.0, tip.y - 10.0), "snapped onto the tip");
+            } else {
+                assert_eq!(want, delta, "exactly one radius away is out");
+            }
         }
     }
 }

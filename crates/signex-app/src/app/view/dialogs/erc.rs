@@ -19,6 +19,9 @@ use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Overwriting a stored profile replaces its rules, so the button is a danger.
+const PROFILE_OVERWRITE_KIND: DialogButtonKind = DialogButtonKind::Danger;
+
 impl Signex {
     pub(in crate::app::view) fn view_erc_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_erc_dialog_body_inner(true);
@@ -302,7 +305,7 @@ impl Signex {
                     row![
                         dialog_button(
                             "Overwrite",
-                            DialogButtonKind::Danger,
+                            PROFILE_OVERWRITE_KIND,
                             (!dialog.busy)
                                 .then_some(Message::Erc(ErcMsg::ProfileSaveOverwriteConfirmed)),
                             tokens,
@@ -374,5 +377,15 @@ impl Signex {
             .padding([8, 14])
             .width(Length::Fill)
             .boxed()
+    }
+}
+
+#[cfg(test)]
+mod overwrite_tests {
+    use super::*;
+
+    #[test]
+    fn overwriting_a_profile_is_a_danger_button() {
+        assert_eq!(PROFILE_OVERWRITE_KIND, DialogButtonKind::Danger);
     }
 }

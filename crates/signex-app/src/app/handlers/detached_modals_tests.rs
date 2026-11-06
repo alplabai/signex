@@ -830,3 +830,53 @@ fn a_scale_change_resizes_every_open_dialog_once_and_closed_windows_are_forgotte
     let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(about)));
     assert!(!app.ui_state.modal_window_sizes.contains_key(&about));
 }
+
+/// A windowed dialog is titled by its state where one id shows several.
+#[test]
+fn a_windowed_library_dialog_is_titled_by_its_state() {
+    let (mut app, _main) = test_app();
+    open(&mut app, ModalId::LibraryPicker);
+    assert_eq!(
+        app.detached_modal_title(ModalId::LibraryPicker),
+        "Place Component"
+    );
+    open(&mut app, ModalId::LibraryRecovery);
+    assert_eq!(
+        app.detached_modal_title(ModalId::LibraryRecovery),
+        crate::library::recovery::title(app.library.recovery.as_ref().expect("recovery"))
+    );
+    assert_ne!(
+        app.detached_modal_title(ModalId::LibraryRecovery),
+        "Library Recovery"
+    );
+    app.library.picker = None;
+    assert_eq!(
+        app.detached_modal_title(ModalId::LibraryPicker),
+        "Open Library",
+        "no state: the fixed title"
+    );
+}
+
+/// Source line continuations left no runs of spaces in the dialog's text.
+#[test]
+fn recovery_dialog_text_has_no_indentation_gaps() {
+    let (mut app, _main) = test_app();
+    app.document_state
+        .autosave
+        .offer(crate::autosave::RecoveryOffer {
+            path: "p.snxsch".into(),
+            age_secs: 90,
+            older_than_file: true,
+        });
+    open(&mut app, ModalId::AutosaveRecovery);
+    let _ = app.sync_detached_modals();
+    let id = window_of(&app, ModalId::AutosaveRecovery).expect("window");
+    let texts = lay_out_texts(
+        app.view(id),
+        app.modal_window_size(ModalId::AutosaveRecovery),
+    );
+    assert!(!texts.is_empty());
+    for t in texts {
+        assert!(!t.text.contains("  "), "gap in dialog text: {:?}", t.text);
+    }
+}

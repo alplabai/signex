@@ -554,6 +554,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_signex_sheet_is_near_white() {
+        for id in [ThemeId::Signex, ThemeId::Alplab] {
+            assert_eq!(canvas_colors(id).paper, c(0xFC, 0xFC, 0xFC), "{id:?}");
+        }
+    }
+
+    #[test]
     fn every_builtin_defines_marker_slots_matching_todays_look() {
         for &id in ThemeId::BUILTINS {
             let c = canvas_colors(id);

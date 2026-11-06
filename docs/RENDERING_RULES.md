@@ -218,6 +218,11 @@ proportion. The connection point is the pin tip at the symbol origin and
 never moves; a sheet's own saved library entry keeps the size it was placed
 with.
 
+A legacy power port with no library entry (saved before #1408) draws through the
+built-in fallback, now 2.54 mm long; its stored Value text was placed for the
+old shorter head and can overlap it. This is visual only and accepted: no
+stored data is rewritten.
+
 ---
 
 ## sch-pan-reuse — Panning moves retained content (#2078)

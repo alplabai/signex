@@ -182,6 +182,20 @@ fn icon_style(disabled: bool, muted: iced::Color) -> iced::widget::svg::Style {
     }
 }
 
+/// Layout of a menu row, shared by [`view`] and [`fitted_width`] so the
+/// measured width follows what is drawn.
+const ROW_SPACING: f32 = 8.0;
+const ICON_SIZE: f32 = 20.0;
+/// The empty cell before the right cluster of a row.
+const CLUSTER_GAP: f32 = 20.0;
+const SHORTCUT_SIZE: f32 = 11.0;
+const CHECK_SIZE: f32 = 13.0;
+const HEADER_SIZE: f32 = 10.0;
+/// Horizontal padding of a row.
+const ROW_PAD_X: f32 = 12.0;
+/// Padding of the panel around its rows.
+const PANEL_PAD: f32 = 4.0;
+
 /// Glyph advance per em the fitted width falls back to before the shaper is
 /// installed: a slight overestimate of a UI face, so a label never clips.
 const FIT_GLYPH_EM: f32 = 0.58;
@@ -214,24 +228,26 @@ where
             DropdownEntry::Item(item) => {
                 let mut w = advance(&item.label, LABEL_SIZE);
                 if has_icons {
-                    w += 20.0 + 8.0;
+                    w += ICON_SIZE + ROW_SPACING;
                 }
                 // Gap spacer before the right cluster, with its spacing.
-                w += 8.0 + 20.0 + 8.0;
+                w += ROW_SPACING + CLUSTER_GAP + ROW_SPACING;
                 if let Some(s) = &item.shortcut {
-                    w += advance(s, 11.0) + 8.0;
+                    w += advance(s, SHORTCUT_SIZE) + ROW_SPACING;
                 }
                 if item.checked {
-                    w += 13.0;
+                    w += CHECK_SIZE;
                 }
                 Some(w)
             }
-            DropdownEntry::Header(label) => Some(advance(label, 10.0)),
+            DropdownEntry::Header(label) => Some(advance(label, HEADER_SIZE)),
             _ => None,
         })
         .fold(0.0, f32::max);
     // Row padding (12 each side) plus the panel padding (4 each side).
-    (widest_row + 24.0 + 8.0).ceil().min(max_w)
+    (widest_row + 2.0 * ROW_PAD_X + 2.0 * PANEL_PAD)
+        .ceil()
+        .min(max_w)
 }
 
 /// Render the dropdown panel as an `Element<M>`. `width_hint`
@@ -273,8 +289,8 @@ where
         match entry {
             DropdownEntry::Header(label) => {
                 col = col.push(
-                    container(text(label).size(10).color(muted))
-                        .padding([4, 12])
+                    container(text(label).size(HEADER_SIZE).color(muted))
+                        .padding([4.0, ROW_PAD_X])
                         .width(Length::Fill)
                         .boxed(),
                 );
@@ -312,7 +328,7 @@ where
                 // crosses from bar to menu) + 13 pt label + [5, 12]
                 // row padding.
                 let mut row_w: Row<Element<'a, M>> = Row::new()
-                    .spacing(8)
+                    .spacing(ROW_SPACING)
                     .align_y(iced::Alignment::Center)
                     .width(Length::Fit);
                 // Leading icon column — fixed-width for alignment.
@@ -320,13 +336,13 @@ where
                     // Tint only via `icon_style` (disabled rows); never always.
                     row_w = row_w.push(
                         svg(handle)
-                            .width(20)
-                            .height(20)
+                            .width(ICON_SIZE)
+                            .height(ICON_SIZE)
                             .style(move |_: &Theme, _| icon_style(disabled, muted))
                             .boxed(),
                     );
                 } else if has_icons {
-                    row_w = row_w.push(Space::new().width(Length::Fixed(20.0)).boxed());
+                    row_w = row_w.push(Space::new().width(Length::Fixed(ICON_SIZE)).boxed());
                 }
                 // Label. Menu rows never wrap — a too-narrow width_hint
                 // clips rather than reflowing a label onto two lines.
@@ -339,36 +355,38 @@ where
                 );
                 // Right-aligned cluster: shortcut + check.
                 let mut right: Row<Element<'a, M>> = Row::new()
-                    .spacing(8)
+                    .spacing(ROW_SPACING)
                     .align_y(iced::Alignment::Center)
                     .width(Length::Fit);
                 if let Some(s) = shortcut {
-                    right = right.push(text(s).size(11).color(muted).boxed());
+                    right = right.push(text(s).size(SHORTCUT_SIZE).color(muted).boxed());
                 }
                 if checked {
-                    right = right.push(text("\u{2713}").size(13).color(accent).boxed());
+                    right = right.push(text("\u{2713}").size(CHECK_SIZE).color(accent).boxed());
                 }
                 row_w = row_w
-                    .push(Space::new().width(Length::Fixed(20.0)).boxed())
+                    .push(Space::new().width(Length::Fixed(CLUSTER_GAP)).boxed())
                     .push(right.boxed());
 
                 // Wrap in a button that triggers on_press when armed.
-                let mut btn = button(container(row_w).padding([5, 12]).width(Length::Fill))
-                    .padding(0)
-                    .style(move |_: &Theme, status: button::Status| {
-                        let bg = match status {
-                            button::Status::Hovered if !disabled => {
-                                Some(Background::Color(hover_c))
-                            }
-                            _ => None,
-                        };
-                        button::Style {
-                            background: bg,
-                            border: Border::default(),
-                            text_color: row_text_c,
-                            ..button::Style::default()
-                        }
-                    });
+                let mut btn = button(
+                    container(row_w)
+                        .padding([5.0, ROW_PAD_X])
+                        .width(Length::Fill),
+                )
+                .padding(0)
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered if !disabled => Some(Background::Color(hover_c)),
+                        _ => None,
+                    };
+                    button::Style {
+                        background: bg,
+                        border: Border::default(),
+                        text_color: row_text_c,
+                        ..button::Style::default()
+                    }
+                });
                 if let Some(msg) = on_press {
                     btn = btn.on_press(msg);
                 }
@@ -392,7 +410,7 @@ where
         }
     }
 
-    let mut panel = container(col).padding(4);
+    let mut panel = container(col).padding(PANEL_PAD);
     if let Some(w) = width_hint {
         panel = panel.width(Length::Fixed(w));
     } else {
@@ -496,5 +514,19 @@ mod tests {
         let panel = view(entries, &tokens, None);
         use iced::advanced::Widget as _;
         assert_eq!(panel.size().width, Length::Fit);
+    }
+
+    fn labelled(label: &str) -> Vec<DropdownEntry<()>> {
+        vec![DropdownEntry::Item(DropdownItem::new(label, ()))]
+    }
+
+    /// A context menu fits its labels: narrower than the cap, wider for a
+    /// longer label, and held at the cap (#2100).
+    #[test]
+    fn a_fitted_menu_is_narrower_than_the_cap_and_grows_with_its_label() {
+        let short = fitted_width(&labelled("Copy"), 260.0, "");
+        let long = fitted_width(&labelled("Copy Designator And Value"), 260.0, "");
+        assert!(short < 260.0 && short < long, "{short} {long}");
+        assert_eq!(fitted_width(&labelled(&"W".repeat(200)), 260.0, ""), 260.0);
     }
 }

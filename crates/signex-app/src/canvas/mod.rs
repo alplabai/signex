@@ -21,6 +21,7 @@ pub mod grid;
 mod input;
 mod move_pick;
 mod net_highlight;
+pub(crate) mod pin_focus;
 pub(crate) mod paper;
 pub mod placement_ghost;
 mod shape_preview;

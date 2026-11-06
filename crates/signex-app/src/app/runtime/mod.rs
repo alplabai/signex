@@ -226,10 +226,9 @@ impl Signex {
                     == Some(c.sheet.as_path())
                     && placements_agree(self.shown_placement(&c.sheet), &c.placement);
                 same_sheet
-                    && matches!(
-                        self.interaction_state.active_canvas().selected.as_slice(),
-                        [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
-                            && item.uuid == c.symbol
+                    && crate::canvas::pin_focus::is_sole_selected_symbol(
+                        &self.interaction_state.active_canvas().selected,
+                        c.symbol,
                     )
             });
         if !keeps_focus {

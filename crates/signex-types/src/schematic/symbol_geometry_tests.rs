@@ -437,3 +437,26 @@ fn a_width_zero_symbol_strokes_its_pins_at_the_default_wire_width() {
         Some(crate::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM)
     );
 }
+
+/// A text's box is the line box of the face it draws in, taller than its
+/// cap height (#2099).
+#[test]
+fn a_text_box_is_the_line_box_of_its_face() {
+    for family in [None, Some("Iosevka")] {
+        let b = text_aabb(
+            "R1",
+            1.27,
+            (0.0, 0.0),
+            0.0,
+            HAlign::Left,
+            VAlign::Top,
+            family,
+        );
+        let want = crate::font::line_box_mm(1.27, family);
+        assert!(((b.max_y - b.min_y) - want).abs() < 1e-9, "{family:?}");
+        assert!(
+            b.max_y - b.min_y > 1.27,
+            "{family:?}: taller than the cap height"
+        );
+    }
+}

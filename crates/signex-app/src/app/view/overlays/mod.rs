@@ -636,7 +636,7 @@ impl Signex {
         if !self.overlay_belongs_to(tree_ctx.window, window_id) {
             return Vec::new();
         }
-        let menu = self.view_project_tree_context_menu(tree_ctx);
+        let (menu, menu_w) = self.view_project_tree_context_menu(tree_ctx);
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look
         // consistent.
@@ -648,7 +648,6 @@ impl Signex {
             ),
             ui.window_size,
         );
-        let menu_w = self.project_tree_menu_width(tree_ctx);
         let edge_margin = super::context_menu::EDGE_MARGIN;
         let win_w = ui.window_size.0;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
