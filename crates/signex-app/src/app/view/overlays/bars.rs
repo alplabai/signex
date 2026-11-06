@@ -558,8 +558,8 @@ impl Signex {
         let font_px = (camera.2 * 1.8).clamp(10.0, 64.0);
         // Estimate width from the text in the canvas face to keep the input
         // snug, with two characters of room to type into.
-        let canvas_family =
-            Some(document.panel_ctx.canvas_font_name.as_str()).filter(|f| !f.trim().is_empty());
+        let canvas_font_name = document.panel_ctx.canvas_font_name.as_str();
+        let canvas_family = crate::fonts::canvas_text_family(canvas_font_name);
         let approx_w =
             (signex_types::font::estimate_text_width_px(&edit_state.text, font_px, canvas_family)
                 + 2.0 * font_px * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM)
@@ -580,6 +580,7 @@ impl Signex {
                             .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))
+                            .font(crate::fonts::canvas_iced_font(canvas_font_name))
                             .size(font_px)
                             .padding([1.0, SP.xs])
                             .width(approx_w)

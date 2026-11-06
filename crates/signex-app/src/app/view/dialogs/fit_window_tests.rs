@@ -103,3 +103,25 @@ fn detached_export_footer_stays_inside_a_small_window() {
         &["Export PDF", "No files selected for export"],
     );
 }
+
+/// A window between a confirm card's design width and that width plus the
+/// window margins: the card is centred on its fitted width, so it must be
+/// that wide too or its right edge (the footer buttons) leaves the window.
+#[test]
+fn a_confirm_card_narrower_than_its_design_stays_inside_a_narrow_window() {
+    let (mut app, _boot) = Signex::new();
+    let window = Size::new(540.0, 700.0);
+    app.ui_state.window_size = (window.width, window.height);
+    app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+        dirty_paths: vec![std::path::PathBuf::from("a.snxsch")],
+        dirty_rows: Vec::new(),
+    });
+    let texts = lay_out_texts(app.view_app_quit_confirm(), window);
+    for label in ["Cancel", "Save All"] {
+        let b = find(&texts, label).bounds;
+        assert!(
+            b.x >= 0.0 && b.x + b.width <= window.width - super::MODAL_WINDOW_MARGIN,
+            "{label:?} leaves the {window:?} window: {b:?}"
+        );
+    }
+}

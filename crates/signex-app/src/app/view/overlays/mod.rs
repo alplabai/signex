@@ -106,13 +106,7 @@ impl Signex {
         // hits the embedded TTF (not whatever the system fontconfig
         // falls back to for `Family::Name`).
         let canvas_font_name: &str = &self.document_state.panel_ctx.canvas_font_name;
-        let canvas_font = if canvas_font_name == crate::fonts::DEFAULT_CANVAS_FONT
-            || canvas_font_name.is_empty()
-        {
-            crate::render_config::IOSEVKA
-        } else {
-            crate::fonts::iced_font_for_family(canvas_font_name)
-        };
+        let canvas_font = crate::fonts::canvas_iced_font(canvas_font_name);
 
         // Single row style — label in a fixed gutter, value fills the
         // remaining card width and wraps onto further lines on its
@@ -485,6 +479,7 @@ impl Signex {
                 menu_w,
                 rows_above,
                 separators_above,
+                true,
                 self.ui_state.size_of_window(window_id).0,
             );
             out.push(Self::submenu_flyout(submenu, sub_origin));
@@ -577,6 +572,7 @@ impl Signex {
                 Self::CONTEXT_MENU_WIDTH,
                 2,
                 0,
+                false,
                 self.ui_state.size_of_window(window_id).0,
             );
             out.push(Self::submenu_flyout(submenu, sub_origin));

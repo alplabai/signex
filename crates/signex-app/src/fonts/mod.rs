@@ -131,6 +131,21 @@ pub fn iced_font_for_family(name: &str) -> iced::Font {
     iced::Font::with_family(iced::font::Family::name(name))
 }
 
+/// The family name canvas text is measured in, `None` for the empty setting.
+pub fn canvas_text_family(name: &str) -> Option<&str> {
+    Some(name).filter(|f| !f.trim().is_empty())
+}
+
+/// The font canvas text is drawn in: the bundled Iosevka for the default or
+/// empty setting, the named family otherwise. Pair with
+/// [`canvas_text_family`] so a widget measures in the face it draws.
+pub fn canvas_iced_font(name: &str) -> iced::Font {
+    match canvas_text_family(name) {
+        None | Some(DEFAULT_CANVAS_FONT) => crate::render_config::IOSEVKA,
+        Some(family) => iced_font_for_family(family),
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // System font enumeration
 // ──────────────────────────────────────────────────────────────────────────
@@ -795,6 +810,17 @@ mod tests {
         assert!(!may_migrate_legacy_prefs(true, true));
         assert!(!may_migrate_legacy_prefs(true, false));
         assert!(may_migrate_legacy_prefs(false, false));
+    }
+
+    /// A widget that measures canvas text in a family must draw in it: the
+    /// font handed to the widget names the family the measurement used.
+    #[test]
+    fn canvas_text_is_measured_in_the_family_it_is_drawn_in() {
+        for name in [DEFAULT_CANVAS_FONT, "", "  ", "Roboto Mono"] {
+            let drawn = canvas_iced_font(name).family;
+            let measured = canvas_text_family(name).unwrap_or(DEFAULT_CANVAS_FONT);
+            assert_eq!(drawn, iced::font::Family::name(measured), "{name:?}");
+        }
     }
 
     /// `prefs_path()` is private (unlike the other three prefs

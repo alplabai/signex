@@ -21,9 +21,24 @@ pub(in crate::app::view) fn menu_height(rows: usize) -> f32 {
     rows as f32 * menu_row_height() + 2.0 * SP.s
 }
 
-/// Height of one menu row.
+/// Height of one text-only menu row.
 pub(in crate::app::view) fn menu_row_height() -> f32 {
-    (TS.title * LINE_HEIGHT).ceil() + 2.0 * (SP.s + SP.xs / 2.0)
+    menu_row_height_with(false)
+}
+
+/// Side of a menu row's leading icon (`signex_widgets::active_bar::dropdown`).
+const MENU_ICON_SIZE: f32 = 20.0;
+
+/// Height of one menu row; a menu whose rows carry icons has taller rows,
+/// since the icon is taller than the text line.
+pub(in crate::app::view) fn menu_row_height_with(has_icons: bool) -> f32 {
+    let line = (TS.title * LINE_HEIGHT).ceil();
+    let content = if has_icons {
+        line.max(MENU_ICON_SIZE)
+    } else {
+        line
+    };
+    content + 2.0 * (SP.s + SP.xs / 2.0)
 }
 
 /// Height of a menu separator line.
@@ -33,13 +48,15 @@ const SEPARATOR_HEIGHT: f32 = 1.0;
 /// `parent` (width `parent_w`) in a window `window_w` wide: right of the
 /// parent, or left of it when the right edge would be crossed. Its top lines
 /// up with the launcher row under `rows_above` rows and `separators_above`
-/// separators of the parent.
+/// separators of the parent; `has_icons` says whether the parent's rows carry
+/// icons (taller rows).
 pub(in crate::app::view) fn submenu_origin(
     parent: (f32, f32),
     parent_w: f32,
     sub_w: f32,
     rows_above: usize,
     separators_above: usize,
+    has_icons: bool,
     window_w: f32,
 ) -> (f32, f32) {
     let x = if parent.0 + parent_w + sub_w + EDGE_MARGIN > window_w {
@@ -48,7 +65,7 @@ pub(in crate::app::view) fn submenu_origin(
         parent.0 + parent_w
     };
     let y = parent.1
-        + rows_above as f32 * menu_row_height()
+        + rows_above as f32 * menu_row_height_with(has_icons)
         + separators_above as f32 * SEPARATOR_HEIGHT;
     (x, y)
 }
@@ -186,14 +203,24 @@ mod tests {
 
     #[test]
     fn a_flyout_opens_right_of_its_parent_and_level_with_the_launcher() {
-        let (x, y) = submenu_origin((100.0, 50.0), 200.0, 200.0, 3, 1, 1000.0);
+        let (x, y) = submenu_origin((100.0, 50.0), 200.0, 200.0, 3, 1, false, 1000.0);
         assert_eq!(x, 300.0);
         assert_eq!(y, 50.0 + 3.0 * menu_row_height() + SEPARATOR_HEIGHT);
     }
 
     #[test]
+    fn icon_rows_are_taller_than_text_rows_and_move_the_flyout_down() {
+        assert!(menu_row_height_with(true) > menu_row_height_with(false));
+        let (_, y) = submenu_origin((100.0, 50.0), 200.0, 200.0, 3, 1, true, 1000.0);
+        assert_eq!(
+            y,
+            50.0 + 3.0 * menu_row_height_with(true) + SEPARATOR_HEIGHT
+        );
+    }
+
+    #[test]
     fn a_flyout_that_would_cross_the_right_edge_opens_left() {
-        let (x, _) = submenu_origin((700.0, 0.0), 200.0, 200.0, 0, 0, 1000.0);
+        let (x, _) = submenu_origin((700.0, 0.0), 200.0, 200.0, 0, 0, false, 1000.0);
         assert_eq!(x, 500.0);
     }
 

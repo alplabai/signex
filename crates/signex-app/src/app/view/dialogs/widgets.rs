@@ -10,8 +10,8 @@ use iced::widget::{Space, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::{
-    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
-    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_HEADER_HEIGHT,
+    MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -33,6 +33,11 @@ pub(in crate::app::view) fn fit_modal_size(
 ) -> (f32, f32) {
     let cap = |window: f32, want: f32| want.min((window - 2.0 * MODAL_WINDOW_MARGIN).max(1.0));
     (cap(window_size.0, desired.0), cap(window_size.1, desired.1))
+}
+
+/// Card width for a modal that wants `px`: the width [`wrap_dialog`](Signex::wrap_dialog) centres on.
+pub(in crate::app::view) fn modal_card_width(window_size: (f32, f32), px: f32) -> f32 {
+    fit_modal_size(window_size, (px, 0.0)).0
 }
 
 pub(in crate::app::view) fn wrap_modal<'a>(
@@ -117,8 +122,9 @@ impl Signex {
         wrap_modal(body, (0.0, 0.0), window, fit_modal_size(window, desired))
     }
 
-    /// `px` for the card in the main window, the full width in the dialog's
-    /// own window (the window is the frame, so no fixed card width survives).
+    /// `px` for the card in the main window, capped like [`fit_modal_size`] so
+    /// the card is as wide as the width the dialog is centred on; the full
+    /// width in the dialog's own window (the window is the frame).
     pub(in crate::app::view) fn dialog_width(
         &self,
         modal: super::super::super::state::ModalId,
@@ -127,7 +133,7 @@ impl Signex {
         if self.modal_detached(modal) {
             Length::Fill
         } else {
-            Length::Fixed(px)
+            Length::Fixed(modal_card_width(self.ui_state.window_size, px))
         }
     }
 
@@ -155,37 +161,42 @@ pub(crate) fn os_title_bar_slot<'a>() -> Element<'a, Message> {
     Space::new().height(0).boxed()
 }
 
-/// Glyph colour of the modal close-X: the theme's own text colour, so it
-/// reads on a light header as well as a dark one.
+/// The close glyph drawn on a hit-sized canvas, so the svg widget (and its
+/// hover status) spans the whole button rather than just the X (46x28 = HIT_W x HIT_H).
+const CLOSE_X_GLYPH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" width="46" height="28" viewBox="0 0 46 28" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"><path d="M19.5 10.5l7 7M26.5 10.5l-7 7"/></svg>"##;
+
+/// Glyph colour of the modal close-X at rest: the theme's own text colour,
+/// so it reads on a light header as well as a dark one.
 fn close_glyph_color(theme: &Theme) -> Color {
     theme.palette().background.base.text
+}
+
+/// On the red hover the glyph is white (as the main-window close), so a
+/// light theme never shows a dark X on red.
+fn close_glyph_color_for(theme: &Theme, hovered: bool) -> Color {
+    if hovered {
+        Color::WHITE
+    } else {
+        close_glyph_color(theme)
+    }
 }
 
 /// Compact X close button for borderless modal headers. Matches the
 /// main-window chrome close (`view/chrome/buttons.rs::windows_button`):
 /// no border, fully transparent at rest, Windows-native red bg on hover.
-/// Same SVG and footprint as that close, so the modal X is visually
-/// identical to the OS-window X. Generic over the message type so
-/// Preferences uses it too.
+/// Generic over the message type so Preferences uses it too.
 pub(crate) fn close_x_button<'a, M: Clone + 'a>(
     message: M,
-    theme_id: signex_types::theme::ThemeId,
+    _theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, M> {
     use iced::widget::svg;
-    let handle = crate::icons::icon_chrome_window_close(theme_id);
     button(
-        container(
-            svg(handle)
-                .width(MODAL_CLOSE_X_ICON)
-                .height(MODAL_CLOSE_X_ICON)
-                .style(|theme: &Theme, _| svg::Style {
-                    color: Some(close_glyph_color(theme)),
-                }),
-        )
-        .width(MODAL_CLOSE_X_HIT_W)
-        .height(MODAL_CLOSE_X_HIT_H)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center),
+        svg(svg::Handle::from_memory(CLOSE_X_GLYPH))
+            .width(MODAL_CLOSE_X_HIT_W)
+            .height(MODAL_CLOSE_X_HIT_H)
+            .style(|theme: &Theme, status| svg::Style {
+                color: Some(close_glyph_color_for(theme, status == svg::Status::Hovered)),
+            }),
     )
     .padding(0)
     .on_press(message)
@@ -305,5 +316,39 @@ mod tests {
             close_glyph_color(&Theme::Light),
             close_glyph_color(&Theme::Dark)
         );
+    }
+
+    #[test]
+    fn the_close_glyph_is_white_on_the_red_hover_in_every_theme() {
+        for theme in [Theme::Light, Theme::Dark] {
+            assert_eq!(close_glyph_color_for(&theme, true), Color::WHITE);
+            assert_eq!(
+                close_glyph_color_for(&theme, false),
+                close_glyph_color(&theme)
+            );
+        }
+    }
+
+    #[test]
+    fn a_card_is_as_wide_as_the_width_its_dialog_is_centred_on() {
+        // Window between desired and desired + 2 * margin: the card must
+        // shrink with the centring width, or it drifts off the right edge.
+        let desired = 560.0;
+        for ww in [
+            desired,
+            desired + 10.0,
+            desired + 2.0 * MODAL_WINDOW_MARGIN - 1.0,
+            desired + 2.0 * MODAL_WINDOW_MARGIN,
+            2000.0,
+        ] {
+            let window = (ww, 800.0);
+            let card = modal_card_width(window, desired);
+            assert_eq!(card, fit_modal_size(window, (desired, 100.0)).0);
+            let left = (window.0 - card) * 0.5;
+            assert!(left >= MODAL_WINDOW_MARGIN.min((window.0 - card) * 0.5));
+            assert!(left + card <= window.0, "window {ww}: card spills right");
+            assert!(left >= 0.0, "window {ww}: card spills left");
+        }
+        assert_eq!(modal_card_width((570.0, 800.0), 560.0), 522.0);
     }
 }
