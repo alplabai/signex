@@ -1,16 +1,16 @@
 //! The "Copy to Library" dialog. A pure read of [`StockCopyState`] and the
 //! open libraries' names; every colour comes from theme tokens.
 
-use iced::widget::{Space, Widget, column, container, row, scrollable, text};
+use iced::widget::{Space, Widget, column, container, scrollable, text};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::{StockCopyMsg, StockCopyState};
 use crate::library::messages::LibraryMessage;
-use crate::library::modal_chrome::{close_x, primary_btn, secondary_btn};
+use crate::library::modal_chrome::{header, primary_btn, secondary_btn};
 use crate::library::state::LibraryState;
-use crate::styles::{Spacing, TypeScale};
+use crate::styles::{Spacing, TypeScale, dialog_footer_split};
 
 /// Width of the dialog card in the main window.
 pub(crate) const CARD_W: f32 = 520.0;
@@ -27,16 +27,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let cancel = LibraryMessage::StockCopy(StockCopyMsg::Cancelled);
 
-    let header = container(
-        row![
-            text("Copy to Library").size(ts.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(cancel.clone(), tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header("Copy to Library", cancel.clone(), windowed, tokens);
 
     let intro = text(format!(
         "{} is part of the stock library, which is read-only. Pick the library to copy \
@@ -89,25 +80,20 @@ pub fn view<'a>(
     };
     body = body.push(list);
 
-    let footer = container(
-        row![
-            secondary_btn(
-                "New Library\u{2026}",
-                LibraryMessage::StockCopy(StockCopyMsg::NewLibraryRequested),
-                tokens,
-            ),
-            Space::new().width(Length::Fill),
-            primary_btn("Cancel", cancel, tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
+    let footer = container(dialog_footer_split(
+        vec![primary_btn(
+            "New Library\u{2026}",
+            LibraryMessage::StockCopy(StockCopyMsg::NewLibraryRequested),
+            tokens,
+        )],
+        vec![secondary_btn("Cancel", cancel, tokens)],
+    ))
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
         column![
             header,
-            container(body).padding([sp.l, sp.xl]),
+            container(body).padding(sp.l),
             Space::new().height(Length::Fill),
             footer
         ]

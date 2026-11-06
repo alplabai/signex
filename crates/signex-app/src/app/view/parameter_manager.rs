@@ -33,10 +33,9 @@ impl Signex {
 
         let Some(engine) = self.document_state.active_engine() else {
             return container(
-                column![
-                    container(text("No active schematic.").size(TS.body).color(text_muted))
-                        .padding([14, 14]),
-                ]
+                column![crate::styles::dialog_section(
+                    crate::styles::dialog_message("No active schematic.", tokens)
+                ),]
                 .width(iced::Length::Fixed(900.0))
                 .height(iced::Length::Fixed(560.0)),
             )
@@ -73,10 +72,12 @@ impl Signex {
                 .padding([SP.xs, 6.0])
                 .size(TS.body)
                 .width(iced::Length::Fixed(180.0)),
-            button(
-                container(text("Add column").size(TS.body).color(text_c)).padding([SP.xs, 10.0])
-            )
-            .on_press(Message::ParameterManager(ParameterManagerMsg::ColumnAdded)),
+            crate::styles::dialog_button(
+                "Add column",
+                crate::styles::DialogButtonKind::Secondary,
+                Some(Message::ParameterManager(ParameterManagerMsg::ColumnAdded)),
+                tokens,
+            ),
         ]
         .spacing(SP.s)
         .padding([SP.s, SP.m]);

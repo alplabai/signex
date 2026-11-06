@@ -340,10 +340,17 @@ fn caller_width_replaces_the_monospace_estimate() {
         0.0,
         HAlign::Left,
         VAlign::Top,
+        None,
     );
     assert_box(estimate, same.min_x, same.min_y, same.max_x, same.max_y);
-    let wide = text_aabb_with_width(10.0, size, anchor, 0.0, HAlign::Right, VAlign::Top);
-    assert_box(wide, 0.0, 5.0, 10.0, 5.0 + text_height_mm(size));
+    let wide = text_aabb_with_width(10.0, size, anchor, 0.0, HAlign::Right, VAlign::Top, None);
+    assert_box(
+        wide,
+        0.0,
+        5.0,
+        10.0,
+        5.0 + crate::font::line_box_mm(text_height_mm(size), None),
+    );
 }
 
 /// A symbol with a 2x2 normal body and a 6x6 alternate body (#1233).
@@ -465,4 +472,27 @@ fn a_width_zero_symbol_strokes_its_pins_at_the_default_wire_width() {
         pin_width,
         Some(crate::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM)
     );
+}
+
+/// A text's box is the line box of the face it draws in, taller than its
+/// cap height (#2099).
+#[test]
+fn a_text_box_is_the_line_box_of_its_face() {
+    for family in [None, Some("Iosevka")] {
+        let b = text_aabb(
+            "R1",
+            1.27,
+            (0.0, 0.0),
+            0.0,
+            HAlign::Left,
+            VAlign::Top,
+            family,
+        );
+        let want = crate::font::line_box_mm(1.27, family);
+        assert!(((b.max_y - b.min_y) - want).abs() < 1e-9, "{family:?}");
+        assert!(
+            b.max_y - b.min_y > 1.27,
+            "{family:?}: taller than the cap height"
+        );
+    }
 }

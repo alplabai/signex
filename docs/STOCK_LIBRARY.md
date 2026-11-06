@@ -66,6 +66,22 @@ it would discard every edit made in Signex, so it refuses to write while
 cargo run --example build_stock_library -p signex-app -- --force
 ```
 
+The four power ports (GND, VCC, +3V3, +5V) take their stem and head
+geometry from `power_port_lib_symbol` in `signex-types`, so a stock port
+and a built-in one are the same size (2.54 mm stem, 1.27 mm for GND; #2091,
+#2101). Their committed files were edited in place to match the generator,
+which keeps any other edit made in Signex. GND already had the 1.27 mm stem
+and is byte-identical to before. The resistor (R) and inductor (L) were
+reshaped in #2101, with their pins kept at ±3.81 mm.
+
+No symbol version was bumped for it, for the reason given under Chip
+passives below: drift is decided by content hash, not by version. A sheet
+that embedded a copy of VCC, +3V3, +5V, R or L from the Stock library reads
+it as drifted, which is correct since the library changed, and shows the
+library update notice for it. R and L are the most used parts, so most
+sheets show the notice. GND does not drift. A placed port keeps connecting:
+its tip stays at the origin and the sheet's own entry wins.
+
 ## Chip passives
 
 R, C, L, Ferrite and Fuse default to `Chip-0805`; D, D_Schottky, D_Zener

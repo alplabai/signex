@@ -12,10 +12,13 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use crate::app::state::AnnotateOrder;
 
 use super::widgets::{
-    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
-    secondary_button, secondary_button_maybe, wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use crate::styles::{
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
+    dialog_message,
+};
 
 mod controls;
 mod reprefix_confirm;
@@ -549,71 +552,58 @@ impl Signex {
         // start another stay off until it ends (#1753).
         let busy = self.ui_state.annotate_runs.is_running();
         let idle = |message: Message| (!busy).then_some(message);
-        let footer = row![
-            secondary_button(
-                "All On",
-                Message::Annotate(AnnotateMsg::SetAllLocked(false)),
-                text_c,
-                border_c,
-            ),
-            Space::new().width(4),
-            secondary_button(
-                "All Off",
-                Message::Annotate(AnnotateMsg::SetAllLocked(true)),
-                text_c,
-                border_c,
-            ),
-            Space::new().width(Length::Fill),
-            text(if busy { "Running…" } else { "" })
-                .size(TS.caption)
-                .color(text_muted),
-            Space::new().width(SP.m),
-            secondary_button_maybe(
-                "Re-prefix to standard",
-                (standard.is_some() && !self.ui_state.annotate_preview.loading && !busy)
-                    .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
-                text_c,
-                border_c,
-            ),
-            Space::new().width(4),
-            secondary_button_maybe(
-                "Reset All",
-                idle(Message::Annotate(AnnotateMsg::Run(
-                    signex_engine::AnnotateMode::ResetOnly,
-                ))),
-                text_c,
-                border_c,
-            ),
-            Space::new().width(4),
-            secondary_button_maybe(
-                "Reset & Renumber",
-                idle(Message::Annotate(AnnotateMsg::Run(
-                    signex_engine::AnnotateMode::ResetAndRenumber,
-                ))),
-                text_c,
-                border_c,
-            ),
-            Space::new().width(4),
-            primary_button(
-                "Accept Changes",
-                if changes == 0 || self.ui_state.annotate_preview.loading || busy {
-                    None
-                } else {
-                    Some(Message::Annotate(AnnotateMsg::Run(
-                        signex_engine::AnnotateMode::Incremental,
-                    )))
-                },
-                border_c,
-            ),
-            Space::new().width(4),
-            secondary_button(
-                "Close",
-                Message::Annotate(AnnotateMsg::CloseDialog),
-                text_c,
-                border_c
-            ),
-        ]
-        .align_y(iced::Alignment::Center);
+        let secondary = |label: &str, message: Option<Message>| {
+            dialog_button(label, DialogButtonKind::Secondary, message, tokens)
+        };
+        let status: Element<'_, Message> = text(if busy { "Running…" } else { "" })
+            .size(TS.caption)
+            .color(text_muted)
+            .boxed();
+        let footer = dialog_footer_split(
+            vec![
+                secondary(
+                    "All On",
+                    Some(Message::Annotate(AnnotateMsg::SetAllLocked(false))),
+                ),
+                secondary(
+                    "All Off",
+                    Some(Message::Annotate(AnnotateMsg::SetAllLocked(true))),
+                ),
+            ],
+            vec![
+                status,
+                secondary(
+                    "Re-prefix to standard",
+                    (standard.is_some() && !self.ui_state.annotate_preview.loading && !busy)
+                        .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
+                ),
+                secondary(
+                    "Reset All",
+                    idle(Message::Annotate(AnnotateMsg::Run(
+                        signex_engine::AnnotateMode::ResetOnly,
+                    ))),
+                ),
+                secondary(
+                    "Reset & Renumber",
+                    idle(Message::Annotate(AnnotateMsg::Run(
+                        signex_engine::AnnotateMode::ResetAndRenumber,
+                    ))),
+                ),
+                dialog_button(
+                    "Accept Changes",
+                    DialogButtonKind::Primary,
+                    if changes == 0 || self.ui_state.annotate_preview.loading || busy {
+                        None
+                    } else {
+                        Some(Message::Annotate(AnnotateMsg::Run(
+                            signex_engine::AnnotateMode::Incremental,
+                        )))
+                    },
+                    tokens,
+                ),
+                secondary("Close", Some(Message::Annotate(AnnotateMsg::CloseDialog))),
+            ],
+        );
 
         let body_row = row![
             // Fill portions bound each column, so long lines wrap instead
@@ -645,7 +635,7 @@ impl Signex {
             (Length::Fill, Length::Fill)
         };
         let dialog = container(
-            column![header, body_row, container(footer).padding([10.0, 14.0]),]
+            column![header, body_row, footer,]
                 .width(modal_w)
                 .height(modal_h),
         )
@@ -674,7 +664,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
 
         let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = container(
@@ -707,32 +696,27 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                container(
-                    text(
-                        "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.\nThis cannot be undone through Ctrl+Z alone — consider saving first.",
-                    )
-                    .size(TS.body)
-                    .color(text_muted),
-                )
-                .padding([14.0, 14.0]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button("Cancel", Message::Annotate(AnnotateMsg::CloseResetConfirm), text_c, border_c),
-                        Space::new().width(8),
-                        primary_button(
-                            "Reset & Renumber",
-                            (!self.ui_state.annotate_runs.is_running()).then_some(
-                                Message::Annotate(AnnotateMsg::Run(
-                                    signex_engine::AnnotateMode::ResetAndRenumber,
-                                ))
-                            ),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10.0, 14.0]),
+                dialog_body(dialog_message(
+                    "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
+This cannot be undone through Ctrl+Z alone — consider saving first.",
+                    tokens,
+                )),
+                dialog_footer(vec![
+                    dialog_button(
+                        "Cancel",
+                        DialogButtonKind::Secondary,
+                        Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
+                        tokens,
+                    ),
+                    dialog_button(
+                        "Reset & Renumber",
+                        DialogButtonKind::Danger,
+                        (!self.ui_state.annotate_runs.is_running()).then_some(Message::Annotate(
+                            AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber),
+                        )),
+                        tokens,
+                    ),
+                ]),
             ]
             .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, 420.0)),
         )

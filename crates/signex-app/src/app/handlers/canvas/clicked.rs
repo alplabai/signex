@@ -314,6 +314,13 @@ impl Signex {
             }
             Tool::Component if self.interaction_state.pending_power.is_some() => {
                 if let Some((ref net_name, ref lib_id)) = self.interaction_state.pending_power {
+                    // The sheet keeps an older entry for this style (register
+                    // inserts only when absent): the text follows that one.
+                    let held_entry = self
+                        .document_state
+                        .active_engine()
+                        .and_then(|e| e.document().lib_symbols.get(lib_id).cloned())
+                        .unwrap_or_else(|| signex_types::schematic::power_port_lib_symbol(lib_id));
                     let sym = signex_types::schematic::Symbol {
                         unknown_columns: Default::default(),
                         unknown: Default::default(),
@@ -331,8 +338,8 @@ impl Signex {
                         body_style: Default::default(),
                         is_power: true,
                         ref_text: None,
-                        val_text: Some(signex_types::schematic::power_port_value_field(
-                            lib_id,
+                        val_text: Some(signex_types::schematic::power_port_value_field_for(
+                            &held_entry,
                             signex_types::schematic::Point::new(wx, wy),
                         )),
                         fields_autoplaced: true,

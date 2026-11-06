@@ -147,7 +147,11 @@ impl Signex {
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
-        if crate::fonts::paste_designators_needs_migration(prefs) {
+        // Never rewrite prefs under a headless config root (#1926); the read
+        // above already treats the old value as migrated for this session.
+        if !crate::config_root::is_override_active()
+            && crate::fonts::paste_designators_needs_migration(prefs)
+        {
             match crate::fonts::migrate_paste_designators_pref() {
                 crate::fonts::PasteDesignatorsMigration::Migrated => crate::diagnostics::log_info(
                     "Designators on paste: your saved \"Keep\" was the old default, so it is now \"Keep unless taken\" (a pasted part keeps its designator unless the project already uses it). Choose Keep in Preferences to turn this off.",

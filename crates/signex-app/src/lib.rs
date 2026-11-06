@@ -39,6 +39,7 @@ pub mod find_replace;
 pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
+pub mod frame_probe;
 pub mod icons;
 pub mod paste_array;
 pub mod paste_prefs;
@@ -76,6 +77,7 @@ pub mod startup_args;
 pub mod status_bar;
 pub mod styles;
 pub mod tab_bar;
+pub mod task_driver;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod text_trunc;

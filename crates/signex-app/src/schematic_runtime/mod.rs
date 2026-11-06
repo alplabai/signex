@@ -914,7 +914,15 @@ fn drawn_text_aabb(
         Some((widths, id, field)) => widths.width_mm(id, field, text, family, size_mm, measure),
         None => measure().0,
     };
-    text_aabb_with_width(width, font_size, anchor, rotation_deg, h_align, v_align)
+    text_aabb_with_width(
+        width,
+        font_size,
+        anchor,
+        rotation_deg,
+        h_align,
+        v_align,
+        family,
+    )
 }
 
 #[cfg(test)]

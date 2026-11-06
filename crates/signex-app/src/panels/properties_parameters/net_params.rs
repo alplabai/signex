@@ -110,11 +110,11 @@ pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, Pan
     container(
         row![
             text("Name".to_string())
-                .size(TS.caption)
+                .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(2)),
             text("Value".to_string())
-                .size(TS.caption)
+                .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(3)),
         ]
@@ -166,7 +166,7 @@ pub fn net_params_add_bar<'a>(
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
-        iced::widget::button(text(label.to_string()).size(TS.body).color(label_c))
+        iced::widget::button(text(label.to_string()).size(TS.caption).color(label_c))
             .padding([SP.s, SP.m])
             .on_press(PanelMsg::Noop)
             .style(move |_: &Theme, _| iced::widget::button::Style {

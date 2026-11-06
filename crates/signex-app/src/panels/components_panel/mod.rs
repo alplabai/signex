@@ -46,9 +46,12 @@ pub mod stock;
 
 const PANEL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 const SECTION_HEADER_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.label;
-const ROW_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.caption;
+const ROW_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
+/// Hints, counts, manufacturer and empty-state subtext; also the layout unit
+/// for the pointer-travel and list-height constants.
+const HINT_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.caption;
 /// Pointer travel that turns a row press into a drag.
-pub(crate) const DRAG_THRESHOLD: f32 = ROW_TEXT_SIZE;
+pub(crate) const DRAG_THRESHOLD: f32 = HINT_TEXT_SIZE;
 /// Most rows built per library per frame; the rest are summarised by a
 /// "N more — refine search" row so a huge library cannot stall the view.
 const MAX_ROWS_PER_LIBRARY: usize = 200;
@@ -286,7 +289,7 @@ fn view_section<'a>(
         if libs_for_source.is_empty() {
             let empty_msg = empty_section_text(src, project_libs);
             section_col = section_col.push(
-                container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted))
+                container(text(empty_msg).size(HINT_TEXT_SIZE).color(muted))
                     .padding([6.0, SP.xl])
                     .boxed(),
             );
@@ -390,7 +393,7 @@ fn view_library_block<'a>(
                     .color(text_c)
                     .width(Length::Fill),
                 text(format!("({})", lib.total_rows()))
-                    .size(ROW_TEXT_SIZE)
+                    .size(HINT_TEXT_SIZE)
                     .color(muted),
             ]
             .spacing(SP.s)
@@ -432,7 +435,7 @@ fn view_library_block<'a>(
                     "{} more — refine search",
                     matched - MAX_ROWS_PER_LIBRARY
                 ))
-                .size(ROW_TEXT_SIZE)
+                .size(HINT_TEXT_SIZE)
                 .color(muted),
             )
             .padding([SP.xs, 28.0])
@@ -444,7 +447,7 @@ fn view_library_block<'a>(
         col = col.push(
             container(
                 text("(no matches in this library)")
-                    .size(ROW_TEXT_SIZE)
+                    .size(HINT_TEXT_SIZE)
                     .color(muted),
             )
             .padding([SP.xs, 28.0])
@@ -493,7 +496,7 @@ fn view_row_button<'a>(
                 .width(Length::FillPortion(3))
                 .wrapping(iced::widget::text::Wrapping::None),
             text(label_right)
-                .size(ROW_TEXT_SIZE)
+                .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .width(Length::FillPortion(2))
                 .wrapping(iced::widget::text::Wrapping::None),

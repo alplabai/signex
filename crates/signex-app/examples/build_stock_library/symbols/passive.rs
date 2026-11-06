@@ -17,7 +17,7 @@
 use signex_library::primitive::symbol::{PinDirection, PinOrientation, Symbol, SymbolPin};
 
 use super::{
-    arc, arrow_head, circle, labels_hidden, line, name_hidden, pin, polygon, rect, symbol,
+    arc, arrow_head, circle, labels_hidden, line, name_hidden, pin, polygon, rect, round4, symbol,
     with_length,
 };
 
@@ -75,12 +75,28 @@ fn plain(
     two_terminal(name, designator, description, ("1", "1"), ("2", "2"), body)
 }
 
+/// Vertical two-terminal part as long as the others (pins at ±3.81 mm) with
+/// 1.27 mm leads, leaving 5.08 mm for the body.
+fn short_lead_two_terminal(
+    name: &str,
+    designator: &str,
+    description: &str,
+    body: Vec<super::SymbolGraphic>,
+) -> Symbol {
+    let pins = vec![
+        name_hidden(with_length(pin("1", "1", Passive, 0.0, 3.81, Down), 1.27)),
+        name_hidden(with_length(pin("2", "2", Passive, 0.0, -3.81, Up), 1.27)),
+    ];
+    symbol(name, designator, description, pins, body)
+}
+
 fn resistor() -> Symbol {
-    plain(
+    // A 5.08 x 1.524 mm rectangle: about 3:1, the usual resistor proportion.
+    short_lead_two_terminal(
         "R",
         "R?",
         "Resistor (IEC rectangle).",
-        vec![rect([-1.016, 1.27], [1.016, -1.27])],
+        vec![rect([-0.762, 2.54], [0.762, -2.54])],
     )
 }
 
@@ -112,12 +128,12 @@ fn capacitor_polarized() -> Symbol {
 }
 
 fn inductor() -> Symbol {
-    // Four humps bulging to the right of the axis, 0.635 mm each.
-    let body = [0.9525, 0.3175, -0.3175, -0.9525]
+    // Four humps bulging to the right of the axis, 1.27 mm each.
+    let body = [1.905, 0.635, -0.635, -1.905]
         .iter()
-        .map(|&cy| arc([0.0, cy], 0.3175, 270.0, 90.0))
+        .map(|&cy| arc([0.0, cy], 0.635, 270.0, 90.0))
         .collect();
-    plain("L", "L?", "Inductor (four-hump coil).", body)
+    short_lead_two_terminal("L", "L?", "Inductor (four-hump coil).", body)
 }
 
 fn ferrite() -> Symbol {
@@ -296,38 +312,54 @@ fn crystal() -> Symbol {
     )
 }
 
+/// The built-in power port `lib_id` a stock port is drawn from.
+fn power_port_lib_id(name: &str) -> &'static str {
+    match name {
+        "GND" => "power:GND",
+        "VCC" => "power:bar",
+        "+3V3" => "power:arrow",
+        _ => "power:circle",
+    }
+}
+
+/// Stock graphics of a built-in power port head: the same geometry the
+/// canvas draws for a port with no library entry (`power_port_lib_symbol`),
+/// rounded like every other stock coordinate.
+fn power_port_body(lib: &signex_types::schematic::LibSymbol) -> Vec<super::SymbolGraphic> {
+    use signex_types::schematic::Graphic;
+    let xy = |p: &signex_types::schematic::Point| [round4(p.x), round4(p.y)];
+    lib.graphics
+        .iter()
+        .map(|g| match &g.graphic {
+            Graphic::Polyline { points, .. } if points.len() == 2 => {
+                line(xy(&points[0]), xy(&points[1]))
+            }
+            // A closed head repeats its first point; the stock polygon does not.
+            Graphic::Polyline { points, .. } => {
+                polygon(points[..points.len() - 1].iter().map(xy).collect())
+            }
+            Graphic::Circle { center, radius, .. } => circle(xy(center), round4(*radius)),
+            other => panic!("power port head {other:?} has no stock graphic"),
+        })
+        .collect()
+}
+
 /// Single-pin supply symbol. The pin connects at the origin and the
-/// symbol draws away from it: ground below, supplies above.
+/// symbol draws away from it: ground below, supplies above. Pin length and
+/// head geometry come from `power_port_lib_symbol`, so a stock port and a
+/// built-in one are the same size.
 fn power_port(name: &str) -> Symbol {
-    let (orientation, body, desc) = match name {
-        "GND" => (
-            Down,
-            vec![
-                line([-1.27, -1.27], [1.27, -1.27]),
-                line([-0.762, -1.778], [0.762, -1.778]),
-                line([-0.254, -2.286], [0.254, -2.286]),
-            ],
-            "Ground power port.",
-        ),
-        "VCC" => (
-            Up,
-            vec![line([-1.016, 1.27], [1.016, 1.27])],
-            "VCC supply power port (bar).",
-        ),
-        "+3V3" => (
-            Up,
-            vec![polygon(vec![[-0.635, 1.27], [0.635, 1.27], [0.0, 2.032]])],
-            "+3V3 supply power port (arrow).",
-        ),
-        _ => (
-            Up,
-            vec![circle([0.0, 1.905], 0.635)],
-            "+5V supply power port (circle).",
-        ),
+    let lib = signex_types::schematic::power_port_lib_symbol(power_port_lib_id(name));
+    let (orientation, desc) = match name {
+        "GND" => (Down, "Ground power port."),
+        "VCC" => (Up, "VCC supply power port (bar)."),
+        "+3V3" => (Up, "+3V3 supply power port (arrow)."),
+        _ => (Up, "+5V supply power port (circle)."),
     };
+    let body = power_port_body(&lib);
     let pins = vec![labels_hidden(with_length(
         pin("1", name, Power, 0.0, 0.0, orientation),
-        1.27,
+        round4(lib.pins[0].pin.length),
     ))];
     let mut sym = symbol(name, "#PWR?", desc, pins, body);
     sym.comment = name.to_string();

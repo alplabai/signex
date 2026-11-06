@@ -314,7 +314,7 @@ mod size_tests {
 /// `geometry/text.rs`), which the CPU replay used implicitly — not iced's
 /// widget-level `LineHeight` default of 1.3. The GPU pipeline hardcoded 1.35,
 /// so multiline notes spread 12.5% taller there. Both now read this.
-pub const LINE_HEIGHT_EM: f32 = 1.2;
+pub const LINE_HEIGHT_EM: f32 = signex_types::font::TEXT_LINE_HEIGHT_EM;
 
 #[derive(Clone, Debug, Default)]
 pub struct TextItem {

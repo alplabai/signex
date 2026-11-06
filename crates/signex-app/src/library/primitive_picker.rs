@@ -30,7 +30,7 @@ use signex_widgets::theme_ext;
 use super::browser::{OVERSCAN_ROWS, visible_range};
 use super::loose_symbols::LooseSymbol;
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
-use super::modal_chrome::{close_x, secondary_btn};
+use super::modal_chrome::{footer_strip, header, primary_btn, secondary_btn};
 use super::state::{LibraryState, PrimitivePickerState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -224,6 +224,17 @@ fn row_button<'a>(
     .boxed()
 }
 
+/// Title of the picker for `kind`; the native window title of a detached
+/// picker reads the same.
+pub(crate) fn title(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => "Pick Symbol",
+        PrimitiveKind::Footprint => "Pick Footprint",
+        PrimitiveKind::Sim => "Pick Sim Model",
+        _ => "Pick Primitive",
+    }
+}
+
 pub fn view<'a>(
     state: &'a LibraryState,
     picker: &'a PrimitivePickerState,
@@ -234,26 +245,12 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let hover = crate::styles::tokens::hover_overlay(tokens);
 
-    let title = match picker.kind {
-        PrimitiveKind::Symbol => "Pick Symbol",
-        PrimitiveKind::Footprint => "Pick Footprint",
-        PrimitiveKind::Sim => "Pick Sim Model",
-        _ => "Pick Primitive",
-    };
-
-    let header = container(
-        row![
-            text(title).size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
-                tokens
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        title(picker.kind),
+        LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
+        windowed,
+        tokens,
+    );
 
     let search = text_input("Filter…", &picker.filter)
         .on_input(|s| LibraryMessage::PrimitivePicker(PrimitivePickerMsg::SetFilter(s)))
@@ -355,24 +352,19 @@ pub fn view<'a>(
         Space::new().height(0).boxed()
     };
 
-    let footer = container(
-        row![
-            secondary_btn(
-                "Browse filesystem…",
-                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse),
-                tokens,
-            ),
-            Space::new().width(Length::Fill),
-            secondary_btn(
-                "Cancel",
-                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+    let footer = footer_strip(
+        vec![secondary_btn(
+            "Browse filesystem…",
+            LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse),
+            tokens,
+        )],
+        vec![secondary_btn(
+            "Cancel",
+            LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
+            tokens,
+        )],
+        tokens,
+    );
 
     let body_pad = container(
         column![
@@ -436,7 +428,7 @@ fn copy_confirm_row<'a>(
         .boxed()
     } else if symbol.library.is_some() {
         row![
-            secondary_btn(
+            primary_btn(
                 "Open library",
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::OpenLibraryConfirmed),
                 tokens,
@@ -453,7 +445,7 @@ fn copy_confirm_row<'a>(
         text("Copying…").size(TS.body).boxed()
     } else {
         row![
-            secondary_btn(
+            primary_btn(
                 "Copy",
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyConfirmed),
                 tokens,

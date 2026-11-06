@@ -181,7 +181,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(
         row![
             text("ERC Diagnostic Results")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(theme_ext::text_primary(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
             text(format!("{errors} errors"))
@@ -248,15 +248,15 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             row![
                 iced::widget::button(
                     row![
-                        text(sev_label).size(TS.caption).color(sev_color),
+                        text(sev_label).size(TS.body).color(sev_color),
                         Space::new().width(4).height(Length::Shrink),
-                        text(v.rule_label.clone()).size(TS.caption).color(label_c),
+                        text(v.rule_label.clone()).size(TS.body).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
-                        text(v.message.clone()).size(TS.caption).color(detail_c),
+                        text(v.message.clone()).size(TS.body).color(detail_c),
                         Space::new().width(6).height(Length::Shrink),
                         iced::widget::tooltip(
                             text(location_label(&v.sheet_name, v.world_x, v.shown_y))
-                                .size(TS.caption)
+                                .size(TS.body)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(detail_c),
                             iced::widget::container(
@@ -286,7 +286,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 Space::new().width(6).height(Length::Shrink),
                 iced::widget::button(
                     text(quick_fix_label)
-                        .size(TS.caption)
+                        .size(TS.body)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])
@@ -332,7 +332,7 @@ fn waive_chip<'a>(
         Space::new().width(6).height(Length::Shrink),
         iced::widget::button(
             text("Waive net")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(theme_ext::text_primary(tokens))
         )
         .padding([SP.xs, SP.m])
@@ -375,7 +375,7 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 Space::new().width(Length::Fill).height(Length::Shrink),
                 iced::widget::button(
                     text("Restore")
-                        .size(TS.caption)
+                        .size(TS.body)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])
@@ -498,13 +498,13 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             col = col.push(
                 container(
                     row![
-                        container(cell(format!("#{}", entry.id), muted, 11.0))
+                        container(cell(format!("#{}", entry.id), muted, TS.body))
                             .width(Length::Fixed(48.0)),
-                        container(cell(entry.level.label().to_string(), level_color, 11.0,))
+                        container(cell(entry.level.label().to_string(), level_color, TS.body))
                             .width(Length::Fixed(64.0)),
-                        container(cell(entry.code.as_str().to_string(), muted, 11.0))
+                        container(cell(entry.code.as_str().to_string(), muted, TS.body))
                             .width(Length::Fixed(180.0)),
-                        container(cell(entry.message.as_str().to_string(), primary, 12.0))
+                        container(cell(entry.message.as_str().to_string(), primary, TS.body))
                             .width(Length::Fill),
                     ]
                     .align_y(iced::Alignment::Center),

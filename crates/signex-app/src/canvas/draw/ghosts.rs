@@ -123,7 +123,7 @@ impl SchematicCanvas<'_> {
     /// on this window's device-pixel grid.
     pub(crate) fn placed_bus_entry_stroke_px(&self, scale: f32) -> f32 {
         signex_types::schematic::stroke_px(
-            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
+            self.prefs.schematic_defaults.wire_mm(0.0, None) as f32,
             scale,
             self.prefs.device_px_per_logical_px,
         )

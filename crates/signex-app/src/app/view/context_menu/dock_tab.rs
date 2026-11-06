@@ -41,10 +41,12 @@ impl Signex {
             return iced::widget::Space::new().boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        signex_widgets::active_bar_dropdown::view(
-            dock_tab_menu_entries(menu.position),
-            tokens,
-            Some(Self::CONTEXT_MENU_WIDTH),
-        )
+        let entries = dock_tab_menu_entries(menu.position);
+        let width = signex_widgets::active_bar_dropdown::fitted_width(
+            &entries,
+            Self::CONTEXT_MENU_WIDTH,
+            &self.document_state.panel_ctx.ui_font_name,
+        );
+        signex_widgets::active_bar_dropdown::view(entries, tokens, Some(width))
     }
 }

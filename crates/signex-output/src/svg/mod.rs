@@ -188,6 +188,8 @@ mod drawing_placement_tests;
 mod net_class_tests;
 #[cfg(test)]
 mod sheet_color_tests;
+#[cfg(test)]
+mod stroke_rule_tests;
 
 #[cfg(test)]
 mod tests {

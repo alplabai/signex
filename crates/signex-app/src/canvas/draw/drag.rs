@@ -1,5 +1,23 @@
 use super::super::*;
 
+/// Half the arm length of a connection-point X, in mm on the sheet: it grows
+/// with the zoom like the pin it marks.
+const CONNECTION_X_HALF_MM: f32 = 0.6;
+/// The smallest half arm (px), so the X stays visible zoomed out.
+const CONNECTION_X_HALF_MIN_PX: f32 = 6.0;
+/// Stroke width of the X, in mm on the sheet, and its floor in px.
+const CONNECTION_X_STROKE_MM: f32 = 0.12;
+const CONNECTION_X_STROKE_MIN_PX: f32 = 1.5;
+
+/// The half arm and stroke width (px) of a connection-point X at `scale`
+/// (screen px per sheet mm).
+fn connection_x_size(scale: f32) -> (f32, f32) {
+    (
+        (CONNECTION_X_HALF_MM * scale).max(CONNECTION_X_HALF_MIN_PX),
+        (CONNECTION_X_STROKE_MM * scale).max(CONNECTION_X_STROKE_MIN_PX),
+    )
+}
+
 impl SchematicCanvas<'_> {
     /// Drag-to-move guide line + connection-point X markers.
     pub(in crate::canvas) fn draw_move_guides(
@@ -73,11 +91,11 @@ impl SchematicCanvas<'_> {
             let layers = self.drag_layers.borrow();
             if let Some(snap) = layers.lifted() {
                 let x_color = Color::from_rgb(1.0, 0.3, 0.3);
+                let (r, width) = connection_x_size(cam.scale);
                 let x_stroke = canvas::Stroke::default()
                     .with_color(x_color)
-                    .with_width(1.0);
+                    .with_width(width);
                 let draw_x = |frame: &mut canvas::Frame, screen: iced::Point| {
-                    let r = 4.0;
                     frame.stroke(
                         &canvas::Path::line(
                             iced::Point::new(screen.x - r, screen.y - r),

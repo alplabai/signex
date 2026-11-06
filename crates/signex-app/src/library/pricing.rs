@@ -87,6 +87,16 @@ pub fn resolve_client(
             "{label} is not in the distributor order (Distributor APIs settings)"
         )));
     }
+    let uses_keyring = matches!(
+        source,
+        DistributorSource::DigiKey | DistributorSource::Mouser
+    );
+    if uses_keyring && crate::config_root::is_override_active() {
+        return Err(ClientUnavailable::NotConfigured(format!(
+            "{label}: {}",
+            crate::config_root::KEYRING_UNUSED_UNDER_OVERRIDE
+        )));
+    }
     match source {
         DistributorSource::DigiKey => {
             let (id, secret) = digikey_oauth::read_env_credentials();

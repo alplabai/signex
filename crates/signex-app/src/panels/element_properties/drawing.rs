@@ -428,7 +428,7 @@ fn drawing_num_row<'a>(
         .unwrap_or_else(|| format!("{stored_value:.3}"));
     row![
         text(label)
-            .size(TS.caption)
+            .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         text_input("", display)
@@ -459,7 +459,7 @@ fn drawing_stroke_color_row<'a>(
                 active: bool,
                 fill_color: Color|
      -> Element<'a, PanelMsg> {
-        button(text(label).size(TS.caption))
+        button(text(label).size(TS.body))
             .padding([3, 6])
             .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -489,7 +489,7 @@ fn drawing_stroke_color_row<'a>(
     let theme_active = current.is_none();
     row![
         text("Color")
-            .size(TS.caption)
+            .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
@@ -549,7 +549,7 @@ fn drawing_placement_row<'a>(
     use signex_types::schematic::DrawingPlacement;
     let tile = |label: &'static str, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
         let active = current == placement;
-        iced::widget::button(text(label).size(TS.caption))
+        iced::widget::button(text(label).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Placement(placement)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -575,7 +575,7 @@ fn drawing_placement_row<'a>(
     };
     row![
         text("Placement")
-            .size(TS.caption)
+            .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
@@ -599,7 +599,7 @@ fn drawing_fill_row<'a>(
     use crate::app::contracts::DrawingFieldEdit as E;
     use signex_types::schematic::FillType;
     let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        iced::widget::button(text(label).size(TS.caption))
+        iced::widget::button(text(label).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -625,7 +625,7 @@ fn drawing_fill_row<'a>(
     };
     row![
         text("Fill")
-            .size(TS.caption)
+            .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![

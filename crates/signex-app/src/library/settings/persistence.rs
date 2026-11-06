@@ -111,10 +111,19 @@ pub fn config_path_for_dir(base: &std::path::Path) -> PathBuf {
 /// Load the persisted preferred-order list. Returns the default order
 /// when the file is missing/empty/corrupt — startup is
 /// best-effort.
+///
+/// Under a headless config root a missing file means no distributor is
+/// configured (#1926): the default order would turn them all on.
 pub fn load_preferred_order() -> Vec<DistributorSource> {
-    config_path()
-        .map(|p| load_preferred_order_at(&p))
-        .unwrap_or_else(default_order)
+    let Some(path) = config_path() else {
+        return default_order();
+    };
+    let is_missing =
+        std::fs::metadata(&path).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
+    if is_missing && crate::config_root::is_override_active() {
+        return Vec::new();
+    }
+    load_preferred_order_at(&path)
 }
 
 /// Load preferred order from a specific path — extracted so tests can

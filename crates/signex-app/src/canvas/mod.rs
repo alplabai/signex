@@ -1,7 +1,8 @@
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
 //! Uses `iced::widget::canvas::Program`. Layers, back to front:
-//! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
+//! - background (`background_surface`): retained across pans like the content
+//!   and rebuilt when its inputs change;
 //! - content (`content_surface`): retained across pans and moved by a
 //!   translation; cleared when the document changes (see `draw::retained`);
 //! - autofocus dim: drawn over the content when autofocus is active;
@@ -21,6 +22,7 @@ mod input;
 mod move_pick;
 mod net_highlight;
 pub(crate) mod paper;
+pub(crate) mod pin_focus;
 pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
@@ -119,6 +121,9 @@ pub struct CanvasSlot {
     pub content_cache: canvas::Cache,
     /// The CPU content layer, retained across pans (#2078).
     content_surface: std::cell::RefCell<draw::RetainedContent>,
+    /// The sheet background, retained across pans (#2102); it checks its own
+    /// inputs, so `bg_cache` clears do not reach it.
+    background_surface: std::cell::RefCell<draw::RetainedBackground>,
     pub overlay_cache: canvas::Cache,
     /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
@@ -137,6 +142,8 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
+    /// Hotspots the current drag can snap to, built once per drag (#2077).
+    hotspot_cache: std::cell::RefCell<drag_preview::HotspotCache>,
     /// The move-drag frame the GPU overlay's `update` last computed, for the
     /// shaders to read; see [`gpu_drag::PublishedDrag`].
     published_drag: gpu_drag::PublishedDrag,
@@ -159,6 +166,9 @@ pub struct CanvasSlot {
     pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
+    /// The pin a click landed on, as `(symbol uuid, pin key)`, while its part
+    /// is the one selected; drawn highlighted on the selection layer (#2086).
+    pub focused_pin: Option<(uuid::Uuid, String)>,
     /// What the net highlight keeps bright on this sheet (#1271); see
     /// [`CanvasSlot::set_net_highlight`].
     net_highlight: Option<std::sync::Arc<std::collections::HashSet<uuid::Uuid>>>,
@@ -285,6 +295,7 @@ impl CanvasSlot {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             content_surface: std::cell::RefCell::new(Default::default()),
+            background_surface: std::cell::RefCell::new(Default::default()),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             bg_cache_camera: std::cell::Cell::new(None),
@@ -292,6 +303,7 @@ impl CanvasSlot {
             bg_tessellations: std::cell::Cell::new(0),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
+            hotspot_cache: std::cell::RefCell::new(Default::default()),
             published_drag: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
@@ -314,6 +326,7 @@ impl CanvasSlot {
             special_strings: None,
             designators: std::collections::HashMap::new(),
             designators_key: None,
+            focused_pin: None,
             erc_markers: Vec::new(),
             pending_net_color: None,
             lasso_polygon: None,
@@ -675,7 +688,8 @@ impl<'a> SchematicCanvas<'a> {
             .move_origin
             .zip(state.move_current)
             .map(|((ox, oy), (cx, cy))| {
-                drag_preview::snapped_move_delta(
+                let revision = self.render_cache.as_ref().map_or(0, |c| c.revision());
+                drag_preview::snapped_move_delta_with(
                     self.active_snapshot(),
                     &self.selected,
                     cx - ox,
@@ -691,6 +705,7 @@ impl<'a> SchematicCanvas<'a> {
                             },
                         )
                     }),
+                    Some((&self.hotspot_cache, revision)),
                 )
             })
     }
@@ -701,6 +716,7 @@ impl<'a> SchematicCanvas<'a> {
     fn refresh_drag_ghost(&self, state: &mut CanvasState) {
         let Some((dx, dy)) = self.drag_delta(state) else {
             state.ghost.clear();
+            self.hotspot_cache.borrow_mut().clear();
             return;
         };
         let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
@@ -890,6 +906,8 @@ mod gesture;
 #[cfg(test)]
 mod active_bar_hit;
 #[cfg(test)]
+mod background_reuse_tests;
+#[cfg(test)]
 mod draw_order_tests;
 #[cfg(test)]
 mod gpu_mount_drag_tests;
@@ -897,6 +915,8 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod grid_order_tests;
+#[cfg(test)]
+mod pan_bench_tests;
 #[cfg(test)]
 mod pan_reuse_pixel_tests;
 #[cfg(test)]

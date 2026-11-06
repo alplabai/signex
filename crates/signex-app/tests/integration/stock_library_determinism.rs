@@ -268,6 +268,23 @@ fn every_stock_symbol_pin_is_on_the_schematic_grid_and_converts() {
     }
 }
 
+/// A wire saved on trunk ends on these tips; the reshaped R and L (#2101)
+/// keep them, so no saved wire is left short of its pin.
+#[test]
+fn stock_r_and_l_keep_their_pin_tips() {
+    for name in ["R", "L"] {
+        let file =
+            SymbolFile::from_toml_str(&read_lf(&symbols_dir().join(format!("{name}.snxsym"))))
+                .expect("parse");
+        let tips: Vec<[f64; 2]> = file.symbols[0].pins.iter().map(|p| p.position).collect();
+        assert_eq!(
+            tips,
+            vec![[0.0, 3.81], [0.0, -3.81]],
+            "{name}: a saved wire ends on these"
+        );
+    }
+}
+
 #[test]
 fn logic_packages_are_14_pin_with_power_on_7_and_14() {
     let mut seen = 0;

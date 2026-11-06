@@ -49,7 +49,7 @@ mod runtime;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
-mod window_geometry;
+pub mod window_geometry;
 pub(crate) use state::library_entry;
 pub(crate) use state::rule_profile_ui;
 pub(crate) use state::scope::{deepest_owner, deepest_owners, path_key_with};
@@ -98,6 +98,9 @@ pub use state::AnnotateOrder;
 
 impl Signex {
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let _probe = crate::frame_probe::span_with("update", || {
+            crate::frame_probe::message_name(&format!("{message:?}"))
+        });
         // Messages that complete a save, delete, rename or library write may
         // have changed the disk under an unchanged path set; the probe below
         // then runs now instead of at the next 2 s tick.

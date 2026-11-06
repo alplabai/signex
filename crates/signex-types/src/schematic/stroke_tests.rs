@@ -25,7 +25,6 @@ fn the_floor_is_one_value_for_every_kind() {
         SCHEMATIC_RENDER_MIN_STROKE_MM,
         SCHEMATIC_NO_CONNECT_STROKE_MM,
         SCHEMATIC_LABEL_MARKER_STROKE_MM,
-        SCHEMATIC_SHEET_FRAME_STROKE_MM,
         0.0,
     ]
     .into_iter()

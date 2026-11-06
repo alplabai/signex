@@ -142,22 +142,9 @@ fn elide_middle(text: &str) -> String {
 /// each message back through `update` (what the iced runtime does).
 #[cfg(test)]
 pub(crate) fn settle(app: &mut Signex, task: Task<Message>) {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    let mut pending = vec![task];
-    while let Some(task) = pending.pop() {
-        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
-            continue;
-        };
-        let mut messages = Vec::new();
-        runtime.block_on(async {
-            while let Some(action) = futures::StreamExt::next(&mut stream).await {
-                if let iced_runtime::Action::Output(message) = action {
-                    messages.push(message);
-                }
-            }
-        });
-        pending.extend(messages.into_iter().map(|m| app.update(m)));
-    }
+    crate::task_driver::TaskDriver::new()
+        .settle(app, task)
+        .expect("the task chain settled");
 }
 
 impl Signex {

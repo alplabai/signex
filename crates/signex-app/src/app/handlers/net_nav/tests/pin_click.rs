@@ -399,3 +399,29 @@ fn a_real_click_near_the_stock_r_top_edge_selects_the_part_with_no_pin() {
     click(&mut p, 50.0, 47.5);
     assert_eq!(focused(&p).as_deref(), Some("1"));
 }
+
+/// The canvas highlights the clicked pin (#2086): the slot carries it while
+/// its part is the selection, it is the pin the click picked, and any other
+/// selection drops it.
+#[test]
+fn the_clicked_pin_is_highlighted_on_the_canvas_until_the_selection_changes() {
+    let (mut p, part) = project_with_part(false);
+    click(&mut p, 54.9, 50.0);
+    assert_eq!(
+        p.app.interaction_state.active_canvas().focused_pin,
+        Some((part, "2".to_string()))
+    );
+    let line = {
+        let sheet = p
+            .app
+            .interaction_state
+            .active_canvas()
+            .active_snapshot()
+            .expect("snapshot");
+        signex_types::schematic::symbol_pin_line(sheet, part, "2").expect("pin 2 line")
+    };
+    assert_eq!((line.tip.x, line.tip.y), (55.0, 50.0));
+    assert_eq!((line.inner.x, line.inner.y), (52.5, 50.0));
+    click(&mut p, 10.0, 10.0);
+    assert_eq!(p.app.interaction_state.active_canvas().focused_pin, None);
+}

@@ -135,11 +135,11 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         container(
             row![
                 text("Design Item ID")
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(3)),
                 text("Description")
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(4)),
             ]
@@ -168,7 +168,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     .color(label_color)
                     .width(Length::FillPortion(3)),
                 text(entry.description.clone())
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(4)),
             ]
@@ -419,11 +419,8 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     col = col.push(
         container(
             row![
-                text("Name")
-                    .size(TS.caption)
-                    .color(muted)
-                    .width(Length::Fill),
-                text("Pads").size(TS.caption).color(muted),
+                text("Name").size(TS.body).color(muted).width(Length::Fill),
+                text("Pads").size(TS.body).color(muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
@@ -459,11 +456,11 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         let row_btn = iced::widget::button(
             row![
                 text(footprint_row.name.clone())
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(label_color)
                     .width(Length::Fill),
                 text(footprint_row.pad_count.to_string())
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(label_color),
             ]
             .spacing(SP.m)

@@ -137,7 +137,11 @@ pub(super) fn render(gpu: &mut Gpu, element: Element<'_, crate::app::Message>) -
 }
 
 /// `element` laid out in the `WIDTH` x `HEIGHT` logical window at `dpi`.
-fn render_at(gpu: &mut Gpu, element: Element<'_, crate::app::Message>, dpi: f32) -> Frame {
+pub(super) fn render_at(
+    gpu: &mut Gpu,
+    element: Element<'_, crate::app::Message>,
+    dpi: f32,
+) -> Frame {
     let size = Size::new(WIDTH as f32, HEIGHT as f32);
     let mut ui = UserInterface::build(element, size, Cache::default(), &mut gpu.renderer);
     ui.draw(

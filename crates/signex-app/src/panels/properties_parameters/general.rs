@@ -108,7 +108,7 @@ pub fn view_custom_selection_filters_section<'a>(
                         .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
                         .width(Length::Fill)
                         .boxed(),
-                    iced::widget::button(text("Delete").size(TS.caption).color(primary_c))
+                    iced::widget::button(text("Delete").size(TS.body).color(primary_c))
                         .padding([3.0, SP.m])
                         .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
                         .boxed(),
@@ -559,12 +559,12 @@ pub fn view_properties_parameters<'a>(
         container(
             row![
                 text("Name")
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(3))
                     .boxed(),
                 text("Value")
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(2))
                     .boxed(),
@@ -734,7 +734,7 @@ pub fn preset_chip(
     let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     iced::widget::button(
         text(label.to_string())
-            .size(TS.caption)
+            .size(TS.body)
             .color(if enabled { text_on } else { text_off })
             .align_x(iced::alignment::Horizontal::Center),
     )

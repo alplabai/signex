@@ -29,9 +29,15 @@ pub(super) fn push_symbol_lib_graphics(
     defaults: &SchematicDefaults,
 ) {
     let px = |p: &Point| pt(xform.x(p.x), xform.px_y(p.y));
+    // A power port draws in the theme's power colour, as on the canvas (#2091).
+    let (body_rgb, pin_rgb) = if sym.is_power {
+        (palette.power_label, palette.power_label)
+    } else {
+        (palette.symbol_stroke, palette.pin)
+    };
     let style = |width: f64, fill: FillType| SvgStyle {
-        stroke_rgb: Some(palette.symbol_stroke),
-        fill_rgb: fill_to_rgb(fill, palette.symbol_stroke, palette.symbol_fill),
+        stroke_rgb: Some(body_rgb),
+        fill_rgb: fill_to_rgb(fill, body_rgb, palette.symbol_fill),
         stroke_width: (defaults.symbol_line_mm(width) * xform.mm_to_unit) as f32,
     };
     for primitive in lower_placed_symbol(lib, sym, defaults) {
@@ -100,7 +106,11 @@ pub(super) fn push_symbol_lib_graphics(
                 align: halign_to_svg(h_align),
                 v_align: valign_to_svg(v_align),
                 rotation_deg: rotation_deg as f32,
-                fill_rgb: (0.15, 0.15, 0.15),
+                fill_rgb: if sym.is_power {
+                    body_rgb
+                } else {
+                    (0.15, 0.15, 0.15)
+                },
                 text: normalize_standard_text(&text),
             }),
             SymbolPrimitive::Pin { tip, body, width } => out.push(SvgElement::Path {
@@ -109,7 +119,7 @@ pub(super) fn push_symbol_lib_graphics(
                     SvgPathCommand::LineTo(px(&body)),
                 ],
                 style: SvgStyle {
-                    stroke_rgb: Some(palette.pin),
+                    stroke_rgb: Some(pin_rgb),
                     fill_rgb: None,
                     stroke_width: (defaults.symbol_line_mm(width) * xform.mm_to_unit) as f32,
                 },

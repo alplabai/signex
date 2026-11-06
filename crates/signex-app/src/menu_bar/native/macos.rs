@@ -128,6 +128,13 @@ impl NativeMenuState {
         if !self.armed || self.failed {
             return;
         }
+        // AppKit panics off the main thread, where a headless driver or a
+        // test runs `update` (#1927); the in-window menu stays instead.
+        if objc2::MainThreadMarker::new().is_none() {
+            self.failed = true;
+            log_info("Main menu: not on the main thread; using the in-window menu");
+            return;
+        }
         self.applied_inputs = Some(inputs);
         let refresh = plan_refresh(self.applied.as_ref(), &build.spec);
         let NativeBuild { spec, actions } = build;

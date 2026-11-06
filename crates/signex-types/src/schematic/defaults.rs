@@ -53,7 +53,7 @@ impl SchematicDefaults {
         wire_width_mm: SCHEMATIC_DEFAULT_WIRE_STROKE_MM,
         bus_width_mm: SCHEMATIC_RENDER_BUS_STROKE_MM,
         symbol_line_width_mm: SCHEMATIC_DEFAULT_WIRE_STROKE_MM,
-        shape_stroke_mm: SCHEMATIC_RENDER_MIN_STROKE_MM,
+        shape_stroke_mm: SCHEMATIC_DEFAULT_WIRE_STROKE_MM,
         junction_diameter_mm: 2.0 * SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM,
         text_size_pt: SCHEMATIC_DEFAULT_TEXT_SIZE_PT,
         wire_line_style: NetLineStyle::Solid,

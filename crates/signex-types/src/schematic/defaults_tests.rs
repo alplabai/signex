@@ -16,7 +16,7 @@ fn the_built_in_table_keeps_the_values_sheets_drew_before_it() {
     assert_eq!(B.wire_width_mm, 0.254);
     assert_eq!(B.bus_width_mm, 0.45);
     assert_eq!(B.symbol_line_width_mm, 0.254);
-    assert_eq!(B.shape_stroke_mm, 0.15);
+    assert_eq!(B.shape_stroke_mm, 0.254, "the #2091 one stroke rule");
     assert_eq!(B.junction_diameter_mm, 0.7);
     assert_eq!(B.text_size_pt, 10.0);
 }
@@ -63,9 +63,17 @@ fn a_pin_draws_as_wide_as_a_wire_by_default() {
 
 #[test]
 fn effective_shape_width_defaults_a_zero_or_broken_width() {
-    assert_eq!(B.shape_stroke_mm(0.0), SCHEMATIC_RENDER_MIN_STROKE_MM);
-    assert_eq!(B.shape_stroke_mm(f64::NAN), SCHEMATIC_RENDER_MIN_STROKE_MM);
+    assert_eq!(B.shape_stroke_mm(0.0), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
+    assert_eq!(
+        B.shape_stroke_mm(f64::NAN),
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    );
     assert_eq!(B.shape_stroke_mm(0.254), 0.254);
+    assert_eq!(
+        B.shape_stroke_mm(0.05),
+        SCHEMATIC_RENDER_MIN_STROKE_MM,
+        "floor"
+    );
     let p = SchematicDefaults {
         shape_stroke_mm: 0.3,
         ..B
@@ -152,4 +160,23 @@ fn placed_text_rounds_once_and_never_to_zero() {
     );
     assert_eq!(p(0.2).placed_text_pt(), 1);
     assert_eq!(B.placed_text_mm(), crate::schematic::SCHEMATIC_TEXT_MM);
+}
+
+/// #2091, on the table: every stored-stroke kind (symbol graphic and pin,
+/// drawing and child sheet frame, wire) resolves a stored 0 or a broken
+/// width to 0.254 mm and floors an explicit width at 0.15 mm.
+#[test]
+fn every_stored_stroke_kind_resolves_zero_to_the_default() {
+    for broken in [0.0, f64::NAN, f64::INFINITY, -1.0] {
+        assert_eq!(B.symbol_line_mm(broken), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
+        assert_eq!(B.shape_stroke_mm(broken), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
+        assert_eq!(B.wire_mm(broken, None), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
+    }
+    for kind in [
+        B.symbol_line_mm(0.05),
+        B.shape_stroke_mm(0.05),
+        B.wire_mm(0.05, None),
+    ] {
+        assert_eq!(kind, SCHEMATIC_RENDER_MIN_STROKE_MM);
+    }
 }

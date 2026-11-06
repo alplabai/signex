@@ -316,3 +316,101 @@ fn a_non_power_symbol_without_a_library_entry_still_gets_the_placeholder() {
     sheet.symbols.push(sym.clone());
     assert!(approx(symbol_bounds(&sheet, &sym), 6.0, 7.2, 14.0, 12.8));
 }
+
+fn value_prop() -> signex_types::schematic::TextProp {
+    signex_types::schematic::TextProp {
+        position: Point::new(50.0, 56.0),
+        rotation: 0.0,
+        font_size: 1.27,
+        font_family: None,
+        justify_h: Default::default(),
+        justify_v: Default::default(),
+        hidden: false,
+    }
+}
+
+fn snapshot_of(sheet: &SchematicSheet) -> (RendererSnapshot, CanvasColors) {
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 10.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(2000.0, 2000.0));
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let snap =
+        build_renderer_snapshot(sheet, &transform, &colors, bounds, None, Default::default());
+    (snap, colors)
+}
+
+/// #2091 - a power port draws its strokes, pin and Value text in the theme's
+/// power colour; a normal part keeps body / pin / value.
+#[test]
+fn a_power_port_draws_in_the_power_colour_and_a_part_keeps_its_own() {
+    let (mut sheet, mut port) = placed_power_port("power:GND");
+    port.value = "GND".into();
+    port.val_text = Some(value_prop());
+    sheet.symbols[0] = port;
+    let (snap, colors) = snapshot_of(&sheet);
+    let power = to_rgba(to_iced(&colors.power));
+    assert_ne!(power, to_rgba(to_iced(&colors.body)), "theme distinguishes");
+    assert!(!snap.wires.is_empty(), "the port draws strokes and a pin");
+    assert!(snap.wires.iter().all(|w| w.explicit_color == Some(power)));
+    let value = snap
+        .reference_value_texts
+        .iter()
+        .find(|t| t.content == "GND")
+        .expect("the Value text");
+    assert_eq!(value.color, power);
+
+    let (mut part_sheet, mut part) = sheet_with_body(10.0, 6.0, 50.0, 50.0, 0.0);
+    part.value = "10k".into();
+    part.val_text = Some(value_prop());
+    part_sheet.symbols[0] = part;
+    let (snap, colors) = snapshot_of(&part_sheet);
+    let body = snap.polygons.first().expect("part body");
+    assert_eq!(body.stroke_color, Some(to_rgba(to_iced(&colors.body))));
+    let value = snap
+        .reference_value_texts
+        .iter()
+        .find(|t| t.content == "10k")
+        .expect("the Value text");
+    assert_eq!(value.color, to_rgba(to_iced(&colors.value)));
+}
+
+/// #2091 - a power port's stem and graphics draw at the same width as a
+/// stock-style symbol (stored 0, so 0.254 mm).
+#[test]
+fn a_power_port_strokes_at_the_stock_symbol_width() {
+    let (sheet, _) = placed_power_port("power:GND");
+    let (snap, _) = snapshot_of(&sheet);
+    let (stock_sheet, _) = sheet_with_body(10.0, 6.0, 50.0, 50.0, 0.0);
+    let (stock, _) = snapshot_of(&stock_sheet);
+    let default = signex_types::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM as f32;
+    let stock_width = stock.polygons.first().expect("stock body").stroke_width_mm;
+    assert_eq!(stock_width, default);
+    assert!(!snap.wires.is_empty());
+    assert!(snap.wires.iter().all(|w| w.width_mm == stock_width));
+}
+
+/// #2091 - the canvas draws a child sheet frame through the one stroke rule.
+#[test]
+fn a_child_sheet_frame_resolves_its_stored_width_through_the_one_rule() {
+    for (stored, drawn) in [(0.0, 0.254_f32), (0.5, 0.5), (0.05, 0.15)] {
+        let mut sheet = SchematicSheet::default();
+        sheet.child_sheets.push(
+            serde_json::from_value(serde_json::json!({
+                "uuid": uuid::Uuid::now_v7(),
+                "name": "Child",
+                "filename": "child.snxsch",
+                "position": { "x": 20.0, "y": 20.0 },
+                "size": [40.0, 30.0],
+                "stroke_width": stored,
+            }))
+            .expect("child sheet"),
+        );
+        let (snap, _) = snapshot_of(&sheet);
+        let frame = snap.polygons.first().expect("the sheet frame");
+        assert_eq!(frame.stroke_width_mm, drawn, "stored {stored}");
+    }
+}

@@ -36,6 +36,8 @@ mod annotation_placements_tests;
 mod annotation_tests;
 
 #[cfg(test)]
+mod field_follow_tests;
+#[cfg(test)]
 mod lock_tests;
 #[cfg(test)]
 mod object_lock_tests;

@@ -278,7 +278,7 @@ impl SchematicCanvas<'_> {
         let placed_mm = if self.prefs.current_tool == crate::app::Tool::Bus {
             self.prefs.schematic_defaults.bus_mm()
         } else {
-            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM
+            self.prefs.schematic_defaults.wire_mm(0.0, None)
         };
         signex_types::schematic::stroke_px(
             placed_mm as f32,

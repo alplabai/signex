@@ -13,10 +13,37 @@ use super::{
     Point, SCHEMATIC_TEXT_MM, SchematicSheet, Symbol, TextProp, VAlign,
 };
 
-/// Length of the stem from the connection point to the symbol head, mm.
-const STEM_MM: f64 = 1.27;
-/// Half width of the head, mm.
-const HEAD_HALF_MM: f64 = 0.635;
+/// Length of the stem from the connection point to the symbol head, mm: the
+/// stock library's pin stub (two 1.27 mm grid steps). The connection point
+/// is the pin tip at the origin and never moves; only the far end does.
+const STEM_MM: f64 = 2.54;
+/// Stem of the hanging ground styles, mm: one grid step, so the bars sit
+/// close under the wire (maintainer decision, #2091).
+const GROUND_STEM_MM: f64 = 1.27;
+
+/// Stem length of `style`, mm.
+fn stem_mm(style: PowerPortStyle) -> f64 {
+    if style.hangs_down() {
+        GROUND_STEM_MM
+    } else {
+        STEM_MM
+    }
+}
+/// Half width of a bar, arrow or circle head, mm.
+const HEAD_HALF_MM: f64 = 1.016;
+/// Half widths of the three ground bars, widest first, mm (the stock GND).
+const GROUND_BAR_HALVES_MM: [f64; 3] = [1.27, 0.762, 0.254];
+/// Distance between ground bars, mm.
+const GROUND_BAR_STEP_MM: f64 = 0.508;
+/// Depth of an arrow or signal-ground triangle, mm.
+const TRIANGLE_DEPTH_MM: f64 = 1.27;
+/// Half width of the signal-ground triangle and the earth bar, mm.
+const GROUND_HALF_MM: f64 = 1.27;
+/// Depth of the earth hatch, mm.
+const EARTH_HATCH_MM: f64 = 0.762;
+/// Height of the wave head's offset and swing, mm.
+const WAVE_OFFSET_MM: f64 = 0.508;
+const WAVE_SWING_MM: f64 = 0.4;
 
 /// Style of a power port, read from its `lib_id`. This one classifier is
 /// shared by the built-in body below and the Properties panel's Style row,
@@ -116,19 +143,19 @@ fn line(a: (f64, f64), b: (f64, f64)) -> Graphic {
 pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
     let style = PowerPortStyle::of(lib_id);
     let dir = if style.hangs_down() { -1.0 } else { 1.0 };
-    let mut out = vec![line((0.0, 0.0), (0.0, dir * STEM_MM))];
+    let mut out = vec![line((0.0, 0.0), (0.0, dir * stem_mm(style)))];
     out.extend(power_port_head(style));
     out
 }
 
 /// The head of a style, without the stem (the stem is the library pin).
 fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
-    let top = STEM_MM;
+    let top = stem_mm(style);
     match style {
         PowerPortStyle::PowerGround => {
             let mut out = Vec::new();
-            for (i, half) in [0.9525, 0.6, 0.25].into_iter().enumerate() {
-                let y = -top - 0.5 * i as f64;
+            for (i, half) in GROUND_BAR_HALVES_MM.into_iter().enumerate() {
+                let y = -top - GROUND_BAR_STEP_MM * i as f64;
                 out.push(line((-half, y), (half, y)));
             }
             out
@@ -138,7 +165,7 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
             points: vec![
                 Point::new(-HEAD_HALF_MM, top),
                 Point::new(HEAD_HALF_MM, top),
-                Point::new(0.0, top + 1.0),
+                Point::new(0.0, top + TRIANGLE_DEPTH_MM),
                 Point::new(-HEAD_HALF_MM, top),
             ],
             width: 0.0,
@@ -152,30 +179,33 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
         }],
         PowerPortStyle::SignalGround => vec![Graphic::Polyline {
             points: vec![
-                Point::new(-0.9525, -top),
-                Point::new(0.9525, -top),
-                Point::new(0.0, -top - 1.0),
-                Point::new(-0.9525, -top),
+                Point::new(-GROUND_HALF_MM, -top),
+                Point::new(GROUND_HALF_MM, -top),
+                Point::new(0.0, -top - TRIANGLE_DEPTH_MM),
+                Point::new(-GROUND_HALF_MM, -top),
             ],
             width: 0.0,
             fill: FillType::None,
         }],
         PowerPortStyle::Earth => {
-            let mut out = vec![line((-0.9525, -top), (0.9525, -top))];
-            for x in [-0.9525, 0.0, 0.9525] {
-                out.push(line((x, -top), (x - 0.5, -top - 0.6)));
+            let mut out = vec![line((-GROUND_HALF_MM, -top), (GROUND_HALF_MM, -top))];
+            for x in [-GROUND_HALF_MM, 0.0, GROUND_HALF_MM] {
+                out.push(line(
+                    (x, -top),
+                    (x - 0.6 * EARTH_HATCH_MM, -top - EARTH_HATCH_MM),
+                ));
             }
             out
         }
         PowerPortStyle::Wave => {
-            let y = top + 0.4;
+            let y = top + WAVE_OFFSET_MM;
             vec![Graphic::Polyline {
                 points: (0..=8)
                     .map(|i| {
                         let t = i as f64 / 8.0;
                         Point::new(
                             (t - 0.5) * 2.0 * HEAD_HALF_MM,
-                            y + 0.3 * (t * std::f64::consts::TAU).sin(),
+                            y + WAVE_SWING_MM * (t * std::f64::consts::TAU).sin(),
                         )
                     })
                     .collect(),
@@ -191,14 +221,14 @@ const VALUE_GAP_MM: f64 = 0.254;
 
 /// How far the head of `style` reaches past the connection point, mm.
 fn head_reach_mm(style: PowerPortStyle) -> f64 {
+    let stem = stem_mm(style);
     match style {
-        PowerPortStyle::Bar => STEM_MM,
-        PowerPortStyle::Arrow | PowerPortStyle::PowerGround | PowerPortStyle::SignalGround => {
-            STEM_MM + 1.0
-        }
-        PowerPortStyle::Circle => STEM_MM + 2.0 * HEAD_HALF_MM,
-        PowerPortStyle::Wave => STEM_MM + 0.7,
-        PowerPortStyle::Earth => STEM_MM + 0.6,
+        PowerPortStyle::Bar => stem,
+        PowerPortStyle::Arrow | PowerPortStyle::SignalGround => stem + TRIANGLE_DEPTH_MM,
+        PowerPortStyle::PowerGround => stem + GROUND_BAR_STEP_MM * 2.0,
+        PowerPortStyle::Circle => stem + 2.0 * HEAD_HALF_MM,
+        PowerPortStyle::Wave => stem + WAVE_OFFSET_MM + WAVE_SWING_MM,
+        PowerPortStyle::Earth => stem + EARTH_HATCH_MM,
     }
 }
 
@@ -208,8 +238,55 @@ fn head_reach_mm(style: PowerPortStyle) -> f64 {
 /// hangs on.
 #[must_use]
 pub fn power_port_value_field(lib_id: &str, at: Point) -> TextProp {
-    let style = PowerPortStyle::of(lib_id);
-    let reach = head_reach_mm(style) + VALUE_GAP_MM;
+    power_port_value_field_for(&power_port_lib_symbol(lib_id), at)
+}
+
+/// How far the entry `lib` reaches past the connection point along its stem,
+/// mm, read from its own pin and graphics. An entry without geometry reaches
+/// as far as the built-in head of its style.
+fn lib_head_reach_mm(lib: &LibSymbol, style: PowerPortStyle) -> f64 {
+    // Library space is Y-up; the grounds hang to negative y.
+    let dir = if style.hangs_down() { -1.0 } else { 1.0 };
+    let mut reach: f64 = 0.0;
+    let mut take = |y: f64| reach = reach.max(dir * y);
+    for lib_graphic in &lib.graphics {
+        match &lib_graphic.graphic {
+            Graphic::Polyline { points, .. } => points.iter().for_each(|p| take(p.y)),
+            Graphic::Rectangle { start, end, .. } => {
+                take(start.y);
+                take(end.y);
+            }
+            Graphic::Circle { center, radius, .. } => {
+                take(center.y + radius);
+                take(center.y - radius);
+            }
+            Graphic::Arc {
+                start, mid, end, ..
+            } => {
+                take(start.y);
+                take(mid.y);
+                take(end.y);
+            }
+            _ => {}
+        }
+    }
+    for lib_pin in &lib.pins {
+        let pin = &lib_pin.pin;
+        take(pin.position.y + pin.length * pin.rotation.to_radians().sin());
+    }
+    if reach > 0.0 {
+        reach
+    } else {
+        head_reach_mm(style)
+    }
+}
+
+/// [`power_port_value_field`] for the entry the sheet actually holds for the
+/// port: the text clears that entry's head, whatever its geometry.
+#[must_use]
+pub fn power_port_value_field_for(lib: &LibSymbol, at: Point) -> TextProp {
+    let style = PowerPortStyle::of(&lib.id);
+    let reach = lib_head_reach_mm(lib, style) + VALUE_GAP_MM;
     // Schematic space is Y-down: a rising head is at smaller y.
     let (dy, justify_v) = if style.hangs_down() {
         (reach, VAlign::Top)
@@ -264,7 +341,7 @@ pub fn power_port_lib_symbol(lib_id: &str) -> LibSymbol {
                 position: Point::new(0.0, 0.0),
                 // Library space is Y-up: 90 degrees points the stub up.
                 rotation: if style.hangs_down() { 270.0 } else { 90.0 },
-                length: STEM_MM,
+                length: stem_mm(style),
                 name: String::new(),
                 number: "1".to_owned(),
                 visible: true,
@@ -347,6 +424,25 @@ mod tests {
         }
     }
 
+    /// #2091 - the stem is a stock pin long and the connection point is the
+    /// pin tip at the symbol origin for every style and both directions: a
+    /// saved wire ends on that point, so it must never move.
+    #[test]
+    fn the_stem_is_a_stock_pin_or_one_step_for_a_ground_and_the_tip_stays_on_the_origin() {
+        for style in PowerPortStyle::ALL {
+            let lib = power_port_lib_symbol(&format!("power:{}", style.lib_tag()));
+            let pin = &lib.pins[0].pin;
+            assert_eq!((pin.position.x, pin.position.y), (0.0, 0.0));
+            let want = if style.hangs_down() { 1.27 } else { 2.54 };
+            assert_eq!(pin.length, want, "{style:?}");
+            let stem = power_port_graphics(&format!("power:{}", style.lib_tag()));
+            let Graphic::Polyline { points, .. } = &stem[0] else {
+                panic!("the first graphic is the stem");
+            };
+            assert_eq!((points[0].x, points[0].y), (0.0, 0.0));
+        }
+    }
+
     #[test]
     fn every_style_has_a_body() {
         for style in PowerPortStyle::ALL {
@@ -377,7 +473,7 @@ mod tests {
                 .collect();
             assert_eq!(pins.len(), 1, "{lib_id}");
             assert_eq!((pins[0].0.x, pins[0].0.y), (0.0, 0.0), "{lib_id}");
-            let stem = STEM_MM;
+            let stem = stem_mm(PowerPortStyle::of(&lib_id));
             assert!((pins[0].1.x).abs() < 1e-9, "{lib_id}");
             assert!((pins[0].1.y.abs() - stem).abs() < 1e-9, "{lib_id}");
             // Same extent as the entry-less fallback.
@@ -387,6 +483,38 @@ mod tests {
                 format!("{:?}", crate::schematic::primitives_bounds(&lowered)),
                 format!("{:?}", crate::schematic::primitives_bounds(&fallback)),
                 "{lib_id}"
+            );
+        }
+    }
+
+    /// A port placed on a sheet that holds an older, shorter entry (1.27 mm
+    /// stem) puts its Value text beyond that entry's head, not the new one's.
+    #[test]
+    fn value_text_follows_the_entry_the_sheet_holds() {
+        for style in PowerPortStyle::ALL {
+            let lib_id = format!("power:{}", style.lib_tag());
+            let mut old = power_port_lib_symbol(&lib_id);
+            let dir = if style.hangs_down() { -1.0 } else { 1.0 };
+            old.graphics.clear();
+            old.pins[0].pin.length = 1.27;
+            old.graphics.push(LibGraphic {
+                unit: 0,
+                body_style: 1,
+                graphic: line((-1.0, dir * 1.27), (1.0, dir * 1.27)),
+            });
+            let at = Point::new(10.0, 20.0);
+            let value = power_port_value_field_for(&old, at);
+            let expected = 1.27 + VALUE_GAP_MM;
+            let dy = if style.hangs_down() {
+                expected
+            } else {
+                -expected
+            };
+            assert!((value.position.y - (at.y + dy)).abs() < 1e-9, "{lib_id}");
+            let built_in = power_port_value_field(&lib_id, at);
+            assert!(
+                (built_in.position.y - at.y).abs() > expected,
+                "{lib_id}: the built-in entry reaches further"
             );
         }
     }

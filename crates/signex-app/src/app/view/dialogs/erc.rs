@@ -7,17 +7,20 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row, text, text_input};
-use iced::{Color, Element, Length, Widget};
+use iced::{Element, Length, Widget};
 
 use super::rule_editor::{RuleEditor, rule_editor};
 use super::widgets::{
-    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, primary_button,
-    secondary_button, secondary_button_maybe, wrap_modal,
+    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Overwriting a stored profile replaces its rules, so the button is a danger.
+const PROFILE_OVERWRITE_KIND: DialogButtonKind = DialogButtonKind::Danger;
 
 impl Signex {
     pub(in crate::app::view) fn view_erc_dialog(&self) -> Element<'_, Message> {
@@ -50,7 +53,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
 
         let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = container(
@@ -124,64 +126,54 @@ impl Signex {
             scope = scope.push(
                 text(notice)
                     .size(TS.caption)
-                    .color(Color::from_rgb(0.9, 0.35, 0.35))
+                    .color(crate::styles::tokens::danger(tokens))
                     .boxed(),
             );
         }
-        let mut footer = row![scope].spacing(SP.m).align_y(iced::Alignment::Center);
+        let secondary = |label: &str, message: Option<Message>| {
+            dialog_button(label, DialogButtonKind::Secondary, message, tokens)
+        };
+        let mut extras: Vec<Element<'_, Message>> = vec![scope.boxed()];
         // A rule set from a newer Signex sits unread in the file; storing
         // would replace it on save, so the action is not offered.
         if has_project && stored.is_none() && !unreadable {
-            footer = footer.push(secondary_button(
+            extras.push(secondary(
                 "Store ERC rules in this project",
-                Message::Erc(ErcMsg::StoreRulesInProject),
-                text_c,
-                border_c,
+                Some(Message::Erc(ErcMsg::StoreRulesInProject)),
             ));
         }
         if stored.is_some() {
-            footer = footer.push(secondary_button(
+            extras.push(secondary(
                 "Save as profile",
-                Message::Erc(ErcMsg::ProfileSaveDialogOpened),
-                text_c,
-                border_c,
+                Some(Message::Erc(ErcMsg::ProfileSaveDialogOpened)),
             ));
             if self.active_project_has_profile() {
-                footer = footer.push(secondary_button(
+                extras.push(secondary(
                     "Update from profile",
-                    Message::Erc(ErcMsg::ProfileUpdateRequested),
-                    text_c,
-                    border_c,
+                    Some(Message::Erc(ErcMsg::ProfileUpdateRequested)),
                 ));
             }
-            footer = footer
-                .push(secondary_button_maybe(
-                    "Undo",
-                    can_undo.then_some(Message::Erc(ErcMsg::RulesUndone)),
-                    if can_undo { text_c } else { text_muted },
-                    border_c,
-                ))
-                .push(secondary_button_maybe(
-                    "Redo",
-                    can_redo.then_some(Message::Erc(ErcMsg::RulesRedone)),
-                    if can_redo { text_c } else { text_muted },
-                    border_c,
-                ));
-        }
-        let footer = footer
-            .push(Space::new().width(Length::Fill).boxed())
-            .push(primary_button(
-                "Run ERC",
-                Some(Message::Erc(ErcMsg::Run)),
-                border_c,
-            ))
-            .push(Space::new().width(8).boxed())
-            .push(secondary_button(
-                "Close",
-                Message::Erc(ErcMsg::CloseDialog),
-                text_c,
-                border_c,
+            extras.push(secondary(
+                "Undo",
+                can_undo.then_some(Message::Erc(ErcMsg::RulesUndone)),
             ));
+            extras.push(secondary(
+                "Redo",
+                can_redo.then_some(Message::Erc(ErcMsg::RulesRedone)),
+            ));
+        }
+        let footer = dialog_footer_split(
+            extras,
+            vec![
+                dialog_button(
+                    "Run ERC",
+                    DialogButtonKind::Primary,
+                    Some(Message::Erc(ErcMsg::Run)),
+                    tokens,
+                ),
+                secondary("Close", Some(Message::Erc(ErcMsg::CloseDialog))),
+            ],
+        );
 
         // The shared rule editor: rules table on the left, pin-connection
         // matrix on the right. Preferences ▸ Rule Profiles draws the same one.
@@ -211,9 +203,9 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill),
-                self.view_profile_update_panel(text_c, text_muted, border_c),
-                self.view_profile_save_panel(text_c, text_muted, border_c),
-                container(footer).padding([10, 14]),
+                self.view_profile_update_panel(tokens),
+                self.view_profile_save_panel(tokens),
+                footer,
             ]
             .width(modal_w)
             .height(modal_h),
@@ -229,10 +221,10 @@ impl Signex {
     /// Empty space when no update is pending.
     fn view_profile_update_panel(
         &self,
-        text_c: Color,
-        text_muted: Color,
-        border_c: Color,
+        tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'_, Message> {
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
         let Some((name, lines)) = self.pending_profile_update_lines() else {
             return Space::new().height(0).boxed();
         };
@@ -251,19 +243,20 @@ impl Signex {
             list = list.push(text(line).size(TS.caption).color(text_muted).boxed());
         }
         let buttons = row![
-            primary_button(
+            dialog_button(
                 "Apply update",
+                DialogButtonKind::Primary,
                 Some(Message::Erc(ErcMsg::ProfileUpdateConfirmed)),
-                border_c,
+                tokens,
             ),
-            secondary_button(
+            dialog_button(
                 "Cancel",
-                Message::Erc(ErcMsg::ProfileUpdateCancelled),
-                text_c,
-                border_c,
+                DialogButtonKind::Secondary,
+                Some(Message::Erc(ErcMsg::ProfileUpdateCancelled)),
+                tokens,
             ),
         ]
-        .spacing(SP.m);
+        .spacing(SP.s);
         container(
             column![
                 container(iced::widget::scrollable(list)).height(Length::Fit.max(120)),
@@ -282,10 +275,10 @@ impl Signex {
     /// overwrite question. Empty space when the dialog is closed.
     fn view_profile_save_panel(
         &self,
-        text_c: Color,
-        text_muted: Color,
-        border_c: Color,
+        tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'_, Message> {
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
         let Some(dialog) = self.ui_state.save_profile_dialog.as_ref() else {
             return Space::new().height(0).boxed();
         };
@@ -310,20 +303,21 @@ impl Signex {
                 )
                 .push(
                     row![
-                        primary_button(
+                        dialog_button(
                             "Overwrite",
+                            PROFILE_OVERWRITE_KIND,
                             (!dialog.busy)
                                 .then_some(Message::Erc(ErcMsg::ProfileSaveOverwriteConfirmed)),
-                            border_c,
+                            tokens,
                         ),
-                        secondary_button(
+                        dialog_button(
                             "Back",
-                            Message::Erc(ErcMsg::ProfileSaveCancelled),
-                            text_c,
-                            border_c,
+                            DialogButtonKind::Secondary,
+                            Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
+                            tokens,
                         ),
                     ]
-                    .spacing(SP.m)
+                    .spacing(SP.s)
                     .boxed(),
                 );
         } else {
@@ -356,21 +350,26 @@ impl Signex {
                 panel = panel.push(
                     text(error.clone())
                         .size(TS.caption)
-                        .color(Color::from_rgb(0.9, 0.35, 0.35))
+                        .color(crate::styles::tokens::danger(tokens))
                         .boxed(),
                 );
             }
             panel = panel.push(
                 row![
-                    primary_button("Save", editable.then(submit), border_c),
-                    secondary_button(
+                    dialog_button(
+                        "Save",
+                        DialogButtonKind::Primary,
+                        editable.then(submit),
+                        tokens,
+                    ),
+                    dialog_button(
                         "Cancel",
-                        Message::Erc(ErcMsg::ProfileSaveCancelled),
-                        text_c,
-                        border_c,
+                        DialogButtonKind::Secondary,
+                        Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
+                        tokens,
                     ),
                 ]
-                .spacing(SP.m)
+                .spacing(SP.s)
                 .boxed(),
             );
         }
@@ -378,5 +377,15 @@ impl Signex {
             .padding([8, 14])
             .width(Length::Fill)
             .boxed()
+    }
+}
+
+#[cfg(test)]
+mod overwrite_tests {
+    use super::*;
+
+    #[test]
+    fn overwriting_a_profile_is_a_danger_button() {
+        assert_eq!(PROFILE_OVERWRITE_KIND, DialogButtonKind::Danger);
     }
 }

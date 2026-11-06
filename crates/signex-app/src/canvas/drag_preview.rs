@@ -26,6 +26,32 @@ pub(crate) fn snapped_move_delta(
     grid_mm: f64,
     hotspot_radius: Option<f64>,
 ) -> (f64, f64) {
+    snapped_move_delta_with(
+        snap,
+        selected,
+        dx,
+        dy,
+        snap_enabled,
+        grid_mm,
+        hotspot_radius,
+        None,
+    )
+}
+
+/// [`snapped_move_delta`], with the hotspots of a drag kept in `cache` for
+/// the document `revision` (`0` = unknown: not cached), so a cursor step does
+/// not rescan the sheet (#2077). Same answer as without the cache.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn snapped_move_delta_with(
+    snap: Option<&SchematicRenderSnapshot>,
+    selected: &[SelectedItem],
+    dx: f64,
+    dy: f64,
+    snap_enabled: bool,
+    grid_mm: f64,
+    hotspot_radius: Option<f64>,
+    cache: Option<(&std::cell::RefCell<HotspotCache>, u64)>,
+) -> (f64, f64) {
     let (dx, dy) = if snap_enabled {
         let primary = selected
             .first()
@@ -45,12 +71,78 @@ pub(crate) fn snapped_move_delta(
         (dx, dy)
     };
     match (snap, hotspot_radius) {
-        (Some(sheet), Some(radius)) if !selected.is_empty() => {
+        (Some(sheet), Some(radius)) if !selected.is_empty() => match cache {
+            Some((cache, revision)) if super::drag_layers::is_known(revision) => {
+                let mut cache = cache.borrow_mut();
+                cache
+                    .for_move(sheet, revision, selected, radius)
+                    .snap((dx, dy))
+            }
+            _ => {
+                let points = moved_connection_points(sheet, selected);
+                let ids: Vec<_> = moved_item_ids(sheet, selected).into_iter().collect();
+                signex_types::schematic::snap_move_to_hotspot(
+                    sheet,
+                    &points,
+                    &ids,
+                    (dx, dy),
+                    radius,
+                )
+            }
+        },
+        _ => (dx, dy),
+    }
+}
+
+/// The hotspots one drag can snap to and the moved connection points, built
+/// once per document revision, selection and capture radius.
+#[derive(Debug, Default)]
+pub(crate) struct HotspotCache {
+    entry: Option<HotspotEntry>,
+}
+
+#[derive(Debug)]
+struct HotspotEntry {
+    revision: u64,
+    selection: Vec<SelectedItem>,
+    radius_bits: u64,
+    index: signex_types::schematic::MoveHotspots,
+}
+
+impl HotspotEntry {
+    fn snap(&self, delta: (f64, f64)) -> (f64, f64) {
+        self.index.snap(delta)
+    }
+}
+
+impl HotspotCache {
+    fn for_move(
+        &mut self,
+        sheet: &SchematicRenderSnapshot,
+        revision: u64,
+        selected: &[SelectedItem],
+        radius: f64,
+    ) -> &HotspotEntry {
+        let fits = self.entry.as_ref().is_some_and(|e| {
+            e.revision == revision && e.radius_bits == radius.to_bits() && e.selection == selected
+        });
+        if !fits {
             let points = moved_connection_points(sheet, selected);
             let ids: Vec<_> = moved_item_ids(sheet, selected).into_iter().collect();
-            signex_types::schematic::snap_move_to_hotspot(sheet, &points, &ids, (dx, dy), radius)
+            let index = signex_types::schematic::MoveHotspots::new(sheet, &points, &ids, radius);
+            self.entry = Some(HotspotEntry {
+                revision,
+                selection: selected.to_vec(),
+                radius_bits: radius.to_bits(),
+                index,
+            });
         }
-        _ => (dx, dy),
+        self.entry.as_ref().expect("entry was just set")
+    }
+
+    /// Drop the cached hotspots (the drag ended).
+    pub(crate) fn clear(&mut self) {
+        self.entry = None;
     }
 }
 

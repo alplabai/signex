@@ -6,8 +6,7 @@
 //! (PDF/SVG/print) uses the mm widths alone. See docs/RENDERING_RULES.md,
 //! "Stroke law".
 
-/// Thinnest world width any schematic stroke lowers to, and the width a
-/// graphic stored with width `0` ("default") draws at (mm).
+/// Thinnest world width an explicitly stored schematic stroke lowers to (mm).
 pub const SCHEMATIC_RENDER_MIN_STROKE_MM: f64 = 0.15;
 
 /// Width a wire stored with width `0` ("default") is drawn and exported at
@@ -27,9 +26,6 @@ pub const SCHEMATIC_NO_CONNECT_STROKE_MM: f64 = 0.2;
 
 /// Global / hierarchical label marker outline width (mm).
 pub const SCHEMATIC_LABEL_MARKER_STROKE_MM: f64 = 0.15;
-
-/// Child sheet frame outline width (mm).
-pub const SCHEMATIC_SHEET_FRAME_STROKE_MM: f64 = 0.15;
 
 /// Thinnest a schematic stroke draws on screen, in device pixels. One whole
 /// pixel: the CPU canvas has no anti-aliasing, so a thinner unsnapped outline

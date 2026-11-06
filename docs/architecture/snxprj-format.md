@@ -214,7 +214,8 @@ the Project tab's Schematic defaults section, added without bumping the
   `shape_fill` (`none` / `outline` / `background`). Every key is optional; a missing key, or a number that is not
   above zero, falls back to the built-in table
   (`signex_types::schematic::SchematicDefaults::BUILT_IN`: 0.254, 0.45, the
-  wire width, 0.15, 0.7 mm, 10 pt, Iosevka). An unset symbol line follows the
+  wire width, 0.254, 0.7 mm, 10 pt, Iosevka; a stored 0 draws at the
+  default and an explicit width is floored at 0.15 mm, as #2091 set). An unset symbol line follows the
   project's wire width.
 - Only unset values follow it: an item stored with width or size `0`. An
   explicit value in a sheet is never rewritten. A wire resolves explicit width

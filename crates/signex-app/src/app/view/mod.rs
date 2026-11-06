@@ -87,6 +87,7 @@ const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
 
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
+        let _probe = crate::frame_probe::span("view");
         // Secondary windows (detached modals, future undocked tabs) render
         // just their own content — no menu / dock / canvas. The main
         // window's view_main drops any overlay whose modal is currently

@@ -14,12 +14,13 @@
 //! `LibraryState::create_options.is_some()`; `create_options_overlay`
 //! owns that guard.
 
-use iced::widget::{Space, button, checkbox, column, container, row, text};
-use iced::{Border, Element, Length, Theme, Widget};
+use iced::widget::{Space, checkbox, column, container, row, text};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
+use super::modal_chrome::{footer_strip, header_with_note, primary_btn, secondary_btn};
 use super::state::LibraryCreateOptionsState;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -33,7 +34,6 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let lib_label = state
         .lib_path
@@ -42,16 +42,7 @@ pub fn view<'a>(
         .map(|s| s.to_string())
         .unwrap_or_else(|| state.lib_path.display().to_string());
 
-    let header = container(
-        row![
-            text("Library Options").size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            text(lib_label).size(TS.body).color(muted),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header_with_note("Library Options", lib_label, windowed, tokens);
 
     // Toggle 1 — Enable Version Control. Off by default so a fresh
     // library lives on disk as plain files; opting in runs `git init`
@@ -80,7 +71,7 @@ pub fn view<'a>(
         ]
         .align_y(iced::Alignment::Start),
     )
-    .padding([10, 14])
+    .padding([SP.m, SP.l])
     .width(Length::Fill);
 
     // Toggle 2 — LFS, only meaningful when version control is on.
@@ -115,7 +106,7 @@ pub fn view<'a>(
         ]
         .align_y(iced::Alignment::Start),
     )
-    .padding([10, 14])
+    .padding([SP.m, SP.l])
     .width(Length::Fill);
 
     let mut body = column![git_row, lfs_row].spacing(SP.xs);
@@ -126,62 +117,27 @@ pub fn view<'a>(
                     .size(TS.caption)
                     .color(theme_ext::error_color(tokens)),
             )
-            .padding([6, 14])
+            .padding([SP.s, SP.l])
             .width(Length::Fill)
             .boxed(),
         );
     }
 
-    let cancel = button(text("Cancel").size(TS.body).color(text_c))
-        .padding([SP.s, 14.0])
-        .on_press(LibraryMessage::LibraryCreateOptionsCancel)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
-    let create = button(
-        text("Create Library")
-            .size(TS.body)
-            .color(iced::Color::WHITE),
-    )
-    .padding([SP.s, 14.0])
-    .on_press(LibraryMessage::LibraryCreateOptionsConfirm)
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.00, 0.47, 0.84,
-        ))),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
-
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
-            cancel,
-            Space::new().width(8),
-            create
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
+            secondary_btn("Cancel", LibraryMessage::LibraryCreateOptionsCancel, tokens),
+            primary_btn(
+                "Create Library",
+                LibraryMessage::LibraryCreateOptionsConfirm,
+                tokens,
+            ),
+        ],
+        tokens,
+    );
 
     container(
-        column![header, container(body).padding([6, 0]), footer].width(super::card_len(
+        column![header, container(body).padding([SP.s, 0.0]), footer].width(super::card_len(
             windowed,
             super::modal_chrome::CREATE_OPTIONS_W,
         )),
