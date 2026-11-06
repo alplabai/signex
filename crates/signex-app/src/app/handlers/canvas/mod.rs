@@ -24,6 +24,7 @@ pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
 mod place_label;
+mod place_text;
 pub(crate) use place_label::LabelSpec;
 mod move_pick;
 mod sheet_tool;

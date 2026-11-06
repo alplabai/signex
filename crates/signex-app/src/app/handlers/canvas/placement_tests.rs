@@ -303,3 +303,13 @@ fn place_label_at_matches_a_label_click() {
         assert!(app.place_label_at(at, spec));
     });
 }
+
+#[test]
+fn place_text_at_matches_a_text_click() {
+    let setup = |app: &mut Signex| {
+        app.document_state.panel_ctx.pre_placement = Some(form(PrePlacementKind::TextNote, "Note"));
+    };
+    assert_method_matches_click(Tool::Text, setup, |app, at| {
+        assert!(app.place_text_at(at, "Note".into()));
+    });
+}

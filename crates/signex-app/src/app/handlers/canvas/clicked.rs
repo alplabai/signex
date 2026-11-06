@@ -611,21 +611,9 @@ impl Signex {
                     .as_ref()
                     .map(|pp| pp.label_text.clone())
                     .unwrap_or_else(|| "Text".to_string());
-                let tn = signex_types::schematic::TextNote {
-                    uuid: uuid::Uuid::now_v7(),
-                    text: note_text.clone(),
-                    position: signex_types::schematic::Point::new(wx, wy),
-                    rotation: 0.0,
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify_h: signex_types::schematic::HAlign::Left,
-                    justify_v: signex_types::schematic::VAlign::default(),
-                    font_family: None,
-                    locked: false,
-                };
-                if self.apply_engine_command(
-                    signex_engine::Command::PlaceTextNote { text_note: tn },
-                    false,
-                    false,
+                if self.place_text_at(
+                    signex_types::schematic::Point::new(wx, wy),
+                    note_text.clone(),
                 ) {
                     self.text_note_placed(&note_text);
                 }
