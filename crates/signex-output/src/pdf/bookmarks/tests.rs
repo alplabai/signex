@@ -20,18 +20,11 @@ fn ctx_with_one_sheet() -> ExportContext {
         ..Default::default()
     });
     sheet.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: uuid::Uuid::nil(),
-        text: "VCC".to_string(),
-        position: Point::new(20.0, 20.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new("VCC", Point::new(20.0, 20.0), LabelType::Net)
     });
     ExportContext {
         sheets: vec![SheetSnapshot {

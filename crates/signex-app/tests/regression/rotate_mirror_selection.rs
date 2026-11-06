@@ -84,18 +84,7 @@ fn pin_world(symbol: &Symbol) -> (f64, f64) {
 
 fn label(text: &str, label_type: LabelType, at: (f64, f64)) -> Label {
     Label {
-        uuid: uuid::Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point::new(at.0, at.1),
-        rotation: 0.0,
-        label_type,
-        shape: String::new(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(text, Point::new(at.0, at.1), label_type)
     }
 }
 

@@ -95,20 +95,8 @@ pub fn draw_selection_overlay(
     }
 
     let snapshot = RendererSnapshot {
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        arcs: Vec::new(),
-        polygons: Vec::new(),
-        labels: Vec::new(),
-        pin_texts: Vec::new(),
-        reference_value_texts: Vec::new(),
-        parameter_texts: Vec::new(),
         overlays,
-        erc_markers: Vec::new(),
-        drawings: Vec::new(),
-        drawings_front: Vec::new(),
-        wire_color_overrides: HashMap::new(),
-        wire_line_styles: HashMap::new(),
+        ..Default::default()
     };
 
     draw_renderer_snapshot(

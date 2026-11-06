@@ -18,8 +18,8 @@ use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use iced_wgpu::wgpu;
 use signex_types::schematic::{
-    FillType, HAlign, Junction, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, VAlign, Wire,
+    FillType, Junction, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
+    SelectedKind, Wire,
 };
 
 use super::tests::test_prefs;
@@ -176,18 +176,8 @@ fn world(x: f32, y: f32) -> (u32, u32) {
 
 fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
     Label {
-        uuid: uuid::Uuid::now_v7(),
-        text: text.into(),
-        position: Point::new(x, y),
         rotation,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(text, Point::new(x, y), LabelType::Net)
     }
 }
 

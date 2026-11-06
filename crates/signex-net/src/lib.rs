@@ -19,6 +19,8 @@ pub use net_class::{
 
 mod build;
 mod bus;
+#[cfg(test)]
+mod fixtures;
 pub use build::{
     ConnectedPoints, FloodElements, NetExtent, SegmentIndex, SheetConnectivity, SheetPinContacts,
     best_net_name_of, build_netlist, connected_points, flood_net_elements, is_power_flag,

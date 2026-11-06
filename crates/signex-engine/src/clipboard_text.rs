@@ -81,18 +81,9 @@ mod tests {
             locked: false,
         };
         let label = Label {
-            uuid: Uuid::now_v7(),
-            text: "D0".to_owned(),
-            position: Point::new(38.1, 25.4),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            font_family: None,
             justify: Default::default(),
             justify_v: Default::default(),
-            unknown_columns: Default::default(),
-            locked: false,
+            ..Label::new("D0".to_owned(), Point::new(38.1, 25.4), LabelType::Net)
         };
         let items = vec![
             SelectedItem::new(part.uuid, SelectedKind::Symbol),

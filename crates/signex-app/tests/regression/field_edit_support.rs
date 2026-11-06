@@ -43,18 +43,8 @@ pub(crate) fn part(reference: &str, value: &str, at: (f64, f64)) -> Symbol {
 
 pub(crate) fn label(text: &str, at: (f64, f64)) -> Label {
     Label {
-        uuid: Uuid::now_v7(),
-        text: text.into(),
-        position: Point::new(at.0, at.1),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
         justify_v: Default::default(),
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(text, Point::new(at.0, at.1), LabelType::Net)
     }
 }
 

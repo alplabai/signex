@@ -810,32 +810,16 @@ mod tests {
     fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {
         let mut document = test_sheet();
         document.labels.push(Label {
-            unknown_columns: Default::default(),
-            uuid: uuid::Uuid::now_v7(),
-            text: "ALERT".to_string(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            label_type: LabelType::Global,
             shape: "output".to_string(),
-            font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
-            font_family: None,
-            locked: false,
+            ..Label::new("ALERT", Point::new(0.0, 0.0), LabelType::Global)
         });
         document.labels.push(Label {
-            unknown_columns: Default::default(),
-            uuid: uuid::Uuid::now_v7(),
-            text: "ALERT".to_string(),
-            position: Point::new(1.0, 1.0),
-            rotation: 0.0,
-            label_type: LabelType::Hierarchical,
             shape: "input".to_string(),
-            font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
-            font_family: None,
-            locked: false,
+            ..Label::new("ALERT", Point::new(1.0, 1.0), LabelType::Hierarchical)
         });
 
         let engine = Engine::new(document).unwrap();

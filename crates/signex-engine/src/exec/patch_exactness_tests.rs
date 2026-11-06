@@ -124,18 +124,8 @@ fn wire(n: u128) -> Wire {
 
 fn label(n: u128) -> Label {
     Label {
-        unknown_columns: Default::default(),
         uuid: uid(LABEL, n),
-        text: format!("NET{n}"),
-        position: pt(30.0, 5.0 * n as f64),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
+        ..Label::new(format!("NET{n}"), pt(30.0, 5.0 * n as f64), LabelType::Net)
     }
 }
 

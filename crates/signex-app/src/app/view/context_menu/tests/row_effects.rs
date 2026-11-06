@@ -817,18 +817,14 @@ fn app_with_sheet_symbol(
 fn sync_sheet_pins_row_reconciles_the_symbols_pins() {
     let mut child = sheet_of(Vec::new());
     child.labels = vec![signex_types::schematic::Label {
-        unknown_columns: Default::default(),
         uuid: Uuid::from_u128(9),
-        text: "SDA".to_string(),
-        position: Point::new(10.0, 10.0),
-        rotation: 0.0,
-        label_type: signex_types::schematic::LabelType::Hierarchical,
-        shape: String::new(),
-        font_size: 1.27,
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..signex_types::schematic::Label::new(
+            "SDA",
+            Point::new(10.0, 10.0),
+            signex_types::schematic::LabelType::Hierarchical,
+        )
     }];
     let (mut app, _tmp, _child) = app_with_sheet_symbol(Some(child));
     let _ = press(&mut app, "sync_sheet_pins");

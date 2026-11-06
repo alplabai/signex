@@ -80,6 +80,26 @@ pub struct Label {
 }
 
 impl Label {
+    /// A new label with a fresh id and the stock look: no rotation, no shape,
+    /// [`SCHEMATIC_TEXT_MM`] text, left-aligned, sitting on its anchor. Use
+    /// struct update (`Label { rotation, ..Label::new(..) }`) to change more.
+    pub fn new(text: impl Into<String>, position: Point, label_type: LabelType) -> Self {
+        Self {
+            uuid: Uuid::now_v7(),
+            text: text.into(),
+            position,
+            rotation: 0.0,
+            label_type,
+            shape: String::new(),
+            font_size: SCHEMATIC_TEXT_MM,
+            font_family: None,
+            justify: HAlign::Left,
+            justify_v: VAlign::Bottom,
+            locked: false,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+
     /// The sheet-port name this label exposes to a parent sheet, or `None`
     /// when it is not a port label (only Hierarchical and Global labels cross
     /// a sheet boundary) or its text is blank. The single predicate +
@@ -850,5 +870,26 @@ mod lib_symbol_table_tests {
         assert!(!live.shares_storage_with(&snapshot));
         assert_eq!(snapshot.len(), 1);
         assert_eq!(live.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::*;
+
+    #[test]
+    fn label_new_has_the_stock_look() {
+        let label = Label::new("VCC", Point::new(1.0, 2.0), LabelType::Global);
+        assert_eq!(label.text, "VCC");
+        assert_eq!(label.position, Point::new(1.0, 2.0));
+        assert_eq!(label.label_type, LabelType::Global);
+        assert_eq!(label.rotation, 0.0);
+        assert!(label.shape.is_empty());
+        assert_eq!(label.font_size, SCHEMATIC_TEXT_MM);
+        assert_eq!(label.font_family, None);
+        assert_eq!(label.justify, HAlign::Left);
+        assert_eq!(label.justify_v, VAlign::Bottom);
+        assert!(!label.locked);
+        assert!(label.unknown_columns.is_empty());
     }
 }

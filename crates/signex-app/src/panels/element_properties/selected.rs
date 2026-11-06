@@ -1022,22 +1022,9 @@ mod tests {
     #[test]
     fn a_left_justified_label_row_reads_back_as_left() {
         use signex_types::schematic::{
-            Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind, VAlign,
+            Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
         };
-        let label = Label {
-            uuid: uuid::Uuid::now_v7(),
-            text: "NET".into(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            font_family: None,
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
-            unknown_columns: Default::default(),
-            locked: false,
-        };
+        let label = Label::new("NET", Point::new(0.0, 0.0), LabelType::Net);
         let id = label.uuid;
         let engine = signex_engine::Engine::new(SchematicSheet {
             labels: vec![label],

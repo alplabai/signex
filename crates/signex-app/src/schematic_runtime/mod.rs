@@ -349,19 +349,10 @@ pub fn power_port_preview_snapshot(
 
     RendererSnapshot {
         wires,
-        junctions: Vec::new(),
         arcs,
         polygons,
-        labels: Vec::new(),
-        pin_texts: Vec::new(),
-        reference_value_texts: Vec::new(),
         parameter_texts,
-        overlays: OverlayInputs::default(),
-        erc_markers: Vec::new(),
-        drawings: Vec::new(),
-        drawings_front: Vec::new(),
-        wire_color_overrides: HashMap::new(),
-        wire_line_styles: HashMap::new(),
+        ..Default::default()
     }
 }
 

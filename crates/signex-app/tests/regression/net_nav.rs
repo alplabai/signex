@@ -70,18 +70,10 @@ mod flows {
                 ..Default::default()
             });
             s.labels.push(Label {
-                unknown_columns: Default::default(),
                 uuid: Uuid::from_u128(label),
-                text: "VCC".into(),
-                position: Point::new(0.0, 0.0),
-                rotation: 0.0,
-                label_type: LabelType::Global,
-                shape: String::new(),
-                font_size: 1.27,
                 justify: HAlign::default(),
                 justify_v: VAlign::default(),
-                font_family: None,
-                locked: false,
+                ..Label::new("VCC", Point::new(0.0, 0.0), LabelType::Global)
             });
             s
         };

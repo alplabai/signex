@@ -12,18 +12,10 @@ type Resolutions = HashMap<SheetKey, HashMap<String, SheetKey>>;
 
 fn label(text: &str, label_type: LabelType) -> Label {
     Label {
-        uuid: Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point { x: 10.0, y: 10.0 },
-        rotation: 0.0,
-        label_type,
-        shape: String::new(),
         font_size: 0.0,
-        font_family: None,
         justify: Default::default(),
         justify_v: signex_types::schematic::VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(text, Point { x: 10.0, y: 10.0 }, label_type)
     }
 }
 

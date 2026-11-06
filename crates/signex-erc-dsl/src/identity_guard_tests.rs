@@ -30,18 +30,9 @@ fn pin(number: &str, y: f64) -> LibPin {
 
 fn label(text: &str, at: Point) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: text.into(),
-        position: at,
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
         justify: HAlign::default(),
         justify_v: VAlign::default(),
-        font_family: None,
-        locked: false,
+        ..Label::new(text, at, LabelType::Net)
     }
 }
 

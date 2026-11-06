@@ -320,18 +320,9 @@ fn nothing_folds_where_something_else_attaches() {
         "a label",
         |s| {
             s.labels.push(Label {
-                uuid: Uuid::now_v7(),
-                text: "SIG".into(),
-                position: pt(45.0, 50.0),
-                rotation: 0.0,
-                label_type: LabelType::Net,
-                shape: String::new(),
-                font_size: 1.27,
-                font_family: None,
                 justify: Default::default(),
                 justify_v: signex_types::schematic::VAlign::Bottom,
-                locked: false,
-                unknown_columns: Default::default(),
+                ..Label::new("SIG", pt(45.0, 50.0), LabelType::Net)
             });
         },
         straight(),

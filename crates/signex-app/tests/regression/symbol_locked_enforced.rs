@@ -112,18 +112,14 @@ fn find_replace_app(reference: &str) -> (Signex, uuid::Uuid, uuid::Uuid, uuid::U
         ..Default::default()
     });
     sheet.labels.push(signex_types::schematic::Label {
-        unknown_columns: Default::default(),
         uuid: label,
-        text: "GND_RAIL".to_string(),
-        position: Point::new(0.0, 50.0),
-        rotation: 0.0,
-        label_type: signex_types::schematic::LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..signex_types::schematic::Label::new(
+            "GND_RAIL",
+            Point::new(0.0, 50.0),
+            signex_types::schematic::LabelType::Net,
+        )
     });
     engine.set_document(sheet.clone());
     app.interaction_state

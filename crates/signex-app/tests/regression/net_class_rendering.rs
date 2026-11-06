@@ -8,8 +8,8 @@ use signex_app::panels::{NetClassMsg, PanelMsg};
 use signex_types::net_class::{NetClass, NetLineStyle};
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
-    HAlign, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
-    SchematicSheet, Symbol, VAlign, Wire,
+    Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet,
+    Symbol, Wire,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -78,17 +78,7 @@ fn vcc_sheet() -> SchematicSheet {
     });
     sheet.labels.push(Label {
         uuid: Uuid::from_u128(3),
-        text: "VCC".to_string(),
-        position: Point::new(0.0, 0.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new("VCC", Point::new(0.0, 0.0), LabelType::Net)
     });
     sheet
 }

@@ -33,17 +33,8 @@ fn app_with_locked_objects(y: f64) -> (Signex, Vec<SelectedItem>) {
         }],
         labels: vec![Label {
             uuid: label,
-            text: format!("LOCKED{y}"),
-            position: Point::new(0.0, y),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            font_family: None,
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
             locked: true,
-            unknown_columns: Default::default(),
+            ..Label::new(format!("LOCKED{y}"), Point::new(0.0, y), LabelType::Net)
         }],
         text_notes: vec![TextNote {
             uuid: note,

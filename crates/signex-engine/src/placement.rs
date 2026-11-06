@@ -490,18 +490,14 @@ mod tests {
             ..Default::default()
         });
         sheet.labels.push(signex_types::schematic::Label {
-            uuid: Uuid::now_v7(),
-            text: "N".into(),
-            position: Point::new(5.0, 3.0),
-            rotation: 0.0,
-            label_type: signex_types::schematic::LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            font_family: None,
             justify: Default::default(),
             justify_v: signex_types::schematic::VAlign::Bottom,
             locked: true,
-            unknown_columns: Default::default(),
+            ..signex_types::schematic::Label::new(
+                "N",
+                Point::new(5.0, 3.0),
+                signex_types::schematic::LabelType::Net,
+            )
         });
         sheet.text_notes.push(signex_types::schematic::TextNote {
             uuid: Uuid::now_v7(),
