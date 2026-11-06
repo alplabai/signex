@@ -86,13 +86,7 @@ fn all_selectable_items(
         items.push(SelectedItem::new(bus_entry.uuid, SelectedKind::BusEntry));
     }
     for drawing in &snapshot.drawings {
-        let uuid = match drawing {
-            signex_types::schematic::SchDrawing::Line { uuid, .. }
-            | signex_types::schematic::SchDrawing::Rect { uuid, .. }
-            | signex_types::schematic::SchDrawing::Circle { uuid, .. }
-            | signex_types::schematic::SchDrawing::Arc { uuid, .. }
-            | signex_types::schematic::SchDrawing::Polyline { uuid, .. } => *uuid,
-        };
+        let uuid = drawing.uuid();
         items.push(SelectedItem::new(uuid, SelectedKind::Drawing));
     }
 
@@ -132,19 +126,12 @@ impl Signex {
         match request {
             selection_request::SelectionRequest::SelectAll => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    self.interaction_state.active_canvas_mut().selected =
-                        all_selectable_items(snapshot);
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                    self.update_selection_info();
+                    let items = all_selectable_items(snapshot);
+                    self.replace_selection(items);
                 }
             }
             selection_request::SelectionRequest::ClearAll => {
-                let canvas = self.interaction_state.active_canvas_mut();
-                canvas.selected.clear();
-                canvas.clear_overlay_cache();
-                self.update_selection_info();
+                self.replace_selection(Vec::new());
             }
             selection_request::SelectionRequest::StoreSlot { slot } => {
                 let selected = self.interaction_state.canvas.selected.clone();
@@ -161,11 +148,7 @@ impl Signex {
                         .map(|items| valid_selection_items(snapshot, items))
                         .unwrap_or_default();
                     self.interaction_state.clicked_pin = None;
-                    self.interaction_state.active_canvas_mut().selected = recalled;
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                    self.update_selection_info();
+                    self.replace_selection(recalled);
                 }
             }
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
@@ -302,41 +285,10 @@ impl Signex {
         if self.interaction_state.current_tool == Tool::Polyline
             && self.interaction_state.polyline_points.len() >= 2
         {
-            let pp_w = self
-                .document_state
-                .panel_ctx
-                .pre_placement
-                .as_ref()
-                .map(|pp| pp.shape_width_mm)
-                .unwrap_or(0.0);
-            let pp_fill = self
-                .document_state
-                .panel_ctx
-                .pre_placement
-                .as_ref()
-                .map(|pp| pp.shape_fill)
-                .unwrap_or(self.document_state.active_schematic_defaults().shape_fill);
-            let pts = std::mem::take(&mut self.interaction_state.polyline_points);
-            let drawing = signex_types::schematic::SchDrawing::Polyline {
-                uuid: uuid::Uuid::now_v7(),
-                points: pts,
-                width: pp_w,
-                fill: pp_fill,
-                stroke_color: None,
-                locked: false,
-            };
-            self.apply_engine_command(
-                signex_engine::Command::PlaceSchDrawing { drawing },
-                false,
-                false,
-            );
-            self.interaction_state
-                .active_canvas_mut()
-                .polyline_points
-                .clear();
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_overlay_cache();
+            self.commit_polyline();
+            let canvas = self.interaction_state.active_canvas_mut();
+            canvas.polyline_points.clear();
+            canvas.clear_overlay_cache();
             return Task::none();
         }
         if let Some(pts) = self.ui_state.lasso_polygon.take()

@@ -787,13 +787,7 @@ fn collect_item_bounds_with(
     }
 
     for drawing in &snapshot.drawings {
-        let uuid = match drawing {
-            SchDrawing::Line { uuid, .. }
-            | SchDrawing::Rect { uuid, .. }
-            | SchDrawing::Circle { uuid, .. }
-            | SchDrawing::Arc { uuid, .. }
-            | SchDrawing::Polyline { uuid, .. } => *uuid,
-        };
+        let uuid = drawing.uuid();
         let bbox = drawing_aabb(drawing);
         out.push(ItemBound {
             item: SelectedItem::new(uuid, SelectedKind::Drawing),

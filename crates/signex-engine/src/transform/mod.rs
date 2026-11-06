@@ -54,11 +54,7 @@ impl Engine {
                 .text_notes
                 .iter()
                 .any(|text_note| text_note.uuid == item.uuid),
-            SelectedKind::Drawing => self
-                .document
-                .drawings
-                .iter()
-                .any(|d| drawing_uuid(d) == item.uuid),
+            SelectedKind::Drawing => self.document.drawings.iter().any(|d| d.uuid() == item.uuid),
             _ => false,
         }
     }
@@ -101,9 +97,7 @@ impl Engine {
             SelectedKind::TextNote => remove_by_uuid(&mut self.document.text_notes, item.uuid),
             SelectedKind::Drawing => {
                 let before_len = self.document.drawings.len();
-                self.document
-                    .drawings
-                    .retain(|d| drawing_uuid(d) != item.uuid);
+                self.document.drawings.retain(|d| d.uuid() != item.uuid);
                 self.document.drawings.len() != before_len
             }
             // A child sheet owns its pins (`ChildSheet::pins`); removing the
@@ -381,7 +375,7 @@ impl Engine {
                 .document
                 .drawings
                 .iter_mut()
-                .find(|d| drawing_uuid(d) == item.uuid)
+                .find(|d| d.uuid() == item.uuid)
                 .map(|d| {
                     match d {
                         SchDrawing::Line { start, end, .. } => {
@@ -530,20 +524,6 @@ use wire_index::WireIndex;
 // ---------------------------------------------------------------------------
 // UUID-based collection helpers
 // ---------------------------------------------------------------------------
-
-/// `SchDrawing` doesn't implement `HasUuid` (its uuid lives inside each
-/// enum variant, not on a common struct field) — shared by
-/// `contains_selected_item`, `remove_selected_item` and
-/// `move_selected_item` so the five-variant match lives in one place.
-fn drawing_uuid(d: &SchDrawing) -> uuid::Uuid {
-    match d {
-        SchDrawing::Line { uuid, .. }
-        | SchDrawing::Rect { uuid, .. }
-        | SchDrawing::Circle { uuid, .. }
-        | SchDrawing::Arc { uuid, .. }
-        | SchDrawing::Polyline { uuid, .. } => *uuid,
-    }
-}
 
 fn remove_by_uuid<T>(items: &mut Vec<T>, uuid: uuid::Uuid) -> bool
 where

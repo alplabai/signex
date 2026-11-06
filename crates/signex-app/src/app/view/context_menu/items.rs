@@ -281,9 +281,8 @@ impl Signex {
     /// profile. A command the profile does not bind (or unbinds) has no
     /// hint, which every caller renders as an empty label (#1378).
     pub(in crate::app::view) fn keymap_shortcut_label(&self, command_id: &str) -> String {
-        crate::keymap::AppCommandId::new(command_id)
-            .ok()
-            .and_then(|command| self.ui_state.active_keymap.shortcut_label(&command))
-            .unwrap_or_default()
+        self.ui_state
+            .active_keymap
+            .shortcut_label_for_id(command_id)
     }
 }

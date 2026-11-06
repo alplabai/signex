@@ -1,5 +1,53 @@
 use super::*;
 
+/// The flag polygon (global and hierarchical labels only) and the text of a
+/// label, in `color`. `fill` is the flag's fill: transparent on the sheet,
+/// the preview colour while placing.
+pub(super) fn label_draw_inputs(
+    widths: Option<WidthSources<'_>>,
+    label: &Label,
+    color: Color,
+    fill: [f32; 4],
+    document_family: Option<&str>,
+) -> (Option<PolygonInput>, TextInput) {
+    let size_mm = signex_types::schematic::text_height_mm(label.font_size) as f32;
+    let family = resolve_family(label.font_family.as_deref(), document_family);
+    if matches!(
+        label.label_type,
+        LabelType::Global | LabelType::Hierarchical
+    ) {
+        let polygon = super::label_marker_polygon(widths, label, color, fill, document_family);
+        let ((x, y), rotation, h_align) = flag_text_with(widths, label, document_family);
+        let text = TextInput {
+            content: label.text.clone(),
+            position: [x as f32, y as f32],
+            size_mm,
+            color: to_rgba(color),
+            bold: false,
+            italic: false,
+            family,
+            rotation_rad: rotation.to_radians() as f32,
+            h_align,
+            v_align: VAlign::Center,
+        };
+        (Some(polygon), text)
+    } else {
+        let text = TextInput {
+            content: label.text.clone(),
+            position: [label.position.x as f32, label.position.y as f32],
+            size_mm,
+            color: to_rgba(color),
+            bold: false,
+            italic: false,
+            family,
+            rotation_rad: label.rotation.to_radians() as f32,
+            h_align: label.justify,
+            v_align: label.justify_v,
+        };
+        (None, text)
+    }
+}
+
 pub fn draw_label_preview(
     frame: &mut canvas::Frame,
     label: &Label,
@@ -9,51 +57,15 @@ pub fn draw_label_preview(
     colors: &CanvasColors,
     document_family: Option<&str>,
 ) {
-    let mut polygons = Vec::new();
-    let mut labels = Vec::new();
-
-    if matches!(
-        label.label_type,
-        LabelType::Global | LabelType::Hierarchical
-    ) {
-        polygons.push(super::label_marker_polygon(
-            None,
-            label,
-            stroke_color,
-            to_rgba(fill_color),
-            document_family,
-        ));
-        let ((x, y), rotation, h_align) = flag_text_with(None, label, document_family);
-        labels.push(TextInput {
-            content: label.text.clone(),
-            position: [x as f32, y as f32],
-            size_mm: label
-                .font_size
-                .max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
-            color: to_rgba(stroke_color),
-            bold: false,
-            italic: false,
-            family: resolve_family(label.font_family.as_deref(), document_family),
-            rotation_rad: rotation.to_radians() as f32,
-            h_align,
-            v_align: VAlign::Center,
-        });
-    } else {
-        labels.push(TextInput {
-            content: label.text.clone(),
-            position: [label.position.x as f32, label.position.y as f32],
-            size_mm: label
-                .font_size
-                .max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
-            color: to_rgba(stroke_color),
-            bold: false,
-            italic: false,
-            family: resolve_family(label.font_family.as_deref(), document_family),
-            rotation_rad: label.rotation.to_radians() as f32,
-            h_align: label.justify,
-            v_align: label.justify_v,
-        });
-    }
+    let (polygon, text) = label_draw_inputs(
+        None,
+        label,
+        stroke_color,
+        to_rgba(fill_color),
+        document_family,
+    );
+    let polygons: Vec<PolygonInput> = polygon.into_iter().collect();
+    let labels = vec![text];
 
     let snapshot = RendererSnapshot {
         wires: Vec::new(),

@@ -14,11 +14,8 @@ impl Signex {
     pub(super) fn measure_click(&mut self, world_x: f64, world_y: f64) {
         let point = Point::new(world_x, world_y);
         let Some(a) = self.interaction_state.shape_anchor.take() else {
-            self.interaction_state.shape_anchor = Some(point);
-            let canvas = self.interaction_state.active_canvas_mut();
-            canvas.measure = None;
-            canvas.shape_anchor = Some((point, ShapePreviewKind::Measure));
-            canvas.clear_overlay_cache();
+            self.set_shape_anchor(Some((point, ShapePreviewKind::Measure)));
+            self.interaction_state.active_canvas_mut().measure = None;
             return;
         };
         let measurement = Measurement::between(a, point);

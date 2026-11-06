@@ -50,7 +50,7 @@ fn mixed_sheet() -> (SchematicSheet, Vec<SelectedItem>) {
                 SelectedItem::new(wire.uuid, SelectedKind::Wire),
                 SelectedItem::new(junction.uuid, SelectedKind::Junction),
                 SelectedItem::new(lbl.uuid, SelectedKind::Label),
-                SelectedItem::new(drawing_uuid(&drawing), SelectedKind::Drawing),
+                SelectedItem::new(drawing.uuid(), SelectedKind::Drawing),
             ]);
         }
         sheet.symbols.push(sym);
@@ -60,16 +60,6 @@ fn mixed_sheet() -> (SchematicSheet, Vec<SelectedItem>) {
         sheet.drawings.push(drawing);
     }
     (sheet, selected)
-}
-
-fn drawing_uuid(drawing: &SchDrawing) -> uuid::Uuid {
-    match drawing {
-        SchDrawing::Line { uuid, .. }
-        | SchDrawing::Rect { uuid, .. }
-        | SchDrawing::Circle { uuid, .. }
-        | SchDrawing::Arc { uuid, .. }
-        | SchDrawing::Polyline { uuid, .. } => *uuid,
-    }
 }
 
 fn corners(bbox: Option<Aabb>) -> Option<[f64; 4]> {

@@ -39,6 +39,41 @@ impl Signex {
             .clear_overlay_cache();
     }
 
+    /// Make `items` the active canvas's selection, repaint its overlay and
+    /// refresh the Properties panel.
+    pub(crate) fn replace_selection(&mut self, items: Vec<signex_types::schematic::SelectedItem>) {
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.selected = items;
+        canvas.clear_overlay_cache();
+        self.update_selection_info();
+    }
+
+    /// Set (or clear) the half-placed shape anchor on the app and on the
+    /// active canvas together, and repaint the overlay.
+    pub(crate) fn set_shape_anchor(
+        &mut self,
+        anchor: Option<(
+            signex_types::schematic::Point,
+            crate::canvas::ShapePreviewKind,
+        )>,
+    ) {
+        self.interaction_state.shape_anchor = anchor.map(|(point, _)| point);
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.shape_anchor = anchor;
+        canvas.clear_overlay_cache();
+    }
+
+    /// Mirror the arc and polyline vertex buffers into the active canvas and
+    /// repaint the overlay, like [`Self::sync_lasso_polygon_to_canvas`].
+    pub(crate) fn sync_point_buffers_to_canvas(&mut self) {
+        let arc_points = self.interaction_state.arc_points.clone();
+        let polyline_points = self.interaction_state.polyline_points.clone();
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.arc_points = arc_points;
+        canvas.polyline_points = polyline_points;
+        canvas.clear_overlay_cache();
+    }
+
     pub(crate) fn increment_designator(reference: &str) -> Option<String> {
         let digit_start = reference
             .char_indices()

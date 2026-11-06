@@ -314,7 +314,6 @@ impl Signex {
         target_uuid: uuid::Uuid,
         edit: crate::app::contracts::DrawingFieldEdit,
     ) -> iced::Task<crate::app::Message> {
-        use signex_types::schematic::SchDrawing;
         if let crate::app::contracts::DrawingFieldEdit::Placement(placement) = edit {
             self.apply_engine_command(
                 signex_engine::Command::SetDrawingPlacement {
@@ -333,16 +332,7 @@ impl Signex {
         let Some(current) = doc
             .drawings
             .iter()
-            .find(|d| {
-                let u = match d {
-                    SchDrawing::Line { uuid, .. }
-                    | SchDrawing::Rect { uuid, .. }
-                    | SchDrawing::Circle { uuid, .. }
-                    | SchDrawing::Arc { uuid, .. }
-                    | SchDrawing::Polyline { uuid, .. } => *uuid,
-                };
-                u == target_uuid
-            })
+            .find(|d| d.uuid() == target_uuid)
             .cloned()
         else {
             return iced::Task::none();

@@ -164,10 +164,7 @@ impl Signex {
         if items.is_empty() {
             crate::diagnostics::log_warning("Find Similar: nothing matches those properties");
         } else {
-            let canvas = self.interaction_state.active_canvas_mut();
-            canvas.selected = items.clone();
-            canvas.clear_overlay_cache();
-            self.update_selection_info();
+            self.replace_selection(items.clone());
             crate::diagnostics::log_info(format!(
                 "Find Similar: selected {} on this sheet",
                 items.len()

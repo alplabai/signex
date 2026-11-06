@@ -375,23 +375,13 @@ impl Signex {
                 details.selected_kind,
                 signex_types::schematic::SelectedKind::Drawing
             ) {
-                use signex_types::schematic::SchDrawing;
                 self.document_state.panel_ctx.selected_drawing_placement =
                     engine.document().drawing_placement(details.selected_uuid);
                 self.document_state.panel_ctx.selected_drawing = engine
                     .document()
                     .drawings
                     .iter()
-                    .find(|d| {
-                        let u = match d {
-                            SchDrawing::Line { uuid, .. }
-                            | SchDrawing::Rect { uuid, .. }
-                            | SchDrawing::Circle { uuid, .. }
-                            | SchDrawing::Arc { uuid, .. }
-                            | SchDrawing::Polyline { uuid, .. } => *uuid,
-                        };
-                        u == details.selected_uuid
-                    })
+                    .find(|d| d.uuid() == details.selected_uuid)
                     .cloned();
             }
             if matches!(

@@ -5,10 +5,12 @@
 //! `use signex_app::*` and exercise dispatchers without spinning up
 //! the iced runtime.
 //!
-//! All modules are `pub` for test access. The published surface is
-//! deliberately wide because tests need to reach into engine state,
-//! dispatch handlers, and inspect dirty bits / panel context — there's
-//! no narrow public API to design here, the test harness IS the audit.
+//! API for a non-GUI caller (#1933): [`headless`] (boot without a window,
+//! run commands by id), with [`config_root`]'s override,
+//! [`fonts::catalog::install_before_boot`], [`task_driver`] and
+//! [`io_ports`]. Everything else is `pub` only so integration tests in
+//! `tests/` can reach engine state, dispatch handlers, dirty bits and panel
+//! context: that is test harness, not API.
 
 // `clippy::let_underscore_must_use` (Cargo.toml `[lints.clippy]`, GH #99
 // part 1) is warn-level in production code on purpose — it flags the 13
@@ -40,6 +42,7 @@ pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
 pub mod frame_probe;
+pub mod headless;
 pub mod icons;
 pub mod io_ports;
 pub mod paste_array;
