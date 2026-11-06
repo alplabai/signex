@@ -466,9 +466,9 @@ impl Signex {
         });
         if renamed.is_some() {
             let colours_moved_on = self.net_color_revision_of(from) != net_color_revision;
-            if let Some(count) = self.ui_state.net_color_revision.remove(from) {
-                self.ui_state.net_color_revision.insert(to.clone(), count);
-            }
+            // The sheet's colour revision, undo history and id follow it; the
+            // rest of Save As (dirty, disk records, placements) stays above.
+            self.rekey_path_keyed_records(from, &to);
             if colours_moved_on {
                 self.document_state.mark_document_dirty(&to);
                 self.refresh_panel_ctx();

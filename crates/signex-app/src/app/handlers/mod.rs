@@ -13,6 +13,7 @@ mod detached_library_tests;
 pub mod detached_modals;
 pub mod dock;
 pub mod document_files;
+mod document_identity;
 pub mod document_tabs;
 pub mod drawing_order;
 pub mod editing_commands;

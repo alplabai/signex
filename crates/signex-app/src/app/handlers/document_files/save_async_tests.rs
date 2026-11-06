@@ -144,7 +144,7 @@ fn a_renamed_pcb_tab_still_saves_clean_and_commits() {
     signex_library::git_identity::test_identity::install();
     let (mut app, path) = app_with_pcb(dir.path());
     let renamed = dir.path().join("renamed.snxpcb");
-    app.rekey_open_document(&path, &renamed);
+    app.rekey_document(&path, &renamed);
     assert!(app.document_state.pcb_revisions.contains_key(&renamed));
     mark_dirty(&mut app, &renamed);
     press_save(&mut app);
