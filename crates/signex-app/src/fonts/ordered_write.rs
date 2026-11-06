@@ -42,13 +42,14 @@ pub(crate) fn take_wait_probe() -> Option<std::sync::Arc<std::sync::atomic::Atom
 }
 
 /// Holds one slot of `IN_FLIGHT`; releases it when the write completes or its
-/// task is dropped without running. The second case loses the setting, so it
+/// task is dropped without running. The second case may lose the setting, so it
 /// is reported (#1932).
 struct InFlightSlot {
     key: &'static str,
-    /// Set when the write is handed to its blocking worker, which finishes it
-    /// even if the task is dropped afterwards; only a write never handed over
-    /// is reported as lost.
+    /// Set by the worker as it starts the write. A blocking task the runtime
+    /// never started (it may skip them at shutdown) leaves it unset, so the
+    /// warning says the write may not have been saved: a spurious warning
+    /// beats a silent loss.
     has_run: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -69,7 +70,7 @@ impl Drop for InFlightSlot {
         IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
         if !self.has_run.load(Ordering::SeqCst) {
             crate::diagnostics::log_warning(format!(
-                "The {} preference was not saved: its write was dropped before it ran",
+                "The {} preference may not have been saved: its write was dropped before it ran",
                 self.key
             ));
         }
@@ -162,10 +163,8 @@ pub fn background_pref_write(
     let has_run = slot.has_run.clone();
     Task::perform(
         async move {
-            // A blocking worker runs to the end even if this task is
-            // dropped later, so the write counts as run once handed over.
-            has_run.store(true, Ordering::SeqCst);
             let result = tokio::task::spawn_blocking(move || {
+                has_run.store(true, Ordering::SeqCst);
                 ordered.run(write);
             })
             .await;
@@ -191,7 +190,7 @@ mod dropped_write_tests {
     /// silently.
     #[test]
     fn a_pref_write_dropped_before_it_ran_is_reported() {
-        let needle = "The zq-dropped-write preference was not saved";
+        let needle = "The zq-dropped-write preference may not have been saved";
         let before = crate::diagnostics::logged_count(needle);
         drop(background_pref_write("zq-dropped-write", || {}));
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
@@ -202,7 +201,7 @@ mod dropped_write_tests {
     #[test]
     fn a_pref_write_dropped_while_it_runs_is_not_reported() {
         use futures::StreamExt as _;
-        let needle = "The zq-running-write preference was not saved";
+        let needle = "The zq-running-write preference may not have been saved";
         let before = crate::diagnostics::logged_count(needle);
         let (started_tx, started_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
@@ -227,7 +226,7 @@ mod dropped_write_tests {
 
     #[test]
     fn a_pref_write_that_ran_reports_nothing() {
-        let needle = "The zq-finished-write preference was not saved";
+        let needle = "The zq-finished-write preference may not have been saved";
         let before = crate::diagnostics::logged_count(needle);
         let write = background_pref_write("zq-finished-write", || {});
         crate::task_driver::TaskDriver::new()

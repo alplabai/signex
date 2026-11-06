@@ -12,8 +12,8 @@ use crate::persist::{SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsMsg, SearchPrefsWrit
 
 /// A quit-path write may be the last thing the process does, and `update`
 /// may never see its `Saved` message once the app exits, so a failure is
-/// logged here as the message streams by (#1932). The message then carries
-/// `Ok`, so `update` does not log it a second time.
+/// logged here as the message streams by (#1932). `update` then gets
+/// `SaveFailedLogged`: the retry bookkeeping without a second log line.
 pub(super) fn log_failure_at_quit(task: Task<Message>) -> Task<Message> {
     task.map(|message| match message {
         Message::DockLayout(DockLayoutMsg::Saved(Err(reason))) => {
@@ -21,14 +21,14 @@ pub(super) fn log_failure_at_quit(task: Task<Message>) -> Task<Message> {
                 "Dock layout was not saved, it will be lost at the next launch",
                 &anyhow::anyhow!(reason),
             );
-            Message::DockLayout(DockLayoutMsg::Saved(Ok(())))
+            Message::DockLayout(DockLayoutMsg::SaveFailedLogged)
         }
         Message::SearchPrefs(SearchPrefsMsg::Saved(Err(reason))) => {
             crate::diagnostics::log_error(
                 "Search box contents were not saved",
                 &anyhow::anyhow!(reason),
             );
-            Message::SearchPrefs(SearchPrefsMsg::Saved(Ok(())))
+            Message::SearchPrefs(SearchPrefsMsg::SaveFailedLogged)
         }
         other => other,
     })
@@ -57,12 +57,14 @@ impl Signex {
                 }
             }
             SearchPrefsMsg::Saved(Ok(())) => Task::none(),
-            SearchPrefsMsg::Saved(Err(reason)) => {
+            msg @ (SearchPrefsMsg::Saved(Err(_)) | SearchPrefsMsg::SaveFailedLogged) => {
                 self.document_state.search_prefs.write_failed();
-                crate::diagnostics::log_error(
-                    "Search box contents were not saved; retrying on the next edit or at quit",
-                    &anyhow::anyhow!(reason),
-                );
+                if let SearchPrefsMsg::Saved(Err(reason)) = msg {
+                    crate::diagnostics::log_error(
+                        "Search box contents were not saved; retrying on the next edit or at quit",
+                        &anyhow::anyhow!(reason),
+                    );
+                }
                 self.sync_diagnostics_panel_ctx();
                 Task::none()
             }
