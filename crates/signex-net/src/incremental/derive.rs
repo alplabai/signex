@@ -114,56 +114,63 @@ impl NetBase {
             keys.push(a);
             keys.push(b);
         }
+        self.dirty_points(d, cand, &mut keys);
+        self.dirty_symbols(d, cand, &mut keys);
+        (keys, segments)
+    }
+
+    /// Positions of the dots, labels, no-connects and child-sheet pins that
+    /// went or came.
+    fn dirty_points(&self, d: &Diffs, cand: &SchematicSheet, keys: &mut Vec<Key>) {
+        let pk = pt_key;
         keys.extend(
             d.junctions
                 .removed
                 .iter()
-                .map(|&s| pt_key(&self.junctions.recs[s].geom)),
+                .map(|&s| pk(&self.junctions.recs[s].geom)),
         );
         keys.extend(
             d.junctions
                 .added
                 .iter()
-                .map(|&i| pt_key(&cand.junctions[i].position)),
+                .map(|&i| pk(&cand.junctions[i].position)),
         );
         keys.extend(
             d.labels
                 .removed
                 .iter()
-                .map(|&s| pt_key(&self.labels.recs[s].geom.0)),
+                .map(|&s| pk(&self.labels.recs[s].geom.0)),
         );
-        keys.extend(
-            d.labels
-                .added
-                .iter()
-                .map(|&i| pt_key(&cand.labels[i].position)),
-        );
+        keys.extend(d.labels.added.iter().map(|&i| pk(&cand.labels[i].position)));
         keys.extend(
             d.no_connects
                 .removed
                 .iter()
-                .map(|&s| pt_key(&self.no_connects.recs[s].geom)),
+                .map(|&s| pk(&self.no_connects.recs[s].geom)),
         );
         keys.extend(
             d.no_connects
                 .added
                 .iter()
-                .map(|&i| pt_key(&cand.no_connects[i].position)),
+                .map(|&i| pk(&cand.no_connects[i].position)),
         );
+        keys.extend(
+            d.pins
+                .removed
+                .iter()
+                .map(|&s| pk(&self.sheet_pins.recs[s].geom)),
+        );
+        keys.extend(d.pins.added.iter().map(|&i| pk(&d.cand_pins[i].1)));
+    }
+
+    /// Every pin tip of the symbols that went or came, connected or not.
+    fn dirty_symbols(&self, d: &Diffs, cand: &SchematicSheet, keys: &mut Vec<Key>) {
         for &slot in &d.symbols.removed {
             keys.extend(self.symbols.recs[slot].geom.tips.iter().copied());
         }
         for &i in &d.symbols.added {
             keys.extend(symbol_tips(cand, &cand.symbols[i]));
         }
-        keys.extend(
-            d.pins
-                .removed
-                .iter()
-                .map(|&s| pt_key(&self.sheet_pins.recs[s].geom)),
-        );
-        keys.extend(d.pins.added.iter().map(|&i| pt_key(&d.cand_pins[i].1)));
-        (keys, segments)
     }
 
     /// The roots of the base clusters the change can reach. A key reaches the
@@ -207,36 +214,8 @@ impl NetBase {
         let mut taken: HashSet<Elem> = HashSet::new();
         for root in region {
             for &elem in self.buckets.get(root).map(Vec::as_slice).unwrap_or(&[]) {
-                if !taken.insert(elem) {
-                    continue;
-                }
-                match elem {
-                    Elem::Wire(s) => {
-                        sub.wires
-                            .extend(d.wires.kept_at(s).map(|i| cand.wires[i].clone()));
-                    }
-                    Elem::Junction(s) => {
-                        sub.junctions
-                            .extend(d.junctions.kept_at(s).map(|i| cand.junctions[i].clone()));
-                    }
-                    Elem::Label(s) => {
-                        sub.labels
-                            .extend(d.labels.kept_at(s).map(|i| cand.labels[i].clone()));
-                    }
-                    Elem::NoConnect(s) => {
-                        sub.no_connects.extend(
-                            d.no_connects
-                                .kept_at(s)
-                                .map(|i| cand.no_connects[i].clone()),
-                        );
-                    }
-                    Elem::Symbol(s) => {
-                        sub.symbols
-                            .extend(d.symbols.kept_at(s).map(|i| cand.symbols[i].clone()));
-                    }
-                    Elem::SheetPin(s) => {
-                        pins.extend(d.pins.kept_at(s).map(|i| d.cand_pins[i]));
-                    }
+                if taken.insert(elem) {
+                    Self::keep_unchanged(elem, d, cand, &mut sub, &mut pins);
                 }
             }
         }
@@ -256,6 +235,36 @@ impl NetBase {
             .extend(d.symbols.added.iter().map(|&i| cand.symbols[i].clone()));
         pins.extend(d.pins.added.iter().map(|&i| d.cand_pins[i]));
         (sub, pins)
+    }
+
+    /// Copy base element `elem` into `sub` from `cand` when it is unchanged.
+    fn keep_unchanged(
+        elem: Elem,
+        d: &Diffs,
+        cand: &SchematicSheet,
+        sub: &mut SchematicSheet,
+        pins: &mut Vec<(Uuid, Point)>,
+    ) {
+        match elem {
+            Elem::Wire(s) => sub
+                .wires
+                .extend(d.wires.kept_at(s).map(|i| cand.wires[i].clone())),
+            Elem::Junction(s) => sub
+                .junctions
+                .extend(d.junctions.kept_at(s).map(|i| cand.junctions[i].clone())),
+            Elem::Label(s) => sub
+                .labels
+                .extend(d.labels.kept_at(s).map(|i| cand.labels[i].clone())),
+            Elem::NoConnect(s) => sub.no_connects.extend(
+                d.no_connects
+                    .kept_at(s)
+                    .map(|i| cand.no_connects[i].clone()),
+            ),
+            Elem::Symbol(s) => sub
+                .symbols
+                .extend(d.symbols.kept_at(s).map(|i| cand.symbols[i].clone())),
+            Elem::SheetPin(s) => pins.extend(d.pins.kept_at(s).map(|i| d.cand_pins[i])),
+        }
     }
 
     fn incremental(&self, cand: &SchematicSheet, at: &[(Key, bool)]) -> Option<Answer> {

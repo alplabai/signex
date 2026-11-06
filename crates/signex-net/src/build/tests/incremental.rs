@@ -3,7 +3,7 @@
 //! random edits.
 use super::*;
 use crate::{NetBase, net_signatures, net_signatures_at};
-use signex_types::schematic::{ChildSheet, FillType, LabelType, NoConnect, SheetPin};
+use signex_types::schematic::{BodyStyle, ChildSheet, FillType, LabelType, NoConnect, SheetPin};
 
 fn fresh_wire(a: Point, b: Point) -> Wire {
     Wire {
@@ -41,6 +41,18 @@ fn libs(sheet: &mut SchematicSheet) {
         "power:PWR_FLAG",
         vec![lib_pin("1", pt(0.0, 0.0), PinDirection::PowerOutput)],
     );
+    // Two units, the first with an alternate body.
+    let mut pins = vec![
+        lib_pin("1", pt(-2.5, 0.0), PinDirection::Passive),
+        lib_pin("2", pt(2.5, 0.0), PinDirection::Passive),
+        lib_pin("3", pt(0.0, 2.5), PinDirection::Passive),
+        lib_pin("4", pt(0.0, -2.5), PinDirection::Passive),
+    ];
+    for (pin, (unit, body)) in pins.iter_mut().zip([(1, 1), (2, 1), (1, 2), (2, 2)]) {
+        pin.unit = unit;
+        pin.body_style = body;
+    }
+    add_lib(sheet, "U2", pins);
 }
 
 fn child_with_pins(sheet: &mut SchematicSheet, at: &[Point]) {
@@ -251,6 +263,19 @@ fn no_connects_gate_a_pin() {
 }
 
 #[test]
+fn a_repeated_wire_id_in_the_base_falls_back_to_the_full_derive() {
+    let mut before = two_resistors();
+    let id = before.wires[0].uuid;
+    before.wires[1].uuid = id;
+    let mut cand = before.clone();
+    cand.symbols[0].position = pt(10.0, 20.0);
+    cand.wires[0].start = pt(12.5, 20.0);
+    let base = NetBase::new(&before);
+    assert!(!base.derives_incrementally(&cand));
+    assert_eq!(base.derive(&cand), net_signatures(&cand));
+}
+
+#[test]
 fn a_changed_library_falls_back_to_the_full_derive() {
     let before = two_resistors();
     let mut cand = before.clone();
@@ -295,13 +320,18 @@ const KINDS: [LabelType; 4] = [
 fn add_random_symbol(sheet: &mut SchematicSheet, rng: &mut Lcg, index: usize) {
     let at = rng.spot();
     let reference = format!("X{index}");
-    match rng.next(10) {
+    match rng.next(12) {
         0..=4 => place(sheet, &reference, "R", at),
         5..=7 => {
             let value = TEXTS[rng.next(4) as usize];
             place_power(sheet, &reference, "P", value, at);
         }
         8 => place_power(sheet, &reference, "power:PWR_FLAG", "PWR_FLAG", at),
+        10 | 11 => {
+            place(sheet, &reference, "U2", at);
+            let sym = sheet.symbols.last_mut().expect("just placed");
+            sym.unit = 1 + rng.next(2) as u32;
+        }
         _ => place_power(sheet, &reference, "P", "", at),
     }
     let sym = sheet.symbols.last_mut().expect("just placed");
@@ -356,7 +386,7 @@ fn edit(sheet: &mut SchematicSheet, rng: &mut Lcg) {
         p.y += 2.5 * (rng.next(5) as f64 - 2.0);
     };
     let pick = |len: usize, rng: &mut Lcg| (len > 0).then(|| rng.next(len as u64) as usize);
-    match rng.next(16) {
+    match rng.next(17) {
         0 | 1 => {
             if let Some(i) = pick(sheet.symbols.len(), rng) {
                 shift(&mut sheet.symbols[i].position, rng);
@@ -441,6 +471,16 @@ fn edit(sheet: &mut SchematicSheet, rng: &mut Lcg) {
             {
                 let i = rng.next(child.pins.len() as u64) as usize;
                 shift(&mut child.pins[i].position, rng);
+            }
+        }
+        16 => {
+            if let Some(i) = pick(sheet.symbols.len(), rng) {
+                sheet.symbols[i].unit = 1 + rng.next(2) as u32;
+                sheet.symbols[i].body_style = if rng.chance(50) {
+                    BodyStyle::Normal
+                } else {
+                    BodyStyle::Alternate
+                };
             }
         }
         _ => {

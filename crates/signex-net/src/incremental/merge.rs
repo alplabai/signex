@@ -84,13 +84,12 @@ fn first_port<'a>(
     });
     ports
         .iter()
-        .min_by_key(|(symbol, _)| order.get(symbol).copied().unwrap_or(usize::MAX))
+        .min_by_key(|(symbol, value)| (order.get(symbol).copied().unwrap_or(usize::MAX), *value))
         .map(|(_, value)| *value)
 }
 
-/// Join `clusters` (root key, cluster) by name and build the nets. `sheet`
-/// supplies the symbol order for the rare net that needs it.
-pub(super) fn merge(clusters: &[(Key, &Cluster)], sheet: &SchematicSheet) -> Merged {
+/// The union-find over `clusters` after the name joins.
+fn join_by_name(clusters: &[(Key, &Cluster)]) -> Vec<usize> {
     let mut uf: Vec<usize> = (0..clusters.len()).collect();
     let mut by_label: HashMap<&str, usize> = HashMap::new();
     let mut by_power: HashMap<&str, usize> = HashMap::new();
@@ -115,11 +114,18 @@ pub(super) fn merge(clusters: &[(Key, &Cluster)], sheet: &SchematicSheet) -> Mer
             }
         }
     }
+    uf
+}
 
-    let mut classes: HashMap<usize, Acc<'_>> = HashMap::new();
+/// What each joined class holds, and the class of every cluster.
+fn accumulate<'a>(
+    clusters: &[(Key, &'a Cluster)],
+    uf: &mut [usize],
+) -> (HashMap<usize, Acc<'a>>, Vec<usize>) {
+    let mut classes: HashMap<usize, Acc<'a>> = HashMap::new();
     let mut class_of: Vec<usize> = Vec::with_capacity(clusters.len());
     for (at, (root, cluster)) in clusters.iter().enumerate() {
-        let class = root_of(&mut uf, at);
+        let class = root_of(uf, at);
         class_of.push(class);
         let acc = classes.entry(class).or_default();
         acc.id = Some(acc.id.map_or(*root, |id| id.min(*root)));
@@ -132,10 +138,17 @@ pub(super) fn merge(clusters: &[(Key, &Cluster)], sheet: &SchematicSheet) -> Mer
         acc.ports
             .extend(cluster.ports.iter().map(|(s, v)| (*s, v.as_str())));
     }
+    (classes, class_of)
+}
 
+/// The signature of every class that is a net, with its class, sorted.
+fn signatures(
+    classes: &HashMap<usize, Acc<'_>>,
+    sheet: &SchematicSheet,
+) -> Vec<(NetSignature, usize)> {
     let order: OnceCell<HashMap<Uuid, usize>> = OnceCell::new();
     let mut nets: Vec<(NetSignature, usize)> = Vec::new();
-    for (class, acc) in &classes {
+    for (class, acc) in classes {
         if !acc.is_net() {
             continue;
         }
@@ -156,6 +169,15 @@ pub(super) fn merge(clusters: &[(Key, &Cluster)], sheet: &SchematicSheet) -> Mer
         ));
     }
     nets.sort_by(|a, b| a.0.cmp(&b.0));
+    nets
+}
+
+/// Join `clusters` (root key, cluster) by name and build the nets. `sheet`
+/// supplies the symbol order for the rare net that needs it.
+pub(super) fn merge(clusters: &[(Key, &Cluster)], sheet: &SchematicSheet) -> Merged {
+    let mut uf = join_by_name(clusters);
+    let (classes, class_of) = accumulate(clusters, &mut uf);
+    let nets = signatures(&classes, sheet);
     let position: HashMap<usize, usize> = nets
         .iter()
         .enumerate()

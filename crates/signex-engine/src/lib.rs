@@ -215,9 +215,11 @@ pub struct MovePreview {
 impl MovePreview {
     #[must_use]
     pub fn new(sheet: &SchematicSheet) -> Self {
+        let base = signex_net::NetBase::new(sheet);
         Self {
-            before: before_nets(sheet),
-            base: Some(std::sync::Arc::new(signex_net::NetBase::new(sheet))),
+            // The base derives the unchanged sheet from its own clusters.
+            before: std::sync::Arc::new(base.derive(sheet)),
+            base: Some(std::sync::Arc::new(base)),
             sheet: sheet.clone(),
         }
     }

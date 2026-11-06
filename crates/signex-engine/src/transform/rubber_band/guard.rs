@@ -76,6 +76,11 @@ fn derive_at(base: Option<&NetBase>, sheet: &SchematicSheet, at: &[(Key, bool)])
     };
     let found = base.derive_at(sheet, at);
     #[cfg(test)]
+    debug_assert!(
+        base.derives_incrementally(sheet),
+        "the base fell back to the full derive"
+    );
+    #[cfg(test)]
     assert_eq!(
         found,
         net_signatures_at(sheet, at),

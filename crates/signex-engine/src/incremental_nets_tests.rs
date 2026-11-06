@@ -43,6 +43,14 @@ fn ghost_equals_commit(sheet: &SchematicSheet, moves: &Moves) {
     assert_eq!(base.derive(&ghost), net_signatures(&ghost), "{shown}");
 }
 
+#[test]
+fn the_preview_starts_from_the_same_nets_as_the_full_derive() {
+    let (engine, _, _) = series_fixture();
+    let sheet = engine.document();
+    let preview = MovePreview::new(sheet);
+    assert_eq!(*preview.before, *crate::before_nets(sheet));
+}
+
 fn gnd_port(sheet: &mut SchematicSheet, reference: &str, value: &str, at: Point) -> Uuid {
     sheet
         .lib_symbols

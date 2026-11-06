@@ -78,122 +78,122 @@ fn sheet_pin_list(sheet: &SchematicSheet) -> Vec<(Uuid, Point)> {
         .collect()
 }
 
+/// The six kinds of element the derivation reads, as the base remembers them.
+struct Kinds {
+    wires: Kind<(Point, Point)>,
+    junctions: Kind<Point>,
+    labels: Kind<(Point, LabelType, String)>,
+    no_connects: Kind<Point>,
+    symbols: Kind<SymGeom>,
+    sheet_pins: Kind<Point>,
+}
+
+fn rec<G>(uuid: Uuid, geom: G) -> Rec<G> {
+    Rec { uuid, geom }
+}
+
+impl Kinds {
+    fn of(sheet: &SchematicSheet, pins: &[(Uuid, Point)]) -> Self {
+        Self {
+            wires: Kind::new(
+                (sheet.wires.iter())
+                    .map(|w| rec(w.uuid, (w.start, w.end)))
+                    .collect(),
+            ),
+            junctions: Kind::new(
+                (sheet.junctions.iter())
+                    .map(|j| rec(j.uuid, j.position))
+                    .collect(),
+            ),
+            labels: Kind::new(
+                (sheet.labels.iter())
+                    .map(|l| rec(l.uuid, (l.position, l.label_type, l.text.clone())))
+                    .collect(),
+            ),
+            no_connects: Kind::new(
+                (sheet.no_connects.iter())
+                    .map(|n| rec(n.uuid, n.position))
+                    .collect(),
+            ),
+            symbols: Kind::new(
+                (sheet.symbols.iter())
+                    .map(|s| rec(s.uuid, SymGeom::of(sheet, s)))
+                    .collect(),
+            ),
+            sheet_pins: Kind::new(pins.iter().map(|(u, at)| rec(*u, *at)).collect()),
+        }
+    }
+
+    /// Whether the diff can tell every element of every kind apart.
+    fn unique(&self) -> bool {
+        self.wires.unique
+            && self.junctions.unique
+            && self.labels.unique
+            && self.no_connects.unique
+            && self.symbols.unique
+            && self.sheet_pins.unique
+    }
+
+    /// Every element under the root of each point it sits on.
+    fn buckets(&self, rb: impl Fn(Key) -> Key) -> HashMap<Key, Vec<Elem>> {
+        let mut buckets: HashMap<Key, Vec<Elem>> = HashMap::new();
+        let mut put = |k: Key, elem: Elem| buckets.entry(rb(k)).or_default().push(elem);
+        for (at, rec) in self.wires.recs.iter().enumerate() {
+            put(pt_key(&rec.geom.0), Elem::Wire(at));
+        }
+        for (at, rec) in self.junctions.recs.iter().enumerate() {
+            put(pt_key(&rec.geom), Elem::Junction(at));
+        }
+        for (at, rec) in self.labels.recs.iter().enumerate() {
+            put(pt_key(&rec.geom.0), Elem::Label(at));
+        }
+        for (at, rec) in self.no_connects.recs.iter().enumerate() {
+            put(pt_key(&rec.geom), Elem::NoConnect(at));
+        }
+        for (at, rec) in self.symbols.recs.iter().enumerate() {
+            for tip in &rec.geom.tips {
+                put(*tip, Elem::Symbol(at));
+            }
+        }
+        for (at, rec) in self.sheet_pins.recs.iter().enumerate() {
+            put(pt_key(&rec.geom), Elem::SheetPin(at));
+        }
+        buckets
+    }
+
+    /// The points a wire can pass through.
+    fn items(&self) -> ItemGrid {
+        ItemGrid::new(
+            (self.labels.recs.iter().map(|r| pt_key(&r.geom.0)))
+                .chain(self.junctions.recs.iter().map(|r| pt_key(&r.geom)))
+                .chain(self.sheet_pins.recs.iter().map(|r| pt_key(&r.geom))),
+        )
+    }
+}
+
 impl NetBase {
     /// Derive `sheet` once.
     #[must_use]
     pub fn new(sheet: &SchematicSheet) -> Self {
-        let wires = Kind::new(
-            sheet
-                .wires
-                .iter()
-                .map(|w| Rec {
-                    uuid: w.uuid,
-                    geom: (w.start, w.end),
-                })
-                .collect(),
-        );
-        let junctions = Kind::new(
-            sheet
-                .junctions
-                .iter()
-                .map(|j| Rec {
-                    uuid: j.uuid,
-                    geom: j.position,
-                })
-                .collect(),
-        );
-        let labels = Kind::new(
-            sheet
-                .labels
-                .iter()
-                .map(|l| Rec {
-                    uuid: l.uuid,
-                    geom: (l.position, l.label_type, l.text.clone()),
-                })
-                .collect(),
-        );
-        let no_connects = Kind::new(
-            sheet
-                .no_connects
-                .iter()
-                .map(|n| Rec {
-                    uuid: n.uuid,
-                    geom: n.position,
-                })
-                .collect(),
-        );
-        let symbols = Kind::new(
-            sheet
-                .symbols
-                .iter()
-                .map(|s| Rec {
-                    uuid: s.uuid,
-                    geom: SymGeom::of(sheet, s),
-                })
-                .collect(),
-        );
         let pins = sheet_pin_list(sheet);
-        let sheet_pins = Kind::new(
-            pins.iter()
-                .map(|(uuid, at)| Rec {
-                    uuid: *uuid,
-                    geom: *at,
-                })
-                .collect(),
-        );
-        let usable = wires.unique
-            && junctions.unique
-            && labels.unique
-            && no_connects.unique
-            && symbols.unique
-            && sheet_pins.unique;
-
+        let kinds = Kinds::of(sheet, &pins);
         let Level1 {
             mut parent,
             clusters,
             index,
         } = derive_level1(sheet, &pins, &|_| true);
         let root = compress(&mut parent);
-        let rb = |k: Key| root.get(&k).copied().unwrap_or(k);
-        let mut buckets: HashMap<Key, Vec<Elem>> = HashMap::new();
-        let mut put = |k: Key, elem: Elem| buckets.entry(rb(k)).or_default().push(elem);
-        for (at, rec) in wires.recs.iter().enumerate() {
-            put(pt_key(&rec.geom.0), Elem::Wire(at));
-        }
-        for (at, rec) in junctions.recs.iter().enumerate() {
-            put(pt_key(&rec.geom), Elem::Junction(at));
-        }
-        for (at, rec) in labels.recs.iter().enumerate() {
-            put(pt_key(&rec.geom.0), Elem::Label(at));
-        }
-        for (at, rec) in no_connects.recs.iter().enumerate() {
-            put(pt_key(&rec.geom), Elem::NoConnect(at));
-        }
-        for (at, rec) in symbols.recs.iter().enumerate() {
-            for tip in &rec.geom.tips {
-                put(*tip, Elem::Symbol(at));
-            }
-        }
-        for (at, rec) in sheet_pins.recs.iter().enumerate() {
-            put(pt_key(&rec.geom), Elem::SheetPin(at));
-        }
-        let items = ItemGrid::new(
-            labels
-                .recs
-                .iter()
-                .map(|r| pt_key(&r.geom.0))
-                .chain(junctions.recs.iter().map(|r| pt_key(&r.geom)))
-                .chain(sheet_pins.recs.iter().map(|r| pt_key(&r.geom))),
-        );
+        let buckets = kinds.buckets(|k| root.get(&k).copied().unwrap_or(k));
+        let items = kinds.items();
         Self {
-            usable,
+            usable: kinds.unique(),
             lib_symbols: sheet.lib_symbols.clone(),
-            wires,
-            junctions,
-            labels,
-            no_connects,
-            symbols,
-            sheet_pins,
+            wires: kinds.wires,
+            junctions: kinds.junctions,
+            labels: kinds.labels,
+            no_connects: kinds.no_connects,
+            symbols: kinds.symbols,
+            sheet_pins: kinds.sheet_pins,
             root,
             clusters,
             buckets,
