@@ -573,5 +573,8 @@ fn a_one_line_text_box_is_unchanged_by_the_line_count() {
         VAlign::Bottom,
         None,
     );
-    assert_eq!(a, b);
+    assert_eq!(
+        (a.min_x, a.min_y, a.max_x, a.max_y),
+        (b.min_x, b.min_y, b.max_x, b.max_y)
+    );
 }
