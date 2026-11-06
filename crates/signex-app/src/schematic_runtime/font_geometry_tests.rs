@@ -350,6 +350,7 @@ fn text_box_perf() {
             &designators,
             &rect,
             hit_test::SelectionMode::Touching,
+            Default::default(),
         )
         .len();
         (t.elapsed(), n)

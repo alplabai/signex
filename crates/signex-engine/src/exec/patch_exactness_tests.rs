@@ -309,6 +309,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         title_block,
         lib_symbols,
         frame,
+        page,
     } = a;
     let mut patch = DocumentPatch::NONE;
     let mut flag = |changed: bool, bit: DocumentPatch| {
@@ -354,6 +355,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
             || differ(&sorted(title_block), &sorted(&b.title_block))
+            || differ(page, &b.page)
             || differ(frame, &b.frame),
         DocumentPatch::PAPER,
     );
@@ -373,7 +375,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 53] = [
+const ALL_KINDS: [CommandKind; 55] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -420,6 +422,8 @@ const ALL_KINDS: [CommandKind; 53] = [
     CommandKind::ModifyChildSheet,
     CommandKind::SetPaperSize,
     CommandKind::SetSheetFrame,
+    CommandKind::SetSheetColor,
+    CommandKind::SetPageOrigin,
     CommandKind::SetTitleBlockField,
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
@@ -480,6 +484,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::ModifyChildSheet
         | CommandKind::SetPaperSize
         | CommandKind::SetSheetFrame
+        | CommandKind::SetSheetColor
+        | CommandKind::SetPageOrigin
         | CommandKind::SetTitleBlockField
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
@@ -993,6 +999,18 @@ fn samples() -> Vec<(String, Command)> {
                 horizontal_zones: 4,
                 vertical_zones: 3,
             },
+        },
+    );
+    add(
+        "SetSheetColor",
+        Command::SetSheetColor {
+            color: Some(signex_types::theme::Color::new(0xd0, 0xd0, 0xd0, 0xff)),
+        },
+    );
+    add(
+        "SetPageOrigin",
+        Command::SetPageOrigin {
+            origin: signex_types::schematic::PageOrigin::UpperLeft,
         },
     );
     add(

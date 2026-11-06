@@ -118,7 +118,7 @@ fn class_round_trips_through_json() {
         style: NetClassStyle {
             color: Some(Color::new(255, 0, 0, 255)),
             wire_width_mm: Some(0.4),
-            line: NetLineStyle::Dashed,
+            line: Some(NetLineStyle::Dashed),
         },
         trace_width: 1.5,
         ..NetClass::default()
@@ -138,4 +138,25 @@ fn empty_optional_fields_are_not_written() {
 fn invalid_colour_is_an_error_not_a_silent_drop() {
     let json = r#"{"name":"X","style":{"color":"nope"}}"#;
     assert!(serde_json::from_str::<NetClass>(json).is_err());
+}
+
+/// #2026: a style without `line` (every file before #2026, which never wrote
+/// Solid) reads as inherit and re-saves without the key; an explicit Solid is
+/// written and read back.
+#[test]
+fn an_absent_line_inherits_and_an_explicit_solid_round_trips() {
+    let old = r##"{"color":"#ff0000ff"}"##;
+    let style: NetClassStyle = serde_json::from_str(old).unwrap();
+    assert_eq!(style.line, None);
+    let saved = serde_json::to_string(&style).unwrap();
+    assert!(!saved.contains("line"), "{saved}");
+
+    let solid = NetClassStyle {
+        line: Some(NetLineStyle::Solid),
+        ..NetClassStyle::default()
+    };
+    let saved = serde_json::to_string(&solid).unwrap();
+    assert!(saved.contains(r#""line":"solid""#), "{saved}");
+    let back: NetClassStyle = serde_json::from_str(&saved).unwrap();
+    assert_eq!(back.line, Some(NetLineStyle::Solid));
 }

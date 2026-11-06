@@ -83,7 +83,7 @@ fn sheet_with_net(wire_id: Uuid, name: &str) -> SchematicSheet {
 fn dashed_class(name: &str, net: &str) -> NetClass {
     let mut class = NetClass::named(name);
     class.nets.push(net.to_string());
-    class.style.line = NetLineStyle::Dashed;
+    class.style.line = Some(NetLineStyle::Dashed);
     class
 }
 
@@ -153,7 +153,7 @@ fn a_member_net_wire_gets_the_class_style() {
     let applied = resolve_and_apply(&mut cache, PROJECT, key(1, &classes), &sheet);
 
     assert!(applied.styles_changed);
-    assert_eq!(cache.styles()[&wire_id].line, NetLineStyle::Dashed);
+    assert_eq!(cache.styles()[&wire_id].line, Some(NetLineStyle::Dashed));
     assert_eq!(cache.net_of(PROJECT, wire_id), Some("VCC"));
 }
 
@@ -252,7 +252,7 @@ fn each_part_of_the_key_decides_when_to_resolve_again() {
     resolve_and_apply(&mut cache, PROJECT, key(1, &classes), &sheet);
 
     let mut dotted = dashed_class("Power", "VCC");
-    dotted.style.line = NetLineStyle::Dotted;
+    dotted.style.line = Some(NetLineStyle::Dotted);
     assert!(cache.want(PROJECT, &key(1, &[dotted])), "class table edit");
 
     let mut pages = key(1, &classes);
@@ -300,7 +300,7 @@ fn the_class_table_joins_the_project_netlist_not_one_sheet() {
         projects: vec![resolved(PROJECT, k, &project_netlist)],
     });
 
-    assert_eq!(cache.styles()[&wire_id].line, NetLineStyle::Dashed);
+    assert_eq!(cache.styles()[&wire_id].line, Some(NetLineStyle::Dashed));
     assert_eq!(cache.net_of(PROJECT, wire_id), Some("VCC"));
 }
 
@@ -314,7 +314,7 @@ fn a_late_answer_for_a_project_that_moved_on_is_dropped() {
     // The class table moved on: the answer joins a table that no longer
     // exists, however recent its connectivity.
     let mut dotted = dashed_class("Power", "VCC");
-    dotted.style.line = NetLineStyle::Dotted;
+    dotted.style.line = Some(NetLineStyle::Dotted);
     let (older, newer) = (key(1, &classes), key(1, &[dotted]));
     cache.want(PROJECT, &older);
     cache.want(PROJECT, &newer);
@@ -522,6 +522,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
             net_classes: classes,
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -546,7 +547,7 @@ fn the_gate_is_open_only_when_a_sheet_or_a_project_changed() {
         cache.needs_refresh(8, std::slice::from_ref(&project)),
         "a sheet's connectivity changed"
     );
-    project.data.net_classes[0].style.line = NetLineStyle::Dotted;
+    project.data.net_classes[0].style.line = Some(NetLineStyle::Dotted);
     assert!(
         cache.needs_refresh(8, std::slice::from_ref(&project)),
         "the class table was edited"
@@ -575,7 +576,7 @@ fn a_sheet_placed_twice_draws_and_names_each_placement_on_its_own() {
     );
     let shared = Uuid::from_u128(7);
     let style = NetClassStyle {
-        line: NetLineStyle::Dashed,
+        line: Some(NetLineStyle::Dashed),
         ..Default::default()
     };
     let mut cache = NetClassStyleCache::default();

@@ -22,6 +22,7 @@ use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
+use crate::pdf::palette::SchematicPalette;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::field_effective_style;
@@ -45,7 +46,18 @@ impl SvgRenderContext {
         let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
 
         let mut elements = Vec::new();
-        let palette = &opts.palette;
+        // A sheet with its own paper colour (#2034) fills the page with it,
+        // except in Black & White: that prints black ink on white paper
+        // whatever the sheet or theme (#1342), mapped against the theme paper.
+        let sheet_paper = sheet
+            .schematic
+            .page
+            .color
+            .filter(|_| opts.colour_mode != ColourMode::BlackAndWhite);
+        let palette = &SchematicPalette {
+            paper: sheet_paper.map_or(opts.palette.paper, wire_style::rgb),
+            ..opts.palette
+        };
 
         // Page background — fill the whole MediaBox with the
         // schematic paper colour so the PDF page matches what the
@@ -85,12 +97,13 @@ impl SvgRenderContext {
             DrawingPlacement::Behind,
             &xform,
             palette,
+            &opts.schematic_defaults,
         );
 
         // Base primitives
         for wire in &sheet.schematic.wires {
             let class = opts.net_class_styles.get(&wire.uuid);
-            let stroke_mm = wire_style::wire_width_mm(wire, class);
+            let stroke_mm = wire_style::wire_width_mm(wire, class, &opts.schematic_defaults);
             let start = (
                 xform.x(wire.start.x) as f64,
                 xform.px_y(wire.start.y) as f64,
@@ -99,7 +112,8 @@ impl SvgRenderContext {
             let marks = wire_style::line_marks(
                 start,
                 end,
-                class.map(|style| style.line).unwrap_or_default(),
+                opts.schematic_defaults
+                    .wire_line(class.and_then(|style| style.line)),
                 stroke_mm * xform.mm_to_unit,
             );
             let commands = marks
@@ -135,8 +149,7 @@ impl SvgRenderContext {
                 style: SvgStyle {
                     stroke_rgb: Some(palette.bus),
                     fill_rgb: None,
-                    stroke_width: (signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM
-                        * xform.mm_to_unit) as f32,
+                    stroke_width: (opts.schematic_defaults.bus_mm() * xform.mm_to_unit) as f32,
                 },
             });
         }
@@ -156,14 +169,15 @@ impl SvgRenderContext {
                 style: SvgStyle {
                     stroke_rgb: Some(palette.bus_entry),
                     fill_rgb: None,
-                    stroke_width: (signex_types::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-                        * xform.mm_to_unit) as f32,
+                    stroke_width: (opts.schematic_defaults.wire_mm(0.0, None) * xform.mm_to_unit)
+                        as f32,
                 },
             });
         }
 
         for j in &sheet.schematic.junctions {
-            let dia_mm = if j.diameter > 0.0 { j.diameter } else { 0.7 };
+            // The canvas size, floor included (#2026).
+            let dia_mm = 2.0 * opts.schematic_defaults.junction_radius_mm(j.diameter);
             let side = (dia_mm * xform.mm_to_unit) as f32;
             let half = side / 2.0;
             let cx = xform.x(j.position.x);
@@ -279,9 +293,8 @@ impl SvgRenderContext {
                 SvgStyle {
                     stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
-                    stroke_width: (signex_types::schematic::symbol_graphic_stroke_mm(
-                        child.stroke_width,
-                    ) * xform.mm_to_unit) as f32,
+                    stroke_width: (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
+                        * xform.mm_to_unit) as f32,
                 },
             ));
             if !child.name.is_empty() {
@@ -346,7 +359,14 @@ impl SvgRenderContext {
                 .map(std::borrow::Cow::Borrowed)
                 .or_else(|| sheet.schematic.resolve_lib_symbol(sym));
             if let Some(lib) = lib {
-                push_symbol_lib_graphics(&mut elements, sym, Some(&lib), &xform, palette);
+                push_symbol_lib_graphics(
+                    &mut elements,
+                    sym,
+                    Some(&lib),
+                    &xform,
+                    palette,
+                    &opts.schematic_defaults,
+                );
                 push_symbol_pins(
                     &mut elements,
                     sym,
@@ -366,7 +386,7 @@ impl SvgRenderContext {
                     SvgStyle {
                         stroke_rgb: Some(palette.symbol_stroke),
                         fill_rgb: None,
-                        stroke_width: (signex_types::schematic::symbol_graphic_stroke_mm(0.0)
+                        stroke_width: (opts.schematic_defaults.symbol_line_mm(0.0)
                             * xform.mm_to_unit) as f32,
                     },
                 ));
@@ -439,6 +459,7 @@ impl SvgRenderContext {
             DrawingPlacement::Above,
             &xform,
             palette,
+            &opts.schematic_defaults,
         );
 
         Self {

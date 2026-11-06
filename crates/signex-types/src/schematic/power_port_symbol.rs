@@ -463,7 +463,7 @@ mod tests {
                 unit: 1,
                 ..Default::default()
             };
-            let lowered = lower_symbol(&lib, &sym);
+            let lowered = lower_symbol(&lib, &sym, &crate::schematic::SchematicDefaults::BUILT_IN);
             let pins: Vec<_> = lowered
                 .iter()
                 .filter_map(|p| match p {
@@ -477,7 +477,8 @@ mod tests {
             assert!((pins[0].1.x).abs() < 1e-9, "{lib_id}");
             assert!((pins[0].1.y.abs() - stem).abs() < 1e-9, "{lib_id}");
             // Same extent as the entry-less fallback.
-            let fallback = lower_placed_symbol(None, &sym);
+            let fallback =
+                lower_placed_symbol(None, &sym, &crate::schematic::SchematicDefaults::BUILT_IN);
             assert_eq!(
                 format!("{:?}", crate::schematic::primitives_bounds(&lowered)),
                 format!("{:?}", crate::schematic::primitives_bounds(&fallback)),
@@ -533,7 +534,12 @@ mod tests {
                 unit: 1,
                 ..Default::default()
             };
-            let head = primitives_bounds(&lower_placed_symbol(None, &sym)).expect("head");
+            let head = primitives_bounds(&lower_placed_symbol(
+                None,
+                &sym,
+                &crate::schematic::SchematicDefaults::BUILT_IN,
+            ))
+            .expect("head");
             let value = power_port_value_field(&lib_id, at);
             let text = text_aabb(
                 "+3V3",

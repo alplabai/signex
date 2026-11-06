@@ -91,7 +91,8 @@ fn report_row(entry: &ErcDiagnosticEntry, project_dir: Option<&std::path::Path>)
         rule: entry.rule_label.to_string(),
         message: entry.message.clone(),
         x: entry.world_x,
-        y: entry.world_y,
+        // The Y the panel shows: from the sheet's page origin (#2034).
+        y: entry.shown_y,
     }
 }
 

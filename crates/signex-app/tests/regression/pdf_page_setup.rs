@@ -36,6 +36,7 @@ fn app_with_sheet(paper: &str) -> Signex {
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
         frame: Default::default(),
+        page: Default::default(),
         unknown: Default::default(),
         font_family: None,
     };
@@ -713,6 +714,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

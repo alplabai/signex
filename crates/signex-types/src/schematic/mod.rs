@@ -818,8 +818,14 @@ mod sheet;
 pub use sheet::*;
 mod sheet_frame;
 pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
+mod sheet_page;
+pub use sheet_page::{PageOrigin, SheetPageSettings, paper_height_mm};
+mod defaults;
 mod sheet_size;
 mod stroke;
+pub use defaults::{
+    SCHEMATIC_DEFAULT_FONT, SCHEMATIC_DEFAULT_TEXT_SIZE_PT, SchematicDefaults, is_set_width,
+};
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 pub use stroke::*;
 mod hotspot;

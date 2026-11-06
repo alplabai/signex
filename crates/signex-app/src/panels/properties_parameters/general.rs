@@ -283,10 +283,9 @@ pub fn view_properties_general<'a>(
                             .boxed(),
                         );
                     }
-                    let sheet_colors: Vec<SheetColor> = SheetColor::ALL.to_vec();
                     c = c.push(form_pick_row(
                         "Sheet Color",
-                        sheet_colors,
+                        crate::panels::SchematicSheetColor::options(),
                         sheet_color,
                         PanelMsg::SetSheetColor,
                         muted,

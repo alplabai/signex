@@ -38,6 +38,7 @@ fn emit(lib: &LibSymbol, sym: &Symbol) -> Vec<SvgElement> {
         Some(lib),
         &xform,
         &SchematicPalette::classic(),
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
     );
     out
 }
@@ -70,22 +71,26 @@ fn library_text_matches_the_shared_lowering_under_every_turn() {
                 ..Symbol::default()
             };
             let lib = lib_text();
-            let want = lower_symbol(&lib, &sym)
-                .into_iter()
-                .find_map(|p| match p {
-                    SymbolPrimitive::Text {
-                        rotation_deg,
-                        h_align,
-                        v_align,
-                        ..
-                    } => Some((
-                        rotation_deg as f32,
-                        format!("{:?}", halign_to_svg(h_align)),
-                        format!("{:?}", valign_to_svg(v_align)),
-                    )),
-                    _ => None,
-                })
-                .expect("lowered text");
+            let want = lower_symbol(
+                &lib,
+                &sym,
+                &signex_types::schematic::SchematicDefaults::BUILT_IN,
+            )
+            .into_iter()
+            .find_map(|p| match p {
+                SymbolPrimitive::Text {
+                    rotation_deg,
+                    h_align,
+                    v_align,
+                    ..
+                } => Some((
+                    rotation_deg as f32,
+                    format!("{:?}", halign_to_svg(h_align)),
+                    format!("{:?}", valign_to_svg(v_align)),
+                )),
+                _ => None,
+            })
+            .expect("lowered text");
             assert_eq!(
                 text_of(&emit(&lib, &sym)),
                 want,
@@ -173,7 +178,14 @@ fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
         translate_y: 0.0,
     };
     let mut out = Vec::new();
-    push_symbol_lib_graphics(&mut out, &sym, None, &xform, &SchematicPalette::classic());
+    push_symbol_lib_graphics(
+        &mut out,
+        &sym,
+        None,
+        &xform,
+        &SchematicPalette::classic(),
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(!out.is_empty());
     let mut plain = Vec::new();
     let not_power = Symbol {
@@ -186,6 +198,7 @@ fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
         None,
         &xform,
         &SchematicPalette::classic(),
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
     );
     assert!(plain.is_empty());
 }
@@ -215,6 +228,7 @@ fn power_port_library_entry_draws_its_pin_like_the_built_in_body() {
                 translate_y: 0.0,
             },
             &SchematicPalette::classic(),
+            &signex_types::schematic::SchematicDefaults::BUILT_IN,
         );
         let mut built_in: Vec<String> = xform_out.iter().map(|e| format!("{e:?}")).collect();
         with_entry.sort();

@@ -470,6 +470,10 @@ pub struct SchematicSheet {
     /// `[extras.sheet.frame]` only when not the default.
     #[serde(default, skip_serializing_if = "SheetFrameSettings::is_default")]
     pub frame: SheetFrameSettings,
+    /// Paper colour and coordinate origin (#2034). Saved in
+    /// `[extras.sheet.page]` only when not the default.
+    #[serde(default, skip_serializing_if = "super::SheetPageSettings::is_default")]
+    pub page: super::SheetPageSettings,
     /// Keys in the `.snxsch` manifest and `[extras.sheet]` that this
     /// build does not recognise, kept per section so a save re-emits
     /// each where it was found. Empty for every file written by this
@@ -513,6 +517,7 @@ impl Default for SchematicSheet {
             net_colors: HashMap::new(),
             drawing_placements: BTreeMap::new(),
             frame: SheetFrameSettings::default(),
+            page: Default::default(),
             unknown: SheetUnknown::default(),
         }
     }

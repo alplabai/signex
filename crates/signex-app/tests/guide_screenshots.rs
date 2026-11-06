@@ -473,6 +473,7 @@ fn open_readme_project(app: &mut Signex, dir: &std::path::Path) -> PathBuf {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        schematic_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

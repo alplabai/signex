@@ -46,6 +46,7 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -52,7 +52,10 @@ pub fn symbol_pin_at(
 ) -> Option<PickedPin> {
     let sym = document.symbols.iter().find(|s| s.uuid == symbol)?;
     let lib = document.resolve_lib_symbol(sym)?;
-    if inside_body(&lower_symbol(&lib, sym), at) {
+    if inside_body(
+        &lower_symbol(&lib, sym, &super::SchematicDefaults::BUILT_IN),
+        at,
+    ) {
         return None;
     }
     pin_lines(&lib, sym)

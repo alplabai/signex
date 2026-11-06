@@ -32,6 +32,7 @@ fn fixture() -> (Signex, PathBuf) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -65,12 +66,12 @@ fn editing_a_class_changes_the_project_and_marks_it_dirty() {
     send(&mut app, NetClassMsg::Add);
     commit(&mut app, NetClassField::Name, "Power");
     commit(&mut app, NetClassField::Width, "0.4");
-    send(&mut app, NetClassMsg::SetLine(NetLineStyle::Dashed));
+    send(&mut app, NetClassMsg::SetLine(Some(NetLineStyle::Dashed)));
 
     let class = &classes(&app)[0];
     assert_eq!(class.name, "Power");
     assert_eq!(class.style.wire_width_mm, Some(0.4));
-    assert_eq!(class.style.line, NetLineStyle::Dashed);
+    assert_eq!(class.style.line, Some(NetLineStyle::Dashed));
     assert!(app.document_state.is_document_dirty(&path));
 
     let shown = &app.document_state.panel_ctx.net_classes;
@@ -126,6 +127,7 @@ fn second_project(app: &mut Signex) {
             net_classes: vec![signex_types::net_class::NetClass::named("Sig")],
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

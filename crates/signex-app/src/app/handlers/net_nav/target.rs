@@ -201,7 +201,7 @@ impl Signex {
             &canvas.designators,
             x,
             y,
-            self.active_class_styles(),
+            self.active_wire_widths(),
         )
     }
 

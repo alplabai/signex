@@ -136,6 +136,7 @@ fn run_erc(root: SchematicSheet, child: SchematicSheet, active: Active) -> Vec<V
         rules: Default::default(),
         net_classes: Default::default(),
         annotation: None,
+        schematic_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

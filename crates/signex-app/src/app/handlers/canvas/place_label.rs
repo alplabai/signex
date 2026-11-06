@@ -6,7 +6,7 @@ use signex_types::schematic::{HAlign, Label, LabelType, Point, VAlign};
 use super::super::super::*;
 
 /// A label to place: its kind and text, and the look the pre-placement form
-/// sets.
+/// and the project defaults set.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LabelSpec {
     pub label_type: LabelType,
@@ -16,12 +16,13 @@ pub(crate) struct LabelSpec {
     pub font_size_mm: f64,
     pub justify_h: HAlign,
     pub justify_v: VAlign,
+    pub font_family: Option<String>,
 }
 
 impl Signex {
     /// What a Label-tool click places now: the pending port kind (a net
     /// label when none is pending) with the pre-placement form's text and
-    /// look.
+    /// look, and the project's default text size and font (#2026).
     pub(crate) fn label_spec_from_form(&self) -> LabelSpec {
         let (label_type, shape, default_text) = match self.interaction_state.pending_port.clone() {
             Some((kind, shape)) => {
@@ -50,7 +51,9 @@ impl Signex {
             })
             .unwrap_or((
                 0.0,
-                signex_types::schematic::SCHEMATIC_TEXT_MM,
+                self.document_state
+                    .active_schematic_defaults()
+                    .placed_text_mm(),
                 HAlign::Left,
                 VAlign::Bottom,
             ));
@@ -62,6 +65,7 @@ impl Signex {
             font_size_mm,
             justify_h,
             justify_v,
+            font_family: self.document_state.placed_font_family(),
         }
     }
 
@@ -78,7 +82,7 @@ impl Signex {
             font_size: spec.font_size_mm,
             justify: spec.justify_h,
             justify_v: spec.justify_v,
-            font_family: None,
+            font_family: spec.font_family,
             locked: false,
         };
         self.apply_engine_command(signex_engine::Command::PlaceLabel { label }, false, false)

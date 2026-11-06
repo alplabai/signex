@@ -249,7 +249,15 @@ fn shape_tools_place_a_drawing_with_the_form_width() {
         SchDrawing::Line {
             start, end, width, ..
         } => {
-            assert_eq!((*start, *end, *width), (on_grid(), grid(24.0, 16.0), 0.15));
+            // No form width: the project's shape default (#2026).
+            let default_width = app
+                .document_state
+                .active_schematic_defaults()
+                .shape_stroke_mm(0.0);
+            assert_eq!(
+                (*start, *end, *width),
+                (on_grid(), grid(24.0, 16.0), default_width)
+            );
         }
         other => panic!("{other:?}"),
     }
@@ -421,4 +429,45 @@ fn shape_placements_match_their_clicks() {
         let points = [at, grid(12.0, 20.0), grid(16.0, 16.0)];
         assert!(app.place_arc_at(points, 0.4, FillType::Outline));
     });
+}
+
+/// #2026 carried through the extraction: a text or label click on a project
+/// sheet takes the project's default text size and font.
+#[test]
+fn text_and_label_clicks_take_the_project_text_defaults() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+    use signex_types::project::SchematicDefaultField;
+    let dir = std::env::temp_dir().join(format!("signex-1930-def-{}", uuid::Uuid::now_v7()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
+    let sheet = dir.join("root.snxsch");
+    open_with(&mut app.document_state, &sheet, SchematicSheet::default());
+    app.document_state.active_path = Some(sheet.clone());
+    let project_id = app.document_state.projects[0].id;
+    for msg in [
+        ProjectTabMsg::SchematicDefaultEdited {
+            project_id,
+            field: SchematicDefaultField::TextSize,
+            text: "14".into(),
+        },
+        ProjectTabMsg::SchematicDefaultFontEdited {
+            project_id,
+            text: "Roboto".into(),
+        },
+    ] {
+        let _edit = app.update(Message::Project(ProjectMsg::Tab(msg)));
+    }
+    let size = app
+        .document_state
+        .active_schematic_defaults()
+        .placed_text_mm();
+    assert_ne!(size, SCHEMATIC_TEXT_MM, "the project default differs");
+    for tool in [Tool::Text, Tool::Label] {
+        app.interaction_state.current_tool = tool;
+        click(&mut app, OFF_GRID);
+    }
+    let doc = app.document_state.engines[&sheet].document();
+    assert_eq!(doc.text_notes[0].font_size, size);
+    assert_eq!(doc.text_notes[0].font_family.as_deref(), Some("Roboto"));
+    assert_eq!(doc.labels[0].font_size, size);
+    assert_eq!(doc.labels[0].font_family.as_deref(), Some("Roboto"));
 }

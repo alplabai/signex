@@ -247,6 +247,7 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        schematic_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

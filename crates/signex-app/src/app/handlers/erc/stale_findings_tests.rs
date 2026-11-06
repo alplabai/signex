@@ -291,3 +291,19 @@ fn only_changes_that_can_alter_a_finding_make_the_results_stale() {
         .mark_document_dirty(&dir.join("ProjectA.snxprj"));
     assert!(app.erc_results_stale(), "project file");
 }
+
+/// Review of #2034: the ERC panel's location reads Y from the sheet's page
+/// origin; the pan target stays the stored point.
+#[test]
+fn the_erc_location_reads_y_from_the_page_origin() {
+    let (app, path, _part) = app_with_two_findings();
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| e.world_x == 5.0)
+        .expect("the sheet-level finding");
+    let doc = app.document_state.engines[&path].document();
+    assert_eq!(entry.world_y, 5.0, "the pan target is the stored point");
+    assert_eq!(entry.shown_y, doc.page_y(5.0));
+    assert_ne!(entry.shown_y, 5.0, "Lower Left by default");
+}

@@ -42,6 +42,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

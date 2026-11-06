@@ -176,7 +176,7 @@ impl SchematicCanvas<'_> {
                     &self.designators,
                     wx,
                     wy,
-                    self.prefs.wire_class_styles,
+                    self.prefs.wire_widths(),
                 )
                 .filter(|h| crate::app::passes_filter(h, snapshot, self.prefs.selection_filters))
             });
@@ -256,6 +256,7 @@ pub(in crate::canvas) mod tests {
             net_colors: Default::default(),
             drawing_placements: Default::default(),
             frame: Default::default(),
+            page: Default::default(),
             font_family: None,
         };
         let mut slot = CanvasSlot::new();

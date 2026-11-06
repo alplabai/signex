@@ -217,6 +217,7 @@ fn project_close_discard_all_removes_the_sidecar() {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

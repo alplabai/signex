@@ -412,6 +412,7 @@ impl SchematicCanvas<'_> {
                     &transform,
                     &self.prefs.canvas_colors,
                     &self.designators,
+                    self.prefs.wire_widths(),
                 );
                 self.draw_focused_pin(frame, snapshot, bounds);
                 crate::schematic_runtime::lock_indicator::draw_lock_indicators(
@@ -420,6 +421,7 @@ impl SchematicCanvas<'_> {
                     &transform,
                     &self.prefs.canvas_colors,
                     &self.designators,
+                    self.prefs.wire_widths(),
                 );
                 let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
                     .erc_markers

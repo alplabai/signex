@@ -12,8 +12,6 @@ pub(super) fn build_page_content(
     fonts: &mut FontUsage,
 ) -> Result<Vec<u8>, PdfError> {
     let mut surface = PdfSurface::new(fonts);
-    let colour_map = ColourMap::new(opts.colour_mode, opts.palette.paper);
-
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 
     // Explicit two-step pipeline:
@@ -35,6 +33,8 @@ pub(super) fn build_page_content(
         MM_TO_PT,
         Some(&eval_inputs),
     );
+    // The sheet's own paper colour, if it has one (#2034).
+    let colour_map = ColourMap::new(opts.colour_mode, svg_ctx.paper);
     // Template frame and title block (if enabled), drawn over the content.
     svg_ctx.elements.extend(super::frame::sheet_frame_elements(
         sheet, opts, ctx, page_w_mm, page_h_mm, MM_TO_PT,

@@ -59,6 +59,7 @@ pub fn draw_lock_indicators(
     transform: &ScreenTransform,
     colors: &CanvasColors,
     designators: &Designators,
+    widths: WireWidths<'_>,
 ) {
     let locked = locked_items(snapshot);
     if locked.is_empty() {
@@ -68,7 +69,7 @@ pub fn draw_lock_indicators(
     let px = |n: f32| screen_px_to_world_mm(n, transform.scale) as f32;
     let mut overlays = OverlayInputs::default();
 
-    for bbox in selected_aabbs(snapshot, &locked, designators)
+    for bbox in selected_aabbs(snapshot, &locked, designators, widths)
         .into_iter()
         .flatten()
     {

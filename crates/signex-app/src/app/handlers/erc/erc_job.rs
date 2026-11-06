@@ -54,7 +54,13 @@ pub struct ErcRunOutcome {
     /// (rule id, objects) of waivers whose finding came back because an
     /// involved object changed.
     pub lapsed_waivers: std::collections::BTreeSet<(String, Vec<String>)>,
+    /// Each checked sheet's page frame, closed sheets included, so a
+    /// finding's Y shows from that sheet's page origin (#2034).
+    pub page_frames: PageFrames,
 }
+
+/// Per sheet: the page origin and the paper height shown Y counts from.
+pub type PageFrames = HashMap<PathBuf, (signex_types::schematic::PageOrigin, f64)>;
 
 /// A finding a per-finding waiver hid, with the waiver that hid it.
 #[derive(Debug, Clone)]
@@ -188,6 +194,13 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         }
     }
 
+    let page_frames = snapshots
+        .iter()
+        .map(|(path, sheet)| {
+            let height = signex_types::schematic::paper_height_mm(&sheet.paper_size);
+            (path.clone(), (sheet.page.origin, height))
+        })
+        .collect();
     let total: usize = by_path.values().map(Vec::len).sum();
     infos.push(format!(
         "ERC: {total} total violations across {} sheet(s)",
@@ -201,6 +214,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         waived_hidden,
         waived_findings,
         lapsed_waivers,
+        page_frames,
     }
 }
 

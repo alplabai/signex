@@ -276,9 +276,9 @@ impl SchematicCanvas<'_> {
     /// this window's device-pixel grid.
     pub(crate) fn placed_wire_stroke_px(&self, scale: f32) -> f32 {
         let placed_mm = if self.prefs.current_tool == crate::app::Tool::Bus {
-            signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM
+            self.prefs.schematic_defaults.bus_mm()
         } else {
-            signex_types::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+            self.prefs.schematic_defaults.wire_mm(0.0, None)
         };
         signex_types::schematic::stroke_px(
             placed_mm as f32,

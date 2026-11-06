@@ -79,7 +79,7 @@ fn corners(bbox: Option<Aabb>) -> Option<[f64; 4]> {
 /// The per-item lookup the overlay used before the batch entry point: build
 /// every bound, then find the one item.
 fn reference_aabb(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Aabb> {
-    collect_item_bounds(sheet, &Default::default())
+    collect_item_bounds(sheet, &Default::default(), Default::default())
         .into_iter()
         .find(|entry| entry.item == *item)
         .map(|entry| entry.bbox)
@@ -88,7 +88,7 @@ fn reference_aabb(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Aabb> {
 #[test]
 fn batch_boxes_equal_the_per_item_lookup_for_a_mixed_selection() {
     let (sheet, selected) = mixed_sheet();
-    let batch = selected_aabbs(&sheet, &selected, &Default::default());
+    let batch = selected_aabbs(&sheet, &selected, &Default::default(), Default::default());
     assert_eq!(batch.len(), selected.len());
     for (item, got) in selected.iter().zip(&batch) {
         let want = reference_aabb(&sheet, item);
@@ -108,7 +108,7 @@ fn batch_boxes_stay_aligned_when_an_item_is_gone() {
         uuid::Uuid::now_v7(),
         SelectedKind::Symbol,
     ));
-    let batch = selected_aabbs(&sheet, &selected, &Default::default());
+    let batch = selected_aabbs(&sheet, &selected, &Default::default(), Default::default());
     assert_eq!(batch.len(), selected.len());
     assert!(batch[1].is_none());
     assert!(batch.last().expect("last").is_none());

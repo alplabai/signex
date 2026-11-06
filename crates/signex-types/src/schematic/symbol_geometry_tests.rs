@@ -55,7 +55,12 @@ fn placed(x: f64, y: f64, rotation: f64) -> Symbol {
 }
 
 fn bounds(lib: &LibSymbol, sym: &Symbol) -> Aabb {
-    primitives_bounds(&lower_symbol(lib, sym)).expect("drawable")
+    primitives_bounds(&lower_symbol(
+        lib,
+        sym,
+        &crate::schematic::SchematicDefaults::BUILT_IN,
+    ))
+    .expect("drawable")
 }
 
 fn assert_box(b: Aabb, min_x: f64, min_y: f64, max_x: f64, max_y: f64) {
@@ -140,7 +145,14 @@ fn arc_box_reaches_the_bulge() {
 #[test]
 fn empty_symbol_has_no_bounds() {
     let l = lib(vec![], vec![]);
-    assert!(primitives_bounds(&lower_symbol(&l, &placed(0.0, 0.0, 0.0))).is_none());
+    assert!(
+        primitives_bounds(&lower_symbol(
+            &l,
+            &placed(0.0, 0.0, 0.0),
+            &crate::schematic::SchematicDefaults::BUILT_IN
+        ))
+        .is_none()
+    );
 }
 
 fn mirrored(mirror_x: bool, mirror_y: bool) -> Symbol {
@@ -196,7 +208,7 @@ fn lib_text(rotation: f64) -> Graphic {
 }
 
 fn first_text(l: &LibSymbol, sym: &Symbol) -> (f64, HAlign, VAlign) {
-    lower_symbol(l, sym)
+    lower_symbol(l, sym, &crate::schematic::SchematicDefaults::BUILT_IN)
         .into_iter()
         .find_map(|p| match p {
             SymbolPrimitive::Text {
@@ -263,13 +275,17 @@ fn text_box_text_sits_in_the_frames_top_left_corner() {
         }],
         vec![],
     );
-    let at = lower_symbol(&l, &placed(0.0, 0.0, 0.0))
-        .into_iter()
-        .find_map(|p| match p {
-            SymbolPrimitive::Text { position, .. } => Some(position),
-            _ => None,
-        })
-        .expect("a text primitive");
+    let at = lower_symbol(
+        &l,
+        &placed(0.0, 0.0, 0.0),
+        &crate::schematic::SchematicDefaults::BUILT_IN,
+    )
+    .into_iter()
+    .find_map(|p| match p {
+        SymbolPrimitive::Text { position, .. } => Some(position),
+        _ => None,
+    })
+    .expect("a text primitive");
     assert!(
         (at.x - 0.0).abs() < 1e-9 && (at.y + 4.0).abs() < 1e-9,
         "{at:?}"
@@ -285,7 +301,11 @@ fn filled_arc_keeps_its_fill() {
         width: 0.0,
         fill: FillType::Background,
     };
-    let prims = lower_symbol(&lib(vec![arc], vec![]), &placed(0.0, 0.0, 0.0));
+    let prims = lower_symbol(
+        &lib(vec![arc], vec![]),
+        &placed(0.0, 0.0, 0.0),
+        &crate::schematic::SchematicDefaults::BUILT_IN,
+    );
     assert!(matches!(
         prims[0],
         SymbolPrimitive::Arc {
@@ -369,8 +389,16 @@ fn an_alternate_request_falls_back_to_normal_when_the_unit_has_no_alternate() {
         BodyStyle::Normal
     );
     assert_eq!(
-        lower_symbol(&lib, &alternate()),
-        lower_symbol(&lib, &Symbol::default())
+        lower_symbol(
+            &lib,
+            &alternate(),
+            &crate::schematic::SchematicDefaults::BUILT_IN
+        ),
+        lower_symbol(
+            &lib,
+            &Symbol::default(),
+            &crate::schematic::SchematicDefaults::BUILT_IN
+        )
     );
 }
 
@@ -390,7 +418,7 @@ fn lower_placed_symbol_gives_a_power_port_without_a_library_its_body() {
         position: Point::new(10.0, 10.0),
         ..Symbol::default()
     };
-    let prims = lower_placed_symbol(None, &sym);
+    let prims = lower_placed_symbol(None, &sym, &crate::schematic::SchematicDefaults::BUILT_IN);
     let bounds = primitives_bounds(&prims).expect("body");
     // Ground hangs below the connection point; the stem starts at it.
     assert!(bounds.max_y > 10.0, "{bounds:?}");
@@ -399,7 +427,10 @@ fn lower_placed_symbol_gives_a_power_port_without_a_library_its_body() {
         is_power: false,
         ..sym
     };
-    assert!(lower_placed_symbol(None, &plain).is_empty());
+    assert!(
+        lower_placed_symbol(None, &plain, &crate::schematic::SchematicDefaults::BUILT_IN)
+            .is_empty()
+    );
 }
 
 /// #1858: a pin strokes at its symbol's library width, like the body.
@@ -410,13 +441,17 @@ fn pins_carry_the_symbols_library_stroke_width() {
         *width = 0.254;
     }
     let l = lib(vec![body], vec![pin(-5.0, 0.0, 180.0, 2.54)]);
-    let pin_width = lower_symbol(&l, &placed(0.0, 0.0, 0.0))
-        .into_iter()
-        .find_map(|p| match p {
-            SymbolPrimitive::Pin { width, .. } => Some(width),
-            _ => None,
-        })
-        .expect("a pin");
+    let pin_width = lower_symbol(
+        &l,
+        &placed(0.0, 0.0, 0.0),
+        &crate::schematic::SchematicDefaults::BUILT_IN,
+    )
+    .into_iter()
+    .find_map(|p| match p {
+        SymbolPrimitive::Pin { width, .. } => Some(width),
+        _ => None,
+    })
+    .expect("a pin");
     assert_eq!(pin_width, 0.254);
 }
 
@@ -427,6 +462,7 @@ fn a_width_zero_symbol_strokes_its_pins_at_the_default_wire_width() {
     let primitives = lower_symbol(
         &lib(vec![rect(4.0, 2.0)], vec![pin(-4.0, 0.0, 0.0, 2.0)]),
         &placed(0.0, 0.0, 0.0),
+        &crate::schematic::SchematicDefaults::BUILT_IN,
     );
     let pin_width = primitives.iter().find_map(|p| match p {
         SymbolPrimitive::Pin { width, .. } => Some(*width),

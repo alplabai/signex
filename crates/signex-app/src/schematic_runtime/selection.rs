@@ -6,8 +6,9 @@ pub fn selection_bounds(
     snapshot: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     designators: &Designators,
+    widths: WireWidths<'_>,
 ) -> Option<Aabb> {
-    selected_aabbs(snapshot, selected, designators)
+    selected_aabbs(snapshot, selected, designators, widths)
         .into_iter()
         .flatten()
         .reduce(|a, b| a.union(&b))
@@ -20,11 +21,12 @@ pub(super) fn selection_overlay_inputs(
     transform: &ScreenTransform,
     colors: &CanvasColors,
     designators: &Designators,
+    widths: WireWidths<'_>,
 ) -> OverlayInputs {
     let stroke = to_iced(&colors.selection);
     let mut overlays = OverlayInputs::default();
 
-    for bbox in selected_aabbs(snapshot, selected, designators)
+    for bbox in selected_aabbs(snapshot, selected, designators, widths)
         .into_iter()
         .flatten()
     {
@@ -80,8 +82,10 @@ pub fn draw_selection_overlay(
     transform: &ScreenTransform,
     colors: &CanvasColors,
     designators: &Designators,
+    widths: WireWidths<'_>,
 ) {
-    let overlays = selection_overlay_inputs(snapshot, selected, transform, colors, designators);
+    let overlays =
+        selection_overlay_inputs(snapshot, selected, transform, colors, designators, widths);
     if overlays.preview_lines.is_empty()
         && overlays.ghost_polygons.is_empty()
         && overlays.lasso_lines.is_empty()
@@ -140,7 +144,14 @@ mod tests {
             scale,
             device_px_per_logical_px: 1.0,
         };
-        selection_overlay_inputs(&sheet, &selected, &transform, colors, &Designators::new())
+        selection_overlay_inputs(
+            &sheet,
+            &selected,
+            &transform,
+            colors,
+            &Designators::new(),
+            WireWidths::default(),
+        )
     }
 
     #[test]

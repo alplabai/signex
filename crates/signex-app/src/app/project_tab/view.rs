@@ -5,7 +5,7 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
-use super::{ProjectSection, ProjectTabMsg, general, parameters};
+use super::{ProjectSection, ProjectTabMsg, general, parameters, schematic_defaults};
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::styles::{Spacing, TypeScale};
@@ -80,14 +80,14 @@ impl Signex {
             .get(&project_id)
             .map(|tab| tab.section)
             .unwrap_or_default();
-        let new_parameter_name = self
-            .document_state
-            .project_tabs
-            .get(&project_id)
-            .map_or("", |tab| tab.new_parameter_name.as_str());
+        let tab = self.document_state.project_tabs.get(&project_id);
+        let new_parameter_name = tab.map_or("", |tab| tab.new_parameter_name.as_str());
         let content = match selected {
             ProjectSection::General => general::view(project, tokens),
             ProjectSection::Parameters => parameters::view(project, new_parameter_name, tokens),
+            ProjectSection::SchematicDefaults => {
+                schematic_defaults::view(project, tab.map(|tab| &tab.default_drafts), tokens)
+            }
         };
         row![
             section_list(project_id, selected, tokens),

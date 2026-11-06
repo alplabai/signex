@@ -116,7 +116,7 @@ fn set_style_validates_the_width() {
     let style = NetClassStyle {
         color: Some(Color::new(255, 0, 0, 255)),
         wire_width_mm: Some(0.4),
-        line: NetLineStyle::Dashed,
+        line: Some(NetLineStyle::Dashed),
     };
     history
         .apply(
@@ -217,7 +217,7 @@ fn commands_round_trip_through_json() {
         style: NetClassStyle {
             color: Some(Color::new(0x12, 0x34, 0x56, 255)),
             wire_width_mm: Some(0.5),
-            line: NetLineStyle::Dotted,
+            line: Some(NetLineStyle::Dotted),
         },
     };
     let json = serde_json::to_string(&command).unwrap();

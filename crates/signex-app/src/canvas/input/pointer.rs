@@ -119,7 +119,7 @@ impl SchematicCanvas<'_> {
                             &self.designators,
                             wx,
                             wy,
-                            self.prefs.wire_class_styles,
+                            self.prefs.wire_widths(),
                         ) {
                             let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
                             (sel, !sel)
@@ -472,7 +472,7 @@ mod tests {
     use super::*;
 
     use crate::canvas::tests::test_prefs_styled;
-    use signex_types::net_class::{NetClassStyle, NetLineStyle};
+    use signex_types::net_class::NetClassStyle;
     use signex_types::schematic::{Point as SheetPoint, SchematicSheet, Wire};
 
     const WIRE: uuid::Uuid = uuid::Uuid::from_u128(11);
@@ -483,7 +483,8 @@ mod tests {
                 uuid: WIRE,
                 start: SheetPoint::new(10.0, 10.0),
                 end: SheetPoint::new(30.0, 10.0),
-                stroke_width: 0.15,
+                // Unset, so a class width applies: an explicit one beats it (#2026).
+                stroke_width: 0.0,
                 ..Default::default()
             }],
             ..Default::default()
@@ -517,7 +518,7 @@ mod tests {
         let no_styles = crate::schematic_runtime::WireClassStyles::new();
         assert!(
             !press_lands_on_an_item(&no_styles),
-            "1.5 mm off a 0.15 mm wire is empty space"
+            "1.5 mm off a default-width wire is empty space"
         );
 
         let mut wide = crate::schematic_runtime::WireClassStyles::new();
@@ -526,7 +527,7 @@ mod tests {
             NetClassStyle {
                 color: None,
                 wire_width_mm: Some(2.0),
-                line: NetLineStyle::Solid,
+                line: None,
             },
         );
         assert!(

@@ -5,8 +5,8 @@
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
 use signex_types::schematic::{
-    LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SymbolPrimitive, arc_polyline, lower_pin_labels,
-    lower_placed_symbol, primitives_bounds, primitives_bounds_in,
+    LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SchematicDefaults, SymbolPrimitive, arc_polyline,
+    lower_pin_labels, lower_placed_symbol, primitives_bounds, primitives_bounds_in,
 };
 
 /// Half extents of the box a symbol gets when its library graphics are
@@ -25,12 +25,14 @@ const FALLBACK_HALF_H_MM: f64 = 2.8;
 pub(super) fn symbol_geometry(
     snapshot: &SchematicRenderSnapshot,
     symbol: &Symbol,
+    defaults: &SchematicDefaults,
 ) -> (Vec<SymbolPrimitive>, Aabb) {
     let family = resolve_family(None, snapshot.font_family.as_deref());
     symbol_geometry_of(
         snapshot.lib_symbols.get(&symbol.lib_id),
         symbol,
         family.as_deref(),
+        defaults,
     )
 }
 
@@ -40,8 +42,9 @@ pub(super) fn symbol_geometry_of(
     lib: Option<&LibSymbol>,
     symbol: &Symbol,
     family: Option<&str>,
+    defaults: &SchematicDefaults,
 ) -> (Vec<SymbolPrimitive>, Aabb) {
-    let primitives = lower_placed_symbol(lib, symbol);
+    let primitives = lower_placed_symbol(lib, symbol, defaults);
     match primitives_bounds_in(&primitives, family) {
         Some(bbox) => (primitives, bbox),
         None => (Vec::new(), fallback_box(symbol)),
@@ -50,7 +53,7 @@ pub(super) fn symbol_geometry_of(
 
 /// Hit-test / selection box of `symbol`.
 pub(crate) fn symbol_bounds(snapshot: &SchematicRenderSnapshot, symbol: &Symbol) -> Aabb {
-    symbol_geometry(snapshot, symbol).1
+    symbol_geometry(snapshot, symbol, &SchematicDefaults::BUILT_IN).1
 }
 
 fn fallback_box(symbol: &Symbol) -> Aabb {
@@ -70,7 +73,11 @@ pub(crate) fn symbols_without_geometry(snapshot: &SchematicRenderSnapshot) -> Ve
         .symbols
         .iter()
         .filter(|symbol| {
-            let lowered = lower_placed_symbol(snapshot.lib_symbols.get(&symbol.lib_id), symbol);
+            let lowered = lower_placed_symbol(
+                snapshot.lib_symbols.get(&symbol.lib_id),
+                symbol,
+                &SchematicDefaults::BUILT_IN,
+            );
             primitives_bounds(&lowered).is_none()
         })
         .map(|symbol| symbol.lib_id.clone())
@@ -91,6 +98,8 @@ pub(super) struct SymbolStyle {
     pub scale: f32,
     /// Face the symbol's library text draws in (the sheet default).
     pub family: Option<std::sync::Arc<str>>,
+    /// Widths unset strokes draw at (#2026).
+    pub defaults: SchematicDefaults,
 }
 
 /// The renderer input lists a symbol draws into.
@@ -101,12 +110,12 @@ pub(super) struct SymbolSink<'a> {
     pub texts: &'a mut Vec<TextInput>,
 }
 
-/// The world width a symbol stroke stored as `width` draws at (#1858).
-fn stroke_mm(width: f64) -> f32 {
-    signex_types::schematic::symbol_graphic_stroke_mm(width) as f32
-}
-
 impl SymbolStyle {
+    /// The world width a symbol stroke stored as `width` draws at (#1858).
+    fn stroke_mm(&self, width: f64) -> f32 {
+        self.defaults.symbol_line_mm(width) as f32
+    }
+
     fn fill_rgba(&self, fill: FillType) -> [f32; 4] {
         match fill {
             FillType::None => [0.0, 0.0, 0.0, 0.0],
@@ -139,7 +148,7 @@ pub(super) fn push_fallback_box(
         vertices: vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
         fill_color: to_rgba(style.fill),
         stroke_color: Some(color),
-        stroke_width_mm: stroke_mm(0.0),
+        stroke_width_mm: style.stroke_mm(0.0),
     });
     for (i, (p0, p1)) in [([x0, y0], [x1, y1]), ([x0, y1], [x1, y0])]
         .into_iter()
@@ -149,7 +158,7 @@ pub(super) fn push_fallback_box(
             id: style.id.wrapping_add(i as u64),
             p0,
             p1,
-            width_mm: stroke_mm(0.0),
+            width_mm: style.stroke_mm(0.0),
             explicit_color: Some(color),
         });
     }
@@ -235,11 +244,11 @@ pub(super) fn push_primitives(
                         vertices: points.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
                         fill_color: style.fill_rgba(*fill),
                         stroke_color: Some(stroke),
-                        stroke_width_mm: stroke_mm(*width),
+                        stroke_width_mm: style.stroke_mm(*width),
                     });
                 } else {
                     for pair in points.windows(2) {
-                        segment(sink, pair[0], pair[1], stroke_mm(*width), stroke);
+                        segment(sink, pair[0], pair[1], style.stroke_mm(*width), stroke);
                     }
                 }
             }
@@ -252,7 +261,7 @@ pub(super) fn push_primitives(
                 vertices: circle_vertices([center.x, center.y], *radius as f32, 40),
                 fill_color: style.fill_rgba(*fill),
                 stroke_color: Some(stroke),
-                stroke_width_mm: stroke_mm(*width),
+                stroke_width_mm: style.stroke_mm(*width),
             }),
             SymbolPrimitive::Arc {
                 start,
@@ -276,7 +285,7 @@ pub(super) fn push_primitives(
                     [*start, *mid, *end],
                     ArcStroke {
                         id: style.id,
-                        width_mm: stroke_mm(*width),
+                        width_mm: style.stroke_mm(*width),
                         color: stroke,
                     },
                     style.scale,
@@ -304,7 +313,13 @@ pub(super) fn push_primitives(
                 v_align: *v_align,
             }),
             SymbolPrimitive::Pin { tip, body, width } => {
-                segment(sink, *tip, *body, stroke_mm(*width), to_rgba(style.pin));
+                segment(
+                    sink,
+                    *tip,
+                    *body,
+                    style.stroke_mm(*width),
+                    to_rgba(style.pin),
+                );
             }
         }
     }

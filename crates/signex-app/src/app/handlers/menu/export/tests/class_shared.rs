@@ -13,7 +13,7 @@ use crate::app::stitched_netlist::STITCH_RUNS;
 fn power_class(net: &str) -> NetClass {
     let mut class = NetClass::named("Power");
     class.nets.push(net.to_string());
-    class.style.line = NetLineStyle::Dashed;
+    class.style.line = Some(NetLineStyle::Dashed);
     class
 }
 
@@ -98,7 +98,7 @@ fn a_label_on_a_sheet_placed_twice_names_the_net_the_canvas_styles() {
             .net_class_styles
             .styles()
             .get(&wire)
-            .map(|s| s.line),
+            .and_then(|s| s.line),
         Some(NetLineStyle::Dashed),
         "the second placement's net styles the shared wire"
     );

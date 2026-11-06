@@ -192,7 +192,7 @@ impl Signex {
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
-                    self.active_class_styles(),
+                    self.active_wire_widths(),
                 );
                 if let Some(reference) = hit {
                     let direction = match picker {

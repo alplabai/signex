@@ -52,7 +52,7 @@ pub enum SymbolPrimitive {
         v_align: VAlign,
     },
     /// Pin stub from its connection point (`tip`) to the body end, stroked at
-    /// the symbol's library width ([`super::symbol_stroke_mm`]).
+    /// the symbol's library width ([`super::SchematicDefaults::symbol_stroke_mm`]).
     Pin { tip: Point, body: Point, width: f64 },
 }
 
@@ -93,8 +93,13 @@ pub fn pin_direction(rotation_deg: f64) -> (f64, f64) {
     }
 }
 
-/// Lower `sym`'s library graphics and visible pins to world space.
-pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
+/// Lower `sym`'s library graphics and visible pins to world space. Pins take
+/// the symbol's library stroke width resolved against `defaults`.
+pub fn lower_symbol(
+    lib: &LibSymbol,
+    sym: &Symbol,
+    defaults: &super::SchematicDefaults,
+) -> Vec<SymbolPrimitive> {
     let t = SymbolTransform::from_symbol(sym);
     let mut out = Vec::with_capacity(lib.graphics.len() + lib.pins.len());
     let body = lib.effective_body(sym.unit, sym.body_style);
@@ -103,7 +108,7 @@ pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
             lower_graphic(&lg.graphic, &t, &mut out);
         }
     }
-    let pin_width = super::symbol_stroke_mm(out.iter().filter_map(SymbolPrimitive::stroke_width));
+    let pin_width = defaults.symbol_stroke_mm(out.iter().filter_map(SymbolPrimitive::stroke_width));
     for lp in instance_pins(lib, sym).filter(|lp| lp.pin.visible) {
         let pin = &lp.pin;
         let (dx, dy) = pin_direction(pin.rotation);
@@ -127,9 +132,13 @@ pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
 /// `power_port_lib_symbol`); any other symbol without an entry lowers to
 /// nothing. A library entry that draws nothing also falls back for a power
 /// port.
-pub fn lower_placed_symbol(lib: Option<&LibSymbol>, sym: &Symbol) -> Vec<SymbolPrimitive> {
+pub fn lower_placed_symbol(
+    lib: Option<&LibSymbol>,
+    sym: &Symbol,
+    defaults: &super::SchematicDefaults,
+) -> Vec<SymbolPrimitive> {
     if let Some(lib) = lib {
-        let lowered = lower_symbol(lib, sym);
+        let lowered = lower_symbol(lib, sym, defaults);
         if !lowered.is_empty() || !sym.is_power {
             return lowered;
         }
@@ -137,7 +146,7 @@ pub fn lower_placed_symbol(lib: Option<&LibSymbol>, sym: &Symbol) -> Vec<SymbolP
     if !sym.is_power {
         return Vec::new();
     }
-    lower_symbol(&super::power_port_lib_symbol(&sym.lib_id), sym)
+    lower_symbol(&super::power_port_lib_symbol(&sym.lib_id), sym, defaults)
 }
 
 fn lower_graphic(graphic: &Graphic, t: &SymbolTransform, out: &mut Vec<SymbolPrimitive>) {

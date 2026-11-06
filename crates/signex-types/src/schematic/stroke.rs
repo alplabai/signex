@@ -39,37 +39,6 @@ const _: () = assert!(SCHEMATIC_MIN_STROKE_DEVICE_PX >= 1.0);
 /// headless draws): the floor and snap then work in logical pixels.
 pub const UNSCALED_DEVICE_PX_PER_LOGICAL_PX: f32 = 1.0;
 
-/// The one stored-stroke rule (#2091, #2025): a `0` or non-finite `width_mm`
-/// draws at [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`] (0.254 mm), an explicit
-/// width is raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`] (0.15 mm).
-/// Drawings, symbol graphics, pins, child sheet frames and wires all resolve
-/// through this (wires via [`wire_stroke_mm`]). Fixed-width kinds (bus,
-/// no-connect, label marker) are not stored strokes.
-#[must_use]
-pub fn symbol_graphic_stroke_mm(width_mm: f64) -> f64 {
-    if width_mm.is_finite() && width_mm > 0.0 {
-        width_mm.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
-    } else {
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    }
-}
-
-/// The world width a wire is drawn and exported at: the net class width, else
-/// the wire's own, raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`]. A class width
-/// of `0` (or not a finite number) is unset and falls back to the wire's own;
-/// an own width of `0` is the default, [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`].
-/// The canvas, the selection box and every export take the width from here.
-#[must_use]
-pub fn wire_stroke_mm(own_mm: f64, class_mm: Option<f64>) -> f64 {
-    let class_mm = class_mm.filter(|w| w.is_finite() && *w > 0.0);
-    let width = class_mm.unwrap_or(own_mm);
-    if width.is_finite() && width > 0.0 {
-        width.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
-    } else {
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    }
-}
-
 /// The shared floor in logical pixels on a surface with
 /// `device_px_per_logical_px` device pixels per logical pixel.
 #[must_use]
@@ -87,24 +56,6 @@ pub const fn min_stroke_logical_px(device_px_per_logical_px: f32) -> f32 {
 #[must_use]
 pub fn stroke_px(width_mm: f32, scale_px_per_mm: f32, device_px_per_logical_px: f32) -> f32 {
     (width_mm * scale_px_per_mm).max(min_stroke_logical_px(device_px_per_logical_px))
-}
-
-/// The symbol's library stroke width, which its pins draw at: the most
-/// common effective width among its stroked graphics (the wider one on a
-/// tie), or the default when it has none.
-#[must_use]
-pub fn symbol_stroke_mm(graphic_widths_mm: impl IntoIterator<Item = f64>) -> f64 {
-    let mut counts: Vec<(f64, usize)> = Vec::new();
-    for width in graphic_widths_mm.into_iter().map(symbol_graphic_stroke_mm) {
-        match counts.iter_mut().find(|(w, _)| *w == width) {
-            Some((_, n)) => *n += 1,
-            None => counts.push((width, 1)),
-        }
-    }
-    counts
-        .into_iter()
-        .max_by(|a, b| a.1.cmp(&b.1).then(a.0.total_cmp(&b.0)))
-        .map_or(SCHEMATIC_DEFAULT_WIRE_STROKE_MM, |(width, _)| width)
 }
 
 #[cfg(test)]
