@@ -9,7 +9,12 @@ build, 2026-11-06, trunk `685badd3b`.
 
 Hakan, 2026-11-06: the schematic moves to the GPU path (#199), and the canvas
 stays the default until it does. The blocker for both paths is rotated text
-(finding 1 below): fixing it is tracked in signex #2128 and alplabai/iced#38.
+(finding 1 below), tracked in signex #2128 and alplabai/iced#38. Direction, per
+the #2022 Lyon decision: rotated glyphs come from Lyon outlines tessellated
+once and cached per (font, glyph, tolerance bucket) in glyph-local coordinates,
+with only the transform applied per frame (iced#38 step 2 plus the outline cache
+of iced#21). signex-gfx draws those cached meshes instanced; axis-aligned text
+stays on the atlas. Rotating bitmap glyphs in the atlas is not the direction.
 Nothing is deleted. The row is in `docs/DECISIONS.md`.
 
 ## Rerun
@@ -137,7 +142,7 @@ retained). At dpr 2 the windowed surfaces dominate (1.0 to 2.4 GB for both).
 - **Partial updates while dragging:** the moving set is rebuilt per frame and
   uploaded alone (static layer once, `drag_static_builds=1`). Equal to the
   canvas today, not better.
-- **Rotated text:** nothing yet. The fallback has the same per-text cost as the
+- **Rotated text:** nothing yet; the cached-outline direction above is what changes it. The fallback has the same per-text cost as the
   canvas, and loses the canvas's pan reuse (76 vs 59 ms on `full`).
 
 ## Not measurable here
