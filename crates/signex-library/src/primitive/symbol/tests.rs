@@ -343,11 +343,7 @@ fn stock_snxsym_re_encodes_byte_identical() {
         include_str!("../../../../../assets/stock-library/symbols/GND.snxsym"),
         include_str!("../../../../../assets/stock-library/symbols/74HC00.snxsym"),
     ] {
-        let text = text.replace(
-            "
-", "
-",
-        );
+        let text = text.replace("\r\n", "\n");
         let file = SymbolFile::from_toml_str(&text).unwrap();
         assert_eq!(file.to_toml_string().unwrap(), text);
     }
