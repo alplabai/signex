@@ -369,3 +369,45 @@ fn wire_and_bus_placements_match_their_clicks() {
         assert!(app.place_bus_entry_at(at, size));
     });
 }
+
+#[test]
+fn shape_placements_match_their_clicks() {
+    let form_shape = |app: &mut Signex| {
+        let mut pre = form(PrePlacementKind::Rectangle, "");
+        pre.shape_width_mm = 0.4;
+        pre.shape_fill = FillType::Outline;
+        app.document_state.panel_ctx.pre_placement = Some(pre);
+    };
+    let second = (30.4, 30.4);
+    assert_method_matches_clicks(Tool::Line, &[OFF_GRID, second], form_shape, |app, at| {
+        assert!(app.place_line_at(at, grid(24.0, 24.0), 0.4));
+    });
+    assert_method_matches_clicks(
+        Tool::Rectangle,
+        &[OFF_GRID, second],
+        form_shape,
+        |app, at| {
+            assert!(app.place_rect_at(at, grid(24.0, 24.0), 0.4, FillType::Outline));
+        },
+    );
+    assert_method_matches_clicks(
+        Tool::Circle,
+        &[OFF_GRID, (15.2, 20.2)],
+        form_shape,
+        |app, at| {
+            let edge = grid(12.0, 16.0);
+            let radius =
+                ((edge.x - at.x) * (edge.x - at.x) + (edge.y - at.y) * (edge.y - at.y)).sqrt();
+            assert!(app.place_circle_at(at, radius, 0.4, FillType::Outline));
+            assert!(
+                !app.place_circle_at(at, 0.0, 0.4, FillType::Outline),
+                "too small to see"
+            );
+        },
+    );
+    let arc = [OFF_GRID, (15.2, 25.3), (20.3, 20.2)];
+    assert_method_matches_clicks(Tool::Arc, &arc, form_shape, |app, at| {
+        let points = [at, grid(12.0, 20.0), grid(16.0, 16.0)];
+        assert!(app.place_arc_at(points, 0.4, FillType::Outline));
+    });
+}

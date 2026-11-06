@@ -307,19 +307,7 @@ impl Signex {
                             .clear_overlay_cache();
                     }
                     Some(start) => {
-                        let drawing = signex_types::schematic::SchDrawing::Line {
-                            uuid: uuid::Uuid::now_v7(),
-                            start,
-                            end: p,
-                            width: pp_w,
-                            stroke_color: None,
-                            locked: false,
-                        };
-                        self.apply_engine_command(
-                            signex_engine::Command::PlaceSchDrawing { drawing },
-                            false,
-                            false,
-                        );
+                        self.place_line_at(start, p, pp_w);
                         // Re-arm with the just-placed endpoint
                         // as the new anchor so chained segments
                         // share vertices.
@@ -352,20 +340,7 @@ impl Signex {
                             .clear_overlay_cache();
                     }
                     Some(start) => {
-                        let drawing = signex_types::schematic::SchDrawing::Rect {
-                            uuid: uuid::Uuid::now_v7(),
-                            start,
-                            end: p,
-                            width: pp_w,
-                            fill: pp_fill,
-                            stroke_color: None,
-                            locked: false,
-                        };
-                        self.apply_engine_command(
-                            signex_engine::Command::PlaceSchDrawing { drawing },
-                            false,
-                            false,
-                        );
+                        self.place_rect_at(start, p, pp_w, pp_fill);
                         self.interaction_state.shape_anchor = None;
                         self.interaction_state.active_canvas_mut().shape_anchor = None;
                         self.interaction_state
@@ -392,22 +367,7 @@ impl Signex {
                         let dx = p.x - center.x;
                         let dy = p.y - center.y;
                         let radius = (dx * dx + dy * dy).sqrt();
-                        if radius > 0.01 {
-                            let drawing = signex_types::schematic::SchDrawing::Circle {
-                                uuid: uuid::Uuid::now_v7(),
-                                center,
-                                radius,
-                                width: pp_w,
-                                fill: pp_fill,
-                                stroke_color: None,
-                                locked: false,
-                            };
-                            self.apply_engine_command(
-                                signex_engine::Command::PlaceSchDrawing { drawing },
-                                false,
-                                false,
-                            );
-                        }
+                        self.place_circle_at(center, radius, pp_w, pp_fill);
                         self.interaction_state.shape_anchor = None;
                         self.interaction_state.active_canvas_mut().shape_anchor = None;
                         self.interaction_state
@@ -423,21 +383,7 @@ impl Signex {
                 self.interaction_state.arc_points.push(p);
                 if self.interaction_state.arc_points.len() >= 3 {
                     let pts = std::mem::take(&mut self.interaction_state.arc_points);
-                    let drawing = signex_types::schematic::SchDrawing::Arc {
-                        uuid: uuid::Uuid::now_v7(),
-                        start: pts[0],
-                        mid: pts[1],
-                        end: pts[2],
-                        width: pp_w,
-                        fill: pp_fill,
-                        stroke_color: None,
-                        locked: false,
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSchDrawing { drawing },
-                        false,
-                        false,
-                    );
+                    self.place_arc_at([pts[0], pts[1], pts[2]], pp_w, pp_fill);
                 }
                 self.interaction_state.active_canvas_mut().arc_points =
                     self.interaction_state.arc_points.clone();
