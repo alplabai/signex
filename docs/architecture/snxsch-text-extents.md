@@ -29,10 +29,10 @@ with the field `label`, `note`, `ref` or `value`:
 
 ```toml
 [extras.sheet.text_extents."0190...:label"]
-width_nm = 12345678
-size_nm = 1270000
 family = "Fira Mono"
+size_nm = 1270000
 text = "185edd1b28072179"
+width_nm = 12345678
 ```
 
 Integers only (nanometres). `family` is the family the text asked for (its own,

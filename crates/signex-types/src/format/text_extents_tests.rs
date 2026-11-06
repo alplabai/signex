@@ -166,3 +166,14 @@ fn a_non_table_entry_is_dropped_and_the_file_still_opens() {
     assert_eq!(loaded.text_extents.len(), 1);
     assert_eq!(loaded.labels.len(), 2);
 }
+
+#[test]
+fn a_text_extents_value_that_is_not_a_table_still_opens() {
+    let text = format!(
+        "{}\n[extras.sheet]\ntext_extents = 7\n",
+        write(&plain_sheet())
+    );
+    let loaded = load(&text);
+    assert!(loaded.text_extents.is_empty());
+    assert_eq!(loaded.labels.len(), plain_sheet().labels.len());
+}

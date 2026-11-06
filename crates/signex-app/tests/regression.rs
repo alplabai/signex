@@ -333,7 +333,6 @@ mod primitive_save_cascade;
 mod reload_and_switch_state;
 #[path = "regression/save_all_menu.rs"]
 mod save_all_menu;
-
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]

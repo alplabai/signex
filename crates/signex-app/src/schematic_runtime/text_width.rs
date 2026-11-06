@@ -79,10 +79,10 @@ pub(super) fn text_width_mm(
         size_mm,
     };
     let decide = || decide_width_mm(&probe, resolved, sources.extents, live);
-    // A stored record is checked on every read, not through the cache: the
-    // cache is keyed by the resolved face, which is the default for any
-    // missing one.
-    if sources.extents.contains(id, field) && !face_is_available(requested, resolved) {
+    // A matching stored record is checked on every read, not through the
+    // cache: the cache is keyed by the resolved face, which is the default for
+    // any missing one. A stale record goes through the cache like no record.
+    if !face_is_available(requested, resolved) && sources.extents.matching(&probe).is_some() {
         return decide().0;
     }
     sources

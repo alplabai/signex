@@ -23,6 +23,25 @@ pub(in crate::format) struct ExtentEntry {
 /// malformed entry is dropped by [`decode`], not rejected by serde.
 pub(in crate::format) type ExtentTable = BTreeMap<String, toml::Value>;
 
+/// `text_extents` read as any value: a non-table (say, a later build's other
+/// shape) is dropped with a warning instead of failing the whole parse.
+pub(in crate::format) fn lenient_table<'de, D>(deserializer: D) -> Result<ExtentTable, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match toml::Value::deserialize(deserializer)? {
+        toml::Value::Table(table) => Ok(table.into_iter().collect()),
+        other => {
+            tracing::warn!(
+                target: "signex::format",
+                "[extras.sheet.text_extents] is a {}, not a table; stored text widths ignored",
+                other.type_str()
+            );
+            Ok(ExtentTable::new())
+        }
+    }
+}
+
 pub(in crate::format) fn encode(extents: &TextExtents) -> ExtentTable {
     extents
         .iter()

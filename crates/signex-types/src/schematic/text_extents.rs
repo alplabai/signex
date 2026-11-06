@@ -105,11 +105,6 @@ impl TextExtents {
         self.0.iter()
     }
 
-    /// Whether a record exists for `id`'s `field`, valid or not.
-    pub fn contains(&self, id: Uuid, field: TextField) -> bool {
-        self.0.contains_key(&(id, field))
-    }
-
     /// The record of `id`'s `field` if it was measured from these inputs.
     pub fn matching(&self, probe: &TextProbe<'_>) -> Option<&StoredTextExtent> {
         let size_nm = mm_as_stored_nm(probe.size_mm)?;

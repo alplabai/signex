@@ -60,6 +60,16 @@ fn a_record_measured_from_other_text_is_ignored() {
     assert!((box_width(&sheet) - substitute).abs() < 1e-6);
 }
 
+/// A stale record is cached like no record, so an edited text is not shaped
+/// again on every read.
+#[test]
+fn a_stale_record_goes_through_the_live_cache() {
+    let mut sheet = sheet_with_stored(label(LabelType::Net, Some(MISSING)));
+    sheet.labels[0].text.push('X');
+    box_width(&sheet);
+    assert_eq!(sheet.text_widths.len(), 1);
+}
+
 #[test]
 fn an_installed_face_measures_live_not_from_the_file() {
     let sheet = sheet_with_stored(label(LabelType::Net, None));

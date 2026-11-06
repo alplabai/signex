@@ -330,7 +330,11 @@ pub(in crate::format) struct SheetExtras {
     /// Stored text widths (#2029); omitted when empty so a sheet without any
     /// re-saves byte-identical. A table, so a build that predates it keeps it
     /// as an unknown key of `[extras.sheet]`.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        deserialize_with = "super::text_extents_extras::lenient_table"
+    )]
     pub(in crate::format) text_extents: super::text_extents_extras::ExtentTable,
     /// Drawing placements by drawing uuid; only `"above"` is written, because
     /// no entry means behind. Kept beside the drawings, not in them: a build
