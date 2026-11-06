@@ -120,6 +120,51 @@ pub fn installed_blocking() -> &'static FontCatalog {
     INSTALLED.get_or_init(FontCatalog::scan_system)
 }
 
+/// The fonts a headless run measures and resolves text with (#1929).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontSet {
+    /// The machine's fonts plus the bundled ones: what the GUI ends up with.
+    System,
+    /// The bundled faces only, so the result does not depend on the host.
+    BundledOnly,
+}
+
+/// [`install_before_boot`] found fonts already installed (an earlier call, or
+/// the startup scan), so `set` was not installed and text keeps being measured
+/// with what is there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FontsAlreadyInstalled;
+
+impl std::fmt::Display for FontsAlreadyInstalled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a font catalog or text measurer is already installed")
+    }
+}
+
+impl std::error::Error for FontsAlreadyInstalled {}
+
+/// Install the catalog and the text measurer on the calling thread, so text is
+/// measured with real faces from the first `update`. Call it before boot; the
+/// startup scan then finds both installed and does nothing. `System` walks
+/// the font directories and is slow. Refused when either is already there:
+/// the process would measure with a mix, or with the other set.
+pub fn install_before_boot(set: FontSet) -> Result<(), FontsAlreadyInstalled> {
+    if INSTALLED.get().is_some() || super::measure::installed() {
+        return Err(FontsAlreadyInstalled);
+    }
+    match set {
+        FontSet::System => {
+            installed_blocking();
+            super::measure::install_blocking();
+        }
+        FontSet::BundledOnly => {
+            install(FontCatalog::from_families::<_, &str>([]));
+            super::measure::install_hermetic();
+        }
+    }
+    Ok(())
+}
+
 /// The scan, as a future for `Task::perform`: the blocking directory walk
 /// runs on a `spawn_blocking` worker, never in `update`. Resolves at once
 /// when the catalog is already cached.

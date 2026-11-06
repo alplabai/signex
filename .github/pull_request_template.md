@@ -65,13 +65,13 @@ Hard CI gates (must pass to merge):
 - [ ] No discarded `iced::Task` (**no discarded tasks**)
 - [ ] Every `[workspace.lints.*]` entry still reaches the non-inheriting
       members (**lint lockstep**)
+- [ ] A `feat`/`fix`/`perf` PR adds a fragment under `changelog.d/`
+      (`<number>.<section>.md`) and does not edit `CHANGELOG.md`; CI fails
+      either miss ([`changelog.d/README.md`](../changelog.d/README.md))
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 
 - [ ] The issue was claimed before work started, and no other open PR covers
       it ([Claiming an issue](../CONTRIBUTING.md#claiming-an-issue))
-- [ ] User-visible change? Added a fragment under `changelog.d/`
-      (`<number>.<section>.md`) instead of editing `CHANGELOG.md` (CI warns
-      on a direct edit)
 - [ ] New code has tests where appropriate
 - [ ] Milestone is set on this PR

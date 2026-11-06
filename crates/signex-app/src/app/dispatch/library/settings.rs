@@ -221,6 +221,12 @@ impl Signex {
                                 // visible failure, never a silent skip.
                                 persist_mouser_key(
                                     |key| {
+                                        if crate::config_root::is_override_active() {
+                                            return Err(signex_library::distributors::keyring::KeyringError::Backend(
+                                                crate::config_root::KEYRING_UNUSED_UNDER_OVERRIDE
+                                                    .to_string(),
+                                            ));
+                                        }
                                         KeyringStore::for_provider("mouser", "default")?
                                             .set_secret(key)
                                     },

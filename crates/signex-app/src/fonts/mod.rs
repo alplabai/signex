@@ -165,24 +165,25 @@ pub fn system_font_families() -> &'static Vec<String> {
 /// tempdir, and this function returns *before* touching
 /// `legacy_posix_prefs_path()` at all — so the legacy migration never
 /// runs and never reads/writes the developer's real config directory.
-/// Issue #437, hoisted in #440.
+/// Issue #437, hoisted in #440. A headless config root skips it the same
+/// way (#1926).
 fn prefs_path() -> PathBuf {
     use std::sync::OnceLock;
     static PATH: OnceLock<PathBuf> = OnceLock::new();
     PATH.get_or_init(|| {
         let root = crate::config_root::config_root();
-        if crate::config_root::is_test_redirect_active() {
-            // Branch on the gate itself, not on whether `root` happens
-            // to be `Some` — `config_root()` always resolves under the
-            // redirect today, but a `Some(dir) if is_test_redirect_
-            // active()` match guard is correct only *because* of that
-            // coincidence. If `config_root()` ever grows an env
-            // override or an early `?` that can return `None` while
-            // the redirect is active, that guard would silently fall
-            // through to the arm below and run migrate_legacy_prefs
-            // against the developer's real legacy path mid-test-suite
-            // (#440 review). Deciding on the gate alone rules that out.
-            let dir = root.expect("config_root() always resolves under the test/dev redirect");
+        let may_migrate = may_migrate_legacy_prefs(
+            crate::config_root::is_test_redirect_active(),
+            crate::config_root::is_override_active(),
+        );
+        if !may_migrate {
+            // Branch on the gates themselves, not on whether `root` happens
+            // to be `Some`: a `Some(dir) if gate` match guard would fall
+            // through to the migration below if `config_root()` ever
+            // returned `None` here, and run it against the developer's or
+            // the user's real legacy path (#440 review, #1926).
+            let dir =
+                root.expect("config_root() always resolves under the redirect or an override");
             return dir.join("prefs.json");
         }
         let canonical = match root {
@@ -194,6 +195,13 @@ fn prefs_path() -> PathBuf {
         canonical
     })
     .clone()
+}
+
+/// Whether the one-shot legacy-prefs migration may run: never in a test
+/// build, never under a headless config root (#1926). Both point the prefs
+/// at a throwaway folder, and the migration reads and rewrites the real one.
+fn may_migrate_legacy_prefs(is_test_redirect: bool, is_override: bool) -> bool {
+    !is_test_redirect && !is_override
 }
 
 /// Fallback used only when `dirs::config_dir()` returns `None` (rare — a
@@ -779,6 +787,15 @@ pub use recent::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1926: only a real GUI process, with neither gate, migrates.
+    #[test]
+    fn the_legacy_prefs_migration_never_runs_under_a_headless_config_root() {
+        assert!(!may_migrate_legacy_prefs(false, true));
+        assert!(!may_migrate_legacy_prefs(true, true));
+        assert!(!may_migrate_legacy_prefs(true, false));
+        assert!(may_migrate_legacy_prefs(false, false));
+    }
 
     /// `prefs_path()` is private (unlike the other three prefs
     /// resolvers, which are all `pub`), so it can't be reached from an

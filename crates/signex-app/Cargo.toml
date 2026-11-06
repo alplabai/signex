@@ -123,6 +123,9 @@ libc = "0.2"
 # docs/MENU_BAR.md, "Native macOS menu". No default features: they only pull
 # the Linux gtk/libxdo backends.
 muda = { version = "0.20", default-features = false }
+# `MainThreadMarker`: AppKit is built only on the main thread. Already in
+# the graph through muda and winit.
+objc2 = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 # DwmSetWindowAttribute for DWMWA_WINDOW_CORNER_PREFERENCE — used by
