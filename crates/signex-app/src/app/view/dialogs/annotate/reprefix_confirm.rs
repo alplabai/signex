@@ -20,7 +20,7 @@ impl Signex {
         self.wrap_dialog(
             crate::app::state::ModalId::ReprefixConfirm,
             dialog,
-            (560.0, 520.0),
+            super::super::sizes::REPREFIX_CONFIRM,
         )
     }
 
@@ -39,7 +39,6 @@ impl Signex {
         let header_content: Element<'_, Message> = modal_title_header(
             "Re-prefix to Standard",
             Message::Annotate(AnnotateMsg::ReprefixCancelled),
-            self.ui_state.effective_theme_id(),
             tokens,
         );
         let header = if draggable {
@@ -95,7 +94,10 @@ impl Signex {
                     ),
                 ]),
             ]
-            .width(self.dialog_width(crate::app::state::ModalId::ReprefixConfirm, 560.0)),
+            .width(self.dialog_width(
+                crate::app::state::ModalId::ReprefixConfirm,
+                super::super::sizes::REPREFIX_CONFIRM,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

@@ -81,7 +81,7 @@ impl Signex {
 /// its lines measured in `ui_family`, plus the padding, at most
 /// [`CARD_MAX_W`].
 fn card_width_estimate(card: &HoverCard, ui_family: &str) -> f32 {
-    let family = Some(ui_family).filter(|f| !f.trim().is_empty());
+    let family = signex_types::font::nonblank_family(ui_family);
     let line =
         |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let mut widest = line(&card.name, TS.label);

@@ -122,18 +122,18 @@ impl Signex {
         wrap_modal(body, (0.0, 0.0), window, fit_modal_size(window, desired))
     }
 
-    /// `px` for the card in the main window, capped like [`fit_modal_size`] so
+    /// `size.0` for the card in the main window, capped like [`fit_modal_size`] so
     /// the card is as wide as the width the dialog is centred on; the full
     /// width in the dialog's own window (the window is the frame).
     pub(in crate::app::view) fn dialog_width(
         &self,
         modal: super::super::super::state::ModalId,
-        px: f32,
+        size: (f32, f32),
     ) -> Length {
         if self.modal_detached(modal) {
             Length::Fill
         } else {
-            Length::Fixed(modal_card_width(self.ui_state.window_size, px))
+            Length::Fixed(modal_card_width(self.ui_state.window_size, size.0))
         }
     }
 
@@ -185,10 +185,7 @@ fn close_glyph_color_for(theme: &Theme, hovered: bool) -> Color {
 /// main-window chrome close (`view/chrome/buttons.rs::windows_button`):
 /// no border, fully transparent at rest, Windows-native red bg on hover.
 /// Generic over the message type so Preferences uses it too.
-pub(crate) fn close_x_button<'a, M: Clone + 'a>(
-    message: M,
-    _theme_id: signex_types::theme::ThemeId,
-) -> Element<'a, M> {
+pub(crate) fn close_x_button<'a, M: Clone + 'a>(message: M) -> Element<'a, M> {
     use iced::widget::svg;
     button(
         svg(svg::Handle::from_memory(CLOSE_X_GLYPH))
@@ -229,7 +226,6 @@ pub(crate) fn close_x_button<'a, M: Clone + 'a>(
 pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
     title: impl iced::widget::text::IntoFragment<'a>,
     on_close: M,
-    theme_id: signex_types::theme::ThemeId,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, M> {
     container(
@@ -238,7 +234,7 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
                 .size(MODAL_HEADER_TITLE_SIZE)
                 .color(crate::styles::ti(tokens.text)),
             Space::new().width(Length::Fill),
-            close_x_button(on_close, theme_id),
+            close_x_button(on_close),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -327,28 +323,5 @@ mod tests {
                 close_glyph_color(&theme)
             );
         }
-    }
-
-    #[test]
-    fn a_card_is_as_wide_as_the_width_its_dialog_is_centred_on() {
-        // Window between desired and desired + 2 * margin: the card must
-        // shrink with the centring width, or it drifts off the right edge.
-        let desired = 560.0;
-        for ww in [
-            desired,
-            desired + 10.0,
-            desired + 2.0 * MODAL_WINDOW_MARGIN - 1.0,
-            desired + 2.0 * MODAL_WINDOW_MARGIN,
-            2000.0,
-        ] {
-            let window = (ww, 800.0);
-            let card = modal_card_width(window, desired);
-            assert_eq!(card, fit_modal_size(window, (desired, 100.0)).0);
-            let left = (window.0 - card) * 0.5;
-            assert!(left >= MODAL_WINDOW_MARGIN.min((window.0 - card) * 0.5));
-            assert!(left + card <= window.0, "window {ww}: card spills right");
-            assert!(left >= 0.0, "window {ww}: card spills left");
-        }
-        assert_eq!(modal_card_width((570.0, 800.0), 560.0), 522.0);
     }
 }

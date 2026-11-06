@@ -22,7 +22,10 @@ impl Signex {
         &self,
         offer: &RecoveryOffer,
     ) -> Element<'_, Message> {
-        self.wrap_centred_dialog(self.autosave_recovery_card(offer, false), (520.0, 250.0))
+        self.wrap_centred_dialog(
+            self.autosave_recovery_card(offer, false),
+            super::sizes::AUTOSAVE_RECOVERY,
+        )
     }
 
     /// The prompt as the content of its own OS window (no header, fills it).
@@ -41,12 +44,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
-        let header_content = modal_title_header(
-            "Recover Unsaved Edits",
-            later.clone(),
-            self.ui_state.effective_theme_id(),
-            tokens,
-        );
+        let header_content = modal_title_header("Recover Unsaved Edits", later.clone(), tokens);
         let header: Element<'_, Message> = if windowed {
             super::widgets::os_title_bar_slot()
         } else {
@@ -115,7 +113,10 @@ impl Signex {
             column![header, dialog_body(body), dialog_footer(buttons)].width(if windowed {
                 Length::Fill
             } else {
-                Length::Fixed(520.0)
+                Length::Fixed(super::widgets::modal_card_width(
+                    self.ui_state.window_size,
+                    super::sizes::AUTOSAVE_RECOVERY.0,
+                ))
             }),
         )
         .style(crate::styles::modal_card(tokens))

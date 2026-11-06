@@ -3,42 +3,18 @@
 //! clamp, and sizes come from the type and spacing scales.
 
 use super::*;
-use crate::styles::{Spacing, TypeScale};
+use crate::styles::Spacing;
 
-const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
-
-/// Line height of a text row, relative to its font size (iced's default).
-const LINE_HEIGHT: f32 = 1.3;
 
 /// Gap kept between a menu and the window edge.
 pub(in crate::app::view) const EDGE_MARGIN: f32 = SP.s;
 
-/// Height of a card with `rows` menu rows: one row is a `title` label
-/// between `SP.s + SP.xs / 2` of padding, and the card pads `SP.s` around
-/// its rows (`signex_widgets::active_bar::dropdown`).
-pub(in crate::app::view) fn menu_height(rows: usize) -> f32 {
-    rows as f32 * menu_row_height() + 2.0 * SP.s
-}
-
-/// Height of one text-only menu row.
-pub(in crate::app::view) fn menu_row_height() -> f32 {
-    menu_row_height_with(false)
-}
-
-/// Side of a menu row's leading icon (`signex_widgets::active_bar::dropdown`).
-const MENU_ICON_SIZE: f32 = 20.0;
-
-/// Height of one menu row; a menu whose rows carry icons has taller rows,
-/// since the icon is taller than the text line.
-pub(in crate::app::view) fn menu_row_height_with(has_icons: bool) -> f32 {
-    let line = (TS.title * LINE_HEIGHT).ceil();
-    let content = if has_icons {
-        line.max(MENU_ICON_SIZE)
-    } else {
-        line
-    };
-    content + 2.0 * (SP.s + SP.xs / 2.0)
+/// Height of a card with `rows` menu rows, from the dropdown widget's own
+/// row and panel metrics; `has_icons` is whether its rows carry icons.
+pub(in crate::app::view) fn menu_height(rows: usize, has_icons: bool) -> f32 {
+    rows as f32 * signex_widgets::active_bar_dropdown::row_height(has_icons)
+        + 2.0 * signex_widgets::active_bar_dropdown::panel_padding()
 }
 
 /// Height of a menu separator line.
@@ -65,7 +41,8 @@ pub(in crate::app::view) fn submenu_origin(
         parent.0 + parent_w
     };
     let y = parent.1
-        + rows_above as f32 * menu_row_height_with(has_icons)
+        + signex_widgets::active_bar_dropdown::panel_padding()
+        + rows_above as f32 * signex_widgets::active_bar_dropdown::row_height(has_icons)
         + separators_above as f32 * SEPARATOR_HEIGHT;
     (x, y)
 }
@@ -121,10 +98,11 @@ impl Signex {
         anchor: (f32, f32),
         width: f32,
         rows: usize,
+        has_icons: bool,
     ) -> (f32, f32) {
         clamp_menu_origin(
             anchor,
-            (width, menu_height(rows)),
+            (width, menu_height(rows, has_icons)),
             self.ui_state.size_of_window(window_id),
         )
     }
@@ -139,8 +117,9 @@ impl Signex {
         anchor: (f32, f32),
         width: f32,
         rows: usize,
+        has_icons: bool,
     ) -> Vec<iced::Element<'a, Message>> {
-        let origin = self.menu_origin(window_id, anchor, width, rows);
+        let origin = self.menu_origin(window_id, anchor, width, rows, has_icons);
         Self::menu_layers(close, menu, origin)
     }
 
@@ -201,21 +180,62 @@ mod tests {
         );
     }
 
+    use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, row_height};
+
     #[test]
     fn a_flyout_opens_right_of_its_parent_and_level_with_the_launcher() {
         let (x, y) = submenu_origin((100.0, 50.0), 200.0, 200.0, 3, 1, false, 1000.0);
         assert_eq!(x, 300.0);
-        assert_eq!(y, 50.0 + 3.0 * menu_row_height() + SEPARATOR_HEIGHT);
+        assert_eq!(
+            y,
+            50.0 + signex_widgets::active_bar_dropdown::panel_padding()
+                + 3.0 * row_height(false)
+                + SEPARATOR_HEIGHT
+        );
     }
 
     #[test]
     fn icon_rows_are_taller_than_text_rows_and_move_the_flyout_down() {
-        assert!(menu_row_height_with(true) > menu_row_height_with(false));
+        assert!(row_height(true) > row_height(false));
         let (_, y) = submenu_origin((100.0, 50.0), 200.0, 200.0, 3, 1, true, 1000.0);
         assert_eq!(
             y,
-            50.0 + 3.0 * menu_row_height_with(true) + SEPARATOR_HEIGHT
+            50.0 + signex_widgets::active_bar_dropdown::panel_padding()
+                + 3.0 * row_height(true)
+                + SEPARATOR_HEIGHT
         );
+    }
+
+    /// The row height the placement assumes is the one the dropdown really
+    /// lays out: consecutive labels of a real menu are one row apart.
+    #[test]
+    fn the_assumed_row_height_is_what_the_dropdown_lays_out() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let icon = iced::widget::svg::Handle::from_memory(
+            br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>"#.as_slice(),
+        );
+        for has_icons in [false, true] {
+            let entries: Vec<DropdownEntry<()>> = ["Alpha", "Bravo", "Charlie"]
+                .into_iter()
+                .map(|label| {
+                    let item = DropdownItem::new(label, ());
+                    DropdownEntry::Item(if has_icons {
+                        item.icon(icon.clone())
+                    } else {
+                        item
+                    })
+                })
+                .collect();
+            let menu = signex_widgets::active_bar_dropdown::view(entries, &tokens, Some(240.0));
+            let texts = crate::layout_probe::lay_out_texts(menu, iced::Size::new(400.0, 400.0));
+            let y = |label: &str| crate::layout_probe::find(&texts, label).bounds.y;
+            let pitch = (y("Charlie") - y("Alpha")) / 2.0;
+            assert!(
+                (pitch - row_height(has_icons)).abs() < 0.6,
+                "icons {has_icons}: laid out {pitch}, assumed {}",
+                row_height(has_icons)
+            );
+        }
     }
 
     #[test]
@@ -234,17 +254,17 @@ mod tests {
             .insert(undocked, (300.0, 200.0));
         let anchor = (250.0, 190.0);
         assert_eq!(
-            app.menu_origin(iced::window::Id::unique(), anchor, MENU.0, 1),
+            app.menu_origin(iced::window::Id::unique(), anchor, MENU.0, 1, false),
             anchor,
             "the main window has room"
         );
-        let (x, y) = app.menu_origin(undocked, anchor, MENU.0, 1);
+        let (x, y) = app.menu_origin(undocked, anchor, MENU.0, 1, false);
         assert_eq!(x, 300.0 - MENU.0 - SP.s);
-        assert_eq!(y, anchor.1 - menu_height(1));
+        assert_eq!(y, anchor.1 - menu_height(1, false));
     }
 
     #[test]
     fn height_grows_by_one_row_each() {
-        assert!(menu_height(3) - menu_height(2) > TS.title);
+        assert!(menu_height(3, false) - menu_height(2, false) > 13.0);
     }
 }

@@ -6,7 +6,7 @@
 
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
 use iced::{Element, Length, Widget};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 
 use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
@@ -55,26 +55,20 @@ pub fn build_sections(profiles: &ShortcutProfileSet) -> Vec<ShortcutSection> {
 }
 
 /// The sheet painted as a card in the main window.
-pub fn view<'a>(
-    tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
-    sections: &[ShortcutSection],
-) -> Element<'a, Message> {
-    build(tokens, theme_id, sections, false)
+pub fn view<'a>(tokens: &'a ThemeTokens, sections: &[ShortcutSection]) -> Element<'a, Message> {
+    build(tokens, sections, false)
 }
 
 /// The sheet as the content of its own OS window: no header, filling it.
 pub fn window_view<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     sections: &[ShortcutSection],
 ) -> Element<'a, Message> {
-    build(tokens, theme_id, sections, true)
+    build(tokens, sections, true)
 }
 
 fn build<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     sections: &[ShortcutSection],
     windowed: bool,
 ) -> Element<'a, Message> {
@@ -96,7 +90,6 @@ fn build<'a>(
     let header = modal_title_header(
         "Keyboard Shortcuts",
         Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
-        theme_id,
         tokens,
     );
 

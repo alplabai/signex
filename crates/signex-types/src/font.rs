@@ -73,6 +73,12 @@ pub fn shaped_advance_em(text: &str, family: Option<&str>) -> Option<f32> {
         .and_then(|resolve| resolve(text, name))
 }
 
+/// `name` as a family to measure in, `None` when it is blank (the bundled
+/// default then applies).
+pub fn nonblank_family(name: &str) -> Option<&str> {
+    Some(name).filter(|f| !f.trim().is_empty())
+}
+
 /// Em advance per character the width estimate falls back to before the
 /// shaper is installed: a slight overestimate of a UI face, so text never clips.
 pub const ESTIMATE_FALLBACK_ADVANCE_EM: f32 = 0.58;

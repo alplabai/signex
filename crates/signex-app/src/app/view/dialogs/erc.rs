@@ -43,11 +43,9 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = modal_title_header(
             "Electrical Rules Check",
             Message::Erc(ErcMsg::CloseDialog),
-            theme_id,
             tokens,
         );
         let header = if draggable {

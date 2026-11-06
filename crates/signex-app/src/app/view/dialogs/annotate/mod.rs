@@ -73,11 +73,9 @@ impl Signex {
 
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──
-        let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = modal_title_header(
             "Annotate",
             Message::Annotate(AnnotateMsg::CloseDialog),
-            theme_id,
             tokens,
         );
         let header = if draggable {
@@ -630,7 +628,7 @@ impl Signex {
         self.wrap_dialog(
             crate::app::state::ModalId::AnnotateResetConfirm,
             dialog,
-            (420.0, 180.0),
+            super::sizes::ANNOTATE_RESET_CONFIRM,
         )
     }
 
@@ -641,11 +639,9 @@ impl Signex {
     fn view_annotate_reset_confirm_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
 
-        let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = modal_title_header(
             "Reset All Annotations",
             Message::Annotate(AnnotateMsg::CloseResetConfirm),
-            theme_id,
             tokens,
         );
         let header = if draggable {
@@ -682,7 +678,7 @@ This cannot be undone through Ctrl+Z alone — consider saving first.",
                     ),
                 ]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, 420.0)),
+            .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, super::sizes::ANNOTATE_RESET_CONFIRM)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

@@ -11,7 +11,10 @@ use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer,
 
 impl Signex {
     pub(in crate::app::view) fn view_create_child_sheet_confirm(&self) -> Element<'_, Message> {
-        self.wrap_centred_dialog(self.view_create_child_sheet_body(), (560.0, 260.0))
+        self.wrap_centred_dialog(
+            self.view_create_child_sheet_body(),
+            super::sizes::CREATE_CHILD_SHEET,
+        )
     }
 
     /// The dialog body: the card in the main window, or the content of its
@@ -28,12 +31,8 @@ impl Signex {
         let later = msg(ProjectMsg::CreateChildSheetAnswered { create: false });
         let create = msg(ProjectMsg::CreateChildSheetAnswered { create: true });
 
-        let header_content: Element<'_, Message> = modal_title_header(
-            "Create Sheet",
-            later.clone(),
-            self.ui_state.effective_theme_id(),
-            tokens,
-        );
+        let header_content: Element<'_, Message> =
+            modal_title_header("Create Sheet", later.clone(), tokens);
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::CreateChildSheet,
@@ -79,6 +78,15 @@ impl Signex {
             dialog_button("Create", DialogButtonKind::Primary, Some(create), tokens)
         };
 
+        // In the main window the card is its design width and as tall as its
+        // content; in its own window it fills that window.
+        let modal = super::super::super::state::ModalId::CreateChildSheet;
+        let width = self.dialog_width(modal, super::sizes::CREATE_CHILD_SHEET);
+        let height = if self.modal_detached(modal) {
+            Length::Fill
+        } else {
+            Length::Shrink
+        };
         container(
             column![
                 header,
@@ -119,10 +127,10 @@ impl Signex {
                 ]),
             ]
             .width(Length::Fill)
-            .height(Length::Fill),
+            .height(height),
         )
-        .width(Length::Fill)
-        .height(Length::Fill)
+        .width(width)
+        .height(height)
         .style(crate::styles::modal_card(tokens))
         .clip(true)
         .boxed()

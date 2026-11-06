@@ -3,7 +3,7 @@
 
 use iced::widget::{Widget, button, column, container, row, text};
 use iced::{Element, Length};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 
 use crate::about::{ExternalLink, LICENSE_NAME, VERSION};
 use crate::app::view::dialogs::modal_title_header;
@@ -17,24 +17,23 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 const MODAL_W: f32 = 380.0;
 
 /// The dialog painted as a card in the main window.
-pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Message> {
-    build(tokens, theme_id, false)
+pub fn view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, false)
 }
 
 /// The dialog as the content of its own OS window: no header (the native
 /// title bar has the title and the close) and filling the window.
-pub fn window_view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Message> {
-    build(tokens, theme_id, true)
+pub fn window_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, true)
 }
 
-fn build<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId, windowed: bool) -> Element<'a, Message> {
+fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
 
     let header = modal_title_header(
         "About Signex",
         Message::Overlay(OverlayMsg::CloseAbout),
-        theme_id,
         tokens,
     );
 

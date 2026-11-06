@@ -281,7 +281,6 @@ impl Signex {
         use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{draggable_header, modal_title_header, os_title_bar_slot};
         use iced::widget::{column, container, text};
-        let theme_id = self.ui_state.effective_theme_id();
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -295,7 +294,6 @@ impl Signex {
         let header_content: Element<'_, Message> = modal_title_header(
             "Export PDF",
             Message::PrintPreview(PrintPreviewMsg::Close),
-            theme_id,
             tokens,
         );
         let header = if draggable {

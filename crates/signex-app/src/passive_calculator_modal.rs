@@ -5,7 +5,7 @@
 
 use iced::widget::{Widget as _, column, container};
 use iced::{Element, Length};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::passive_calculator::CalculatorControl;
 
 use crate::app::view::dialogs::modal_title_header;
@@ -20,34 +20,27 @@ const MODAL_H: f32 = 520.0;
 
 /// The calculator painted as a card in the main window (the fallback when
 /// its own window is not available).
-pub fn view<'a>(
-    tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
-    control: &'a CalculatorControl,
-) -> Element<'a, Message> {
-    build(tokens, theme_id, control, false)
+pub fn view<'a>(tokens: &'a ThemeTokens, control: &'a CalculatorControl) -> Element<'a, Message> {
+    build(tokens, control, false)
 }
 
 /// The calculator as the content of its own OS window: no header, filling
 /// the window.
 pub fn window_view<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     control: &'a CalculatorControl,
 ) -> Element<'a, Message> {
-    build(tokens, theme_id, control, true)
+    build(tokens, control, true)
 }
 
 fn build<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     control: &'a CalculatorControl,
     windowed: bool,
 ) -> Element<'a, Message> {
     let header = modal_title_header(
         "Passive Network Calculator",
         Message::Overlay(OverlayMsg::ClosePassiveCalculator),
-        theme_id,
         tokens,
     );
 

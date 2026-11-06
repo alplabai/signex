@@ -193,8 +193,25 @@ const CHECK_SIZE: f32 = 13.0;
 const HEADER_SIZE: f32 = 10.0;
 /// Horizontal padding of a row.
 const ROW_PAD_X: f32 = 12.0;
+/// Vertical padding of a row.
+const ROW_PAD_Y: f32 = 5.0;
 /// Padding of the panel around its rows.
 const PANEL_PAD: f32 = 4.0;
+/// Line height of a label, relative to its size (iced's default).
+const LINE_HEIGHT_EM: f32 = 1.3;
+
+/// Height of one item row: the label line, or the icon when the menu has
+/// icons and it is the taller, between [`ROW_PAD_Y`] above and below.
+pub fn row_height(has_icons: bool) -> f32 {
+    let line = LABEL_SIZE * LINE_HEIGHT_EM;
+    let content = if has_icons { line.max(ICON_SIZE) } else { line };
+    content + 2.0 * ROW_PAD_Y
+}
+
+/// Padding of the panel around its rows, on each side.
+pub fn panel_padding() -> f32 {
+    PANEL_PAD
+}
 
 /// Width a menu of `entries` needs, for a context menu that fits its labels
 /// rather than a shared width, at most `max_w`. It mirrors [`view`]'s row
@@ -207,7 +224,7 @@ pub fn fitted_width<M>(entries: &[DropdownEntry<M>], max_w: f32, ui_family: &str
 where
     M: Clone,
 {
-    let family = Some(ui_family).filter(|f| !f.trim().is_empty());
+    let family = signex_types::font::nonblank_family(ui_family);
     let advance =
         |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let has_icons = entries
@@ -362,7 +379,7 @@ where
                 // Wrap in a button that triggers on_press when armed.
                 let mut btn = button(
                     container(row_w)
-                        .padding([5.0, ROW_PAD_X])
+                        .padding([ROW_PAD_Y, ROW_PAD_X])
                         .width(Length::Fill),
                 )
                 .padding(0)

@@ -364,6 +364,7 @@ impl Signex {
             (menu_state.x, menu_state.y),
             Self::CONTEXT_MENU_WIDTH,
             FOOTPRINT_MENU_ROWS,
+            false,
         )
     }
 
@@ -529,6 +530,7 @@ impl Signex {
             (menu_state.x, menu_state.y),
             crate::library::editor::symbol::context_menu::MENU_WIDTH,
             TOP_LEVEL_ROWS + expanded_rows,
+            false,
         )
     }
 
@@ -559,7 +561,7 @@ impl Signex {
         // Estimate width from the text in the canvas face to keep the input
         // snug, with two characters of room to type into.
         let canvas_font_name = document.panel_ctx.canvas_font_name.as_str();
-        let canvas_family = crate::fonts::canvas_text_family(canvas_font_name);
+        let canvas_family = signex_types::font::nonblank_family(canvas_font_name);
         let approx_w =
             (signex_types::font::estimate_text_width_px(&edit_state.text, font_px, canvas_family)
                 + 2.0 * font_px * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM)

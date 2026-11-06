@@ -454,7 +454,7 @@ impl Signex {
         // The footprint is estimated from the largest possible row count,
         // so a click near an edge flips the card up or left.
         let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let origin = self.menu_origin(window_id, (ctx_menu.x, ctx_menu.y), menu_w, 22);
+        let origin = self.menu_origin(window_id, (ctx_menu.x, ctx_menu.y), menu_w, 22, true);
         let mut out = Self::menu_layers(Message::ContextMenu(ContextMenuMsg::Close), menu, origin);
         if let Some(submenu_kind) = interaction.context_submenu {
             let submenu = self.view_context_submenu(
@@ -510,6 +510,7 @@ impl Signex {
             (tab_ctx.x, tab_ctx.y),
             Self::CONTEXT_MENU_WIDTH,
             5,
+            false,
         )
     }
 
@@ -529,6 +530,7 @@ impl Signex {
             (menu_ctx.x, menu_ctx.y),
             Self::CONTEXT_MENU_WIDTH,
             5,
+            false,
         )
     }
 
@@ -547,12 +549,7 @@ impl Signex {
             return Vec::new();
         }
         let (menu, menu_w) = self.view_project_tree_context_menu(tree_ctx);
-        let origin = self.menu_origin(
-            window_id,
-            (tree_ctx.x, tree_ctx.y),
-            Self::CONTEXT_MENU_WIDTH,
-            6,
-        );
+        let origin = self.menu_origin(window_id, (tree_ctx.x, tree_ctx.y), menu_w, 6, false);
         let mut out = Self::menu_layers(
             Message::ContextMenu(ContextMenuMsg::CloseProjectTree),
             menu,
@@ -597,6 +594,7 @@ impl Signex {
             (picker.x, picker.y),
             200.0,
             13,
+            false,
         )
     }
 
@@ -713,7 +711,7 @@ const SYMBOL_CARD_PAD_W: f32 = 26.0;
 /// longest label, the gap and the longest value, at most
 /// [`SYMBOL_CARD_MAX_W`].
 fn symbol_card_widths(fields: &[(&str, String)], family: &str) -> (f32, f32) {
-    let family = Some(family).filter(|f| !f.trim().is_empty());
+    let family = signex_types::font::nonblank_family(family);
     let width =
         |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let label_w = fields

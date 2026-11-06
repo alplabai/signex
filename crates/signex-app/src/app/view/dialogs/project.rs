@@ -30,7 +30,7 @@ impl Signex {
         self.wrap_dialog(
             crate::app::state::ModalId::RenameDialog,
             dialog,
-            (420.0, 200.0),
+            super::sizes::RENAME,
         )
     }
 
@@ -44,14 +44,13 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let error_c = crate::styles::tokens::danger(tokens);
 
-        let theme_id = self.ui_state.effective_theme_id();
         let title = if st.is_project_rename {
             "Rename Project"
         } else {
             "Rename File"
         };
         let header_content: Element<'_, Message> =
-            modal_title_header(title, Message::Rename(RenameMsg::Close), theme_id, tokens);
+            modal_title_header(title, Message::Rename(RenameMsg::Close), tokens);
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,
@@ -115,7 +114,10 @@ impl Signex {
                     ),
                 ]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::RenameDialog, 420.0)),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::RenameDialog,
+                super::sizes::RENAME,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -127,7 +129,7 @@ impl Signex {
         self.wrap_dialog(
             crate::app::state::ModalId::EnableVersionControl,
             dialog,
-            (520.0, 320.0),
+            super::sizes::ENABLE_VERSION_CONTROL,
         )
     }
 
@@ -139,14 +141,12 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let header_content: Element<'_, Message> = modal_title_header(
             "Enable Version Control",
             Message::EnableVersionControl(EnableVersionControlMsg::Close),
-            theme_id,
             tokens,
         );
         let header = self.modal_header(
@@ -269,7 +269,7 @@ impl Signex {
             ]
             .width(self.dialog_width(
                 super::super::super::state::ModalId::EnableVersionControl,
-                520.0,
+                super::sizes::ENABLE_VERSION_CONTROL,
             )),
         )
         .style(crate::styles::modal_card(tokens))
@@ -287,7 +287,7 @@ impl Signex {
         self.wrap_dialog(
             crate::app::state::ModalId::GridProperties,
             dialog,
-            (480.0, 280.0),
+            super::sizes::GRID_PROPERTIES,
         )
     }
 
@@ -296,7 +296,6 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
@@ -304,7 +303,6 @@ impl Signex {
         let header_content: Element<'_, Message> = modal_title_header(
             "Cartesian Grid Editor [mm]",
             Message::GridProperties(GridPropertiesMsg::Close),
-            theme_id,
             tokens,
         );
         let header = self.modal_header(
@@ -409,7 +407,10 @@ impl Signex {
                     ),
                 ]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::GridProperties, 480.0)),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::GridProperties,
+                super::sizes::GRID_PROPERTIES,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -425,7 +426,7 @@ impl Signex {
         self.wrap_dialog(
             crate::app::state::ModalId::SelectionFilterCustom,
             dialog,
-            (440.0, 380.0),
+            super::sizes::SELECTION_FILTER_CUSTOM,
         )
     }
 
@@ -436,14 +437,12 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let header_content: Element<'_, Message> = modal_title_header(
             "Selection Filter — Customize",
             Message::SelectionFilter(SelectionFilterMsg::CloseCustom),
-            theme_id,
             tokens,
         );
         let header = self.modal_header(
@@ -525,7 +524,7 @@ impl Signex {
             ]
             .width(self.dialog_width(
                 super::super::super::state::ModalId::SelectionFilterCustom,
-                440.0,
+                super::sizes::SELECTION_FILTER_CUSTOM,
             )),
         )
         .style(crate::styles::modal_card(tokens))

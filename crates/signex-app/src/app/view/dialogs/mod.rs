@@ -18,6 +18,7 @@ mod create_child_sheet;
 mod erc;
 mod project;
 mod rule_editor;
+mod sizes;
 pub(crate) use rule_editor::{RuleEditor, rule_editor};
 mod widgets;
 

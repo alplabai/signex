@@ -26,7 +26,7 @@ impl Signex {
         self.wrap_dialog(
             crate::app::state::ModalId::RemoveDialog,
             dialog,
-            (560.0, 260.0),
+            super::sizes::REMOVE,
         )
     }
 
@@ -40,7 +40,6 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
-        let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = modal_title_header(
             if st.unsaved_prompt {
                 "Exclude from Project \u{2014} Unsaved Edits"
@@ -48,7 +47,6 @@ impl Signex {
                 "Remove from Project"
             },
             Message::Remove(RemoveMsg::Close),
-            theme_id,
             tokens,
         );
         let header = self.modal_header(
@@ -231,7 +229,10 @@ impl Signex {
                     tokens,
                 )]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::RemoveDialog, 560.0)),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::RemoveDialog,
+                super::sizes::REMOVE,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -277,7 +278,10 @@ impl Signex {
                 dialog_body(dialog_message(body, tokens)),
                 dialog_footer(buttons),
             ]
-            .width(560),
+            .width(self.dialog_width(
+                crate::app::state::ModalId::RemoveDialog,
+                super::sizes::REMOVE,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true)
@@ -286,7 +290,7 @@ impl Signex {
 
     pub(in crate::app::view) fn view_project_close_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_project_close_confirm_body();
-        self.wrap_centred_dialog(dialog, (520.0, 360.0))
+        self.wrap_centred_dialog(dialog, super::sizes::PROJECT_CLOSE_CONFIRM)
     }
 
     pub(in crate::app::view) fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
@@ -298,11 +302,9 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
 
-        let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = modal_title_header(
             "Close Project — Unsaved Edits",
             Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
-            theme_id,
             tokens,
         );
         let header = self.modal_header(
@@ -381,7 +383,7 @@ impl Signex {
         let dialog = container(
             column![header, dialog_body(body), dialog_footer(buttons)].width(self.dialog_width(
                 super::super::super::state::ModalId::ProjectCloseConfirm,
-                520.0,
+                super::sizes::PROJECT_CLOSE_CONFIRM,
             )),
         )
         .style(crate::styles::modal_card(tokens))
@@ -391,7 +393,7 @@ impl Signex {
 
     pub(in crate::app::view) fn view_app_quit_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_app_quit_confirm_body();
-        self.wrap_centred_dialog(dialog, (520.0, 360.0))
+        self.wrap_centred_dialog(dialog, super::sizes::APP_QUIT_CONFIRM)
     }
 
     /// One list row per unsaved entry in a confirm modal: file
@@ -437,14 +439,12 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
 
-        let theme_id = self.ui_state.effective_theme_id();
         let header_content: Element<'_, Message> = modal_title_header(
             format!(
                 "{} Signex — Unsaved Edits",
                 super::super::detached_title::quit_word()
             ),
             Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel)),
-            theme_id,
             tokens,
         );
         let header = self.modal_header(
@@ -508,9 +508,10 @@ impl Signex {
             ),
         ];
         let dialog = container(
-            column![header, dialog_body(body), dialog_footer(buttons)].width(
-                self.dialog_width(super::super::super::state::ModalId::AppQuitConfirm, 520.0),
-            ),
+            column![header, dialog_body(body), dialog_footer(buttons)].width(self.dialog_width(
+                super::super::super::state::ModalId::AppQuitConfirm,
+                super::sizes::APP_QUIT_CONFIRM,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
