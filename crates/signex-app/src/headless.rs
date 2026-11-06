@@ -95,14 +95,17 @@ impl Signex {
 
     /// Run the command `command` with `args` as every GUI surface runs it,
     /// and say what happened. On an app that was not booted headless (no
-    /// config root override, or native dialogs) nothing runs:
-    /// [`CommandOutcome::NotHeadless`].
+    /// config root override, native dialogs, or launches not refused)
+    /// nothing runs: [`CommandOutcome::NotHeadless`].
     pub fn dispatch_command_headless(
         &mut self,
         command: &AppCommandId,
         args: CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
-        if !crate::config_root::is_override_active() || self.headless_answers().is_none() {
+        if !crate::config_root::is_override_active()
+            || self.headless_answers().is_none()
+            || self.ui_state.io.opener != crate::io_ports::Opener::Refuse
+        {
             return (CommandOutcome::NotHeadless, Task::none());
         }
         self.dispatch_command_reporting(command, args, None)

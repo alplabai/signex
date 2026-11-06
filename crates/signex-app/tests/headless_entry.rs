@@ -121,6 +121,12 @@ fn run() {
         signex_app::io_ports::Opener::Refuse,
         "launches are refused"
     );
+    // Headless dialogs but native launches: still not a headless app.
+    app.ui_state.io.opener = signex_app::io_ports::Opener::Native;
+    let (outcome, _task) =
+        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::NotHeadless);
+    app.ui_state.io.opener = signex_app::io_ports::Opener::Refuse;
 
     let grid_before = app.ui_state.grid_visible;
     let (outcome, task) =
@@ -165,6 +171,14 @@ fn run() {
     let written = std::fs::read_to_string(isolated.path().join("prefs.json")).expect("prefs");
     assert!(written.contains("grid_visible"), "{written}");
     assert_eq!(snapshot(&real), before, "the real config root changed");
+}
+
+#[test]
+fn the_snapshot_sees_a_folder_only_change() {
+    let root = tempfile::tempdir().expect("root");
+    let before = snapshot(root.path());
+    std::fs::create_dir(root.path().join("recovery")).expect("folder");
+    assert_ne!(snapshot(root.path()), before);
 }
 
 /// Every file and folder under `root`, with a file's bytes.
