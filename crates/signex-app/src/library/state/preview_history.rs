@@ -10,69 +10,59 @@ use signex_library::ComponentRow;
 
 use super::ComponentPreviewState;
 use super::preview::PinMapInlineState;
-use crate::app::SavePoint;
+use crate::app::History;
 
 /// Depth cap of the undo and redo stacks.
 const HISTORY_DEPTH: usize = 100;
 
-/// The snapshot stacks and the saved position of one preview's row.
+/// The snapshot history and saved position of one preview's row.
 #[derive(Debug)]
-pub struct RowHistory {
-    /// Older states, newest last.
-    undo: Vec<ComponentRow>,
-    /// States undone, the next redo last.
-    redo: Vec<ComponentRow>,
-    point: SavePoint,
-}
+pub struct RowHistory(History<ComponentRow>);
 
 impl RowHistory {
     /// A row read from the library: the empty history is the saved state.
     pub fn at_start() -> Self {
-        Self {
-            undo: Vec::new(),
-            redo: Vec::new(),
-            point: SavePoint::at_start(),
-        }
+        Self(History::at_start(HISTORY_DEPTH))
     }
 
     /// Is the row away from the state the library stores (or is that state
     /// unknown)?
     pub fn is_dirty(&self) -> bool {
-        !self.point.is_at(self.undo.len())
+        self.0.is_dirty()
     }
 
     /// Every row an undo or redo can restore.
     pub fn rows(&self) -> impl Iterator<Item = &ComponentRow> {
-        self.undo.iter().chain(self.redo.iter())
+        self.0.states()
     }
 
     /// Is there an edit to undo?
     pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
+        self.0.can_undo()
     }
 
     /// Is there an undone edit to redo?
     pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
+        self.0.can_redo()
     }
 
     /// Carry a cascade's pins and version into every state an undo or redo
     /// can restore, so stepping to one does not bring back a pre-cascade pin
     /// (#1840).
     pub fn rebase_onto_cascade(&mut self, stored: &ComponentRow) {
-        for row in self.undo.iter_mut().chain(self.redo.iter_mut()) {
+        for row in self.0.states_mut() {
             crate::library::preview_rebase::rebase_onto_cascade(row, stored);
         }
     }
 
     /// The current row is what a save is writing.
     pub fn mark_saved(&mut self) {
-        self.point.mark_saved(self.undo.len());
+        self.0.mark_saved();
     }
 
     /// No state reproduces the stored copy: dirty until the next save.
     pub fn forget(&mut self) {
-        self.point.forget();
+        self.0.forget();
     }
 
     /// Drop every step and forget the saved position: the row changed in a
@@ -83,48 +73,18 @@ impl RowHistory {
 
     /// Drop every step; the current row is the saved state when `saved`.
     pub fn restart(&mut self, saved: bool) {
-        self.undo.clear();
-        self.redo.clear();
-        self.point = if saved {
-            SavePoint::at_start()
-        } else {
-            SavePoint::unknown()
-        };
+        self.0.restart(saved);
     }
 
     /// An edit turned `before` into the current row.
     fn record(&mut self, before: ComponentRow) {
-        self.point.redo_cleared(self.undo.len());
-        self.redo.clear();
-        self.undo.push(before);
-        if self.undo.len() > HISTORY_DEPTH {
-            self.undo.remove(0);
-            self.point.evicted_oldest();
-        }
+        self.0.record(before);
     }
 
     /// Move one step: the state to show, the `current` one going to the
     /// opposite stack.
     fn step(&mut self, current: ComponentRow, undo: bool) -> Option<ComponentRow> {
-        let target = if undo {
-            self.undo.pop()?
-        } else {
-            self.redo.pop()?
-        };
-        if undo {
-            self.redo.push(current);
-            if self.redo.len() > HISTORY_DEPTH {
-                self.redo.remove(0);
-            }
-        } else {
-            self.undo.push(current);
-            if self.undo.len() > HISTORY_DEPTH {
-                self.undo.remove(0);
-                self.point.evicted_oldest();
-            }
-        }
-        self.point.limit_to(self.undo.len(), self.redo.len());
-        Some(target)
+        self.0.step(current, undo)
     }
 }
 
