@@ -623,7 +623,7 @@ impl Signex {
         under.dedup();
         for old in under {
             let new = crate::app::state::scope::rebase_under(&old, &job.old_dir, &job.new_dir);
-            self.rekey_open_document(&old, &new);
+            self.rekey_document(&old, &new);
         }
         if let Some(loaded) = self.document_state.projects.get_mut(idx) {
             loaded.path = job.new_project_file();

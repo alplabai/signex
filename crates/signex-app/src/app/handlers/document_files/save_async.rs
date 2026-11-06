@@ -466,9 +466,9 @@ impl Signex {
         });
         if renamed.is_some() {
             let colours_moved_on = self.net_color_revision_of(from) != net_color_revision;
-            if let Some(count) = self.ui_state.net_color_revision.remove(from) {
-                self.ui_state.net_color_revision.insert(to.clone(), count);
-            }
+            // The colour revision and the net-colour / net-class pick history
+            // follow the re-pathed engine; dirty and disk records are Save As's own.
+            self.rekey_path_keyed_records(from, &to);
             if colours_moved_on {
                 self.document_state.mark_document_dirty(&to);
                 self.refresh_panel_ctx();
