@@ -24,8 +24,15 @@ pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
 mod move_pick;
+mod place_drawing;
+mod place_label;
+mod place_point;
+mod place_text;
+mod place_wire;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
+#[cfg(test)]
+mod placement_tests;
 mod status_activity;
 mod status_readout;
 mod sync_sheet_pins;
