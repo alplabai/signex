@@ -1,5 +1,5 @@
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Label, LabelType, Point, SchematicSheet, SheetPin, VAlign,
+    ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SheetPin,
 };
 
 use super::{exposed_sheet_ports, ports_for_pin_sync};
@@ -7,18 +7,8 @@ use crate::test_support::test_sheet;
 
 fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point::new(10.0, 10.0),
-        rotation: 0.0,
-        label_type,
         shape: shape.to_string(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new(text, Point::new(10.0, 10.0), label_type)
     }
 }
 

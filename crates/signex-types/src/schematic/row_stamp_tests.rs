@@ -251,3 +251,104 @@ fn a_link_stamp_tags_the_stamp_with_its_version_and_keeps_the_values_of_a_valid_
     assert!(stale.apply_link_stamp(&LinkStamp::version("3")));
     assert_eq!(stale.valid_stamp().unwrap().mpn, None);
 }
+
+#[test]
+fn building_a_part_with_a_footprint_binding_stamps_the_name_and_the_choice() {
+    let row = Uuid::from_u128(7);
+    let mut part = Symbol {
+        row_id: Some(row),
+        library_version: "1".into(),
+        footprint: "Chip-0805".into(),
+        library_stamp: Some(RowStamp {
+            footprint: Some("Chip-0805".into()),
+            mpn: Some("A".into()),
+            version: Some("1".into()),
+            ..RowStamp::new(row)
+        }),
+        ..Default::default()
+    };
+    part.apply_footprint_binding("Chip-0402", Some("lib:fp".into()));
+    assert_eq!(part.footprint, "Chip-0402");
+    let stamp = part.valid_stamp().expect("the stamp stays valid");
+    assert_eq!(stamp.footprint.as_deref(), Some("Chip-0402"));
+    assert_eq!(stamp.footprint_ref.as_deref(), Some("lib:fp"));
+    assert_eq!(stamp.mpn.as_deref(), Some("A"), "other bases are kept");
+
+    // Back to the default: the choice is gone, the base follows the name.
+    part.apply_footprint_binding("Chip-0805", None);
+    let stamp = part.valid_stamp().unwrap();
+    assert_eq!(stamp.footprint.as_deref(), Some("Chip-0805"));
+    assert_eq!(stamp.footprint_ref, None);
+}
+
+#[test]
+fn a_part_with_no_row_gets_the_footprint_and_no_stamp() {
+    let mut part = Symbol::default();
+    part.apply_footprint_binding("Chip-0402", Some("lib:fp".into()));
+    assert_eq!(part.footprint, "Chip-0402");
+    assert!(part.library_stamp.is_none());
+}
+
+#[test]
+fn a_link_stamp_that_resets_the_footprint_binding_drops_the_recorded_alternate() {
+    let row = Uuid::from_u128(7);
+    let mut part = Symbol {
+        row_id: Some(row),
+        library_version: "1".into(),
+        library_stamp: Some(RowStamp {
+            footprint: Some("Chip-0402".into()),
+            footprint_ref: Some("lib:fp".into()),
+            version: Some("1".into()),
+            ..RowStamp::new(row)
+        }),
+        ..Default::default()
+    };
+    // A plain footprint update keeps the recorded binding...
+    let mut link = LinkStamp {
+        version: "2".into(),
+        values: StampValues {
+            footprint: Some("Chip-0805".into()),
+            ..StampValues::default()
+        },
+    };
+    part.apply_link_stamp(&link);
+    assert_eq!(
+        part.library_stamp
+            .as_ref()
+            .unwrap()
+            .footprint_ref
+            .as_deref(),
+        Some("lib:fp")
+    );
+    // ...and the reset forgets it.
+    link.values.reset_footprint_binding = true;
+    part.apply_link_stamp(&link);
+    let stamp = part.library_stamp.as_ref().unwrap();
+    assert_eq!(stamp.footprint_ref, None);
+    assert_eq!(stamp.footprint.as_deref(), Some("Chip-0805"));
+}
+
+#[test]
+fn a_reset_without_a_footprint_value_keeps_the_recorded_binding() {
+    let row = Uuid::from_u128(7);
+    let mut part = Symbol {
+        row_id: Some(row),
+        library_version: "1".into(),
+        library_stamp: Some(RowStamp {
+            footprint_ref: Some("lib:fp".into()),
+            version: Some("1".into()),
+            ..RowStamp::new(row)
+        }),
+        ..Default::default()
+    };
+    let link = LinkStamp {
+        version: "2".into(),
+        values: StampValues {
+            reset_footprint_binding: true,
+            ..StampValues::default()
+        },
+    };
+    part.apply_link_stamp(&link);
+    let stamp = part.library_stamp.as_ref().unwrap();
+    assert_eq!(stamp.footprint_ref.as_deref(), Some("lib:fp"));
+}

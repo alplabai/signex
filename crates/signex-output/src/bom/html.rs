@@ -3,6 +3,7 @@
 //! Produces a standalone HTML file with inline CSS suitable for printing.
 
 use super::{BomColumn, BomError, BomTable};
+use crate::markup_escape::escape_markup;
 
 /// Emit a BOM table as self-contained HTML with inline CSS.
 pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError> {
@@ -68,19 +69,19 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     html.push_str("  <div class=\"bom-header\">\n");
     html.push_str(&format!(
         "    <h1>{}</h1>\n",
-        escape_html(&table.metadata.title)
+        escape_markup(&table.metadata.title)
     ));
     html.push_str("    <div class=\"bom-meta\">\n");
     if !table.metadata.revision.is_empty() {
         html.push_str(&format!(
             "      <p>Revision: {}</p>\n",
-            escape_html(&table.metadata.revision)
+            escape_markup(&table.metadata.revision)
         ));
     }
     if !table.metadata.date.is_empty() {
         html.push_str(&format!(
             "      <p>Date: {}</p>\n",
-            escape_html(&table.metadata.date)
+            escape_markup(&table.metadata.date)
         ));
     }
     html.push_str(&format!(
@@ -96,7 +97,10 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     html.push_str("      <tr>\n");
 
     for col in columns {
-        html.push_str(&format!("        <th>{}</th>\n", escape_html(col.header())));
+        html.push_str(&format!(
+            "        <th>{}</th>\n",
+            escape_markup(col.header())
+        ));
     }
 
     html.push_str("      </tr>\n");
@@ -108,7 +112,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
         for col in columns {
             let value = super::cell_text(row, col);
-            html.push_str(&format!("        <td>{}</td>\n", escape_html(&value)));
+            html.push_str(&format!("        <td>{}</td>\n", escape_markup(&value)));
         }
 
         html.push_str("      </tr>\n");
@@ -118,7 +122,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     for line in super::total_lines(table, columns) {
         html.push_str("      <tr class=\"total\">\n");
         for (text, _) in line {
-            html.push_str(&format!("        <td>{}</td>\n", escape_html(&text)));
+            html.push_str(&format!("        <td>{}</td>\n", escape_markup(&text)));
         }
         html.push_str("      </tr>\n");
     }
@@ -132,32 +136,17 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     Ok(html.into_bytes())
 }
 
-/// Escape HTML special characters.
-fn escape_html(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for ch in s.chars() {
-        match ch {
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '&' => out.push_str("&amp;"),
-            _ => out.push(ch),
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn escape_html_handles_every_special_and_multibyte() {
+    fn escape_markup_handles_every_special_and_multibyte() {
         assert_eq!(
-            escape_html("<a href=\"x\">R&D 日本é</a>"),
+            escape_markup("<a href=\"x\">R&D 日本é</a>"),
             "&lt;a href=&quot;x&quot;&gt;R&amp;D 日本é&lt;/a&gt;"
         );
-        assert_eq!(escape_html(""), "");
+        assert_eq!(escape_markup(""), "");
     }
 
     #[test]

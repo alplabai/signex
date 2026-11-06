@@ -46,6 +46,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditSymbolValue(..)
                 | P::EditSymbolFootprint(..)
                 | P::SwitchSymbolChoice(..)
+                | P::SwitchFootprintChoice(..)
                 | P::ToggleSymbolMirrorX(_)
                 | P::ToggleSymbolMirrorY(_)
                 | P::ToggleSymbolLocked(_)

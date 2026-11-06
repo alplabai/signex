@@ -138,18 +138,8 @@ mod tests {
 
     fn label(family: Option<&str>) -> Label {
         Label {
-            uuid: uuid::Uuid::now_v7(),
-            text: "N".into(),
-            position: Point { x: 0.0, y: 0.0 },
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
             font_family: family.map(str::to_string),
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
-            unknown_columns: Default::default(),
-            locked: false,
+            ..Label::new("N", Point { x: 0.0, y: 0.0 }, LabelType::Net)
         }
     }
 

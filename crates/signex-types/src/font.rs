@@ -73,6 +73,29 @@ pub fn shaped_advance_em(text: &str, family: Option<&str>) -> Option<f32> {
         .and_then(|resolve| resolve(text, name))
 }
 
+/// `name` as a family to measure in, `None` when it is blank (the bundled
+/// default then applies).
+pub fn nonblank_family(name: &str) -> Option<&str> {
+    Some(name).filter(|f| !f.trim().is_empty())
+}
+
+/// Em advance per character the width estimate falls back to before the
+/// shaper is installed: a slight overestimate of a UI face, so text never clips.
+pub const ESTIMATE_FALLBACK_ADVANCE_EM: f32 = 0.58;
+
+/// Margin on a shaped width, for hinting and rounding in the real layout.
+pub const ESTIMATE_SHAPED_MARGIN: f32 = 1.05;
+
+/// Width in px of `text` drawn at `size_px` in `family` (`None` is the bundled
+/// default): the shaped width times [`ESTIMATE_SHAPED_MARGIN`], or
+/// [`ESTIMATE_FALLBACK_ADVANCE_EM`] per character before the shaper is ready.
+pub fn estimate_text_width_px(text: &str, size_px: f32, family: Option<&str>) -> f32 {
+    match shaped_advance_em(text, family) {
+        Some(em) => em * size_px * ESTIMATE_SHAPED_MARGIN,
+        None => text.chars().count() as f32 * size_px * ESTIMATE_FALLBACK_ADVANCE_EM,
+    }
+}
+
 /// Em advance per character of the bundled default face, which is monospace.
 /// Stands in for the shaper until it is ready.
 const BUNDLED_DEFAULT_ADVANCE_EM: f32 = 0.5;
@@ -197,6 +220,17 @@ pub fn requested_family<'a>(item: Option<&'a str>, document: Option<&'a str>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_width_estimate_scales_with_size_and_length() {
+        // No shaper is registered in this crate's tests, so this is the
+        // per-character stand-in.
+        assert_eq!(estimate_text_width_px("", 13.0, None), 0.0);
+        let one = estimate_text_width_px("a", 10.0, None);
+        assert_eq!(one, 10.0 * ESTIMATE_FALLBACK_ADVANCE_EM);
+        assert_eq!(estimate_text_width_px("abcd", 10.0, None), 4.0 * one);
+        assert_eq!(estimate_text_width_px("a", 20.0, None), 2.0 * one);
+    }
 
     #[test]
     fn item_beats_document_beats_nothing() {

@@ -222,6 +222,34 @@ fn a_value_stamp_round_trips_byte_identical_and_keeps_absent_apart_from_empty() 
 }
 
 #[test]
+fn a_chosen_footprint_binding_round_trips_and_an_older_stamp_loads_as_the_default() {
+    let chosen = Symbol {
+        library_stamp: Some(RowStamp {
+            footprint: Some("Chip-0402".into()),
+            footprint_ref: Some("0000aaaa:0000bbbb".into()),
+            version: Some("1.0.2".into()),
+            ..RowStamp::new(Uuid::from_u128(0x2001))
+        }),
+        ..linked(1)
+    };
+    let text = write(&sheet(vec![chosen.clone()]));
+    assert!(
+        text.contains("footprint_ref = \"0000aaaa:0000bbbb\""),
+        "{text}"
+    );
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert_eq!(stamp_of(&back), chosen.library_stamp);
+    assert_eq!(write(&back), text, "the encoding must be stable");
+
+    // A stamp written before the key existed has no binding: the default.
+    let older = write(&sheet(vec![stamped(1)]));
+    assert!(!older.contains("footprint_ref"), "{older}");
+    let back = SnxSchematic::parse(&older).unwrap().sheet;
+    assert_eq!(stamp_of(&back).unwrap().footprint_ref, None);
+    assert_eq!(write(&back), older);
+}
+
+#[test]
 fn a_symbol_whose_only_extra_is_the_stamp_is_not_dropped() {
     let only = Symbol {
         uuid: Uuid::from_u128(5),

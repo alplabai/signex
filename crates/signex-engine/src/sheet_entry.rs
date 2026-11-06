@@ -132,21 +132,17 @@ pub fn child_document_for_symbol(mut blank: SchematicSheet, symbol: &ChildSheet)
         }
         seen.push(name);
         blank.labels.push(Label {
-            unknown_columns: Default::default(),
-            uuid: Uuid::now_v7(),
-            text: name.to_string(),
-            position: Point::new(
-                20.0 * GRID_MM,
-                20.0 * GRID_MM + row * (seen.len() - 1) as f64,
-            ),
-            rotation: 0.0,
-            label_type: LabelType::Hierarchical,
             shape: normalize_sheet_pin_direction(&pin.direction).to_string(),
-            font_size: 1.27,
-            font_family: None,
             justify: HAlign::default(),
             justify_v: VAlign::default(),
-            locked: false,
+            ..Label::new(
+                name,
+                Point::new(
+                    20.0 * GRID_MM,
+                    20.0 * GRID_MM + row * (seen.len() - 1) as f64,
+                ),
+                LabelType::Hierarchical,
+            )
         });
     }
     blank

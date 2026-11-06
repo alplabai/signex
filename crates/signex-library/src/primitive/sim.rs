@@ -246,11 +246,6 @@ impl SimFile {
         }
         Ok(out)
     }
-
-    /// Locate a model by UUID within this file.
-    pub fn get_model(&self, uuid: Uuid) -> Option<&SimModel> {
-        self.models.iter().find(|m| m.uuid == uuid)
-    }
 }
 
 /// Error variants raised by [`SimFile`] parsers + serialisers.

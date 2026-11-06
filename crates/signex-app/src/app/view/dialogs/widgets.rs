@@ -9,13 +9,16 @@ use super::*;
 use iced::widget::{Space, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::{MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON};
+use super::{
+    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_HEADER_HEIGHT,
+    MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
+const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, crate::styles::tokens::BACKDROP_ALPHA);
 
 /// Gap kept between a modal and the window edge, in logical px.
 pub(in crate::app::view) const MODAL_WINDOW_MARGIN: f32 = 24.0;
@@ -30,6 +33,11 @@ pub(in crate::app::view) fn fit_modal_size(
 ) -> (f32, f32) {
     let cap = |window: f32, want: f32| want.min((window - 2.0 * MODAL_WINDOW_MARGIN).max(1.0));
     (cap(window_size.0, desired.0), cap(window_size.1, desired.1))
+}
+
+/// Card width for a modal that wants `px`: the width [`wrap_dialog`](Signex::wrap_dialog) centres on.
+pub(in crate::app::view) fn modal_card_width(window_size: (f32, f32), px: f32) -> f32 {
+    fit_modal_size(window_size, (px, 0.0)).0
 }
 
 pub(in crate::app::view) fn wrap_modal<'a>(
@@ -86,17 +94,46 @@ pub(in crate::app::view) fn draggable_header<'a>(
 }
 
 impl Signex {
-    /// `px` for the card in the main window, the full width in the dialog's
-    /// own window (the window is the frame, so no fixed card width survives).
+    /// `body` as the in-window modal `modal`: sized to `desired`, capped to
+    /// fit the window (#1227), centred, then moved by the modal's drag offset.
+    pub(in crate::app::view) fn wrap_dialog<'a>(
+        &self,
+        modal: crate::app::state::ModalId,
+        body: Element<'a, Message>,
+        desired: (f32, f32),
+    ) -> Element<'a, Message> {
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&modal)
+            .copied()
+            .unwrap_or_default();
+        let window = self.ui_state.window_size;
+        wrap_modal(body, offset, window, fit_modal_size(window, desired))
+    }
+
+    /// [`Self::wrap_dialog`] for a modal that is never dragged.
+    pub(in crate::app::view) fn wrap_centred_dialog<'a>(
+        &self,
+        body: Element<'a, Message>,
+        desired: (f32, f32),
+    ) -> Element<'a, Message> {
+        let window = self.ui_state.window_size;
+        wrap_modal(body, (0.0, 0.0), window, fit_modal_size(window, desired))
+    }
+
+    /// `size.0` for the card in the main window, capped like [`fit_modal_size`] so
+    /// the card is as wide as the width the dialog is centred on; the full
+    /// width in the dialog's own window (the window is the frame).
     pub(in crate::app::view) fn dialog_width(
         &self,
         modal: super::super::super::state::ModalId,
-        px: f32,
+        size: (f32, f32),
     ) -> Length {
         if self.modal_detached(modal) {
             Length::Fill
         } else {
-            Length::Fixed(px)
+            Length::Fixed(modal_card_width(self.ui_state.window_size, size.0))
         }
     }
 
@@ -124,39 +161,39 @@ pub(crate) fn os_title_bar_slot<'a>() -> Element<'a, Message> {
     Space::new().height(0).boxed()
 }
 
+/// The close glyph drawn on a hit-sized canvas, so the svg widget (and its
+/// hover status) spans the whole button rather than just the X (46x28 = HIT_W x HIT_H).
+const CLOSE_X_GLYPH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" width="46" height="28" viewBox="0 0 46 28" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"><path d="M19.5 10.5l7 7M26.5 10.5l-7 7"/></svg>"##;
+
+/// Glyph colour of the modal close-X at rest: the theme's own text colour,
+/// so it reads on a light header as well as a dark one.
+fn close_glyph_color(theme: &Theme) -> Color {
+    theme.palette().background.base.text
+}
+
+/// On the red hover the glyph is white (as the main-window close), so a
+/// light theme never shows a dark X on red.
+fn close_glyph_color_for(theme: &Theme, hovered: bool) -> Color {
+    if hovered {
+        Color::WHITE
+    } else {
+        close_glyph_color(theme)
+    }
+}
+
 /// Compact X close button for borderless modal headers. Matches the
 /// main-window chrome close (`view/chrome/buttons.rs::windows_button`):
-/// no border, fully transparent at rest, Windows-native red bg + white
-/// icon on hover. The `_text_color` argument is kept for API
-/// compatibility with existing call sites — it is intentionally
-/// ignored, hence the leading underscore.
-pub(crate) fn close_x_button(
-    message: Message,
-    theme_id: signex_types::theme::ThemeId,
-    _text_color: Color,
-) -> Element<'static, Message> {
-    // Use the same SVG and footprint as the main-window chrome close
-    // (`view/chrome/buttons.rs::windows_button`) so the modal X is
-    // visually identical to the OS-window X, including stroke weight,
-    // hit-box dimensions, and red-on-hover behaviour. Glyph is
-    // ALWAYS white per design — `_text_color` is ignored for the
-    // icon. Some themes' text colour was washing the X out against
-    // the toolbar bg.
+/// no border, fully transparent at rest, Windows-native red bg on hover.
+/// Generic over the message type so Preferences uses it too.
+pub(crate) fn close_x_button<'a, M: Clone + 'a>(message: M) -> Element<'a, M> {
     use iced::widget::svg;
-    let handle = crate::icons::icon_chrome_window_close(theme_id);
     button(
-        container(
-            svg(handle)
-                .width(MODAL_CLOSE_X_ICON)
-                .height(MODAL_CLOSE_X_ICON)
-                .style(move |_: &Theme, _| svg::Style {
-                    color: Some(Color::WHITE),
-                }),
-        )
-        .width(MODAL_CLOSE_X_HIT_W)
-        .height(MODAL_CLOSE_X_HIT_H)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center),
+        svg(svg::Handle::from_memory(CLOSE_X_GLYPH))
+            .width(MODAL_CLOSE_X_HIT_W)
+            .height(MODAL_CLOSE_X_HIT_H)
+            .style(|theme: &Theme, status| svg::Style {
+                color: Some(close_glyph_color_for(theme, status == svg::Status::Hovered)),
+            }),
     )
     .padding(0)
     .on_press(message)
@@ -176,8 +213,6 @@ pub(crate) fn close_x_button(
                 radius,
                 ..Border::default()
             },
-            // Always white — keeps glyph readable on any theme +
-            // the destructive red on hover.
             text_color: Color::WHITE,
             ..button::Style::default()
         }
@@ -185,35 +220,28 @@ pub(crate) fn close_x_button(
     .boxed()
 }
 
-// `detach_button` was removed once the three big modals started
-// opening as separate OS windows by default (see
-// `handle_open_annotate_dialog` et al.). Drag-off is no longer needed
-// because there is no in-window overlay to drag.
-
-#[expect(
-    dead_code,
-    reason = "dialogs are separate windows now, so no in-window overlay needs a close button"
-)]
-fn close_button(
-    label: &str,
-    message: Message,
-    text_color: Color,
-    border: Color,
-) -> Element<'_, Message> {
-    button(container(text(label.to_string()).size(TS.body).color(text_color)).padding([3, 10]))
-        .on_press(message)
-        .style(move |_: &Theme, _| button::Style {
-            background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            text_color,
-            ..button::Style::default()
-        })
-        .boxed()
+/// The title strip every app modal opens with: `title` on the left, the
+/// close-X sending `on_close` on the right, on the modal header strip. Pass
+/// it to [`Signex::modal_header`] (or `draggable_header`).
+pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
+    title: impl iced::widget::text::IntoFragment<'a>,
+    on_close: M,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, M> {
+    container(
+        row![
+            text(title)
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(crate::styles::ti(tokens.text)),
+            Space::new().width(Length::Fill),
+            close_x_button(on_close),
+        ]
+        .align_y(iced::Alignment::Center),
+    )
+    .padding(MODAL_HEADER_PADDING)
+    .height(MODAL_HEADER_HEIGHT)
+    .style(crate::styles::modal_header_strip(tokens))
+    .boxed()
 }
 
 /// Subtle section divider used inside the BOM modal's properties
@@ -235,4 +263,34 @@ pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> 
         ..container::Style::default()
     })
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_close_glyph_follows_the_theme_text_colour_on_light_and_dark() {
+        for theme in [Theme::Light, Theme::Dark] {
+            assert_eq!(
+                close_glyph_color(&theme),
+                theme.palette().background.base.text
+            );
+        }
+        assert_ne!(
+            close_glyph_color(&Theme::Light),
+            close_glyph_color(&Theme::Dark)
+        );
+    }
+
+    #[test]
+    fn the_close_glyph_is_white_on_the_red_hover_in_every_theme() {
+        for theme in [Theme::Light, Theme::Dark] {
+            assert_eq!(close_glyph_color_for(&theme, true), Color::WHITE);
+            assert_eq!(
+                close_glyph_color_for(&theme, false),
+                close_glyph_color(&theme)
+            );
+        }
+    }
 }

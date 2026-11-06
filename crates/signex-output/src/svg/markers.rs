@@ -1,20 +1,20 @@
 //! ERC-related schematic markers: the no-connect X and the generic
 //! No-ERC directive diamond. Kept apart so the two glyphs stay visibly
-//! distinct in print, matching the canvas.
+//! distinct in print. Size and stroke are the canvas constants.
 
 use super::*;
 use crate::pdf::layout::PageTransform;
 use signex_types::schematic::Point;
 
-const MARKER_STROKE_WIDTH: f32 = 0.8;
-/// Half extent of both glyphs, in millimetres.
-const MARKER_HALF_MM: f64 = 1.0;
+use signex_types::schematic::{
+    SCHEMATIC_NO_CONNECT_STROKE_MM, SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM,
+};
 
-fn marker_style(rgb: (f32, f32, f32)) -> SvgStyle {
+fn marker_style(rgb: (f32, f32, f32), xform: &PageTransform) -> SvgStyle {
     SvgStyle {
         stroke_rgb: Some(rgb),
         fill_rgb: None,
-        stroke_width: MARKER_STROKE_WIDTH,
+        stroke_width: (SCHEMATIC_NO_CONNECT_STROKE_MM * xform.mm_to_unit) as f32,
     }
 }
 
@@ -25,10 +25,10 @@ pub(super) fn push_no_connect_x(
     rgb: (f32, f32, f32),
     position: Point,
 ) {
-    let arm = (MARKER_HALF_MM * xform.mm_to_unit) as f32;
+    let arm = (SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM * xform.mm_to_unit) as f32;
     let cx = xform.x(position.x);
     let cy = xform.px_y(position.y);
-    let style = marker_style(rgb);
+    let style = marker_style(rgb, xform);
     out.push(SvgElement::Path {
         commands: vec![
             SvgPathCommand::MoveTo(pt(cx - arm, cy - arm)),
@@ -52,7 +52,7 @@ pub(super) fn push_no_erc_diamond(
     rgb: (f32, f32, f32),
     position: Point,
 ) {
-    let half = (MARKER_HALF_MM * xform.mm_to_unit) as f32;
+    let half = (SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM * xform.mm_to_unit) as f32;
     let cx = xform.x(position.x);
     let cy = xform.px_y(position.y);
     out.push(SvgElement::Path {
@@ -63,7 +63,7 @@ pub(super) fn push_no_erc_diamond(
             SvgPathCommand::LineTo(pt(cx - half, cy)),
             SvgPathCommand::Close,
         ],
-        style: marker_style(rgb),
+        style: marker_style(rgb, xform),
     });
 }
 
@@ -130,5 +130,59 @@ mod tests {
             "the two glyphs are not the same drawing"
         );
         assert_ne!(render(&marked, true, true), directive_only);
+    }
+
+    fn first_path(out: &[SvgElement]) -> (&[SvgPathCommand], SvgStyle) {
+        match &out[0] {
+            SvgElement::Path { commands, style } => (commands, *style),
+            other => panic!("expected a path, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn markers_use_the_canvas_half_length_and_stroke() {
+        let xform = PageTransform {
+            mm_to_unit: 2.0,
+            translate_x: 0.0,
+            translate_y: 0.0,
+        };
+        let arm = (SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM * 2.0) as f32;
+        let mut out = Vec::new();
+        push_no_connect_x(&mut out, &xform, (0.0, 0.0, 0.0), Point::new(10.0, 10.0));
+        let (commands, style) = first_path(&out);
+        assert_eq!(
+            style.stroke_width,
+            (SCHEMATIC_NO_CONNECT_STROKE_MM * 2.0) as f32
+        );
+        let SvgPathCommand::MoveTo(from) = &commands[0] else {
+            panic!("X arm starts with a move");
+        };
+        assert_eq!(from.x, 20.0 - arm);
+
+        let mut out = Vec::new();
+        push_no_erc_diamond(&mut out, &xform, (0.0, 0.0, 0.0), Point::new(10.0, 10.0));
+        let (commands, style) = first_path(&out);
+        assert_eq!(
+            style.stroke_width,
+            (SCHEMATIC_NO_CONNECT_STROKE_MM * 2.0) as f32
+        );
+        let SvgPathCommand::MoveTo(top) = &commands[0] else {
+            panic!("diamond starts with a move");
+        };
+        assert_eq!(top.y, 20.0 - arm);
+    }
+
+    #[test]
+    fn a_junction_prints_as_a_circle() {
+        let mut with = snapshot(false);
+        with.schematic
+            .junctions
+            .push(signex_types::schematic::Junction {
+                position: Point::new(30.0, 40.0),
+                ..Default::default()
+            });
+        let cubics = |svg: &str| svg.matches("C ").count();
+        let bare = render(&snapshot(false), true, true);
+        assert_eq!(cubics(&render(&with, true, true)), cubics(&bare) + 4);
     }
 }

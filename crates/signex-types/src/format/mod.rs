@@ -111,7 +111,7 @@ use sch_rows::{
     junction_to_row, label_to_row, row_to_junction, row_to_label, row_to_symbol, row_to_wire,
     symbol_to_row, wire_to_row,
 };
-use tsv::write_tsv_section;
+use tsv::{parse_optional_block, write_tsv_section};
 
 // ---------------------------------------------------------------------------
 // Format version tokens
@@ -498,22 +498,12 @@ impl SnxSchematic {
         version::check(&raw.format, SNXSCH_FORMAT_V1)?;
 
         // Stage 2: parse each TSV block into adapter rows.
-        let component_rows = match raw.sheets.components {
-            Some(b) => parse_tsv_block::<SchComponentRow>("sheets.components", &b.content)?,
-            None => Vec::new(),
-        };
-        let wire_rows = match raw.sheets.wires {
-            Some(b) => parse_tsv_block::<SchWireRow>("sheets.wires", &b.content)?,
-            None => Vec::new(),
-        };
-        let junction_rows = match raw.sheets.junctions {
-            Some(b) => parse_tsv_block::<SchJunctionRow>("sheets.junctions", &b.content)?,
-            None => Vec::new(),
-        };
-        let label_rows = match raw.sheets.labels {
-            Some(b) => parse_tsv_block::<SchLabelRow>("sheets.labels", &b.content)?,
-            None => Vec::new(),
-        };
+        let component_rows =
+            parse_optional_block::<SchComponentRow>("sheets.components", raw.sheets.components)?;
+        let wire_rows = parse_optional_block::<SchWireRow>("sheets.wires", raw.sheets.wires)?;
+        let junction_rows =
+            parse_optional_block::<SchJunctionRow>("sheets.junctions", raw.sheets.junctions)?;
+        let label_rows = parse_optional_block::<SchLabelRow>("sheets.labels", raw.sheets.labels)?;
 
         // Stage 3: rebuild the SchematicSheet from rows + extras.
         let extras = raw.extras.unwrap_or_default();
@@ -918,22 +908,10 @@ impl SnxPcb {
 
         version::check(&raw.format, SNXPCB_FORMAT_V1)?;
 
-        let footprint_rows = match raw.footprints {
-            Some(b) => parse_tsv_block::<PcbFootprintRow>("footprints", &b.content)?,
-            None => Vec::new(),
-        };
-        let pad_rows = match raw.pads {
-            Some(b) => parse_tsv_block::<PcbPadRow>("pads", &b.content)?,
-            None => Vec::new(),
-        };
-        let track_rows = match raw.tracks {
-            Some(b) => parse_tsv_block::<PcbTrackRow>("tracks", &b.content)?,
-            None => Vec::new(),
-        };
-        let via_rows = match raw.vias {
-            Some(b) => parse_tsv_block::<PcbViaRow>("vias", &b.content)?,
-            None => Vec::new(),
-        };
+        let footprint_rows = parse_optional_block::<PcbFootprintRow>("footprints", raw.footprints)?;
+        let pad_rows = parse_optional_block::<PcbPadRow>("pads", raw.pads)?;
+        let track_rows = parse_optional_block::<PcbTrackRow>("tracks", raw.tracks)?;
+        let via_rows = parse_optional_block::<PcbViaRow>("vias", raw.vias)?;
 
         // Reconstruct footprints with their pads. Group pads by ref.
         let extras = raw.extras.unwrap_or_default();

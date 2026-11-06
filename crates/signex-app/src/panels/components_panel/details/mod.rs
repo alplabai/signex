@@ -7,10 +7,11 @@ pub(crate) mod footprint_canvas;
 pub mod load;
 pub(crate) mod symbol_canvas;
 
-use iced::widget::{Column, Space, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, column, container, pick_list, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use crate::library::editor::footprint::canvas::PreviewFootprint;
+use signex_library::primitive::PrimitiveRef;
 use signex_types::schematic::LibSymbol;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -34,12 +35,83 @@ pub struct ComponentDetails {
     /// The row binds a footprint (it may still have failed to read).
     pub has_footprint_ref: bool,
     pub symbol: Option<LibSymbol>,
-    /// The editor's model of the footprint, built once at load.
+    /// The editor's model of the row's default footprint, built once at load.
     pub footprint: Option<PreviewFootprint>,
+    /// The row's default footprint, whether or not it could be read (#1234).
+    pub default_footprint: Option<PrimitiveRef>,
+    /// The row's alternate footprints, read with the rest (#1234).
+    pub alternate_footprints: Vec<FootprintOption>,
     /// `(name, value)` of every row parameter.
     pub parameters: Vec<(String, String)>,
     /// Why the symbol or footprint is missing, one line each.
     pub notes: Vec<String>,
+}
+
+/// One alternate footprint of the row, with its preview (`None`: it could
+/// not be read; the load's notes say why).
+#[derive(Debug, Clone)]
+pub struct FootprintOption {
+    pub reference: PrimitiveRef,
+    pub name: String,
+    pub preview: Option<PreviewFootprint>,
+}
+
+/// One entry of the Footprint picker: a footprint the row offers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FootprintChoice {
+    pub reference: PrimitiveRef,
+    /// The footprint's name, "(default)" appended for the row's default.
+    pub label: String,
+}
+
+impl std::fmt::Display for FootprintChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+impl ComponentDetails {
+    /// The footprints the row offers, the default first. Fewer than two
+    /// entries means there is nothing to pick.
+    pub fn footprint_choices(&self) -> Vec<FootprintChoice> {
+        let Some(default) = self.default_footprint else {
+            return Vec::new();
+        };
+        let default_name = self
+            .footprint
+            .as_ref()
+            .map_or("Default", |fp| fp.name.as_str());
+        let default = FootprintChoice {
+            reference: default,
+            label: format!("{default_name} (default)"),
+        };
+        std::iter::once(default)
+            .chain(self.alternate_footprints.iter().map(|a| FootprintChoice {
+                reference: a.reference,
+                label: a.name.clone(),
+            }))
+            .collect()
+    }
+
+    /// The footprint the picker shows: `pick` when the row offers it, else
+    /// the default.
+    pub fn shown_footprint(&self, pick: Option<&PrimitiveRef>) -> Option<FootprintChoice> {
+        let choices = self.footprint_choices();
+        pick.and_then(|p| choices.iter().find(|c| c.reference == *p))
+            .or_else(|| choices.first())
+            .cloned()
+    }
+
+    /// The preview of the footprint `pick` names (the default when `None` or
+    /// not offered), and whether that footprint could not be read.
+    pub fn footprint_preview(&self, pick: Option<&PrimitiveRef>) -> Option<&PreviewFootprint> {
+        let alternate =
+            pick.and_then(|p| self.alternate_footprints.iter().find(|a| a.reference == *p));
+        match alternate {
+            Some(alternate) => alternate.preview.as_ref(),
+            None => self.footprint.as_ref(),
+        }
+    }
 }
 
 /// The selected row's details or the read filling them.
@@ -198,7 +270,27 @@ pub(crate) fn view<'a>(
     });
 
     col = col.push(section_title("Footprint", primary));
-    if let Some(fp) = &d.footprint {
+    // The pick belongs to the selected row only (#1234).
+    let pick = panel
+        .footprint_pick
+        .as_ref()
+        .filter(|(key, _)| panel.selected.as_ref() == Some(key))
+        .map(|(_, reference)| reference);
+    let shown = d.shown_footprint(pick);
+    let choices = d.footprint_choices();
+    if choices.len() >= 2 {
+        col = col.push(
+            pick_list(shown.clone(), choices, |choice: &FootprintChoice| {
+                choice.to_string()
+            })
+            .on_select(|choice: FootprintChoice| {
+                LibraryMessage::ComponentsPanelFootprintPicked(choice.reference)
+            })
+            .text_size(ROW_TEXT_SIZE)
+            .width(Length::Fill)
+            .boxed(),
+        );
+    } else if let Some(fp) = &d.footprint {
         col = col.push(
             text(fp.name.as_str())
                 .size(ROW_TEXT_SIZE)
@@ -206,7 +298,8 @@ pub(crate) fn view<'a>(
                 .boxed(),
         );
     }
-    col = col.push(match &d.footprint {
+    let preview = d.footprint_preview(shown.as_ref().map(|c| &c.reference));
+    col = col.push(match preview {
         Some(fp) => {
             let program = footprint_canvas::FootprintPreview::new(fp);
             let canvas = iced::widget::canvas(program)

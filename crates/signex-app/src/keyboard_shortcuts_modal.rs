@@ -5,12 +5,10 @@
 //! Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.2 ("Hotkey discoverability").
 
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
-use iced::{Border, Element, Length, Theme, Widget};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use iced::{Element, Length, Widget};
+use signex_types::theme::ThemeTokens;
 
-use crate::app::view::dialogs::{
-    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
-};
+use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
 use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
 use crate::styles;
@@ -57,26 +55,20 @@ pub fn build_sections(profiles: &ShortcutProfileSet) -> Vec<ShortcutSection> {
 }
 
 /// The sheet painted as a card in the main window.
-pub fn view<'a>(
-    tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
-    sections: &[ShortcutSection],
-) -> Element<'a, Message> {
-    build(tokens, theme_id, sections, false)
+pub fn view<'a>(tokens: &'a ThemeTokens, sections: &[ShortcutSection]) -> Element<'a, Message> {
+    build(tokens, sections, false)
 }
 
 /// The sheet as the content of its own OS window: no header, filling it.
 pub fn window_view<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     sections: &[ShortcutSection],
 ) -> Element<'a, Message> {
-    build(tokens, theme_id, sections, true)
+    build(tokens, sections, true)
 }
 
 fn build<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     sections: &[ShortcutSection],
     windowed: bool,
 ) -> Element<'a, Message> {
@@ -95,24 +87,11 @@ fn build<'a>(
     };
 
     // ── Header — canonical modal chrome ─────────────────────────
-    let header = container(
-        row![
-            text("Keyboard Shortcuts")
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .color(text_primary),
-            Space::new().width(Length::Fill),
-            close_x_button(
-                Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
-                theme_id,
-                text_secondary,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .width(Length::Fill)
-    .height(MODAL_HEADER_HEIGHT)
-    .padding(MODAL_HEADER_PADDING)
-    .style(styles::modal_header_strip(tokens));
+    let header = modal_title_header(
+        "Keyboard Shortcuts",
+        Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
+        tokens,
+    );
 
     // ── Body — sections per category ────────────────────────────
     // Column header (Action | Shortcut). Action goes on the LEFT
@@ -132,7 +111,7 @@ fn build<'a>(
 
     let mut body: Column<Element<'a, Message>> =
         Column::new().spacing(0).push(column_header.boxed());
-    body = body.push(thin_divider(border));
+    body = body.push(crate::panels::thin_sep(border));
 
     let mut first_section = true;
     for section in sections {
@@ -141,7 +120,7 @@ fn build<'a>(
 
         // Subtle section divider above every section after the first.
         if !first_section {
-            body = body.push(thin_divider(section_divider_color));
+            body = body.push(crate::panels::thin_sep(section_divider_color));
         }
         first_section = false;
 
@@ -177,7 +156,7 @@ fn build<'a>(
             // Subtle row divider between rows (not after the last row
             // in a section — section divider handles that gap).
             if idx < last_idx {
-                section_col = section_col.push(thin_divider(row_divider_color));
+                section_col = section_col.push(crate::panels::thin_sep(row_divider_color));
             }
         }
         body = body.push(section_col.boxed());
@@ -236,18 +215,6 @@ fn title_case(value: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn thin_divider<'a, M: 'a>(color: iced::Color) -> Element<'a, M> {
-    container(Space::new())
-        .width(Length::Fill)
-        .height(1)
-        .style(move |_: &Theme| container::Style {
-            background: Some(iced::Background::Color(color)),
-            border: Border::default(),
-            ..container::Style::default()
-        })
-        .boxed()
 }
 
 #[cfg(test)]

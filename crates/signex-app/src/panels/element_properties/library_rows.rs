@@ -40,6 +40,53 @@ pub(super) fn push_symbol_choice_row<'a>(
     ))
 }
 
+/// One entry of the Footprint pick list, told apart by its position so two
+/// footprints with the same label stay distinct.
+#[derive(Clone, PartialEq, Eq)]
+struct FootprintEntry {
+    index: usize,
+    label: String,
+}
+
+impl std::fmt::Display for FootprintEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+/// The footprint rows of a placed symbol (#1234): a pick list of the
+/// footprints its library row offers, when it offers two or more, above the
+/// free-text field every part keeps.
+pub(super) fn push_footprint_row<'a>(
+    mut c: Column<Element<'a, PanelMsg>>,
+    id: uuid::Uuid,
+    footprint: &str,
+    choices: &[FootprintChoiceItem],
+    muted: Color,
+) -> Column<Element<'a, PanelMsg>> {
+    if let Some(current) = choices.iter().position(|i| i.selected) {
+        let entry = |index: usize| FootprintEntry {
+            index,
+            label: choices[index].label.clone(),
+        };
+        let options: Vec<FootprintEntry> = (0..choices.len()).map(entry).collect();
+        let bindings: Vec<String> = choices.iter().map(|i| i.binding.clone()).collect();
+        c = c.push(form_pick_row(
+            "Footprint",
+            options,
+            entry(current),
+            move |picked: FootprintEntry| {
+                let binding = bindings.get(picked.index).cloned().unwrap_or_default();
+                PanelMsg::SwitchFootprintChoice(id, binding)
+            },
+            muted,
+        ));
+    }
+    c.push(form_edit_row("Footprint", footprint, muted, move |s| {
+        PanelMsg::EditSymbolFootprint(id, s)
+    }))
+}
+
 /// How the sheet's embedded copy compares with the library (#912, #1845).
 #[derive(Clone, Copy)]
 pub(super) struct LibraryStatus {

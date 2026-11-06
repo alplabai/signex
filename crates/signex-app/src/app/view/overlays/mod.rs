@@ -74,8 +74,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
-        use iced::widget::{column, container, text};
-        use iced::{Background, Border};
+        use iced::widget::text;
 
         if self.interaction_state.editing_text.is_some() {
             return None;
@@ -99,8 +98,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let border_c = crate::styles::ti(tokens.border);
         // Match the schematic's own font (Iosevka by default; whatever
         // the user picked under Preferences ▸ Canvas Font) so the
         // tooltip reads as "this is data from the canvas" rather than
@@ -109,13 +106,7 @@ impl Signex {
         // hits the embedded TTF (not whatever the system fontconfig
         // falls back to for `Family::Name`).
         let canvas_font_name: &str = &self.document_state.panel_ctx.canvas_font_name;
-        let canvas_font = if canvas_font_name == crate::fonts::DEFAULT_CANVAS_FONT
-            || canvas_font_name.is_empty()
-        {
-            crate::render_config::IOSEVKA
-        } else {
-            crate::fonts::iced_font_for_family(canvas_font_name)
-        };
+        let canvas_font = crate::fonts::canvas_iced_font(canvas_font_name);
 
         // Single row style — label in a fixed gutter, value fills the
         // remaining card width and wraps onto further lines on its
@@ -170,28 +161,16 @@ impl Signex {
             .collect();
 
         let rows_len = rows.len();
-        let card = container(column(rows).spacing(3))
-            .padding(iced::Padding {
-                top: 8.0,
-                right: 14.0,
-                bottom: 8.0,
-                left: 10.0,
-            })
-            .width(if at_cap {
+        let card = hover_card(
+            rows,
+            3.0,
+            if at_cap {
                 Length::Fixed(card_w)
             } else {
                 Length::Shrink
-            })
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(Background::Color(panel_bg)),
-                border: Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            });
+            },
+            &self.document_state.panel_ctx.tokens,
+        );
 
         // Below-right of the cursor, flipped or clamped to stay on the
         // canvas (not the Properties panel beside it). Rows wrap, so the
@@ -201,7 +180,7 @@ impl Signex {
         let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let (x, y) =
             canvas_region::place_card((sx, sy), (card_w, estimated_h), self.card_bounds(window_id));
-        Some(super::view::translate::Translate::new(card.boxed(), (x, y)).boxed())
+        Some(super::view::translate::Translate::new(card, (x, y)).boxed())
     }
 
     /// Result list for the chrome-strip command palette. Anchored
@@ -392,17 +371,13 @@ impl Signex {
         // `overlay_id::swallows_scroll` marks, so scroll cannot reach the
         // canvas through an overlay regardless of whether that overlay
         // built a dismiss layer at all (#562).
-        const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(move |_: &iced::Theme| container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        0.0,
-                        0.0,
-                        0.0,
-                        BACKDROP_OPACITY,
+                    background: Some(iced::Background::Color(crate::styles::tokens::scrim(
+                        crate::styles::tokens::BACKDROP_ALPHA,
                     ))),
                     ..container::Style::default()
                 }),
@@ -461,14 +436,12 @@ impl Signex {
 
     /// Canvas right-click context menu (+ its Place/Align submenu).
     /// Clamps the menu inside the window; the submenu pops to the right
-    /// (or left on overflow) aligned to its launcher row. Pushes dismiss,
+    /// (or left on overflow) level with its launcher row. Pushes dismiss,
     /// menu, then the optional submenu.
     pub(in crate::app) fn context_menu_overlay(
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        use iced::widget::{column, row};
-
         let interaction = &self.interaction_state;
         let Some(ctx_menu) = interaction.context_menu.as_ref() else {
             return Vec::new();
@@ -478,88 +451,38 @@ impl Signex {
             return Vec::new();
         }
         let menu = self.view_context_menu(window_id);
-        // Clamp the menu inside the window so a click near the
-        // right/bottom edge doesn't push it off-screen. Estimate
-        // the menu's footprint conservatively from the maximum
-        // possible row count (22 rows) and
-        // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
-        // lands too close to an edge.
-        let window_size = self.ui_state.size_of_window(window_id);
-        let (x, y) = super::context_menu::clamp_menu_origin(
-            (ctx_menu.x, ctx_menu.y),
-            (
-                Self::CONTEXT_MENU_WIDTH,
-                super::context_menu::menu_height(22),
-            ),
-            window_size,
-        );
+        // The footprint is estimated from the largest possible row count,
+        // so a click near an edge flips the card up or left.
         let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let edge_margin = super::context_menu::EDGE_MARGIN;
-        let win_w = window_size.0;
-        let mut out: Vec<Element<'_, Message>> = Vec::new();
-        out.push(Self::dismiss_layer(Message::ContextMenu(
-            ContextMenuMsg::Close,
-        )));
-        out.push(super::context_menu::anchored_menu(menu, (x, y)));
-        // Submenu (Place / Align) — pop to the right of the parent
-        // menu (or left if the right edge would overflow), and
-        // align its top to the launcher row's y-position so the
-        // first submenu item sits next to the row that opened it.
+        let origin = self.menu_origin(window_id, (ctx_menu.x, ctx_menu.y), menu_w, 22, true);
+        let mut out = Self::menu_layers(Message::ContextMenu(ContextMenuMsg::Close), menu, origin);
         if let Some(submenu_kind) = interaction.context_submenu {
             let submenu = self.view_context_submenu(
                 submenu_kind,
                 interaction.canvas_for_window(window_id).selected.len(),
             );
-            // Wrap in mouse_area so on_enter/on_exit on the panel
-            // can extend the close timer when the cursor crosses
-            // from the launcher into the submenu and back.
-            let submenu = iced::widget::mouse_area(submenu)
-                .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
-                .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
-            let submenu_w = menu_w;
-            let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
-                (x - submenu_w).max(0.0)
-            } else {
-                x + menu_w
+            // Rows and separators above each launcher in `view_context_menu`.
+            let (rows_above, separators_above) = match submenu_kind {
+                // 3 always-visible rows + 1 separator.
+                ContextSubmenu::Place => (3, 1),
+                // Shown only with a selection: the same, then Place / Part
+                // Actions / Sheet Actions / References.
+                ContextSubmenu::Align => (7, 1),
+                // Right under Align, only when a drawing is selected (#1583).
+                ContextSubmenu::Arrange => (8, 1),
+                // Only the project-tree menu opens this one.
+                ContextSubmenu::AddNewToProject => (0, 0),
             };
-            // Approximate launcher-row y inside the parent menu.
-            // Each ctx_menu_item_* row is ≈ 22 px tall (text + 4 px
-            // top + 4 px bottom + a tiny line-height fudge); the
-            // separator is rendered as a 1 px line. The numbers
-            // below come from counting rows above each launcher in
-            // `view_context_menu`.
-            const ROW_H: f32 = 22.0;
-            const SEP_H: f32 = 1.0;
-            const TOP_PAD: f32 = 4.0;
-            let launcher_y = match submenu_kind {
-                // Above Place: 3 always-visible rows + 1 separator.
-                ContextSubmenu::Place => TOP_PAD + 3.0 * ROW_H + SEP_H,
-                // Align is only shown when something is selected;
-                // above Align: the same 3 rows + 1 sep, then
-                // Place / Part Actions / Sheet Actions / References.
-                ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
-                // Arrange sits right under Align, but only when a drawing is
-                // selected (#1583).
-                ContextSubmenu::Arrange => TOP_PAD + 8.0 * ROW_H + SEP_H,
-                // AddNewToProject only fires from the project-tree
-                // menu, never from the canvas menu — fall through
-                // to a safe placeholder if the state somehow leaks
-                // (no submenu rendered, just a 0-offset).
-                ContextSubmenu::AddNewToProject => 0.0,
-            };
-            let sub_y = (y + launcher_y - 4.0).max(0.0);
-            out.push(
-                column![
-                    iced::widget::Space::new().height(sub_y),
-                    row![
-                        iced::widget::Space::new().width(sub_x),
-                        submenu,
-                        iced::widget::Space::new().width(Length::Fill),
-                    ]
-                    .width(Length::Fill),
-                ]
-                .boxed(),
+            let sub_origin = super::context_menu::submenu_origin(
+                origin,
+                menu_w,
+                menu_w,
+                rows_above,
+                separators_above,
+                true,
+                self.ui_state.size_of_window(window_id).0,
             );
+            out.push(Self::submenu_flyout(submenu, sub_origin));
         }
         out
     }
@@ -571,52 +494,42 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
-            return self.dock_tab_context_menu_overlay();
+            return self.dock_tab_context_menu_overlay(window_id);
         };
         // Only the main window's tab strip opens this menu, so only the main
         // window paints it (#2037).
         if !self.overlay_belongs_to(None, window_id) {
             return Vec::new();
         }
-        let menu = self.view_tab_context_menu(tab_ctx);
-        // Conservative footprint matches the project-tree menu so
-        // the two visually align.
-        let (x, y) = super::context_menu::clamp_menu_origin(
+        self.menu_overlay(
+            window_id,
+            Message::ContextMenu(ContextMenuMsg::CloseTab),
+            self.view_tab_context_menu(tab_ctx),
             (tab_ctx.x, tab_ctx.y),
-            (
-                Self::CONTEXT_MENU_WIDTH,
-                super::context_menu::menu_height(5),
-            ),
-            ui.window_size,
-        );
-        vec![
-            Self::dismiss_layer(Message::ContextMenu(ContextMenuMsg::CloseTab)),
-            super::context_menu::anchored_menu(menu, (x, y)),
-        ]
+            Self::CONTEXT_MENU_WIDTH,
+            5,
+        )
     }
 
     /// Dock panel tab right-click menu: dismiss layer, then the menu clamped
     /// into the window.
-    fn dock_tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    fn dock_tab_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let Some(menu_ctx) = self.document_state.dock.tab_menu else {
             return Vec::new();
         };
-        let menu = self.view_dock_tab_context_menu();
-        let (x, y) = super::context_menu::clamp_menu_origin(
+        self.menu_overlay(
+            window_id,
+            Message::Dock(crate::dock::DockMessage::TabMenuDismissed),
+            self.view_dock_tab_context_menu(),
             (menu_ctx.x, menu_ctx.y),
-            (
-                Self::CONTEXT_MENU_WIDTH,
-                super::context_menu::menu_height(5),
-            ),
-            self.ui_state.window_size,
-        );
-        vec![
-            Self::dismiss_layer(Message::Dock(crate::dock::DockMessage::TabMenuDismissed)),
-            super::context_menu::anchored_menu(menu, (x, y)),
-        ]
+            Self::CONTEXT_MENU_WIDTH,
+            5,
+        )
     }
 
     /// Projects-panel tree right-click menu (+ its AddNewToProject
@@ -625,9 +538,6 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        use iced::widget::{column, row};
-
-        let ui = &self.ui_state;
         let interaction = &self.interaction_state;
         let Some(tree_ctx) = interaction.project_tree_context_menu.as_ref() else {
             return Vec::new();
@@ -637,65 +547,30 @@ impl Signex {
             return Vec::new();
         }
         let (menu, menu_w) = self.view_project_tree_context_menu(tree_ctx);
-        // Conservative footprint: at most 6 rows × 22 px + 8 px
-        // padding. Width matches the canvas menu so the two look
-        // consistent.
-        let (x, y) = super::context_menu::clamp_menu_origin(
-            (tree_ctx.x, tree_ctx.y),
-            (
-                Self::CONTEXT_MENU_WIDTH,
-                super::context_menu::menu_height(6),
-            ),
-            ui.window_size,
+        let origin = self.menu_origin(window_id, (tree_ctx.x, tree_ctx.y), menu_w, 6, false);
+        let mut out = Self::menu_layers(
+            Message::ContextMenu(ContextMenuMsg::CloseProjectTree),
+            menu,
+            origin,
         );
-        let edge_margin = super::context_menu::EDGE_MARGIN;
-        let win_w = ui.window_size.0;
-        let mut out: Vec<Element<'_, Message>> = Vec::new();
-        out.push(Self::dismiss_layer(Message::ContextMenu(
-            ContextMenuMsg::CloseProjectTree,
-        )));
-        out.push(super::context_menu::anchored_menu(menu, (x, y)));
-        // Adjacent submenu (currently only AddNewToProject opens
-        // from this menu). Mirrors the canvas-menu submenu logic
-        // above — pop to the right of the parent (or left if the
-        // right edge would overflow), align top to the launcher
-        // row's y inside the parent menu.
+        // Currently only AddNewToProject opens from this menu: row 2, under
+        // `Make Project Available Online...` and `Validate Project`.
         if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
             let submenu = self.view_context_submenu(
                 ContextSubmenu::AddNewToProject,
                 interaction.canvas.selected.len(),
             );
-            let submenu = iced::widget::mouse_area(submenu)
-                .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
-                .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
-            // The flyout is built at the shared width (`submenu.rs`).
-            let submenu_w = Self::CONTEXT_MENU_WIDTH;
-            let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
-                (x - submenu_w).max(0.0)
-            } else {
-                x + menu_w
-            };
-            // Launcher position inside the project-tree menu:
-            // `Make Project Available Online...` (row 0)
-            // `Validate Project`                 (row 1)
-            // `Add New to Project ›`             (row 2) ← target
-            // → top + 2 rows, no separator above the launcher.
-            const ROW_H: f32 = 22.0;
-            const TOP_PAD: f32 = 4.0;
-            let launcher_y = TOP_PAD + 2.0 * ROW_H;
-            let sub_y = (y + launcher_y - 4.0).max(0.0);
-            out.push(
-                column![
-                    iced::widget::Space::new().height(sub_y),
-                    row![
-                        iced::widget::Space::new().width(sub_x),
-                        submenu,
-                        iced::widget::Space::new().width(Length::Fill),
-                    ]
-                    .width(Length::Fill),
-                ]
-                .boxed(),
+            let sub_origin = super::context_menu::submenu_origin(
+                origin,
+                menu_w,
+                // The flyout is built at the shared width (`submenu.rs`).
+                Self::CONTEXT_MENU_WIDTH,
+                2,
+                0,
+                false,
+                self.ui_state.size_of_window(window_id).0,
             );
+            out.push(Self::submenu_flyout(submenu, sub_origin));
         }
         out
     }
@@ -703,22 +578,21 @@ impl Signex {
     /// v0.18.10 — Altium-style grid picker popup. Floats at the cursor
     /// when `G` is pressed in a footprint editor. Pushes dismiss then the
     /// clamped menu.
-    pub(super) fn grid_picker_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let interaction = &self.interaction_state;
-        let Some(picker) = interaction.grid_picker.as_ref() else {
+    pub(super) fn grid_picker_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
+        let Some(picker) = self.interaction_state.grid_picker.as_ref() else {
             return Vec::new();
         };
-        let menu = self.view_grid_picker_menu();
-        let (x, y) = super::context_menu::clamp_menu_origin(
+        self.menu_overlay(
+            window_id,
+            Message::Ui(UiMsg::GridPickerClose),
+            self.view_grid_picker_menu(),
             (picker.x, picker.y),
-            (200.0, super::context_menu::menu_height(13)),
-            ui.window_size,
-        );
-        vec![
-            Self::dismiss_layer(Message::Ui(UiMsg::GridPickerClose)),
-            super::context_menu::anchored_menu(menu, (x, y)),
-        ]
+            200.0,
+            13,
+        )
     }
 
     /// Dock drop preview — paints the region the dragged floating panel
@@ -792,12 +666,41 @@ impl Signex {
     }
 }
 
+/// The card both hover cards draw: `rows` on the panel background with a 1 px
+/// border, padded `8 14 8 10`. `width` is `Shrink` to fit the text, or fixed
+/// at the cap.
+fn hover_card<'a>(
+    rows: Vec<Element<'a, Message>>,
+    spacing: f32,
+    width: Length,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, Message> {
+    let panel_bg = crate::styles::ti(tokens.panel_bg);
+    let border_c = crate::styles::ti(tokens.border);
+    container(column(rows).spacing(spacing))
+        .padding(iced::Padding {
+            top: 8.0,
+            right: 14.0,
+            bottom: 8.0,
+            left: 10.0,
+        })
+        .width(width)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(iced::Background::Color(panel_bg)),
+            border: iced::Border {
+                color: border_c,
+                width: 1.0,
+                radius: 4.0.into(),
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
 /// Widest the symbol hover card grows; below that it fits its text and the
 /// values wrap (#2100).
 const SYMBOL_CARD_MAX_W: f32 = 320.0;
-/// Glyph advance per em for the label column and the placement estimate: the
-/// canvas face (Iosevka, 0.5 em) plus a margin for other picked fonts.
-const SYMBOL_CARD_GLYPH_EM: f32 = 0.55;
 /// Left (10) plus right (14) padding, plus the 1 px border on each side.
 const SYMBOL_CARD_PAD_W: f32 = 26.0;
 
@@ -805,11 +708,9 @@ const SYMBOL_CARD_PAD_W: f32 = 26.0;
 /// longest label, the gap and the longest value, at most
 /// [`SYMBOL_CARD_MAX_W`].
 fn symbol_card_widths(fields: &[(&str, String)], family: &str) -> (f32, f32) {
-    let family = Some(family).filter(|f| !f.trim().is_empty());
-    let width = |text: &str, size: f32| match signex_types::font::shaped_advance_em(text, family) {
-        Some(em) => em * size * 1.05,
-        None => text.chars().count() as f32 * size * SYMBOL_CARD_GLYPH_EM,
-    };
+    let family = signex_types::font::nonblank_family(family);
+    let width =
+        |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let label_w = fields
         .iter()
         .map(|(label, _)| width(label, TS.body))

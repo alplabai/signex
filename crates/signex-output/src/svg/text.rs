@@ -225,13 +225,11 @@ fn glyph_advance(face: &Face<'_>, gid: GlyphId, scale: f32) -> f32 {
 /// the export must too or a printed label is shorter than the one on screen
 /// and a Roboto label differs from an Iosevka one.
 pub(super) fn em_for_glyph_height(alias: &str, glyph_height: f32) -> f32 {
-    let ratio = face_for_alias(alias)
-        .and_then(|face| {
-            let upm = f32::from(face.units_per_em());
-            let cap = f32::from(face.capital_height()?);
-            (upm > 0.0 && cap > 0.0).then_some(cap / upm)
-        })
-        .unwrap_or(signex_types::font::FALLBACK_MM_PER_EM);
+    let ratio = match alias {
+        "F1" | "F2" => signex_types::font::mm_per_em(Some("Roboto")),
+        "F3" | "F4" => signex_types::font::mm_per_em(Some("Iosevka")),
+        _ => signex_types::font::FALLBACK_MM_PER_EM,
+    };
     glyph_height / ratio
 }
 

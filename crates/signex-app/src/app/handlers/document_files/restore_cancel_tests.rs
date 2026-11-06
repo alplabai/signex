@@ -612,9 +612,7 @@ fn text_edit_on(
 
 #[test]
 fn inline_text_on_an_object_of_a_background_restored_sheet_is_discarded() {
-    use signex_types::schematic::{
-        HAlign, Label, LabelType, Point, SchematicSheet, SelectedKind, VAlign,
-    };
+    use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SelectedKind};
     let _ = crate::diagnostics::init_logging();
     let (dir, path, sha, _restored, mut app) = schematic_fixture("text-on-background");
     let label_uuid = uuid::Uuid::now_v7();
@@ -623,18 +621,8 @@ fn inline_text_on_an_object_of_a_background_restored_sheet_is_discarded() {
         ..Default::default()
     };
     sheet.labels.push(Label {
-        unknown_columns: Default::default(),
-        font_family: None,
         uuid: label_uuid,
-        text: "NET".into(),
-        position: Point::new(1.0, 1.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
+        ..Label::new("NET", Point::new(1.0, 1.0), LabelType::Net)
     });
     app.document_state.engines.insert(
         path.clone(),

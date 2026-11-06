@@ -15,17 +15,12 @@ use uuid::Uuid;
 fn label(n: u128, family: Option<&str>) -> Label {
     Label {
         uuid: Uuid::from_u128(n),
-        text: format!("NET{n}"),
-        position: SchPoint { x: 1.0, y: 2.0 },
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
         font_family: family.map(str::to_string),
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(
+            format!("NET{n}"),
+            SchPoint { x: 1.0, y: 2.0 },
+            LabelType::Net,
+        )
     }
 }
 

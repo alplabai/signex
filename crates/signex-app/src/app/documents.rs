@@ -278,7 +278,6 @@ pub struct SymbolDocument {
     pub active_body: signex_types::schematic::BodyStyle,
     pub tool: crate::library::editor::symbol::canvas::SymbolTool,
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
-    pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
     pub canvas_cache: iced::widget::canvas::Cache,
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
@@ -424,7 +423,6 @@ impl SymbolDocument {
             active_body: signex_types::schematic::BodyStyle::Normal,
             tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
             selected: None,
-            ai_preview: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
             save_generation: 0,

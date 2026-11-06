@@ -5,7 +5,6 @@
 //! so the types carry `pub(super)` visibility.
 
 use super::*;
-use signex_types::anchor2d::rotate_vec;
 use signex_types::rotation2d::Vec2d;
 
 /// Palette derived from the active sheet colour — picks a content
@@ -111,20 +110,10 @@ pub(super) struct PinRenderGeometry {
 
 impl PinRenderGeometry {
     pub(super) fn compute(pin: &SymbolPin) -> Self {
-        use signex_library::PinOrientation;
-        use std::f64::consts::FRAC_PI_2;
-
-        // Orientation → angle (CCW from +x axis), tip → body direction.
-        let angle_rad: f64 = match pin.orientation {
-            PinOrientation::Right => 0.0,
-            PinOrientation::Up => FRAC_PI_2,
-            PinOrientation::Left => std::f64::consts::PI,
-            PinOrientation::Down => -FRAC_PI_2,
-            _ => std::f64::consts::PI,
-        };
-
         let tip = Vec2d::new(pin.position[0], pin.position[1]);
-        let unit = rotate_vec(Vec2d::new(1.0, 0.0), angle_rad);
+        // Tip → body direction.
+        let (unit_x, unit_y) = pin.orientation.unit_vector();
+        let unit = Vec2d::new(unit_x, unit_y);
         let body_end = Vec2d::new(tip.x + unit.x * pin.length, tip.y + unit.y * pin.length);
 
         // One layout for sheet and editor (`pin_text_layout`, Y-down): the

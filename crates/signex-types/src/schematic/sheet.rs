@@ -80,6 +80,26 @@ pub struct Label {
 }
 
 impl Label {
+    /// A new label with a fresh id and the stock look: no rotation, no shape,
+    /// [`SCHEMATIC_TEXT_MM`] text, left-aligned, sitting on its anchor. Use
+    /// struct update (`Label { rotation, ..Label::new(..) }`) to change more.
+    pub fn new(text: impl Into<String>, position: Point, label_type: LabelType) -> Self {
+        Self {
+            uuid: Uuid::now_v7(),
+            text: text.into(),
+            position,
+            rotation: 0.0,
+            label_type,
+            shape: String::new(),
+            font_size: SCHEMATIC_TEXT_MM,
+            font_family: None,
+            justify: HAlign::Left,
+            justify_v: VAlign::Bottom,
+            locked: false,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+
     /// The sheet-port name this label exposes to a parent sheet, or `None`
     /// when it is not a port label (only Hierarchical and Global labels cross
     /// a sheet boundary) or its text is blank. The single predicate +
@@ -641,6 +661,22 @@ impl Aabb {
         }
     }
 
+    /// Whether the two boxes share any point; boxes that only touch count.
+    pub fn intersects(&self, other: &Aabb) -> bool {
+        !(self.max_x < other.min_x
+            || self.min_x > other.max_x
+            || self.max_y < other.min_y
+            || self.min_y > other.max_y)
+    }
+
+    /// Whether the two boxes share area; boxes that only touch do not count.
+    pub fn overlaps_interior(&self, other: &Aabb) -> bool {
+        self.min_x < other.max_x
+            && self.max_x > other.min_x
+            && self.min_y < other.max_y
+            && self.max_y > other.min_y
+    }
+
     pub fn width(&self) -> f64 {
         self.max_x - self.min_x
     }
@@ -850,5 +886,37 @@ mod lib_symbol_table_tests {
         assert!(!live.shares_storage_with(&snapshot));
         assert_eq!(snapshot.len(), 1);
         assert_eq!(live.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod label_junction_aabb_tests {
+    use super::*;
+
+    #[test]
+    fn label_new_has_the_stock_look() {
+        let label = Label::new("VCC", Point::new(1.0, 2.0), LabelType::Global);
+        assert_eq!(label.text, "VCC");
+        assert_eq!(label.position, Point::new(1.0, 2.0));
+        assert_eq!(label.label_type, LabelType::Global);
+        assert_eq!(label.rotation, 0.0);
+        assert!(label.shape.is_empty());
+        assert_eq!(label.font_size, SCHEMATIC_TEXT_MM);
+        assert_eq!(label.font_family, None);
+        assert_eq!(label.justify, HAlign::Left);
+        assert_eq!(label.justify_v, VAlign::Bottom);
+        assert!(!label.locked);
+        assert!(label.unknown_columns.is_empty());
+    }
+
+    #[test]
+    fn touching_boxes_intersect_but_share_no_interior() {
+        let a = Aabb::new(0.0, 0.0, 1.0, 1.0);
+        let touching = Aabb::new(1.0, 0.0, 2.0, 1.0);
+        let apart = Aabb::new(1.5, 0.0, 2.5, 1.0);
+        let over = Aabb::new(0.5, 0.5, 1.5, 1.5);
+        assert!(a.intersects(&touching) && !a.overlaps_interior(&touching));
+        assert!(!a.intersects(&apart) && !a.overlaps_interior(&apart));
+        assert!(a.intersects(&over) && a.overlaps_interior(&over));
     }
 }

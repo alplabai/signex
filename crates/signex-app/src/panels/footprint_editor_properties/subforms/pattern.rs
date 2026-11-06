@@ -5,7 +5,7 @@ use iced::{Color, Element, Length, Widget};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row};
-use super::super::{fp_is_collapsed, props_section_header};
+use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -40,16 +40,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     let array_id = arr.array_id;
 
     col = col.push(
-        props_section_header(
-            "Pattern",
+        collapsible_section_header(
             "fp_pattern",
+            "Pattern",
             collapsed_sections,
             primary,
             border_c,
         )
         .boxed(),
     );
-    if fp_is_collapsed("fp_pattern", collapsed_sections) {
+    if is_section_collapsed("fp_pattern", collapsed_sections) {
         return col;
     }
 

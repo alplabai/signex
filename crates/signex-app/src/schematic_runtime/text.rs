@@ -31,25 +31,13 @@ pub fn draw_text_note_preview(
     document_family: Option<&str>,
 ) {
     let snapshot = RendererSnapshot {
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        arcs: Vec::new(),
-        polygons: Vec::new(),
-        labels: Vec::new(),
-        pin_texts: Vec::new(),
-        reference_value_texts: Vec::new(),
         parameter_texts: vec![note_text_input(
             note,
             note.text.clone(),
             color,
             document_family,
         )],
-        overlays: OverlayInputs::default(),
-        erc_markers: Vec::new(),
-        drawings: Vec::new(),
-        drawings_front: Vec::new(),
-        wire_color_overrides: HashMap::new(),
-        wire_line_styles: HashMap::new(),
+        ..Default::default()
     };
 
     draw_renderer_snapshot(

@@ -37,18 +37,13 @@ impl Signex {
                 self.interaction_state.pending_port = None;
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
-                        unknown_columns: Default::default(),
-                        uuid: uuid::Uuid::now_v7(),
-                        text: "NET".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        label_type: signex_types::schematic::LabelType::Net,
-                        shape: String::new(),
-                        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
-                        font_family: None,
-                        locked: false,
+                        ..signex_types::schematic::Label::new(
+                            "NET",
+                            signex_types::schematic::Point::new(0.0, 0.0),
+                            signex_types::schematic::LabelType::Net,
+                        )
                     });
                 task
             }
@@ -111,17 +106,16 @@ impl Signex {
             ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
             ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
             // "Select → Connection": if a wire/bus/junction/label is already
-            // selected, expand immediately. Otherwise fall through to Select
-            // tool so the next click triggers the net walk via the hit-test
-            // dispatched with SelectConnected.
+            // selected, expand it to its connected net geometry. Otherwise
+            // fall through to the Select tool.
             ActiveBarAction::SelectConnection => {
                 use signex_types::schematic::SelectedKind;
-                let has_net_seed = self
+                let seed = self
                     .interaction_state
-                    .active_canvas_mut()
+                    .active_canvas()
                     .selected
                     .iter()
-                    .any(|i| {
+                    .find(|i| {
                         matches!(
                             i.kind,
                             SelectedKind::Wire
@@ -129,53 +123,13 @@ impl Signex {
                                 | SelectedKind::Junction
                                 | SelectedKind::Label
                         )
-                    });
-                if has_net_seed {
-                    let seed = self
-                        .interaction_state
-                        .active_canvas()
-                        .selected
-                        .first()
-                        .cloned();
-                    if let (Some(snapshot), Some(seed)) = (self.active_render_snapshot(), seed) {
-                        let (wx, wy) = match seed.kind {
-                            SelectedKind::Wire => snapshot
-                                .wires
-                                .iter()
-                                .find(|w| w.uuid == seed.uuid)
-                                .map(|w| (w.start.x, w.start.y))
-                                .unwrap_or((0.0, 0.0)),
-                            SelectedKind::Bus => snapshot
-                                .buses
-                                .iter()
-                                .find(|b| b.uuid == seed.uuid)
-                                .map(|b| (b.start.x, b.start.y))
-                                .unwrap_or((0.0, 0.0)),
-                            SelectedKind::Junction => snapshot
-                                .junctions
-                                .iter()
-                                .find(|j| j.uuid == seed.uuid)
-                                .map(|j| (j.position.x, j.position.y))
-                                .unwrap_or((0.0, 0.0)),
-                            SelectedKind::Label => snapshot
-                                .labels
-                                .iter()
-                                .find(|l| l.uuid == seed.uuid)
-                                .map(|l| (l.position.x, l.position.y))
-                                .unwrap_or((0.0, 0.0)),
-                            _ => (0.0, 0.0),
-                        };
-                        self.update(Message::Selection(
-                            selection_request::SelectionRequest::SelectConnected {
-                                world_x: wx,
-                                world_y: wy,
-                            },
-                        ))
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)))
+                    })
+                    .copied();
+                match seed {
+                    Some(seed) => self.update(Message::Selection(
+                        selection_request::SelectionRequest::SelectConnected { seed },
+                    )),
+                    None => self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select))),
                 }
             }
             // Lasso arms a multi-click polygon selection in

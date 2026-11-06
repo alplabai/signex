@@ -8,18 +8,8 @@ const TEXT: &str = "SYSTEM_RESET_REQUEST_N";
 
 fn label(label_type: LabelType, family: Option<&str>) -> Label {
     Label {
-        uuid: uuid::Uuid::now_v7(),
-        text: TEXT.into(),
-        position: Point::new(20.0, 30.0),
-        rotation: 0.0,
-        label_type,
-        shape: String::new(),
-        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
         font_family: family.map(str::to_string),
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(TEXT, Point::new(20.0, 30.0), label_type)
     }
 }
 

@@ -29,7 +29,15 @@ impl Signex {
         &mut self,
         key: crate::library::state::ComponentsPanelRowKey,
     ) -> Task<Message> {
-        self.library.components_panel.selected = Some(key.clone());
+        let panel = &mut self.library.components_panel;
+        if panel
+            .footprint_pick
+            .as_ref()
+            .is_some_and(|(k, _)| *k != key)
+        {
+            panel.footprint_pick = None;
+        }
+        panel.selected = Some(key.clone());
         // The row already shown is read again only when it was saved since
         // or its last read failed, and not while a read is running.
         let stamp = self.components_row_stamp(&key);
@@ -40,6 +48,60 @@ impl Signex {
             return Task::none();
         }
         self.start_components_details_load(key)
+    }
+
+    /// A footprint was picked in the details view: remember it for the
+    /// selected row. A pick the row does not offer is refused, and the
+    /// default's pick is stored as no pick.
+    pub(super) fn handle_components_panel_footprint_picked(
+        &mut self,
+        reference: signex_library::primitive::PrimitiveRef,
+    ) -> Task<Message> {
+        let Some(key) = self.library.components_panel.selected.clone() else {
+            return Task::none();
+        };
+        let Some(row) = self.components_row(&key) else {
+            return Task::none();
+        };
+        if !row.binds_footprint(&reference) {
+            crate::diagnostics::log_warning(format!(
+                "{} does not offer that footprint any more; pick again.",
+                row.internal_pn
+            ));
+            return Task::none();
+        }
+        let is_default = row.footprint_ref == Some(reference);
+        self.library.components_panel.footprint_pick = (!is_default).then_some((key, reference));
+        Task::none()
+    }
+
+    /// The alternate footprint the Components panel picked for the row, when
+    /// the row is still the selected one and still offers it (#1234); `None`
+    /// places the row's default. Only the Components panel's own place paths
+    /// ask; the library picker always places the default.
+    pub(crate) fn picked_footprint_for(
+        &self,
+        key: &crate::library::state::ComponentsPanelRowKey,
+    ) -> Option<signex_library::primitive::PrimitiveRef> {
+        let panel = &self.library.components_panel;
+        let (picked_for, reference) = panel.footprint_pick.as_ref()?;
+        (picked_for == key
+            && panel.selected.as_ref() == Some(key)
+            && self.components_row(key)?.binds_footprint(reference))
+        .then_some(*reference)
+    }
+
+    /// The in-memory row `key` names.
+    fn components_row(
+        &self,
+        key: &crate::library::state::ComponentsPanelRowKey,
+    ) -> Option<&signex_library::ComponentRow> {
+        self.library
+            .library_at(&key.library_path)?
+            .tables
+            .get(&key.table)?
+            .iter()
+            .find(|r| r.row_id == key.row_id.0)
     }
 
     /// The saved state of the row `key` names, for the staleness check.
@@ -265,7 +327,8 @@ impl Signex {
         // A session already open (Place Component, a paste) is not this
         // drag's: end it so a release before the read lands cannot commit it.
         self.cancel_placement_session();
-        self.handle_place_library_component(k.library_path, k.table, k.row_id)
+        let footprint = self.picked_footprint_for(&k);
+        self.handle_place_library_component_with(k.library_path, k.table, k.row_id, footprint)
     }
 
     /// The button went up. A row dragged past the threshold and released
@@ -347,7 +410,9 @@ impl Signex {
         // `handle_place_library_component` refuses a pick with.
         let starts = self.document_state.active_path.is_some()
             && self.library.library_at(&k.library_path).is_some();
-        let task = self.handle_place_library_component(k.library_path, k.table, k.row_id);
+        let footprint = self.picked_footprint_for(&k);
+        let task =
+            self.handle_place_library_component_with(k.library_path, k.table, k.row_id, footprint);
         if starts {
             let epoch = self.interaction_state.placement_epoch;
             self.library.components_panel.pending_drop = Some((epoch, world));
@@ -498,7 +563,12 @@ impl Signex {
     ) -> Task<Message> {
         // Same flow as the picker: the part attaches to the cursor.
         self.library.components_panel.row_menu = None;
-        self.handle_place_library_component(library_path, table, row_id)
+        let footprint = self.picked_footprint_for(&crate::library::state::ComponentsPanelRowKey {
+            library_path: library_path.clone(),
+            table: table.clone(),
+            row_id,
+        });
+        self.handle_place_library_component_with(library_path, table, row_id, footprint)
     }
 }
 
@@ -507,6 +577,24 @@ mod tests {
     use crate::app::{Message, Signex};
     use crate::library::messages::LibraryMessage;
     use crate::library::state::ComponentsPanelRowKey;
+
+    #[test]
+    fn closing_a_library_forgets_a_footprint_pick_made_in_it() {
+        let (mut app, _boot) = Signex::new();
+        let key = ComponentsPanelRowKey {
+            library_path: std::path::PathBuf::from("gone.snxlib"),
+            table: "parts".into(),
+            row_id: signex_library::RowId::new(),
+        };
+        let panel = &mut app.library.components_panel;
+        panel.selected = Some(key.clone());
+        panel.footprint_pick = Some((
+            key.clone(),
+            signex_library::primitive::PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil()),
+        ));
+        app.library.forget_panel_state_of(&key.library_path);
+        assert!(app.library.components_panel.footprint_pick.is_none());
+    }
 
     #[test]
     fn a_row_of_a_library_that_is_not_open_shows_an_error() {

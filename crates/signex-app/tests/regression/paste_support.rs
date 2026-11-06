@@ -139,18 +139,9 @@ pub(crate) mod sheet {
 
     pub(crate) fn net_label(text: &str, at: (f64, f64)) -> Label {
         Label {
-            uuid: Uuid::now_v7(),
-            text: text.to_owned(),
-            position: Point::new(at.0, at.1),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            font_family: None,
             justify: Default::default(),
             justify_v: Default::default(),
-            unknown_columns: Default::default(),
-            locked: false,
+            ..Label::new(text.to_owned(), Point::new(at.0, at.1), LabelType::Net)
         }
     }
 

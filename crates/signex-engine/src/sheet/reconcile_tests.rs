@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 use signex_net::{ProjectGraph, ProjectRoot, SheetKey, build_project_netlist};
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Junction, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin,
-    PinDirection, PinShapeStyle, Point, SchematicSheet, SheetPin, Symbol, VAlign, Wire,
+    ChildSheet, FillType, Junction, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin,
+    PinDirection, PinShapeStyle, Point, SchematicSheet, SheetPin, Symbol, Wire,
 };
 
 use super::{SheetPinContacts, reconcile_child_sheet_pins as reconcile_with};
@@ -188,18 +188,7 @@ fn place(sheet: &mut SchematicSheet, reference: &str, at: Point) {
 
 fn hierarchical_label(text: &str, at: Point) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: text.to_string(),
-        position: at,
-        rotation: 0.0,
-        label_type: LabelType::Hierarchical,
-        shape: String::new(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new(text, at, LabelType::Hierarchical)
     }
 }
 

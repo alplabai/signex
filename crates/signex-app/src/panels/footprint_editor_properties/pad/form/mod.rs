@@ -14,12 +14,12 @@
 //!   chrome primitives; `subforms` and `pad_table` import them.
 
 use iced::widget::{Column, Widget as _, container, pick_list, row, text, text_input};
-use iced::{Color, Length, Theme};
+use iced::{Color, Length};
 
 use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
 };
-use super::super::{fp_is_collapsed, props_section_header};
+use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -234,20 +234,9 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
             text_input(placeholder, value)
                 .size(TS.caption)
                 .padding(SP.xs)
-                .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                    background: iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    )),
-                    border: iced::Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: border_c,
-                        ..Default::default()
-                    },
-                    placeholder: muted,
-                    value: primary,
-                    selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                })
+                .style(crate::panels::footprint_editor_properties::fp_field_style(
+                    muted, primary, border_c
+                ))
                 .on_input(on_input),
         ]
         .spacing(6)
@@ -336,16 +325,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         ..
     } = palette;
     col = col.push(
-        props_section_header(
-            "Properties",
+        collapsible_section_header(
             "fp_pad_properties",
+            "Properties",
             collapsed_sections,
             primary,
             border_c,
         )
         .boxed(),
     );
-    if fp_is_collapsed("fp_pad_properties", collapsed_sections) {
+    if is_section_collapsed("fp_pad_properties", collapsed_sections) {
         return col;
     }
 
@@ -469,16 +458,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
         ..
     } = palette;
     col = col.push(
-        props_section_header(
-            "Pad Features",
+        collapsible_section_header(
             "fp_pad_features",
+            "Pad Features",
             collapsed_sections,
             primary,
             border_c,
         )
         .boxed(),
     );
-    if fp_is_collapsed("fp_pad_features", collapsed_sections) {
+    if is_section_collapsed("fp_pad_features", collapsed_sections) {
         return col;
     }
 

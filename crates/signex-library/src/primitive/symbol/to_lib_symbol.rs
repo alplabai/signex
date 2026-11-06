@@ -65,10 +65,7 @@ use signex_types::schematic::{
     PinDirection as SchematicPinDirection, PinShapeStyle, Point, VAlign,
 };
 
-use super::{
-    PinDirection, PinOrientation, PinSymbolKind, Symbol, SymbolGraphic, SymbolGraphicKind,
-    SymbolPin,
-};
+use super::{PinDirection, PinSymbolKind, Symbol, SymbolGraphic, SymbolGraphicKind, SymbolPin};
 
 impl Symbol {
     /// Convert this library `Symbol` into a schematic `LibSymbol`.
@@ -120,7 +117,7 @@ fn lib_pin_from(pin: &SymbolPin) -> LibPin {
             direction: pin_direction(pin.electrical),
             shape_style: pin_shape_style(pin.outside_edge_symbol),
             position: Point::new(pin.position[0], pin.position[1]),
-            rotation: pin_rotation_deg(pin.orientation),
+            rotation: pin.orientation.rotation_deg(),
             length: pin.length,
             name: pin.name.clone(),
             number: pin.number.clone(),
@@ -128,22 +125,6 @@ fn lib_pin_from(pin: &SymbolPin) -> LibPin {
             name_visible: pin.name_visible,
             number_visible: pin.designator_visible,
         },
-    }
-}
-
-/// See the module doc's "Pin rotation convention" section for why this
-/// is the identity on angle — both sides already agree.
-///
-/// `PinOrientation` is `#[non_exhaustive]` for downstream crates, but
-/// this match lives in the crate that defines it, so it stays exhaustive
-/// with no wildcard arm — a future variant added to the enum fails this
-/// match at compile time instead of silently falling through.
-fn pin_rotation_deg(orientation: PinOrientation) -> f64 {
-    match orientation {
-        PinOrientation::Right => 0.0,
-        PinOrientation::Up => 90.0,
-        PinOrientation::Left => 180.0,
-        PinOrientation::Down => 270.0,
     }
 }
 

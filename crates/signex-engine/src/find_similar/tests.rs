@@ -17,18 +17,10 @@ fn part(reference: &str, value: &str, footprint: &str, lib: &str) -> Symbol {
 
 fn label(text: &str, label_type: LabelType) -> Label {
     Label {
-        uuid: Uuid::now_v7(),
-        text: text.to_owned(),
-        position: Point::new(0.0, 0.0),
-        rotation: 0.0,
-        label_type,
-        shape: String::new(),
         font_size: 0.0,
-        font_family: None,
         justify: Default::default(),
         justify_v: Default::default(),
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(text.to_owned(), Point::new(0.0, 0.0), label_type)
     }
 }
 

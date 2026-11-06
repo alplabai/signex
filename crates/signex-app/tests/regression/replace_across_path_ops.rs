@@ -30,18 +30,9 @@ fn sheet_with_label(text: &str) -> SchematicSheet {
         ..Default::default()
     };
     sheet.labels.push(Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point::new(0.0, 0.0),
-        rotation: 0.0,
-        label_type: LabelType::Global,
-        shape: String::new(),
-        font_size: 1.27,
         justify: HAlign::default(),
         justify_v: VAlign::default(),
-        font_family: None,
-        locked: false,
+        ..Label::new(text, Point::new(0.0, 0.0), LabelType::Global)
     });
     sheet
 }

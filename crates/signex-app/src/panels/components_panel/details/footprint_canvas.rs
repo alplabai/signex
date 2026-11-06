@@ -1,7 +1,8 @@
 //! Footprint preview: the footprint editor's own rendering (backdrop, grid,
 //! origin, silk, courtyard, pads with holes) over a read-only
 //! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
-//! first show. Shared by the Components panel and the Component Preview
+//! first show, and again when the box changes size while the user has not
+//! zoomed or panned. Shared by the Components panel and the Component Preview
 //! dialog. Left-drag pans; Ctrl+wheel zooms (a plain wheel scrolls the
 //! panel around it).
 
@@ -52,6 +53,10 @@ pub struct PreviewState {
     camera: FootprintCanvasState,
     /// The footprint the camera was fitted for.
     fitted_for: Option<(uuid::Uuid, i64)>,
+    /// The box size the camera was fitted for; another size refits.
+    fitted_size: Option<iced::Size>,
+    /// The user zoomed or panned since the last fit: a resize keeps the view.
+    user_moved: bool,
     /// Last cursor position while a drag-pan is running.
     pan_from: Option<Point>,
     /// Ctrl state from the last modifiers event; the wheel zooms with it.
@@ -72,8 +77,10 @@ impl PreviewState {
         self.camera.offset
     }
 
-    fn is_fitted_for(&self, model: &PreviewFootprint) -> bool {
-        self.fitted_for == Some(model.key()) && self.camera.did_initial_fit
+    fn is_fitted_for(&self, model: &PreviewFootprint, size: iced::Size) -> bool {
+        self.fitted_for == Some(model.key())
+            && (self.user_moved || self.fitted_size == Some(size))
+            && self.camera.did_initial_fit
     }
 }
 
@@ -100,9 +107,11 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
         cursor: mouse::Cursor,
     ) -> Option<Action<M>> {
         let size_ok = bounds.width > 0.0 && bounds.height > 0.0;
-        if !state.is_fitted_for(self.model) && size_ok {
+        if size_ok && !state.is_fitted_for(self.model, bounds.size()) {
             state.camera = fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()));
             state.fitted_for = Some(self.model.key());
+            state.fitted_size = Some(bounds.size());
+            state.user_moved = false;
             state.pan_from = None;
             state.cache.clear();
         }
@@ -129,6 +138,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
                     return None;
                 }
                 state.camera.zoom_about(anchor, factor, MIN_PREVIEW_SCALE);
+                state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
@@ -139,6 +149,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
                 if !pinch_zoom(&mut state.camera, anchor, *delta) {
                     return None;
                 }
+                state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
@@ -153,6 +164,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
                     .camera
                     .pan_by(Vector::new(position.x - last.x, position.y - last.y));
                 state.pan_from = Some(*position);
+                state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
@@ -178,7 +190,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
     ) -> Vec<Geometry> {
         // Until `update` has fitted this footprint, draw the fitted view
         // without caching it against the stale camera.
-        let fitted = state.is_fitted_for(self.model);
+        let fitted = state.is_fitted_for(self.model, bounds.size());
         if !fitted {
             state.cache.clear();
         }

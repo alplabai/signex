@@ -8,8 +8,8 @@
 
 use signex_app::app::{ContextAction, ContextMenuMsg, EditMsg, ErcMsg, Message, Signex};
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Label, LabelType, Point, SchematicSheet, SelectedItem,
-    SelectedKind, SheetPin, VAlign,
+    ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
+    SheetPin,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -49,18 +49,8 @@ fn empty_sheet() -> SchematicSheet {
 
 fn label(text: &str, label_type: LabelType, shape: &str) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point::new(10.0, 10.0),
-        rotation: 0.0,
-        label_type,
         shape: shape.to_string(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new(text, Point::new(10.0, 10.0), label_type)
     }
 }
 

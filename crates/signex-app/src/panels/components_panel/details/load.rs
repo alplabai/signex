@@ -8,7 +8,7 @@ use signex_library::RowId;
 use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
 
-use super::ComponentDetails;
+use super::{ComponentDetails, FootprintOption};
 use crate::library::editor::footprint::canvas::PreviewFootprint;
 use crate::library::state::ComponentsPanelRowKey;
 
@@ -55,11 +55,11 @@ pub fn load_details(
             None
         }
     };
-    let footprint = row.footprint_ref.and_then(|reference| {
+    let mut read_footprint = |reference: &PrimitiveRef| {
         let read = if reference.library_id == own.library_id() {
             own.get_footprint(reference.uuid).map_err(|e| e.to_string())
         } else {
-            owner_of(libraries, &reference)
+            owner_of(libraries, reference)
                 .and_then(|a| a.get_footprint(reference.uuid).map_err(|e| e.to_string()))
         };
         match read {
@@ -69,7 +69,25 @@ pub fn load_details(
                 None
             }
         }
-    });
+    };
+    let footprint = row.footprint_ref.as_ref().and_then(&mut read_footprint);
+    // The alternates are read with the rest, so switching the picker is
+    // instant and needs no second read (#1234).
+    let alternate_footprints = row
+        .alternate_footprints
+        .iter()
+        .map(|binding| {
+            let preview = read_footprint(&binding.footprint);
+            FootprintOption {
+                reference: binding.footprint,
+                name: preview.as_ref().map_or_else(
+                    || format!("Footprint {}", short_id(&binding.footprint)),
+                    |p| p.name.clone(),
+                ),
+                preview,
+            }
+        })
+        .collect();
 
     Ok(ComponentDetails {
         internal_pn: row.internal_pn.to_string(),
@@ -81,6 +99,8 @@ pub fn load_details(
         has_footprint_ref: row.footprint_ref.is_some(),
         symbol,
         footprint,
+        default_footprint: row.footprint_ref,
+        alternate_footprints,
         parameters: row
             .parameters
             .iter()
@@ -88,4 +108,16 @@ pub fn load_details(
             .collect(),
         notes,
     })
+}
+
+/// The first eight characters of a primitive's id, for a footprint whose name
+/// could not be read.
+fn short_id(reference: &PrimitiveRef) -> String {
+    reference
+        .uuid
+        .simple()
+        .to_string()
+        .chars()
+        .take(8)
+        .collect()
 }

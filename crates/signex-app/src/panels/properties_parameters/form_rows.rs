@@ -51,13 +51,7 @@ pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> El
         container(text(title.to_string()).size(TS.label).color(text_c))
             .padding([6.0, SP.m])
             .width(Length::Fill),
-        container(Space::new())
-            .height(1.0)
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(border_c)),
-                ..container::Style::default()
-            }),
+        thin_sep(border_c),
     ]
     .spacing(0)
     .boxed()

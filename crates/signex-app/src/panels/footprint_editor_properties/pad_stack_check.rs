@@ -6,7 +6,7 @@ use iced::widget::{Column, button, container, row, text};
 use iced::{Background, Color, Element, Length, Theme, Widget};
 
 use super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
-use super::{fp_is_collapsed, props_section_header};
+use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -30,16 +30,16 @@ pub(super) fn view_pad_stack_check<'a>(
     } = palette;
     let warn = Color::from_rgba(1.00, 0.75, 0.30, 1.00);
     col = col.push(
-        props_section_header(
-            "Pad stack check",
+        collapsible_section_header(
             "fp_pad_stack_check",
+            "Pad stack check",
             collapsed_sections,
             primary,
             border,
         )
         .boxed(),
     );
-    if fp_is_collapsed("fp_pad_stack_check", collapsed_sections) {
+    if is_section_collapsed("fp_pad_stack_check", collapsed_sections) {
         return col;
     }
     if let Some(n) = fp.legacy_pad_stack_offer {

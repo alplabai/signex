@@ -23,5 +23,6 @@ pub mod schematic;
 pub mod segment;
 pub mod text_increment;
 pub mod theme;
+mod token_enum;
 pub mod violation;
 pub mod zone_holes;

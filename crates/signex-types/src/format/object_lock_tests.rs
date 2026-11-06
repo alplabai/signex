@@ -29,17 +29,8 @@ fn wire(n: u128, locked: bool) -> Wire {
 fn label(n: u128, locked: bool) -> Label {
     Label {
         uuid: Uuid::from_u128(n),
-        text: format!("NET{n}"),
-        position: Point::new(1.0, 2.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
         locked,
-        unknown_columns: Default::default(),
+        ..Label::new(format!("NET{n}"), Point::new(1.0, 2.0), LabelType::Net)
     }
 }
 
