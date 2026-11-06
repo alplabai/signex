@@ -543,7 +543,10 @@ impl Signex {
         }
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             let written = engine
-                .save_with_net_colors(&self.ui_state.wire_color_overrides)
+                .save_with_extents(
+                    &self.ui_state.wire_color_overrides,
+                    crate::schematic_runtime::text_width::live_extent_measure(),
+                )
                 .with_context(|| format!("save schematic {}", path.display()))?;
             self.record_disk_baseline(path, crate::persist::ContentHash::of(&written));
             // This save never reaches the async completion that removes

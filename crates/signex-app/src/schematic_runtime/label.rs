@@ -17,12 +17,13 @@ pub fn draw_label_preview(
         LabelType::Global | LabelType::Hierarchical
     ) {
         polygons.push(super::label_marker_polygon(
+            None,
             label,
             stroke_color,
             to_rgba(fill_color),
             document_family,
         ));
-        let ((x, y), rotation, h_align) = flag_text(label, document_family);
+        let ((x, y), rotation, h_align) = flag_text_with(None, label, document_family);
         labels.push(TextInput {
             content: label.text.clone(),
             position: [x as f32, y as f32],
@@ -92,7 +93,11 @@ pub(super) fn is_flag(label: &Label) -> bool {
 /// direction the label extends): returns `(vertices, text_inset)`. The arrow
 /// tip sits at `-point` so the wire end lands inside the tip; the body runs
 /// from `0` to `w`, and text starts `text_inset` into it.
-fn flag_local(label: &Label, document_family: Option<&str>) -> ([(f64, f64); 5], f64) {
+fn flag_local(
+    widths: Option<WidthSources<'_>>,
+    label: &Label,
+    document_family: Option<&str>,
+) -> ([(f64, f64); 5], f64) {
     let size_mm = label
         .font_size
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
@@ -100,7 +105,14 @@ fn flag_local(label: &Label, document_family: Option<&str>) -> ([(f64, f64); 5],
     // and its height follows the em that family draws the text at.
     let family = resolve_family(label.font_family.as_deref(), document_family);
     let em_mm = size_mm / f64::from(signex_types::font::mm_per_em(family.as_deref()));
-    let glyph_w = signex_types::font::family_width_mm(&label.text, family.as_deref(), size_mm);
+    let slot = text_width::slot(
+        widths,
+        label.uuid,
+        TextField::Label,
+        label.font_family.as_deref(),
+        document_family,
+    );
+    let glyph_w = text_width::text_width_mm(slot, &label.text, family.as_deref(), size_mm);
     let half_h = em_mm * 0.62;
     let point = em_mm * 0.52;
     let pad = em_mm * 0.325;
@@ -126,18 +138,36 @@ fn to_world(label: &Label, (x, y): (f64, f64)) -> (f64, f64) {
 }
 
 /// World-space flag outline; the single source for draw and hit-test.
-pub(super) fn marker_vertices(label: &Label, document_family: Option<&str>) -> Vec<(f64, f64)> {
-    flag_local(label, document_family)
+pub(super) fn marker_vertices_with(
+    widths: Option<WidthSources<'_>>,
+    label: &Label,
+    document_family: Option<&str>,
+) -> Vec<(f64, f64)> {
+    flag_local(widths, label, document_family)
         .0
         .iter()
         .map(|&p| to_world(label, p))
         .collect()
 }
 
+#[cfg(test)]
+pub(super) fn marker_vertices(label: &Label, document_family: Option<&str>) -> Vec<(f64, f64)> {
+    marker_vertices_with(None, label, document_family)
+}
+
 /// World-space start of the flag text (vertically centred), inside the body
 /// so the text runs away from the connection point.
+pub(super) fn flag_text_anchor_with(
+    widths: Option<WidthSources<'_>>,
+    label: &Label,
+    document_family: Option<&str>,
+) -> (f64, f64) {
+    to_world(label, (flag_local(widths, label, document_family).1, 0.0))
+}
+
+#[cfg(test)]
 pub(super) fn flag_text_anchor(label: &Label, document_family: Option<&str>) -> (f64, f64) {
-    to_world(label, (flag_local(label, document_family).1, 0.0))
+    flag_text_anchor_with(None, label, document_family)
 }
 
 /// How the flag text is drawn: `(anchor, rotation_deg, h_align)`.
@@ -148,7 +178,11 @@ pub(super) fn flag_text_anchor(label: &Label, document_family: Option<&str>) -> 
 /// covers the same stretch of the body but reads normally. World space is
 /// y-down and rotation clockwise-positive on screen, so vertical text reads
 /// bottom-to-top (270°), as net-label and note text do (#1083).
-pub(super) fn flag_text(label: &Label, document_family: Option<&str>) -> ((f64, f64), f64, HAlign) {
+pub(super) fn flag_text_with(
+    widths: Option<WidthSources<'_>>,
+    label: &Label,
+    document_family: Option<&str>,
+) -> ((f64, f64), f64, HAlign) {
     let (sin, cos) = label.rotation.to_radians().sin_cos();
     let readable = cos > 1e-9 || (cos.abs() <= 1e-9 && sin < 0.0);
     let (rotation, h_align) = if readable {
@@ -156,5 +190,14 @@ pub(super) fn flag_text(label: &Label, document_family: Option<&str>) -> ((f64, 
     } else {
         ((label.rotation + 180.0).rem_euclid(360.0), HAlign::Right)
     };
-    (flag_text_anchor(label, document_family), rotation, h_align)
+    (
+        flag_text_anchor_with(widths, label, document_family),
+        rotation,
+        h_align,
+    )
+}
+
+#[cfg(test)]
+pub(super) fn flag_text(label: &Label, document_family: Option<&str>) -> ((f64, f64), f64, HAlign) {
+    flag_text_with(None, label, document_family)
 }

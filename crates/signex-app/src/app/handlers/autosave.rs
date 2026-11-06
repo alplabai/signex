@@ -195,7 +195,10 @@ impl Signex {
         if !self.document_state.autosave.needs_write(path, stamp) {
             return None;
         }
-        let bytes = match engine.serialize_with_net_colors(&self.ui_state.wire_color_overrides) {
+        let bytes = match engine.serialize_with_extents(
+            &self.ui_state.wire_color_overrides,
+            crate::schematic_runtime::text_width::live_extent_measure(),
+        ) {
             Ok(text) => text.into_bytes(),
             Err(error) => {
                 let reason = format!(

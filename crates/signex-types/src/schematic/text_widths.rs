@@ -5,8 +5,9 @@
 //! back by item id and field; an entry remembers what it was measured from
 //! (text, face, size), so a changed text, font, size or sheet default font,
 //! an undo and a redo all make it measure again, with no dependence on a
-//! revision counter. The entries are plain data, so a later format can store
-//! the measured width in the file (#2029).
+//! revision counter. This cache is never filled from the file: the widths a
+//! file stores live in [`super::TextExtents`] (#2029), read only when the face
+//! is missing.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -14,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 /// Which text of an item a width belongs to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TextField {
     Label,
     Note,
