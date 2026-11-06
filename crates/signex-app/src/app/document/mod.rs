@@ -2,7 +2,7 @@
 //!
 //! Kind state lives in different maps (engines, symbol and footprint
 //! editors, `library.editors`, the dirty path set), so there is no boxing:
-//! a [`DocumentKey`] names the owner and [`DocumentState::document`] borrows
+//! a [`DocumentKey`] names the owner and [`Signex::document`] borrows
 //! it as a [`DocumentRef`]. Only the dirty query lives here so far.
 
 mod key;
@@ -11,8 +11,10 @@ mod tests;
 
 pub(crate) use key::DocumentKey;
 
+use std::path::Path;
+
 use crate::app::state::DocumentState;
-use crate::app::{FootprintDocument, SymbolDocument};
+use crate::app::{FootprintDocument, Signex, SymbolDocument};
 use crate::library::state::{ComponentPreviewState, LibraryState};
 
 /// What every open document can say about its unsaved edits.
@@ -52,21 +54,31 @@ impl Document for ComponentPreviewState {
     }
 }
 
-/// A borrow of the owner behind a [`DocumentKey`].
-#[derive(Debug)]
+/// A borrow of the owner behind a [`DocumentKey`]. A sheet, PCB or project
+/// file is owned by the dirty path set in `docs`; a draft by its editor,
+/// plus the set while a save's write has not landed.
 pub(crate) enum DocumentRef<'a> {
-    /// A sheet, PCB or project file: the dirty path set is the owner.
-    Path {
-        dirty: bool,
+    Schematic {
+        docs: &'a DocumentState,
+        path: &'a Path,
     },
-    /// A symbol draft; `path_dirty` covers a save whose write has not landed.
+    Pcb {
+        docs: &'a DocumentState,
+        path: &'a Path,
+    },
+    Project {
+        docs: &'a DocumentState,
+        path: &'a Path,
+    },
     Symbol {
+        docs: &'a DocumentState,
+        path: &'a Path,
         draft: &'a SymbolDocument,
-        path_dirty: bool,
     },
     Footprint {
+        docs: &'a DocumentState,
+        path: &'a Path,
         draft: &'a FootprintDocument,
-        path_dirty: bool,
     },
     Row(&'a ComponentPreviewState),
 }
@@ -74,9 +86,15 @@ pub(crate) enum DocumentRef<'a> {
 impl Document for DocumentRef<'_> {
     fn is_dirty(&self) -> bool {
         match self {
-            Self::Path { dirty } => *dirty,
-            Self::Symbol { draft, path_dirty } => *path_dirty || Document::is_dirty(*draft),
-            Self::Footprint { draft, path_dirty } => *path_dirty || Document::is_dirty(*draft),
+            Self::Schematic { docs, path }
+            | Self::Pcb { docs, path }
+            | Self::Project { docs, path } => docs.is_document_dirty(path),
+            Self::Symbol { docs, path, draft } => {
+                docs.is_document_stored_dirty(path) || Document::is_dirty(*draft)
+            }
+            Self::Footprint { docs, path, draft } => {
+                docs.is_document_stored_dirty(path) || Document::is_dirty(*draft)
+            }
             Self::Row(row) => Document::is_dirty(*row),
         }
     }
@@ -89,41 +107,37 @@ impl Document for DocumentRef<'_> {
     }
 }
 
-impl DocumentState {
-    /// The owner of `key`'s state, or `None` for a Component row with no
-    /// open editor.
-    pub(crate) fn document<'a>(
-        &'a self,
-        key: &DocumentKey,
-        library: &'a LibraryState,
-    ) -> Option<DocumentRef<'a>> {
-        match key {
-            DocumentKey::Row(address) => library.editors.get(address).map(DocumentRef::Row),
-            DocumentKey::Symbol(path) => Some(match self.symbol_editors.get(path) {
-                Some(draft) => DocumentRef::Symbol {
-                    draft,
-                    path_dirty: self.is_document_dirty(path),
-                },
-                None => self.path_document(path),
-            }),
-            DocumentKey::Footprint(path) => Some(match self.footprint_editors.get(path) {
-                Some(draft) => DocumentRef::Footprint {
-                    draft,
-                    path_dirty: self.is_document_dirty(path),
-                },
-                None => self.path_document(path),
-            }),
-            DocumentKey::Schematic(path) | DocumentKey::Pcb(path) => Some(self.path_document(path)),
-            DocumentKey::Project(id) => {
-                let project = self.project_by_id(*id)?;
-                Some(self.path_document(&project.path))
-            }
-        }
+impl Signex {
+    /// [`resolve_document`] over the app's own state.
+    pub(crate) fn document<'a>(&'a self, key: &'a DocumentKey) -> Option<DocumentRef<'a>> {
+        resolve_document(&self.document_state, &self.library, key)
     }
+}
 
-    fn path_document(&self, path: &std::path::Path) -> DocumentRef<'_> {
-        DocumentRef::Path {
-            dirty: self.is_document_dirty(path),
+/// The owner of `key`'s state, or `None` when it is not open (a Component
+/// row with no editor, a project that closed). Takes the two fields it reads
+/// so a caller holding split borrows can use it. A shared, short-lived
+/// borrow for queries only: never stored, and writes stay `Signex` methods.
+pub(crate) fn resolve_document<'a>(
+    docs: &'a DocumentState,
+    library: &'a LibraryState,
+    key: &'a DocumentKey,
+) -> Option<DocumentRef<'a>> {
+    match key {
+        DocumentKey::Row(address) => library.editors.get(address).map(DocumentRef::Row),
+        DocumentKey::Schematic(path) => Some(DocumentRef::Schematic { docs, path }),
+        DocumentKey::Pcb(path) => Some(DocumentRef::Pcb { docs, path }),
+        DocumentKey::Project(id) => {
+            let path = docs.project_by_id(*id)?.path.as_path();
+            Some(DocumentRef::Project { docs, path })
+        }
+        DocumentKey::Symbol(path) => {
+            let draft = docs.symbol_editors.get(path)?;
+            Some(DocumentRef::Symbol { docs, path, draft })
+        }
+        DocumentKey::Footprint(path) => {
+            let draft = docs.footprint_editors.get(path)?;
+            Some(DocumentRef::Footprint { docs, path, draft })
         }
     }
 }

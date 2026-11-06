@@ -157,8 +157,7 @@ fn fixture(dir: &Path, kind: Kind, dirty: bool) -> (Signex, TabInfo) {
 }
 
 fn dot(app: &Signex, t: &TabInfo) -> bool {
-    crate::tab_bar::dirty_tab_paths(std::slice::from_ref(t), &app.document_state, &app.library)
-        .contains(&t.path)
+    crate::tab_bar::dirty_tab_paths(app, std::slice::from_ref(t)).contains(&t.path)
 }
 
 fn quit_prompts(app: &mut Signex) -> bool {
@@ -211,7 +210,7 @@ fn the_trait_answers_match_the_owner_for_every_kind() {
         let dir = tempfile::tempdir().unwrap();
         let (app, t) = fixture(dir.path(), kind, true);
         let key = DocumentKey::of(&t).expect("a document tab has a key");
-        let doc = app.document_state.document(&key, &app.library).unwrap();
+        let doc = app.document(&key).unwrap();
         assert!(doc.has_unsaved_input(), "{kind:?}");
         assert_eq!(
             doc.is_dirty(),
@@ -248,4 +247,41 @@ fn the_key_names_the_document_a_tab_hosts() {
         DocumentKey::of(&project),
         Some(DocumentKey::Project(_))
     ));
+}
+
+/// A symbol or footprint draft whose snapshot cleared its flag while the
+/// write has not landed: only the stored set holds it dirty.
+fn save_in_flight(kind: Kind) -> (Signex, TabInfo, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, t) = fixture(dir.path(), kind, false);
+    app.document_state.keep_document_dirty_until_saved(&t.path);
+    (app, t, dir)
+}
+
+#[test]
+fn a_draft_with_its_save_in_flight_reads_dirty_everywhere() {
+    for kind in [Kind::Symbol, Kind::Footprint] {
+        let (mut app, t, _dir) = save_in_flight(kind);
+        assert!(dot(&app, &t), "{kind:?} dot");
+        assert!(close_scan_lists_something(&app), "{kind:?} close scan");
+        let key = DocumentKey::of(&t).unwrap();
+        assert!(app.document(&key).unwrap().is_dirty(), "{kind:?} trait");
+        assert!(quit_prompts(&mut app), "{kind:?} quit guard");
+    }
+}
+
+#[test]
+fn a_tab_without_a_document_owner_keeps_the_path_set_dot() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = fixture(dir.path(), Kind::Project, false);
+    let lib = dir.path().join("lib.snxlib");
+    let browser = tab(&lib, TabKind::LibraryBrowser(lib.clone()));
+    assert!(!dot(&app, &browser));
+    app.document_state.mark_document_dirty(&lib);
+    assert!(dot(&app, &browser), "library browser");
+
+    let (mut app, project) = fixture(dir.path(), Kind::Project, true);
+    assert!(dot(&app, &project));
+    app.document_state.projects.clear();
+    assert!(dot(&app, &project), "project tab after its project closed");
 }

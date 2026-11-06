@@ -317,18 +317,14 @@ pub(crate) fn tab_is_dirty(
 /// Browser, a project tab whose project closed) falls back to the dirty
 /// path set.
 pub(crate) fn dirty_tab_paths(
+    app: &crate::app::Signex,
     tabs: &[TabInfo],
-    document: &crate::app::DocumentState,
-    library: &crate::library::state::LibraryState,
 ) -> std::collections::HashSet<std::path::PathBuf> {
     tabs.iter()
         .filter(|tab| {
             DocumentKey::of(tab)
-                .and_then(|key| document.document(&key, library))
-                .map_or_else(
-                    || document.is_document_dirty(&tab.path),
-                    |doc| doc.has_unsaved_input(),
-                )
+                .and_then(|key| app.document(&key).map(|doc| doc.has_unsaved_input()))
+                .unwrap_or_else(|| app.document_state.is_document_dirty(&tab.path))
         })
         .map(|tab| tab.path.clone())
         .collect()
