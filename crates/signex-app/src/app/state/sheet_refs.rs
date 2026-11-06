@@ -779,6 +779,7 @@ mod tests {
             net_colors: HashMap::new(),
             drawing_placements: Default::default(),
             frame: Default::default(),
+            page: Default::default(),
             unknown: Default::default(),
             font_family: None,
         }
@@ -1011,6 +1012,7 @@ mod tests {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                schematic_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

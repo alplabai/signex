@@ -520,6 +520,11 @@ impl Signex {
                 .ui_state
                 .net_class_styles
                 .revision_in(placement.as_ref()),
+            schematic_defaults: self
+                .document_state
+                .sheet_path_for_window(window, &self.ui_state)
+                .map(|path| self.document_state.schematic_defaults_for(path))
+                .unwrap_or_default(),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),

@@ -5,8 +5,10 @@
 //! - **colour** - the per-net colour override (the Active Bar net-colour
 //!   palette) wins over the class colour, which wins over the theme's wire
 //!   colour;
-//! - **width** - the class width, else the wire's own `stroke_width`;
-//! - **line style** - the class line style, else solid.
+//! - **width** - the wire's own `stroke_width`, else the class width, else
+//!   the project default, else the built-in (#2026);
+//! - **line style** - the class line style, else the project default, else
+//!   solid.
 //!
 //! The class styles arrive resolved, keyed by element uuid, from the net
 //! join (`signex_net::element_class_styles`); nothing here reads the project.
@@ -14,7 +16,7 @@
 use std::collections::HashMap;
 
 use signex_types::net_class::NetClassStyle;
-use signex_types::schematic::{Wire, wire_stroke_mm};
+use signex_types::schematic::{SchematicDefaults, Wire};
 use signex_types::theme::Color as ThemeColor;
 use uuid::Uuid;
 
@@ -96,10 +98,38 @@ pub fn junction_color(styling: Option<WireStyling<'_>>, junction: Uuid) -> Optio
     )
 }
 
+/// What a wire's drawn width depends on besides the wire: its net class and
+/// the project defaults (#2026). Hit test and item bounds take it, so a wire
+/// is grabbed and boxed at the width it is drawn at.
+#[derive(Clone, Copy, Default)]
+pub struct WireWidths<'a> {
+    pub class_styles: Option<&'a WireClassStyles>,
+    pub defaults: SchematicDefaults,
+}
+
+impl WireWidths<'_> {
+    /// The width `wire` is drawn at.
+    #[must_use]
+    pub fn wire_mm(&self, wire: &Wire) -> f64 {
+        let class = self.class_styles.and_then(|styles| styles.get(&wire.uuid));
+        drawn_wire_width_mm(wire, class, &self.defaults)
+    }
+
+    /// The width a bus is drawn at.
+    #[must_use]
+    pub fn bus_mm(&self) -> f64 {
+        self.defaults.bus_mm()
+    }
+}
+
 /// The width in mm a wire is drawn at, and so the width it is hit at.
 #[must_use]
-pub fn drawn_wire_width_mm(wire: &Wire, class: Option<&NetClassStyle>) -> f64 {
-    wire_stroke_mm(
+pub fn drawn_wire_width_mm(
+    wire: &Wire,
+    class: Option<&NetClassStyle>,
+    defaults: &SchematicDefaults,
+) -> f64 {
+    defaults.wire_mm(
         wire.stroke_width,
         class.and_then(|style| style.wire_width_mm),
     )
@@ -126,23 +156,25 @@ mod tests {
             }
         }
         assert!(!widths.is_empty(), "no stock graphic widths found");
-        signex_types::schematic::symbol_stroke_mm(widths)
+        SchematicDefaults::BUILT_IN.symbol_stroke_mm(widths)
     }
+
+    const B: &SchematicDefaults = &SchematicDefaults::BUILT_IN;
 
     #[test]
     fn a_default_wire_draws_as_wide_as_a_stock_pin() {
         let wire = Wire::default();
         assert_eq!(wire.stroke_width, 0.0);
-        assert_eq!(drawn_wire_width_mm(&wire, None), stock_pin_width_mm());
-        // An explicit width and a class width keep their values.
+        assert_eq!(drawn_wire_width_mm(&wire, None, B), stock_pin_width_mm());
+        // An explicit width keeps its value, over a class width too (#2026).
         let wide = Wire {
             stroke_width: 0.5,
             ..Wire::default()
         };
-        assert_eq!(drawn_wire_width_mm(&wide, None), 0.5);
+        assert_eq!(drawn_wire_width_mm(&wide, None, B), 0.5);
         assert_eq!(
-            drawn_wire_width_mm(&wide, Some(&style(None, Some(0.4)))),
-            0.4
+            drawn_wire_width_mm(&wide, Some(&style(None, Some(0.4))), B),
+            0.5
         );
     }
 
@@ -150,7 +182,7 @@ mod tests {
         NetClassStyle {
             color,
             wire_width_mm: width,
-            line: NetLineStyle::Dashed,
+            line: Some(NetLineStyle::Dashed),
         }
     }
 
@@ -196,16 +228,24 @@ mod tests {
         assert_eq!(wire_color(Some(styling), id), None);
     }
 
+    /// #2026: explicit > net class > project > built-in.
     #[test]
-    fn class_width_replaces_the_wire_width() {
+    fn class_width_fills_an_unset_wire_width() {
         let wire = Wire {
             stroke_width: 0.15,
             ..Default::default()
         };
-        assert_eq!(drawn_wire_width_mm(&wire, None), 0.15);
+        let unset = Wire::default();
         let wide = style(None, Some(0.6));
-        assert_eq!(drawn_wire_width_mm(&wire, Some(&wide)), 0.6);
+        let project = SchematicDefaults {
+            wire_width_mm: 0.3,
+            ..SchematicDefaults::BUILT_IN
+        };
+        assert_eq!(drawn_wire_width_mm(&wire, None, B), 0.15);
+        assert_eq!(drawn_wire_width_mm(&wire, Some(&wide), B), 0.15);
+        assert_eq!(drawn_wire_width_mm(&unset, Some(&wide), &project), 0.6);
+        assert_eq!(drawn_wire_width_mm(&unset, None, &project), 0.3);
         let no_width = style(None, None);
-        assert_eq!(drawn_wire_width_mm(&wire, Some(&no_width)), 0.15);
+        assert_eq!(drawn_wire_width_mm(&unset, Some(&no_width), B), 0.254);
     }
 }

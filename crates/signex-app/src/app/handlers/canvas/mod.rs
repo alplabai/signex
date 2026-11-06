@@ -38,19 +38,16 @@ mod wire_merge_tests;
 #[cfg(test)]
 mod wire_undo_tests;
 
-/// Default stroke width applied when the user hasn't edited the
-/// pre_placement Width value yet. Standard's "default line width"
-/// is ~0.15 mm in schematics; showing 0 in the properties panel
-/// used to confuse users because the line was still visible
-/// (renderer substitutes its own default for 0).
-const DEFAULT_SHAPE_STROKE_MM: f64 = 0.15;
-
 /// Read the shape width + fill defaults out of the current
 /// pre_placement slot (TAB-configured) so shape tools pick up the
 /// user's Width/Fill edits when committing the next click.
 fn pre_placement_shape(
     doc: &super::super::state::DocumentState,
 ) -> (f64, signex_types::schematic::FillType) {
+    // An unset width is written as the project's shape default (#2026), so
+    // the placed shape shows the width it draws at.
+    let defaults = doc.active_schematic_defaults();
+    let default_mm = defaults.shape_stroke_mm(0.0);
     doc.panel_ctx
         .pre_placement
         .as_ref()
@@ -58,14 +55,11 @@ fn pre_placement_shape(
             let w = if pp.shape_width_mm > 0.0 {
                 pp.shape_width_mm
             } else {
-                DEFAULT_SHAPE_STROKE_MM
+                default_mm
             };
             (w, pp.shape_fill)
         })
-        .unwrap_or((
-            DEFAULT_SHAPE_STROKE_MM,
-            signex_types::schematic::FillType::None,
-        ))
+        .unwrap_or((default_mm, defaults.shape_fill))
 }
 
 impl Signex {
@@ -264,7 +258,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.active_class_styles(),
+                        self.active_wire_widths(),
                     )
                     && crate::app::handlers::selection_workflow::passes_filter(
                         &hit,

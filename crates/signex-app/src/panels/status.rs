@@ -27,6 +27,9 @@ pub struct ErcDiagnosticEntry {
     pub message: String,
     pub world_x: f64,
     pub world_y: f64,
+    /// `world_y` as the sheet shows it: from its page origin (#2034). The
+    /// location label reads this; panning uses `world_y`.
+    pub shown_y: f64,
     pub select: Option<signex_types::schematic::SelectedItem>,
     /// False when the point is not in `sheet_path`'s own coordinates (a child
     /// sheet that was not part of the run): shown, but never panned to.
@@ -252,7 +255,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         text(v.message.clone()).size(TS.body).color(detail_c),
                         Space::new().width(6).height(Length::Shrink),
                         iced::widget::tooltip(
-                            text(location_label(&v.sheet_name, v.world_x, v.world_y))
+                            text(location_label(&v.sheet_name, v.world_x, v.shown_y))
                                 .size(TS.body)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(detail_c),

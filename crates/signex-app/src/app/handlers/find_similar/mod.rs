@@ -103,7 +103,7 @@ impl Signex {
                 &self.interaction_state.active_canvas().designators,
                 x,
                 y,
-                self.active_class_styles(),
+                self.active_wire_widths(),
             )
         });
         let selected = &self.interaction_state.active_canvas().selected;

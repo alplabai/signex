@@ -1,7 +1,9 @@
 //! Command-driven editing of the project's General settings (#1202).
 //!
-//! The Project tab's General and Parameters sections edit the `.snxprj`
-//! `description`, `parameters` (#1080) and designator standard (#1421) in place on the project's one in-memory `ProjectData`. The project name is
+//! The Project tab's General, Parameters and Schematic defaults sections edit
+//! the `.snxprj` `description`, `parameters` (#1080), designator standard
+//! (#1421) and `schematic_defaults` (#2026) in place on the project's one
+//! in-memory `ProjectData`. The project name is
 //! not edited here: it is the file stem, changed only by the Rename flow.
 //! Like the net-class table, the settings are tiny, so the history keeps
 //! snapshots rather than inverse commands. A snapshot holds only the fields
@@ -16,13 +18,15 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use signex_types::designator::DesignatorStandard;
-use signex_types::project::{AnnotationState, ProjectData};
+use signex_types::project::{
+    AnnotationState, ProjectData, SchematicDefaultField, SchematicDefaultOverrides,
+};
 
 /// How many undo steps are kept.
 pub const HISTORY_LIMIT: usize = 100;
 
 /// One edit of the General section. Plain data, so a script can emit it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "command", content = "text", rename_all = "snake_case")]
 pub enum ProjectGeneralCommand {
     /// The description as typed; an empty text clears it.
@@ -38,6 +42,18 @@ pub enum ProjectGeneralCommand {
     /// An unreadable section from a newer Signex is replaced only by a real
     /// standard: picking `None` over it changes nothing.
     SetDesignatorStandard(Option<DesignatorStandard>),
+    /// A schematic default as typed in the Schematic defaults section
+    /// (#2026); `None` clears it back to the built-in value.
+    SetSchematicDefault {
+        field: SchematicDefaultField,
+        value: Option<f64>,
+    },
+    /// The font new text is placed in (#2026); `None` clears it.
+    SetSchematicDefaultFont(Option<String>),
+    /// The line style of wires whose class sets none (#2026).
+    SetSchematicDefaultLineStyle(Option<signex_types::net_class::NetLineStyle>),
+    /// The fill new shapes are placed with (#2026).
+    SetSchematicDefaultShapeFill(Option<signex_types::schematic::FillType>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -63,6 +79,7 @@ struct GeneralSnapshot {
     description: Option<String>,
     parameters: BTreeMap<String, String>,
     annotation: AnnotationState,
+    schematic_defaults: SchematicDefaultOverrides,
 }
 
 impl GeneralSnapshot {
@@ -71,6 +88,7 @@ impl GeneralSnapshot {
             description: data.description.clone(),
             parameters: data.parameters.clone(),
             annotation: data.annotation_state(),
+            schematic_defaults: data.schematic_defaults.clone(),
         }
     }
 
@@ -79,6 +97,7 @@ impl GeneralSnapshot {
         data.description = self.description;
         data.parameters = self.parameters;
         data.restore_annotation_state(self.annotation);
+        data.schematic_defaults = self.schematic_defaults;
     }
 }
 
@@ -89,6 +108,29 @@ pub struct ProjectGeneralHistory {
     redo: Vec<GeneralSnapshot>,
     /// An edit run is open: the next edit joins the last step.
     run_open: bool,
+    /// What the open run edits; an edit of something else starts a new step.
+    run_field: Option<RunField>,
+}
+
+/// What a typing run edits. Description and parameter edits share one run,
+/// as before; each schematic default is a run of its own (#2026).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunField {
+    General,
+    SchematicDefault(SchematicDefaultField),
+    SchematicDefaultFont,
+}
+
+impl RunField {
+    fn of(command: &ProjectGeneralCommand) -> Self {
+        match command {
+            ProjectGeneralCommand::SetSchematicDefault { field, .. } => {
+                Self::SchematicDefault(*field)
+            }
+            ProjectGeneralCommand::SetSchematicDefaultFont(_) => Self::SchematicDefaultFont,
+            _ => Self::General,
+        }
+    }
 }
 
 impl ProjectGeneralHistory {
@@ -97,10 +139,17 @@ impl ProjectGeneralHistory {
     /// no-op records nothing.
     pub fn apply(&mut self, data: &mut ProjectData, command: ProjectGeneralCommand) -> bool {
         let before = GeneralSnapshot::of(data);
-        let is_pick = matches!(command, ProjectGeneralCommand::SetDesignatorStandard(_));
-        if is_pick {
+        let is_pick = matches!(
+            command,
+            ProjectGeneralCommand::SetDesignatorStandard(_)
+                | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
+                | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
+        );
+        let field = RunField::of(&command);
+        if is_pick || self.run_field != Some(field) {
             self.run_open = false;
         }
+        self.run_field = Some(field);
         match command {
             ProjectGeneralCommand::SetDescription(text) => {
                 data.description = (!text.is_empty()).then_some(text);
@@ -121,6 +170,18 @@ impl ProjectGeneralHistory {
                 if !(standard.is_none() && data.has_unreadable_annotation()) {
                     data.set_designator_standard(standard);
                 }
+            }
+            ProjectGeneralCommand::SetSchematicDefault { field, value } => {
+                data.schematic_defaults = data.schematic_defaults.with(field, value);
+            }
+            ProjectGeneralCommand::SetSchematicDefaultFont(font) => {
+                data.schematic_defaults.set_font_family(font);
+            }
+            ProjectGeneralCommand::SetSchematicDefaultLineStyle(line) => {
+                data.schematic_defaults.set_wire_line_style(line);
+            }
+            ProjectGeneralCommand::SetSchematicDefaultShapeFill(fill) => {
+                data.schematic_defaults.set_shape_fill(fill);
             }
         }
         if GeneralSnapshot::of(data) == before {

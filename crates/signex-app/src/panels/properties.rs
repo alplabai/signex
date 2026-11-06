@@ -35,7 +35,8 @@ pub struct PrePlacementData {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
-    /// Most-recent cursor world position (for the X/Y readout).
+    /// Stored cursor position for the X/Y readout; shown through the sheet's
+    /// page origin by [`pre_placement_readout`].
     pub cursor_x_mm: f64,
     pub cursor_y_mm: f64,
     /// Stroke width for the shape tools (Line / Rect / Circle / Arc /
@@ -134,6 +135,20 @@ pub enum DrawingFieldId {
     ArcEndAngle,
     ArcWidth,
     PolyBorder,
+}
+
+impl DrawingFieldId {
+    /// A Y coordinate on the sheet: shown and typed from the page origin.
+    pub fn is_page_y(self) -> bool {
+        matches!(
+            self,
+            Self::LineStartY
+                | Self::LineEndY
+                | Self::RectStartY
+                | Self::CircleCenterY
+                | Self::ArcCenterY
+        )
+    }
 }
 
 /// Distinguishes placement flavors so the pre-placement form only shows
@@ -333,6 +348,13 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     scrollable(col).width(Length::Fill).boxed()
 }
 
+/// The pre-placement X/Y readout: Y from the active sheet's page origin
+/// (#2034), read when drawn so an origin change shows at once.
+pub(crate) fn pre_placement_readout(pp: &PrePlacementData, ctx: &PanelContext) -> String {
+    let y = ctx.shown_y(pp.cursor_y_mm);
+    format!("{:.2}, {y:.2}", pp.cursor_x_mm)
+}
+
 /// Pre-placement properties — shown when TAB pressed during a placement tool.
 fn view_pre_placement<'a>(
     pp: &PrePlacementData,
@@ -348,7 +370,7 @@ fn view_pre_placement<'a>(
     let rotation = pp.rotation;
     let tool_name = pp.tool_name.clone();
     let kind = pp.kind;
-    let pos_str = format!("{:.2}, {:.2}", pp.cursor_x_mm, pp.cursor_y_mm);
+    let pos_str = pre_placement_readout(pp, ctx);
     let rot_label = format!("{:.0} Degrees", rotation);
     let font = pp.font.clone();
     let font_size_pt = pp.font_size_pt;

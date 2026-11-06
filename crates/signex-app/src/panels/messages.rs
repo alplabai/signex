@@ -1005,15 +1005,15 @@ pub enum PanelMsg {
     SetPaperSize(String),
     /// Page Options: turn the sheet to portrait or landscape.
     SetSheetOrientation(signex_types::schematic::SheetOrientation),
-    /// Page Options: choose origin corner.
+    /// Page Options: choose the origin corner (saved in the sheet, #2034).
     SetPageOrigin(PageOrigin),
     /// Page Options: a keystroke in a custom width/height field (kept as a draft).
     CustomPaperEdgeTyping(super::PaperEdge, String),
     /// Page Options: Enter in a custom width/height field writes its draft
     /// (mm, clamped by the model) as one edit.
     CommitCustomPaperEdge(super::PaperEdge),
-    /// Page Options: choose sheet background colour.
-    SetSheetColor(SheetColor),
+    /// Document Options: choose the sheet's paper colour (saved, #2034).
+    SetSheetColor(super::SchematicSheetColor),
     /// Title Block: a keystroke in a field (kept as a draft).
     TitleBlockTyping(super::TitleBlockField, String),
     /// Title Block: Enter in a field writes its draft to the sheet.

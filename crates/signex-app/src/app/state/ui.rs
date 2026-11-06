@@ -444,6 +444,8 @@ pub struct UiState {
     pub erc_waived_findings: Vec<crate::app::handlers::erc::WaivedFinding>,
     /// (rule id, objects) of waivers that lapsed in the newest run.
     pub erc_lapsed_waivers: std::collections::BTreeSet<(String, Vec<String>)>,
+    /// The page frame of each sheet the newest run checked (#2034).
+    pub erc_page_frames: crate::app::handlers::erc::PageFrames,
     /// The waiver being written in the ERC panel, if any (#1285).
     pub erc_waive_draft: Option<crate::panels::ErcWaiveDraft>,
     /// Global cursor into the flattened ERC diagnostics list spanning all

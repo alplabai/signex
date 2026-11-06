@@ -578,9 +578,9 @@ impl<'a> SymbolCanvas<'a> {
     }
 
     /// The library width the pins stroke at: the symbol's most common body
-    /// width, as on a placed symbol (`signex_types::schematic::symbol_stroke_mm`).
+    /// width, as on a placed symbol (`SchematicDefaults::symbol_stroke_mm`).
     fn pin_stroke_mm(&self) -> f64 {
-        signex_types::schematic::symbol_stroke_mm(
+        signex_types::schematic::SchematicDefaults::BUILT_IN.symbol_stroke_mm(
             self.symbol
                 .graphics
                 .iter()

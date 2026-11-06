@@ -76,9 +76,12 @@ byte-identical to before.
 - A net that matches several classes takes the **first matching class in
   table order**. There is no specificity ranking; reorder the table to change
   the winner.
-- `style.color` is `#RRGGBB` or `#RRGGBBAA`; `style.line` is `solid`
-  (default, not written), `dashed` or `dotted`; `style.wire_width_mm` is the
-  wire width in millimetres. Each is optional, and an absent value leaves the
+- `style.color` is `#RRGGBB` or `#RRGGBBAA`; `style.line` is `solid`,
+  `dashed` or `dotted`, absent meaning Default: inherit the project's
+  `schematic_defaults.wire_line_style`, then solid (#2026). Builds before
+  #2026 never wrote `solid`, so an absent key in an older file keeps its
+  meaning and an explicit `solid` overrides a dashed project default;
+  `style.wire_width_mm` is the wire width in millimetres. Each is optional, and an absent value leaves the
   wire's own look alone. A malformed colour makes the project refuse to open
   rather than silently dropping the value.
 - **PCB extension point.** The same struct carries the PCB rule block
@@ -106,8 +109,10 @@ byte-identical to before.
   the canvas never reads the project. Precedence, per property:
   - **colour**: the per-net colour override (the Active Bar net-colour tool) wins
     over the class colour, which wins over the theme's wire colour;
-  - **width**: the class width, else the wire's own `stroke_width`;
-  - **line style**: the class line style, else solid.
+  - **width**: the wire's own `stroke_width`, else the class width, else the
+    project default, else 0.254 mm (#2026; before it the class width won);
+  - **line style**: the class line style when set, else the project default,
+    else solid.
 
   A class colour also tints the junctions of its nets. Exports honour the
   persisted per-net colours (`[extras.sheet.net_colors]`) in the same order.
@@ -192,6 +197,68 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   verbatim in the unknown-key bag, written back untouched, not applied, and
   reported in the Messages panel when a part is placed. Choosing a standard in
   the Project tab replaces it.
+
+## Schematic defaults (`schematic_defaults`, #2026)
+
+`ProjectData.schematic_defaults` is an optional top-level object, edited in
+the Project tab's Schematic defaults section, added without bumping the
+`snxprj/1` token.
+
+```json
+"schematic_defaults": { "wire_width_mm": 0.3, "bus_width_mm": 0.6, "text_size_pt": 12, "font_family": "Roboto" }
+```
+
+- Keys: `wire_width_mm`, `bus_width_mm`, `symbol_line_width_mm` (symbol lines,
+  and so pins), `shape_stroke_mm`, `junction_diameter_mm`, `text_size_pt`,
+  `font_family`, `wire_line_style` (`solid` / `dashed` / `dotted`),
+  `shape_fill` (`none` / `outline` / `background`). Every key is optional; a missing key, or a number that is not
+  above zero, falls back to the built-in table
+  (`signex_types::schematic::SchematicDefaults::BUILT_IN`: 0.254, 0.45, the
+  wire width, 0.254, 0.7 mm, 10 pt, Iosevka; a stored 0 draws at the
+  default and an explicit width is floored at 0.15 mm, as #2091 set). An unset symbol line follows the
+  project's wire width.
+- Only unset values follow it: an item stored with width or size `0`. An
+  explicit value in a sheet is never rewritten. A wire resolves explicit width
+  > net class width > project > built-in; a bus stores no width and has no
+  class, so project > built-in.
+- The canvas and every export resolve through the same table, and so do the
+  hit tolerance and selection boxes of wires and buses (symbol boxes do not,
+  see the known gaps); placement tools start from the project's shape stroke
+  and shape fill, and labels and notes placed by click from its text size and
+  font.
+- Line style: a wire stores none, so a wire whose net class sets none (the
+  Net Classes panel's Default) strokes in the project's `wire_line_style`; a
+  class's explicit Solid, Dashed or Dotted overrides it.
+- Shape fill and font apply to placement only: a placed shape always stores
+  its fill, and a placed label or note stores the project font (or no font,
+  the sheet default, when the project names none). Stored values are never
+  reinterpreted.
+- Omitted when nothing is set. Read key by key: every readable key applies;
+  a key this build does not know, or a known key whose value it cannot read
+  (a newer build's line style name, say), is kept raw and written back on
+  every save, edits of other keys included, until that same default is set
+  here. A section that is not an object is kept verbatim and not applied.
+- Editing in the Project tab: each default is its own undo step (typing in one
+  field is one step); text that is not a usable number keeps the stored value
+  and the typed text, and only empty text clears the default. The junction
+  diameter range starts at 0.7 mm, its draw floor.
+- Ranges: widths resolve clamped to 0.15–5 mm (bus 0.15–10 mm), text to
+  1 pt–the size the `.snxsch` loader repairs past (100 mm). The Project tab
+  stores a typed value clamped and says so under the field; a file value out
+  of range resolves clamped and is not rewritten. Placement uses whole points
+  (`SchematicDefaults::placed_text_pt`), the same on every placement path.
+- Known gaps: text ghosts (labels, ports, off-sheet connectors, notes) are
+  armed at a fixed 10 pt with no font while the click places at the project
+  text size, and the designator and value text of a placed part stays at the
+  built-in 1.27 mm; symbol hit and selection boxes and the PDF fit-to-page box use
+  the symbol geometry and stored widths, not the resolved stroke, so with a
+  thick project symbol line width the ink can reach past them (growing them
+  needs a maintainer decision); an explicit `null` key is dropped on save; clearing a field
+  also drops an unreadable value kept for that key (unlike the
+  designator-standard rule, where clearing over an unreadable section keeps
+  it); a polyline placed with Width untouched stores 0, not the shape default
+  (`selection_workflow.rs`), so it follows a later default change while other
+  shapes keep the value they were placed with.
 
 ## Description (`description`) and the name (#1202)
 

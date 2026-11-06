@@ -130,6 +130,7 @@ fn add_git_project(app: &mut Signex, dir: &Path) {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                schematic_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

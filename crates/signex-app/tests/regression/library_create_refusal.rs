@@ -39,6 +39,7 @@ fn git_project() -> (Signex, TempDir, std::path::PathBuf) {
         net_classes: Vec::new(),
         rules: None,
         annotation: None,
+        schematic_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

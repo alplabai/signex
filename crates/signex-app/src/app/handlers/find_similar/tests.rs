@@ -344,6 +344,7 @@ fn app_in_a_project(sheet: SchematicSheet) -> Signex {
             net_classes: Vec::new(),
             rules: None,
             annotation: None,
+            schematic_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

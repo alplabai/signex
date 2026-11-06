@@ -201,6 +201,7 @@ impl Signex {
         self.ui_state.erc_waived_hidden = outcome.waived_hidden.clone();
         self.ui_state.erc_waived_findings = outcome.waived_findings.clone();
         self.ui_state.erc_lapsed_waivers = outcome.lapsed_waivers.clone();
+        self.ui_state.erc_page_frames = outcome.page_frames.clone();
         self.ui_state.erc_focus_global_index = self
             .ui_state
             .erc_violations_by_path
@@ -263,6 +264,27 @@ impl Signex {
         self.ui_state.erc_violations = violations;
     }
 
+    /// The Y an ERC finding's location shows: from the page origin of the
+    /// sheet it is in, when the point is that sheet's own (#2034). An open
+    /// sheet reads its live settings; a closed one the frame its run read.
+    fn erc_shown_y(&self, path: &std::path::Path, v: &signex_erc::Violation) -> f64 {
+        let y = v.location.y;
+        let own = matches!(
+            v.location_space,
+            signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+        );
+        if !own {
+            return y;
+        }
+        if let Some(engine) = self.document_state.engines.get(path) {
+            return engine.document().page_y(y);
+        }
+        self.ui_state
+            .erc_page_frames
+            .get(path)
+            .map_or(y, |(origin, height)| origin.map_y(y, *height))
+    }
+
     pub(crate) fn build_erc_diagnostic_entries(&self) -> Vec<crate::panels::ErcDiagnosticEntry> {
         let mut paths: Vec<_> = self
             .ui_state
@@ -305,6 +327,7 @@ impl Signex {
                         message: v.message.clone(),
                         world_x: v.location.x,
                         world_y: v.location.y,
+                        shown_y: self.erc_shown_y(&path, v),
                         select: v.primary,
                         locatable: matches!(
                             v.location_space,

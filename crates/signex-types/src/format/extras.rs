@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::page_extras::PageExtras;
 use super::unknown::UnknownFields;
 use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
 use crate::schematic::{Junction, RowStamp, SchematicSheet, Symbol};
@@ -347,6 +348,9 @@ pub(in crate::format) struct SheetExtras {
     /// sheet that never changed them re-saves byte-identical.
     #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
     pub(in crate::format) frame: FrameExtras,
+    /// Page settings (`[extras.sheet.page]`, #2034); omitted at the default.
+    #[serde(default, skip_serializing_if = "PageExtras::is_default")]
+    pub(in crate::format) page: PageExtras,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -369,6 +373,7 @@ impl SheetExtras {
             && self.drawing_placements.is_empty()
             && self.locked_objects.is_empty()
             && self.frame.is_default()
+            && self.page.is_default()
             && self.unknown.is_empty()
     }
 
@@ -443,7 +448,15 @@ impl SheetExtras {
                 settings: s.frame,
                 unknown: s.unknown.frame.clone(),
             },
-            unknown: s.unknown.extras.clone(),
+            page: PageExtras::of(s.page, &s.unknown.page),
+            unknown: {
+                // A kept non-table `page` gives way to a real page table.
+                let mut extras = s.unknown.extras.clone();
+                if !s.page.is_default() || !s.unknown.page.is_empty() {
+                    extras.remove("page");
+                }
+                extras
+            },
         }
     }
 }

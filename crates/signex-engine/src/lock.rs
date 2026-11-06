@@ -183,6 +183,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::ModifyChildSheet { .. }
         | Command::SetPaperSize { .. }
         | Command::SetSheetFrame { .. }
+        | Command::SetSheetColor { .. }
+        | Command::SetPageOrigin { .. }
         | Command::SetTitleBlockField { .. }
         | Command::ArrangeDrawings { .. }
         | Command::SetDrawingPlacement { .. }

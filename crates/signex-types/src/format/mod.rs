@@ -35,6 +35,7 @@ use crate::schematic::SchematicSheet;
 mod extras;
 mod finite_toml;
 mod load_repair;
+mod page_extras;
 mod pcb_footprints;
 mod pcb_rows;
 mod pcb_uuid_repair;
@@ -73,6 +74,8 @@ mod pcb_footprints_tests;
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
+#[cfg(test)]
+mod sheet_page_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -586,10 +589,18 @@ impl SnxSchematic {
             net_colors,
             drawing_placements,
             frame: sheet_extras.frame.settings,
+            page: sheet_extras.page.settings,
             unknown: SheetUnknown {
                 manifest: raw.unknown,
-                extras: sheet_extras.unknown,
+                extras: {
+                    let mut extras = sheet_extras.unknown;
+                    if let Some(raw) = sheet_extras.page.not_a_table {
+                        extras.insert_value("page", raw);
+                    }
+                    extras
+                },
                 frame: sheet_extras.frame.unknown,
+                page: sheet_extras.page.unknown,
                 sheets: raw.sheets.unknown,
                 extras_root: extras.unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)

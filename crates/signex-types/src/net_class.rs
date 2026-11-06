@@ -86,13 +86,12 @@ pub struct NetClassStyle {
     /// Wire width in millimetres. `None` keeps the wire's own width.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wire_width_mm: Option<f64>,
-    /// Line style. [`NetLineStyle::Solid`] is the default and is not written.
-    #[serde(default, skip_serializing_if = "is_solid")]
-    pub line: NetLineStyle,
-}
-
-fn is_solid(line: &NetLineStyle) -> bool {
-    *line == NetLineStyle::Solid
+    /// Line style. `None` (absent) inherits the project default, then the
+    /// built-in Solid; `Some(Solid)` is written and overrides a project
+    /// Dashed or Dotted. Builds before #2026 never wrote Solid, so an absent
+    /// key in an older file keeps meaning "no style".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<NetLineStyle>,
 }
 
 fn is_zero(value: &f64) -> bool {

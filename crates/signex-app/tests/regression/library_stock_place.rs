@@ -107,7 +107,11 @@ fn a_placed_stock_part_has_its_fields_clear_of_its_body() {
     let sheet = doc(&app);
     let sym = &sheet.symbols[0];
     let lib = sheet.lib_symbols.get(&sym.lib_id).expect("embedded body");
-    let parts = signex_types::schematic::lower_placed_symbol(Some(lib), sym);
+    let parts = signex_types::schematic::lower_placed_symbol(
+        Some(lib),
+        sym,
+        &signex_types::schematic::SchematicDefaults::BUILT_IN,
+    );
     let body = signex_types::schematic::primitives_bounds(&parts).expect("drawn body");
     for (name, prop) in [("reference", &sym.ref_text), ("value", &sym.val_text)] {
         let at = prop.as_ref().expect(name).position;

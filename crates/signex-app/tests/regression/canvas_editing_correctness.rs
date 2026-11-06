@@ -44,6 +44,7 @@ fn empty_sheet() -> SchematicSheet {
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
         frame: Default::default(),
+        page: Default::default(),
         font_family: None,
     }
 }
@@ -226,4 +227,30 @@ fn tab_switch_drops_in_flight_drawing_buffers() {
         .document()
         .drawings;
     assert!(drawings.is_empty(), "tab B got {drawings:?}");
+}
+
+/// #2026 with #2091: a rectangle placed with Width untouched stores the
+/// built-in shape stroke, 0.254 mm (it stored 0.15 mm before the one rule).
+#[test]
+fn a_rectangle_placed_with_width_untouched_stores_the_default_stroke() {
+    let (mut app, _task) = Signex::new();
+    add_tab(&mut app, &PathBuf::from("stroke.snxsch"));
+    activate(&mut app, 0);
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+    for at in [(2.54, 2.54), (12.7, 7.62)] {
+        let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+            world_x: at.0,
+            world_y: at.1,
+        }));
+    }
+    let drawings = &app
+        .document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .drawings;
+    let [SchDrawing::Rect { width, .. }] = drawings.as_slice() else {
+        panic!("expected exactly one rectangle, got {drawings:?}");
+    };
+    assert_eq!(*width, 0.254);
 }

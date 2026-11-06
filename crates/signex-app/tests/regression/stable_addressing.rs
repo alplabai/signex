@@ -119,6 +119,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                schematic_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

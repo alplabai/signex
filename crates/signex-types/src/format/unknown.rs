@@ -76,6 +76,9 @@ pub struct SheetUnknown {
     /// Keys inside `[extras.sheet.frame]` (#1134).
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub frame: UnknownFields,
+    /// Keys inside `[extras.sheet.page]` (#2034).
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub page: UnknownFields,
     /// Keys inside `[sheets]` beside the TSV blocks, e.g. a
     /// `[sheets.widgets]` table (#1829).
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -102,6 +105,7 @@ impl SheetUnknown {
         self.manifest.is_empty()
             && self.extras.is_empty()
             && self.frame.is_empty()
+            && self.page.is_empty()
             && self.sheets.is_empty()
             && self.extras_root.is_empty()
             && self.newer_minor_source.is_none()

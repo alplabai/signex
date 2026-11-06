@@ -193,7 +193,7 @@ impl Signex {
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
-                    self.active_class_styles(),
+                    self.active_wire_widths(),
                 );
                 if let Some(reference) = hit {
                     let direction = match picker {
@@ -616,10 +616,13 @@ impl Signex {
                     text: note_text.clone(),
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: 0.0,
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
+                    font_size: self
+                        .document_state
+                        .active_schematic_defaults()
+                        .placed_text_mm(),
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
-                    font_family: None,
+                    font_family: self.document_state.placed_font_family(),
                     locked: false,
                 };
                 if self.apply_engine_command(
@@ -675,7 +678,9 @@ impl Signex {
                     })
                     .unwrap_or((
                         0.0,
-                        signex_types::schematic::SCHEMATIC_TEXT_MM,
+                        self.document_state
+                            .active_schematic_defaults()
+                            .placed_text_mm(),
                         signex_types::schematic::HAlign::Left,
                         signex_types::schematic::VAlign::Bottom,
                     ));
@@ -691,7 +696,7 @@ impl Signex {
                     font_size: pp_fs_mm,
                     justify: pp_justify_h,
                     justify_v: pp_justify_v,
-                    font_family: None,
+                    font_family: self.document_state.placed_font_family(),
                     locked: false,
                 };
                 if self.apply_engine_command(

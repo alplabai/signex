@@ -175,7 +175,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.active_class_styles(),
+                        self.active_wire_widths(),
                     );
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
@@ -235,6 +235,7 @@ impl Signex {
                             &self.interaction_state.active_canvas().designators,
                             &rect,
                             mode,
+                            self.active_wire_widths(),
                         )
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
@@ -253,7 +254,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.active_class_styles(),
+                        self.active_wire_widths(),
                     );
                     if let Some(item) = hit {
                         self.interaction_state.active_canvas_mut().selected =
@@ -314,7 +315,7 @@ impl Signex {
                 .pre_placement
                 .as_ref()
                 .map(|pp| pp.shape_fill)
-                .unwrap_or(signex_types::schematic::FillType::None);
+                .unwrap_or(self.document_state.active_schematic_defaults().shape_fill);
             let pts = std::mem::take(&mut self.interaction_state.polyline_points);
             let drawing = signex_types::schematic::SchDrawing::Polyline {
                 uuid: uuid::Uuid::now_v7(),

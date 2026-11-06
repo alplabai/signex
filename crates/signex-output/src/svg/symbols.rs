@@ -12,8 +12,8 @@ use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::{
-    FillType, LibSymbol, PinLabelKind, Point, Symbol, SymbolPrimitive, lower_pin_labels,
-    lower_placed_symbol, symbol_graphic_stroke_mm,
+    FillType, LibSymbol, PinLabelKind, Point, SchematicDefaults, Symbol, SymbolPrimitive,
+    lower_pin_labels, lower_placed_symbol,
 };
 use std::collections::HashMap;
 
@@ -26,6 +26,7 @@ pub(super) fn push_symbol_lib_graphics(
     lib: Option<&LibSymbol>,
     xform: &PageTransform,
     palette: &SchematicPalette,
+    defaults: &SchematicDefaults,
 ) {
     let px = |p: &Point| pt(xform.x(p.x), xform.px_y(p.y));
     // A power port draws in the theme's power colour, as on the canvas (#2091).
@@ -37,9 +38,9 @@ pub(super) fn push_symbol_lib_graphics(
     let style = |width: f64, fill: FillType| SvgStyle {
         stroke_rgb: Some(body_rgb),
         fill_rgb: fill_to_rgb(fill, body_rgb, palette.symbol_fill),
-        stroke_width: (symbol_graphic_stroke_mm(width) * xform.mm_to_unit) as f32,
+        stroke_width: (defaults.symbol_line_mm(width) * xform.mm_to_unit) as f32,
     };
-    for primitive in lower_placed_symbol(lib, sym) {
+    for primitive in lower_placed_symbol(lib, sym, defaults) {
         match primitive {
             SymbolPrimitive::Path {
                 points,
@@ -120,7 +121,7 @@ pub(super) fn push_symbol_lib_graphics(
                 style: SvgStyle {
                     stroke_rgb: Some(pin_rgb),
                     fill_rgb: None,
-                    stroke_width: (symbol_graphic_stroke_mm(width) * xform.mm_to_unit) as f32,
+                    stroke_width: (defaults.symbol_line_mm(width) * xform.mm_to_unit) as f32,
                 },
             }),
         }

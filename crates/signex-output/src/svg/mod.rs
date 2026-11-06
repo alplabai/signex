@@ -84,7 +84,8 @@ pub struct SvgRenderContext {
     pub width: f32,
     pub height: f32,
     pub elements: Vec<SvgElement>,
-    /// The theme's paper colour, which Black & White maps against.
+    /// The page's paper colour (the sheet's own, else the theme's), which
+    /// Black & White maps against.
     pub paper: (f32, f32, f32),
 }
 
@@ -185,6 +186,8 @@ fn pt(x: f32, y: f32) -> SvgPoint {
 mod drawing_placement_tests;
 #[cfg(test)]
 mod net_class_tests;
+#[cfg(test)]
+mod sheet_color_tests;
 #[cfg(test)]
 mod stroke_rule_tests;
 

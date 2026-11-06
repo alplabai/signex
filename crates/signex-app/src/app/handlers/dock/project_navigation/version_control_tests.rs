@@ -126,6 +126,7 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
                 net_classes: Vec::new(),
                 rules: None,
                 annotation: None,
+                schematic_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
