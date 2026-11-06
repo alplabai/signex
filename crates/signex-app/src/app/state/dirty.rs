@@ -60,6 +60,12 @@ impl DocumentState {
         self.dirty_docs.paths.contains(path) || self.editor_draft_is_dirty(path)
     }
 
+    /// Is `path` in the stored dirty set (no editor draft consulted)? A
+    /// draft's save in flight lives here after the snapshot cleared its flag.
+    pub(crate) fn is_document_stored_dirty(&self, path: &Path) -> bool {
+        self.dirty_docs.paths.contains(path)
+    }
+
     /// Is any document dirty? Cheaper than counting.
     pub fn has_dirty_documents(&self) -> bool {
         !self.dirty_docs.paths.is_empty()

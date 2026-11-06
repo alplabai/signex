@@ -4,6 +4,8 @@ One question, one owner: "does this document hold edits that are not on
 disk?" is answered by `DocumentState::is_document_dirty(path)`
 (`crates/signex-app/src/app/state/dirty.rs`). Epic #661, ADR-0003 gap G8.
 
+The tab dot and the Component row collector ask `Document` (`app/document`, a `DocumentKey` derived from the tab, resolved by `Signex::document`); quit, Close Project and the title count still read the path set until slice 5c of #661.
+
 ## What is stored
 
 | Document | Stored flag | Why it lives there |
