@@ -669,7 +669,8 @@ impl Signex {
             let submenu = iced::widget::mouse_area(submenu)
                 .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
                 .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
-            let submenu_w = menu_w;
+            // The flyout is built at the shared width (`submenu.rs`).
+            let submenu_w = Self::CONTEXT_MENU_WIDTH;
             let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
                 (x - submenu_w).max(0.0)
             } else {
@@ -793,7 +794,7 @@ impl Signex {
 }
 
 /// Widest the symbol hover card grows; below that it fits its text and the
-/// values wrap (#2092).
+/// values wrap (#2100).
 const SYMBOL_CARD_MAX_W: f32 = 320.0;
 /// Glyph advance per em for the label column and the placement estimate: the
 /// canvas face (Iosevka, 0.5 em) plus a margin for other picked fonts.

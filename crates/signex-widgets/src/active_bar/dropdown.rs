@@ -182,12 +182,6 @@ fn icon_style(disabled: bool, muted: iced::Color) -> iced::widget::svg::Style {
     }
 }
 
-/// Render the dropdown panel as an `Element<M>`. `width_hint`
-/// specifies a fixed panel width in px (e.g. 220) when the menu is
-/// list-style; `None` lets the panel auto-size (used for the Filter
-/// chip-grid that drives its own width). Caller wraps the result in a
-/// Translate / Stack overlay layer at the chevron's anchor and pairs
-/// it with a transparent backstop for click-outside-to-dismiss.
 /// Glyph advance per em the fitted width falls back to before the shaper is
 /// installed: a slight overestimate of a UI face, so a label never clips.
 const FIT_GLYPH_EM: f32 = 0.58;
@@ -199,7 +193,8 @@ const FIT_SHAPED_MARGIN: f32 = 1.05;
 /// layout: panel padding, row padding, the icon gutter only when a row has
 /// an icon, the label, the gap before the right cluster and its shortcut
 /// and check. Labels are measured in `ui_family`, the face the menu draws
-/// in, so a different UI font still fits.
+/// in, so a different UI font still fits. `Custom` rows are not measured;
+/// a caller with custom rows sizes for them itself.
 pub fn fitted_width<M>(entries: &[DropdownEntry<M>], max_w: f32, ui_family: &str) -> f32
 where
     M: Clone,
@@ -239,6 +234,12 @@ where
     (widest_row + 24.0 + 8.0).ceil().min(max_w)
 }
 
+/// Render the dropdown panel as an `Element<M>`. `width_hint`
+/// specifies a fixed panel width in px (e.g. 220) when the menu is
+/// list-style; `None` lets the panel auto-size (used for the Filter
+/// chip-grid that drives its own width). Caller wraps the result in a
+/// Translate / Stack overlay layer at the chevron's anchor and pairs
+/// it with a transparent backstop for click-outside-to-dismiss.
 pub fn view<'a, M>(
     entries: Vec<DropdownEntry<M>>,
     tokens: &'a ThemeTokens,
