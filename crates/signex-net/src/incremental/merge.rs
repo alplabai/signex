@@ -143,7 +143,7 @@ fn accumulate<'a>(
 
 /// The signature of every class that is a net, with its class, sorted.
 fn signatures(
-    classes: &HashMap<usize, Acc<'_>>,
+    classes: HashMap<usize, Acc<'_>>,
     sheet: &SchematicSheet,
 ) -> Vec<(NetSignature, usize)> {
     let order: OnceCell<HashMap<Uuid, usize>> = OnceCell::new();
@@ -160,12 +160,12 @@ fn signatures(
         };
         nets.push((
             NetSignature {
-                terminals: acc.terminals.clone(),
-                labels: acc.labels.clone(),
-                sheet_pins: acc.sheet_pins.clone(),
+                terminals: acc.terminals,
+                labels: acc.labels,
+                sheet_pins: acc.sheet_pins,
                 name: name.unwrap_or_default(),
             },
-            *class,
+            class,
         ));
     }
     nets.sort_by(|a, b| a.0.cmp(&b.0));
@@ -177,7 +177,11 @@ fn signatures(
 pub(super) fn merge(clusters: &[(Key, &Cluster)], sheet: &SchematicSheet) -> Merged {
     let mut uf = join_by_name(clusters);
     let (classes, class_of) = accumulate(clusters, &mut uf);
-    let nets = signatures(&classes, sheet);
+    let ids: HashMap<usize, Key> = classes
+        .iter()
+        .map(|(class, acc)| (*class, acc.id.unwrap_or_default()))
+        .collect();
+    let nets = signatures(classes, sheet);
     let position: HashMap<usize, usize> = nets
         .iter()
         .enumerate()
@@ -185,10 +189,7 @@ pub(super) fn merge(clusters: &[(Key, &Cluster)], sheet: &SchematicSheet) -> Mer
         .collect();
     let of_cluster = class_of
         .iter()
-        .map(|class| {
-            let id = classes[class].id.unwrap_or_default();
-            (id, position.get(class).copied())
-        })
+        .map(|class| (ids[class], position.get(class).copied()))
         .collect();
     Merged {
         nets: nets.into_iter().map(|(net, _)| net).collect(),

@@ -66,6 +66,25 @@ pub fn before_nets(sheet: &SchematicSheet) -> BeforeNets {
     Arc::new(net_signatures(sheet))
 }
 
+/// Test switch for the check in [`derive_at`]; on unless a timing bench turns
+/// it off for its own thread.
+#[cfg(test)]
+pub(crate) mod self_check {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ON: Cell<bool> = const { Cell::new(true) };
+    }
+
+    pub(crate) fn enabled() -> bool {
+        ON.with(Cell::get)
+    }
+
+    pub(crate) fn set(on: bool) {
+        ON.with(|flag| flag.set(on));
+    }
+}
+
 type Derived = (Vec<NetSignature>, Vec<(Key, Option<usize>)>);
 
 /// [`net_signatures_at`] of `sheet`, found from `base` when there is one. The
@@ -76,16 +95,17 @@ fn derive_at(base: Option<&NetBase>, sheet: &SchematicSheet, at: &[(Key, bool)])
     };
     let found = base.derive_at(sheet, at);
     #[cfg(test)]
-    debug_assert!(
-        base.derives_incrementally(sheet),
-        "the base fell back to the full derive"
-    );
-    #[cfg(test)]
-    assert_eq!(
-        found,
-        net_signatures_at(sheet, at),
-        "the incremental derive differs from the full derive"
-    );
+    if self_check::enabled() {
+        debug_assert!(
+            base.derives_incrementally(sheet),
+            "the base fell back to the full derive"
+        );
+        assert_eq!(
+            found,
+            net_signatures_at(sheet, at),
+            "the incremental derive differs from the full derive"
+        );
+    }
     found
 }
 
