@@ -35,6 +35,17 @@ run_case in_adapter pass "$APP/io_ports/native.rs" 'fn f() { rfd::AsyncFileDialo
 run_case doc_comment pass "$APP/app/menu.rs" '/// Runs `rfd::AsyncFileDialog` behind the picker.'
 run_case clean pass "$APP/app/menu.rs" 'fn f() { picker.dialog(); }'
 
+# A tree grep cannot scan (no crates at all) is an error, never a pass.
+mkdir -p "$TMP/no_crates"
+status=0
+IO_PORTS_ROOT="$TMP/no_crates" bash "$GATE" >/dev/null 2>&1 || status=$?
+if [[ $status -ne 2 ]]; then
+  echo "FAIL  grep_error — expected exit 2, gate exit $status"
+  failures=$((failures + 1))
+else
+  echo "ok    grep_error"
+fi
+
 if [[ $failures -ne 0 ]]; then
   echo "$failures control(s) failed"
   exit 1

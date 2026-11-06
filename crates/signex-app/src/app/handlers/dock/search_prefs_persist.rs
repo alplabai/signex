@@ -7,7 +7,32 @@
 use iced::Task;
 
 use crate::app::{Message, Signex};
+use crate::dock::DockLayoutMsg;
 use crate::persist::{SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsMsg, SearchPrefsWrite};
+
+/// A quit-path write may be the last thing the process does, and `update`
+/// may never see its `Saved` message once the app exits, so a failure is
+/// logged here as the message streams by (#1932). The message then carries
+/// `Ok`, so `update` does not log it a second time.
+pub(super) fn log_failure_at_quit(task: Task<Message>) -> Task<Message> {
+    task.map(|message| match message {
+        Message::DockLayout(DockLayoutMsg::Saved(Err(reason))) => {
+            crate::diagnostics::log_error(
+                "Dock layout was not saved, it will be lost at the next launch",
+                &anyhow::anyhow!(reason),
+            );
+            Message::DockLayout(DockLayoutMsg::Saved(Ok(())))
+        }
+        Message::SearchPrefs(SearchPrefsMsg::Saved(Err(reason))) => {
+            crate::diagnostics::log_error(
+                "Search box contents were not saved",
+                &anyhow::anyhow!(reason),
+            );
+            Message::SearchPrefs(SearchPrefsMsg::Saved(Ok(())))
+        }
+        other => other,
+    })
+}
 
 impl Signex {
     /// A Library Browser search box changed: record it and arm the debounce.
@@ -118,10 +143,11 @@ impl Signex {
             },
             |result| Message::SearchPrefs(SearchPrefsMsg::Saved(result)),
         );
-        match pending {
-            Some(write) => write.chain(drained).chain(next),
-            None => drained.chain(next),
-        }
+        let flushed = match pending {
+            Some(write) => write.chain(drained),
+            None => drained,
+        };
+        log_failure_at_quit(flushed).chain(next)
     }
 }
 

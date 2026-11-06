@@ -21,7 +21,8 @@ pub struct IoPorts {
 }
 
 impl IoPorts {
-    /// A headless run: dialogs answered from `answers`, launches refused.
+    /// A headless run: dialogs answered from `answers` (replaced per command,
+    /// see [`HeadlessAnswers::replace_all`]), launches refused.
     pub fn headless(answers: HeadlessAnswers) -> Self {
         Self {
             picker: Picker::Headless(answers),

@@ -301,11 +301,11 @@ fn an_open_dialog_takes_overwrite_with_it() {
 }
 
 #[test]
-fn cleared_answers_are_gone() {
+fn an_empty_answer_set_drops_earlier_answers() {
     let answers = HeadlessAnswers::default();
     let (mut app, _serial) = headless_app(&answers);
     answers.set("path", "/nowhere/project.snxprj");
-    answers.clear();
+    answers.replace_all([]);
     let task = app.update(Message::Menu(MenuMessage::ImportAltium));
     assert_refused(&mut app, task, "Import Altium Project", "path");
 }
@@ -348,4 +348,24 @@ fn an_unreadable_import_sets_the_pane_status() {
         "{}",
         app.ui_state.preferences_keymap_status
     );
+}
+
+/// A command that opens no dialog cannot leave `overwrite` for the next one:
+/// the next command's answers replace it.
+#[test]
+fn a_commands_answers_replace_what_an_earlier_command_left() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let existing = dir.path().join("theme.json");
+    std::fs::write(&existing, b"keep me").expect("seed");
+    let answers = HeadlessAnswers::default();
+    let (mut app, _serial) = headless_app(&answers);
+    answers.replace_all([("overwrite".to_string(), "true".to_string())]);
+    // No active sheet: Export Netlist returns before any dialog.
+    let task = app.update(Message::Menu(MenuMessage::ExportNetlist));
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+
+    answers.replace_all([("path".to_string(), existing.display().to_string())]);
+    let task = app.update(pref(PrefMsg::ExportTheme));
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+    assert_eq!(std::fs::read(&existing).expect("read"), b"keep me");
 }

@@ -69,10 +69,11 @@ impl Signex {
             },
             |result| Message::DockLayout(DockLayoutMsg::Saved(result)),
         );
-        match pending {
-            Some(write) => write.chain(drained).chain(next),
-            None => drained.chain(next),
-        }
+        let flushed = match pending {
+            Some(write) => write.chain(drained),
+            None => drained,
+        };
+        super::search_prefs_persist::log_failure_at_quit(flushed).chain(next)
     }
 }
 

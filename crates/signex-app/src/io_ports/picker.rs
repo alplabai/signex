@@ -23,9 +23,12 @@ pub enum Picker {
     Headless(HeadlessAnswers),
 }
 
-/// The plain arguments a headless run answers dialogs with. A dialog takes
-/// every answer there is, whatever it uses and whether it is refused, so a
-/// later dialog never inherits an earlier path or `overwrite`.
+/// The plain arguments a headless run answers dialogs with. Each command's
+/// answers replace the last command's ([`Self::replace_all`], fed from
+/// `CommandArgs` by #1933), so a command that opens no dialog cannot leave an
+/// answer behind. A dialog takes every answer there is, whatever it uses and
+/// whether it is refused, so a later dialog never inherits an earlier path or
+/// `overwrite`.
 ///
 /// A path answer must be absolute but is not normalised (`..` stays): code
 /// that confines paths must resolve it, never prefix-match the raw text.
@@ -33,15 +36,17 @@ pub enum Picker {
 pub struct HeadlessAnswers(Arc<Mutex<BTreeMap<String, String>>>);
 
 impl HeadlessAnswers {
-    /// Set the argument `name` (`path`, `paths`, `overwrite`) for the next
-    /// dialog that asks for it.
-    pub fn set(&self, name: &str, value: impl Into<String>) {
-        self.lock().insert(name.to_string(), value.into());
+    /// The answers of the command about to run (`path`, `paths`,
+    /// `overwrite`); whatever an earlier command left is dropped. Call it
+    /// before every command, with no answers when it has none.
+    pub fn replace_all(&self, answers: impl IntoIterator<Item = (String, String)>) {
+        *self.lock() = answers.into_iter().collect();
     }
 
-    /// Drop every answer, so a new command starts with none.
-    pub fn clear(&self) {
-        self.lock().clear();
+    /// Add one answer to the current command's set.
+    #[cfg(test)]
+    pub(crate) fn set(&self, name: &str, value: impl Into<String>) {
+        self.lock().insert(name.to_string(), value.into());
     }
 
     fn take_all(&self) -> BTreeMap<String, String> {

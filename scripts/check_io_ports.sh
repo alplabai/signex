@@ -18,9 +18,22 @@ ADAPTER="crates/signex-app/src/io_ports/native.rs"
 PATTERN='\b(rfd|webbrowser)::|Command::new\("(open|xdg-open|explorer)"\)'
 
 cd "$ROOT"
-hits="$(grep -rnE --include='*.rs' "$PATTERN" crates/*/src 2>/dev/null \
+# Nothing to scan, or a grep error (exit 2; grep exits 1 for "no match"),
+# fails the gate instead of passing it. BSD grep exits 1 on a missing path,
+# so the tree is checked first.
+if ! compgen -G "crates/*/src" >/dev/null; then
+  echo "Native-side-effect gate: FAIL — no crates/*/src under $ROOT."
+  exit 2
+fi
+status=0
+raw="$(grep -rnE --include='*.rs' "$PATTERN" crates/*/src)" || status=$?
+if [[ $status -gt 1 ]]; then
+  echo "Native-side-effect gate: FAIL — grep could not scan crates/*/src (exit $status)."
+  exit 2
+fi
+hits="$(printf '%s\n' "$raw" \
   | grep -v "^$ADAPTER:" \
-  | awk -F: '{ line = $0; sub(/^[^:]*:[^:]*:/, "", line); if (line !~ /^[[:space:]]*\/\//) print $0 }' || true)"
+  | awk -F: '{ line = $0; sub(/^[^:]*:[^:]*:/, "", line); if (line !~ /^[[:space:]]*\/\// && line != "") print $0 }' || true)"
 
 if [[ -n "$hits" ]]; then
   echo "Native-side-effect gate: FAIL — use crate::io_ports (Picker / Opener) instead:"

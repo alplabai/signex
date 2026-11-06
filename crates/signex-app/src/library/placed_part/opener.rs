@@ -121,9 +121,8 @@ fn open_pinned(path: &Path, assets_dir: &Path, part: &str, opener: Opener) -> Re
 }
 
 /// Open `location` for `part` off the update thread with `show`, which
-/// launches through `opener`. A
-/// failure comes back as [`PlacedPartMsg::DatasheetOpenFailed`]; success says
-/// nothing.
+/// launches through `opener`. A failure comes back as
+/// [`PlacedPartMsg::DatasheetOpenFailed`]; success says nothing.
 pub fn open_task(
     location: DatasheetLocation,
     part: String,

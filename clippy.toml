@@ -6,14 +6,15 @@
 # File dialogs, browsers and launched processes go through signex-app's
 # `io_ports` (#1931), which a headless run answers or refuses. Only
 # `io_ports/native.rs` and a few named tool spawns carry an `allow` with a
-# reason. `allow-invalid`: crates without rfd/webbrowser/tokio do not
-# resolve those paths. scripts/check_io_ports.sh is the second layer.
+# reason. `allow-invalid` where a path may not resolve in every build.
+# scripts/check_io_ports.sh is the second layer.
 disallowed-methods = [
     { path = "uuid::Uuid::new_v4", reason = "ids are UUID v7: use Uuid::now_v7 (CONTRIBUTING.md, \"Object ids\")", allow-invalid = true },
     { path = "std::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931); a needed tool spawn carries an allow with its reason" },
     { path = "tokio::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931)", allow-invalid = true },
-    { path = "webbrowser::open", reason = "open links through crate::io_ports::Opener (#1931)", allow-invalid = true },
-    { path = "webbrowser::open_browser", reason = "open links through crate::io_ports::Opener (#1931)", allow-invalid = true },
+    { path = "webbrowser::open", reason = "open links through crate::io_ports::Opener (#1931)" },
+    { path = "webbrowser::open_browser", reason = "open links through crate::io_ports::Opener (#1931)" },
+    { path = "webbrowser::open_browser_with_options", reason = "open links through crate::io_ports::Opener (#1931)" },
 ]
 disallowed-types = [
     { path = "rfd::AsyncFileDialog", reason = "ask through crate::io_ports::Picker (#1931)", allow-invalid = true },
