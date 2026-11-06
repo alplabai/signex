@@ -345,7 +345,7 @@ pub fn build_renderer_snapshot(
             screen,
             bounds,
             22.0,
-            &label_aabb_with(Some(&snapshot.text_widths), label, document_family),
+            &label_aabb_with(Some(WidthSources::of(snapshot)), label, document_family),
             transform.scale,
         ) {
             continue;
@@ -357,12 +357,14 @@ pub fn build_renderer_snapshot(
             LabelType::Global | LabelType::Hierarchical
         ) {
             polygons.push(label_marker_polygon(
+                Some(WidthSources::of(snapshot)),
                 label,
                 color,
                 [0.0, 0.0, 0.0, 0.0],
                 document_family,
             ));
-            let ((tx, ty), rotation, h_align) = label::flag_text(label, document_family);
+            let ((tx, ty), rotation, h_align) =
+                label::flag_text_with(Some(WidthSources::of(snapshot)), label, document_family);
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [tx as f32, ty as f32],
@@ -403,7 +405,7 @@ pub fn build_renderer_snapshot(
             pos,
             bounds,
             28.0,
-            &note_aabb_with(Some(&snapshot.text_widths), note, document_family),
+            &note_aabb_with(Some(WidthSources::of(snapshot)), note, document_family),
             transform.scale,
         ) {
             continue;

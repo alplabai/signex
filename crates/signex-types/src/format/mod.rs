@@ -40,6 +40,7 @@ mod pcb_footprints;
 mod pcb_rows;
 mod pcb_uuid_repair;
 mod sch_rows;
+mod text_extents_extras;
 mod text_size_repair;
 mod tsv;
 mod units;
@@ -78,6 +79,8 @@ mod sheet_frame_tests;
 mod sheet_page_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_extents_tests;
 #[cfg(test)]
 mod unknown_columns_tests;
 #[cfg(test)]
@@ -542,6 +545,15 @@ impl SnxSchematic {
             .iter()
             .map(String::as_str)
             .collect();
+        let (text_extents, dropped_extents) =
+            text_extents_extras::decode(&sheet_extras.text_extents);
+        if dropped_extents > 0 {
+            tracing::warn!(
+                target: "signex::format",
+                "{dropped_extents} stored text width(s) could not be read and were dropped; \
+                 they are measured again on the next save"
+            );
+        }
         let mut sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -586,6 +598,7 @@ impl SnxSchematic {
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),
+            text_extents,
             net_colors,
             drawing_placements,
             frame: sheet_extras.frame.settings,

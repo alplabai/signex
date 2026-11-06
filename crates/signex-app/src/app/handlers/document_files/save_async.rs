@@ -57,7 +57,10 @@ impl Signex {
         let revision = engine.revision();
         let net_color_revision = self.net_color_revision_of(&source);
         let bytes = engine
-            .serialize_with_net_colors(&self.ui_state.wire_color_overrides)
+            .serialize_with_extents(
+                &self.ui_state.wire_color_overrides,
+                crate::schematic_runtime::text_width::live_extent_measure(),
+            )
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was

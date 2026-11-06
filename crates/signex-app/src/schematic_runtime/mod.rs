@@ -15,8 +15,8 @@ use signex_renderer::theme::ResolvedTheme;
 use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, DrawingPlacement, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet,
-    SelectedItem, SelectedKind, Symbol, TextField, TextNote, TextProp, TextWidths, VAlign,
-    circumcircle, field_effective_style, text_aabb_with_width, text_height_mm,
+    SelectedItem, SelectedKind, Symbol, TextField, TextNote, TextProp, VAlign, circumcircle,
+    field_effective_style, text_aabb_with_width, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -30,7 +30,9 @@ mod scene_cache;
 pub mod selection;
 mod snapshot;
 mod symbol;
+pub(crate) mod text_width;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
+use text_width::{WidthSlot, WidthSources};
 pub mod text;
 mod wire_style;
 
@@ -536,13 +538,14 @@ pub(crate) fn draw_canvas_text_fallback(
 }
 
 fn label_marker_polygon(
+    widths: Option<WidthSources<'_>>,
     label: &Label,
     stroke_color: Color,
     fill_color: [f32; 4],
     document_family: Option<&str>,
 ) -> PolygonInput {
     PolygonInput {
-        vertices: label::marker_vertices(label, document_family)
+        vertices: label::marker_vertices_with(widths, label, document_family)
             .iter()
             .map(|&(x, y)| [x as f32, y as f32])
             .collect(),
@@ -635,7 +638,7 @@ fn collect_item_bounds_with(
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
                 bbox: text_prop_aabb_with(
-                    Some(&snapshot.text_widths),
+                    Some(WidthSources::of(snapshot)),
                     TextField::SymbolReference,
                     designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
                     ref_text,
@@ -649,7 +652,7 @@ fn collect_item_bounds_with(
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
                 bbox: text_prop_aabb_with(
-                    Some(&snapshot.text_widths),
+                    Some(WidthSources::of(snapshot)),
                     TextField::SymbolValue,
                     &symbol.value,
                     val_text,
@@ -741,7 +744,7 @@ fn collect_item_bounds_with(
     for label in &snapshot.labels {
         out.push(ItemBound {
             item: SelectedItem::new(label.uuid, SelectedKind::Label),
-            bbox: label_aabb_with(Some(&snapshot.text_widths), label, document_family),
+            bbox: label_aabb_with(Some(WidthSources::of(snapshot)), label, document_family),
             anchor: label.position,
         });
     }
@@ -749,7 +752,7 @@ fn collect_item_bounds_with(
     for note in &snapshot.text_notes {
         out.push(ItemBound {
             item: SelectedItem::new(note.uuid, SelectedKind::TextNote),
-            bbox: note_aabb_with(Some(&snapshot.text_widths), note, document_family),
+            bbox: note_aabb_with(Some(WidthSources::of(snapshot)), note, document_family),
             anchor: note.position,
         });
     }
@@ -857,10 +860,6 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
     }
 }
 
-/// Where a text's measured width is kept: the sheet's table, the item and
-/// which of its texts.
-type WidthSlot<'a> = Option<(&'a TextWidths, uuid::Uuid, TextField)>;
-
 #[cfg(test)]
 fn text_prop_aabb(
     text: &str,
@@ -879,7 +878,7 @@ fn text_prop_aabb(
 }
 
 fn text_prop_aabb_with(
-    widths: Option<&TextWidths>,
+    widths: Option<WidthSources<'_>>,
     field: TextField,
     text: &str,
     prop: &TextProp,
@@ -888,7 +887,13 @@ fn text_prop_aabb_with(
 ) -> Aabb {
     let (rot, h_align, v_align) = field_effective_style(prop, symbol);
     drawn_text_aabb(
-        widths.map(|w| (w, symbol.uuid, field)),
+        text_width::slot(
+            widths,
+            symbol.uuid,
+            field,
+            prop.font_family.as_deref(),
+            document_family,
+        ),
         text,
         resolve_family(prop.font_family.as_deref(), document_family).as_deref(),
         prop.font_size,
@@ -913,12 +918,7 @@ fn drawn_text_aabb(
     h_align: HAlign,
     v_align: VAlign,
 ) -> Aabb {
-    let size_mm = text_height_mm(font_size);
-    let measure = || signex_types::font::family_width_mm_checked(text, family, size_mm);
-    let width = match slot {
-        Some((widths, id, field)) => widths.width_mm(id, field, text, family, size_mm, measure),
-        None => measure().0,
-    };
+    let width = text_width::text_width_mm(slot, text, family, text_height_mm(font_size));
     text_aabb_with_width(
         width,
         font_size,
@@ -936,12 +936,18 @@ fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
 }
 
 fn note_aabb_with(
-    widths: Option<&TextWidths>,
+    widths: Option<WidthSources<'_>>,
     note: &TextNote,
     document_family: Option<&str>,
 ) -> Aabb {
     drawn_text_aabb(
-        widths.map(|w| (w, note.uuid, TextField::Note)),
+        text_width::slot(
+            widths,
+            note.uuid,
+            TextField::Note,
+            note.font_family.as_deref(),
+            document_family,
+        ),
         &note.text,
         resolve_family(note.font_family.as_deref(), document_family).as_deref(),
         note.font_size,
@@ -961,19 +967,25 @@ fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
 }
 
 fn label_aabb_with(
-    widths: Option<&TextWidths>,
+    widths: Option<WidthSources<'_>>,
     label: &Label,
     document_family: Option<&str>,
 ) -> Aabb {
     if label::is_flag(label) {
-        let mut verts = label::marker_vertices(label, document_family).into_iter();
+        let mut verts = label::marker_vertices_with(widths, label, document_family).into_iter();
         let (x0, y0) = verts.next().expect("marker has vertices");
         return verts.fold(Aabb::new(x0, y0, x0, y0), |b, (x, y)| {
             b.union(&Aabb::new(x, y, x, y))
         });
     }
     drawn_text_aabb(
-        widths.map(|w| (w, label.uuid, TextField::Label)),
+        text_width::slot(
+            widths,
+            label.uuid,
+            TextField::Label,
+            label.font_family.as_deref(),
+            document_family,
+        ),
         &label.text,
         resolve_family(label.font_family.as_deref(), document_family).as_deref(),
         label.font_size,
@@ -1136,5 +1148,7 @@ mod scene_cache_tests;
 mod selection_bounds_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_extents_tests;
 #[cfg(test)]
 mod wire_style_render_tests;

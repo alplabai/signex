@@ -157,6 +157,47 @@ fn save_writes_the_sheet_then_excludes_it() {
     assert!(app.document_state.tabs.iter().all(|t| t.path != sheet));
 }
 
+/// #2029: the blocking save behind this choice writes the stored text widths
+/// like every other save.
+#[test]
+fn save_writes_the_text_widths_of_an_installed_face() {
+    signex_app::fonts::measure::install_blocking();
+    let (mut app, _tmp, sheet) = fixture(true);
+    let label = signex_types::schematic::Label {
+        uuid: uuid::Uuid::from_u128(0x2029),
+        text: "NET_A".into(),
+        position: signex_types::schematic::Point { x: 1.0, y: 2.0 },
+        rotation: 0.0,
+        label_type: signex_types::schematic::LabelType::Net,
+        shape: String::new(),
+        font_size: 1.27,
+        font_family: None,
+        justify: signex_types::schematic::HAlign::Left,
+        justify_v: signex_types::schematic::VAlign::Bottom,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    let mut engine = signex_engine::Engine::new(SchematicSheet {
+        labels: vec![label],
+        ..empty_sheet()
+    })
+    .expect("engine");
+    engine.set_path(Some(sheet.clone()));
+    app.document_state.engines.insert(sheet.clone(), engine);
+    exclude(&mut app, &sheet);
+
+    choose(&mut app, ExcludeDirtyChoice::Save);
+
+    let written = std::fs::read_to_string(&sheet).unwrap();
+    assert!(
+        written.contains(&format!(
+            "[extras.sheet.text_extents.\"{}:label\"]",
+            uuid::Uuid::from_u128(0x2029)
+        )),
+        "{written}"
+    );
+}
+
 #[test]
 fn discard_excludes_without_writing_and_leaves_no_dirty_engine() {
     let _ = signex_app::diagnostics::init_logging();
