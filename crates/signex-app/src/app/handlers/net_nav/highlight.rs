@@ -154,10 +154,7 @@ impl Signex {
                 items.push(item);
             }
         }
-        let canvas = self.interaction_state.active_canvas_mut();
-        canvas.selected = items;
-        canvas.clear_overlay_cache();
-        self.update_selection_info();
+        self.replace_selection(items);
     }
 
     /// Step to the next or previous member of the highlighted net, across

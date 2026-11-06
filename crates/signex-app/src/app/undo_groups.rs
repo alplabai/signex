@@ -118,7 +118,7 @@ pub(super) enum StepDirection {
 }
 
 impl StepDirection {
-    fn top(self, engine: &signex_engine::Engine) -> Option<signex_engine::UndoGroupId> {
+    pub(super) fn top(self, engine: &signex_engine::Engine) -> Option<signex_engine::UndoGroupId> {
         match self {
             StepDirection::Undo => engine.next_undo_group(),
             StepDirection::Redo => engine.next_redo_group(),

@@ -10,23 +10,10 @@ impl Engine {
     ) -> Result<CommandResult, EngineError> {
         match cmd {
             Command::UpdateSchDrawing { drawing } => {
-                use signex_types::schematic::SchDrawing;
-                let target_uuid = match &drawing {
-                    SchDrawing::Line { uuid, .. }
-                    | SchDrawing::Rect { uuid, .. }
-                    | SchDrawing::Circle { uuid, .. }
-                    | SchDrawing::Arc { uuid, .. }
-                    | SchDrawing::Polyline { uuid, .. } => *uuid,
-                };
+                let target_uuid = drawing.uuid();
                 let mut changed = false;
                 for d in self.document.drawings.iter_mut() {
-                    let u = match d {
-                        SchDrawing::Line { uuid, .. }
-                        | SchDrawing::Rect { uuid, .. }
-                        | SchDrawing::Circle { uuid, .. }
-                        | SchDrawing::Arc { uuid, .. }
-                        | SchDrawing::Polyline { uuid, .. } => *uuid,
-                    };
+                    let u = d.uuid();
                     if u == target_uuid {
                         // An edit never changes the lock; `SetItemLocked` does.
                         let locked = d.is_locked();

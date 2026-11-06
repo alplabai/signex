@@ -1,7 +1,7 @@
 use iced::Task;
 
 use super::super::super::*;
-use super::pre_placement_shape;
+use super::shape_tool::ClickKind;
 
 impl Signex {
     pub(super) fn handle_canvas_double_clicked(
@@ -50,170 +50,17 @@ impl Signex {
         // path (`handle_canvas_clicked`); hit-testing keeps the raw cursor.
         let (snapped_x, snapped_y) = self.snap_to_grid(world_x, world_y);
         match self.interaction_state.current_tool {
-            Tool::Line => {
-                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
-                if let Some(start) = self.interaction_state.shape_anchor.take() {
-                    let drawing = signex_types::schematic::SchDrawing::Line {
-                        uuid: uuid::Uuid::now_v7(),
-                        start,
-                        end: p,
-                        width: pre_placement_shape(&self.document_state).0,
-                        stroke_color: None,
-                        locked: false,
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSchDrawing { drawing },
-                        false,
-                        false,
-                    );
-                    self.interaction_state.shape_anchor = Some(p);
-                    self.interaction_state.active_canvas_mut().shape_anchor =
-                        Some((p, crate::canvas::ShapePreviewKind::Line));
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                }
-                return Task::none();
-            }
             Tool::Sheet => {
                 return self.place_sheet_click(world_x, world_y);
             }
-            Tool::Rectangle => {
-                let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
+            tool => {
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
-                if let Some(start) = self.interaction_state.shape_anchor.take() {
-                    let drawing = signex_types::schematic::SchDrawing::Rect {
-                        uuid: uuid::Uuid::now_v7(),
-                        start,
-                        end: p,
-                        width: pp_w,
-                        fill: pp_fill,
-                        stroke_color: None,
-                        locked: false,
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSchDrawing { drawing },
-                        false,
-                        false,
-                    );
-                    self.interaction_state.active_canvas_mut().shape_anchor = None;
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
+                if self.shape_tool_point(tool, p, ClickKind::DoubleClick) {
+                    return Task::none();
                 }
-                return Task::none();
             }
-            Tool::Circle => {
-                let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
-                if let Some(center) = self.interaction_state.shape_anchor.take() {
-                    let dx = p.x - center.x;
-                    let dy = p.y - center.y;
-                    let radius = (dx * dx + dy * dy).sqrt();
-                    if radius > 0.01 {
-                        let drawing = signex_types::schematic::SchDrawing::Circle {
-                            uuid: uuid::Uuid::now_v7(),
-                            center,
-                            radius,
-                            width: pp_w,
-                            fill: pp_fill,
-                            stroke_color: None,
-                            locked: false,
-                        };
-                        self.apply_engine_command(
-                            signex_engine::Command::PlaceSchDrawing { drawing },
-                            false,
-                            false,
-                        );
-                    }
-                    self.interaction_state.active_canvas_mut().shape_anchor = None;
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                }
-                return Task::none();
-            }
-            Tool::Arc => {
-                let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
-                self.interaction_state.arc_points.push(p);
-                if self.interaction_state.arc_points.len() >= 3 {
-                    let pts = std::mem::take(&mut self.interaction_state.arc_points);
-                    let drawing = signex_types::schematic::SchDrawing::Arc {
-                        uuid: uuid::Uuid::now_v7(),
-                        start: pts[0],
-                        mid: pts[1],
-                        end: pts[2],
-                        width: pp_w,
-                        fill: pp_fill,
-                        stroke_color: None,
-                        locked: false,
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSchDrawing { drawing },
-                        false,
-                        false,
-                    );
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .arc_points
-                        .clear();
-                } else {
-                    self.interaction_state.active_canvas_mut().arc_points =
-                        self.interaction_state.arc_points.clone();
-                }
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_overlay_cache();
-                return Task::none();
-            }
-            _ => {}
         }
 
-        // Polyline closes on double-click. The canvas widget
-        // intercepts the 2nd click and publishes DoubleClicked
-        // INSTEAD OF Clicked, so the buffer has only one
-        // vertex at this point. Append the cursor as the
-        // final vertex, then commit if we now have >= 2.
-        if self.interaction_state.current_tool == Tool::Polyline {
-            let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
-            // Avoid appending a duplicate of the anchor when
-            // the user double-clicks on the same spot.
-            let is_dup = self
-                .interaction_state
-                .polyline_points
-                .last()
-                .map(|last| (last.x - p.x).abs() < 0.01 && (last.y - p.y).abs() < 0.01)
-                .unwrap_or(false);
-            if !is_dup {
-                self.interaction_state.polyline_points.push(p);
-            }
-            if self.interaction_state.polyline_points.len() >= 2 {
-                let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let pts = std::mem::take(&mut self.interaction_state.polyline_points);
-                let drawing = signex_types::schematic::SchDrawing::Polyline {
-                    uuid: uuid::Uuid::now_v7(),
-                    points: pts,
-                    width: pp_w,
-                    fill: pp_fill,
-                    stroke_color: None,
-                    locked: false,
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceSchDrawing { drawing },
-                    false,
-                    false,
-                );
-            }
-            self.interaction_state
-                .active_canvas_mut()
-                .polyline_points
-                .clear();
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_overlay_cache();
-            return Task::none();
-        }
         if self.interaction_state.wire_drawing {
             self.interaction_state.wire_drawing = false;
             self.interaction_state.wire_points.clear();

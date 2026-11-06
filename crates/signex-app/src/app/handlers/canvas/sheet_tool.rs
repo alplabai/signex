@@ -40,17 +40,10 @@ impl Signex {
     pub(super) fn place_sheet_click(&mut self, world_x: f64, world_y: f64) -> Task<Message> {
         let corner = Point::new(world_x, world_y);
         let Some(anchor) = self.interaction_state.shape_anchor.take() else {
-            self.interaction_state.shape_anchor = Some(corner);
-            self.interaction_state.active_canvas_mut().shape_anchor =
-                Some((corner, crate::canvas::ShapePreviewKind::Rect));
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_overlay_cache();
+            self.set_shape_anchor(Some((corner, crate::canvas::ShapePreviewKind::Rect)));
             return Task::none();
         };
-        let canvas = self.interaction_state.active_canvas_mut();
-        canvas.shape_anchor = None;
-        canvas.clear_overlay_cache();
+        self.set_shape_anchor(None);
         self.begin_sheet_place(anchor, corner)
     }
 

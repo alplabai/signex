@@ -806,6 +806,8 @@ pub use field_style::{field_effective_style, readable_text_style};
 pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
+#[cfg(test)]
+mod item_anchor_tests;
 mod row_stamp;
 #[cfg(test)]
 mod row_stamp_tests;

@@ -1,7 +1,7 @@
 use iced::Task;
 
 use super::super::super::*;
-use super::pre_placement_shape;
+use super::shape_tool::ClickKind;
 
 impl Signex {
     pub(super) fn handle_canvas_clicked(&mut self, world_x: f64, world_y: f64) -> Task<Message> {
@@ -290,117 +290,14 @@ impl Signex {
                 let size = self.interaction_state.bus_entry_size;
                 self.place_bus_entry_at(signex_types::schematic::Point::new(wx, wy), size);
             }
-            Tool::Line => {
-                // Two-click: anchor → commit. First click
-                // seeds shape_anchor; second click emits
-                // SchDrawing::Line and re-arms for the next
-                // line (matches Altium's stay-in-tool flow).
-                let (pp_w, _) = pre_placement_shape(&self.document_state);
+            tool @ (Tool::Line | Tool::Rectangle | Tool::Circle | Tool::Arc | Tool::Polyline) => {
                 let p = signex_types::schematic::Point::new(wx, wy);
-                match self.interaction_state.shape_anchor.take() {
-                    None => {
-                        self.interaction_state.shape_anchor = Some(p);
-                        self.interaction_state.active_canvas_mut().shape_anchor =
-                            Some((p, crate::canvas::ShapePreviewKind::Line));
-                        self.interaction_state
-                            .active_canvas_mut()
-                            .clear_overlay_cache();
-                    }
-                    Some(start) => {
-                        self.place_line_at(start, p, pp_w);
-                        // Re-arm with the just-placed endpoint
-                        // as the new anchor so chained segments
-                        // share vertices.
-                        self.interaction_state.shape_anchor = Some(p);
-                        self.interaction_state.active_canvas_mut().shape_anchor =
-                            Some((p, crate::canvas::ShapePreviewKind::Line));
-                        self.interaction_state
-                            .active_canvas_mut()
-                            .clear_overlay_cache();
-                    }
-                }
+                self.shape_tool_point(tool, p, ClickKind::Click);
             }
             Tool::Sheet => return self.place_sheet_click(wx, wy),
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Measure => self.measure_click(wx, wy),
             Tool::BreakWire => self.break_wire_click(wx, wy),
-            Tool::Rectangle => {
-                // Two-click: corner → opposite-corner →
-                // SchDrawing::Rect. Rearms blank for the
-                // next rect.
-                let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(wx, wy);
-                match self.interaction_state.shape_anchor.take() {
-                    None => {
-                        self.interaction_state.shape_anchor = Some(p);
-                        self.interaction_state.active_canvas_mut().shape_anchor =
-                            Some((p, crate::canvas::ShapePreviewKind::Rect));
-                        self.interaction_state
-                            .active_canvas_mut()
-                            .clear_overlay_cache();
-                    }
-                    Some(start) => {
-                        self.place_rect_at(start, p, pp_w, pp_fill);
-                        self.interaction_state.shape_anchor = None;
-                        self.interaction_state.active_canvas_mut().shape_anchor = None;
-                        self.interaction_state
-                            .active_canvas_mut()
-                            .clear_overlay_cache();
-                    }
-                }
-            }
-            Tool::Circle => {
-                // Two-click: center → edge-point → commit as
-                // SchDrawing::Circle with radius = |edge-center|.
-                let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(wx, wy);
-                match self.interaction_state.shape_anchor.take() {
-                    None => {
-                        self.interaction_state.shape_anchor = Some(p);
-                        self.interaction_state.active_canvas_mut().shape_anchor =
-                            Some((p, crate::canvas::ShapePreviewKind::Circle));
-                        self.interaction_state
-                            .active_canvas_mut()
-                            .clear_overlay_cache();
-                    }
-                    Some(center) => {
-                        let dx = p.x - center.x;
-                        let dy = p.y - center.y;
-                        let radius = (dx * dx + dy * dy).sqrt();
-                        self.place_circle_at(center, radius, pp_w, pp_fill);
-                        self.interaction_state.shape_anchor = None;
-                        self.interaction_state.active_canvas_mut().shape_anchor = None;
-                        self.interaction_state
-                            .active_canvas_mut()
-                            .clear_overlay_cache();
-                    }
-                }
-            }
-            Tool::Arc => {
-                // 3-click arc: start → mid → end.
-                let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);
-                let p = signex_types::schematic::Point::new(wx, wy);
-                self.interaction_state.arc_points.push(p);
-                if self.interaction_state.arc_points.len() >= 3 {
-                    let pts = std::mem::take(&mut self.interaction_state.arc_points);
-                    self.place_arc_at([pts[0], pts[1], pts[2]], pp_w, pp_fill);
-                }
-                self.interaction_state.active_canvas_mut().arc_points =
-                    self.interaction_state.arc_points.clone();
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_overlay_cache();
-            }
-            Tool::Polyline => {
-                // Click-by-click polyline. Enter / double-click commits.
-                let p = signex_types::schematic::Point::new(wx, wy);
-                self.interaction_state.polyline_points.push(p);
-                self.interaction_state.active_canvas_mut().polyline_points =
-                    self.interaction_state.polyline_points.clone();
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_overlay_cache();
-            }
             Tool::Text => {
                 let note_text = self
                     .document_state

@@ -282,16 +282,7 @@ impl SchematicCanvas<'_> {
                     }
                     SelectedKind::Drawing => {
                         use signex_types::schematic::SchDrawing;
-                        if let Some(d) = snapshot.drawings.iter().find(|d| {
-                            let u = match d {
-                                SchDrawing::Line { uuid, .. }
-                                | SchDrawing::Rect { uuid, .. }
-                                | SchDrawing::Circle { uuid, .. }
-                                | SchDrawing::Arc { uuid, .. }
-                                | SchDrawing::Polyline { uuid, .. } => *uuid,
-                            };
-                            u == item.uuid
-                        }) {
+                        if let Some(d) = snapshot.drawings.iter().find(|d| d.uuid() == item.uuid) {
                             match d {
                                 SchDrawing::Line { start, end, .. } => {
                                     push_pt(start.x, start.y, 1.0);
