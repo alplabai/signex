@@ -2,7 +2,7 @@
 //! transform commands, plus anything without an obvious home. Split
 //! from `keymap/catalog.rs`; entries verbatim.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 
 pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
@@ -465,6 +465,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::SAVE_PATH,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -515,6 +516,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::OPEN_PATH,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -745,6 +747,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::SAVE_PATH,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

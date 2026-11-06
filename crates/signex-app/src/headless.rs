@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_types::project::RuleProfile;
 
-pub use crate::app::command::{CommandArgs, CommandOutcome};
+pub use crate::app::command::{CommandArgs, CommandOutcome, OperandError, OperandValue};
 use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, Picker};
 use crate::keymap::AppCommandId;

@@ -1,7 +1,12 @@
 use crate::keymap::{AppCommandId, Modifiers, ShortcutContext};
 
+#[cfg(test)]
+pub(crate) use operands::{CONVENTION as OPERAND_CONVENTION, describe as describe_operands};
+pub use operands::{Operand, OperandKind};
+
 mod active_bar;
 mod general;
+mod operands;
 mod pcb;
 mod schematic;
 mod threed;
@@ -92,8 +97,8 @@ pub enum Enablement {
 /// GUI/undo/visibility flags for a command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CommandFlags {
-    /// Only meaningful/available when driven from the GUI (no headless
-    /// or scripted equivalent).
+    /// Only meaningful/available when driven from the GUI: the command has
+    /// no operand form, so no headless or scripted equivalent (#1934).
     pub gui_only: bool,
     /// Mutates the open document.
     pub mutates_doc: bool,
@@ -168,6 +173,9 @@ pub struct CommandMetadata {
     pub enable: Enablement,
     /// GUI/undo/visibility flags. Defaults to all-`false`.
     pub flags: CommandFlags,
+    /// The operands a CLI or agent can pass instead of a click or a dialog
+    /// answer. Empty: the command has no operand form (#1934).
+    pub operands: &'static [Operand],
 }
 
 impl CommandMetadata {
@@ -191,6 +199,7 @@ impl CommandMetadata {
             undoable: false,
             hidden: false,
         },
+        operands: &[],
     };
 
     /// The label a menu surface should display: the terse `menu_label`

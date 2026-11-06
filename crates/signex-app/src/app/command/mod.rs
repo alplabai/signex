@@ -13,6 +13,7 @@ mod args;
 pub(crate) mod bridge;
 pub(crate) mod enablement;
 mod needs;
+mod operands;
 mod outcome;
 mod window_document;
 
@@ -21,6 +22,7 @@ pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
+pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;
 
 use iced::Task;
