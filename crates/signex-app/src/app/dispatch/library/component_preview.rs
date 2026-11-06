@@ -90,7 +90,7 @@ impl Signex {
             return Task::none();
         }
         match msg {
-            EditorMsg::CloseEditor => return self.close_component_preview(&address),
+            EditorMsg::CloseEditor => return self.close_component_preview_parking_dirty(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {
                 return self.handle_save_row(&address);
             }
@@ -572,18 +572,32 @@ impl Signex {
     /// the tab that shows it, or drops the orphan editor state when no
     /// tab does.
     pub(crate) fn close_component_preview(&mut self, address: &EditorAddress) -> Task<Message> {
-        let synthetic = address.synthetic_tab_path();
-        if let Some(idx) = self
-            .document_state
-            .tabs
-            .iter()
-            .position(|t| t.path == synthetic)
-        {
+        if let Some(idx) = self.component_preview_tab(address) {
             return self.close_tab_now(idx);
         }
         self.library.editors.remove(address);
         self.library.alternate_generations.remove(address);
         Task::none()
+    }
+
+    /// The user's own close (the header close button): a dirty row draft is
+    /// parked like a tab bar close (#110). Without a tab it is the discard.
+    pub(crate) fn close_component_preview_parking_dirty(
+        &mut self,
+        address: &EditorAddress,
+    ) -> Task<Message> {
+        match self.component_preview_tab(address) {
+            Some(idx) => self.close_tab_parking_dirty(idx),
+            None => self.close_component_preview(address),
+        }
+    }
+
+    fn component_preview_tab(&self, address: &EditorAddress) -> Option<usize> {
+        let synthetic = address.synthetic_tab_path();
+        self.document_state
+            .tabs
+            .iter()
+            .position(|t| t.path == synthetic)
     }
 
     /// Title every Component Preview tab with its row's current part

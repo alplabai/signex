@@ -428,7 +428,7 @@ fn discard_on_the_remove_prompt_drops_the_draft() {
 fn a_rename_keeps_the_pending_drafts() {
     let (mut app, old, recorder) = app_with_draft();
     let new = PathBuf::from("renamed.snxsch");
-    app.rekey_open_document(&old, &new);
+    app.rekey_document(&old, &new);
     let drafts = app.document_state.drafts.title_blocks();
     assert_eq!(drafts.len(), 1);
     assert_eq!(drafts[0].sheet, new, "the draft follows the sheet");
@@ -503,7 +503,7 @@ fn a_rename_re_keys_title_block_and_paper_edge_drafts() {
         .drafts
         .set_paper_edge(&old, PaperEdge::Width, "250");
     let new = PathBuf::from("renamed.snxsch");
-    app.rekey_open_document(&old, &new);
+    app.rekey_document(&old, &new);
     let drafts = &app.document_state.drafts;
     assert_eq!(
         drafts

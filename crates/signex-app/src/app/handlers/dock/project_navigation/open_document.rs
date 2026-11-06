@@ -21,7 +21,7 @@ fn library_path_for_key(
 
 impl Signex {
     /// Tab title for a document: its file stem, so `sub/Power.snxsch` reads
-    /// `Power`, the same as `rekey_open_document` titles it after a rename.
+    /// `Power`, the same as `rekey_document` titles it after a rename.
     fn document_title(path: &std::path::Path) -> String {
         path.file_stem()
             .map(|s| s.to_string_lossy().into_owned())

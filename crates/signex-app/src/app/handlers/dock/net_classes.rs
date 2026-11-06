@@ -259,4 +259,6 @@ mod pick_undo;
 #[cfg(test)]
 mod pick_undo_tests;
 #[cfg(test)]
+mod rekey_tests;
+#[cfg(test)]
 mod tests;

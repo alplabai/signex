@@ -514,7 +514,7 @@ impl Signex {
         new_path: &Path,
         fold: crate::app::state::CaseFold,
     ) {
-        // Drafts first: `rekey_open_document` moves the editor, its tab (path
+        // Drafts first: `rekey_document` moves the editor, its tab (path
         // and kind), its stored dirty mark and its path-keyed records
         // together, so the dirty draft stays dirty at the new path.
         let drafts: Vec<(PathBuf, PathBuf)> = self
@@ -525,7 +525,7 @@ impl Signex {
             })
             .collect();
         for (from, to) in drafts {
-            self.rekey_open_document(&from, &to);
+            self.rekey_document(&from, &to);
         }
         let new_title = new_path
             .file_stem()
