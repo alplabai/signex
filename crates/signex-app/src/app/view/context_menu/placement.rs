@@ -291,7 +291,13 @@ mod tests {
                 "icons {has_icons}: rows around a launcher are {pitch} apart, assumed {}",
                 row_height(has_icons)
             );
-            let to_launcher = y("Launcher") - y("Alpha");
+            // Compare text centres: the launcher's text box is a full row's
+            // content tall, an item's is one label line, both centred.
+            let mid = |label: &str| {
+                let b = crate::layout_probe::find(&texts, label).bounds;
+                b.y + b.height / 2.0
+            };
+            let to_launcher = mid("Launcher") - mid("Alpha");
             assert!(
                 (to_launcher - row_height(has_icons)).abs() < 0.6,
                 "icons {has_icons}: launcher label {to_launcher} below the first row"
