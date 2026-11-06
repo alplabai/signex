@@ -101,10 +101,14 @@ impl Signex {
     /// matches what Altium shows in each context. Empty-area clicks are
     /// filtered upstream (no menu shown), so `path` is `Some` whenever
     /// this runs.
+    ///
+    /// Returns the card, its width and the origin it opens at in `window_id`,
+    /// clamped with the height of the entries it really builds.
     pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
+        window_id: iced::window::Id,
         ctx: &crate::app::ProjectTreeContextMenuState,
-    ) -> (Element<'_, Message>, f32) {
+    ) -> (Element<'_, Message>, f32, (f32, f32)) {
         let tokens = &self.document_state.panel_ctx.tokens;
         // No entries (an empty-area click, or a row that no longer exists)
         // renders an empty placeholder so the overlay layer above has
@@ -113,6 +117,7 @@ impl Signex {
             return (
                 container(iced::widget::Space::new()).boxed(),
                 Self::CONTEXT_MENU_WIDTH,
+                (ctx.x, ctx.y),
             );
         };
         // The width is fitted to the labels, at most the shared context-menu
@@ -122,9 +127,15 @@ impl Signex {
             Self::CONTEXT_MENU_WIDTH,
             &self.document_state.panel_ctx.ui_font_name,
         );
+        let origin = super::placement::clamp_menu_origin(
+            (ctx.x, ctx.y),
+            (width, super::placement::entries_height(&v)),
+            self.ui_state.size_of_window(window_id),
+        );
         (
             signex_widgets::active_bar_dropdown::view(v, tokens, Some(width)),
             width,
+            origin,
         )
     }
 

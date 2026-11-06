@@ -546,8 +546,7 @@ impl Signex {
         if !self.overlay_belongs_to(tree_ctx.window, window_id) {
             return Vec::new();
         }
-        let (menu, menu_w) = self.view_project_tree_context_menu(tree_ctx);
-        let origin = self.menu_origin(window_id, (tree_ctx.x, tree_ctx.y), menu_w, 6, false);
+        let (menu, menu_w, origin) = self.view_project_tree_context_menu(window_id, tree_ctx);
         let mut out = Self::menu_layers(
             Message::ContextMenu(ContextMenuMsg::CloseProjectTree),
             menu,
