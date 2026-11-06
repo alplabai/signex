@@ -186,6 +186,8 @@ pub enum PrefMsg {
     ThemeExportFinished(Result<std::path::PathBuf, String>),
     /// Loaded JSON content from an import pick dialog.
     ThemeFileLoaded(String),
+    /// The picked theme file could not be read; the reason.
+    ThemeFileUnreadable(String),
     /// Rule Profiles pane (#1608). Its edits are written to the profile
     /// files at once, so they are not drafts and never mark the dialog dirty.
     Profiles(ProfilesMsg),
@@ -246,6 +248,8 @@ pub enum PrefMsg {
     KeymapImportProfile,
     /// Loaded profile source from the import pick dialog.
     KeymapProfileLoaded(String),
+    /// The picked profile file could not be read; the reason.
+    KeymapProfileUnreadable(String),
     /// Save the active profile to a `.toml` file.
     KeymapExportProfile,
     /// Outcome of the keymap-export write (#533) — same shape and same

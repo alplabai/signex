@@ -124,14 +124,16 @@ fn bind_callback_listener() -> Result<(TcpListener, String), std::io::Error> {
 /// from `signex-library`.
 ///
 /// The function is split so the `cargo test` path can drive it end-
-/// to-end against wiremock without needing a real browser.
+/// to-end against wiremock without needing a real browser: `browser` is
+/// `None` there, and the app passes its opener, which a headless run makes
+/// refuse (the flow then fails at once instead of waiting for a callback).
 pub fn run_blocking(
     client_id: String,
     client_secret: String,
     auth_url_endpoint: String,
     token_url_endpoint: String,
     cancel: CancelHandle,
-    open_browser: bool,
+    browser: Option<crate::io_ports::Opener>,
 ) -> Outcome {
     if client_id.is_empty() {
         return fail_and_log(format!(
@@ -166,7 +168,9 @@ pub fn run_blocking(
     // Consumed by the one real exchange; an idle connection never takes it.
     let mut verifier = Some(verifier);
 
-    if open_browser && let Err(e) = webbrowser::open(auth_url.as_str()) {
+    if let Some(opener) = browser
+        && let Err(e) = opener.browse(auth_url.as_str())
+    {
         return fail_and_log(format!("could not open browser: {e}"));
     }
 
@@ -812,7 +816,7 @@ mod tests {
             "http://127.0.0.1/auth".into(),
             "http://127.0.0.1/token".into(),
             cancel,
-            false,
+            None,
         );
         match outcome {
             Outcome::Failed { reason } => assert!(reason.contains("client_id")),

@@ -65,7 +65,9 @@ impl Signex {
     pub(super) fn handle_stock_copy(&mut self, msg: StockCopyMsg) -> Task<Message> {
         match msg {
             StockCopyMsg::TargetPicked(root) => self.handle_stock_copy_target_picked(root),
-            StockCopyMsg::NewLibraryRequested => new_library_dialog(),
+            StockCopyMsg::NewLibraryRequested => {
+                new_library_dialog(self.ui_state.io.picker.clone())
+            }
             StockCopyMsg::NewLibraryPathChosen(Some(path)) => {
                 let path =
                     crate::app::handlers::document_files::with_primitive_extension(path, "snxlib");
@@ -274,16 +276,16 @@ impl Signex {
 }
 
 /// The save dialog that names the library to create.
-fn new_library_dialog() -> Task<Message> {
+fn new_library_dialog(picker: crate::io_ports::Picker) -> Task<Message> {
     Task::perform(
-        async {
-            rfd::AsyncFileDialog::new()
+        async move {
+            picker
+                .dialog()
                 .set_title("New Library")
                 .add_filter("Signex Library", &["snxlib"])
                 .set_file_name("MyLibrary.snxlib")
                 .save_file()
                 .await
-                .map(|file| file.path().to_path_buf())
         },
         |picked| {
             Message::Library(LibraryMessage::StockCopy(

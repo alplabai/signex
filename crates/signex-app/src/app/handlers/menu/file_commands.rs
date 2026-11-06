@@ -6,17 +6,16 @@ impl Signex {
     pub(super) fn handle_menu_file_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
         match msg {
             MenuMessage::OpenProject => Some(Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
-                        .set_title("Open Project or Schematic")
-                        .add_filter("Signex Project", &["snxprj"])
-                        .add_filter("Signex Schematic", &["snxsch"])
-                        .add_filter("All Supported", &["snxprj", "snxsch"])
-                        .add_filter("All files", &["*"])
-                        .pick_file()
-                        .await
-                        .map(|file| file.path().to_path_buf())
-                },
+                self.ui_state
+                    .io
+                    .picker
+                    .dialog()
+                    .set_title("Open Project or Schematic")
+                    .add_filter("Signex Project", &["snxprj"])
+                    .add_filter("Signex Schematic", &["snxsch"])
+                    .add_filter("All Supported", &["snxprj", "snxsch"])
+                    .add_filter("All files", &["*"])
+                    .pick_file(),
                 |p| Message::File(FileMsg::Opened(p)),
             )),
             MenuMessage::OpenRecentProject(path) => {
@@ -24,16 +23,15 @@ impl Signex {
             }
             MenuMessage::ClearRecentProjects => Some(self.handle_clear_recent_projects()),
             MenuMessage::ImportAltium => Some(Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
-                        .set_title("Import Altium Project")
-                        .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
-                        .add_filter("Altium Library", &["SchLib", "PcbLib"])
-                        .add_filter("All files", &["*"])
-                        .pick_file()
-                        .await
-                        .map(|file| file.path().to_path_buf())
-                },
+                self.ui_state
+                    .io
+                    .picker
+                    .dialog()
+                    .set_title("Import Altium Project")
+                    .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
+                    .add_filter("Altium Library", &["SchLib", "PcbLib"])
+                    .add_filter("All files", &["*"])
+                    .pick_file(),
                 |p| Message::File(FileMsg::AltiumImportPicked(p)),
             )),
             MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
@@ -45,10 +43,12 @@ impl Signex {
             MenuMessage::CloseProject => Some(self.close_active_project()),
             MenuMessage::NewProject => {
                 let target = self.save_target(None);
+                let picker = self.ui_state.io.picker.clone();
                 Some(Task::perform(
                     async move {
                         target
                             .new_project_dialog(
+                                picker,
                                 "New Signex Project (a folder named after the project is created)",
                             )
                             .await
@@ -56,7 +56,6 @@ impl Signex {
                             .add_filter("Signex Project", &["snxprj"])
                             .save_file()
                             .await
-                            .map(|file| file.path().to_path_buf())
                     },
                     |p| Message::File(FileMsg::NewProject(p)),
                 ))
@@ -268,20 +267,18 @@ impl Signex {
                 let from_path = self.active_tab_path().unwrap_or_default();
                 let target = self.save_target(Some(&from_path));
                 let save_as_name = target.save_as_suggested_name();
+                let picker = self.ui_state.io.picker.clone();
                 Task::perform(
                     async move {
                         let dialog = target
-                            .save_as_dialog("Save Schematic As")
+                            .save_as_dialog(picker, "Save Schematic As")
                             .await
                             .add_filter("Signex Schematic", &["snxsch"]);
                         let dialog = match save_as_name {
                             Some(name) => dialog.set_file_name(name),
                             None => dialog,
                         };
-                        dialog
-                            .save_file()
-                            .await
-                            .map(|file| file.path().to_path_buf())
+                        dialog.save_file().await
                     },
                     move |path| {
                         path.map(|to_path| {
@@ -295,7 +292,10 @@ impl Signex {
                 )
             }
             Some(TabKind::SymbolEditor(path)) | Some(TabKind::FootprintEditor(path)) => {
-                super::super::document_files::spawn_save_as_for_primitive(path)
+                super::super::document_files::spawn_save_as_for_primitive(
+                    self.ui_state.io.picker.clone(),
+                    path,
+                )
             }
             _ => {
                 crate::diagnostics::log_warning(

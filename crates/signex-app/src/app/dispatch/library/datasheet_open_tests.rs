@@ -24,7 +24,11 @@ use crate::library::test_adapters::ScriptedSymbolsAdapter;
 /// its own part name and reads only its own entries.
 static LAUNCHES: Mutex<Vec<(DatasheetLocation, String)>> = Mutex::new(Vec::new());
 
-fn record(location: &DatasheetLocation, part: &str) -> Result<(), String> {
+fn record(
+    location: &DatasheetLocation,
+    part: &str,
+    _: crate::io_ports::Opener,
+) -> Result<(), String> {
     LAUNCHES
         .lock()
         .expect("launch record")

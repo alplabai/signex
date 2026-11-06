@@ -15,6 +15,8 @@ use super::{
 pub const DEFAULT_BOTTOM_PANEL_HEIGHT: f32 = 220.0;
 
 pub struct UiState {
+    /// The file picker and the opener the returned tasks use (#1931).
+    pub io: crate::io_ports::IoPorts,
     pub theme_id: ThemeId,
     pub unit: Unit,
     pub grid_visible: bool,

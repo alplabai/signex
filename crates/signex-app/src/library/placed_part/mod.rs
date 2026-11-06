@@ -6,7 +6,8 @@ pub mod opener;
 mod view;
 
 /// Shows one document; see [`opener::open`].
-pub type OpenDatasheet = fn(&DatasheetLocation, &str) -> Result<(), String>;
+pub type OpenDatasheet =
+    fn(&DatasheetLocation, &str, crate::io_ports::Opener) -> Result<(), String>;
 
 pub use datasheet::{
     DatasheetLocation, DatasheetTarget, PartSource, datasheet_targets, location_of,

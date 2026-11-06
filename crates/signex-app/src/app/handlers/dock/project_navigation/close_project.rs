@@ -745,8 +745,7 @@ impl Signex {
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
-        self.commit_pending_title_block_drafts();
-        if self.hold_quit_while_path_op() {
+        if !self.prepare_quit() {
             return Task::none();
         }
         // Guard against a second close request stacking a duplicate
@@ -805,6 +804,14 @@ impl Signex {
             None => iced::exit(),
         };
         self.flush_quit_writes_then(close)
+    }
+
+    /// What every quit does before it may exit, GUI or headless (#1932):
+    /// commit pending title-block drafts, and hold the quit while a rename,
+    /// delete or rewrite runs. `false`: held, and the user was told why.
+    pub(crate) fn prepare_quit(&mut self) -> bool {
+        self.commit_pending_title_block_drafts();
+        !self.hold_quit_while_path_op()
     }
 
     /// Quitting between a file move and its completion would leave the

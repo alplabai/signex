@@ -1,3 +1,7 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests run git, mkfifo and other tools as fixtures"
+)]
 use super::*;
 use crate::managed_block::{BEGIN_MARKER, END_MARKER};
 use std::path::Path;

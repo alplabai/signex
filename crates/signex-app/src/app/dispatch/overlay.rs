@@ -38,9 +38,11 @@ impl Signex {
             OverlayMsg::CopyAboutInfo => {
                 iced::clipboard::write(crate::about::version_info_text()).discard()
             }
-            OverlayMsg::OpenLink(link) => crate::about::open_link(link, |detail| {
-                Message::Overlay(OverlayMsg::LinkOpenFailed(detail))
-            }),
+            OverlayMsg::OpenLink(link) => {
+                crate::about::open_link(self.ui_state.io.opener, link, |detail| {
+                    Message::Overlay(OverlayMsg::LinkOpenFailed(detail))
+                })
+            }
             OverlayMsg::LinkOpenFailed(detail) => {
                 self.document_state.error_notice =
                     Some(crate::app::state::ErrorNotice::link(detail));

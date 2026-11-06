@@ -41,12 +41,14 @@ impl Signex {
                 }
             }
             DockLayoutMsg::Saved(Ok(())) => Task::none(),
-            DockLayoutMsg::Saved(Err(reason)) => {
+            msg @ (DockLayoutMsg::Saved(Err(_)) | DockLayoutMsg::SaveFailedLogged) => {
                 self.document_state.dock_layout_sync.write_failed();
-                crate::diagnostics::log_error(
-                    "Dock layout was not saved, it will be lost at the next launch",
-                    &anyhow::anyhow!(reason),
-                );
+                if let DockLayoutMsg::Saved(Err(reason)) = msg {
+                    crate::diagnostics::log_error(
+                        "Dock layout was not saved, it will be lost at the next launch",
+                        &anyhow::anyhow!(reason),
+                    );
+                }
                 self.sync_diagnostics_panel_ctx();
                 Task::none()
             }
@@ -69,10 +71,11 @@ impl Signex {
             },
             |result| Message::DockLayout(DockLayoutMsg::Saved(result)),
         );
-        match pending {
-            Some(write) => write.chain(drained).chain(next),
-            None => drained.chain(next),
-        }
+        let flushed = match pending {
+            Some(write) => write.chain(drained),
+            None => drained,
+        };
+        super::search_prefs_persist::log_failure_at_quit(flushed).chain(next)
     }
 }
 

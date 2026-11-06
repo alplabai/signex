@@ -193,7 +193,10 @@ impl Signex {
             // — same gate as the top-level `Message::File(FileMsg::Save)` path uses.
             PrimitiveEdit::Save => {
                 if !path.exists() {
-                    return crate::app::handlers::document_files::spawn_save_as_for_primitive(path);
+                    return crate::app::handlers::document_files::spawn_save_as_for_primitive(
+                        self.ui_state.io.picker.clone(),
+                        path,
+                    );
                 }
                 match self.save_primitive_tab_at(&path) {
                     Ok(task) => task,

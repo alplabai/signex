@@ -289,17 +289,17 @@ impl Signex {
         });
 
         let target = self.save_target(Some(&request.source));
+        let picker = self.ui_state.io.picker.clone();
         let file_name = target.file_name("schematic", "", "pdf");
         Some(Task::perform(
             async move {
                 target
-                    .dialog("Export PDF")
+                    .dialog(picker, "Export PDF")
                     .await
                     .add_filter("PDF", &["pdf"])
                     .set_file_name(file_name)
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             move |path| {
                 Message::Export(ExportMsg::PdfFinished {

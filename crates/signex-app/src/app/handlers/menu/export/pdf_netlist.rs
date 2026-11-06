@@ -119,17 +119,17 @@ impl Signex {
         let source = self.document_state.active_path.clone()?;
         let format = NetlistOptions::default().format;
         let target = self.save_target(Some(&source));
+        let picker = self.ui_state.io.picker.clone();
         let file_name = format.file_name(target.stem().unwrap_or("schematic"));
         Some(Task::perform(
             async move {
                 target
-                    .dialog("Export Netlist")
+                    .dialog(picker, "Export Netlist")
                     .await
                     .add_filter(format.label(), &[format.extension()])
                     .set_file_name(file_name)
                     .save_file()
                     .await
-                    .map(|file| file.path().to_path_buf())
             },
             move |path| {
                 if let Some(path) = path {

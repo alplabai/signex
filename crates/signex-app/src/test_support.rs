@@ -10,6 +10,11 @@
 //! ([`settle_deny`]) before `DenyNewFiles::on` returns, rather than
 //! trusting `icacls`'s exit code — see #482.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests run git, mkfifo and other tools as fixtures"
+)]
+
 use std::path::{Path, PathBuf};
 
 /// RAII guard: while alive, `dir` rejects new-file creation. Restores

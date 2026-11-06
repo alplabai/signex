@@ -118,14 +118,15 @@ pub(super) fn handle_recovery_library_missing(
                 let path = path.clone();
                 app.library.missing.start_locating(path);
             }
+            let picker = app.ui_state.io.picker.clone();
             Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
+                async move {
+                    picker
+                        .dialog()
                         .set_title("Locate Library (*.snxlib)")
                         .add_filter("Signex Library", &["snxlib"])
                         .pick_file()
                         .await
-                        .map(|f| f.path().to_path_buf())
                 },
                 |path| Message::Library(LibraryMessage::RecoveryLibraryMissingLocateResult(path)),
             )

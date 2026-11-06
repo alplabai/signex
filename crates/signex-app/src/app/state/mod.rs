@@ -527,7 +527,7 @@ pub struct DocumentState {
     /// BOM preview state. `Some` while the BOM Export modal is open.
     /// Mirrors the Print Preview pattern: the user adjusts grouping /
     /// include flags / format / variant in the modal and clicks
-    /// Export to drive `rfd::AsyncFileDialog` with the chosen options.
+    /// Export to drive the file picker with the chosen options.
     pub bom_preview: Option<BomPreviewState>,
     /// Right-dock History panel state — current generation counter,
     /// last loaded entries, the path the load was issued for. Driven

@@ -372,3 +372,51 @@ fn a_library_opened_right_after_save_takes_the_saved_defaults() {
         .collect();
     assert_eq!(keys, vec!["zz_1602".to_string()], "create: classes");
 }
+
+/// #1932: ending a headless session waits for a preference write that is
+/// still running, like the GUI quit does. The prefs file is held busy until
+/// the flush is seen waiting (or the session has ended without waiting), so
+/// the write cannot land first by luck of timing.
+#[test]
+fn ending_a_headless_session_waits_for_a_running_preference_write() {
+    let _turn = autosave_key();
+    let (mut app, _task) = Signex::new();
+    crate::fonts::write_autosave_enabled_pref(false);
+    app.ui_state.autosave_enabled = false;
+    app.ui_state.preferences_draft_autosave_enabled = true;
+
+    let busy = crate::fonts::PrefsIoHold::take();
+    let wait_started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    crate::fonts::install_wait_probe(wait_started.clone());
+    let ended = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let releaser = {
+        let ended = ended.clone();
+        std::thread::spawn(move || {
+            while !wait_started.load(std::sync::atomic::Ordering::SeqCst)
+                && !ended.load(std::sync::atomic::Ordering::SeqCst)
+            {
+                std::thread::yield_now();
+            }
+            busy.release();
+        })
+    };
+    let save = app.dispatch_update(save_message());
+    let end = app.end_headless_session();
+    let mut driver = crate::task_driver::TaskDriver::new();
+    driver
+        .settle(&mut app, iced::Task::batch([save, end]))
+        .expect("session ended");
+    // Read without the prefs lock: the holder may still have it.
+    let on_disk_at_exit = std::fs::read_to_string(crate::fonts::prefs_file_path())
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .is_some_and(|json| crate::fonts::read_autosave_enabled_pref_from(Some(&json)));
+    ended.store(true, std::sync::atomic::Ordering::SeqCst);
+    releaser.join().expect("releaser thread");
+
+    assert!(driver.has_exited());
+    assert!(
+        on_disk_at_exit,
+        "the session ended before the running write landed"
+    );
+}
