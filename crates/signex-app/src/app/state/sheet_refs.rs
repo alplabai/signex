@@ -1600,6 +1600,10 @@ mod tests {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test makes a FIFO with mkfifo"
+    )]
     #[cfg(unix)]
     #[test]
     fn a_fifo_reference_is_not_opened_and_disables_discard_all() {

@@ -253,6 +253,7 @@ impl Signex {
             .flatten();
         let mut app = Self {
             ui_state: UiState {
+                io: crate::io_ports::IoPorts::default(),
                 // Persisted user-toggleable state (UX §1.5). Reads
                 // fall back to defaults when the prefs file is absent
                 // or the key missing — same as a fresh install.

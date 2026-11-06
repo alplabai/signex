@@ -86,12 +86,20 @@ fn set_documents(app: &mut Signex, docs: Vec<DatasheetDoc>) {
 
 static OPENED: Mutex<Vec<DatasheetLocation>> = Mutex::new(Vec::new());
 
-fn record_open(location: &DatasheetLocation, _part: &str) -> Result<(), String> {
+fn record_open(
+    location: &DatasheetLocation,
+    _part: &str,
+    _: signex_app::io_ports::Opener,
+) -> Result<(), String> {
     OPENED.lock().unwrap().push(location.clone());
     Ok(())
 }
 
-fn refuse_open(_: &DatasheetLocation, _part: &str) -> Result<(), String> {
+fn refuse_open(
+    _: &DatasheetLocation,
+    _part: &str,
+    _: signex_app::io_ports::Opener,
+) -> Result<(), String> {
     Err("Refuse-opener advice for zq-open-fail".into())
 }
 

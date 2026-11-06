@@ -71,6 +71,9 @@ pub enum DockLayoutMsg {
     /// A background write finished; the error text is what the Messages
     /// panel shows.
     Saved(Result<(), String>),
+    /// A quit-flush write failed and was already logged (#1932): only the
+    /// retry bookkeeping is left to do.
+    SaveFailedLogged,
 }
 
 /// Quit waits on this for the dock write that is already running.

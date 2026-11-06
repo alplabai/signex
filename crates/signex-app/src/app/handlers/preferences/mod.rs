@@ -609,19 +609,22 @@ impl Signex {
                 self.recompute_preferences_dirty();
             }
             PrefMsg::ImportTheme => {
-                return Task::future(async {
-                    let picked = rfd::AsyncFileDialog::new()
+                let picker = self.ui_state.io.picker.clone();
+                return Task::future(async move {
+                    let picked = picker
+                        .dialog()
                         .set_title("Import Signex Theme")
                         .add_filter("Signex Theme", &["json"])
                         .pick_file()
                         .await;
-                    if let Some(f) = picked {
-                        let bytes = f.read().await;
-                        let s = String::from_utf8_lossy(&bytes).to_string();
-                        Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeFileLoaded(s)))
-                    } else {
-                        Message::noop()
-                    }
+                    let Some(path) = picked else {
+                        return Message::noop();
+                    };
+                    let loaded = match read_picked(&path).await {
+                        Ok(s) => PrefMsg::ThemeFileLoaded(s),
+                        Err(reason) => PrefMsg::ThemeFileUnreadable(reason),
+                    };
+                    Message::Preferences(PreferencesMsg::Inner(loaded))
                 });
             }
             PrefMsg::ExportTheme => {
@@ -662,27 +665,27 @@ impl Signex {
                 // Drop any status from a previous attempt so the line the
                 // user sees always describes the export they just started.
                 self.ui_state.preferences_theme_status.clear();
+                let picker = self.ui_state.io.picker.clone();
                 return Task::future(async move {
-                    let picked = rfd::AsyncFileDialog::new()
+                    let picked = picker
+                        .dialog()
                         .set_title("Export Signex Theme")
                         .add_filter("Signex Theme", &["json"])
                         .set_file_name("custom-theme.json")
                         .save_file()
                         .await;
-                    let Some(f) = picked else {
+                    let Some(path) = picked else {
                         // Cancelled the save dialog — nothing was
                         // attempted, so there is nothing to report.
                         return Message::noop();
                     };
-                    let path = f.path().to_path_buf();
-                    // `rfd::FileHandle::write` is a whole-file
-                    // `std::fs::write` on a worker thread and yields
-                    // `io::Result<()>` — no short write to handle, but a
+                    // A whole-file write yielding `io::Result<()>` — no
+                    // short write to handle, but a
                     // real failure (read-only volume, full disk, a path
                     // that vanished between pick and write) used to be
                     // discarded here, leaving the user believing the
                     // theme had been exported (#533).
-                    let outcome = match f.write(json.as_bytes()).await {
+                    let outcome = match tokio::fs::write(&path, json.as_bytes()).await {
                         Ok(()) => Ok(path),
                         Err(error) => Err(format!("{path}: {error}", path = path.display())),
                     };
@@ -696,6 +699,10 @@ impl Signex {
                     Ok(path) => format!("Exported theme to {}.", path.display()),
                     Err(detail) => format!("Could not export theme: {detail}"),
                 };
+            }
+            PrefMsg::ThemeFileUnreadable(reason) => {
+                self.ui_state.preferences_theme_status =
+                    format!("Could not import theme: {reason}");
             }
             PrefMsg::ThemeFileLoaded(content) => {
                 match serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content) {
@@ -877,6 +884,7 @@ impl Signex {
             | PrefMsg::KeymapDiscardBackup
             | PrefMsg::KeymapImportProfile
             | PrefMsg::KeymapProfileLoaded(..)
+            | PrefMsg::KeymapProfileUnreadable(..)
             | PrefMsg::KeymapExportProfile
             | PrefMsg::KeymapExportFinished(..)
             | PrefMsg::KeymapRecorderOpen { .. }
@@ -892,5 +900,18 @@ impl Signex {
         }
 
         Task::none()
+    }
+}
+
+/// The text of a file a dialog picked to import. A read failure is logged
+/// and returned as the reason, for the pane's status line.
+async fn read_picked(path: &std::path::Path) -> Result<String, String> {
+    match tokio::fs::read(path).await {
+        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(error) => {
+            let reason = format!("{} could not be read: {error}", path.display());
+            crate::diagnostics::log_warning(format!("Import: {reason}"));
+            Err(reason)
+        }
     }
 }

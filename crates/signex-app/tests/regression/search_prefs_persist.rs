@@ -345,3 +345,42 @@ fn a_failed_search_write_is_retried_at_quit() {
         Some("varistor")
     );
 }
+
+/// Fails its first write, then records like `Recorder`.
+#[derive(Default)]
+struct FailsOnce {
+    failed: std::sync::atomic::AtomicBool,
+    writes: Mutex<Vec<SearchPrefsChange>>,
+}
+
+impl DebouncedStore<SearchPrefsChange> for FailsOnce {
+    fn write(&self, snapshot: &SearchPrefsChange) -> Result<(), String> {
+        if !self.failed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return Err("zq-disk-full".into());
+        }
+        self.writes.lock().unwrap().push(snapshot.clone());
+        Ok(())
+    }
+}
+
+/// The GUI quit flushes twice (closing the main window, then on its close
+/// event): a search write that fails in the first flush is retried by the
+/// second, even though the first failure is logged on the quit path (#1932).
+#[test]
+fn a_search_write_failing_in_the_first_quit_flush_is_retried_by_the_second() {
+    let (mut app, _boot) = Signex::new();
+    let store = Arc::new(FailsOnce::default());
+    app.document_state.search_prefs = SearchPrefsSync::new(store.clone());
+    let _debounce_not_run = type_search(&mut app, "zq-retried-at-quit");
+
+    let quit = app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let mut driver = signex_app::task_driver::TaskDriver::new();
+    driver.settle(&mut app, quit).expect("quit settled");
+
+    assert!(driver.has_exited());
+    assert_eq!(
+        store.writes.lock().unwrap().len(),
+        1,
+        "the second flush retried the write"
+    );
+}

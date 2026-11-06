@@ -14,7 +14,7 @@ use super::{
 /// Top-level library message — folded into [`Message::Library`](crate::app::Message::Library).
 #[derive(Debug, Clone)]
 pub enum LibraryMessage {
-    /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog`
+    /// File ▸ Library ▸ Open Library… — runs the file picker
     /// on the directory level and lands in [`LibraryMessage::OpenLibraryAt`].
     OpenLibraryDialog,
     /// Result of the `rfd` directory pick. `None` = user cancelled.
@@ -41,7 +41,7 @@ pub enum LibraryMessage {
     NewComponent,
     /// Project tree → right-click → Add New to Project ▸ Component
     /// Library. Carries the active project's root directory; the
-    /// dispatcher opens an `rfd::AsyncFileDialog::save_file()` with
+    /// dispatcher opens the file picker's save dialog with
     /// `.snxlib` filter so the user picks the library's name and
     /// location (defaults to `<root>/<project>-lib/<project>-lib.snxlib` for the
     /// common project-local case, but the user can navigate anywhere
@@ -565,7 +565,7 @@ pub enum LibraryMessage {
     /// Components panel (#1908).
     IdClashNoticesDismissed,
     /// "+ Add Library…" button on the Installed / Global section
-    /// header. Opens an `rfd::AsyncFileDialog` with `*.snxlib`
+    /// header. Opens the file picker with `*.snxlib`
     /// filter and lands in `ComponentsPanelAddLibraryAt`.
     ComponentsPanelAddLibrary(super::super::state::ComponentsMountSource),
     /// Result of the Add Library file dialog. `None` = user

@@ -7,7 +7,32 @@
 use iced::Task;
 
 use crate::app::{Message, Signex};
+use crate::dock::DockLayoutMsg;
 use crate::persist::{SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsMsg, SearchPrefsWrite};
+
+/// A quit-path write may be the last thing the process does, and `update`
+/// may never see its `Saved` message once the app exits, so a failure is
+/// logged here as the message streams by (#1932). `update` then gets
+/// `SaveFailedLogged`: the retry bookkeeping without a second log line.
+pub(super) fn log_failure_at_quit(task: Task<Message>) -> Task<Message> {
+    task.map(|message| match message {
+        Message::DockLayout(DockLayoutMsg::Saved(Err(reason))) => {
+            crate::diagnostics::log_error(
+                "Dock layout was not saved, it will be lost at the next launch",
+                &anyhow::anyhow!(reason),
+            );
+            Message::DockLayout(DockLayoutMsg::SaveFailedLogged)
+        }
+        Message::SearchPrefs(SearchPrefsMsg::Saved(Err(reason))) => {
+            crate::diagnostics::log_error(
+                "Search box contents were not saved",
+                &anyhow::anyhow!(reason),
+            );
+            Message::SearchPrefs(SearchPrefsMsg::SaveFailedLogged)
+        }
+        other => other,
+    })
+}
 
 impl Signex {
     /// A Library Browser search box changed: record it and arm the debounce.
@@ -32,16 +57,51 @@ impl Signex {
                 }
             }
             SearchPrefsMsg::Saved(Ok(())) => Task::none(),
-            SearchPrefsMsg::Saved(Err(reason)) => {
+            msg @ (SearchPrefsMsg::Saved(Err(_)) | SearchPrefsMsg::SaveFailedLogged) => {
                 self.document_state.search_prefs.write_failed();
-                crate::diagnostics::log_error(
-                    "Search box contents were not saved; retrying on the next edit or at quit",
-                    &anyhow::anyhow!(reason),
-                );
+                if let SearchPrefsMsg::Saved(Err(reason)) = msg {
+                    crate::diagnostics::log_error(
+                        "Search box contents were not saved; retrying on the next edit or at quit",
+                        &anyhow::anyhow!(reason),
+                    );
+                }
                 self.sync_diagnostics_panel_ctx();
                 Task::none()
             }
         }
+    }
+
+    /// End a headless session (#1932) the way the quit path ends the GUI:
+    /// the same pre-quit steps, then every pending and in-flight write is
+    /// flushed and the app exits. While a rename or delete runs the session
+    /// does not end (reported; call again once it finished). Unsaved
+    /// documents and library rows are not saved, as there is nobody to ask;
+    /// each is reported.
+    pub fn end_headless_session(&mut self) -> Task<Message> {
+        if !self.prepare_quit() {
+            return Task::none();
+        }
+        for row in self.library.dirty_editors() {
+            crate::diagnostics::log_warning(format!(
+                "Headless session ended with unsaved changes in library row {} of {} in {}",
+                row.row_id,
+                row.table,
+                row.library_path.display()
+            ));
+        }
+        let mut unsaved: Vec<_> = self
+            .document_state
+            .dirty_document_paths()
+            .into_iter()
+            .collect();
+        unsaved.sort();
+        for path in unsaved {
+            crate::diagnostics::log_warning(format!(
+                "Headless session ended with unsaved changes in {}",
+                path.display()
+            ));
+        }
+        self.flush_quit_writes_then(iced::exit())
     }
 
     /// Quit path: flush every debounced preference write (dock layout, then
@@ -85,10 +145,11 @@ impl Signex {
             },
             |result| Message::SearchPrefs(SearchPrefsMsg::Saved(result)),
         );
-        match pending {
-            Some(write) => write.chain(drained).chain(next),
-            None => drained.chain(next),
-        }
+        let flushed = match pending {
+            Some(write) => write.chain(drained),
+            None => drained,
+        };
+        log_failure_at_quit(flushed).chain(next)
     }
 }
 

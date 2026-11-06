@@ -142,6 +142,10 @@ pub fn detect() -> Result<Option<DesktopButtonLayout>, ProbeTimedOut> {
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "reads the desktop button layout from gsettings"
+)]
 fn detect_gnome() -> Result<Option<DesktopButtonLayout>, ProbeTimedOut> {
     let mut command = Command::new("gsettings");
     command.args(["get", "org.gnome.desktop.wm.preferences", "button-layout"]);
@@ -215,6 +219,10 @@ mod tests {
         })
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test spawns a stand-in probe child"
+    )]
     #[cfg(unix)]
     #[test]
     fn a_stalled_probe_child_is_killed_at_the_deadline() {
@@ -226,6 +234,10 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(10));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test spawns a stand-in probe child"
+    )]
     #[cfg(unix)]
     #[test]
     fn a_quick_probe_child_returns_its_output() {

@@ -4,6 +4,11 @@
 //! path runs in a child process of this test binary: [`probe`] does the work
 //! when `PROBE_ENV` names a path and is a no-op otherwise.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "the test re-runs its own binary as a child process"
+)]
+
 use signex_app::app::Signex;
 use signex_app::fonts::catalog::{FontSet, FontsAlreadyInstalled, install_before_boot};
 use signex_app::task_driver::TaskDriver;

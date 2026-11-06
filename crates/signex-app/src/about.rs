@@ -51,6 +51,7 @@ pub fn version_info_text() -> String {
 /// failure is turned into a message by `on_failed` (given the
 /// user-readable reason) so the caller can put it on the error card.
 pub fn open_link<M: Send + 'static>(
+    opener: crate::io_ports::Opener,
     link: ExternalLink,
     on_failed: impl FnOnce(String) -> M + Send + 'static,
 ) -> iced::Task<M> {
@@ -58,7 +59,7 @@ pub fn open_link<M: Send + 'static>(
     iced::Task::future(async move {
         let result = tokio::task::spawn_blocking({
             let url = url.clone();
-            move || webbrowser::open(&url)
+            move || opener.browse(&url)
         })
         .await;
         match result {

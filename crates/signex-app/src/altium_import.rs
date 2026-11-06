@@ -135,6 +135,10 @@ struct Finished {
 
 /// Spawn and wait at most `timeout`, killing the converter past it or as
 /// soon as `cancel` is set.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "runs the external importer binary, not a browser or viewer"
+)]
 fn run_converter(
     binary: &Path,
     input: &Path,

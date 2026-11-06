@@ -41,6 +41,7 @@ pub mod first_run_tour;
 pub mod fonts;
 pub mod frame_probe;
 pub mod icons;
+pub mod io_ports;
 pub mod paste_array;
 pub mod paste_prefs;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of

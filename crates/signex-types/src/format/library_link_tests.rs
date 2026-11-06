@@ -1,6 +1,11 @@
 //! A placed symbol's library link (#1338): `library_id`, `row_id` and the
 //! pinned `library_version` ride in `[extras.symbols.<uuid>]`, only when set.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests run git, mkfifo and other tools as fixtures"
+)]
+
 use super::*;
 use crate::schematic::{SchematicSheet, Symbol};
 use uuid::Uuid;

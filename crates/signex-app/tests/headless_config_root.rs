@@ -7,6 +7,11 @@
 //! "real" root is the per-process test redirect, the root `config_root()`
 //! answers without an override.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "the test re-runs its own binary as a child process"
+)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -208,7 +213,7 @@ fn assert_credentials_unused() {
         "http://127.0.0.1:9/authorize".into(),
         "http://127.0.0.1:9/token".into(),
         cancel,
-        false,
+        None,
     );
     assert!(
         matches!(&connect, digikey_oauth::Outcome::Failed { reason } if reason.contains("keyring")),

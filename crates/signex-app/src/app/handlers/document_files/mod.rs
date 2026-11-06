@@ -69,8 +69,11 @@ mod symbol_restore_tests;
 /// dialog cannot redirect the write to whichever tab is active when it
 /// returns; the picked path is passed through unresolved and
 /// `handle_save_primitive_as` applies the extension and overwrite check.
-pub(crate) fn spawn_save_as_for_primitive(suggested: PathBuf) -> iced::Task<Message> {
-    spawn_primitive_save_dialog(suggested)
+pub(crate) fn spawn_save_as_for_primitive(
+    picker: crate::io_ports::Picker,
+    suggested: PathBuf,
+) -> iced::Task<Message> {
+    spawn_primitive_save_dialog(picker, suggested)
 }
 
 fn primitive_save_as_message(from_path: PathBuf, to_path: PathBuf) -> Message {
@@ -99,7 +102,10 @@ pub(crate) fn with_primitive_extension(to_path: PathBuf, ext: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-fn spawn_primitive_save_dialog(suggested: PathBuf) -> iced::Task<Message> {
+fn spawn_primitive_save_dialog(
+    picker: crate::io_ports::Picker,
+    suggested: PathBuf,
+) -> iced::Task<Message> {
     let filter_ext = primitive_extension(&suggested);
     let (filter_label, title) = match filter_ext {
         "snxfpt" => ("Signex Footprint", "Save Footprint As"),
@@ -117,14 +123,14 @@ fn spawn_primitive_save_dialog(suggested: PathBuf) -> iced::Task<Message> {
 
     iced::Task::perform(
         async move {
-            rfd::AsyncFileDialog::new()
+            picker
+                .dialog()
                 .set_title(title)
                 .add_filter(filter_label, &[filter_ext])
                 .set_directory(&default_dir)
                 .set_file_name(&default_name)
                 .save_file()
                 .await
-                .map(|file| file.path().to_path_buf())
         },
         move |picked| match picked {
             Some(to_path) => primitive_save_as_message(from.clone(), to_path),

@@ -11,26 +11,32 @@ use iced::Task;
 
 use super::{DatasheetLocation, OpenDatasheet};
 use crate::app::contracts::Message;
+use crate::io_ports::{OpenError, Opener};
 use crate::library::{LibraryMessage, PlacedPartMsg};
 
 /// Open `location` for the part `part`. Blocks on the launcher: call it
 /// from a worker. The error is the advice line for Messages.
-pub fn open(location: &DatasheetLocation, part: &str) -> Result<(), String> {
+pub fn open(location: &DatasheetLocation, part: &str, opener: Opener) -> Result<(), String> {
     match location {
-        DatasheetLocation::Url(url) => open_url(url, part),
-        DatasheetLocation::Pinned { path, assets_dir } => open_pinned(path, assets_dir, part),
+        DatasheetLocation::Url(url) => open_url(url, part, opener),
+        DatasheetLocation::Pinned { path, assets_dir } => {
+            open_pinned(path, assets_dir, part, opener)
+        }
     }
 }
 
-fn open_url(url: &str, part: &str) -> Result<(), String> {
+fn open_url(url: &str, part: &str, opener: Opener) -> Result<(), String> {
     let lower = url.to_ascii_lowercase();
     if !(lower.starts_with("https://") || lower.starts_with("http://")) {
         return Err(format!(
             "Fix the datasheet link of {part}: it must start with https:// or http://."
         ));
     }
-    webbrowser::open(url).map_err(|e| {
-        format!("Set a default browser to open the datasheet of {part}: it did not launch ({e}).")
+    opener.browse(url).map_err(|e| match e {
+        OpenError::Refused => format!("The datasheet of {part} was not opened: {e}."),
+        OpenError::Failed(e) => format!(
+            "Set a default browser to open the datasheet of {part}: it did not launch ({e})."
+        ),
     })
 }
 
@@ -100,57 +106,31 @@ fn check_pinned(path: &Path, assets_dir: &Path) -> Result<(), &'static str> {
 /// How much of the file is read to look for the PDF header.
 const PDF_HEAD_BYTES: u64 = 1024;
 
-fn open_pinned(path: &Path, assets_dir: &Path, part: &str) -> Result<(), String> {
+fn open_pinned(path: &Path, assets_dir: &Path, part: &str, opener: Opener) -> Result<(), String> {
     check_pinned(path, assets_dir)
         .map_err(|why| format!("Re-pin the datasheet of {part} in its library row: {why}."))?;
     // The checked path itself, not its canonical form: that is a `\\?\`
     // verbatim path on Windows, which `explorer` handles unreliably. With
     // symlinks refused and a plain hex name, both name the same file.
-    launch(path).map_err(|e| {
-        format!("Install a PDF viewer to open the datasheet of {part}: it did not launch ({e}).")
+    opener.view(path).map_err(|e| match e {
+        OpenError::Refused => format!("The datasheet of {part} was not opened: {e}."),
+        OpenError::Failed(e) => format!(
+            "Install a PDF viewer to open the datasheet of {part}: it did not launch ({e})."
+        ),
     })
 }
 
-#[cfg(target_os = "macos")]
-fn launch(path: &Path) -> std::io::Result<()> {
-    run_launcher(std::process::Command::new("open").arg(path))
-}
-
-#[cfg(target_os = "windows")]
-fn launch(path: &Path) -> std::io::Result<()> {
-    // `explorer` reports exit code 1 even when it opened the file, so its
-    // status is not read; a launch that cannot even start is still an error.
-    std::process::Command::new("explorer")
-        .arg(path)
-        .spawn()
-        .map(|_| ())
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn launch(path: &Path) -> std::io::Result<()> {
-    run_launcher(std::process::Command::new("xdg-open").arg(path))
-}
-
-#[cfg(not(target_os = "windows"))]
-fn run_launcher(command: &mut std::process::Command) -> std::io::Result<()> {
-    let status = command.status()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(std::io::Error::other(format!("exit status {status}")))
-    }
-}
-
-/// Open `location` for `part` off the update thread with `opener`. A
-/// failure comes back as [`PlacedPartMsg::DatasheetOpenFailed`]; success says
-/// nothing.
+/// Open `location` for `part` off the update thread with `show`, which
+/// launches through `opener`. A failure comes back as
+/// [`PlacedPartMsg::DatasheetOpenFailed`]; success says nothing.
 pub fn open_task(
     location: DatasheetLocation,
     part: String,
-    opener: OpenDatasheet,
+    show: OpenDatasheet,
+    opener: Opener,
 ) -> Task<Message> {
     Task::future(async move {
-        tokio::task::spawn_blocking(move || opener(&location, &part))
+        tokio::task::spawn_blocking(move || show(&location, &part, opener))
             .await
             .unwrap_or_else(|e| Err(format!("The datasheet launcher did not finish: {e}")))
             .err()
@@ -189,7 +169,7 @@ mod tests {
     }
 
     fn refusal(location: &DatasheetLocation) -> String {
-        open(location, "R1").unwrap_err()
+        open(location, "R1", Opener::Refuse).unwrap_err()
     }
 
     fn assert_advice_without_path(advice: &str) {
@@ -304,10 +284,22 @@ mod tests {
         }
     }
 
+    /// #1931: headless, a valid link is refused and reported, not launched.
+    #[test]
+    fn a_headless_opener_refuses_a_valid_link_and_says_why() {
+        let link = DatasheetLocation::Url("https://example.com/r1.pdf".into());
+        let advice = open(&link, "R1", Opener::Refuse).unwrap_err();
+        assert!(
+            advice.starts_with("The datasheet of R1 was not opened: a headless run"),
+            "{advice}"
+        );
+    }
+
     #[test]
     fn a_non_web_link_is_never_handed_to_the_browser() {
         for bad in ["file:///etc/passwd", "javascript:alert(1)"] {
-            let advice = open(&DatasheetLocation::Url(bad.into()), "R1").unwrap_err();
+            let advice =
+                open(&DatasheetLocation::Url(bad.into()), "R1", Opener::Refuse).unwrap_err();
             assert!(
                 advice.starts_with("Fix the datasheet link of R1"),
                 "{advice}"

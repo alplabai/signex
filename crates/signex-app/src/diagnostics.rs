@@ -131,6 +131,32 @@ pub fn newest_entry_id() -> Option<u64> {
         .map(|e| e.id)
 }
 
+/// What was logged after the entry `after` (`None`: since the start), for a
+/// headless run that reports what one command did (#1932). `missed` counts
+/// entries the ring already dropped, so a long command's report says it is
+/// incomplete instead of silently starting late.
+#[derive(Debug, Clone, Default)]
+pub struct DiagnosticsDelta {
+    pub entries: Vec<DiagnosticEntry>,
+    pub missed: u64,
+}
+
+pub fn entries_since(after: Option<u64>) -> DiagnosticsDelta {
+    delta_in(
+        &entries().lock().expect("diagnostics mutex poisoned"),
+        after,
+    )
+}
+
+fn delta_in(ring: &VecDeque<DiagnosticEntry>, after: Option<u64>) -> DiagnosticsDelta {
+    let after = after.unwrap_or(0);
+    let entries: Vec<DiagnosticEntry> = ring.iter().filter(|e| e.id > after).cloned().collect();
+    let missed = entries
+        .first()
+        .map_or(0, |first| first.id.saturating_sub(after + 1));
+    DiagnosticsDelta { entries, missed }
+}
+
 pub fn configured_level() -> LevelFilter {
     *CONFIGURED_LEVEL.get_or_init(resolve_configured_level)
 }
@@ -439,6 +465,12 @@ mod ring_order_tests {
         });
         let ring = ring.lock().expect("ring");
         let ids: Vec<u64> = ring.iter().map(|e| e.id).collect();
+        // #1932: a delta from an entry the ring dropped says how many it lost.
+        let delta = delta_in(&ring, Some(10));
+        assert_eq!(delta.entries.len(), MAX_DIAGNOSTIC_ENTRIES);
+        assert_eq!(delta.missed, ids[0] - 11);
+        let newest = delta_in(&ring, Some(ids[ids.len() - 2]));
+        assert_eq!((newest.entries.len(), newest.missed), (1, 0));
         assert_eq!(ids.len(), MAX_DIAGNOSTIC_ENTRIES);
         assert!(
             ids.windows(2).all(|pair| pair[0] < pair[1]),

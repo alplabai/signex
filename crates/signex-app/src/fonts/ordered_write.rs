@@ -42,21 +42,38 @@ pub(crate) fn take_wait_probe() -> Option<std::sync::Arc<std::sync::atomic::Atom
 }
 
 /// Holds one slot of `IN_FLIGHT`; releases it when the write completes or its
-/// task is dropped without running.
-struct InFlightSlot;
+/// task is dropped without running. The second case may lose the setting, so it
+/// is reported (#1932).
+struct InFlightSlot {
+    key: &'static str,
+    /// Set by the worker as it starts the write. A blocking task the runtime
+    /// never started (it may skip them at shutdown) leaves it unset, so the
+    /// warning says the write may not have been saved: a spurious warning
+    /// beats a silent loss.
+    has_run: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
 
 impl InFlightSlot {
-    fn take() -> Self {
+    fn take(key: &'static str) -> Self {
         IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
         #[cfg(test)]
         SLOTS_TAKEN_HERE.with(|n| n.set(n.get() + 1));
-        Self
+        Self {
+            key,
+            has_run: std::sync::Arc::default(),
+        }
     }
 }
 
 impl Drop for InFlightSlot {
     fn drop(&mut self) {
         IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+        if !self.has_run.load(Ordering::SeqCst) {
+            crate::diagnostics::log_warning(format!(
+                "The {} preference may not have been saved: its write was dropped before it ran",
+                self.key
+            ));
+        }
     }
 }
 
@@ -142,10 +159,12 @@ pub fn background_pref_write(
     let ordered = OrderedPrefWrite::new(key);
     // Taken here, on the UI thread, so a quit that follows sees the write
     // even before its worker has started.
-    let slot = InFlightSlot::take();
+    let slot = InFlightSlot::take(key);
+    let has_run = slot.has_run.clone();
     Task::perform(
         async move {
             let result = tokio::task::spawn_blocking(move || {
+                has_run.store(true, Ordering::SeqCst);
                 ordered.run(write);
             })
             .await;
@@ -161,4 +180,58 @@ pub fn background_pref_write(
         },
         |()| Message::Ui(UiMsg::PrefWriteFinished),
     )
+}
+
+#[cfg(test)]
+mod dropped_write_tests {
+    use super::*;
+
+    /// #1932: a write whose task is dropped unrun is reported, not lost
+    /// silently.
+    #[test]
+    fn a_pref_write_dropped_before_it_ran_is_reported() {
+        let needle = "The zq-dropped-write preference may not have been saved";
+        let before = crate::diagnostics::logged_count(needle);
+        drop(background_pref_write("zq-dropped-write", || {}));
+        assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+    }
+
+    /// Dropping the task while its write already runs loses nothing: the
+    /// write finishes on its worker, so there is nothing to report.
+    #[test]
+    fn a_pref_write_dropped_while_it_runs_is_not_reported() {
+        use futures::StreamExt as _;
+        let needle = "The zq-running-write preference may not have been saved";
+        let before = crate::diagnostics::logged_count(needle);
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let write = background_pref_write("zq-running-write", move || {
+            started_tx.send(()).ok();
+            release_rx.recv().ok();
+        });
+        let mut stream = iced_runtime::task::into_stream(write).expect("a task");
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        runtime.block_on(async {
+            let started = tokio::task::spawn_blocking(move || started_rx.recv());
+            tokio::select! {
+                _ = stream.next() => panic!("the write was released early"),
+                _ = started => {}
+            }
+        });
+        drop(stream);
+        release_tx.send(()).ok();
+        drop(runtime);
+        assert_eq!(crate::diagnostics::logged_count(needle), before);
+    }
+
+    #[test]
+    fn a_pref_write_that_ran_reports_nothing() {
+        let needle = "The zq-finished-write preference may not have been saved";
+        let before = crate::diagnostics::logged_count(needle);
+        let write = background_pref_write("zq-finished-write", || {});
+        crate::task_driver::TaskDriver::new()
+            .outputs(write)
+            .expect("ran");
+        assert_eq!(crate::diagnostics::logged_count(needle), before);
+    }
 }

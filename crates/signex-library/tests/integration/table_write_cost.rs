@@ -4,6 +4,11 @@
 //! The timing tests are ignored by default. Run them with
 //! `cargo test -p signex-library --test integration --release -- table_write_cost --ignored --nocapture`.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests run git, mkfifo and other tools as fixtures"
+)]
+
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};

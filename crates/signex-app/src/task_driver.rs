@@ -187,6 +187,11 @@ impl TaskDriver {
                     if let Some(message) = effects.perform(action) {
                         out.push(message);
                     }
+                    // Exit stops the runtime at once: work still running in
+                    // the same task never reports back (#1932).
+                    if effects.has_exited {
+                        break;
+                    }
                 }
                 out
             };

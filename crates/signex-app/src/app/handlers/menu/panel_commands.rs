@@ -67,10 +67,12 @@ impl Signex {
                 Some(Task::none())
             }
             MenuMessage::OpenDocumentation => Some(crate::about::open_link(
+                self.ui_state.io.opener,
                 crate::about::ExternalLink::Documentation,
                 |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
             )),
             MenuMessage::ReportIssue => Some(crate::about::open_link(
+                self.ui_state.io.opener,
                 crate::about::ExternalLink::IssueTracker,
                 |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
             )),

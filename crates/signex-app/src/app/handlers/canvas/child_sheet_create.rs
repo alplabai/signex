@@ -116,16 +116,18 @@ impl Signex {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
+        let picker = self.ui_state.io.picker.clone();
         Task::perform(
             async move {
-                let mut dialog = rfd::AsyncFileDialog::new()
+                let mut dialog = picker
+                    .dialog()
                     .set_title("Create Sheet")
                     .add_filter("Signex Schematic", &["snxsch"])
                     .set_file_name(&name);
                 if let Some(dir) = dir {
                     dialog = dialog.set_directory(dir);
                 }
-                dialog.save_file().await.map(|f| f.path().to_path_buf())
+                dialog.save_file().await
             },
             |picked| Message::Project(ProjectMsg::CreateChildSheetBrowsed(picked)),
         )

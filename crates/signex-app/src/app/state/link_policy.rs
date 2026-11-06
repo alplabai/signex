@@ -187,6 +187,10 @@ mod tests {
         ));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test makes a junction with cmd"
+    )]
     #[cfg(windows)]
     #[test]
     fn a_junction_to_a_local_directory_is_followed() {
