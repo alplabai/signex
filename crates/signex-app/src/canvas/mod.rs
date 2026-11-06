@@ -1,7 +1,8 @@
 //! Schematic/PCB canvas — wgpu rendering with Altium-style pan/zoom/grid.
 //!
 //! Uses `iced::widget::canvas::Program`. Layers, back to front:
-//! - background (`bg_cache`): cached, cleared on theme/grid/viewport change;
+//! - background (`background_surface`): retained across pans like the content
+//!   and rebuilt when its inputs change;
 //! - content (`content_surface`): retained across pans and moved by a
 //!   translation; cleared when the document changes (see `draw::retained`);
 //! - autofocus dim: drawn over the content when autofocus is active;
@@ -115,6 +116,9 @@ pub struct CanvasSlot {
     pub content_cache: canvas::Cache,
     /// The CPU content layer, retained across pans (#2078).
     content_surface: std::cell::RefCell<draw::RetainedContent>,
+    /// The sheet background, retained across pans (#2102); it checks its own
+    /// inputs, so `bg_cache` clears do not reach it.
+    background_surface: std::cell::RefCell<draw::RetainedBackground>,
     pub overlay_cache: canvas::Cache,
     /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
@@ -285,6 +289,7 @@ impl CanvasSlot {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             content_surface: std::cell::RefCell::new(Default::default()),
+            background_surface: std::cell::RefCell::new(Default::default()),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             bg_cache_camera: std::cell::Cell::new(None),
@@ -883,6 +888,8 @@ mod gesture;
 #[cfg(test)]
 mod active_bar_hit;
 #[cfg(test)]
+mod background_reuse_tests;
+#[cfg(test)]
 mod draw_order_tests;
 #[cfg(test)]
 mod gpu_mount_drag_tests;
@@ -890,6 +897,8 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod grid_order_tests;
+#[cfg(test)]
+mod pan_bench_tests;
 #[cfg(test)]
 mod pan_reuse_pixel_tests;
 #[cfg(test)]
