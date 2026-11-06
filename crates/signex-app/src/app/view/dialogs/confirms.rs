@@ -56,7 +56,11 @@ impl Signex {
 
         if st.unsaved_prompt {
             let (body, can_discard) = self.exclude_dirty_prompt(st);
-            return Self::exclude_dirty_card(body, can_discard, header, tokens);
+            let width = self.dialog_width(
+                crate::app::state::ModalId::RemoveDialog,
+                super::sizes::REMOVE,
+            );
+            return Self::exclude_dirty_card(body, can_discard, header, width, tokens);
         }
 
         let option_card =
@@ -245,6 +249,7 @@ impl Signex {
         body: String,
         can_discard: bool,
         header: Element<'a, Message>,
+        width: Length,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
         // Discard is withheld when another open project shares the target.
@@ -278,10 +283,7 @@ impl Signex {
                 dialog_body(dialog_message(body, tokens)),
                 dialog_footer(buttons),
             ]
-            .width(self.dialog_width(
-                crate::app::state::ModalId::RemoveDialog,
-                super::sizes::REMOVE,
-            )),
+            .width(width),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true)
