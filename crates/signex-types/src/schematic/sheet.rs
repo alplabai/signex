@@ -890,7 +890,7 @@ mod lib_symbol_table_tests {
 }
 
 #[cfg(test)]
-mod label_junction_aabb_tests {
+mod label_aabb_tests {
     use super::*;
 
     #[test]

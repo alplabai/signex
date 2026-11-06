@@ -20,6 +20,23 @@ pub(in crate::app::view) fn menu_height(rows: usize, has_icons: bool) -> f32 {
 /// Height of a menu separator line.
 const SEPARATOR_HEIGHT: f32 = 1.0;
 
+/// Height of the card the dropdown widget lays out for `entries`: its rows
+/// (items, headers and custom rows), its separators and the panel padding.
+/// Rows are icon-tall when any item carries an icon, as in the widget.
+pub(in crate::app::view) fn entries_height<M: Clone + 'static>(
+    entries: &[signex_widgets::active_bar_dropdown::DropdownEntry<M>],
+) -> f32 {
+    use signex_widgets::active_bar_dropdown::DropdownEntry;
+    let separators = entries
+        .iter()
+        .filter(|e| matches!(e, DropdownEntry::Separator))
+        .count();
+    let has_icons = entries
+        .iter()
+        .any(|e| matches!(e, DropdownEntry::Item(item) if item.icon.is_some()));
+    menu_height(entries.len() - separators, has_icons) + separators as f32 * SEPARATOR_HEIGHT
+}
+
 /// Top-left corner of a flyout of width `sub_w` beside the parent card at
 /// `parent` (width `parent_w`) in a window `window_w` wide: right of the
 /// parent, or left of it when the right edge would be crossed. Its top lines
@@ -234,6 +251,50 @@ mod tests {
                 (pitch - row_height(has_icons)).abs() < 0.6,
                 "icons {has_icons}: laid out {pitch}, assumed {}",
                 row_height(has_icons)
+            );
+        }
+    }
+
+    /// A submenu launcher is exactly one item row tall, so a flyout placed
+    /// by `submenu_origin` lines up with it (#2136).
+    #[test]
+    fn a_submenu_launcher_row_is_one_item_row_tall() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let icon = iced::widget::svg::Handle::from_memory(
+            br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>"#.as_slice(),
+        );
+        for has_icons in [false, true] {
+            let with_icon = |item: DropdownItem<Message>| {
+                DropdownEntry::Item(if has_icons {
+                    item.icon(icon.clone())
+                } else {
+                    item
+                })
+            };
+            let entries = vec![
+                with_icon(DropdownItem::new("Alpha", Message::Ui(UiMsg::Noop))),
+                super::items::submenu_launcher(
+                    &tokens,
+                    has_icons.then(|| icon.clone()),
+                    "Launcher",
+                    ContextSubmenu::Align,
+                    false,
+                ),
+                with_icon(DropdownItem::new("Charlie", Message::Ui(UiMsg::Noop))),
+            ];
+            let menu = signex_widgets::active_bar_dropdown::view(entries, &tokens, Some(240.0));
+            let texts = crate::layout_probe::lay_out_texts(menu, iced::Size::new(400.0, 400.0));
+            let y = |label: &str| crate::layout_probe::find(&texts, label).bounds.y;
+            let pitch = (y("Charlie") - y("Alpha")) / 2.0;
+            assert!(
+                (pitch - row_height(has_icons)).abs() < 0.6,
+                "icons {has_icons}: rows around a launcher are {pitch} apart, assumed {}",
+                row_height(has_icons)
+            );
+            let to_launcher = y("Launcher") - y("Alpha");
+            assert!(
+                (to_launcher - row_height(has_icons)).abs() < 0.6,
+                "icons {has_icons}: launcher label {to_launcher} below the first row"
             );
         }
     }
