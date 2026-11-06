@@ -382,10 +382,6 @@ mod tests {
         })
     }
 
-    fn app_with_library_delete() -> Signex {
-        app_with_library_delete_of("/w/a.snxlib")
-    }
-
     fn app_with_library_delete_of(library: &str) -> Signex {
         let (mut app, _task) = Signex::new();
         app.document_state.pending_path_ops.begin(
