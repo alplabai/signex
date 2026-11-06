@@ -120,7 +120,7 @@ fn a_confirm_card_narrower_than_its_design_stays_inside_a_narrow_window() {
     for label in ["Cancel", "Save All"] {
         let b = find(&texts, label).bounds;
         assert!(
-            b.x >= 0.0 && b.x + b.width <= window.width - super::MODAL_WINDOW_MARGIN,
+            b.x >= 0.0 && b.x + b.width <= window.width - super::widgets::MODAL_WINDOW_MARGIN,
             "{label:?} leaves the {window:?} window: {b:?}"
         );
     }

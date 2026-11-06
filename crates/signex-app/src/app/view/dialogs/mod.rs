@@ -58,10 +58,8 @@ pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
 /// Hover background for the close-X (Windows-native destructive red).
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
-pub(in crate::app::view) use widgets::{
-    MODAL_WINDOW_MARGIN, draggable_header, fit_modal_size, modal_card_width, wrap_modal,
-};
 pub(crate) use widgets::{close_x_button, modal_title_header, os_title_bar_slot};
+pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size, wrap_modal};
 
 #[cfg(test)]
 mod fit_window_tests;
