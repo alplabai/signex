@@ -9,8 +9,8 @@
 //! motion, zero behaviour change.
 
 use super::drawings::push_placed_drawings;
-use super::family::alias_for_family;
-use super::geometry::{path_to_tiny_skia, rect_path};
+use super::family::{alias_for_family, export_face};
+use super::geometry::{circle_path, path_to_tiny_skia, rect_path};
 use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
@@ -21,6 +21,7 @@ use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
+use crate::markup_escape::escape_markup;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use crate::pdf::{ColourMode, PdfOptions};
@@ -177,9 +178,8 @@ impl SvgRenderContext {
 
         for j in &sheet.schematic.junctions {
             // The canvas size, floor included (#2026).
-            let dia_mm = 2.0 * opts.schematic_defaults.junction_radius_mm(j.diameter);
-            let side = (dia_mm * xform.mm_to_unit) as f32;
-            let half = side / 2.0;
+            let radius =
+                (opts.schematic_defaults.junction_radius_mm(j.diameter) * xform.mm_to_unit) as f32;
             let cx = xform.x(j.position.x);
             let cy = xform.px_y(j.position.y);
             let junction_rgb = wire_style::junction_rgb(
@@ -188,11 +188,10 @@ impl SvgRenderContext {
                 &opts.net_class_styles,
                 palette.junction,
             );
-            elements.push(rect_path(
-                cx - half,
-                cy - half,
-                side,
-                side,
+            elements.push(circle_path(
+                cx,
+                cy,
+                radius,
                 SvgStyle {
                     stroke_rgb: Some(junction_rgb),
                     fill_rgb: Some(junction_rgb),
@@ -219,7 +218,8 @@ impl SvgRenderContext {
 
         let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
-            let font_alias = alias_for_family(label.font_family.as_deref(), document_family, "F3");
+            let (font_alias, measure_family) =
+                export_face(label.font_family.as_deref(), document_family, "F3");
             let size_pt = label_size_pt(label.font_size, xform.mm_to_unit, &opts.scale, font_alias);
             let spin = label_spin_style(label.justify, label.rotation);
             let (off_x, off_y) = match label.label_type {
@@ -227,16 +227,9 @@ impl SvgRenderContext {
                 LabelType::Global => {
                     schematic_text_offset_global(&label.shape, spin, label.font_size)
                 }
-                LabelType::Hierarchical => schematic_text_offset_hier(
-                    &label.text,
-                    label.font_size,
-                    spin,
-                    signex_types::font::resolve_family(
-                        label.font_family.as_deref(),
-                        document_family,
-                    )
-                    .as_deref(),
-                ),
+                LabelType::Hierarchical => {
+                    schematic_text_offset_hier(&label.text, label.font_size, spin, measure_family)
+                }
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
@@ -604,7 +597,7 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
                     out,
                     "  <text x=\"{x}\" y=\"{y}\" text-anchor=\"{anchor}\" dominant-baseline=\"{baseline}\"{transform} fill=\"{}\" font-size=\"{size_pt}\">{}</text>",
                     rgb_css(*fill_rgb),
-                    escape_xml(text)
+                    escape_markup(text)
                 );
             }
         }
@@ -642,13 +635,4 @@ fn to_svg_path_d(commands: &[SvgPathCommand]) -> String {
 fn rgb_css((r, g, b): (f32, f32, f32)) -> String {
     let to_u8 = |v: f32| -> u8 { (v.clamp(0.0, 1.0) * 255.0).round() as u8 };
     format!("rgb({},{},{})", to_u8(r), to_u8(g), to_u8(b))
-}
-
-fn escape_xml(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
 }

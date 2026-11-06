@@ -42,9 +42,9 @@ pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
 pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use signex_net::{SegmentIndex, SheetConnectivity, pt_key};
+use signex_net::{SegmentIndex, SheetConnectivity, pt_key, uf::Key};
 use signex_types::schematic::{
     LabelType, PartKey, PinDirection, Point, SelectedKind, group_into_parts, normalize_port_name,
     normalized_lib_id,
@@ -57,12 +57,6 @@ use crate::{RuleKind, Severity, sel};
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
-
-const ENDPOINT_EPS: f64 = 1e-4;
-
-fn same(a: &Point, b: &Point) -> bool {
-    (a.x - b.x).abs() < ENDPOINT_EPS && (a.y - b.y).abs() < ENDPOINT_EPS
-}
 
 /// Every wire on the sheet as a `(start, end)` pair, for anchoring queries
 /// against [`SheetConnectivity::root_of_anchored`] / [`on_any_wire`].
@@ -311,86 +305,48 @@ fn pt_of(x: f64, y: f64) -> Point {
     Point { x, y }
 }
 
-/// Points bucketed on an `ENDPOINT_EPS` grid so a "is anything within
-/// `same()` of here" query probes 9 cells instead of scanning every element.
-/// The grid only narrows candidates; the exact [`same`] test decides.
-struct EpsPointIndex<T> {
-    cells: HashMap<(i64, i64), Vec<(Point, T)>>,
-}
-
-impl<T: Copy> EpsPointIndex<T> {
-    fn new() -> Self {
-        Self {
-            cells: HashMap::new(),
-        }
-    }
-
-    fn cell(p: &Point) -> (i64, i64) {
-        (
-            (p.x / ENDPOINT_EPS).floor() as i64,
-            (p.y / ENDPOINT_EPS).floor() as i64,
-        )
-    }
-
-    fn insert(&mut self, p: Point, tag: T) {
-        self.cells.entry(Self::cell(&p)).or_default().push((p, tag));
-    }
-
-    /// Tags of every indexed point `same()` as `p`.
-    fn near<'a>(&'a self, p: &'a Point) -> impl Iterator<Item = T> + 'a {
-        let (cx, cy) = Self::cell(p);
-        (-1i64..=1).flat_map(move |dx| {
-            (-1i64..=1).flat_map(move |dy| {
-                self.cells
-                    .get(&(cx.saturating_add(dx), cy.saturating_add(dy)))
-                    .into_iter()
-                    .flatten()
-                    .filter(move |(q, _)| same(q, p))
-                    .map(|&(_, t)| t)
-            })
-        })
-    }
-}
-
 pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     // Everything a wire end can legitimately land on besides another wire.
-    let mut non_wire: EpsPointIndex<()> = EpsPointIndex::new();
+    let mut non_wire: HashSet<Key> = HashSet::new();
     for pin in ctx.symbols.iter().flat_map(|s| s.pins.iter()) {
-        non_wire.insert(pin.world_pos, ());
+        non_wire.insert(pt_key(&pin.world_pos));
     }
     // Sheet-symbol pins sit in world coordinates, as `build_netlist` anchors
     // them (issue #1834).
     for pin in ctx.child_sheets.iter().flat_map(|c| c.pins.iter()) {
-        non_wire.insert(pin.position, ());
+        non_wire.insert(pt_key(&pin.position));
     }
     for j in &ctx.junctions {
-        non_wire.insert(j.position, ());
+        non_wire.insert(pt_key(&j.position));
     }
     for l in &ctx.labels {
-        non_wire.insert(l.position, ());
+        non_wire.insert(pt_key(&l.position));
     }
     for nc in &ctx.no_connects {
-        non_wire.insert(nc.position, ());
+        non_wire.insert(pt_key(&nc.position));
     }
     for be in &ctx.bus_entries {
         // An entry meets a wire at either end: the bus end (`position`) or
         // the far end (`position + size`).
-        non_wire.insert(be.position, ());
-        non_wire.insert(
-            pt_of(be.position.x + be.size.0, be.position.y + be.size.1),
-            (),
-        );
+        non_wire.insert(pt_key(&be.position));
+        non_wire.insert(pt_key(&pt_of(
+            be.position.x + be.size.0,
+            be.position.y + be.size.1,
+        )));
     }
-    let mut wire_ends = EpsPointIndex::new();
+    let mut wire_ends: HashMap<Key, Vec<uuid::Uuid>> = HashMap::new();
     for w in &ctx.wires {
-        wire_ends.insert(w.start, w.uuid);
-        wire_ends.insert(w.end, w.uuid);
+        wire_ends.entry(pt_key(&w.start)).or_default().push(w.uuid);
+        wire_ends.entry(pt_key(&w.end)).or_default().push(w.uuid);
     }
 
     for wire in &ctx.wires {
         for (end, endpoint) in [("start", wire.start), ("end", wire.end)] {
-            let touches_other_wire = wire_ends.near(&endpoint).any(|id| id != wire.uuid);
-            if touches_other_wire || non_wire.near(&endpoint).next().is_some() {
+            let key = pt_key(&endpoint);
+            let touches_other_wire = wire_ends
+                .get(&key)
+                .is_some_and(|ids| ids.iter().any(|&id| id != wire.uuid));
+            if touches_other_wire || non_wire.contains(&key) {
                 continue;
             }
             out.push(
@@ -544,8 +500,6 @@ pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    use std::collections::HashSet;
-
     for child in &ctx.child_sheets {
         // Duplicate pin names on the parent sheet symbol.
         let mut seen: HashMap<&str, uuid::Uuid> = HashMap::new();

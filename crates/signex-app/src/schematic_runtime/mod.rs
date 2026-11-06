@@ -349,19 +349,10 @@ pub fn power_port_preview_snapshot(
 
     RendererSnapshot {
         wires,
-        junctions: Vec::new(),
         arcs,
         polygons,
-        labels: Vec::new(),
-        pin_texts: Vec::new(),
-        reference_value_texts: Vec::new(),
         parameter_texts,
-        overlays: OverlayInputs::default(),
-        erc_markers: Vec::new(),
-        drawings: Vec::new(),
-        drawings_front: Vec::new(),
-        wire_color_overrides: HashMap::new(),
-        wire_line_styles: HashMap::new(),
+        ..Default::default()
     }
 }
 
@@ -1048,10 +1039,6 @@ fn focus_color(base: Color, focus_set: Option<&HashSet<uuid::Uuid>>, uuid: uuid:
         };
     }
     base
-}
-
-fn aabb_overlaps(a: &Aabb, b: &Aabb) -> bool {
-    !(a.max_x < b.min_x || a.min_x > b.max_x || a.max_y < b.min_y || a.min_y > b.max_y)
 }
 
 fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {

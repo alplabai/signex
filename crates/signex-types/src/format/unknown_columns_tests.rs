@@ -6,9 +6,7 @@ use super::tests::{empty_sheet, sample_symbol};
 use super::tsv::{encode_cell, escape_tsv_body_for_toml};
 use super::*;
 use crate::pcb::{Point as PcbPoint, Segment, Via, ViaType};
-use crate::schematic::{
-    HAlign, Junction, Label, LabelType, Point as SchPoint, SchematicSheet, VAlign, Wire,
-};
+use crate::schematic::{Junction, Label, LabelType, Point as SchPoint, SchematicSheet, Wire};
 
 /// Awkward cell content: whitespace, quotes, backslash, a lone `-`, empty.
 const NASTY: [&str; 3] = ["a b \"q\" C:\\p\tz", "-", ""];
@@ -43,18 +41,12 @@ fn two_row_sheet() -> SchematicSheet {
             ..Default::default()
         });
         sheet.labels.push(Label {
-            unknown_columns: Default::default(),
             uuid: uuid_n(30 + n),
-            text: format!("NET{n}"),
-            position: SchPoint { x: 1.0, y: 1.0 },
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
-            font_family: None,
-            locked: false,
+            ..Label::new(
+                format!("NET{n}"),
+                SchPoint { x: 1.0, y: 1.0 },
+                LabelType::Net,
+            )
         });
     }
     sheet

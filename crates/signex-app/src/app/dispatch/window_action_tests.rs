@@ -151,18 +151,14 @@ fn fixture_with_a_labelled_a3_window() -> Fixture {
     engine
         .execute(signex_engine::Command::PlaceLabel {
             label: signex_types::schematic::Label {
-                unknown_columns: Default::default(),
                 uuid: label_id(),
-                text: "WINDOW_NET".into(),
-                position: Point::new(30.48, 30.48),
-                rotation: 0.0,
-                label_type: signex_types::schematic::LabelType::Net,
-                shape: String::new(),
-                font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                font_family: None,
                 justify: Default::default(),
                 justify_v: Default::default(),
-                locked: false,
+                ..signex_types::schematic::Label::new(
+                    "WINDOW_NET",
+                    Point::new(30.48, 30.48),
+                    signex_types::schematic::LabelType::Net,
+                )
             },
         })
         .unwrap();

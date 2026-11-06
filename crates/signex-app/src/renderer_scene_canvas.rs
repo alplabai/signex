@@ -905,18 +905,10 @@ mod canvas_font_tests {
         use signex_types::schematic::{Label, LabelType, Point as SchPoint, SchematicSheet};
 
         let label = |text: &str, family: Option<&str>| Label {
-            uuid: uuid::Uuid::now_v7(),
-            text: text.to_string(),
-            position: SchPoint { x: 10.0, y: 10.0 },
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
             font_family: family.map(str::to_string),
             justify: Default::default(),
             justify_v: Default::default(),
-            unknown_columns: Default::default(),
-            locked: false,
+            ..Label::new(text, SchPoint { x: 10.0, y: 10.0 }, LabelType::Net)
         };
         // Roboto is bundled, so it is installed on every machine and the
         // result does not depend on the fonts of the machine running this.

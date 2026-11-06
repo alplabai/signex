@@ -7,7 +7,7 @@
 
 use signex_app::app::{ErcMsg, Message, Signex};
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Label, LabelType, Point, SchematicSheet, SheetPin, VAlign, Wire,
+    ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SheetPin, Wire,
 };
 use tempfile::TempDir;
 
@@ -21,20 +21,9 @@ fn named_wire(text: &str, label_type: LabelType) -> SchematicSheet {
         end: Point::new(10.0, 0.0),
         ..Default::default()
     });
-    sheet.labels.push(Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point::new(0.0, 0.0),
-        rotation: 0.0,
-        label_type,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
-    });
+    sheet
+        .labels
+        .push(Label::new(text, Point::new(0.0, 0.0), label_type));
     sheet
 }
 

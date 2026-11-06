@@ -41,6 +41,32 @@ pub enum PinOrientation {
     Right,
 }
 
+impl PinOrientation {
+    /// Angle in degrees, counter-clockwise from +x, of the direction the pin
+    /// extends in: the library's pin rotation (see the module doc of
+    /// `to_lib_symbol`). The match is exhaustive, so a new variant fails to
+    /// compile here instead of falling through.
+    pub fn rotation_deg(self) -> f64 {
+        match self {
+            Self::Right => 0.0,
+            Self::Up => 90.0,
+            Self::Left => 180.0,
+            Self::Down => 270.0,
+        }
+    }
+
+    /// Unit vector (x, y; +y is up) from the connection point toward the
+    /// body.
+    pub fn unit_vector(self) -> (f64, f64) {
+        match self {
+            Self::Right => (1.0, 0.0),
+            Self::Up => (0.0, 1.0),
+            Self::Left => (-1.0, 0.0),
+            Self::Down => (0.0, -1.0),
+        }
+    }
+}
+
 /// Decorative IEEE-style modifier glyph attached to a pin's symbol
 /// body. Altium splits these across four placement zones (Inside,
 /// Inside Edge, Outside Edge, Outside) so a pin can carry multiple

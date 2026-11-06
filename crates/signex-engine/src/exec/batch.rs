@@ -171,7 +171,7 @@ mod tests {
     use super::*;
     use crate::history::MAX_HISTORY_ENTRIES;
     use crate::test_support::test_sheet;
-    use signex_types::schematic::{HAlign, Label, LabelType, NoConnect, Point, VAlign};
+    use signex_types::schematic::{Label, LabelType, NoConnect, Point};
 
     fn engine() -> Engine {
         Engine::new(test_sheet()).unwrap()
@@ -208,18 +208,8 @@ mod tests {
     fn place_label() -> Command {
         Command::PlaceLabel {
             label: Label {
-                unknown_columns: Default::default(),
-                uuid: uuid::Uuid::now_v7(),
-                text: "NET".to_string(),
-                position: Point::new(0.0, 0.0),
-                rotation: 0.0,
-                label_type: LabelType::Net,
                 shape: "input".to_string(),
-                font_size: 1.27,
-                justify: HAlign::Left,
-                justify_v: VAlign::Bottom,
-                font_family: None,
-                locked: false,
+                ..Label::new("NET", Point::new(0.0, 0.0), LabelType::Net)
             },
         }
     }

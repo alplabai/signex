@@ -19,7 +19,6 @@ const SP: Spacing = Spacing::DEFAULT;
 
 mod annotation;
 mod appearance;
-mod close_button;
 mod component_classes;
 mod distributors;
 mod editing;
@@ -29,7 +28,6 @@ mod widgets;
 
 use annotation::content_annotation;
 use appearance::content_appearance;
-use close_button::close_btn;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
 use editing::content_editing;
@@ -297,7 +295,7 @@ const FOOTER_H: f32 = 44.0;
 /// The dialog is a four-hop chain — `view` / `view_body` -> `build_dialog`
 /// -> `build_content` — and every hop needs very nearly the same inputs.
 /// Passed positionally that was 23 parameters per hop, and several share a
-/// type: `draft_theme`, `saved_theme` and `theme_id` are all `ThemeId`;
+/// type: `draft_theme` and `saved_theme` are both `ThemeId`;
 /// `draft_grid_style` and `draft_symbol_grid_style` are both `GridStyle`.
 /// A transposed pair would have compiled silently and shipped the wrong
 /// control state. Naming the fields makes that a compile error instead.
@@ -366,7 +364,6 @@ pub struct PrefsView<'a> {
     pub prefs_status: &'a str,
     pub keymap_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-    pub theme_id: ThemeId,
 }
 
 // ─── Dialog entry points ──────────────────────────────────────
@@ -422,7 +419,6 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
     let PrefsView {
         nav,
         dirty,
-        theme_id,
         prefs_load_error,
         prefs_status,
         ..
@@ -437,7 +433,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
                 .size(MODAL_HEADER_TITLE_SIZE)
                 .style(text_primary),
             Space::new().width(Length::Fill),
-            close_btn(theme_id),
+            crate::app::view::dialogs::close_x_button(PrefMsg::Close),
         ]
         .align_y(iced::Alignment::Center),
     )

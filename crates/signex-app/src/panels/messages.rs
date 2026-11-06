@@ -659,6 +659,10 @@ pub enum PanelMsg {
     /// Switch a placed symbol to another drawing of its library row: the
     /// symbol's uuid and the `lib_id` of the drawing (#1230).
     SwitchSymbolChoice(uuid::Uuid, String),
+    /// Build a placed library part with another footprint of its row: the
+    /// symbol's uuid and the `<library uuid>:<footprint uuid>` of the
+    /// footprint (#1234).
+    SwitchFootprintChoice(uuid::Uuid, String),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

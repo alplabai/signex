@@ -70,18 +70,10 @@ mod flows {
                 ..Default::default()
             });
             s.labels.push(Label {
-                unknown_columns: Default::default(),
                 uuid: Uuid::from_u128(label),
-                text: "VCC".into(),
-                position: Point::new(0.0, 0.0),
-                rotation: 0.0,
-                label_type: LabelType::Global,
-                shape: String::new(),
-                font_size: 1.27,
                 justify: HAlign::default(),
                 justify_v: VAlign::default(),
-                font_family: None,
-                locked: false,
+                ..Label::new("VCC", Point::new(0.0, 0.0), LabelType::Global)
             });
             s
         };
@@ -160,6 +152,27 @@ mod flows {
 
     fn item(label: u128) -> SelectedItem {
         SelectedItem::new(Uuid::from_u128(label), SelectedKind::Label)
+    }
+
+    /// #2106: Select > Connection takes the first wire-like item as its seed,
+    /// so a symbol ahead of the wire in the selection does not block it.
+    #[test]
+    fn select_connection_seeds_from_the_wire_after_a_symbol() {
+        use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
+        let tmp = TempDir::new().unwrap();
+        let (mut app, _a, _b) = open_project(tmp.path());
+        let symbol = SelectedItem::new(Uuid::from_u128(99), SelectedKind::Symbol);
+        let wire = SelectedItem::new(Uuid::from_u128(11), SelectedKind::Wire);
+        app.interaction_state.active_canvas_mut().selected = vec![symbol, wire];
+
+        let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+            ActiveBarAction::SelectConnection,
+        )));
+
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![wire, item(LABEL_A)]
+        );
     }
 
     #[test]

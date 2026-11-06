@@ -44,17 +44,14 @@ impl Signex {
             &self.document_state.panel_ctx.ui_font_name,
         );
         let menu = signex_widgets::active_bar_dropdown::view(entries, tokens, Some(width));
-        let (x, y) = super::clamp_menu_origin(
+        let layers = self.menu_overlay(
+            window_id,
+            Message::Library(LibraryMessage::ComponentsPanelRowMenuDismissed),
+            menu,
             (menu_ctx.x, menu_ctx.y),
-            (Self::CONTEXT_MENU_WIDTH, super::menu_height(entries_len)),
-            self.ui_state.size_of_window(window_id),
+            Self::CONTEXT_MENU_WIDTH,
+            entries_len,
         );
-        let layers = vec![
-            Self::dismiss_layer(Message::Library(
-                LibraryMessage::ComponentsPanelRowMenuDismissed,
-            )),
-            super::anchored_menu(menu, (x, y)),
-        ];
         match menu_ctx.window {
             None => layers,
             // A pick in an undocked window acts on that window's sheet.

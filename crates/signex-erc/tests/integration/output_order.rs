@@ -1,9 +1,7 @@
 //! #1364: ERC output order must not depend on hash iteration order.
 
 use signex_erc::{RuleKind, Violation};
-use signex_types::schematic::{
-    HAlign, Label, LabelType, LibSymbol, Point, SchematicSheet, Symbol, VAlign, Wire,
-};
+use signex_types::schematic::{Label, LabelType, LibSymbol, Point, SchematicSheet, Symbol, Wire};
 use uuid::Uuid;
 
 fn duplicated_refs_sheet() -> SchematicSheet {
@@ -53,20 +51,7 @@ fn duplicated_refs_sheet() -> SchematicSheet {
 }
 
 fn conflicting_nets_sheet() -> SchematicSheet {
-    let label = |text: &str, pos: Point| Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: text.to_string(),
-        position: pos,
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
-    };
+    let label = |text: &str, pos: Point| Label::new(text, pos, LabelType::Net);
     let mut wires = Vec::new();
     let mut labels = Vec::new();
     for i in 0..12 {

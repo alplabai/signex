@@ -9,8 +9,7 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length};
 
-use super::widgets::{close_x_button, wrap_modal};
-use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::widgets::modal_title_header;
 use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -21,20 +20,18 @@ impl Signex {
     // ────────────────────────────────────────────────────────────────
     // Small Altium-style modals (Rename / Remove-from-Project / Close-
     // Tab Confirm). All three render through the same chrome used by
-    // Annotate / ERC: `draggable_header` + `close_x_button` on the
+    // Annotate / ERC: `draggable_header` + the title header on the
     // right + `wrap_modal` for absolute positioning with drag-offset
     // persistence in `ui_state.modal_offsets`.
     // ────────────────────────────────────────────────────────────────
 
     pub(in crate::app::view) fn view_rename_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_rename_dialog_body();
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::RenameDialog)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 200.0))
+        self.wrap_dialog(
+            crate::app::state::ModalId::RenameDialog,
+            dialog,
+            super::sizes::RENAME,
+        )
     }
 
     pub(in crate::app::view) fn view_rename_dialog_body(&self) -> Element<'_, Message> {
@@ -45,28 +42,15 @@ impl Signex {
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
         let error_c = crate::styles::tokens::danger(tokens);
 
-        let theme_id = self.ui_state.effective_theme_id();
         let title = if st.is_project_rename {
             "Rename Project"
         } else {
             "Rename File"
         };
-        let header_content: Element<'_, Message> = container(
-            row![
-                text(title).size(MODAL_HEADER_TITLE_SIZE).color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(Message::Rename(RenameMsg::Close), theme_id, text_muted),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> =
+            modal_title_header(title, Message::Rename(RenameMsg::Close), tokens);
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,
@@ -130,7 +114,10 @@ impl Signex {
                     ),
                 ]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::RenameDialog, 420.0)),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::RenameDialog,
+                super::sizes::RENAME,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -139,13 +126,11 @@ impl Signex {
 
     pub(in crate::app::view) fn view_enable_version_control_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_enable_version_control_dialog_body();
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::EnableVersionControl)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
+        self.wrap_dialog(
+            crate::app::state::ModalId::EnableVersionControl,
+            dialog,
+            super::sizes::ENABLE_VERSION_CONTROL,
+        )
     }
 
     pub(in crate::app::view) fn view_enable_version_control_dialog_body(
@@ -156,28 +141,14 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Enable Version Control")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::EnableVersionControl(EnableVersionControlMsg::Close),
-                    theme_id,
-                    text_muted,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Enable Version Control",
+            Message::EnableVersionControl(EnableVersionControlMsg::Close),
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::EnableVersionControl,
@@ -298,7 +269,7 @@ impl Signex {
             ]
             .width(self.dialog_width(
                 super::super::super::state::ModalId::EnableVersionControl,
-                520.0,
+                super::sizes::ENABLE_VERSION_CONTROL,
             )),
         )
         .style(crate::styles::modal_card(tokens))
@@ -313,13 +284,11 @@ impl Signex {
     /// in v0.18.11.x as the underlying canvas/grid system grows them.
     pub(in crate::app::view) fn view_grid_properties_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_grid_properties_dialog_body();
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::GridProperties)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (480.0, 280.0))
+        self.wrap_dialog(
+            crate::app::state::ModalId::GridProperties,
+            dialog,
+            super::sizes::GRID_PROPERTIES,
+        )
     }
 
     pub(in crate::app::view) fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
@@ -327,29 +296,15 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Cartesian Grid Editor [mm]")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::GridProperties(GridPropertiesMsg::Close),
-                    theme_id,
-                    text_muted,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Cartesian Grid Editor [mm]",
+            Message::GridProperties(GridPropertiesMsg::Close),
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::GridProperties,
@@ -374,28 +329,9 @@ impl Signex {
         use crate::library::editor::footprint::state::GridDisplay as Gd;
         let mk_display_row =
             |label: &'static str, current: Gd, setter: fn(Gd) -> Message| -> Element<'_, Message> {
-                let seg =
-                    move |label: &'static str, target: Gd, active: bool| -> Element<'_, Message> {
-                        let bg = if active {
-                            iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
-                        } else {
-                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-                        };
-                        iced::widget::button(text(label).size(TS.caption).color(text_c))
-                            .padding([3, 10])
-                            .on_press(setter(target))
-                            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                                background: Some(iced::Background::Color(bg)),
-                                border: iced::Border {
-                                    width: 1.0,
-                                    radius: 3.0.into(),
-                                    color: border_c,
-                                    ..iced::Border::default()
-                                },
-                                ..iced::widget::button::Style::default()
-                            })
-                            .boxed()
-                    };
+                let seg = move |label: &'static str, target: Gd, active: bool| {
+                    grid_segment(label, active, setter(target), text_c, border_c)
+                };
                 row![
                     container(text(label).size(TS.body).color(text_muted))
                         .width(Length::Fixed(80.0)),
@@ -408,30 +344,10 @@ impl Signex {
                 .boxed()
             };
         let mk_mult_row = |current: u32| -> Element<'_, Message> {
-            let seg =
-                move |label: &'static str, target: u32, active: bool| -> Element<'_, Message> {
-                    let bg = if active {
-                        iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
-                    } else {
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-                    };
-                    iced::widget::button(text(label).size(TS.caption).color(text_c))
-                        .padding([3, 10])
-                        .on_press(Message::GridProperties(GridPropertiesMsg::SetMultiplier(
-                            target,
-                        )))
-                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                            background: Some(iced::Background::Color(bg)),
-                            border: iced::Border {
-                                width: 1.0,
-                                radius: 3.0.into(),
-                                color: border_c,
-                                ..iced::Border::default()
-                            },
-                            ..iced::widget::button::Style::default()
-                        })
-                        .boxed()
-                };
+            let seg = move |label: &'static str, target: u32, active: bool| {
+                let msg = Message::GridProperties(GridPropertiesMsg::SetMultiplier(target));
+                grid_segment(label, active, msg, text_c, border_c)
+            };
             row![
                 container(text("Multiplier").size(TS.body).color(text_muted))
                     .width(Length::Fixed(80.0)),
@@ -491,7 +407,10 @@ impl Signex {
                     ),
                 ]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::GridProperties, 480.0)),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::GridProperties,
+                super::sizes::GRID_PROPERTIES,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -504,13 +423,11 @@ impl Signex {
     /// the draft into `editor.state.selection_filter`.
     pub(in crate::app::view) fn view_selection_filter_custom_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_selection_filter_custom_body();
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::SelectionFilterCustom)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (440.0, 380.0))
+        self.wrap_dialog(
+            crate::app::state::ModalId::SelectionFilterCustom,
+            dialog,
+            super::sizes::SELECTION_FILTER_CUSTOM,
+        )
     }
 
     pub(in crate::app::view) fn view_selection_filter_custom_body(&self) -> Element<'_, Message> {
@@ -520,28 +437,14 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Selection Filter — Customize")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::SelectionFilter(SelectionFilterMsg::CloseCustom),
-                    theme_id,
-                    text_muted,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Selection Filter — Customize",
+            Message::SelectionFilter(SelectionFilterMsg::CloseCustom),
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::SelectionFilterCustom,
@@ -621,11 +524,41 @@ impl Signex {
             ]
             .width(self.dialog_width(
                 super::super::super::state::ModalId::SelectionFilterCustom,
-                440.0,
+                super::sizes::SELECTION_FILTER_CUSTOM,
             )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.boxed()
     }
+}
+
+/// One segment button of the Grid Properties display and multiplier rows:
+/// tinted while `active`.
+fn grid_segment<'a>(
+    label: &'static str,
+    active: bool,
+    on_press: Message,
+    text_c: iced::Color,
+    border_c: iced::Color,
+) -> Element<'a, Message> {
+    let bg = if active {
+        iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+    } else {
+        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+    };
+    iced::widget::button(text(label).size(TS.caption).color(text_c))
+        .padding([3, 10])
+        .on_press(on_press)
+        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(bg)),
+            border: iced::Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border_c,
+                ..iced::Border::default()
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .boxed()
 }

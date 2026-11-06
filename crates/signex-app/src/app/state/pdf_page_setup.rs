@@ -107,11 +107,6 @@ impl PageSetupInputs {
         self.rejections.is_empty() && self.info.is_some()
     }
 
-    /// Whether `field` currently holds rejected text.
-    pub fn is_rejected(&self, field: PageField) -> bool {
-        self.rejections.iter().any(|(f, _)| *f == field)
-    }
-
     /// Record an automatic adjustment: shown in the modal and written to the
     /// Messages panel, so a value the user did not type never changes unseen.
     fn note(&mut self, message: String) {

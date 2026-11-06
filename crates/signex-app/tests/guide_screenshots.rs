@@ -198,17 +198,7 @@ fn sheet() -> SchematicSheet {
     });
     sheet.labels.push(Label {
         uuid: uuid::Uuid::nil(),
-        text: "SENSE".into(),
-        position: Point::new(115.0, 95.08),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new("SENSE", Point::new(115.0, 95.08), LabelType::Net)
     });
     sheet
 }
@@ -417,18 +407,9 @@ fn readme_sheet() -> SchematicSheet {
     }
     for (text, at, justify) in labels {
         sheet.labels.push(Label {
-            uuid: uuid::Uuid::now_v7(),
-            text: text.into(),
-            position: Point::new(at.0, at.1),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
             font_size: 1.7,
-            font_family: None,
             justify,
-            justify_v: VAlign::Bottom,
-            unknown_columns: Default::default(),
-            locked: false,
+            ..Label::new(text, Point::new(at.0, at.1), LabelType::Net)
         });
     }
     sheet

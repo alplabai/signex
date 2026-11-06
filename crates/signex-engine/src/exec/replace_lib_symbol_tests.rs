@@ -160,18 +160,13 @@ fn a_label_on_a_pin_tip_counts_as_a_connection() {
     let mut sheet = engine_with_wired_pin_2().document().clone();
     // Pin "1" tip (7.46, 10) carries only a label, no wire.
     sheet.labels.push(signex_types::schematic::Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: "N".to_string(),
-        position: Point::new(7.46, 10.0),
-        rotation: 0.0,
-        label_type: signex_types::schematic::LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..signex_types::schematic::Label::new(
+            "N",
+            Point::new(7.46, 10.0),
+            signex_types::schematic::LabelType::Net,
+        )
     });
     let mut engine = Engine::new(sheet).unwrap();
     let fresh = lib_symbol("new", vec![lib_pin("2", 2.54)]);

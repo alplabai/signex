@@ -141,6 +141,13 @@ impl LibraryState {
         if panel.details.key.as_ref().is_some_and(of) {
             panel.details = Default::default();
         }
+        if panel
+            .footprint_pick
+            .as_ref()
+            .is_some_and(|(key, _)| of(key))
+        {
+            panel.footprint_pick = None;
+        }
         if panel.row_menu.as_ref().is_some_and(|m| of(&m.key)) {
             panel.row_menu = None;
         }

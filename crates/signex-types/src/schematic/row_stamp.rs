@@ -37,8 +37,9 @@ impl StampField {
 /// The row values a part last agreed with, `[extras.symbols.<uuid>.library_stamp]`.
 ///
 /// A value that is `None` is unknown; `Some("")` is "the row offered
-/// nothing". Fields are declared in key order so an older build that keeps
-/// the table as unknown keys re-saves the same bytes.
+/// nothing". The table is written through a sorted `toml::Value`
+/// (`stamp_for_write`), so an older build that keeps it as unknown keys
+/// re-saves the same bytes whatever the field order here.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RowStamp {
     /// The resolved NAME of the bound footprint, not its reference.
@@ -58,6 +59,10 @@ pub struct RowStamp {
     /// version. Absent means the stamp is not trusted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// The footprint binding the part was built with, as `<library uuid>:<footprint uuid>`
+    /// (#1234). Absent means the row's default footprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub footprint_ref: Option<String>,
     /// Keys a later build adds.
     #[serde(flatten)]
     pub unknown: UnknownFields,
@@ -71,6 +76,7 @@ impl RowStamp {
             mpn: None,
             row_id,
             version: None,
+            footprint_ref: None,
             unknown: UnknownFields::default(),
         }
     }
@@ -108,6 +114,9 @@ pub struct StampValues {
     pub footprint: Option<String>,
     pub manufacturer: Option<String>,
     pub mpn: Option<String>,
+    /// The part now holds the row's default footprint: forget the alternate
+    /// binding its stamp recorded (#1234).
+    pub reset_footprint_binding: bool,
 }
 
 impl StampValues {
@@ -128,7 +137,7 @@ impl StampValues {
     }
 
     pub fn is_empty(&self) -> bool {
-        StampField::ALL.iter().all(|f| self.get(*f).is_none())
+        StampField::ALL.iter().all(|f| self.get(*f).is_none()) && !self.reset_footprint_binding
     }
 }
 
@@ -162,6 +171,28 @@ impl super::Symbol {
         })
     }
 
+    /// Build the part with footprint `name`, the row's footprint `binding`
+    /// (`<library uuid>:<footprint uuid>`; `None` for the row's default,
+    /// #1234). The part then agrees with the row on the footprint, so the
+    /// stamp takes the name as its base. A part with no row keeps no stamp.
+    pub fn apply_footprint_binding(&mut self, name: &str, binding: Option<String>) {
+        self.footprint = name.to_owned();
+        if self.row_id.is_none() {
+            return;
+        }
+        let link = LinkStamp {
+            version: self.library_version.clone(),
+            values: StampValues {
+                footprint: Some(name.to_owned()),
+                ..StampValues::default()
+            },
+        };
+        self.apply_link_stamp(&link);
+        if let Some(stamp) = self.library_stamp.as_mut() {
+            stamp.footprint_ref = binding;
+        }
+    }
+
     /// Record `link` on a part: the pinned version and the stamp values,
     /// the stamp tagged with that version. Returns whether anything changed.
     /// A part with no row keeps no stamp.
@@ -178,6 +209,9 @@ impl super::Symbol {
         // absent keys read as unknown (so a conflict is not cleared unasked).
         let mut stamp = kept.unwrap_or_else(|| RowStamp::new(row_id));
         stamp.apply(&link.values);
+        if link.values.reset_footprint_binding && link.values.footprint.is_some() {
+            stamp.footprint_ref = None;
+        }
         stamp.version = Some(link.version.clone());
         changed |= self.library_stamp.as_ref() != Some(&stamp);
         self.library_stamp = Some(stamp);

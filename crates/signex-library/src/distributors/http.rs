@@ -8,7 +8,8 @@
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use crate::distributor::DistributorError;
+use crate::distributor::{DistributorError, DistributorPart};
+use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
 
 /// Maximum time to establish the TCP/TLS connection.
 const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -67,6 +68,69 @@ impl LazyClient {
             .as_ref()
             .map_err(|e| DistributorError::Backend(format!("http client: {e}")))
     }
+}
+
+/// Turn a response status into the adapter error, or hand the response back
+/// for decoding. A 401/403 is an [`DistributorError::Auth`] reading
+/// `"{auth_rejection} (HTTP {status})"` when the adapter has credentials to
+/// reject, and a plain backend error otherwise.
+pub(super) fn check_response(
+    resp: reqwest::blocking::Response,
+    auth_rejection: Option<&str>,
+) -> Result<reqwest::blocking::Response, DistributorError> {
+    use reqwest::StatusCode;
+    let status = resp.status();
+    if let Some(what) = auth_rejection
+        && matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+    {
+        return Err(DistributorError::Auth(format!("{what} (HTTP {status})")));
+    }
+    if status == StatusCode::TOO_MANY_REQUESTS {
+        let retry_after_seconds = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(60);
+        return Err(DistributorError::RateLimited {
+            retry_after_seconds,
+        });
+    }
+    if status == StatusCode::NOT_FOUND {
+        return Err(DistributorError::NotFound);
+    }
+    if !status.is_success() {
+        return Err(DistributorError::Backend(format!("HTTP {status}")));
+    }
+    Ok(resp)
+}
+
+/// `lookup_by_mpn` for every adapter: a fresh cache hit wins, otherwise run
+/// `search` and cache its first part. A failed cache write is logged and the
+/// live result still returned.
+pub(super) fn cached_lookup(
+    cache: Option<&DistributorCache>,
+    provider_key: &str,
+    display_name: &str,
+    mpn: &str,
+    search: impl FnOnce() -> Result<Vec<DistributorPart>, DistributorError>,
+) -> Result<Vec<DistributorPart>, DistributorError> {
+    if let Some(cache) = cache
+        && let Some(hit) = cache.get_or_warn(provider_key, mpn, DEFAULT_TTL)
+    {
+        return Ok(vec![hit]);
+    }
+    let hits = search()?;
+    if let (Some(cache), Some(first)) = (cache, hits.first())
+        && let Err(e) = cache.put(provider_key, first)
+    {
+        tracing::warn!(
+            error = %e,
+            mpn = %mpn,
+            "{display_name} cache write failed; live result returned but not persisted",
+        );
+    }
+    Ok(hits)
 }
 
 #[cfg(test)]

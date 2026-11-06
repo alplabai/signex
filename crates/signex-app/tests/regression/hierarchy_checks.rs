@@ -8,7 +8,7 @@
 use signex_app::app::{ErcMsg, Message, Signex};
 use signex_erc::Violation;
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Label, LabelType, Point, SchematicSheet, SheetPin, VAlign, Wire,
+    ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SheetPin, Wire,
 };
 use tempfile::TempDir;
 
@@ -18,18 +18,8 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn label(text: &str, at: Point, label_type: LabelType, shape: &str) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: text.to_string(),
-        position: at,
-        rotation: 0.0,
-        label_type,
         shape: shape.to_string(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
+        ..Label::new(text, at, label_type)
     }
 }
 

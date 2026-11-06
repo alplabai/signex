@@ -10,11 +10,8 @@
 //! Arc / Circle / Rectangle) live in the Shapes dropdown to keep the
 //! bar slim.
 //!
-//! Built on top of the unified
-//! `signex_widgets::active_bar::view_with_overlay` so a single call
-//! returns the bar + dropdown overlay + click-outside backstop —
-//! identical pattern across schematic / footprint / SchLib /
-//! upcoming PCB editors.
+//! Built on `signex_widgets::active_bar::view`; the dropdown overlay and
+//! click-outside backstop are mounted by the symbol editor view.
 
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};

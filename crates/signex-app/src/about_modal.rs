@@ -1,14 +1,12 @@
 //! Help ▸ About Signex dialog — product name, version, licence and the
 //! "Copy version info" action. Styled from `ThemeTokens` only.
 
-use iced::widget::{Space, Widget, button, column, container, row, text};
+use iced::widget::{Widget, button, column, container, row, text};
 use iced::{Element, Length};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 
 use crate::about::{ExternalLink, LICENSE_NAME, VERSION};
-use crate::app::view::dialogs::{
-    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
-};
+use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
 use crate::styles;
 
@@ -19,38 +17,25 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 const MODAL_W: f32 = 380.0;
 
 /// The dialog painted as a card in the main window.
-pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Message> {
-    build(tokens, theme_id, false)
+pub fn view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, false)
 }
 
 /// The dialog as the content of its own OS window: no header (the native
 /// title bar has the title and the close) and filling the window.
-pub fn window_view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Message> {
-    build(tokens, theme_id, true)
+pub fn window_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
+    build(tokens, true)
 }
 
-fn build<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId, windowed: bool) -> Element<'a, Message> {
+fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
 
-    let header = container(
-        row![
-            text("About Signex")
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .color(text_primary),
-            Space::new().width(Length::Fill),
-            close_x_button(
-                Message::Overlay(OverlayMsg::CloseAbout),
-                theme_id,
-                text_secondary,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .width(Length::Fill)
-    .height(MODAL_HEADER_HEIGHT)
-    .padding(MODAL_HEADER_PADDING)
-    .style(styles::modal_header_strip(tokens));
+    let header = modal_title_header(
+        "About Signex",
+        Message::Overlay(OverlayMsg::CloseAbout),
+        tokens,
+    );
 
     let license_link = button(text(format!("{LICENSE_NAME} license")).size(TS.label))
         .padding(0)

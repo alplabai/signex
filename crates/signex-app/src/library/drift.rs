@@ -299,6 +299,18 @@ pub struct ApplyStamp {
     pub choices: Choices,
 }
 
+impl ApplyStamp {
+    /// The alternate footprint the part was built with, from its stamp;
+    /// `None` for the row's default (#1234).
+    pub(crate) fn chosen_footprint(&self) -> Option<signex_library::primitive::PrimitiveRef> {
+        let key = self.stamp.as_ref()?.footprint_ref.as_deref()?;
+        let (library, footprint) = split_lib_id(key)?;
+        Some(signex_library::primitive::PrimitiveRef::new(
+            library, footprint,
+        ))
+    }
+}
+
 /// Everything the off-thread apply read needs, built on the UI thread from
 /// the Library Updates modal or from "Update from library".
 #[derive(Debug, Clone)]
@@ -544,7 +556,15 @@ fn stamp_or_reason(
                 r.version
             ))),
             _ => {
-                let settled = eval_part(w, opened, &r, libs).settle(true, &w.choices);
+                let mut settled = eval_part(w, opened, &r, libs).settle(true, &w.choices);
+                // The row dropped the alternate the part was built with; the
+                // update wrote the default's name, so the binding is gone too.
+                let dropped = w.chosen_footprint().is_some_and(|c| !r.binds_footprint(&c));
+                let wrote_footprint = settled
+                    .sync
+                    .as_ref()
+                    .is_some_and(|s| s.change.footprint.is_some());
+                settled.values.reset_footprint_binding = dropped && wrote_footprint;
                 // An open conflict keeps the part on its old version, so the
                 // next scan lists it again and the modal can still ask.
                 let open_conflict = settled.sync.as_ref().is_some_and(|s| !s.kept.is_empty());
@@ -582,7 +602,11 @@ fn eval_part(
     row: &signex_library::ComponentRow,
     libs: &[MountedLibrary],
 ) -> PartEval {
-    eval_against(w, &row_offer(opened, row, libs), row)
+    eval_against(
+        w,
+        &row_offer(opened, row, w.chosen_footprint().as_ref(), libs),
+        row,
+    )
 }
 
 /// [`eval_part`] against the offer already read off `row`.
@@ -598,16 +622,19 @@ fn eval_against(w: &ApplyStamp, offer: &RowOffer, row: &signex_library::Componen
     )
 }
 
+/// What `row` offers the part built with `chosen` (an alternate footprint,
+/// #1234; `None` for the default).
 fn row_offer(
     opened: &OpenedLibrary,
     row: &signex_library::ComponentRow,
+    chosen: Option<&signex_library::primitive::PrimitiveRef>,
     libs: &[MountedLibrary],
 ) -> RowOffer {
     let open: Vec<(Uuid, PathBuf)> = libs.iter().map(|l| (l.id, l.path.clone())).collect();
     // An unreadable footprint is not "no footprint": the field is unknown and
     // never flags, nor does it write a base (the placement-time warning
     // would repeat on every pass).
-    let footprint = super::place::read_footprint_name(&opened.adapter, row, &open);
+    let footprint = super::place::read_footprint_name(&opened.adapter, row, chosen, &open);
     if let Err(why) = &footprint {
         tracing::debug!(target: "signex::library", pn = %row.internal_pn, %why, "drift: footprint unreadable");
     }

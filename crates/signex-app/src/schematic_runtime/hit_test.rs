@@ -92,7 +92,7 @@ pub fn hit_test_rect_mode(
     for item in collect_item_bounds(snapshot, designators, widths) {
         let inside = rect.contains(item.bbox.min_x, item.bbox.min_y)
             && rect.contains(item.bbox.max_x, item.bbox.max_y);
-        let touching = aabb_overlaps(rect, &item.bbox);
+        let touching = rect.intersects(&item.bbox);
 
         let keep = match mode {
             SelectionMode::Inside | SelectionMode::Single => inside,

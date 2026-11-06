@@ -13,6 +13,7 @@ use thiserror::Error;
 pub mod bom;
 pub mod erc;
 mod expression;
+mod markup_escape;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;

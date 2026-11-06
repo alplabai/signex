@@ -1,56 +1,14 @@
 //! Tests for project-level netlist stitching.
 use super::*;
+use crate::fixtures::{empty_sheet, junction, label, pt, wire};
 
 mod instances;
 mod net_members;
 use crate::build_netlist;
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Junction, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
-    Point, SheetPin, Symbol, VAlign, Wire,
+    ChildSheet, FillType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SheetPin,
+    Symbol, Wire,
 };
-
-fn pt(x: f64, y: f64) -> Point {
-    Point::new(x, y)
-}
-
-fn empty_sheet() -> SchematicSheet {
-    SchematicSheet {
-        paper_size: "A4".to_string(),
-        ..Default::default()
-    }
-}
-
-fn wire(a: Point, b: Point) -> Wire {
-    Wire {
-        start: a,
-        end: b,
-        ..Default::default()
-    }
-}
-
-fn junction(pos: Point) -> Junction {
-    Junction {
-        position: pos,
-        ..Default::default()
-    }
-}
-
-fn label(text: &str, pos: Point, ty: LabelType) -> Label {
-    Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::nil(),
-        text: text.to_string(),
-        position: pos,
-        rotation: 0.0,
-        label_type: ty,
-        shape: String::new(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
-    }
-}
 
 fn lib_pin(number: &str, local: Point) -> LibPin {
     LibPin {

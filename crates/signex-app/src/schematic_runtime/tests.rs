@@ -127,18 +127,8 @@ fn hit_test_polygon_selects_wire_and_label_by_anchor() {
         ..Default::default()
     });
     snapshot.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: label_uuid,
-        text: "NET_MAIN".into(),
-        position: Point::new(4.0, 4.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new("NET_MAIN", Point::new(4.0, 4.0), LabelType::Net)
     });
 
     let polygon = vec![(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)];
@@ -455,18 +445,8 @@ fn hidden_field_has_no_hit_box() {
 
 fn anchored_label(label_type: LabelType, rotation: f64) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: uuid::Uuid::now_v7(),
-        text: "DATA_BUS_0".into(),
-        position: Point::new(20.0, 30.0),
         rotation,
-        label_type,
-        shape: String::new(),
-        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new("DATA_BUS_0", Point::new(20.0, 30.0), label_type)
     }
 }
 

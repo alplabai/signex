@@ -57,18 +57,10 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         locked: false,
     });
     ctx.sheets[0].schematic.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: uuid::Uuid::nil(),
-        text: label.into(),
-        position: Point::new(20.0, 30.0),
-        rotation: 0.0,
-        label_type: LabelType::Global,
         shape: "input".into(),
         font_size: 2.54,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new(label, Point::new(20.0, 30.0), LabelType::Global)
     });
     ctx
 }
@@ -247,18 +239,11 @@ fn exports_schematic_content() {
 
     // Add one label.
     sheet.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
-        text: "VCC".to_string(),
-        position: Point::new(20.0, 20.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new("VCC", Point::new(20.0, 20.0), LabelType::Net)
     });
 
     let mut ctx = sample_ctx(1);

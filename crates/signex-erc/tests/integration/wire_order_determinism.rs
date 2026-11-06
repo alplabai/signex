@@ -12,7 +12,7 @@
 //! that routes through the shared anchor, the shared `SheetConnectivity` derivation included.
 
 use signex_erc::{RuleKind, Violation};
-use signex_types::schematic::{HAlign, Label, LabelType, Point, SchematicSheet, VAlign, Wire};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
 use uuid::Uuid;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -39,18 +39,7 @@ fn wire(a: Point, b: Point) -> Wire {
 
 fn net_label(text: &str, pos: Point) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: text.to_string(),
-        position: pos,
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new(text, pos, LabelType::Net)
     }
 }
 

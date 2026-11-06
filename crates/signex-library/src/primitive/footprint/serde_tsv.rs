@@ -2,37 +2,21 @@
 
 use super::pad_columns::{self, ExtendedColumn};
 use super::*;
-use crate::primitive::tsv_cell::fmt_f64;
+use crate::primitive::tsv_cell::{fmt_f64, parse_finite_cell};
 use signex_types::numeric::parse_finite_f64;
 
 // ---- Pad TSV codec --------------------------------------------------
 
-pub(super) fn pad_kind_token(k: PadKind) -> &'static str {
-    match k {
-        PadKind::Smd => "Smd",
-        PadKind::Tht => "Tht",
-        PadKind::NptHole => "NptHole",
-        PadKind::ConnectorPad => "ConnectorPad",
-        PadKind::Castellated => "Castellated",
-        PadKind::Fiducial => "Fiducial",
+signex_types::token_enum! {
+    pub(super) fn pad_kind_token / pad_kind_from_token for PadKind,
+    error FootprintFileError {
+        Smd => "Smd",
+        Tht => "Tht",
+        NptHole => "NptHole",
+        ConnectorPad => "ConnectorPad",
+        Castellated => "Castellated",
+        Fiducial => "Fiducial",
     }
-}
-
-pub(super) fn pad_kind_from_token(s: &str) -> Result<PadKind, FootprintFileError> {
-    Ok(match s {
-        "Smd" => PadKind::Smd,
-        "Tht" => PadKind::Tht,
-        "NptHole" => PadKind::NptHole,
-        "ConnectorPad" => PadKind::ConnectorPad,
-        "Castellated" => PadKind::Castellated,
-        "Fiducial" => PadKind::Fiducial,
-        other => {
-            return Err(FootprintFileError::UnknownEnumToken {
-                kind: "PadKind",
-                got: other.to_string(),
-            });
-        }
-    })
 }
 
 /// The error for a non-finite number in a pad's `column`.
@@ -167,14 +151,10 @@ fn layers_from_token(s: &str) -> Vec<LayerId> {
 }
 
 fn parse_f64_cell_fp(col: &'static str, s: &str) -> Result<f64, FootprintFileError> {
-    // #678: reject `NaN` / `inf` (and `1e999`, which overflows to inf).
-    s.parse::<f64>()
-        .ok()
-        .filter(|v| v.is_finite())
-        .ok_or_else(|| FootprintFileError::InvalidNumericCell {
-            column: col,
-            value: s.to_string(),
-        })
+    parse_finite_cell(s).ok_or_else(|| FootprintFileError::InvalidNumericCell {
+        column: col,
+        value: s.to_string(),
+    })
 }
 
 pub(super) fn parse_opt_f64_cell_fp(

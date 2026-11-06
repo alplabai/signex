@@ -363,6 +363,18 @@ fn foreign_column_names<R: SnxTable>(rows: &[R]) -> Vec<String> {
     names
 }
 
+/// [`parse_tsv_block`] for a block the file may leave out: an absent block is
+/// no rows.
+pub(super) fn parse_optional_block<R: SnxTable>(
+    name: &str,
+    block: Option<TsvBody>,
+) -> Result<Vec<R>, FormatError> {
+    match block {
+        Some(b) => parse_tsv_block::<R>(name, &b.content),
+        None => Ok(Vec::new()),
+    }
+}
+
 /// Parse a TSV block. Columns resolve by header name: every column in
 /// `R::columns()` must be present (any order); extra columns are
 /// captured per row as [`UnknownColumns`] instead of refusing the file.

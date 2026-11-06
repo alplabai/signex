@@ -113,14 +113,16 @@ fn export_widths(defaults: SchematicDefaults) -> (f32, f32, f32, f32) {
         SvgElement::Path { style, .. } => style.stroke_width,
         SvgElement::Text { .. } => panic!("a path"),
     };
-    // Page fill, border, then the two wires, the bus and the junction box.
+    // Page fill, border, then the two wires, the bus and the junction disc
+    // (#2115): its x extent is the diameter.
     let side = match &page.elements[5] {
         SvgElement::Path { commands, .. } => {
             let xs: Vec<f32> = commands
                 .iter()
                 .filter_map(|c| match c {
                     signex_output::svg::SvgPathCommand::MoveTo(p)
-                    | signex_output::svg::SvgPathCommand::LineTo(p) => Some(p.x),
+                    | signex_output::svg::SvgPathCommand::LineTo(p)
+                    | signex_output::svg::SvgPathCommand::CubicTo(_, _, p) => Some(p.x),
                     _ => None,
                 })
                 .collect();

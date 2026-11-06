@@ -120,7 +120,7 @@ pub struct ErcMarkerInput {
     pub severity: Severity,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SchematicSnapshot {
     pub wires: Vec<WireInput>,
     pub junctions: Vec<JunctionInput>,
@@ -293,22 +293,7 @@ mod tests {
     }
 
     fn empty_snapshot() -> SchematicSnapshot {
-        SchematicSnapshot {
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            arcs: Vec::new(),
-            polygons: Vec::new(),
-            labels: Vec::new(),
-            pin_texts: Vec::new(),
-            reference_value_texts: Vec::new(),
-            parameter_texts: Vec::new(),
-            overlays: OverlayInputs::default(),
-            erc_markers: Vec::new(),
-            drawings: Vec::new(),
-            drawings_front: Vec::new(),
-            wire_color_overrides: HashMap::new(),
-            wire_line_styles: HashMap::new(),
-        }
+        SchematicSnapshot::default()
     }
 
     fn make_erc_marker(center: [f32; 2], radius_mm: f32, severity: Severity) -> ErcMarkerInput {

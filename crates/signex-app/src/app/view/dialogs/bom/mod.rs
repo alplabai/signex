@@ -11,8 +11,7 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length, Widget};
 
-use super::widgets::{close_x_button, draggable_header, os_title_bar_slot, wrap_modal};
-use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
 use crate::styles::{DialogButtonKind, dialog_button};
 
 mod rules;
@@ -28,16 +27,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 impl Signex {
     pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
         let dialog = self.view_bom_preview_body_inner(true);
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::BomPreview)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(
+        self.wrap_dialog(
+            crate::app::state::ModalId::BomPreview,
             dialog,
-            offset,
-            self.ui_state.window_size,
             self.bom_modal_size(),
         )
     }
@@ -59,26 +51,12 @@ impl Signex {
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
-        let theme_id = self.ui_state.effective_theme_id();
 
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Bill of Materials")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::BomPreview(BomPreviewMsg::Close),
-                    theme_id,
-                    text_muted
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Bill of Materials",
+            Message::BomPreview(BomPreviewMsg::Close),
+            tokens,
+        );
         let header = if draggable {
             draggable_header(
                 header_content,

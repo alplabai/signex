@@ -25,7 +25,7 @@ use url::Url;
 use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource,
 };
-use crate::distributors::cache::{DEFAULT_TTL, DistributorCache};
+use crate::distributors::cache::DistributorCache;
 use crate::param::ParamMap;
 
 const LCSC_PROVIDER_KEY: &str = "lcsc";
@@ -74,16 +74,6 @@ impl LcscAdapter {
         super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
-    /// Helper exposed for tests: how many ms since the last recorded request,
-    /// or None if no request has been made.
-    #[doc(hidden)]
-    pub fn last_call_age(&self) -> Option<Duration> {
-        self.throttle
-            .lock()
-            .ok()
-            .and_then(|g| g.map(|i| i.elapsed()))
-    }
-
     fn http_get_json<T: for<'de> serde::Deserialize<'de>>(
         &self,
         url: &str,
@@ -95,23 +85,7 @@ impl LcscAdapter {
             .get(url)
             .send()
             .map_err(|e| DistributorError::Network(e.to_string()))?;
-        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            let retry_after_seconds = resp
-                .headers()
-                .get(reqwest::header::RETRY_AFTER)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(60);
-            return Err(DistributorError::RateLimited {
-                retry_after_seconds,
-            });
-        }
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            return Err(DistributorError::NotFound);
-        }
-        if !resp.status().is_success() {
-            return Err(DistributorError::Backend(format!("HTTP {}", resp.status())));
-        }
+        let resp = super::http::check_response(resp, None)?;
         resp.json::<T>()
             .map_err(|e| DistributorError::Backend(format!("decode: {e}")))
     }
@@ -150,10 +124,7 @@ impl DistributorAdapter for LcscAdapter {
             .next()
             .unwrap_or("")
             .trim_end_matches(".html");
-        let token = stem
-            .rsplit('_')
-            .find(|t| t.starts_with('C') && t[1..].chars().all(|c| c.is_ascii_digit()))
-            .unwrap_or("");
+        let token = stem.rsplit('_').find(|t| is_lcsc_code(t)).unwrap_or("");
         if token.is_empty() {
             return Ok(None);
         }
@@ -166,23 +137,13 @@ impl DistributorAdapter for LcscAdapter {
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
-        if let Some(cache) = &self.cache
-            && let Some(hit) = cache.get_or_warn(LCSC_PROVIDER_KEY, mpn, DEFAULT_TTL)
-        {
-            return Ok(vec![hit]);
-        }
-        let hits = self.search_by_keyword(mpn)?;
-        if let (Some(cache), Some(first)) = (&self.cache, hits.first()) {
-            // H4: silenced cache writes hide disk-full / permission failures.
-            if let Err(e) = cache.put(LCSC_PROVIDER_KEY, first) {
-                tracing::warn!(
-                    error = %e,
-                    mpn = %mpn,
-                    "LCSC cache write failed; live result returned but not persisted",
-                );
-            }
-        }
-        Ok(hits)
+        super::http::cached_lookup(
+            self.cache.as_ref(),
+            LCSC_PROVIDER_KEY,
+            LCSC_NAME,
+            mpn,
+            || self.search_by_keyword(mpn),
+        )
     }
 
     fn refresh_pricing(
@@ -193,6 +154,11 @@ impl DistributorAdapter for LcscAdapter {
         // nothing to refresh from; say so instead of reporting "not found".
         Err(super::price::pricing_unavailable(LCSC_NAME))
     }
+}
+
+/// Whether `token` is an LCSC part code: `C` then digits. A bare `C` passes.
+pub(super) fn is_lcsc_code(token: &str) -> bool {
+    token.starts_with('C') && token[1..].chars().all(|c| c.is_ascii_digit())
 }
 
 /// Minimal percent-encoding for the `keyword=` query parameter. Avoids

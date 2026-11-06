@@ -17,6 +17,6 @@ mod catalog_agreement_tests;
 #[cfg(test)]
 mod tests;
 
-pub(super) use placement::{EDGE_MARGIN, anchored_menu, clamp_menu_origin, menu_height};
+pub(super) use placement::submenu_origin;
 
 use super::*;

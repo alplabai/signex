@@ -18,6 +18,7 @@ mod create_child_sheet;
 mod erc;
 mod project;
 mod rule_editor;
+mod sizes;
 pub(crate) use rule_editor::{RuleEditor, rule_editor};
 mod widgets;
 
@@ -55,12 +56,10 @@ pub(crate) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
 /// Close-X hit-box height — also matches the chrome close (full
 /// menu-bar height) so the modal X is pixel-identical to the OS-window X.
 pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
-/// SVG glyph size for the close-X. Same value the chrome close uses.
-pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
-pub(crate) use widgets::{close_x_button, os_title_bar_slot};
+pub(crate) use widgets::{close_x_button, modal_title_header, os_title_bar_slot};
 pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size, wrap_modal};
 
 #[cfg(test)]

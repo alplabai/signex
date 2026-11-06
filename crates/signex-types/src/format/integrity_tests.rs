@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use super::tests::{empty_board, empty_sheet, sample_symbol};
 use super::*;
 use crate::schematic::{
-    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LabelType, NoConnect, Point, SchDrawing,
-    SchematicSheet, SheetPin, TextNote, VAlign, Wire,
+    Bus, BusEntry, ChildSheet, Junction, Label, LabelType, NoConnect, Point, SchDrawing,
+    SchematicSheet, SheetPin, TextNote, Wire,
 };
 
 fn load(text: &str) -> SchematicSheet {
@@ -44,17 +44,7 @@ fn wire(n: u128, end_x: f64) -> Wire {
 fn label(n: u128, text: &str) -> Label {
     Label {
         uuid: id(n),
-        text: text.into(),
-        position: Point::new(1.0, 2.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
-        unknown_columns: Default::default(),
+        ..Label::new(text, Point::new(1.0, 2.0), LabelType::Net)
     }
 }
 

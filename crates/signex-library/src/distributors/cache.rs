@@ -4,10 +4,6 @@
 //! - Default TTL: **24 hours**. The whole entry (datasheet URL included,
 //!   it is part of the same JSON) expires at the TTL.
 //! - Tests use a temp dir, never `~/.signex/`.
-//!
-//! `DistributorCache::with_root` is the test-friendly constructor;
-//! `DistributorCache::default_root()` resolves `~/.signex/cache/distributor`
-//! for runtime use.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -25,8 +21,6 @@ pub enum CacheError {
     Io(#[from] std::io::Error),
     #[error("serde: {0}")]
     Serde(#[from] serde_json::Error),
-    #[error("home directory not resolvable")]
-    NoHomeDir,
 }
 
 /// Filesystem-backed cache of `DistributorPart` JSON, keyed by `(provider, mpn)`.
@@ -42,14 +36,6 @@ impl DistributorCache {
         let root = root.as_ref().to_path_buf();
         std::fs::create_dir_all(&root)?;
         Ok(Self { root })
-    }
-
-    /// Resolve `~/.signex/cache/distributor` (creates it on first use).
-    /// Production callers use this; tests should call [`Self::with_root`].
-    pub fn default_root() -> Result<Self, CacheError> {
-        let home = dirs::home_dir().ok_or(CacheError::NoHomeDir)?;
-        let root = home.join(".signex").join("cache").join("distributor");
-        Self::with_root(root)
     }
 
     /// Compute the on-disk path for a `(provider, mpn)` entry.

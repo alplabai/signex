@@ -11,6 +11,7 @@ use super::domain::{
 use super::network::format_value;
 use super::production_date_code::{ProductionDateCode, ProductionDateCycle, ProductionMonth};
 use super::rkm_code::{RatedPower, RkmCode, TemperatureCoefficient};
+use super::widgets::{MetricSizes, labeled, metric, token_color};
 
 /// Width (px) shared by the Component and Tolerance pickers.
 const WIDE_PICK_W: f32 = 125.0;
@@ -44,6 +45,14 @@ pub struct RkmEncoder {
     value_options: Vec<PreferredNumber>,
     production_year_options: Vec<u16>,
 }
+
+/// Caption size of the RKM encoder's controls.
+const RKM_CAPTION_SIZE: f32 = 12.0;
+/// The RKM result reads larger than the other tabs' read-outs.
+const RKM_METRIC: MetricSizes = MetricSizes {
+    label: 11.0,
+    value: 16.0,
+};
 
 impl Default for RkmEncoder {
     fn default() -> Self {
@@ -147,12 +156,14 @@ impl RkmEncoder {
     pub fn view<'a>(&'a self, tokens: &'a ThemeTokens) -> Element<'a, RkmEncoderMessage> {
         let inputs = row![
             labeled(
+                RKM_CAPTION_SIZE,
                 "Component",
                 pick_list(Some(self.kind), ComponentKind::ALL, ToString::to_string)
                     .on_select(RkmEncoderMessage::KindChanged)
                     .width(WIDE_PICK_W),
             ),
             labeled(
+                RKM_CAPTION_SIZE,
                 "Value",
                 pick_list(
                     Some(self.value),
@@ -163,6 +174,7 @@ impl RkmEncoder {
                 .width(130),
             ),
             labeled(
+                RKM_CAPTION_SIZE,
                 "Unit",
                 pick_list(
                     Some(self.prefix),
@@ -176,6 +188,7 @@ impl RkmEncoder {
                 .size(14)
                 .color(token_color(tokens.text_secondary)),
             labeled(
+                RKM_CAPTION_SIZE,
                 "Tolerance",
                 pick_list(Some(self.tolerance), Tolerance::ALL, ToString::to_string)
                     .on_select(RkmEncoderMessage::ToleranceChanged)
@@ -189,6 +202,7 @@ impl RkmEncoder {
         if self.kind == ComponentKind::Resistor {
             let optional_fields = row![
                 labeled(
+                    RKM_CAPTION_SIZE,
                     "Temperature coefficient",
                     pick_list(
                         self.temperature_coefficient,
@@ -200,6 +214,7 @@ impl RkmEncoder {
                     .width(165),
                 ),
                 labeled(
+                    RKM_CAPTION_SIZE,
                     "Rated power",
                     pick_list(self.rated_power, RatedPower::ALL, ToString::to_string)
                         .on_select(RkmEncoderMessage::RatedPowerChanged)
@@ -217,6 +232,7 @@ impl RkmEncoder {
 
         let production_date_fields = row![
             labeled(
+                RKM_CAPTION_SIZE,
                 "Production date cycle",
                 pick_list(
                     self.production_date_cycle,
@@ -228,6 +244,7 @@ impl RkmEncoder {
                 .width(150),
             ),
             labeled(
+                RKM_CAPTION_SIZE,
                 "Production year",
                 pick_list(
                     self.production_year,
@@ -239,6 +256,7 @@ impl RkmEncoder {
                 .width(130),
             ),
             labeled(
+                RKM_CAPTION_SIZE,
                 "Production month",
                 pick_list(
                     self.production_month,
@@ -280,12 +298,13 @@ impl RkmEncoder {
             tokens,
         );
         let mut output = column![
-            metric("Specification", specification, tokens),
-            metric("RKM code", self.code().to_string(), tokens),
+            metric(RKM_METRIC, "Specification", specification, tokens),
+            metric(RKM_METRIC, "RKM code", self.code().to_string(), tokens),
         ]
         .spacing(10);
         if let Some(production_date_code) = self.production_date_code() {
             output = output.push(metric(
+                RKM_METRIC,
                 "Production date code",
                 production_date_code.to_string(),
                 tokens,
@@ -326,29 +345,6 @@ fn production_year_options(current_year: u16) -> Vec<u16> {
         return vec![current_year];
     }
     (FIRST_DOCUMENTED_YEAR..=current_year).rev().collect()
-}
-
-fn labeled<'a, M: 'a>(label: &'a str, control: impl Widget<M> + 'a) -> Element<'a, M> {
-    column![text(label).size(12), control].spacing(4).boxed()
-}
-
-fn metric<'a>(
-    label: &'a str,
-    value: String,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, RkmEncoderMessage> {
-    column![
-        text(label)
-            .size(11)
-            .color(token_color(tokens.text_secondary)),
-        text(value).size(16).color(token_color(tokens.text)),
-    ]
-    .spacing(2)
-    .boxed()
-}
-
-fn token_color(color: signex_types::theme::Color) -> iced::Color {
-    iced::Color::from_rgba8(color.r, color.g, color.b, f32::from(color.a) / 255.0)
 }
 
 fn panel_style(tokens: &ThemeTokens) -> container::Style {

@@ -5,18 +5,15 @@
 use iced::widget::{Space, column, container, row, text, text_input};
 use iced::{Element, Length, Widget};
 
-use super::widgets::{close_x_button, wrap_modal};
+use super::widgets::modal_title_header;
 use super::*;
-use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
 
 impl Signex {
     pub(in crate::app::view) fn view_create_child_sheet_confirm(&self) -> Element<'_, Message> {
-        wrap_modal(
+        self.wrap_centred_dialog(
             self.view_create_child_sheet_body(),
-            (0.0, 0.0),
-            self.ui_state.window_size,
-            (560.0, 260.0),
+            super::sizes::CREATE_CHILD_SHEET,
         )
     }
 
@@ -27,7 +24,6 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         fn msg(m: ProjectMsg) -> Message {
             Message::Project(m)
@@ -35,24 +31,8 @@ impl Signex {
         let later = msg(ProjectMsg::CreateChildSheetAnswered { create: false });
         let create = msg(ProjectMsg::CreateChildSheetAnswered { create: true });
 
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Create Sheet")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    later.clone(),
-                    self.ui_state.effective_theme_id(),
-                    text_muted
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> =
+            modal_title_header("Create Sheet", later.clone(), tokens);
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::CreateChildSheet,
@@ -98,6 +78,15 @@ impl Signex {
             dialog_button("Create", DialogButtonKind::Primary, Some(create), tokens)
         };
 
+        // In the main window the card is its design width and as tall as its
+        // content; in its own window it fills that window.
+        let modal = super::super::super::state::ModalId::CreateChildSheet;
+        let width = self.dialog_width(modal, super::sizes::CREATE_CHILD_SHEET);
+        let height = if self.modal_detached(modal) {
+            Length::Fill
+        } else {
+            Length::Shrink
+        };
         container(
             column![
                 header,
@@ -138,10 +127,10 @@ impl Signex {
                 ]),
             ]
             .width(Length::Fill)
-            .height(Length::Fill),
+            .height(height),
         )
-        .width(Length::Fill)
-        .height(Length::Fill)
+        .width(width)
+        .height(height)
         .style(crate::styles::modal_card(tokens))
         .clip(true)
         .boxed()

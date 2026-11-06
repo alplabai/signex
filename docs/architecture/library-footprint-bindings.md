@@ -34,3 +34,7 @@ The cascade (`cascade.rs`) finds a footprint bound only as an alternate and move
 ## Not yet
 
 `diff.rs` still reads only `footprint_ref`: a change to alternates alone is not shown in a row diff. It has no production caller yet. (`where_used.rs` lists alternate footprints as uses.)
+
+## Choosing a footprint (#1234)
+
+The Components panel details view lists the default and the alternates; the pick lives in `ComponentsPanelState::footprint_pick` and Place builds the part with it. A part built with an alternate records it in its value stamp as `footprint_ref = "<library uuid>:<footprint uuid>"` (`[extras.symbols.<uuid>.library_stamp]`); the key is absent for the row's default, so older files load as the default and a build that does not know the key keeps it as an unknown key. Library drift reads the footprint name of that binding, not the row default. Placing from the library picker still uses the row default. Properties changes it on a placed part (a dropdown above the footprint text field) with `Command::SetSymbolFootprintBinding` (one undo step). A project-level preferred package is not part of this; `pick_binding` stays unused until it is.

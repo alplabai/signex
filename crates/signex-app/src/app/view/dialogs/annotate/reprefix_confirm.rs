@@ -2,11 +2,10 @@
 //! the parts that stay, and Confirm / Cancel.
 
 use super::*;
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, column, container, text};
 use iced::{Element, Length, Widget};
 
-use super::super::widgets::{close_x_button, draggable_header, os_title_bar_slot, wrap_modal};
-use super::super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
 use crate::styles::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_list, dialog_message,
 };
@@ -18,13 +17,11 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 impl Signex {
     pub(in crate::app::view) fn view_reprefix_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_reprefix_confirm_body_inner(true);
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&crate::app::state::ModalId::ReprefixConfirm)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 520.0))
+        self.wrap_dialog(
+            crate::app::state::ModalId::ReprefixConfirm,
+            dialog,
+            super::super::sizes::REPREFIX_CONFIRM,
+        )
     }
 
     pub(in crate::app::view) fn view_reprefix_confirm_body(&self) -> Element<'_, Message> {
@@ -39,24 +36,11 @@ impl Signex {
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Re-prefix to Standard")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::Annotate(AnnotateMsg::ReprefixCancelled),
-                    self.ui_state.effective_theme_id(),
-                    text_muted
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Re-prefix to Standard",
+            Message::Annotate(AnnotateMsg::ReprefixCancelled),
+            tokens,
+        );
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -110,7 +94,10 @@ impl Signex {
                     ),
                 ]),
             ]
-            .width(self.dialog_width(crate::app::state::ModalId::ReprefixConfirm, 560.0)),
+            .width(self.dialog_width(
+                crate::app::state::ModalId::ReprefixConfirm,
+                super::super::sizes::REPREFIX_CONFIRM,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

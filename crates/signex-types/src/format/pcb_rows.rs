@@ -282,59 +282,31 @@ impl SnxTable for PcbViaRow {
 // Enum string codecs
 // ---------------------------------------------------------------------------
 
-fn pad_type_str(t: PadType) -> &'static str {
-    match t {
-        PadType::Thru => "thru",
-        PadType::Smd => "smd",
-        PadType::Connect => "connect",
-        PadType::NpThru => "np_thru",
+crate::token_enum! {
+    fn pad_type_str / parse_pad_type for PadType, fallback Thru {
+        Thru => "thru",
+        Smd => "smd",
+        Connect => "connect",
+        NpThru => "np_thru",
     }
 }
 
-fn parse_pad_type(s: &str) -> PadType {
-    match s {
-        "smd" => PadType::Smd,
-        "connect" => PadType::Connect,
-        "np_thru" => PadType::NpThru,
-        _ => PadType::Thru,
+crate::token_enum! {
+    fn pad_shape_str / parse_pad_shape for PadShape, fallback Circle {
+        Circle => "circle",
+        Rect => "rect",
+        Oval => "oval",
+        Trapezoid => "trapezoid",
+        RoundRect => "roundrect",
+        Custom => "custom",
     }
 }
 
-fn pad_shape_str(s: PadShape) -> &'static str {
-    match s {
-        PadShape::Circle => "circle",
-        PadShape::Rect => "rect",
-        PadShape::Oval => "oval",
-        PadShape::Trapezoid => "trapezoid",
-        PadShape::RoundRect => "roundrect",
-        PadShape::Custom => "custom",
-    }
-}
-
-fn parse_pad_shape(s: &str) -> PadShape {
-    match s {
-        "rect" => PadShape::Rect,
-        "oval" => PadShape::Oval,
-        "trapezoid" => PadShape::Trapezoid,
-        "roundrect" => PadShape::RoundRect,
-        "custom" => PadShape::Custom,
-        _ => PadShape::Circle,
-    }
-}
-
-fn via_type_str(t: ViaType) -> &'static str {
-    match t {
-        ViaType::Through => "through",
-        ViaType::Blind => "blind",
-        ViaType::Micro => "micro",
-    }
-}
-
-fn parse_via_type(s: &str) -> ViaType {
-    match s {
-        "blind" => ViaType::Blind,
-        "micro" => ViaType::Micro,
-        _ => ViaType::Through,
+crate::token_enum! {
+    fn via_type_str / parse_via_type for ViaType, fallback Through {
+        Through => "through",
+        Blind => "blind",
+        Micro => "micro",
     }
 }
 

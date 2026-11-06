@@ -98,20 +98,8 @@ pub fn draw_lock_indicators(
     }
 
     let snapshot = RendererSnapshot {
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        arcs: Vec::new(),
-        polygons: Vec::new(),
-        labels: Vec::new(),
-        pin_texts: Vec::new(),
-        reference_value_texts: Vec::new(),
-        parameter_texts: Vec::new(),
         overlays,
-        erc_markers: Vec::new(),
-        drawings: Vec::new(),
-        drawings_front: Vec::new(),
-        wire_color_overrides: HashMap::new(),
-        wire_line_styles: HashMap::new(),
+        ..Default::default()
     };
     draw_renderer_snapshot(
         frame,
@@ -130,17 +118,8 @@ mod tests {
     fn label(locked: bool) -> Label {
         Label {
             uuid: uuid::Uuid::nil(),
-            text: "N".into(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            font_family: None,
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
             locked,
-            unknown_columns: Default::default(),
+            ..Label::new("N", Point::new(0.0, 0.0), LabelType::Net)
         }
     }
 

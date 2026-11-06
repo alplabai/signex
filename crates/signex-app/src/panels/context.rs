@@ -110,6 +110,9 @@ pub struct PanelContext {
     /// The drawings the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1230).
     pub symbol_choices: Vec<SymbolChoiceItem>,
+    /// The footprints the selected placed symbol's library row offers, when
+    /// it has alternates; empty otherwise (#1234).
+    pub footprint_choices: Vec<FootprintChoiceItem>,
     /// Transient numeric-input buffers for the drawing properties
     /// panel — keyed on DrawingFieldId. Keeps half-typed strings
     /// ("", "-", "2.") alive between rerenders so fields can be
@@ -248,4 +251,16 @@ impl PanelContext {
         let paper_h = signex_types::schematic::paper_height_mm(&self.paper_size);
         self.page_origin.map_y(y, paper_h)
     }
+}
+
+/// One footprint a placed symbol can be built with: its row's default or an
+/// alternate (#1234).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FootprintChoiceItem {
+    /// `"<library uuid>:<footprint uuid>"` of the footprint.
+    pub binding: String,
+    /// The footprint's name.
+    pub label: String,
+    /// The placed symbol is built with this footprint.
+    pub selected: bool,
 }
