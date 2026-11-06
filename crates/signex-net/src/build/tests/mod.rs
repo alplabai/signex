@@ -4,6 +4,7 @@ use crate::fixtures::{empty_sheet, junction, label, pt, wire};
 
 mod bus_members;
 mod connected_items;
+mod incremental;
 mod index_equivalence;
 mod multiple_names;
 mod pin_contact_and_power;

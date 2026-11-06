@@ -47,6 +47,8 @@ mod wire_merge_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
+mod incremental_nets_tests;
+#[cfg(test)]
 mod rubber_band_power_tests;
 #[cfg(test)]
 mod rubber_band_tests;
@@ -185,6 +187,9 @@ pub struct Engine {
     unkept_pins: Vec<String>,
     /// Pre-move nets computed ahead of time (drag previews).
     preset_before: Option<BeforeNets>,
+    /// The pre-move sheet's connectivity, to derive moved sheets from
+    /// (drag previews).
+    preset_base: Option<std::sync::Arc<signex_net::NetBase>>,
     /// Net colour of each wire the app has painted, by wire uuid. The engine
     /// never changes it; a merge reads it so two wires of different colours
     /// are not folded into one (see `transform::merge`).
@@ -197,12 +202,14 @@ pub(crate) fn next_revision() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// A sheet prepared for repeated drag previews: the pre-move nets are derived
-/// once, not for every cursor step.
+/// A sheet prepared for repeated drag previews: the pre-move nets and
+/// connectivity are derived once, not for every cursor step, and each step
+/// derives only what the move changed (`docs/INCREMENTAL_NETS.md`).
 #[derive(Debug)]
 pub struct MovePreview {
     sheet: SchematicSheet,
     before: BeforeNets,
+    base: Option<std::sync::Arc<signex_net::NetBase>>,
 }
 
 impl MovePreview {
@@ -210,7 +217,18 @@ impl MovePreview {
     pub fn new(sheet: &SchematicSheet) -> Self {
         Self {
             before: before_nets(sheet),
+            base: Some(std::sync::Arc::new(signex_net::NetBase::new(sheet))),
             sheet: sheet.clone(),
+        }
+    }
+
+    /// A preview that derives every net from scratch, as before the
+    /// incremental derive: the reference for the timing bench.
+    #[cfg(test)]
+    pub(crate) fn new_full_derive(sheet: &SchematicSheet) -> Self {
+        Self {
+            base: None,
+            ..Self::new(sheet)
         }
     }
 
@@ -237,6 +255,7 @@ impl MovePreview {
             return (self.sheet.clone(), Vec::new());
         };
         engine.preset_before = Some(self.before.clone());
+        engine.preset_base.clone_from(&self.base);
         engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
@@ -284,6 +303,7 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            preset_base: None,
             wire_colors: std::collections::HashMap::new(),
         })
     }
@@ -318,6 +338,7 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            preset_base: None,
             wire_colors: std::collections::HashMap::new(),
         })
     }

@@ -309,6 +309,12 @@ impl SheetConnectivity {
         Self { parent }
     }
 
+    /// The union-find itself, for a derivation that reads it directly (see
+    /// `incremental`).
+    pub(crate) fn into_parent(self) -> HashMap<Key, Key> {
+        self.parent
+    }
+
     /// The canonical net root of point `p` — its union-find representative in
     /// the 1 µm key space. Two points sit on the same net iff their roots are
     /// equal. Takes `&mut self` because lookups path-compress.

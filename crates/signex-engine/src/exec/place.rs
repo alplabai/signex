@@ -99,7 +99,13 @@ impl Engine {
             self.reconciled_patch(&[items, followed].concat());
             std::mem::replace(&mut self.document, base.clone())
         };
-        let guard = crate::Guard::new(before, &plain_reference, tips, self.preset_before.clone());
+        let guard = crate::Guard::with_base(
+            before,
+            &plain_reference,
+            tips,
+            self.preset_before.clone(),
+            self.preset_base.clone(),
+        );
         let mut policy = crate::Policy::default();
         for round in 0.. {
             self.document = base.clone();
