@@ -357,18 +357,14 @@ impl Signex {
         // Conservative footprint so the card stays on screen near the
         // right / bottom edges.
         const FOOTPRINT_MENU_ROWS: usize = 12;
-        let (x, y) = super::super::context_menu::clamp_menu_origin(
+        self.menu_overlay(
+            window_id,
+            close_msg,
+            card_msg,
             (menu_state.x, menu_state.y),
-            (
-                Self::CONTEXT_MENU_WIDTH,
-                super::super::context_menu::menu_height(FOOTPRINT_MENU_ROWS),
-            ),
-            self.ui_state.window_size,
-        );
-        vec![
-            Self::dismiss_layer(close_msg),
-            super::super::translate::Translate::new(card_msg, (x, y)).boxed(),
-        ]
+            Self::CONTEXT_MENU_WIDTH,
+            FOOTPRINT_MENU_ROWS,
+        )
     }
 
     /// v0.14 — typed-delta "Move Selection By X, Y…" modal for the
@@ -515,51 +511,25 @@ impl Signex {
         let card_msg = card.map(Message::Library).boxed();
         let place_open = menu_state.open_submenu
             == Some(crate::library::editor::symbol::state::SymbolContextSubmenu::Place);
-        let (x, y) = Self::clamp_symbol_menu_position(
-            (menu_state.x, menu_state.y),
-            self.ui_state.window_size,
-            place_open,
-        );
-        vec![
-            Self::dismiss_layer(close_msg),
-            super::super::translate::Translate::new(card_msg, (x, y)).boxed(),
-        ]
-    }
-
-    /// Clamp the symbol context menu's requested `(x, y)` so a
-    /// conservative estimate of its footprint stays on screen near
-    /// the right / bottom window edges (matches the footprint
-    /// overlay's clamping, sized down for the shorter symbol menu).
-    /// `place_submenu_open` accounts for the extra rows the Place ▸
-    /// submenu adds in place (accordion, not a flyout) when expanded —
-    /// otherwise the estimate under-shoots the expanded card's real
-    /// footprint and it can run off the bottom edge.
-    fn clamp_symbol_menu_position(
-        requested: (f32, f32),
-        window: (f32, f32),
-        place_submenu_open: bool,
-    ) -> (f32, f32) {
-        let est_menu_w: f32 = crate::library::editor::symbol::context_menu::MENU_WIDTH;
         // The collapsed menu is the stable 6-row top-level set (Place ▸,
         // Join, Delete, Select All, Deselect All, Fit; locked by
         // rows::tests::top_level_ids_are_stable); an expanded Place ▸ adds
         // its rows in place (accordion, not a flyout). The estimate must be
         // tight: the bottom-edge flip lifts the card by exactly its height.
         const TOP_LEVEL_ROWS: usize = 6;
-        let expanded_rows = if place_submenu_open {
+        let expanded_rows = if place_open {
             crate::library::editor::symbol::context_menu::PLACE_TOOLS.len()
         } else {
             0
         };
-        let (x, y) = super::super::context_menu::clamp_menu_origin(
-            requested,
-            (
-                est_menu_w,
-                super::super::context_menu::menu_height(TOP_LEVEL_ROWS + expanded_rows),
-            ),
-            window,
-        );
-        (x, y)
+        self.menu_overlay(
+            window_id,
+            close_msg,
+            card_msg,
+            (menu_state.x, menu_state.y),
+            crate::library::editor::symbol::context_menu::MENU_WIDTH,
+            TOP_LEVEL_ROWS + expanded_rows,
+        )
     }
 
     /// In-canvas text-edit input — the floating `text_input` anchored on
