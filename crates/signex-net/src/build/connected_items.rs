@@ -5,7 +5,8 @@ use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind}
 use super::{SheetConnectivity, net_extent_at, point_on_segment, pt_key};
 
 /// The wires, junctions and labels on the net of `seed`, or for a bus seed the
-/// buses joined to it end to end plus the labels sitting on them. The seed is
+/// buses joined to it end to end plus the labels sitting on them (a label on a
+/// bus seeds that bus run). The seed is
 /// always part of the result, and a seed of any other kind comes back alone.
 ///
 /// A net seed reads the same [`merged_connectivity`](super::merged_connectivity)
@@ -28,7 +29,11 @@ pub fn connected_net_items(sheet: &SchematicSheet, seed: SelectedItem) -> Vec<Se
             .labels
             .iter()
             .find(|l| l.uuid == seed.uuid)
-            .map(|l| net_items(sheet, &l.position)),
+            .and_then(|l| {
+                bus_under(sheet, &l.position)
+                    .and_then(|bus| bus_run_items(sheet, bus))
+                    .or_else(|| Some(net_items(sheet, &l.position)))
+            }),
         SelectedKind::Bus => bus_run_items(sheet, seed.uuid),
         _ => None,
     }
@@ -37,6 +42,16 @@ pub fn connected_net_items(sheet: &SchematicSheet, seed: SelectedItem) -> Vec<Se
         out.push(seed);
     }
     out
+}
+
+/// The bus a point lies on, if any: a label there names the bus, not a net.
+fn bus_under(sheet: &SchematicSheet, at: &Point) -> Option<uuid::Uuid> {
+    let p = pt_key(at);
+    sheet
+        .buses
+        .iter()
+        .find(|b| point_on_segment(p, pt_key(&b.start), pt_key(&b.end)))
+        .map(|b| b.uuid)
 }
 
 fn net_items(sheet: &SchematicSheet, anchor: &Point) -> Vec<SelectedItem> {

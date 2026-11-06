@@ -121,6 +121,34 @@ fn a_bus_seed_takes_the_joined_run_and_its_labels() {
 }
 
 #[test]
+fn a_label_on_a_bus_seeds_the_bus_run() {
+    let mut sheet = empty_sheet();
+    for (n, a, b) in [
+        (20, pt(0.0, 0.0), pt(10.0, 0.0)),
+        (21, pt(10.0, 0.0), pt(10.0, 10.0)),
+    ] {
+        sheet.buses.push(Bus {
+            uuid: id(n),
+            start: a,
+            end: b,
+        });
+    }
+    let mut on_bus = label("D[0..7]", pt(10.0, 0.0), LabelType::Net);
+    on_bus.uuid = id(30);
+    sheet.labels.push(on_bus);
+
+    let got = sorted(connected_net_items(&sheet, item(30, SelectedKind::Label)));
+    assert_eq!(
+        got,
+        vec![
+            item(20, SelectedKind::Bus),
+            item(21, SelectedKind::Bus),
+            item(30, SelectedKind::Label),
+        ]
+    );
+}
+
+#[test]
 fn an_isolated_or_unknown_seed_comes_back_alone() {
     let mut sheet = empty_sheet();
     let mut l = label("X", pt(1.0, 1.0), LabelType::Net);
