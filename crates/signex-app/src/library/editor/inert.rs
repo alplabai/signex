@@ -158,7 +158,8 @@ where
     }
 }
 
-#[cfg(test)]
+// iced's headless `()` renderer exists only with debug assertions.
+#[cfg(all(test, debug_assertions))]
 mod tests {
     use super::*;
     use iced::Widget as _;
