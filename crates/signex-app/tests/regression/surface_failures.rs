@@ -303,7 +303,7 @@ fn closing_a_symbol_tab_dirtied_by_undo_after_a_save_parks_the_draft() {
     open_symbol_tab(&mut app, &path);
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     let snapshot = editor.snapshot();
-    editor.undo_snapshots.push(snapshot);
+    editor.history.undo_steps_mut().push(snapshot);
     editor.primitive_mut().name = "edited".into();
     editor.mark_dirty();
     app.document_state.mark_document_dirty(&path);

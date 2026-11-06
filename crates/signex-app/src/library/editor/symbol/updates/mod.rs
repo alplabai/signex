@@ -675,17 +675,13 @@ mod tests {
             &mut editor,
             SymbolEditorMsg::PolygonClick { x: 2.0, y: 3.0 },
         );
-        assert_eq!(
-            editor.undo_snapshots.len(),
-            0,
-            "clicks alone don't push undo"
-        );
+        assert_eq!(editor.history.undo_len(), 0, "clicks alone don't push undo");
 
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
 
         assert_eq!(editor.primitive().graphics.len(), 1);
         assert_eq!(
-            editor.undo_snapshots.len(),
+            editor.history.undo_len(),
             1,
             "commit pushes exactly one undo snapshot"
         );
@@ -717,7 +713,7 @@ mod tests {
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
         assert!(editor.polygon_vertices.is_empty());
     }
 
@@ -741,7 +737,7 @@ mod tests {
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
     }
 
     /// A trailing vertex equal to the first (a plain click landed
@@ -836,7 +832,7 @@ mod tests {
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCancel);
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
         assert!(editor.polygon_vertices.is_empty());
     }
 
@@ -908,6 +904,6 @@ mod tests {
             Some("Arc sweep must be less than a full turn.")
         );
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert_eq!(editor.history.undo_len(), 0);
     }
 }

@@ -322,11 +322,7 @@ fn an_edit_at_full_history_depth_makes_the_warning_stale() {
     for _ in 0..SymbolDocument::HISTORY_DEPTH + 5 {
         add_pin(&mut app, &path);
     }
-    let depth = |app: &Signex| {
-        app.document_state.symbol_editors[&path]
-            .undo_snapshots
-            .len()
-    };
+    let depth = |app: &Signex| app.document_state.symbol_editors[&path].history.undo_len();
     assert_eq!(depth(&app), SymbolDocument::HISTORY_DEPTH);
     panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
     assert!(warning_shown(&app));

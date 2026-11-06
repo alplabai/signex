@@ -222,12 +222,12 @@ pub enum SymbolEditorMsg {
     /// common to both bodies, or the active body's tag to pin them to it.
     SelectionBodyAssigned(u8),
 
-    /// Undo the last symbol mutation. Pops from `undo_snapshots`
+    /// Undo the last symbol mutation. Pops from the undo stack
     /// and restores the previous `Symbol` state.
     Undo,
 
     /// Redo — reapply an undone symbol mutation. Pops from
-    /// `redo_snapshots`.
+    /// the redo stack.
     Redo,
 
     /// Drag committed — clears `mid_drag` so the next drag starts a

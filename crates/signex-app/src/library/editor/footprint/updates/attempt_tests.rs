@@ -80,21 +80,25 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
     for _ in 0..FootprintDocument::HISTORY_DEPTH {
         editor.push_history();
     }
-    editor.history[0].selected_pad = Some(7);
+    editor.history.undo_steps_mut()[0].selected_pad = Some(7);
     let spare = editor.begin_edit();
-    editor.redo.push(spare);
+    editor.history.redo_steps_mut().push(spare);
     editor.set_dirty(false);
 
     constrain_distance(&mut editor);
 
     assert!(!editor.state.conflict.is_empty(), "the edit was rejected");
-    assert_eq!(editor.history.len(), FootprintDocument::HISTORY_DEPTH);
+    assert_eq!(editor.history.undo_len(), FootprintDocument::HISTORY_DEPTH);
     assert_eq!(
-        editor.history[0].selected_pad,
+        editor.history.undo_steps()[0].selected_pad,
         Some(7),
         "the oldest undo step was not evicted"
     );
-    assert_eq!(editor.redo.len(), 1, "the redo stack was not cleared");
+    assert_eq!(
+        editor.history.redo_len(),
+        1,
+        "the redo stack was not cleared"
+    );
     assert!(
         !editor.is_dirty(),
         "a rejected edit does not dirty the document"
@@ -135,13 +139,13 @@ fn a_kept_edit_records_history_clears_redo_and_marks_dirty() {
     // 5 mm again: consistent with the existing 5 mm distance.
     let mut editor = editor_ready_to_constrain("5");
     let spare = editor.begin_edit();
-    editor.redo.push(spare);
+    editor.history.redo_steps_mut().push(spare);
 
     constrain_distance(&mut editor);
 
     assert!(editor.state.conflict.is_empty(), "the edit solved");
-    assert_eq!(editor.history.len(), 1);
-    assert!(editor.redo.is_empty());
+    assert_eq!(editor.history.undo_len(), 1);
+    assert!(!editor.history.can_redo());
     assert!(editor.is_dirty());
 }
 
@@ -197,7 +201,7 @@ fn a_rejected_edit_keeps_the_save_point() {
     assert!(!editor.state.conflict.is_empty(), "the edit was rejected");
     assert!(!editor.is_dirty());
     assert!(
-        editor.save_point.is_at(editor.history.len()),
+        !editor.history.is_dirty(),
         "the document is still at the saved state"
     );
 }

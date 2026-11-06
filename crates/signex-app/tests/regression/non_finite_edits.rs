@@ -174,7 +174,7 @@ fn a_refused_move_by_axis_leaves_the_pad_and_keeps_the_dialog_open() {
             "dx={dx:?} dy={dy:?}: nothing was edited"
         );
         assert!(
-            editor.history.is_empty(),
+            !editor.history.can_undo(),
             "dx={dx:?} dy={dy:?}: a refused move is not an undo step"
         );
     }
@@ -201,7 +201,7 @@ fn a_finite_move_by_still_moves_the_pad_and_closes_the_dialog() {
     assert_eq!(editor.state.pads[0].position_mm, (3.5, 1.0));
     assert!(editor.state.move_by_modal.is_none());
     assert!(editor.is_dirty());
-    assert_eq!(editor.history.len(), 1);
+    assert_eq!(editor.history.undo_len(), 1);
 }
 
 // ── Symbol editor Properties edits ──────────────────────────────────
