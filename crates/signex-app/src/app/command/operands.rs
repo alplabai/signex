@@ -18,7 +18,7 @@ pub enum OperandValue {
     /// Degrees.
     Angle(f64),
     Text(String),
-    /// An absolute path.
+    /// An absolute path on the host running the command (`C:\...` on Windows).
     Path(String),
     Bool(bool),
 }
@@ -115,7 +115,14 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
         expected,
         got: text.to_string(),
     };
-    let number = |s: &str| s.trim().parse::<f64>().ok().filter(|n| n.is_finite());
+    // `+ 0.0` turns -0 into 0.
+    let number = |s: &str| {
+        s.trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|n| n.is_finite())
+            .map(|n| n + 0.0)
+    };
     match operand.kind {
         OperandKind::Point => {
             let (x, y) = text.split_once(',').ok_or_else(|| invalid("x,y in mm"))?;
@@ -124,9 +131,15 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
                 _ => Err(invalid("x,y in mm")),
             }
         }
+        // The pre-placement form offers 0, 90, 180 and 270 only.
         OperandKind::Angle => number(text)
+            .filter(|deg| deg % 90.0 == 0.0)
             .map(OperandValue::Angle)
-            .ok_or_else(|| invalid("a number of degrees")),
+            .ok_or_else(|| invalid("a multiple of 90 degrees")),
+        OperandKind::Text if text.chars().any(char::is_control) => {
+            Err(invalid("text without control characters"))
+        }
+        OperandKind::Text if text.is_empty() && operand.required => Err(invalid("non-empty text")),
         OperandKind::Text => Ok(OperandValue::Text(text.to_string())),
         OperandKind::Path if Path::new(text).is_absolute() => {
             Ok(OperandValue::Path(text.to_string()))
@@ -202,26 +215,39 @@ mod tests {
         ));
     }
 
+    /// `path=<absolute path in the temp dir>`: absolute on every host.
+    fn path_arg(file: &str) -> String {
+        format!("path={}", std::env::temp_dir().join(file).display())
+    }
+
     #[test]
     fn a_value_of_the_wrong_form_is_named() {
-        let cases: [(&str, &[&str], &str); 6] = [
-            ("place_junction", &["at=1"], "at"),
-            ("place_junction", &["at=a,b"], "at"),
-            ("place_junction", &["at=1,inf"], "at"),
+        let save = path_arg("x.snxsch");
+        let cases: Vec<(&str, Vec<&str>, &str)> = vec![
+            ("place_junction", vec!["at=1"], "at"),
+            ("place_junction", vec!["at=a,b"], "at"),
+            ("place_junction", vec!["at=1,inf"], "at"),
             (
                 "place_net_label",
-                &["at=0,0", "text=A", "rotation=NaN"],
+                vec!["at=0,0", "text=A", "rotation=NaN"],
                 "rotation",
             ),
-            ("save_document_as", &["path=relative/x.snxsch"], "path"),
+            (
+                "place_net_label",
+                vec!["at=0,0", "text=A", "rotation=45"],
+                "rotation",
+            ),
+            ("place_net_label", vec!["at=0,0", "text="], "text"),
+            ("place_net_label", vec!["at=0,0", "text=a\nb"], "text"),
+            ("save_document_as", vec!["path=relative/x.snxsch"], "path"),
             (
                 "save_document_as",
-                &["path=/tmp/x.snxsch", "overwrite=yes"],
+                vec![&save, "overwrite=yes"],
                 "overwrite",
             ),
         ];
         for (id, args, operand) in cases {
-            let err = parse(id, args).unwrap_err();
+            let err = parse(id, &args).unwrap_err();
             assert!(
                 matches!(&err, OperandError::Invalid { operand: o, .. } if o == operand),
                 "{id} {args:?}: {err}"
@@ -231,18 +257,46 @@ mod tests {
 
     #[test]
     fn a_save_dialog_answer_parses() {
-        let args = parse(
-            "save_document_as",
-            &["path=/tmp/a.snxsch", "overwrite=true"],
-        )
-        .unwrap();
+        let save = path_arg("a.snxsch");
+        let args = parse("save_document_as", &[&save, "overwrite=true"]).unwrap();
         assert_eq!(args.operand("overwrite"), Some(&OperandValue::Bool(true)));
+        let open = path_arg("a.snxprj");
         assert_eq!(
-            parse("open_document", &["path=/tmp/a.snxprj"])
+            parse("open_document", &[&open])
                 .unwrap()
                 .operand("overwrite"),
             None
         );
+    }
+
+    #[test]
+    fn a_value_splits_on_the_first_equals_only() {
+        let arg = path_arg("a=b.snxsch");
+        let args = parse("open_document", &[&arg]).unwrap();
+        let Some(OperandValue::Path(path)) = args.operand("path") else {
+            panic!("no path operand");
+        };
+        assert!(path.ends_with("a=b.snxsch"), "{path}");
+    }
+
+    #[test]
+    fn negative_zero_reads_as_zero_and_right_angles_pass() {
+        let args = parse("place_net_label", &["at=-0,-0.0", "text=A", "rotation=-0"]).unwrap();
+        let Some(OperandValue::Point(x, y)) = args.operand("at") else {
+            panic!("no point");
+        };
+        assert!(x.is_sign_positive() && y.is_sign_positive());
+        let Some(OperandValue::Angle(deg)) = args.operand("rotation") else {
+            panic!("no angle");
+        };
+        assert!(deg.is_sign_positive());
+        for deg in ["90", "180", "270", "-90"] {
+            parse(
+                "place_net_label",
+                &["at=0,0", "text=A", &format!("rotation={deg}")],
+            )
+            .unwrap();
+        }
     }
 
     /// The one convention (#1923): every descriptor names operands from the

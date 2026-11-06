@@ -7,11 +7,12 @@
 pub enum OperandKind {
     /// `x,y` in mm.
     Point,
-    /// A number of degrees.
+    /// A multiple of 90 degrees, the pre-placement form's choices.
     Angle,
     /// Free text (a label text, a net name, a library id).
     Text,
-    /// An absolute file path (a GUI file dialog's answer).
+    /// An absolute path on the host running the command (a GUI file dialog's
+    /// answer).
     Path,
     /// `true` or `false`.
     Bool,
@@ -38,7 +39,10 @@ impl OperandKind {
     }
 }
 
-/// One named operand of a command.
+/// One named operand of a command. A command's operands are the inputs it
+/// needs; everything else (line width, fill, wire mode, label shape, font and
+/// justification) comes from the pre-placement form and the project defaults,
+/// as for a click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Operand {
     /// snake_case, one of the [`CONVENTION`] names.

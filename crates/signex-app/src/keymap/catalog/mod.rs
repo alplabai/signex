@@ -133,8 +133,8 @@ impl CommandFlags {
         ..Self::NONE
     };
 
-    /// Mutates the document, undoable, and only reachable interactively
-    /// (in-place edits, drag/place gestures, cursor-anchored actions).
+    /// Mutates the document, undoable, and has no operand form: only the GUI
+    /// drives it (in-place edits, drag gestures, cursor-anchored actions).
     pub const GUI_MUTATES: Self = Self {
         gui_only: true,
         mutates_doc: true,
@@ -174,7 +174,9 @@ pub struct CommandMetadata {
     /// GUI/undo/visibility flags. Defaults to all-`false`.
     pub flags: CommandFlags,
     /// The operands a CLI or agent can pass instead of a click or a dialog
-    /// answer. Empty: the command has no operand form (#1934).
+    /// answer: the inputs the command needs, the rest comes from the
+    /// pre-placement form and project defaults as for a click. Empty: the
+    /// command has no operand form (#1934).
     pub operands: &'static [Operand],
 }
 
