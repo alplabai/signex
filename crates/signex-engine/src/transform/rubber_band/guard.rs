@@ -21,8 +21,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 
 use signex_net::{
-    NetSignature, best_net_name_of, name_carrying_ports, net_signatures, net_signatures_at,
-    point_on_segment, pt_key, uf::Key,
+    NetBase, NetSignature, best_net_name_of, name_carrying_ports, net_signatures,
+    net_signatures_at, point_on_segment, pt_key, uf::Key,
 };
 use signex_types::schematic::{LabelType, SchematicSheet};
 use uuid::Uuid;
@@ -66,6 +66,30 @@ pub fn before_nets(sheet: &SchematicSheet) -> BeforeNets {
     Arc::new(net_signatures(sheet))
 }
 
+type Derived = (Vec<NetSignature>, Vec<(Key, Option<usize>)>);
+
+/// [`net_signatures_at`] of `sheet`, found from `base` when there is one. The
+/// tests hold every such answer to the full derive.
+fn derive_at(base: Option<&NetBase>, sheet: &SchematicSheet, at: &[(Key, bool)]) -> Derived {
+    let Some(base) = base else {
+        return net_signatures_at(sheet, at);
+    };
+    let found = base.derive_at(sheet, at);
+    #[cfg(test)]
+    if self_check::enabled() {
+        debug_assert!(
+            base.derives_incrementally(sheet),
+            "the base fell back to the full derive"
+        );
+        assert_eq!(
+            found,
+            net_signatures_at(sheet, at),
+            "the incremental derive differs from the full derive"
+        );
+    }
+    found
+}
+
 /// Pins and power ports left out of (or standing in for) a comparison.
 struct Exclusions {
     terminals: Terminals,
@@ -87,12 +111,12 @@ struct PlainView {
 }
 
 impl PlainView {
-    fn of(sheet: &SchematicSheet, tips: &[PinTip]) -> Self {
+    fn of(sheet: &SchematicSheet, tips: &[PinTip], base: Option<&NetBase>) -> Self {
         let keys: Vec<(Key, bool)> = tips
             .iter()
             .map(|t| (t.old_key(), t.is_sheet_pin()))
             .collect();
-        let (nets, at_old) = net_signatures_at(sheet, &keys);
+        let (nets, at_old) = derive_at(base, sheet, &keys);
         let home = tips
             .iter()
             .map(|tip| nets.iter().position(|net| holds(net, tip.ident())))
@@ -177,6 +201,9 @@ pub struct Guard {
     seen_sheet_pins: BTreeSet<Uuid>,
     /// The plain move changed nothing but symbol and child-sheet positions.
     only_symbols_moved: bool,
+    /// The pre-move sheet's connectivity, to derive the moved sheets from
+    /// instead of from scratch (a drag preview).
+    base: Option<Arc<NetBase>>,
 }
 
 impl Guard {
@@ -186,6 +213,19 @@ impl Guard {
         plain_sheet: &SchematicSheet,
         tips: &[PinTip],
         before: Option<BeforeNets>,
+    ) -> Self {
+        Self::with_base(before_sheet, plain_sheet, tips, before, None)
+    }
+
+    /// [`Self::new`] deriving every moved sheet's nets from `base`, the
+    /// connectivity of `before_sheet` (the answer is the same, found faster).
+    #[must_use]
+    pub fn with_base(
+        before_sheet: &SchematicSheet,
+        plain_sheet: &SchematicSheet,
+        tips: &[PinTip],
+        before: Option<BeforeNets>,
+        base: Option<Arc<NetBase>>,
     ) -> Self {
         let before = before.unwrap_or_else(|| before_nets(before_sheet));
         let seen_terminals = before
@@ -200,11 +240,17 @@ impl Guard {
             before_sheet: before_sheet.clone(),
             plain_sheet: plain_sheet.clone(),
             before,
-            plain_view: PlainView::of(plain_sheet, tips),
+            plain_view: PlainView::of(plain_sheet, tips, base.as_deref()),
             seen_terminals,
             seen_sheet_pins,
             only_symbols_moved: same_wiring(before_sheet, plain_sheet),
+            base,
         }
+    }
+
+    /// The nets of `sheet`.
+    fn nets_of(&self, sheet: &SchematicSheet) -> Vec<NetSignature> {
+        derive_at(self.base.as_deref(), sheet, &[]).0
     }
 
     /// Whether the pre-move netlist had `tip`'s pin on a net.
@@ -284,7 +330,11 @@ impl Guard {
         let view = if skip.power_out.is_empty() {
             &self.plain_view
         } else {
-            stripped = PlainView::of(&Self::strip(&self.plain_sheet, &skip.power_out), tips);
+            stripped = PlainView::of(
+                &Self::strip(&self.plain_sheet, &skip.power_out),
+                tips,
+                self.base.as_deref(),
+            );
             &stripped
         };
         let mut nets = view.nets.clone();
@@ -473,7 +523,7 @@ impl Guard {
         let sigs = if skip.power_out.is_empty() {
             self.before.to_vec()
         } else {
-            net_signatures(&Self::strip(&self.before_sheet, &skip.power_out))
+            self.nets_of(&Self::strip(&self.before_sheet, &skip.power_out))
         };
         let same = Exclusions {
             terminals: skip.terminals.clone(),
@@ -500,9 +550,9 @@ impl Guard {
         // Pins with an undefined plain connection stay out of both sides;
         // skipped pins are compared against where the plain move left them.
         let sigs = if skip.power_out.is_empty() {
-            net_signatures(candidate)
+            self.nets_of(candidate)
         } else {
-            net_signatures(&Self::strip(candidate, &skip.power_out))
+            self.nets_of(&Self::strip(candidate, &skip.power_out))
         };
         let got = Self::project(&sigs, &extra);
         if want == got {
@@ -553,5 +603,34 @@ fn empty_net() -> NetSignature {
         labels: BTreeSet::new(),
         sheet_pins: BTreeSet::new(),
         name: String::new(),
+    }
+}
+
+/// Test switch for the check in [`derive_at`]; on unless a timing bench turns
+/// it off for its own thread.
+#[cfg(test)]
+pub(crate) mod self_check {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ON: Cell<bool> = const { Cell::new(true) };
+    }
+
+    pub(crate) fn enabled() -> bool {
+        ON.with(Cell::get)
+    }
+
+    /// Turn the check off for this thread until the guard drops.
+    pub(crate) fn off() -> Off {
+        Off(ON.with(|flag| flag.replace(false)))
+    }
+
+    /// Restores the setting [`off`] found.
+    pub(crate) struct Off(bool);
+
+    impl Drop for Off {
+        fn drop(&mut self) {
+            ON.with(|flag| flag.set(self.0));
+        }
     }
 }
