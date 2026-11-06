@@ -37,6 +37,8 @@ use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
 mod alternate_symbols;
 mod browser;
+#[cfg(test)]
+mod close_preview_tests;
 mod commit_pending;
 mod component_preview;
 mod components_panel;
