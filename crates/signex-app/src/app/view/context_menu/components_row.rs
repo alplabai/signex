@@ -51,7 +51,6 @@ impl Signex {
             (menu_ctx.x, menu_ctx.y),
             Self::CONTEXT_MENU_WIDTH,
             entries_len,
-            false,
         );
         match menu_ctx.window {
             None => layers,

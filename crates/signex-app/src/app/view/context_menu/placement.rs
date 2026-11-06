@@ -107,8 +107,9 @@ impl Signex {
         )
     }
 
-    /// A right-click menu as overlay layers: the click-outside layer that
-    /// sends `close`, then `menu` clamped into `window_id`.
+    /// A text-only right-click menu as overlay layers: the click-outside
+    /// layer that sends `close`, then `menu` clamped into `window_id`. A menu
+    /// with icon rows clamps through [`Self::menu_origin`] itself.
     pub(in crate::app::view) fn menu_overlay<'a>(
         &self,
         window_id: iced::window::Id,
@@ -117,9 +118,8 @@ impl Signex {
         anchor: (f32, f32),
         width: f32,
         rows: usize,
-        has_icons: bool,
     ) -> Vec<iced::Element<'a, Message>> {
-        let origin = self.menu_origin(window_id, anchor, width, rows, has_icons);
+        let origin = self.menu_origin(window_id, anchor, width, rows, false);
         Self::menu_layers(close, menu, origin)
     }
 

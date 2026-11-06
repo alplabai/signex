@@ -510,7 +510,6 @@ impl Signex {
             (tab_ctx.x, tab_ctx.y),
             Self::CONTEXT_MENU_WIDTH,
             5,
-            false,
         )
     }
 
@@ -530,7 +529,6 @@ impl Signex {
             (menu_ctx.x, menu_ctx.y),
             Self::CONTEXT_MENU_WIDTH,
             5,
-            false,
         )
     }
 
@@ -594,7 +592,6 @@ impl Signex {
             (picker.x, picker.y),
             200.0,
             13,
-            false,
         )
     }
 

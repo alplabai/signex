@@ -364,7 +364,6 @@ impl Signex {
             (menu_state.x, menu_state.y),
             Self::CONTEXT_MENU_WIDTH,
             FOOTPRINT_MENU_ROWS,
-            false,
         )
     }
 
@@ -530,7 +529,6 @@ impl Signex {
             (menu_state.x, menu_state.y),
             crate::library::editor::symbol::context_menu::MENU_WIDTH,
             TOP_LEVEL_ROWS + expanded_rows,
-            false,
         )
     }
 
