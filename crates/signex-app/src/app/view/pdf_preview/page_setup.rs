@@ -66,10 +66,10 @@ impl Signex {
                 pick_list(
                     Some(orientation),
                     vec![
-                        signex_output::Orientation::Portrait,
-                        signex_output::Orientation::Landscape,
+                        signex_types::schematic::SheetOrientation::Portrait,
+                        signex_types::schematic::SheetOrientation::Landscape,
                     ],
-                    |o: &signex_output::Orientation| o.to_string(),
+                    |o: &signex_types::schematic::SheetOrientation| o.to_string(),
                 )
                 .on_select(|o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)))
                 .text_size(FIELD_TEXT)

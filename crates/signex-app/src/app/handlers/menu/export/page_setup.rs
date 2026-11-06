@@ -3,7 +3,8 @@
 //! only forwards the edit and re-rasterises when it changed the options.
 
 use iced::Task;
-use signex_output::{MarginEdge, Orientation, PageSize, PdfScaleMode};
+use signex_output::{MarginEdge, PageSize, PdfScaleMode};
+use signex_types::schematic::SheetOrientation;
 
 use super::super::super::super::*;
 
@@ -27,7 +28,7 @@ impl Signex {
 
     pub(crate) fn handle_print_preview_set_orientation(
         &mut self,
-        orientation: Orientation,
+        orientation: SheetOrientation,
     ) -> Task<Message> {
         self.edit_print_preview_page_setup(|p| p.apply_orientation(orientation))
     }

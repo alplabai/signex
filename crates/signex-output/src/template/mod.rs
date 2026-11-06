@@ -12,8 +12,9 @@
 
 use thiserror::Error;
 
-use crate::pdf::{Orientation, PageSize};
+use crate::pdf::PageSize;
 use signex_types::schematic::SheetFrameSettings;
+use signex_types::schematic::SheetOrientation;
 
 pub mod builtin;
 pub mod format;
@@ -46,7 +47,7 @@ pub struct Template {
     pub id: TemplateId,
     pub display_name: String,
     pub page_size: PageSize,
-    pub orientation: Orientation,
+    pub orientation: SheetOrientation,
     pub frame: Frame,
     pub title_block: TitleBlock,
 }

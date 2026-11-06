@@ -8,7 +8,8 @@
 //! `.snxsht` parser (`format.rs`).
 
 use super::{FontStyle, Frame, Template, TemplateId, TitleBlock, TitleBlockCell};
-use crate::pdf::{Orientation, PageSize};
+use crate::pdf::PageSize;
+use signex_types::schematic::SheetOrientation;
 
 /// Every built-in template's IDs, in display order.
 pub fn all_builtin_ids() -> Vec<TemplateId> {
@@ -36,120 +37,120 @@ pub fn load_builtin(id: &TemplateId) -> Option<Template> {
 /// Registry of built-ins. Order matters for display — ISO first (most
 /// common in European/Asian use), ANSI second (US), portrait before
 /// landscape within each pair.
-const BUILTIN_TEMPLATES: &[(&str, &str, PageSize, Orientation)] = &[
+const BUILTIN_TEMPLATES: &[(&str, &str, PageSize, SheetOrientation)] = &[
     (
         "iso_a0_portrait",
         "ISO A0 portrait",
         PageSize::IsoA0,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "iso_a0_landscape",
         "ISO A0 landscape",
         PageSize::IsoA0,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "iso_a1_portrait",
         "ISO A1 portrait",
         PageSize::IsoA1,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "iso_a1_landscape",
         "ISO A1 landscape",
         PageSize::IsoA1,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "iso_a2_portrait",
         "ISO A2 portrait",
         PageSize::IsoA2,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "iso_a2_landscape",
         "ISO A2 landscape",
         PageSize::IsoA2,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "iso_a3_portrait",
         "ISO A3 portrait",
         PageSize::IsoA3,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "iso_a3_landscape",
         "ISO A3 landscape",
         PageSize::IsoA3,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "iso_a4_portrait",
         "ISO A4 portrait",
         PageSize::IsoA4,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "iso_a4_landscape",
         "ISO A4 landscape",
         PageSize::IsoA4,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "iso_a5_portrait",
         "ISO A5 portrait",
         PageSize::IsoA5,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "iso_a5_landscape",
         "ISO A5 landscape",
         PageSize::IsoA5,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "ansi_a_portrait",
         "ANSI A (Letter) portrait",
         PageSize::AnsiA,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "ansi_a_landscape",
         "ANSI A (Letter) landscape",
         PageSize::AnsiA,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "ansi_b_portrait",
         "ANSI B (Tabloid) portrait",
         PageSize::AnsiB,
-        Orientation::Portrait,
+        SheetOrientation::Portrait,
     ),
     (
         "ansi_b_landscape",
         "ANSI B (Tabloid) landscape",
         PageSize::AnsiB,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "ansi_c_landscape",
         "ANSI C landscape",
         PageSize::AnsiC,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "ansi_d_landscape",
         "ANSI D landscape",
         PageSize::AnsiD,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
     (
         "ansi_e_landscape",
         "ANSI E landscape",
         PageSize::AnsiE,
-        Orientation::Landscape,
+        SheetOrientation::Landscape,
     ),
 ];
 
@@ -271,7 +272,7 @@ mod tests {
     fn default_template_id_loads() {
         let t = load_builtin(&TemplateId::default()).unwrap();
         assert_eq!(t.page_size, PageSize::IsoA4);
-        assert_eq!(t.orientation, Orientation::Landscape);
+        assert_eq!(t.orientation, SheetOrientation::Landscape);
     }
 
     #[test]

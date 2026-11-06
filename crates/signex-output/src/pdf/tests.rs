@@ -1,7 +1,7 @@
 //! Tests for the PDF exporter.
 use std::path::PathBuf;
 
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{SchematicSheet, SheetOrientation};
 
 use super::*;
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
@@ -204,7 +204,7 @@ fn page_size_reflected_in_media_box() {
     let ctx = sample_ctx(1);
     let opts = PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Portrait,
+        orientation: SheetOrientation::Portrait,
         ..Default::default()
     };
     let out = PdfExporter.export(&ctx, &opts).unwrap();
@@ -313,7 +313,7 @@ fn fit_to_page_scales_large_content_down() {
 
     let opts = PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         scale: PdfScale::FitToPage,
         margins: Margins {
             top_mm: 10.0,
@@ -348,7 +348,7 @@ fn fit_to_page_does_not_upscale_small_content() {
 
     let opts = PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         scale: PdfScale::FitToPage,
         margins: Margins {
             top_mm: 10.0,
@@ -548,7 +548,7 @@ fn media_box_matches_every_selectable_page_size_and_custom() {
     let ctx = sample_ctx(1);
     let pt = |mm: f64| mm * 72.0 / 25.4;
     for kind in PageSizeKind::ALL {
-        for orientation in [Orientation::Portrait, Orientation::Landscape] {
+        for orientation in [SheetOrientation::Portrait, SheetOrientation::Landscape] {
             let size = kind.select(PageSize::IsoA4, orientation);
             let opts = PdfOptions {
                 page_size: size,
@@ -611,7 +611,7 @@ fn wire_ctx() -> ExportContext {
 fn one_to_one_with(margins: Margins) -> PdfOptions {
     PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         scale: PdfScale::OneToOne,
         margins,
         ..Default::default()
