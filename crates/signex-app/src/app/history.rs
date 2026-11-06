@@ -253,18 +253,40 @@ mod tests {
     }
 
     #[test]
-    fn a_capped_redo_stack_forgets_a_point_off_its_far_end() {
+    fn stepping_back_caps_the_redo_stack_at_its_far_end() {
+        let mut h = history();
+        h.undo_steps_mut().push(0);
+        h.redo_steps_mut().extend([10, 11, 12]);
+        assert_eq!(h.step(99, true), Some(0));
+        assert_eq!(h.redo_len(), CAP, "the redo stack stays within its cap");
+        assert_eq!(h.redo_steps(), &[11, 12, 99], "the far end is dropped");
+    }
+
+    #[test]
+    fn a_step_forgets_a_point_the_stacks_no_longer_reach() {
         let mut h = history();
         for i in 0..3 {
             h.record(i);
         }
         h.mark_saved(); // depth 3
+        h.undo_steps_mut().truncate(1); // a hand rewrite lost the point
+        h.step(9, true); // reach is now 1
+        h.redo_steps_mut().extend([1, 2]);
         for i in 0..3 {
-            h.step(i, true);
+            h.step(i, false);
         }
-        assert_eq!(h.redo_len(), 3);
-        h.record(7); // new branch
-        assert_eq!(h.redo_len(), 0);
+        assert_eq!(h.undo_len(), 3);
+        assert!(h.is_dirty(), "depth 3 is not the saved state any more");
+    }
+
+    #[test]
+    fn an_edit_from_one_step_below_the_point_cuts_it() {
+        let mut h = history();
+        h.record(0);
+        h.record(1);
+        h.mark_saved(); // depth 2
+        h.step(2, true); // depth 1, the point one step ahead
+        h.record(9);
         assert!(h.is_dirty());
     }
 

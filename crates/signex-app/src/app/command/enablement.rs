@@ -362,13 +362,13 @@ impl Signex {
                 .symbol_editors
                 .get(path)
                 .map_or((false, false), |e| {
-                    (!!e.history.can_undo(), !!e.history.can_redo())
+                    (e.history.can_undo(), e.history.can_redo())
                 }),
             Some(TabKind::FootprintEditor(path)) => document
                 .footprint_editors
                 .get(path)
                 .map_or((false, false), |e| {
-                    (!!e.history.can_undo(), !!e.history.can_redo())
+                    (e.history.can_undo(), e.history.can_redo())
                 }),
             Some(TabKind::ComponentEditor(tab)) => self.component_history_available(tab),
             Some(TabKind::Project(project_id)) => self.project_tab_history_available(*project_id),
