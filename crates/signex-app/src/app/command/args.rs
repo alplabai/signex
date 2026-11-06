@@ -50,16 +50,17 @@ impl Operands {
 
 /// The context and operands of one command invocation.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub(crate) struct CommandArgs {
-    pub context: InvocationContext,
+pub struct CommandArgs {
+    pub(crate) context: InvocationContext,
     /// Private to the `command` module: a GUI surface cannot set it, nor
     /// write a `CommandArgs { .. }` literal.
     pub(super) operands: Operands,
 }
 
 impl CommandArgs {
-    /// No context, no operands: a keystroke or the command palette.
-    pub(crate) fn none() -> Self {
+    /// No context, no operands: a keystroke, the command palette or a
+    /// headless run of a command that takes no operand.
+    pub fn none() -> Self {
         Self::default()
     }
 
