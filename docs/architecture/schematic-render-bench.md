@@ -34,7 +34,7 @@ iced's `()` renderer only exists in debug builds.
 ## Method
 
 - **Sheet.** Generated, deterministic (uuids count up). 24 x 20 cells of 60 x 40
-  mm: 2400 symbols (480 8-pin ICs, 1440 resistors, 480 capacitors), 7680 pins
+  mm: 2400 symbols (480 8-pin ICs, 1920 resistors), 7680 pins
   with names and numbers, 7680 wires, 1920 junctions, 1920 net labels (half
   turned 90 degrees), 480 text notes, reference and value on every symbol. No
   corpus file comes close: the largest is `linear-regulator.snxsch` (28 KB).
@@ -48,9 +48,12 @@ iced's `()` renderer only exists in debug builds.
   `iced_wgpu::Renderer::screenshot`, which uploads, renders and reads back. So
   GPU work is inside the timing. Never tiny-skia.
 - **Floor.** An empty sheet through the same stack: 2.0 ms at dpr 1, 6.7 ms at
-  dpr 2. It is the readback, not the app; read every number net of it. No
+  dpr 2. It is the readback plus the empty backdrop (paper, grid, frame), not
+  the sheet; read every number net of it. No
   vsync or surface present is measured.
-- **Interactions.** `cold` fresh slot and tree; `idle` same camera, cache hit;
+- **Interactions.** Pan, pan-frac and zoom set the camera directly through
+  `slot.camera_mut()`, not through the app's update path; only the drag sends
+  real events. `cold` fresh slot and tree; `idle` same camera, cache hit;
   `pan` whole-pixel steps (6, 4 px) over 60 frames; `pan-frac` 6.37, 4.21 px
   steps (no retained reuse); `zoom` 30 steps of x1.05 about the window centre
   (a cache miss each); `drag` press on a selected wire, then 4, 2 px per frame

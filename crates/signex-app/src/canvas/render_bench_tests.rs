@@ -101,9 +101,6 @@ fn text_prop(x: f64, y: f64, text: bool) -> TextProp {
     }
 }
 
-/// A grid of identical cells: one 8-pin IC, three resistors and a capacitor,
-/// 16 wires, 4 net labels (half of them turned 90 degrees), 4 junctions and a
-/// note each. Deterministic: the uuids count up.
 /// What the generated sheet carries. `SIGNEX_BENCH_VARIANT`: `full` (default),
 /// `norot` (no text turned 90 degrees) or `notext` (no text at all).
 #[derive(Clone, Copy)]
@@ -131,6 +128,9 @@ impl Variant {
     }
 }
 
+/// A grid of identical cells: one 8-pin IC, four resistors, 16 wires, 4 net
+/// labels (half of them turned 90 degrees), 4 junctions and a note each.
+/// Deterministic: the uuids count up.
 fn generate(cols: usize, rows: usize, v: Variant) -> Generated {
     let n = std::cell::Cell::new(0u128);
     let mut sheet = SchematicSheet::default();
@@ -214,7 +214,7 @@ fn generate(cols: usize, rows: usize, v: Variant) -> Generated {
                     });
                     cell.push(SelectedItem::new(uuid, SelectedKind::Label));
                 }
-                // Right: stub, a resistor or the capacitor, output, rail.
+                // Right: stub, a resistor, output, rail.
                 cell.push(wire(&mut sheet, (ix + 10.16, py), (ix + 14.0, py)));
                 cell.push(symbol(&mut sheet, "R", ix + 17.81, py, "R1"));
                 cell.push(wire(&mut sheet, (ix + 21.62, py), (ox + 54.0, py)));
@@ -732,7 +732,7 @@ fn measure_case(case: &Case<'_>, aa: &str, rig: &mut Rig) {
     let cam = case.camera();
     let center = iced::Point::new(WINDOW.0 / 2.0, WINDOW.1 / 2.0);
 
-    // Floor: a frame of an empty sheet, the same stack, the same readback.
+    // Floor: a frame of an empty sheet, the same stack, so readback plus the empty backdrop.
     let empty = SchematicSheet::default();
     let floor_slot = slot_for(&empty, case.generated.paper);
     *floor_slot.camera_mut() = cam.clone();
@@ -909,7 +909,7 @@ fn scene_report(g: &Generated) {
         build.sort();
         let s = &last.expect("built").scene;
         eprintln!(
-            "BENCH scene {:<4} cold build median {:.2} ms p95 {:.2} ms | lines {} circles {} arcs {} \
+            "BENCH scene {:<4} cold build median {:.2} ms max {:.2} ms | lines {} circles {} arcs {} \
              polygons {} top_polygons {} drawings {} texts {} (rotated or oversize: {})",
             match view {
                 View::Fit => "fit",
