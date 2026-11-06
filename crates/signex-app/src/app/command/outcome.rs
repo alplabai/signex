@@ -5,6 +5,7 @@
 /// A click, a key or the palette ignores it; a CLI or an agent (#1923) reads
 /// it to tell "ran" from "ignored".
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CommandOutcome {
     /// The command resolved to its handler and the handler was run. The
     /// handler may still report that it had nothing to do in the Messages
@@ -19,6 +20,9 @@ pub enum CommandOutcome {
     /// Where the command's handler explains this to the user, it still ran
     /// (and said why); every other disabled command was dropped.
     Disabled { reason: String },
+    /// A headless dispatch on an app that was not booted headless (no config
+    /// root override, or native dialogs): nothing ran (#1933).
+    NotHeadless,
 }
 
 impl CommandOutcome {

@@ -71,6 +71,19 @@ fn id(name: &str) -> AppCommandId {
 fn no_override() {
     let refused = Signex::boot_headless(Vec::new(), &rules()).err();
     assert_eq!(refused, Some(HeadlessBootError::NoConfigRootOverride));
+    // An app booted the GUI way runs nothing through the headless entry.
+    let (mut app, _boot) = Signex::new();
+    let grid = app.ui_state.grid_visible;
+    let (outcome, _task) =
+        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::NotHeadless);
+    assert_eq!(app.ui_state.grid_visible, grid, "nothing ran");
+    // Headless ports without the override: still refused.
+    app.ui_state.io = signex_app::io_ports::IoPorts::headless(Default::default());
+    let (outcome, _task) =
+        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::NotHeadless);
+    assert_eq!(app.ui_state.grid_visible, grid, "nothing ran");
 }
 
 fn run() {
@@ -82,6 +95,17 @@ fn run() {
     let isolated = tempfile::tempdir().expect("override root");
     set_config_root_override(isolated.path().to_path_buf()).expect("override");
     install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let relative = PathBuf::from("relative/demo.snxprj");
+    assert_eq!(
+        Signex::boot_headless(vec![relative.clone()], &rules()).err(),
+        Some(HeadlessBootError::NotAbsolute(relative))
+    );
+    // Native dialogs: not a headless app, even with the override set.
+    let (mut native, _boot) = Signex::new();
+    let (outcome, _task) =
+        native.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::NotHeadless);
+
     let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
     let mut driver = TaskDriver::new();
     driver.settle(&mut app, boot).expect("boot settled");
@@ -105,6 +129,26 @@ fn run() {
     driver.settle(&mut app, task).expect("command settled");
     assert_eq!(app.ui_state.grid_visible, !grid_before, "the command ran");
 
+    // One answered dialog: Open takes the `path` answer, so the open of a
+    // file that is not there reports that file.
+    let missing = isolated.path().join("zq-missing.snxsch");
+    app.headless_answers()
+        .expect("headless answers")
+        .replace_all([("path".to_string(), missing.display().to_string())]);
+    let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::Ran);
+    driver.settle(&mut app, task).expect("open settled");
+    let notice = app
+        .document_state
+        .error_notice
+        .take()
+        .expect("the open was tried");
+    assert!(
+        notice.detail.contains("zq-missing.snxsch"),
+        "{}",
+        notice.detail
+    );
+
     let (outcome, _task) =
         app.dispatch_command_headless(&id("zq_no_such_command"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::UnknownId);
@@ -123,17 +167,18 @@ fn run() {
     assert_eq!(snapshot(&real), before, "the real config root changed");
 }
 
-/// Every file under `root` with its bytes.
-fn snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+/// Every file and folder under `root`, with a file's bytes.
+fn snapshot(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
     let mut out = BTreeMap::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         for entry in std::fs::read_dir(&dir).expect("read dir") {
             let path = entry.expect("entry").path();
             if path.is_dir() {
+                out.insert(path.clone(), None);
                 stack.push(path);
             } else {
-                out.insert(path.clone(), std::fs::read(&path).expect("read"));
+                out.insert(path.clone(), Some(std::fs::read(&path).expect("read")));
             }
         }
     }

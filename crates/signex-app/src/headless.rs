@@ -9,7 +9,10 @@
 //!    as in the GUI;
 //! 3. [`Signex::boot_headless`], then [`crate::task_driver::TaskDriver`] to
 //!    run the returned task;
-//! 4. [`Signex::dispatch_command_headless`] per command, driving each task;
+//! 4. per command, [`crate::io_ports::HeadlessAnswers::replace_all`] on
+//!    [`Signex::headless_answers`] with that command's dialog answers (none
+//!    when it has none), then [`Signex::dispatch_command_headless`], driving
+//!    each task;
 //! 5. [`Signex::end_headless_session`] to flush and exit.
 
 use std::path::PathBuf;
@@ -19,14 +22,19 @@ use signex_types::project::RuleProfile;
 
 pub use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::{Message, Signex};
+use crate::io_ports::{HeadlessAnswers, Picker};
 use crate::keymap::AppCommandId;
 
 /// Why [`Signex::boot_headless`] refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HeadlessBootError {
     /// No [`crate::config_root::set_config_root_override`]: a headless run
     /// would read and write the user's real config.
     NoConfigRootOverride,
+    /// A path to open is relative, so it would depend on the process's
+    /// working folder (the dialog answers follow the same rule).
+    NotAbsolute(PathBuf),
 }
 
 impl std::fmt::Display for HeadlessBootError {
@@ -34,6 +42,9 @@ impl std::fmt::Display for HeadlessBootError {
         match self {
             Self::NoConfigRootOverride => {
                 f.write_str("a headless run needs a config root override set first")
+            }
+            Self::NotAbsolute(path) => {
+                write!(f, "{} is not an absolute path", path.display())
             }
         }
     }
@@ -58,6 +69,9 @@ impl Signex {
         if !crate::config_root::is_override_active() {
             return Err(HeadlessBootError::NoConfigRootOverride);
         }
+        if let Some(path) = paths.iter().find(|path| !path.is_absolute()) {
+            return Err(HeadlessBootError::NotAbsolute(path.clone()));
+        }
         let (mut app, boot) = Self::new();
         app.ui_state.io = crate::io_ports::IoPorts::headless(Default::default());
         let rules_applied = app.handle_user_default_loaded(&Ok(Some(rules.clone())));
@@ -70,13 +84,27 @@ impl Signex {
         ))
     }
 
+    /// The dialog answers of an app from [`Self::boot_headless`]; `None`
+    /// for an app with native dialogs.
+    pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {
+        match &self.ui_state.io.picker {
+            Picker::Headless(answers) => Some(answers),
+            Picker::Native => None,
+        }
+    }
+
     /// Run the command `command` with `args` as every GUI surface runs it,
-    /// and say what happened.
+    /// and say what happened. On an app that was not booted headless (no
+    /// config root override, or native dialogs) nothing runs:
+    /// [`CommandOutcome::NotHeadless`].
     pub fn dispatch_command_headless(
         &mut self,
         command: &AppCommandId,
         args: CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
+        if !crate::config_root::is_override_active() || self.headless_answers().is_none() {
+            return (CommandOutcome::NotHeadless, Task::none());
+        }
         self.dispatch_command_reporting(command, args, None)
     }
 }
