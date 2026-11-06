@@ -7,12 +7,12 @@ use signex_types::schematic::{Point, SchematicSheet};
 use uuid::Uuid;
 
 use super::level1::{Cluster, Level1, derive_level1};
-use super::merge::merge;
+use super::merge::{Merged, merge};
 use super::records::{Diff, diff, symbol_tips};
 use super::{Elem, NetBase, sheet_pin_list};
-use crate::build::{anchor_point, pt_key};
+use crate::build::{SegmentIndex, pt_key};
 use crate::signature::{NetSignature, net_signatures_at};
-use crate::uf::{Key, find};
+use crate::uf::{Key, find, union as uf_union};
 
 /// A later sheet against the base, element kind by element kind.
 struct Diffs {
@@ -267,6 +267,47 @@ impl NetBase {
         }
     }
 
+    /// Where each queried point sits, as the full derive reports it: a point
+    /// flagged as on a wire's interior is joined to that wire in the union-find
+    /// that already holds the name joins, one point after another, and its net
+    /// is then looked up by the root the nets were numbered with before those
+    /// joins. A point that is already a node of another net (a pin tip held by
+    /// a no-connect, say) therefore merges the two classes for the queries
+    /// after it, and a net found by a stale root is found or missed exactly as
+    /// there.
+    fn locate(
+        at: &[(Key, bool)],
+        parent: &mut HashMap<Key, Key>,
+        index: &SegmentIndex,
+        rebuilt_at: &HashMap<Key, usize>,
+        merged: &Merged,
+    ) -> Vec<(Key, Option<usize>)> {
+        let by_id: HashMap<Key, Option<usize>> = merged.of_cluster.iter().copied().collect();
+        // The root a point's class had before any query joined it.
+        let class_of = |parent: &mut HashMap<Key, Key>, key: Key| {
+            let root = find(parent, key);
+            rebuilt_at
+                .get(&root)
+                .map_or(root, |&i| merged.of_cluster[i].0)
+        };
+        let mut joined: HashMap<Key, Key> = HashMap::new();
+        for &(key, on_interior) in at {
+            if !on_interior || index.is_endpoint(key) {
+                continue;
+            }
+            if let Some((a, b)) = index.anchor_segment(key) {
+                let (point, wire) = (class_of(parent, key), class_of(parent, a.min(b)));
+                uf_union(&mut joined, point, wire);
+            }
+        }
+        at.iter()
+            .map(|&(key, _)| {
+                let root = find(&mut joined, class_of(parent, key));
+                (root, by_id.get(&root).copied().flatten())
+            })
+            .collect()
+    }
+
     fn incremental(&self, cand: &SchematicSheet, at: &[(Key, bool)]) -> Option<Answer> {
         if !self.usable || !cand.lib_symbols.shares_storage_with(&self.lib_symbols) {
             return None;
@@ -281,14 +322,6 @@ impl NetBase {
             clusters,
             index,
         } = derive_level1(&sub, &sub_pins, &inside);
-        // A queried point on a wire's interior joins that wire's net.
-        for (key, on_interior) in at {
-            if *on_interior {
-                anchor_point(&mut parent, *key, &index);
-            }
-        }
-        let point_roots: Vec<Key> = at.iter().map(|(k, _)| find(&mut parent, *k)).collect();
-
         let mut all: Vec<(Key, &Cluster)> = self
             .clusters
             .iter()
@@ -304,13 +337,7 @@ impl NetBase {
             .enumerate()
             .map(|(i, (root, _))| (*root, rebuilt + i))
             .collect();
-        let found = point_roots
-            .into_iter()
-            .map(|root| match rebuilt_at.get(&root) {
-                Some(&i) => merged.of_cluster[i],
-                None => (root, None),
-            })
-            .collect();
+        let found = Self::locate(at, &mut parent, &index, &rebuilt_at, &merged);
         Some((merged.nets, found))
     }
 }

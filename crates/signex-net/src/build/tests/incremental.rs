@@ -262,6 +262,45 @@ fn no_connects_gate_a_pin() {
     assert_same(&before, &cand);
 }
 
+/// A queried point that is already a node of another net (a pin tip held by
+/// a no-connect, lying inside a wire without a dot) joins that wire's class for
+/// the queries, and the nets are then found by the roots they were numbered
+/// with: the case `random_edits_derive_the_same_nets_as_the_full_derive` met
+/// at seed 0xa11ce, round 19, step 2.
+#[test]
+fn a_queried_pin_tip_inside_a_wire_joins_the_wires_class_like_the_full_derive() {
+    let mut before = empty_sheet();
+    libs(&mut before);
+    before.wires.push(fresh_wire(pt(0.0, 0.0), pt(20.0, 0.0)));
+    before
+        .labels
+        .push(labelled("B", pt(0.0, 0.0), LabelType::Net));
+    place(&mut before, "R1", "R", pt(12.5, 0.0));
+    before.no_connects.push(NoConnect {
+        uuid: Uuid::now_v7(),
+        position: pt(10.0, 0.0),
+    });
+    let mut cand = before.clone();
+    cand.labels[0].text = "C".into();
+    let base = NetBase::new(&before);
+    let tip = pt_key(&pt(10.0, 0.0));
+    let far = pt_key(&pt(15.0, 5.0));
+    for at in [
+        vec![(tip, true)],
+        vec![(tip, false)],
+        vec![(far, true), (tip, true), (pt_key(&pt(5.0, 0.0)), true)],
+        vec![(tip, true), (pt_key(&pt(5.0, 0.0)), true)],
+    ] {
+        for sheet in [&before, &cand] {
+            assert_eq!(
+                base.derive_at(sheet, &at),
+                net_signatures_at(sheet, &at),
+                "{at:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn a_repeated_wire_id_in_the_base_falls_back_to_the_full_derive() {
     let mut before = two_resistors();

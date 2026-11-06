@@ -55,6 +55,21 @@ the wires through every dirty key and the items under every dirty wire. Name
 joins are not physical, so they are not part of the region: level two redoes
 them for all clusters.
 
+## Queried points
+
+`derive_at` also answers where queried points sit. The full derive anchors a
+point flagged as on a wire's interior in the union-find that already holds the
+name joins, one point after the other, and then looks the net up by the root
+the nets were numbered with before those joins. Normally the point is a fresh
+node and nothing changes; but a point that is already a node of another net
+(a pin tip held by a no-connect, inside a wire with no dot) merges two whole
+classes, for the later queries too, and a net numbered by a root that the merge
+changed is not found. `NetBase::locate` replays exactly that over the class
+roots, not over the clusters alone (the first version anchored in the
+cluster-level union-find and missed the merge; found by the random-edit test).
+The region argument above is unaffected: every queried key is a dirty key, so
+the wires through it are in the region.
+
 ## When it derives in full
 
 `NetBase::derive` returns the full derive's answer for any sheet, and runs the
