@@ -98,6 +98,9 @@ pub use state::AnnotateOrder;
 
 impl Signex {
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let _probe = crate::frame_probe::span_with("update", || {
+            crate::frame_probe::message_name(&format!("{message:?}"))
+        });
         // Messages that complete a save, delete, rename or library write may
         // have changed the disk under an unchanged path set; the probe below
         // then runs now instead of at the next 2 s tick.

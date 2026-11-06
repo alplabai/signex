@@ -5,6 +5,10 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
+use crate::styles::{
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
+    dialog_message,
+};
 use iced::widget::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -17,7 +21,7 @@ impl Signex {
     /// overlay when both would otherwise render; dismiss_layer handles
     /// click-outside-to-close.
     pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, row, text};
+        use iced::widget::{column, container, row, text};
         let Some(notice) = self.document_state.error_notice.as_ref() else {
             return iced::widget::Space::new().boxed();
         };
@@ -26,44 +30,40 @@ impl Signex {
         let panel_bg = crate::styles::ti(tokens.panel_bg);
         let text_c = crate::styles::ti(tokens.text);
         let border_c = crate::styles::ti(tokens.border);
-        let err_red = iced::Color::from_rgb(0.85, 0.25, 0.25);
+        let err_red = crate::styles::tokens::danger(tokens);
 
-        let choices = notice_choice_buttons(notice, err_red);
-        let ok_label = if choices.is_empty() { "OK" } else { "Cancel" };
-        let ok_btn = button(text(ok_label).size(TS.label).color(iced::Color::WHITE))
-            .padding([6, 20])
-            .on_press(Message::Overlay(OverlayMsg::DismissErrorNotice))
-            .style(
-                move |_: &iced::Theme, _status| iced::widget::button::Style {
-                    background: Some(err_red.into()),
-                    text_color: iced::Color::WHITE,
-                    border: iced::Border {
-                        radius: iced::border::Radius::from(4.0),
-                        ..iced::Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                },
-            );
+        let mut buttons = notice_choice_buttons(notice, tokens);
+        let (ok_label, ok_kind) = if buttons.is_empty() {
+            ("OK", DialogButtonKind::Primary)
+        } else {
+            ("Cancel", DialogButtonKind::Secondary)
+        };
+        buttons.push(dialog_button(
+            ok_label,
+            ok_kind,
+            Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+            tokens,
+        ));
 
         let body = column![
-            row![
-                text("\u{26A0}").size(TS.glyph).color(err_red),
-                iced::widget::Space::new().width(10),
-                text(notice.title.clone()).size(TS.heading).color(text_c),
-            ]
-            .align_y(iced::Alignment::Center),
-            iced::widget::Space::new().height(8),
-            container(iced::widget::scrollable(
-                text(notice.detail.clone()).size(TS.label).color(text_c)
-            ))
-            .height(Length::Fit.max(200.0)),
-            iced::widget::Space::new().height(12),
-            row![iced::widget::Space::new().width(Length::Fill)]
-                .extend(choices)
-                .push(ok_btn.boxed())
-                .spacing(8),
-        ]
-        .padding(20);
+            dialog_body(
+                column![
+                    row![
+                        text("\u{26A0}").size(TS.glyph).color(err_red),
+                        iced::widget::Space::new().width(SP.m),
+                        text(notice.title.clone()).size(TS.heading).color(text_c),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                    container(iced::widget::scrollable(dialog_message(
+                        notice.detail.clone(),
+                        tokens
+                    )))
+                    .height(Length::Fit.max(200.0)),
+                ]
+                .spacing(SP.m)
+            ),
+            dialog_footer(buttons),
+        ];
 
         let card = container(body)
             .width(Length::Fit.max(
@@ -126,7 +126,7 @@ impl Signex {
     /// omission recorded in its header comment) or cancel and write nothing.
     /// The refusal stays the default; "Export anyway" is an explicit choice.
     pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, row, text};
+        use iced::widget::{column, container, row, text};
         let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
             return iced::widget::Space::new().boxed();
         };
@@ -138,82 +138,53 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         // The sibling export-error modal's severity cue — reused verbatim so
         // the netlist-incomplete prompt reads as the same modal family.
-        let warn = iced::Color::from_rgb(0.85, 0.25, 0.25);
-
-        // Loud, deliberate action — mirrors the export-error OK button's red.
-        let export_anyway = button(
-            text("Export anyway (incomplete)")
-                .size(TS.label)
-                .color(iced::Color::WHITE),
-        )
-        .padding([6.0, SP.xl])
-        .on_press(Message::Export(ExportMsg::NetlistExportAnyway))
-        .style(
-            move |_: &iced::Theme, _status| iced::widget::button::Style {
-                background: Some(warn.into()),
-                text_color: iced::Color::WHITE,
-                border: iced::Border {
-                    radius: iced::border::Radius::from(4.0),
-                    ..iced::Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            },
-        );
-
-        // Neutral default — themed panel background + border, no accent.
-        let cancel = button(text("Cancel").size(TS.label).color(text_c))
-            .padding([6, 20])
-            .on_press(Message::Export(ExportMsg::NetlistCancelIncomplete))
-            .style(
-                move |_: &iced::Theme, _status| iced::widget::button::Style {
-                    background: Some(panel_bg.into()),
-                    text_color: text_c,
-                    border: iced::Border {
-                        color: border_c,
-                        width: 1.0,
-                        radius: iced::border::Radius::from(4.0),
-                        ..iced::Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                },
-            );
+        let warn = crate::styles::tokens::danger(tokens);
 
         // The omitted pages, one line each — the same detail the
         // warning logged on export will carry.
         let detail = prompt.messages.join("\n");
 
         let body = column![
-            row![
-                text("\u{26A0}").size(TS.glyph).color(warn),
-                iced::widget::Space::new().width(10),
-                text("Netlist is incomplete").size(TS.heading).color(text_c),
-            ]
-            .align_y(iced::Alignment::Center),
-            iced::widget::Space::new().height(8),
-            text(
-                "The project netlist does not cover the whole project. Exporting it \
-                 would produce a file missing components and carrying the wrong net \
-                 names wherever nets merge through a page that is not in it — and a \
-                 PCB import cannot tell. You can export it anyway: the file stays \
-                 a valid netlist, and the omitted pages are reported in the Messages panel."
-            )
-            .size(TS.label)
-            .color(text_c),
-            iced::widget::Space::new().height(8),
-            container(iced::widget::scrollable(
-                text(detail).size(TS.body).color(text_muted)
-            ))
-            .height(Length::Fit.max(120.0)),
-            iced::widget::Space::new().height(14),
-            row![
-                iced::widget::Space::new().width(Length::Fill),
-                cancel,
-                iced::widget::Space::new().width(8),
-                export_anyway,
-            ]
-            .align_y(iced::Alignment::Center),
-        ]
-        .padding(20);
+            dialog_body(
+                column![
+                    row![
+                        text("\u{26A0}").size(TS.glyph).color(warn),
+                        iced::widget::Space::new().width(SP.m),
+                        text("Netlist is incomplete").size(TS.heading).color(text_c),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                    dialog_message(
+                        "The project netlist does not cover the whole project. Exporting it \
+                         would produce a file missing components and carrying the wrong net \
+                         names wherever nets merge through a page that is not in it — and a \
+                         PCB import cannot tell. You can export it anyway: the file stays \
+                         a valid netlist, and the omitted pages are reported in the Messages panel.",
+                        tokens,
+                    ),
+                    container(iced::widget::scrollable(
+                        text(detail).size(TS.body).color(text_muted)
+                    ))
+                    .height(Length::Fit.max(120.0)),
+                ]
+                .spacing(SP.m)
+            ),
+            // Cancel is the default; exporting an incomplete netlist is a
+            // deliberate, risky choice, so it takes the danger style.
+            dialog_footer(vec![
+                dialog_button(
+                    "Cancel",
+                    DialogButtonKind::Secondary,
+                    Some(Message::Export(ExportMsg::NetlistCancelIncomplete)),
+                    tokens,
+                ),
+                dialog_button(
+                    "Export anyway (incomplete)",
+                    DialogButtonKind::Danger,
+                    Some(Message::Export(ExportMsg::NetlistExportAnyway)),
+                    tokens,
+                ),
+            ]),
+        ];
 
         let card = container(body)
             .width(Length::Fit.max(
@@ -312,7 +283,7 @@ impl Signex {
             MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
             draggable_header, os_title_bar_slot,
         };
-        use iced::widget::{Space, button, column, container, row, text};
+        use iced::widget::{Space, column, container, row, text};
         let theme_id = self.ui_state.effective_theme_id();
 
         let preview = match &self.document_state.preview {
@@ -323,7 +294,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let accent_c = crate::styles::ti(tokens.accent);
 
         // Header — same chrome as every other modal.
         let header_content: Element<'_, Message> = container(
@@ -364,35 +334,20 @@ impl Signex {
         };
 
         // Footer — page count + Export PDF.
-        let export_btn = button(text("Export PDF").size(TS.label).color(iced::Color::WHITE))
-            .padding([6, 14])
-            .on_press(Message::PrintPreview(PrintPreviewMsg::Export))
-            .style(
-                move |_: &iced::Theme, _status| iced::widget::button::Style {
-                    background: Some(accent_c.into()),
-                    text_color: iced::Color::WHITE,
-                    border: iced::Border {
-                        radius: iced::border::Radius::from(4.0),
-                        ..iced::Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                },
-            );
         let footer_caption = match (&preview.export_status, preview.pages.is_empty()) {
             (Some(status), _) => status.clone(),
             (None, true) => "No files selected for export".to_string(),
             (None, false) => format!("{} page(s)", preview.pages.len()),
         };
-        let footer = container(
-            row![
-                text(footer_caption).size(TS.body).color(text_muted),
-                Space::new().width(Length::Fill),
-                export_btn,
-            ]
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([10, 14]);
+        let footer = dialog_footer_split(
+            vec![text(footer_caption).size(TS.body).color(text_muted).boxed()],
+            vec![dialog_button(
+                "Export PDF",
+                DialogButtonKind::Primary,
+                Some(Message::PrintPreview(PrintPreviewMsg::Export)),
+                tokens,
+            )],
+        );
 
         // Detached: the OS window owns the size, so fill it.
         let (modal_w, modal_h): (Length, Length) = if draggable {
@@ -415,37 +370,37 @@ impl Signex {
 /// The extra buttons a notice offers before its dismiss button (#1826).
 fn notice_choice_buttons<'a>(
     notice: &crate::app::state::ErrorNotice,
-    accent: iced::Color,
+    tokens: &signex_types::theme::ThemeTokens,
 ) -> Vec<Element<'a, Message>> {
     use crate::app::state::NoticeAction;
     use crate::persist::DiskDrift;
-    use iced::widget::{button, text};
     let Some(NoticeAction::DiskChanged { drift, .. }) = &notice.action else {
         return Vec::new();
     };
-    let choice = |label: &'static str, message: OverlayMsg| -> Element<'a, Message> {
-        button(text(label).size(TS.label).color(iced::Color::WHITE))
-            .padding([6, 20])
-            .on_press(Message::Overlay(message))
-            .style(
-                move |_: &iced::Theme, _status| iced::widget::button::Style {
-                    background: Some(accent.into()),
-                    text_color: iced::Color::WHITE,
-                    border: iced::Border {
-                        radius: iced::border::Radius::from(4.0),
-                        ..iced::Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                },
-            )
-            .boxed()
+    let choice = |label: &'static str,
+                  kind: DialogButtonKind,
+                  message: OverlayMsg|
+     -> Element<'a, Message> {
+        dialog_button(label, kind, Some(Message::Overlay(message)), tokens)
     };
     match drift {
         DiskDrift::Changed => vec![
-            choice("Reload from disk", OverlayMsg::DiskConflictReloadChosen),
-            choice("Overwrite", OverlayMsg::DiskConflictOverwriteChosen),
+            choice(
+                "Reload from disk",
+                DialogButtonKind::Danger,
+                OverlayMsg::DiskConflictReloadChosen,
+            ),
+            choice(
+                "Overwrite",
+                DialogButtonKind::Danger,
+                OverlayMsg::DiskConflictOverwriteChosen,
+            ),
         ],
-        DiskDrift::Missing => vec![choice("Re-create", OverlayMsg::DiskConflictOverwriteChosen)],
+        DiskDrift::Missing => vec![choice(
+            "Re-create",
+            DialogButtonKind::Primary,
+            OverlayMsg::DiskConflictOverwriteChosen,
+        )],
         // Writing would have to re-create the folder, which a save refuses.
         DiskDrift::FolderMissing => Vec::new(),
     }

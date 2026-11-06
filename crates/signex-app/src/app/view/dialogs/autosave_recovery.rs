@@ -7,9 +7,12 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length, Widget};
 
-use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
+use super::widgets::{close_x_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
+use crate::styles::{
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_hint, dialog_message,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -44,7 +47,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
         let header_content = container(
@@ -75,15 +77,14 @@ impl Signex {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| offer.path.display().to_string());
-        let mut body = column![
-            text(format!(
+        let mut body = column![dialog_message(
+            format!(
                 "Signex found a recovery copy of {name} written {} that differs from the \
                  saved file.",
                 describe_age(offer.age_secs)
-            ))
-            .size(TS.label)
-            .color(text_c),
-        ]
+            ),
+            tokens,
+        )]
         .spacing(SP.m);
         if offer.older_than_file {
             body = body.push(
@@ -91,53 +92,46 @@ impl Signex {
                     "{name} was saved after this copy was written. Restore replaces that \
                      newer saved work in the editor with the older copy."
                 ))
-                .size(TS.label)
+                .size(TS.body)
                 .color(crate::styles::ti(tokens.warning))
                 .boxed(),
             );
         }
-        body = body.push(
-            text(
-                "Restore loads the copy as unsaved edits; nothing is written to the file until \
+        body = body.push(dialog_hint(
+            "Restore loads the copy as unsaved edits; nothing is written to the file until \
                  you save. Restoring replaces the open document and cannot be undone with \
                  Ctrl+Z. Discard deletes the copy. Decide later keeps it for the next time \
                  this file is opened, and pauses autosave for this document for the rest of the \
                  session.",
-            )
-            .size(TS.body)
-            .color(text_muted)
-            .boxed(),
-        );
+            tokens,
+        ));
 
+        let buttons = vec![
+            dialog_button(
+                "Decide later",
+                DialogButtonKind::Secondary,
+                Some(later),
+                tokens,
+            ),
+            dialog_button(
+                "Discard",
+                DialogButtonKind::Danger,
+                Some(Message::Autosave(AutosaveMsg::Recovery(
+                    RecoveryChoice::Discard,
+                ))),
+                tokens,
+            ),
+            dialog_button(
+                "Restore",
+                DialogButtonKind::Primary,
+                Some(Message::Autosave(AutosaveMsg::Recovery(
+                    RecoveryChoice::Restore,
+                ))),
+                tokens,
+            ),
+        ];
         let dialog = container(
-            column![
-                header,
-                container(body).padding([14, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button("Decide later", later, text_c, border_c),
-                        Space::new().width(8),
-                        secondary_button(
-                            "Discard",
-                            Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Discard)),
-                            text_c,
-                            border_c,
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            "Restore",
-                            Some(Message::Autosave(AutosaveMsg::Recovery(
-                                RecoveryChoice::Restore,
-                            ))),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([14, 14]),
-            ]
-            .width(if windowed {
+            column![header, dialog_body(body), dialog_footer(buttons)].width(if windowed {
                 Length::Fill
             } else {
                 Length::Fixed(520.0)

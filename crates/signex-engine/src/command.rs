@@ -125,7 +125,9 @@ pub enum Command {
         keep_wires: bool,
     },
     /// Move each item by its own delta in one history step (align and
-    /// distribute). Rubber-bands like [`Command::MoveSelection`].
+    /// distribute). Rubber-bands like [`Command::MoveSelection`]. A
+    /// designator or value field whose symbol is also in `moves` travels with
+    /// the symbol, by the symbol's delta; its own entry is dropped (#2087).
     MoveEach {
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,

@@ -66,6 +66,57 @@ pub(super) fn pin_rows(info: &[(String, String)]) -> Vec<PinRow> {
         .collect()
 }
 
+/// The clicked pin's own properties, ahead of the part's (#2086). Read-only:
+/// pin fields change in the symbol editor.
+pub(super) fn push_focused_pin_section<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    ctx: &PanelContext,
+    muted: Color,
+    border_c: Color,
+) -> Column<Element<'a, PanelMsg>> {
+    let Some(pin) = pin_rows(&ctx.selection_info)
+        .into_iter()
+        .find(|row| row.focused)
+    else {
+        return col;
+    };
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        ..
+    } = PanelPalette::from_tokens(&ctx.tokens);
+    let title = format!("Pin {}", pin.designator);
+    col.push(
+        collapsible_section(
+            FOCUSED_PIN_SECTION_KEY,
+            &title,
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                let mut c: Column<Element<'a, PanelMsg>> =
+                    Column::new().spacing(0).width(Length::Fill);
+                let hidden = if pin.hidden { "Yes" } else { "No" };
+                let rows = [
+                    ("Designator", pin.designator.as_str()),
+                    ("Name", pin.name.as_str()),
+                    ("Electrical Type", pin.electrical_type.as_str()),
+                    ("Net", pin.net.as_deref().unwrap_or("")),
+                    ("Hidden", hidden),
+                ];
+                for (label, value) in rows {
+                    c = c.push(form_input_row(label, value, muted, input_bg, input_bdr));
+                }
+                c
+            },
+        )
+        .boxed(),
+    )
+}
+
+/// Collapse key of the clicked pin's section.
+const FOCUSED_PIN_SECTION_KEY: &str = "sel_focused_pin";
+
 /// The Pins section. It follows the real collapse state; a pin click opens
 /// it through `update` (`PINS_SECTION_KEY`).
 pub(super) fn push_pins_section<'a>(

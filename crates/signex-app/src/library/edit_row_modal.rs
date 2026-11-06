@@ -4,16 +4,18 @@
 //! `view_delete_confirm` lives in this module too.
 
 use iced::widget::{
-    Space, Widget, button, column, container, pick_list, row, scrollable, text, text_input,
+    Space, Widget, column, container, pick_list, row, scrollable, text, text_input,
 };
-use iced::{Border, Element, Length, Theme};
+use iced::{Element, Length};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
 use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
-use super::modal_chrome::close_x;
+use super::modal_chrome::{
+    danger_btn, footer_strip, header, header_title_only, primary_btn, secondary_btn,
+};
 use super::state::{DeleteConfirmState, EditRowModalState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -64,25 +66,17 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let title = format!("Edit Component — {}", edit.draft.internal_pn.as_str());
-    let header = container(
-        row![
-            text(title).size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::BrowserEdit {
-                    library_path: library_path.to_path_buf(),
-                    msg: BrowserEditMsg::Cancel,
-                },
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header(
+        &title,
+        LibraryMessage::BrowserEdit {
+            library_path: library_path.to_path_buf(),
+            msg: BrowserEditMsg::Cancel,
+        },
+        windowed,
+        tokens,
+    );
 
     let lib_for_msg = library_path.to_path_buf();
     let send = move |m: BrowserEditMsg| LibraryMessage::BrowserEdit {
@@ -194,44 +188,21 @@ pub fn view<'a>(
     } else {
         format!("symbol uuid {}", symbol_short)
     };
-    let symbol_btn =
-        button(container(text("Pick Symbol…").size(TS.body).color(text_c)).padding([SP.s, SP.l]))
-            .on_press(send.clone()(BrowserEditMsg::OpenSymbolPicker))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let symbol_btn = secondary_btn(
+        "Pick Symbol…",
+        send.clone()(BrowserEditMsg::OpenSymbolPicker),
+        tokens,
+    );
 
     let footprint_label = match edit.draft.footprint_ref.as_ref() {
         Some(r) => format!("footprint uuid {}", short_id(&r.uuid)),
         None => "Unbound (optional)".to_string(),
     };
-    let footprint_btn = button(
-        container(text("Pick Footprint…").size(TS.body).color(text_c)).padding([SP.s, SP.l]),
-    )
-    .on_press(send.clone()(BrowserEditMsg::OpenFootprintPicker))
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.04,
-        ))),
-        text_color: text_c,
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border,
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
+    let footprint_btn = secondary_btn(
+        "Pick Footprint…",
+        send.clone()(BrowserEditMsg::OpenFootprintPicker),
+        tokens,
+    );
 
     let labelled =
         |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
@@ -316,7 +287,7 @@ pub fn view<'a>(
         container(
             text(err.clone())
                 .size(TS.body)
-                .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                .color(crate::styles::tokens::danger(tokens)),
         )
         .padding([SP.s, SP.xl])
         .boxed()
@@ -328,59 +299,10 @@ pub fn view<'a>(
         Space::new().height(0).boxed()
     };
 
-    let cancel_btn =
-        button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
-            .on_press(send.clone()(BrowserEditMsg::Cancel))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
-
-    let save_btn = button(
-        container(text("Save").size(TS.body).color(iced::Color::WHITE)).padding([SP.s, 14.0]),
-    )
-    .on_press(send(BrowserEditMsg::Save))
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.00, 0.47, 0.84,
-        ))),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
-
     // Offered once a save was refused because the row changed on the
     // server; discarding the draft asks first.
-    let plain_btn = |label: &'static str, msg: BrowserEditMsg| {
-        button(container(text(label).size(TS.body).color(text_c)).padding([SP.s, 14.0]))
-            .on_press(send.clone()(msg))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            })
-    };
+    let plain_btn =
+        |label: &'static str, msg: BrowserEditMsg| secondary_btn(label, send.clone()(msg), tokens);
     let reload: Element<'_, LibraryMessage> = if !edit.stale_base {
         Space::new().width(0).boxed()
     } else if edit.reload_confirming {
@@ -388,29 +310,29 @@ pub fn view<'a>(
             text("Discard your edits and reload?")
                 .size(TS.body)
                 .color(text_c),
-            Space::new().width(8),
-            plain_btn("Reload", BrowserEditMsg::ReloadConfirmed),
-            Space::new().width(8),
+            crate::styles::dialog_button(
+                "Reload",
+                crate::styles::DialogButtonKind::Danger,
+                Some(send.clone()(BrowserEditMsg::ReloadConfirmed)),
+                tokens,
+            ),
             plain_btn("Keep editing", BrowserEditMsg::ReloadCancelled),
         ]
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .boxed()
     } else {
-        plain_btn("Reload saved version", BrowserEditMsg::ReloadRequested).boxed()
+        plain_btn("Reload saved version", BrowserEditMsg::ReloadRequested)
     };
 
-    let footer = container(
-        row![
-            reload,
-            Space::new().width(Length::Fill),
-            cancel_btn,
-            Space::new().width(8),
-            save_btn,
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+    let footer = footer_strip(
+        vec![reload],
+        vec![
+            secondary_btn("Cancel", send.clone()(BrowserEditMsg::Cancel), tokens),
+            primary_btn("Save", send(BrowserEditMsg::Save), tokens),
+        ],
+        tokens,
+    );
 
     container(
         column![header, body, error_row, footer]
@@ -431,17 +353,8 @@ pub fn view_delete_confirm<'a>(
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
 
-    let header = container(
-        row![
-            text("Delete Component?").size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header_title_only("Delete Component?", windowed, tokens);
 
     let msg_label = format!(
         "Delete row {} from {}? This cannot be undone from the UI.",
@@ -456,61 +369,28 @@ pub fn view_delete_confirm<'a>(
     .width(Length::Fill)
     .height(Length::Fill);
 
-    let lib_path_cancel = library_path.to_path_buf();
-    let cancel_btn =
-        button(container(text("Cancel").size(TS.body).color(text_c)).padding([SP.s, 14.0]))
-            .on_press(LibraryMessage::BrowserDeleteRowCancel {
-                library_path: lib_path_cancel,
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
+            secondary_btn(
+                "Cancel",
+                LibraryMessage::BrowserDeleteRowCancel {
+                    library_path: library_path.to_path_buf(),
                 },
-                ..iced::widget::button::Style::default()
-            });
-
-    let lib_path_del = library_path.to_path_buf();
-    let table = confirm.table.clone();
-    let row_id = confirm.row_id;
-    let delete_btn = button(
-        container(text("Delete").size(TS.body).color(iced::Color::WHITE)).padding([SP.s, 14.0]),
-    )
-    .on_press(LibraryMessage::BrowserDeleteRowConfirm {
-        library_path: lib_path_del,
-        table,
-        row_id,
-    })
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.85, 0.30, 0.30,
-        ))),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
-
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
-            cancel_btn,
-            Space::new().width(8),
-            delete_btn,
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_footer_strip(tokens));
+                tokens,
+            ),
+            danger_btn(
+                "Delete",
+                LibraryMessage::BrowserDeleteRowConfirm {
+                    library_path: library_path.to_path_buf(),
+                    table: confirm.table.clone(),
+                    row_id: confirm.row_id,
+                },
+                tokens,
+            ),
+        ],
+        tokens,
+    );
 
     container(
         column![header, body, footer]

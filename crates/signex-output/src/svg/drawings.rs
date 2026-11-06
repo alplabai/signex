@@ -39,7 +39,7 @@ pub(super) fn push_sch_drawing_path(
         SchDrawing::Line {
             start, end, width, ..
         } => {
-            let w_mm = if *width > 0.0 { *width } else { 0.15 };
+            let w_mm = signex_types::schematic::symbol_graphic_stroke_mm(*width);
             out.push(SvgElement::Path {
                 commands: vec![
                     SvgPathCommand::MoveTo(pt(xform.x(start.x), xform.px_y(start.y))),
@@ -59,7 +59,7 @@ pub(super) fn push_sch_drawing_path(
             fill,
             ..
         } => {
-            let w_mm = if *width > 0.0 { *width } else { 0.15 };
+            let w_mm = signex_types::schematic::symbol_graphic_stroke_mm(*width);
             let x1 = xform.x(start.x).min(xform.x(end.x));
             let y1 = xform.px_y(start.y).min(xform.px_y(end.y));
             let x2 = xform.x(start.x).max(xform.x(end.x));
@@ -85,7 +85,7 @@ pub(super) fn push_sch_drawing_path(
             if points.len() < 2 {
                 return;
             }
-            let w_mm = if *width > 0.0 { *width } else { 0.15 };
+            let w_mm = signex_types::schematic::symbol_graphic_stroke_mm(*width);
             let mut cmds = Vec::with_capacity(points.len() + 1);
             cmds.push(SvgPathCommand::MoveTo(pt(
                 xform.x(points[0].x),
@@ -113,7 +113,7 @@ pub(super) fn push_sch_drawing_path(
             fill,
             ..
         } => {
-            let w_mm = if *width > 0.0 { *width } else { 0.15 };
+            let w_mm = signex_types::schematic::symbol_graphic_stroke_mm(*width);
             let (cx, cy) = (xform.x(center.x), xform.px_y(center.y));
             let r = (radius * xform.mm_to_unit).abs() as f32;
             out.push(circle_path(
@@ -135,7 +135,7 @@ pub(super) fn push_sch_drawing_path(
             fill,
             ..
         } => {
-            let w_mm = if *width > 0.0 { *width } else { 0.15 };
+            let w_mm = signex_types::schematic::symbol_graphic_stroke_mm(*width);
             let mut cmds = arc_path_commands(
                 pt(xform.x(start.x), xform.px_y(start.y)),
                 pt(xform.x(mid.x), xform.px_y(mid.y)),

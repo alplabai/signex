@@ -50,6 +50,7 @@ pub(crate) fn paint_paper_and_grid<R: GeometryRenderer>(
     }
 
     if look.grid_visible {
+        let _probe = crate::frame_probe::span("canvas.background.grid");
         grid::draw_grid(
             frame,
             camera,

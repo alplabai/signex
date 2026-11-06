@@ -38,25 +38,42 @@ impl SchematicCanvas<'_> {
         frame: &mut canvas::Frame<R>,
         bounds: Rectangle,
     ) {
-        let cam = self.camera();
+        let cam = self.camera().clone();
+        self.paint_background_at(frame, &cam, bounds);
+    }
+
+    /// [`Self::paint_background`] at an explicit camera: the retained layer
+    /// paints into a frame whose origin is its clip rectangle's corner.
+    pub(in crate::canvas) fn paint_background_at<R: GeometryRenderer>(
+        &self,
+        frame: &mut canvas::Frame<R>,
+        cam: &Camera,
+        bounds: Rectangle,
+    ) {
         paper::paint_paper_and_grid(
             frame,
-            &cam,
+            cam,
             bounds,
             (self.paper_width_mm, self.paper_height_mm),
-            &paper::PaperLook {
-                backdrop: self.prefs.theme_bg,
-                paper: self.prefs.theme_paper,
-                grid: self.prefs.theme_grid,
-                grid_visible: self.prefs.grid_visible,
-                grid_mm: self.prefs.visible_grid_mm as f32,
-                grid_style: self.prefs.grid_style,
-                device_px_per_logical_px: self.prefs.device_px_per_logical_px,
-            },
+            &self.paper_look(),
         );
 
         let frame_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
-        self.draw_sheet_frame(frame, &cam, bounds, frame_color);
+        let _probe = crate::frame_probe::span("canvas.background.frame");
+        self.draw_sheet_frame(frame, cam, bounds, frame_color);
+    }
+
+    /// How the paper and its grid look under the current preferences.
+    pub(in crate::canvas) fn paper_look(&self) -> paper::PaperLook {
+        paper::PaperLook {
+            backdrop: self.prefs.theme_bg,
+            paper: self.prefs.theme_paper,
+            grid: self.prefs.theme_grid,
+            grid_visible: self.prefs.grid_visible,
+            grid_mm: self.prefs.visible_grid_mm as f32,
+            grid_style: self.prefs.grid_style,
+            device_px_per_logical_px: self.prefs.device_px_per_logical_px,
+        }
     }
 
     /// A sheet-frame line of `width_mm` between screen points: the stroke

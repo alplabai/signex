@@ -27,8 +27,6 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        use iced::widget::{column, row};
-
         let Some(menu_ctx) = self.library.components_panel.row_menu.as_ref() else {
             return Vec::new();
         };
@@ -38,11 +36,14 @@ impl Signex {
         let entries = components_row_menu_entries();
         let entries_len = entries.len();
         let tokens = &self.document_state.panel_ctx.tokens;
-        let menu = signex_widgets::active_bar_dropdown::view(
-            entries,
-            tokens,
-            Some(Self::CONTEXT_MENU_WIDTH),
+        // The menu fits its labels; the clamp uses the shared width as an
+        // upper bound so the menu never runs off the window.
+        let width = signex_widgets::active_bar_dropdown::fitted_width(
+            &entries,
+            Self::CONTEXT_MENU_WIDTH,
+            &self.document_state.panel_ctx.ui_font_name,
         );
+        let menu = signex_widgets::active_bar_dropdown::view(entries, tokens, Some(width));
         let (x, y) = super::clamp_menu_origin(
             (menu_ctx.x, menu_ctx.y),
             (Self::CONTEXT_MENU_WIDTH, super::menu_height(entries_len)),
@@ -52,16 +53,7 @@ impl Signex {
             Self::dismiss_layer(Message::Library(
                 LibraryMessage::ComponentsPanelRowMenuDismissed,
             )),
-            column![
-                iced::widget::Space::new().height(y),
-                row![
-                    iced::widget::Space::new().width(x),
-                    menu,
-                    iced::widget::Space::new().width(Length::Fill),
-                ]
-                .width(Length::Fill),
-            ]
-            .boxed(),
+            super::anchored_menu(menu, (x, y)),
         ];
         match menu_ctx.window {
             None => layers,

@@ -1,5 +1,10 @@
 use super::super::*;
 
+/// Width (px) of the line drawn over a clicked pin.
+const FOCUSED_PIN_LINE_PX: f32 = 3.0;
+/// Radius (px) of the dot on a clicked pin's connecting end.
+const FOCUSED_PIN_TIP_PX: f32 = 3.5;
+
 impl SchematicCanvas<'_> {
     /// Whether the retained content layer was drawn at the camera as it is now,
     /// within a sub-pixel pan and a negligible zoom.
@@ -408,6 +413,7 @@ impl SchematicCanvas<'_> {
                     &self.prefs.canvas_colors,
                     &self.designators,
                 );
+                self.draw_focused_pin(frame, snapshot, bounds);
                 crate::schematic_runtime::lock_indicator::draw_lock_indicators(
                     frame,
                     snapshot,
@@ -454,5 +460,37 @@ impl SchematicCanvas<'_> {
             }
         }
         None
+    }
+    /// The clicked pin, drawn over its part in the selection colour: the pin
+    /// line and a dot at its connecting end (#2086).
+    fn draw_focused_pin(
+        &self,
+        frame: &mut canvas::Frame,
+        snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
+        bounds: Rectangle,
+    ) {
+        let Some((symbol, key)) = self.focused_pin.as_ref() else {
+            return;
+        };
+        if !crate::canvas::pin_focus::is_sole_selected_symbol(&self.selected, *symbol) {
+            return;
+        }
+        let Some(line) = signex_types::schematic::symbol_pin_line(snapshot, *symbol, key) else {
+            return;
+        };
+        let cam = self.camera();
+        let to_screen = |p: signex_types::schematic::Point| {
+            cam.world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds)
+        };
+        let (tip, inner) = (to_screen(line.tip), to_screen(line.inner));
+        let colour = crate::render_config::to_iced(&self.prefs.canvas_colors.selection);
+        frame.stroke(
+            &canvas::Path::line(tip, inner),
+            canvas::Stroke::default()
+                .with_color(colour)
+                .with_width(FOCUSED_PIN_LINE_PX)
+                .with_line_cap(canvas::LineCap::Round),
+        );
+        frame.fill(&canvas::Path::circle(tip, FOCUSED_PIN_TIP_PX), colour);
     }
 }

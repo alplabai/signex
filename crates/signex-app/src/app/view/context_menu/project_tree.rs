@@ -104,15 +104,28 @@ impl Signex {
     pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
-    ) -> Element<'_, Message> {
+    ) -> (Element<'_, Message>, f32) {
         let tokens = &self.document_state.panel_ctx.tokens;
         // No entries (an empty-area click, or a row that no longer exists)
         // renders an empty placeholder so the overlay layer above has
         // something to render into.
         let Some(v) = self.project_tree_entries(ctx) else {
-            return container(iced::widget::Space::new()).boxed();
+            return (
+                container(iced::widget::Space::new()).boxed(),
+                Self::CONTEXT_MENU_WIDTH,
+            );
         };
-        signex_widgets::active_bar_dropdown::view(v, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+        // The width is fitted to the labels, at most the shared context-menu
+        // width. The submenu flyout opens at this edge.
+        let width = signex_widgets::active_bar_dropdown::fitted_width(
+            &v,
+            Self::CONTEXT_MENU_WIDTH,
+            &self.document_state.panel_ctx.ui_font_name,
+        );
+        (
+            signex_widgets::active_bar_dropdown::view(v, tokens, Some(width)),
+            width,
+        )
     }
 
     /// The pure row data behind [`Self::view_project_tree_context_menu`]:

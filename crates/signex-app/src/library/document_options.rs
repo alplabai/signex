@@ -9,7 +9,7 @@
 //! `app/view/mod.rs::collect_overlays` when
 //! `LibraryState::document_options.is_some()`.
 
-use iced::widget::{Space, button, column, container, pick_list, row, text};
+use iced::widget::{button, column, container, pick_list, row, text};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -17,6 +17,7 @@ use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
+use super::modal_chrome::{footer_strip, header_with_note, primary_btn, secondary_btn};
 use super::state::DocumentOptionsModalState;
 use crate::panels::SheetColor;
 
@@ -30,18 +31,12 @@ pub fn view<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let header = container(
-        row![
-            text("Document Options").size(ts.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            text(format!("Library: {}", state.library_name))
-                .size(ts.body)
-                .color(muted),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_header_strip(tokens));
+    let header = header_with_note(
+        "Document Options",
+        format!("Library: {}", state.library_name),
+        windowed,
+        tokens,
+    );
 
     let row_field =
         |label: &'a str, value: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
@@ -100,30 +95,14 @@ pub fn view<'a>(
     ]
     .spacing(sp.xs);
 
-    let cancel = button(text("Cancel").size(ts.body).color(text_c))
-        .padding([sp.s, sp.l])
-        .on_press(LibraryMessage::DocumentOptionsCancel)
-        .style(crate::styles::outline_button(tokens));
-    let apply = button(
-        text("Apply")
-            .size(ts.body)
-            .color(crate::styles::tokens::on_accent(tokens)),
-    )
-    .padding([sp.s, sp.l])
-    .on_press(LibraryMessage::DocumentOptionsApply)
-    .style(crate::styles::accent_button(tokens));
-
-    let footer = container(
-        row![
-            Space::new().width(Length::Fill),
-            cancel,
-            Space::new().width(sp.m),
-            apply
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.m, sp.l])
-    .style(crate::styles::modal_footer_strip(tokens));
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
+            secondary_btn("Cancel", LibraryMessage::DocumentOptionsCancel, tokens),
+            primary_btn("Apply", LibraryMessage::DocumentOptionsApply, tokens),
+        ],
+        tokens,
+    );
 
     container(
         column![header, container(body).padding([sp.s, 0.0]), footer].width(super::card_len(

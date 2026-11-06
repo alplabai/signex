@@ -258,10 +258,7 @@ fn child_sheet_stroke_width_row<'a>(
 
     container(
         row![
-            text("Line Width (mm)")
-                .size(TS.caption)
-                .color(muted)
-                .width(96),
+            text("Line Width (mm)").size(TS.body).color(muted).width(96),
             input,
         ]
         .spacing(SP.s)
@@ -311,7 +308,7 @@ fn child_sheet_text_row<'a>(
             },
         );
     container(
-        row![text(label).size(TS.caption).color(muted).width(84), input]
+        row![text(label).size(TS.body).color(muted).width(84), input]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center),
     )

@@ -53,6 +53,41 @@ pub fn subtle_button_with_rest(
     }
 }
 
+/// A close × (document tab): muted at rest; the error colour behind a white
+/// glyph only while the pointer is on the × itself, so the hover says
+/// "this closes" (#2089).
+pub fn close_x_button(
+    tokens: &ThemeTokens,
+    rest_text: Color,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let danger = ti(tokens.error);
+    let pressed = composite_over(
+        Color {
+            a: 0.25,
+            ..Color::BLACK
+        },
+        danger,
+    );
+    let disabled = ti(tokens.text_secondary);
+    move |_: &Theme, status: button::Status| button::Style {
+        background: match status {
+            button::Status::Hovered => fill(danger),
+            button::Status::Pressed => fill(pressed),
+            _ => None,
+        },
+        text_color: match status {
+            button::Status::Disabled => disabled,
+            button::Status::Hovered | button::Status::Pressed => Color::WHITE,
+            button::Status::Active => rest_text,
+        },
+        border: Border {
+            radius: RADIUS.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
 /// Bordered secondary button (Cancel, cycle-value, close-x): faint fill
 /// at rest, hover / pressed overlays, 1 px `tokens.border`.
 pub fn outline_button(
@@ -129,6 +164,42 @@ pub fn accent_button(
         text_color: on,
         border: Border {
             radius: RADIUS.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
+/// Destructive action (Discard, Delete, Remove): an outline in the theme
+/// `error` colour with `error` text, never a fill. Hover and press tint the
+/// inside with the error colour at low alpha.
+pub fn danger_button(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let danger = tokens::danger(tokens);
+    let disabled = ti(tokens.text_secondary);
+    let faint = Color { a: 0.0, ..danger };
+    let hover = Color { a: 0.14, ..danger };
+    let pressed = Color { a: 0.24, ..danger };
+    move |_: &Theme, status: button::Status| button::Style {
+        background: fill(match status {
+            button::Status::Hovered => hover,
+            button::Status::Pressed => pressed,
+            _ => faint,
+        }),
+        text_color: if status == button::Status::Disabled {
+            disabled
+        } else {
+            danger
+        },
+        border: Border {
+            width: 1.0,
+            radius: RADIUS.into(),
+            color: if status == button::Status::Disabled {
+                disabled
+            } else {
+                danger
+            },
             ..Border::default()
         },
         ..button::Style::default()

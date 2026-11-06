@@ -182,6 +182,74 @@ fn icon_style(disabled: bool, muted: iced::Color) -> iced::widget::svg::Style {
     }
 }
 
+/// Layout of a menu row, shared by [`view`] and [`fitted_width`] so the
+/// measured width follows what is drawn.
+const ROW_SPACING: f32 = 8.0;
+const ICON_SIZE: f32 = 20.0;
+/// The empty cell before the right cluster of a row.
+const CLUSTER_GAP: f32 = 20.0;
+const SHORTCUT_SIZE: f32 = 11.0;
+const CHECK_SIZE: f32 = 13.0;
+const HEADER_SIZE: f32 = 10.0;
+/// Horizontal padding of a row.
+const ROW_PAD_X: f32 = 12.0;
+/// Padding of the panel around its rows.
+const PANEL_PAD: f32 = 4.0;
+
+/// Glyph advance per em the fitted width falls back to before the shaper is
+/// installed: a slight overestimate of a UI face, so a label never clips.
+const FIT_GLYPH_EM: f32 = 0.58;
+/// Margin on a shaped width, for hinting and rounding in the real layout.
+const FIT_SHAPED_MARGIN: f32 = 1.05;
+
+/// Width a menu of `entries` needs, for a context menu that fits its labels
+/// rather than a shared width, at most `max_w`. It mirrors [`view`]'s row
+/// layout: panel padding, row padding, the icon gutter only when a row has
+/// an icon, the label, the gap before the right cluster and its shortcut
+/// and check. Labels are measured in `ui_family`, the face the menu draws
+/// in, so a different UI font still fits. `Custom` rows are not measured;
+/// a caller with custom rows sizes for them itself.
+pub fn fitted_width<M>(entries: &[DropdownEntry<M>], max_w: f32, ui_family: &str) -> f32
+where
+    M: Clone,
+{
+    let family = Some(ui_family).filter(|f| !f.trim().is_empty());
+    let advance = |text: &str, size: f32| match signex_types::font::shaped_advance_em(text, family)
+    {
+        Some(em) => em * size * FIT_SHAPED_MARGIN,
+        None => text.chars().count() as f32 * size * FIT_GLYPH_EM,
+    };
+    let has_icons = entries
+        .iter()
+        .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some()));
+    let widest_row = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            DropdownEntry::Item(item) => {
+                let mut w = advance(&item.label, LABEL_SIZE);
+                if has_icons {
+                    w += ICON_SIZE + ROW_SPACING;
+                }
+                // Gap spacer before the right cluster, with its spacing.
+                w += ROW_SPACING + CLUSTER_GAP + ROW_SPACING;
+                if let Some(s) = &item.shortcut {
+                    w += advance(s, SHORTCUT_SIZE) + ROW_SPACING;
+                }
+                if item.checked {
+                    w += CHECK_SIZE;
+                }
+                Some(w)
+            }
+            DropdownEntry::Header(label) => Some(advance(label, HEADER_SIZE)),
+            _ => None,
+        })
+        .fold(0.0, f32::max);
+    // Row padding (12 each side) plus the panel padding (4 each side).
+    (widest_row + 2.0 * ROW_PAD_X + 2.0 * PANEL_PAD)
+        .ceil()
+        .min(max_w)
+}
+
 /// Render the dropdown panel as an `Element<M>`. `width_hint`
 /// specifies a fixed panel width in px (e.g. 220) when the menu is
 /// list-style; `None` lets the panel auto-size (used for the Filter
@@ -212,12 +280,17 @@ where
         Length::Fit
     };
     let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(col_width);
+    // The icon gutter only appears when some row has an icon; a menu of
+    // plain labels starts its text at the row padding.
+    let has_icons = entries
+        .iter()
+        .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some()));
     for entry in entries {
         match entry {
             DropdownEntry::Header(label) => {
                 col = col.push(
-                    container(text(label).size(10).color(muted))
-                        .padding([4, 12])
+                    container(text(label).size(HEADER_SIZE).color(muted))
+                        .padding([4.0, ROW_PAD_X])
                         .width(Length::Fill)
                         .boxed(),
                 );
@@ -255,7 +328,7 @@ where
                 // crosses from bar to menu) + 13 pt label + [5, 12]
                 // row padding.
                 let mut row_w: Row<Element<'a, M>> = Row::new()
-                    .spacing(8)
+                    .spacing(ROW_SPACING)
                     .align_y(iced::Alignment::Center)
                     .width(Length::Fit);
                 // Leading icon column — fixed-width for alignment.
@@ -263,13 +336,13 @@ where
                     // Tint only via `icon_style` (disabled rows); never always.
                     row_w = row_w.push(
                         svg(handle)
-                            .width(20)
-                            .height(20)
+                            .width(ICON_SIZE)
+                            .height(ICON_SIZE)
                             .style(move |_: &Theme, _| icon_style(disabled, muted))
                             .boxed(),
                     );
-                } else {
-                    row_w = row_w.push(Space::new().width(Length::Fixed(20.0)).boxed());
+                } else if has_icons {
+                    row_w = row_w.push(Space::new().width(Length::Fixed(ICON_SIZE)).boxed());
                 }
                 // Label. Menu rows never wrap — a too-narrow width_hint
                 // clips rather than reflowing a label onto two lines.
@@ -282,36 +355,38 @@ where
                 );
                 // Right-aligned cluster: shortcut + check.
                 let mut right: Row<Element<'a, M>> = Row::new()
-                    .spacing(8)
+                    .spacing(ROW_SPACING)
                     .align_y(iced::Alignment::Center)
                     .width(Length::Fit);
                 if let Some(s) = shortcut {
-                    right = right.push(text(s).size(11).color(muted).boxed());
+                    right = right.push(text(s).size(SHORTCUT_SIZE).color(muted).boxed());
                 }
                 if checked {
-                    right = right.push(text("\u{2713}").size(13).color(accent).boxed());
+                    right = right.push(text("\u{2713}").size(CHECK_SIZE).color(accent).boxed());
                 }
                 row_w = row_w
-                    .push(Space::new().width(Length::Fixed(20.0)).boxed())
+                    .push(Space::new().width(Length::Fixed(CLUSTER_GAP)).boxed())
                     .push(right.boxed());
 
                 // Wrap in a button that triggers on_press when armed.
-                let mut btn = button(container(row_w).padding([5, 12]).width(Length::Fill))
-                    .padding(0)
-                    .style(move |_: &Theme, status: button::Status| {
-                        let bg = match status {
-                            button::Status::Hovered if !disabled => {
-                                Some(Background::Color(hover_c))
-                            }
-                            _ => None,
-                        };
-                        button::Style {
-                            background: bg,
-                            border: Border::default(),
-                            text_color: row_text_c,
-                            ..button::Style::default()
-                        }
-                    });
+                let mut btn = button(
+                    container(row_w)
+                        .padding([5.0, ROW_PAD_X])
+                        .width(Length::Fill),
+                )
+                .padding(0)
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered if !disabled => Some(Background::Color(hover_c)),
+                        _ => None,
+                    };
+                    button::Style {
+                        background: bg,
+                        border: Border::default(),
+                        text_color: row_text_c,
+                        ..button::Style::default()
+                    }
+                });
                 if let Some(msg) = on_press {
                     btn = btn.on_press(msg);
                 }
@@ -335,7 +410,7 @@ where
         }
     }
 
-    let mut panel = container(col).padding(4);
+    let mut panel = container(col).padding(PANEL_PAD);
     if let Some(w) = width_hint {
         panel = panel.width(Length::Fixed(w));
     } else {
@@ -439,5 +514,19 @@ mod tests {
         let panel = view(entries, &tokens, None);
         use iced::advanced::Widget as _;
         assert_eq!(panel.size().width, Length::Fit);
+    }
+
+    fn labelled(label: &str) -> Vec<DropdownEntry<()>> {
+        vec![DropdownEntry::Item(DropdownItem::new(label, ()))]
+    }
+
+    /// A context menu fits its labels: narrower than the cap, wider for a
+    /// longer label, and held at the cap (#2100).
+    #[test]
+    fn a_fitted_menu_is_narrower_than_the_cap_and_grows_with_its_label() {
+        let short = fitted_width(&labelled("Copy"), 260.0, "");
+        let long = fitted_width(&labelled("Copy Designator And Value"), 260.0, "");
+        assert!(short < 260.0 && short < long, "{short} {long}");
+        assert_eq!(fitted_width(&labelled(&"W".repeat(200)), 260.0, ""), 260.0);
     }
 }

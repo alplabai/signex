@@ -2,15 +2,15 @@
 //! Change Component (#1260) and the datasheet list (#1301). Pure: the lines
 //! shown are built by [`preview_lines`] from the engine's preview.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Border, Element, Length, Theme, Widget};
+use iced::widget::{Space, button, column, container, scrollable, text};
+use iced::{Element, Length, Widget};
 use signex_engine::ComponentChangePreview;
 use signex_types::schematic::PinMatchedBy;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{LibraryMessage, PlacedPartMsg};
-use crate::library::modal_chrome::close_x;
+use crate::library::modal_chrome::{footer_strip, header, primary_btn, secondary_btn};
 use crate::library::state::{ChangePreview, DatasheetChoice};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -120,24 +120,12 @@ pub fn confirm_label(preview: &ComponentChangePreview) -> &'static str {
 fn card<'a>(
     title: &str,
     body: Element<'a, LibraryMessage>,
-    footer: Element<'a, LibraryMessage>,
+    buttons: Vec<Element<'a, LibraryMessage>>,
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let header = container(
-        row![
-            text(title.to_string()).size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_x(LibraryMessage::ClosePicker, tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .style(crate::styles::modal_header_strip(tokens));
-    let footer = container(footer)
-        .padding([10, 14])
-        .style(crate::styles::modal_footer_strip(tokens));
+    let header = header(title, LibraryMessage::ClosePicker, windowed, tokens);
+    let footer = footer_strip(Vec::new(), buttons, tokens);
     container(
         column![
             header,
@@ -152,36 +140,22 @@ fn card<'a>(
     .boxed()
 }
 
-fn flat_button<'a>(
+/// One full-width option of the datasheet list.
+fn option_button<'a>(
     label: &str,
     tokens: &ThemeTokens,
-    primary: bool,
     message: LibraryMessage,
-) -> iced::widget::Button<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
-    let (bg, fg) = if primary {
-        (iced::Color::from_rgb(0.00, 0.47, 0.84), iced::Color::WHITE)
-    } else {
-        (iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04), text_c)
-    };
+) -> Element<'a, LibraryMessage> {
     button(
-        container(text(label.to_string()).size(TS.body).color(fg))
-            .padding([SP.s, 14.0])
-            .boxed(),
+        text(label.to_string())
+            .size(TS.body)
+            .color(theme_ext::text_primary(tokens)),
     )
+    .padding([SP.s, SP.l])
+    .width(Length::Fill)
     .on_press(message)
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(bg)),
-        text_color: fg,
-        border: Border {
-            width: if primary { 0.0 } else { 1.0 },
-            radius: 3.0.into(),
-            color: border,
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    })
+    .style(crate::styles::outline_button(tokens))
+    .boxed()
 }
 
 /// Step two of Change Component: what the replacement does to the pins.
@@ -210,29 +184,23 @@ pub fn change_preview_view<'a>(
         };
         lines = lines.push(text(line.text).size(TS.body).color(color).boxed());
     }
-    let footer = row![
-        Space::new().width(Length::Fill),
-        flat_button(
+    let buttons = vec![
+        secondary_btn(
             "Back",
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangePreviewBackedOut),
             tokens,
-            false,
-            LibraryMessage::PlacedPart(PlacedPartMsg::ChangePreviewBackedOut)
         ),
-        Space::new().width(8),
-        flat_button("Cancel", tokens, false, LibraryMessage::ClosePicker),
-        Space::new().width(8),
-        flat_button(
+        secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens),
+        primary_btn(
             confirm_label(&change.preview),
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed),
             tokens,
-            true,
-            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed)
         ),
-    ]
-    .align_y(iced::Alignment::Center);
+    ];
     card(
-        "Change Component",
+        crate::library::picker::TITLE_CHANGE_COMPONENT,
         scrollable(lines).width(Length::Fill).boxed(),
-        footer.boxed(),
+        buttons,
         tokens,
         windowed,
     )
@@ -244,37 +212,28 @@ pub fn datasheet_choice_view<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
     let mut list = column![
         text(format!(
             "Which document of {} do you want to open?",
             choice.reference
         ))
         .size(TS.body)
-        .color(muted),
+        .color(theme_ext::text_primary(tokens)),
         Space::new().height(SP.m),
     ]
     .spacing(SP.s);
     for (index, target) in choice.targets.iter().enumerate() {
-        list = list.push(
-            flat_button(
-                &target.label,
-                tokens,
-                false,
-                LibraryMessage::PlacedPart(PlacedPartMsg::DatasheetPicked(index)),
-            )
-            .width(Length::Fill)
-            .boxed(),
-        );
+        list = list.push(option_button(
+            &target.label,
+            tokens,
+            LibraryMessage::PlacedPart(PlacedPartMsg::DatasheetPicked(index)),
+        ));
     }
-    let footer = row![
-        Space::new().width(Length::Fill),
-        flat_button("Cancel", tokens, false, LibraryMessage::ClosePicker),
-    ];
+    let buttons = vec![secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens)];
     card(
-        "Open Datasheet",
+        crate::library::picker::TITLE_OPEN_DATASHEET,
         scrollable(list).width(Length::Fill).boxed(),
-        footer.boxed(),
+        buttons,
         tokens,
         windowed,
     )

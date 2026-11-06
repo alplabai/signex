@@ -39,6 +39,7 @@ pub mod find_replace;
 pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
+pub mod frame_probe;
 pub mod icons;
 pub mod paste_array;
 pub mod paste_prefs;

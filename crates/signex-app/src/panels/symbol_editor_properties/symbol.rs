@@ -75,7 +75,7 @@ pub(super) fn view_symbol_selection<'a>(
         container(
             row![
                 text(label)
-                    .size(TS.caption)
+                    .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(2)),
                 iced::widget::text_input(placeholder, value)
@@ -147,7 +147,7 @@ pub(super) fn view_symbol_selection<'a>(
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text("Mirrored")
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::checkbox(sym.symbol_mirrored)

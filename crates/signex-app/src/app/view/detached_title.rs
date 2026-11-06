@@ -1,6 +1,32 @@
 //! Native title-bar text of a detached modal window.
 
+use crate::app::Signex;
 use crate::app::state::ModalId;
+
+impl Signex {
+    /// Native title of a detached modal. Where one `ModalId` shows several
+    /// dialogs, the title follows the dialog's state, as the in-window
+    /// header does.
+    pub(crate) fn detached_modal_title(&self, modal: ModalId) -> String {
+        let library = &self.library;
+        match modal {
+            ModalId::LibraryPicker => library
+                .picker
+                .as_ref()
+                .map(|p| crate::library::picker::title(&p.mode).to_owned()),
+            ModalId::LibraryPrimitivePicker => library
+                .primitive_picker
+                .as_ref()
+                .map(|p| crate::library::primitive_picker::title(p.kind).to_owned()),
+            ModalId::LibraryRecovery => library
+                .recovery
+                .as_ref()
+                .map(crate::library::recovery::title),
+            _ => None,
+        }
+        .unwrap_or_else(|| detached_modal_title(modal).to_owned())
+    }
+}
 
 /// Native title-bar text of a detached modal window. Matches the header
 /// the same dialog shows when it is painted inside the main window, so the

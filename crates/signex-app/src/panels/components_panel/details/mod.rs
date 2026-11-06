@@ -15,12 +15,12 @@ use signex_types::schematic::LibSymbol;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::{PANEL_TEXT_SIZE, ROW_TEXT_SIZE, SECTION_HEADER_TEXT_SIZE, SP};
+use super::{HINT_TEXT_SIZE, PANEL_TEXT_SIZE, ROW_TEXT_SIZE, SECTION_HEADER_TEXT_SIZE, SP};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsPanelRowKey, ComponentsPanelState};
 
 /// Height of the Symbol and Footprint preview boxes.
-const PREVIEW_HEIGHT: f32 = ROW_TEXT_SIZE * 12.0;
+const PREVIEW_HEIGHT: f32 = HINT_TEXT_SIZE * 12.0;
 
 /// What the details section shows for one row.
 #[derive(Debug, Clone)]
@@ -123,7 +123,7 @@ pub(crate) fn view<'a>(
     let primary = theme_ext::text_primary(tokens);
 
     let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
-        container(text(message).size(ROW_TEXT_SIZE).color(color))
+        container(text(message).size(HINT_TEXT_SIZE).color(color))
             .padding([SP.l, SP.m])
             .width(Length::Fill)
             .boxed()
@@ -157,7 +157,7 @@ pub(crate) fn view<'a>(
     facts.retain(|f| !f.is_empty());
     col = col.push(
         text(facts.join("  ·  "))
-            .size(ROW_TEXT_SIZE)
+            .size(HINT_TEXT_SIZE)
             .color(muted)
             .boxed(),
     );
@@ -173,7 +173,7 @@ pub(crate) fn view<'a>(
     if !d.description.trim().is_empty() {
         col = col.push(
             text(d.description.as_str())
-                .size(ROW_TEXT_SIZE)
+                .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
         );
@@ -218,14 +218,19 @@ pub(crate) fn view<'a>(
         None => empty("No footprint.", muted),
     });
     for note in &d.notes {
-        col = col.push(text(note.as_str()).size(ROW_TEXT_SIZE).color(muted).boxed());
+        col = col.push(
+            text(note.as_str())
+                .size(HINT_TEXT_SIZE)
+                .color(muted)
+                .boxed(),
+        );
     }
 
     col = col.push(section_title("Parameters", primary));
     if d.parameters.is_empty() {
         col = col.push(
             text("No parameters.")
-                .size(ROW_TEXT_SIZE)
+                .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
         );

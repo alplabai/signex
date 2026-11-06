@@ -226,10 +226,9 @@ impl Signex {
                     == Some(c.sheet.as_path())
                     && placements_agree(self.shown_placement(&c.sheet), &c.placement);
                 same_sheet
-                    && matches!(
-                        self.interaction_state.active_canvas().selected.as_slice(),
-                        [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
-                            && item.uuid == c.symbol
+                    && crate::canvas::pin_focus::is_sole_selected_symbol(
+                        &self.interaction_state.active_canvas().selected,
+                        c.symbol,
                     )
             });
         if !keeps_focus {
@@ -240,6 +239,7 @@ impl Signex {
             .clicked_pin
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
+        self.sync_focused_pin(clicked_pin.clone());
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();

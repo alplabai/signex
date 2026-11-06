@@ -328,11 +328,11 @@ const SIGNEX_TOKENS: ThemeTokens = ThemeTokens {
 };
 
 const SIGNEX_CANVAS: CanvasColors = CanvasColors {
-    // Classic schematic palette — cream sheet, dark elements. The workspace
+    // Classic schematic palette — near-white sheet, dark elements. The workspace
     // OUTSIDE the sheet follows the chrome (`SIGNEX_TOKENS.bg`) so the canvas
     // backdrop reads as part of the dark UI instead of a detached gray slab.
     background: c(0x2D, 0x2D, 0x30), // Chrome-aligned workspace outside sheet
-    paper: c(0xFF, 0xFF, 0xE0),      // Pale cream/yellow sheet (255,255,224)
+    paper: c(0xFC, 0xFC, 0xFC),      // Near-white sheet (252,252,252)
     wire: c(0x00, 0x00, 0x80),       // Navy blue wires
     junction: c(0x00, 0x00, 0x80),   // Navy blue junction dots
     body: c(0x80, 0x60, 0x00),       // Brown component body border
@@ -349,7 +349,7 @@ const SIGNEX_CANVAS: CanvasColors = CanvasColors {
     erc_warning: c(0x80, 0x00, 0x00),
     drc_error: c(0x80, 0x00, 0x00),
     drc_warning: c(0x80, 0x00, 0x00),
-    selection: c(0x00, 0xA0, 0x00), // Altium-style green; reads on cream paper and on dark chrome
+    selection: c(0x00, 0xA0, 0x00), // Altium-style green; reads on the white sheet and on dark chrome
     ratsnest: Some(c(0x00, 0x78, 0xD4)),
     bus: c(0x00, 0x00, 0x80),    // Navy blue bus (rendered thicker)
     grid: c(0xC0, 0xC0, 0xC0),   // Light gray grid dots/lines
@@ -363,7 +363,7 @@ const SIGNEX_CANVAS: CanvasColors = CanvasColors {
 // SVG fills to this same cyan; keeping the accent aligned so dropdown
 // chevrons, focus rings and button highlights read as one palette.
 // Canvas colours reuse SIGNEX_CANVAS for now — the schematic sheet
-// keeps the Altium-style cream background regardless of chrome theme.
+// keeps the near-white sheet regardless of chrome theme.
 
 const ALPLAB_TOKENS: ThemeTokens = ThemeTokens {
     bg: c(0x2D, 0x2D, 0x30),
@@ -539,7 +539,7 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
         ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_CANVAS,
         ThemeId::VsCodeDark => VSCODE_DARK_CANVAS,
         ThemeId::Signex => SIGNEX_CANVAS,
-        // Alp Lab reuses the Altium-style cream schematic palette; only
+        // Alp Lab reuses the Signex schematic palette; only
         // the chrome accent differs.
         ThemeId::Alplab => SIGNEX_CANVAS,
         ThemeId::GitHubDark => GITHUB_DARK_CANVAS,
@@ -552,6 +552,13 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_signex_sheet_is_near_white() {
+        for id in [ThemeId::Signex, ThemeId::Alplab] {
+            assert_eq!(canvas_colors(id).paper, c(0xFC, 0xFC, 0xFC), "{id:?}");
+        }
+    }
 
     #[test]
     fn every_builtin_defines_marker_slots_matching_todays_look() {

@@ -279,11 +279,9 @@ impl SvgRenderContext {
                 SvgStyle {
                     stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
-                    stroke_width: ((if child.stroke_width > 0.0 {
-                        child.stroke_width
-                    } else {
-                        0.2
-                    }) * xform.mm_to_unit) as f32,
+                    stroke_width: (signex_types::schematic::symbol_graphic_stroke_mm(
+                        child.stroke_width,
+                    ) * xform.mm_to_unit) as f32,
                 },
             ));
             if !child.name.is_empty() {
@@ -368,7 +366,8 @@ impl SvgRenderContext {
                     SvgStyle {
                         stroke_rgb: Some(palette.symbol_stroke),
                         fill_rgb: None,
-                        stroke_width: (0.1 * xform.mm_to_unit) as f32,
+                        stroke_width: (signex_types::schematic::symbol_graphic_stroke_mm(0.0)
+                            * xform.mm_to_unit) as f32,
                     },
                 ));
             }
@@ -424,7 +423,11 @@ impl SvgRenderContext {
                     align: halign_to_svg(val_style.1),
                     v_align: valign_to_svg(val_style.2),
                     rotation_deg: val_style.0 as f32,
-                    fill_rgb: palette.value,
+                    fill_rgb: if sym.is_power {
+                        palette.power_label
+                    } else {
+                        palette.value
+                    },
                     text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }

@@ -185,6 +185,8 @@ fn pt(x: f32, y: f32) -> SvgPoint {
 mod drawing_placement_tests;
 #[cfg(test)]
 mod net_class_tests;
+#[cfg(test)]
+mod stroke_rule_tests;
 
 #[cfg(test)]
 mod tests {

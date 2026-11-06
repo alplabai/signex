@@ -518,6 +518,80 @@ fn fixed_dialogs_fit_their_content_without_large_slack() {
     }
 }
 
+/// Copy to Library with no writable library is a short dialog, not the tall
+/// window of the list case: the hint sits just above the footer.
+#[test]
+fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
+    let (mut app, _main) = test_app();
+    open(&mut app, ModalId::LibraryStockCopy);
+    let _ = app.sync_detached_modals();
+    let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
+    let size = app.modal_window_size(ModalId::LibraryStockCopy);
+    let list_case = crate::app::handlers::erc::modal_size(ModalId::LibraryStockCopy);
+    assert!(
+        size.height < list_case.height * app.ui_state.ui_scale,
+        "empty list: {} is shorter than the list case {}",
+        size.height,
+        list_case.height
+    );
+    let texts = lay_out_texts(app.view(id), size);
+    let hint = texts
+        .iter()
+        .find(|t| t.text.contains("No writable library"))
+        .expect("the empty-list hint");
+    let footer_top = texts
+        .iter()
+        .filter(|t| t.text == "Cancel")
+        .map(|t| t.bounds.y)
+        .fold(f32::MAX, f32::min);
+    let gap = footer_top - (hint.bounds.y + hint.bounds.height);
+    assert!(gap >= 0.0, "the hint overlaps the footer by {}", -gap);
+    assert!(
+        gap <= 70.0,
+        "{gap} px of empty window between hint and footer"
+    );
+}
+
+/// Copy to Library with no writable library grows by one note line for each
+/// note shown (an unavailable previous library, an error), and the notes
+/// stay above the footer.
+#[test]
+fn copy_to_library_notes_each_add_a_line_and_stay_above_the_footer() {
+    let height_with = |previous: bool, error: bool| {
+        let (mut app, _main) = test_app();
+        open(&mut app, ModalId::LibraryStockCopy);
+        if let Some(copy) = app.library.stock_copy.as_mut() {
+            copy.previous_unavailable = previous.then(|| "/gone/Gone.snxlib".into());
+            copy.error = error.then(|| "The copy could not be written".to_owned());
+        }
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
+        let size = app.modal_window_size(ModalId::LibraryStockCopy);
+        let texts = lay_out_texts(app.view(id), size);
+        let footer_top = texts
+            .iter()
+            .filter(|t| t.text == "Cancel")
+            .map(|t| t.bounds.y)
+            .fold(f32::MAX, f32::min);
+        let above = texts
+            .iter()
+            .filter(|t| t.text != "Cancel" && t.bounds.y < footer_top)
+            .map(|t| t.bounds.y + t.bounds.height)
+            .fold(0.0_f32, f32::max);
+        assert!(above <= footer_top, "a note overlaps the footer");
+        (size.height, app.ui_state.ui_scale)
+    };
+    let (none, scale) = height_with(false, false);
+    let (one, _) = height_with(false, true);
+    let (two, _) = height_with(true, true);
+    let line = crate::app::handlers::modal_sizing::NOTE_HEIGHT * scale;
+    assert!(
+        (one - none - line).abs() <= 2.0,
+        "one note: {none} -> {one}"
+    );
+    assert!((two - one - line).abs() <= 2.0, "two notes: {one} -> {two}");
+}
+
 fn quit_with_rows(rows: usize) -> (Signex, iced::window::Id) {
     let (mut app, _main) = test_app();
     app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
@@ -673,6 +747,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
                     | ModalId::RemoveDialog
                     | ModalId::RenameDialog
                     | ModalId::CreateChildSheet
+                    | ModalId::NetColorCustom
             ) {
                 let right = lay_out_texts(app.view(id), size)
                     .iter()
@@ -754,4 +829,54 @@ fn a_scale_change_resizes_every_open_dialog_once_and_closed_windows_are_forgotte
     assert!(!app.ui_state.modal_window_sizes.contains_key(&rename));
     let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(about)));
     assert!(!app.ui_state.modal_window_sizes.contains_key(&about));
+}
+
+/// A windowed dialog is titled by its state where one id shows several.
+#[test]
+fn a_windowed_library_dialog_is_titled_by_its_state() {
+    let (mut app, _main) = test_app();
+    open(&mut app, ModalId::LibraryPicker);
+    assert_eq!(
+        app.detached_modal_title(ModalId::LibraryPicker),
+        "Place Component"
+    );
+    open(&mut app, ModalId::LibraryRecovery);
+    assert_eq!(
+        app.detached_modal_title(ModalId::LibraryRecovery),
+        crate::library::recovery::title(app.library.recovery.as_ref().expect("recovery"))
+    );
+    assert_ne!(
+        app.detached_modal_title(ModalId::LibraryRecovery),
+        "Library Recovery"
+    );
+    app.library.picker = None;
+    assert_eq!(
+        app.detached_modal_title(ModalId::LibraryPicker),
+        "Open Library",
+        "no state: the fixed title"
+    );
+}
+
+/// Source line continuations left no runs of spaces in the dialog's text.
+#[test]
+fn recovery_dialog_text_has_no_indentation_gaps() {
+    let (mut app, _main) = test_app();
+    app.document_state
+        .autosave
+        .offer(crate::autosave::RecoveryOffer {
+            path: "p.snxsch".into(),
+            age_secs: 90,
+            older_than_file: true,
+        });
+    open(&mut app, ModalId::AutosaveRecovery);
+    let _ = app.sync_detached_modals();
+    let id = window_of(&app, ModalId::AutosaveRecovery).expect("window");
+    let texts = lay_out_texts(
+        app.view(id),
+        app.modal_window_size(ModalId::AutosaveRecovery),
+    );
+    assert!(!texts.is_empty());
+    for t in texts {
+        assert!(!t.text.contains("  "), "gap in dialog text: {:?}", t.text);
+    }
 }

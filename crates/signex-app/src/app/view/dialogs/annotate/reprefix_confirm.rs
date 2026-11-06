@@ -2,14 +2,14 @@
 //! the parts that stay, and Confirm / Cancel.
 
 use super::*;
-use iced::widget::{Space, column, container, row, scrollable, text};
+use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length, Widget};
 
-use super::super::widgets::{
-    close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
-    wrap_modal,
-};
+use super::super::widgets::{close_x_button, draggable_header, os_title_bar_slot, wrap_modal};
 use super::super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use crate::styles::{
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_list, dialog_message,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -38,7 +38,6 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
 
         let header_content: Element<'_, Message> = container(
             row![
@@ -68,15 +67,17 @@ impl Signex {
             os_title_bar_slot()
         };
 
-        let mut lines = column![].spacing(SP.xs);
-        for line in &confirm.change_lines {
-            lines = lines.push(text(line.clone()).size(TS.body).color(text_c));
-        }
+        let mut lines: Vec<Element<'_, Message>> = confirm
+            .change_lines
+            .iter()
+            .map(|line| text(line.clone()).size(TS.body).color(text_c).boxed())
+            .collect();
         if confirm.more > 0 {
-            lines = lines.push(
+            lines.push(
                 text(format!("+{} more", confirm.more))
                     .size(TS.body)
-                    .color(text_muted),
+                    .color(text_muted)
+                    .boxed(),
             );
         }
         let mut skips = column![].spacing(SP.xs);
@@ -84,41 +85,30 @@ impl Signex {
             skips = skips.push(text(line.clone()).size(TS.body).color(text_muted));
         }
 
+        let body = column![
+            dialog_message(confirm.headline.clone(), tokens),
+            container(dialog_list(lines, tokens)).height(Length::Fixed(220.0)),
+            skips,
+        ]
+        .spacing(SP.m);
         let dialog = container(
             column![
                 header,
-                container(
-                    text(confirm.headline.clone())
-                        .size(TS.body)
-                        .color(text_muted)
-                )
-                .padding([14, 14]),
-                container(
-                    scrollable(lines)
-                        .height(Length::Fixed(220.0))
-                        .width(Length::Fill)
-                )
-                .padding([0, 14]),
-                container(skips).padding([10, 14]),
-                container(
-                    row![
-                        Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::Annotate(AnnotateMsg::ReprefixCancelled),
-                            text_c,
-                            border_c
-                        ),
-                        Space::new().width(8),
-                        primary_button(
-                            &confirm.button_label,
-                            Some(Message::Annotate(AnnotateMsg::ReprefixConfirmed)),
-                            border_c,
-                        ),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 14]),
+                dialog_body(body),
+                dialog_footer(vec![
+                    dialog_button(
+                        "Cancel",
+                        DialogButtonKind::Secondary,
+                        Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
+                        tokens,
+                    ),
+                    dialog_button(
+                        &confirm.button_label,
+                        DialogButtonKind::Primary,
+                        Some(Message::Annotate(AnnotateMsg::ReprefixConfirmed)),
+                        tokens,
+                    ),
+                ]),
             ]
             .width(self.dialog_width(crate::app::state::ModalId::ReprefixConfirm, 560.0)),
         )

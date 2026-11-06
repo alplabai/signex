@@ -134,11 +134,11 @@ fn prop_row_static<'a>(
     container(
         row![
             text(label.to_string())
-                .size(TS.caption)
+                .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             text(value)
-                .size(TS.caption)
+                .size(TS.body)
                 .color(primary)
                 .width(Length::FillPortion(3)),
         ]

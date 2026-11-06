@@ -45,7 +45,6 @@ fn the_floor_is_one_value_for_every_kind() {
         SCHEMATIC_RENDER_MIN_STROKE_MM,
         SCHEMATIC_NO_CONNECT_STROKE_MM,
         SCHEMATIC_LABEL_MARKER_STROKE_MM,
-        SCHEMATIC_SHEET_FRAME_STROKE_MM,
         0.0,
     ]
     .into_iter()
@@ -75,14 +74,26 @@ fn the_floor_is_in_device_pixels() {
     );
 }
 
+/// #2091 - every stored-stroke kind (symbol graphic, pin, drawing, child
+/// sheet frame, wire) resolves a stored 0 or a broken width to 0.254, and
+/// floors an explicit width at 0.15.
 #[test]
-fn effective_width_defaults_a_zero_or_broken_width() {
-    assert_eq!(effective_stroke_mm(0.0), SCHEMATIC_RENDER_MIN_STROKE_MM);
+fn every_stored_stroke_kind_resolves_zero_to_the_default() {
+    for broken in [0.0, f64::NAN, f64::INFINITY, -1.0] {
+        assert_eq!(
+            symbol_graphic_stroke_mm(broken),
+            SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+        );
+        assert_eq!(
+            wire_stroke_mm(broken, None),
+            SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+        );
+    }
+    assert_eq!(symbol_graphic_stroke_mm(0.254), 0.254);
     assert_eq!(
-        effective_stroke_mm(f64::NAN),
+        symbol_graphic_stroke_mm(0.05),
         SCHEMATIC_RENDER_MIN_STROKE_MM
     );
-    assert_eq!(effective_stroke_mm(0.254), 0.254);
 }
 
 #[test]

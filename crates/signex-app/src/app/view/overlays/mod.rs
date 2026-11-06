@@ -122,48 +122,52 @@ impl Signex {
         // own when the payload is long. Keeps the rhythm uniform
         // across short (Designator / Value) and long (Footprint /
         // Library) fields without an inline-vs-stacked split.
-        const CARD_W: f32 = 260.0;
-        const LABEL_W: f32 = 60.0;
-        let field = |label: &'static str, value: String| -> Element<'_, Message> {
-            iced::widget::row![
-                text(label)
-                    .font(canvas_font)
-                    .size(TS.body)
-                    .color(muted_c)
-                    .width(LABEL_W),
-                text(value)
-                    .font(canvas_font)
-                    .size(TS.label)
-                    .color(text_c)
-                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
-                    .width(Length::Fill),
-            ]
-            .spacing(SP.s)
-            .width(Length::Fill)
-            .align_y(iced::Alignment::Start)
-            .boxed()
-        };
-
-        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(4);
-        rows.push(field(
-            "Designator",
-            self.shown_designator(symbol).to_string(),
-        ));
-        rows.push(field(
+        let mut fields: Vec<(&'static str, String)> = Vec::with_capacity(4);
+        fields.push(("Designator", self.shown_designator(symbol).to_string()));
+        fields.push((
             "Value",
             crate::library::part_label::card_value(&symbol.value).to_owned(),
         ));
         if !symbol.footprint.is_empty() {
-            rows.push(field("Footprint", symbol.footprint.clone()));
+            fields.push(("Footprint", symbol.footprint.clone()));
         }
         if !symbol.lib_id.is_empty() {
-            rows.push(field(
+            fields.push((
                 "Library",
                 self.library
                     .drift
                     .display_name(&symbol.lib_id, &self.library.open_libraries),
             ));
         }
+        let (label_w, card_w) = symbol_card_widths(&fields, canvas_font_name);
+        // Below the cap the card shrinks to its text; at the cap it holds
+        // the cap and long values wrap.
+        let at_cap = card_w >= SYMBOL_CARD_MAX_W;
+        let fill_or_shrink = if at_cap { Length::Fill } else { Length::Shrink };
+        let field = |label: &'static str, value: String| -> Element<'_, Message> {
+            iced::widget::row![
+                text(label)
+                    .font(canvas_font)
+                    .size(TS.body)
+                    .color(muted_c)
+                    .width(label_w),
+                text(value)
+                    .font(canvas_font)
+                    .size(TS.label)
+                    .color(text_c)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                    .width(fill_or_shrink),
+            ]
+            .spacing(SP.s)
+            .width(fill_or_shrink)
+            .align_y(iced::Alignment::Start)
+            .boxed()
+        };
+
+        let rows: Vec<Element<'_, Message>> = fields
+            .into_iter()
+            .map(|(label, value)| field(label, value))
+            .collect();
 
         let rows_len = rows.len();
         let card = container(column(rows).spacing(3))
@@ -173,7 +177,11 @@ impl Signex {
                 bottom: 8.0,
                 left: 10.0,
             })
-            .width(Length::Fixed(CARD_W))
+            .width(if at_cap {
+                Length::Fixed(card_w)
+            } else {
+                Length::Shrink
+            })
             .style(move |_: &iced::Theme| container::Style {
                 background: Some(Background::Color(panel_bg)),
                 border: Border {
@@ -192,7 +200,7 @@ impl Signex {
         const ESTIMATED_ROW_H: f32 = 28.0;
         let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let (x, y) =
-            canvas_region::place_card((sx, sy), (CARD_W, estimated_h), self.card_bounds(window_id));
+            canvas_region::place_card((sx, sy), (card_w, estimated_h), self.card_bounds(window_id));
         Some(super::view::translate::Translate::new(card.boxed(), (x, y)).boxed())
     }
 
@@ -492,18 +500,7 @@ impl Signex {
         out.push(Self::dismiss_layer(Message::ContextMenu(
             ContextMenuMsg::Close,
         )));
-        out.push(
-            column![
-                iced::widget::Space::new().height(y),
-                row![
-                    iced::widget::Space::new().width(x),
-                    menu,
-                    iced::widget::Space::new().width(Length::Fill),
-                ]
-                .width(Length::Fill),
-            ]
-            .boxed(),
-        );
+        out.push(super::context_menu::anchored_menu(menu, (x, y)));
         // Submenu (Place / Align) — pop to the right of the parent
         // menu (or left if the right edge would overflow), and
         // align its top to the launcher row's y-position so the
@@ -574,8 +571,6 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        use iced::widget::{column, row};
-
         let ui = &self.ui_state;
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
@@ -599,24 +594,13 @@ impl Signex {
         );
         vec![
             Self::dismiss_layer(Message::ContextMenu(ContextMenuMsg::CloseTab)),
-            column![
-                iced::widget::Space::new().height(y),
-                row![
-                    iced::widget::Space::new().width(x),
-                    menu,
-                    iced::widget::Space::new().width(Length::Fill),
-                ]
-                .width(Length::Fill),
-            ]
-            .boxed(),
+            super::context_menu::anchored_menu(menu, (x, y)),
         ]
     }
 
     /// Dock panel tab right-click menu: dismiss layer, then the menu clamped
     /// into the window.
     fn dock_tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
-        use iced::widget::{column, row};
-
         let Some(menu_ctx) = self.document_state.dock.tab_menu else {
             return Vec::new();
         };
@@ -631,16 +615,7 @@ impl Signex {
         );
         vec![
             Self::dismiss_layer(Message::Dock(crate::dock::DockMessage::TabMenuDismissed)),
-            column![
-                iced::widget::Space::new().height(y),
-                row![
-                    iced::widget::Space::new().width(x),
-                    menu,
-                    iced::widget::Space::new().width(Length::Fill),
-                ]
-                .width(Length::Fill),
-            ]
-            .boxed(),
+            super::context_menu::anchored_menu(menu, (x, y)),
         ]
     }
 
@@ -661,7 +636,7 @@ impl Signex {
         if !self.overlay_belongs_to(tree_ctx.window, window_id) {
             return Vec::new();
         }
-        let menu = self.view_project_tree_context_menu(tree_ctx);
+        let (menu, menu_w) = self.view_project_tree_context_menu(tree_ctx);
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look
         // consistent.
@@ -673,25 +648,13 @@ impl Signex {
             ),
             ui.window_size,
         );
-        let menu_w = Self::CONTEXT_MENU_WIDTH;
         let edge_margin = super::context_menu::EDGE_MARGIN;
         let win_w = ui.window_size.0;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         out.push(Self::dismiss_layer(Message::ContextMenu(
             ContextMenuMsg::CloseProjectTree,
         )));
-        out.push(
-            column![
-                iced::widget::Space::new().height(y),
-                row![
-                    iced::widget::Space::new().width(x),
-                    menu,
-                    iced::widget::Space::new().width(Length::Fill),
-                ]
-                .width(Length::Fill),
-            ]
-            .boxed(),
-        );
+        out.push(super::context_menu::anchored_menu(menu, (x, y)));
         // Adjacent submenu (currently only AddNewToProject opens
         // from this menu). Mirrors the canvas-menu submenu logic
         // above — pop to the right of the parent (or left if the
@@ -705,7 +668,8 @@ impl Signex {
             let submenu = iced::widget::mouse_area(submenu)
                 .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
                 .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
-            let submenu_w = menu_w;
+            // The flyout is built at the shared width (`submenu.rs`).
+            let submenu_w = Self::CONTEXT_MENU_WIDTH;
             let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
                 (x - submenu_w).max(0.0)
             } else {
@@ -740,8 +704,6 @@ impl Signex {
     /// when `G` is pressed in a footprint editor. Pushes dismiss then the
     /// clamped menu.
     pub(super) fn grid_picker_overlay(&self) -> Vec<Element<'_, Message>> {
-        use iced::widget::{column, row};
-
         let ui = &self.ui_state;
         let interaction = &self.interaction_state;
         let Some(picker) = interaction.grid_picker.as_ref() else {
@@ -755,16 +717,7 @@ impl Signex {
         );
         vec![
             Self::dismiss_layer(Message::Ui(UiMsg::GridPickerClose)),
-            column![
-                iced::widget::Space::new().height(y),
-                row![
-                    iced::widget::Space::new().width(x),
-                    menu,
-                    iced::widget::Space::new().width(Length::Fill),
-                ]
-                .width(Length::Fill),
-            ]
-            .boxed(),
+            super::context_menu::anchored_menu(menu, (x, y)),
         ]
     }
 
@@ -837,4 +790,37 @@ impl Signex {
         }
         out
     }
+}
+
+/// Widest the symbol hover card grows; below that it fits its text and the
+/// values wrap (#2100).
+const SYMBOL_CARD_MAX_W: f32 = 320.0;
+/// Glyph advance per em for the label column and the placement estimate: the
+/// canvas face (Iosevka, 0.5 em) plus a margin for other picked fonts.
+const SYMBOL_CARD_GLYPH_EM: f32 = 0.55;
+/// Left (10) plus right (14) padding, plus the 1 px border on each side.
+const SYMBOL_CARD_PAD_W: f32 = 26.0;
+
+/// Label column and card width for the symbol hover card `fields`: the
+/// longest label, the gap and the longest value, at most
+/// [`SYMBOL_CARD_MAX_W`].
+fn symbol_card_widths(fields: &[(&str, String)], family: &str) -> (f32, f32) {
+    let family = Some(family).filter(|f| !f.trim().is_empty());
+    let width = |text: &str, size: f32| match signex_types::font::shaped_advance_em(text, family) {
+        Some(em) => em * size * 1.05,
+        None => text.chars().count() as f32 * size * SYMBOL_CARD_GLYPH_EM,
+    };
+    let label_w = fields
+        .iter()
+        .map(|(label, _)| width(label, TS.body))
+        .fold(0.0, f32::max)
+        .ceil();
+    let value_w = fields
+        .iter()
+        .map(|(_, value)| width(value, TS.label))
+        .fold(0.0, f32::max);
+    let card_w = (label_w + SP.s + value_w + SYMBOL_CARD_PAD_W)
+        .ceil()
+        .min(SYMBOL_CARD_MAX_W);
+    (label_w, card_w)
 }

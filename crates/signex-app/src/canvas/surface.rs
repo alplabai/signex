@@ -22,6 +22,9 @@ pub(super) struct SurfaceLayers {
     /// The retained content layer, when it is to be drawn translated:
     /// its index in `layers` and the translation.
     pub(super) content_shift: Option<(usize, Vector)>,
+    /// The translation of the background layer (index 0), when it is drawn
+    /// moved from the camera it was built at.
+    pub(super) background_shift: Option<Vector>,
 }
 
 impl SchematicCanvas<'_> {
@@ -37,13 +40,24 @@ impl SchematicCanvas<'_> {
         cursor: mouse::Cursor,
         allow_shift: bool,
     ) -> SurfaceLayers {
+        let _probe = crate::frame_probe::span("canvas");
         let mut layers = Vec::with_capacity(4);
         let mut content_shift = None;
+        let mut background_shift = None;
 
         // Layer 1: background (grid + paper). A GPU-mounted sheet has the
         // backdrop canvas for it beneath the shader.
         if self.mode == ContentMode::Cpu {
-            layers.push(self.draw_background(renderer, bounds));
+            let _probe = crate::frame_probe::span("canvas.background");
+            // A plain canvas draws the layers as they are, so it takes the
+            // background as it always was.
+            if allow_shift {
+                let background = self.retained_background(renderer, bounds);
+                background_shift = (background.shift != Vector::ZERO).then_some(background.shift);
+                layers.push(background.geometry);
+            } else {
+                layers.push(self.draw_background(renderer, bounds));
+            }
         }
 
         let drag_offset = self.drag_delta(state);
@@ -70,6 +84,7 @@ impl SchematicCanvas<'_> {
             // its content on the shaders, and its rotated and oversize texts on a layer
             // of their own beneath the drag shader.
             if self.mode == ContentMode::Cpu {
+                let _probe = crate::frame_probe::span("canvas.content");
                 let content =
                     self.draw_content(renderer, bounds, snapshot, drag_offset, allow_shift);
                 if content.shift != Vector::ZERO {
@@ -84,15 +99,20 @@ impl SchematicCanvas<'_> {
             }
 
             // Layer 3: selection overlay
+            let selection_probe = crate::frame_probe::span("canvas.selection");
             if let Some(selection) = self.draw_selection(renderer, bounds, snapshot, drag_offset) {
                 layers.push(selection);
             }
+            drop(selection_probe);
 
             // Layer 4: overlay (cursor HUD, previews, drag guides)
+            let overlay_probe = crate::frame_probe::span("canvas.overlay");
             layers.push(self.draw_overlay(state, renderer, bounds, cursor));
+            drop(overlay_probe);
             return SurfaceLayers {
                 layers,
                 content_shift,
+                background_shift,
             };
         };
         let moving = Some(&*drag_frame.moving);
@@ -125,6 +145,7 @@ impl SchematicCanvas<'_> {
         SurfaceLayers {
             layers,
             content_shift,
+            background_shift,
         }
     }
 }
@@ -248,15 +269,21 @@ fn draw_layers(renderer: &mut Renderer, bounds: Rectangle, frame: SurfaceLayers)
     let SurfaceLayers {
         layers,
         content_shift,
+        background_shift,
     } = frame;
     renderer.with_layer(bounds, |renderer| {
         renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
             for (index, layer) in layers.into_iter().enumerate() {
-                match content_shift {
-                    Some((content, shift)) if content == index => {
+                let shift = match (content_shift, background_shift) {
+                    (Some((content, shift)), _) if content == index => Some(shift),
+                    (_, Some(shift)) if index == 0 => Some(shift),
+                    _ => None,
+                };
+                match shift {
+                    Some(shift) => {
                         renderer.with_translation(shift, |renderer| renderer.draw_geometry(layer));
                     }
-                    _ => renderer.draw_geometry(layer),
+                    None => renderer.draw_geometry(layer),
                 }
             }
         });

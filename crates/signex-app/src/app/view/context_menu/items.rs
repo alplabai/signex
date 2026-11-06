@@ -185,10 +185,13 @@ pub(super) fn save_entry(enabled: bool, shortcut: &str) -> DropdownEntry<Message
 /// without a click, plus an active-state highlight so the user can see
 /// which submenu is open. It therefore rides the widget's `Custom`
 /// escape hatch as an owned `Element<'static>`. The row is styled to
-/// match the widget's `Item` rows (20 px icon column, 13 pt label,
-/// `[5, 12]` padding, hover background) so it sits flush with its
-/// neighbours; the `›` chevron renders right-aligned at the unified
-/// `SUBMENU_ARROW_SIZE`.
+/// match the widget's `Item` rows (13 pt label, `[5, 12]` padding, hover
+/// background) so it sits flush with its neighbours; the `›` chevron
+/// renders right-aligned at the unified `SUBMENU_ARROW_SIZE`. With an icon
+/// it has the 20 px icon column; without one it has none, like an
+/// icon-less `Item` in a menu of plain labels (the widget reserves the
+/// column only when a row has an icon). A launcher without an icon belongs
+/// in a menu without icons.
 pub(super) fn submenu_launcher(
     tokens: &ThemeTokens,
     icon: Option<Handle>,
@@ -205,18 +208,9 @@ pub(super) fn submenu_launcher(
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
-    match icon {
-        Some(handle) => {
-            // Launchers are never disabled: keep the icon's own colours.
-            row = row.push(iced::widget::svg(handle).width(20).height(20).boxed());
-        }
-        None => {
-            row = row.push(
-                iced::widget::Space::new()
-                    .width(iced::Length::Fixed(20.0))
-                    .boxed(),
-            );
-        }
+    if let Some(handle) = icon {
+        // Launchers are never disabled: keep the icon's own colours.
+        row = row.push(iced::widget::svg(handle).width(20).height(20).boxed());
     }
     row = row
         .push(
