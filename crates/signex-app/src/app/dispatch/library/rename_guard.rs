@@ -383,17 +383,25 @@ mod tests {
     }
 
     fn app_with_library_delete() -> Signex {
+        app_with_library_delete_of("/w/a.snxlib")
+    }
+
+    fn app_with_library_delete_of(library: &str) -> Signex {
         let (mut app, _task) = Signex::new();
         app.document_state.pending_path_ops.begin(
             PathOpKind::Delete,
-            vec!["/w/a.snxlib".into()],
+            vec![library.into()],
             CaseFold::PRESERVE,
         );
         app
     }
 
     fn app_with_open_symbol(app: &mut Signex) -> std::path::PathBuf {
-        let path = std::path::PathBuf::from("/w/a.snxlib/symbols/r.snxsym");
+        app_with_open_symbol_in(app, "/w/a.snxlib")
+    }
+
+    fn app_with_open_symbol_in(app: &mut Signex, library: &str) -> std::path::PathBuf {
+        let path = std::path::PathBuf::from(format!("{library}/symbols/r.snxsym"));
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
         app.document_state.symbol_editors.insert(
             path.clone(),
@@ -408,8 +416,11 @@ mod tests {
     #[test]
     fn a_symbol_edit_during_a_library_delete_is_refused_and_logged() {
         let _ = crate::diagnostics::init_logging();
-        let mut app = app_with_library_delete();
-        let path = app_with_open_symbol(&mut app);
+        // Its own library: the refusal is logged once per run of identical
+        // lines, so a parallel test refusing the same text would swallow it.
+        let library = "/w/refused_edit_1939.snxlib";
+        let mut app = app_with_library_delete_of(library);
+        let path = app_with_open_symbol_in(&mut app, library);
         let pins =
             |app: &Signex| format!("{:?}", app.document_state.symbol_editors[&path].snapshot());
         let before = pins(&app);
@@ -423,7 +434,7 @@ mod tests {
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| {
                 Some(e.id) > since
-                    && e.message.contains("a.snxlib")
+                    && e.message.contains("refused_edit_1939.snxlib")
                     && e.message.contains("is being deleted")
                     && e.message.contains("edit was not applied")
             }),
