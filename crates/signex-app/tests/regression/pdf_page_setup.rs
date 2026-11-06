@@ -433,19 +433,33 @@ fn a_huge_custom_page_previews_within_the_pixel_cap() {
 
 #[test]
 fn a_portrait_suffixed_sheet_seeds_a_consistent_custom_orientation() {
-    let app = app_with_sheet("Tabloid portrait");
-    let o = preview(&app).pdf_options.clone();
-    if let PageSize::Custom {
-        width_mm,
-        height_mm,
-    } = o.page_size
-    {
-        let expect = if width_mm >= height_mm {
-            SheetOrientation::Landscape
-        } else {
-            SheetOrientation::Portrait
+    // Custom sizes still arrive as `Custom`; the suffix must not override the
+    // orientation their drawn shape describes.
+    for (token, width, height, expect) in [
+        (
+            "Custom 100x200 portrait",
+            100.0,
+            200.0,
+            SheetOrientation::Portrait,
+        ),
+        (
+            "Custom 200x100 portrait",
+            200.0,
+            100.0,
+            SheetOrientation::Landscape,
+        ),
+    ] {
+        let app = app_with_sheet(token);
+        let o = preview(&app).pdf_options.clone();
+        let PageSize::Custom {
+            width_mm,
+            height_mm,
+        } = o.page_size
+        else {
+            panic!("{token} must arrive as Custom, got {:?}", o.page_size);
         };
-        assert_eq!(o.orientation, expect);
+        assert_eq!((width_mm, height_mm), (width, height), "{token}");
+        assert_eq!(o.orientation, expect, "{token}");
     }
 }
 
