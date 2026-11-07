@@ -65,7 +65,7 @@ pub(crate) fn view<'a>(
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
-    let header = view_header(state, tokens, address.clone());
+    let header = view_header(state, tokens, address.clone(), read_only);
     let tabs = view_tabs(state, library_state, tokens, address.clone());
     let body = view_active_tab(
         state,
@@ -107,6 +107,7 @@ fn view_header<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -118,7 +119,7 @@ fn view_header<'a>(
         &format!("{:?}", state.row.state),
     );
     if crate::styles::is_graphite(tokens) {
-        return graphite_header(state, tokens, address);
+        return graphite_header(state, tokens, address, read_only);
     }
     container(
         row![
@@ -136,11 +137,13 @@ fn view_header<'a>(
 }
 
 /// Graphite document header: the internal PN in mono, then the lifecycle
-/// and class as pills, with the close button at the right.
+/// and class as pills, with Discard / Release... / Save and the close
+/// button at the right.
 fn graphite_header<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let pn = state.row.internal_pn.as_str();
     let pn = if pn.trim().is_empty() {
@@ -171,9 +174,39 @@ fn graphite_header<'a>(
             tokens,
         ));
     }
+    let event = |msg: EditorMsg| {
+        Some(LibraryMessage::EditorEvent {
+            library_path: address.library_path.clone(),
+            table: address.table.clone(),
+            row_id: address.row_id,
+            msg,
+        })
+    };
+    line = line.push(Space::new().width(Length::Fill).boxed());
+    if state.dirty {
+        line = line.push(
+            text("\u{2022} Unsaved changes")
+                .size(TS.body)
+                .color(theme_ext::text_secondary(tokens))
+                .boxed(),
+        );
+    }
+    let editable = !read_only;
+    // Discard drops the working copy for the stored row (asks first when
+    // dirty); Release has no backend yet, so it is a disabled stub.
     line = line
-        .push(Space::new().width(Length::Fill).boxed())
-        .push(close_btn(address, tokens));
+        .push(kit::secondary_button(
+            "Discard",
+            event(EditorMsg::ReloadRequested).filter(|_| editable && state.dirty),
+            tokens,
+        ))
+        .push(kit::secondary_button("Release...", None, tokens))
+        .push(kit::primary_button(
+            "Save",
+            event(EditorMsg::SaveDraft).filter(|_| editable),
+            tokens,
+        ))
+        .push(close_btn(address.clone(), tokens));
     container(line.boxed())
         .padding([SP.m, SP.l])
         .style(crate::styles::modal_header_strip(tokens))
@@ -232,9 +265,17 @@ fn view_tabs<'a>(
 ) -> Element<'a, LibraryMessage> {
     // The shared `TabPill`, so these tabs read like the document and dock
     // tabs: bordered pills, the active one filled with an accent line.
-    let active_fill = crate::styles::ti(tokens.hover);
-    let resting_fill = tokens::overlay(tokens, Overlay::Faint);
-    let border = crate::styles::ti(tokens.border);
+    // Graphite tabs are flat: no pill fill or outline, only the accent
+    // underline on the active one.
+    let (active_fill, resting_fill, border) = if crate::styles::is_graphite(tokens) {
+        (Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT)
+    } else {
+        (
+            crate::styles::ti(tokens.hover),
+            tokens::overlay(tokens, Overlay::Faint),
+            crate::styles::ti(tokens.border),
+        )
+    };
     let accent = crate::styles::ti(tokens.accent);
     let last = PreviewTab::ORDER.len().saturating_sub(1);
     let mut row_widget: iced::widget::Row<Element<'_, LibraryMessage>> = iced::widget::Row::new()
@@ -417,10 +458,19 @@ fn view_footer<'a>(
         .boxed()
     };
 
-    container(
+    // Graphite carries Save in the document header.
+    let save: Element<'_, LibraryMessage> = if crate::styles::is_graphite(tokens) {
+        Space::new().width(0.0).boxed()
+    } else {
         row![
             kit::secondary_button("Save", event(EditorMsg::SaveDraft), tokens),
             Space::new().width(SP.m),
+        ]
+        .boxed()
+    };
+    container(
+        row![
+            save,
             kit::primary_button("Save & Close", event(EditorMsg::Commit), tokens),
             reload,
             Space::new().width(Length::Fill),
