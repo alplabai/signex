@@ -158,7 +158,7 @@ pub(super) fn draw_pad(
     let outline_color = if is_selected {
         palette.selection_ink()
     } else {
-        Color { a: 1.0, ..color }
+        palette.pad_edge(color)
     };
     // Place the whole copper shape with one saved transform. World and
     // screen share a handedness here — `world_to_screen` applies no Y
@@ -167,7 +167,13 @@ pub(super) fn draw_pad(
     frame.with_save(|inner| {
         inner.translate(Vector::new(screen_centre.x, screen_centre.y));
         inner.rotate(Radians(pad.rotation_deg.to_radians() as f32));
-        inner.fill(&shape_path, Color { a: 0.85, ..color });
+        inner.fill(
+            &shape_path,
+            Color {
+                a: palette.pad_fill_alpha(),
+                ..color
+            },
+        );
         inner.stroke(
             &shape_path,
             Stroke::default()

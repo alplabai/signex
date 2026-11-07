@@ -39,10 +39,11 @@ impl<'a> FootprintPreview<'a> {
         }
     }
 
-    /// Paint with the Graphite paper / charcoal canvas look when `tokens`
-    /// is a Graphite theme; any other theme is left as it was.
+    /// Paint with the Graphite paper / charcoal canvas look and the preview
+    /// palette (crisp pads, neutral courtyard) when `tokens` is a Graphite
+    /// theme; any other theme keeps the legacy board.
     pub fn with_theme_tokens(mut self, tokens: &signex_types::theme::ThemeTokens) -> Self {
-        self.graphite = graphite_look_for(tokens).map(|l| (l.bg, l.palette()));
+        self.graphite = graphite_look_for(tokens).map(|l| (l.bg, l.palette().for_preview()));
         self
     }
 }
@@ -229,7 +230,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             if let Some((_, palette)) = self.graphite {
                 layers.palette = palette;
             }
-            draw_fab(frame, &camera, self.model.fab_f());
+            draw_fab(frame, &camera, self.model.fab_f(), layers.palette);
             draw_silk(frame, &camera, &layers);
             draw_courtyard(frame, &camera, &layers);
             draw_pads(frame, &camera, &layers);

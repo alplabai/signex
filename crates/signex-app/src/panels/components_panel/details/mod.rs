@@ -4,6 +4,7 @@
 //! `ComponentsPanelState::details`, keyed by the row it was read for.
 
 pub(crate) mod footprint_canvas;
+mod graphite;
 pub mod load;
 pub(crate) mod symbol_canvas;
 
@@ -33,6 +34,8 @@ pub struct ComponentDetails {
     pub internal_pn: String,
     pub class: String,
     pub lifecycle: String,
+    /// The row's lifecycle state, for the Graphite lifecycle pill.
+    pub state: signex_library::LifecycleState,
     pub manufacturer: String,
     pub mpn: String,
     pub description: String,
@@ -195,12 +198,21 @@ pub(crate) fn view<'a>(
     grid: symbol_canvas::SheetGrid,
     device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
+    let is_graphite = crate::styles::is_graphite(tokens);
+    let muted = if is_graphite {
+        crate::styles::tokens::resolve(tokens).ink4
+    } else {
+        theme_ext::text_secondary(tokens)
+    };
     let primary = theme_ext::text_primary(tokens);
 
     let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
         container(text(message).size(HINT_TEXT_SIZE).color(color))
-            .padding([SP.l, SP.m])
+            .padding(if is_graphite {
+                [SP.s, 10.0]
+            } else {
+                [SP.l, SP.m]
+            })
             .width(Length::Fill)
             .boxed()
     };
@@ -223,39 +235,26 @@ pub(crate) fn view<'a>(
                 .boxed(),
         );
     }
-    col = col.push(
-        text(d.internal_pn.as_str())
-            .size(SECTION_HEADER_TEXT_SIZE)
-            .color(primary)
-            .boxed(),
-    );
-    let mut facts = vec![d.class.as_str(), d.lifecycle.as_str()];
-    facts.retain(|f| !f.is_empty());
-    col = col.push(
-        text(facts.join("  ·  "))
-            .size(HINT_TEXT_SIZE)
-            .color(muted)
-            .boxed(),
-    );
     let maker = match (d.manufacturer.trim(), d.mpn.trim()) {
         ("", "") => String::new(),
         (m, "") => m.to_owned(),
         ("", p) => p.to_owned(),
         (m, p) => format!("{m} — {p}"),
     };
-    if !maker.is_empty() {
-        col = col.push(text(maker).size(ROW_TEXT_SIZE).color(primary).boxed());
+    if is_graphite {
+        col = col.push(graphite::header_card(d, maker, tokens));
+    } else {
+        col = legacy_header(col, d, maker, primary, muted);
     }
-    if !d.description.trim().is_empty() {
-        col = col.push(
-            text(d.description.as_str())
-                .size(HINT_TEXT_SIZE)
-                .color(muted)
-                .boxed(),
-        );
-    }
+    let title = |label: &'a str| {
+        if is_graphite {
+            graphite::section_label(label, tokens)
+        } else {
+            section_title(label, primary)
+        }
+    };
 
-    col = col.push(section_title("Symbol", primary));
+    col = col.push(title("Symbol"));
     col = col.push(match &d.symbol {
         Some(symbol) => preview_box(
             symbol_canvas::symbol_preview(
@@ -273,7 +272,7 @@ pub(crate) fn view<'a>(
         None => empty("No symbol.", muted),
     });
 
-    col = col.push(section_title("Footprint", primary));
+    col = col.push(title("Footprint"));
     // The pick belongs to the selected row only (#1234).
     let pick = panel
         .footprint_pick
@@ -292,6 +291,7 @@ pub(crate) fn view<'a>(
             })
             .text_size(ROW_TEXT_SIZE)
             .width(Length::Fill)
+            .style(crate::panels::form_look::pick_list_style)
             .boxed(),
         );
     } else if let Some(fp) = &d.footprint {
@@ -305,7 +305,7 @@ pub(crate) fn view<'a>(
     let preview = d.footprint_preview(shown.as_ref().map(|c| &c.reference));
     col = col.push(match preview {
         Some(fp) => {
-            let program = footprint_canvas::FootprintPreview::new(fp);
+            let program = footprint_canvas::FootprintPreview::new(fp).with_theme_tokens(tokens);
             let canvas = iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(PREVIEW_HEIGHT);
@@ -323,7 +323,7 @@ pub(crate) fn view<'a>(
         );
     }
 
-    col = col.push(section_title("Parameters", primary));
+    col = col.push(title("Parameters"));
     if d.parameters.is_empty() {
         col = col.push(
             text("No parameters.")
@@ -333,6 +333,10 @@ pub(crate) fn view<'a>(
         );
     }
     for (name, value) in &d.parameters {
+        if is_graphite {
+            col = col.push(graphite::parameter_row(name, value, tokens));
+            continue;
+        }
         col = col.push(
             row![
                 text(name.as_str())
@@ -351,10 +355,56 @@ pub(crate) fn view<'a>(
     }
     col = col.push(Space::new().height(SP.m).boxed());
 
-    scrollable(container(col).padding([SP.s, SP.m]).width(Length::Fill))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
+    scrollable(
+        container(col)
+            .padding(if is_graphite {
+                [SP.s, 10.0]
+            } else {
+                [SP.s, SP.m]
+            })
+            .width(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(crate::panels::form_look::scrollbar_style)
+    .boxed()
+}
+
+/// The legacy header lines: part number, class and lifecycle, maker and
+/// description.
+fn legacy_header<'a>(
+    mut col: Column<Element<'a, LibraryMessage>>,
+    d: &'a ComponentDetails,
+    maker: String,
+    primary: Color,
+    muted: Color,
+) -> Column<Element<'a, LibraryMessage>> {
+    col = col.push(
+        text(d.internal_pn.as_str())
+            .size(SECTION_HEADER_TEXT_SIZE)
+            .color(primary)
+            .boxed(),
+    );
+    let mut facts = vec![d.class.as_str(), d.lifecycle.as_str()];
+    facts.retain(|f| !f.is_empty());
+    col = col.push(
+        text(facts.join("  ·  "))
+            .size(HINT_TEXT_SIZE)
+            .color(muted)
+            .boxed(),
+    );
+    if !maker.is_empty() {
+        col = col.push(text(maker).size(ROW_TEXT_SIZE).color(primary).boxed());
+    }
+    if !d.description.trim().is_empty() {
+        col = col.push(
+            text(d.description.as_str())
+                .size(HINT_TEXT_SIZE)
+                .color(muted)
+                .boxed(),
+        );
+    }
+    col
 }
 
 fn section_title<'a>(label: &'a str, color: Color) -> Element<'a, LibraryMessage> {
@@ -373,6 +423,11 @@ fn preview_box<'a>(
 ) -> Element<'a, LibraryMessage> {
     let bg = crate::styles::ti(tokens.panel_bg);
     let border_c = theme_ext::border_color(tokens);
+    let radius = if crate::styles::is_graphite(tokens) {
+        crate::styles::Radii::GRAPHITE.control
+    } else {
+        SP.xs
+    };
     container(inner)
         .width(Length::Fill)
         // Inset by the border so a preview's own fill leaves the stroke and
@@ -382,7 +437,7 @@ fn preview_box<'a>(
             background: Some(Background::Color(bg)),
             border: Border {
                 width: PREVIEW_BORDER_WIDTH,
-                radius: SP.xs.into(),
+                radius: radius.into(),
                 color: border_c,
                 ..Border::default()
             },

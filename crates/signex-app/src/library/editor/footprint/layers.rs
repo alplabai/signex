@@ -99,6 +99,9 @@ impl FpLayer {
     }
 }
 
+/// Shade of a preview pad's edge relative to its fill.
+const PAD_EDGE_SHADE: f32 = 0.7;
+
 /// Which colour set the footprint canvas and layer widgets paint with.
 /// Graphite themes get the Graphite values; every other theme keeps the
 /// Altium-flavoured set of [`FpLayer::color`].
@@ -111,14 +114,59 @@ pub enum LayerPalette {
     CanvasLight,
     /// Graphite colours tuned for the charcoal canvas.
     CanvasDark,
+    /// Read-only previews on the paper canvas: opaque pad gold with a darker
+    /// edge, fab ink apart from the copper and a neutral courtyard.
+    PreviewLight,
+    /// [`Self::PreviewLight`] on the charcoal canvas.
+    PreviewDark,
 }
 
 impl LayerPalette {
     /// Outline colour of a selected pad or silk graphic.
     pub fn selection_ink(self) -> Color {
         match self {
-            LayerPalette::CanvasLight => Color::from_rgb8(0x15, 0x17, 0x1A),
+            LayerPalette::CanvasLight | LayerPalette::PreviewLight => {
+                Color::from_rgb8(0x15, 0x17, 0x1A)
+            }
             _ => Color::WHITE,
+        }
+    }
+
+    /// The preview variant of a canvas palette; any other palette as is.
+    pub fn for_preview(self) -> Self {
+        match self {
+            LayerPalette::CanvasLight => LayerPalette::PreviewLight,
+            LayerPalette::CanvasDark => LayerPalette::PreviewDark,
+            other => other,
+        }
+    }
+
+    fn is_preview(self) -> bool {
+        matches!(self, LayerPalette::PreviewLight | LayerPalette::PreviewDark)
+    }
+
+    /// Whether the courtyard is drawn dashed (the Graphite canvases).
+    pub fn dashes_courtyard(self) -> bool {
+        !matches!(self, LayerPalette::Legacy | LayerPalette::Graphite)
+    }
+
+    /// Alpha of a pad's copper fill: opaque in previews so the gold stays
+    /// crisp on the paper, slightly see-through elsewhere.
+    pub fn pad_fill_alpha(self) -> f32 {
+        if self.is_preview() { 1.0 } else { 0.85 }
+    }
+
+    /// Edge stroke of a pad filled with `fill`: a darker copper in
+    /// previews, the fill colour itself elsewhere.
+    pub fn pad_edge(self, fill: Color) -> Color {
+        if self.is_preview() {
+            Color::from_rgb(
+                fill.r * PAD_EDGE_SHADE,
+                fill.g * PAD_EDGE_SHADE,
+                fill.b * PAD_EDGE_SHADE,
+            )
+        } else {
+            Color { a: 1.0, ..fill }
         }
     }
 
@@ -170,6 +218,16 @@ impl FpLayer {
     pub fn color_in(self, palette: LayerPalette) -> Color {
         match palette {
             LayerPalette::Legacy => self.color(),
+            LayerPalette::PreviewLight => match self {
+                FpLayer::FFab => Color::from_rgb8(0x5B, 0x5E, 0x66),
+                FpLayer::EdgeCuts => Color::from_rgb8(0xA3, 0xA5, 0xAB),
+                _ => self.color_in(LayerPalette::CanvasLight),
+            },
+            LayerPalette::PreviewDark => match self {
+                FpLayer::FFab => Color::from_rgb8(0xA3, 0xA5, 0xAB),
+                FpLayer::EdgeCuts => Color::from_rgb8(0x5B, 0x5E, 0x66),
+                _ => self.color_in(LayerPalette::CanvasDark),
+            },
             LayerPalette::CanvasLight => match self {
                 FpLayer::FSilks => Color::from_rgb8(0x2B, 0x2D, 0x33),
                 FpLayer::BSilks => Color::from_rgb8(0x7A, 0x75, 0x68),

@@ -51,9 +51,14 @@ pub(crate) fn draw_silk(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i
 }
 
 /// Front fabrication graphics (previews only; the editor does not show
-/// the fab layer).
-pub(crate) fn draw_fab(frame: &mut canvas::Frame, cam: &FootprintCanvasState, fab_f: &[FpGraphic]) {
-    draw_silk_graphics(frame, cam, fab_f, FpLayer::FFab, None, LayerPalette::Legacy);
+/// the fab layer), in `palette`.
+pub(crate) fn draw_fab(
+    frame: &mut canvas::Frame,
+    cam: &FootprintCanvasState,
+    fab_f: &[FpGraphic],
+    palette: LayerPalette,
+) {
+    draw_silk_graphics(frame, cam, fab_f, FpLayer::FFab, None, palette);
 }
 
 /// Courtyard: the outline polygon when present, else the bbox rectangle.
@@ -67,10 +72,7 @@ pub(crate) fn draw_courtyard(
     }
     let edge_color = FpLayer::EdgeCuts.color_in(i.palette);
     // Graphite draws the courtyard dashed; other themes keep it solid.
-    let dashed = matches!(
-        i.palette,
-        LayerPalette::CanvasLight | LayerPalette::CanvasDark
-    );
+    let dashed = i.palette.dashes_courtyard();
     let stroke = || Stroke {
         line_dash: if dashed {
             canvas::LineDash {
