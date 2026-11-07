@@ -4,10 +4,10 @@
 
 use iced::Color;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::tree_view::{TreeIcon, TreeNode, TreeStyle};
+use signex_widgets::tree_view::{BadgeTone, TreeIcon, TreeNode, TreeStyle};
 
-use crate::styles::ti;
-use crate::styles::tokens::resolve;
+use crate::styles::tokens::{relative_luminance, resolve};
+use crate::styles::{PillTone, pill_colors, ti};
 
 /// Table row height of the Messages and ERC tables.
 pub const TABLE_ROW_HEIGHT: f32 = 28.0;
@@ -17,23 +17,47 @@ pub const PROPERTY_FIELD_RADIUS: f32 = 7.0;
 /// Row look of the Projects tree: accent-soft selection, 24 px rows.
 pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
     let r = resolve(tokens);
-    TreeStyle::new(r.accent_soft, r.accent_soft_ink)
+    let tone = |t: PillTone| pill_colors(tokens, t);
+    // The mock's violet has no token: a fixed pair per light / dark panel.
+    let violet = if relative_luminance(ti(tokens.panel_bg)) < 0.5 {
+        (
+            Color::from_rgb8(0x2A, 0x21, 0x38),
+            Color::from_rgb8(0xC9, 0xB3, 0xEE),
+        )
+    } else {
+        (
+            Color::from_rgb8(0xF1, 0xEA, 0xF8),
+            Color::from_rgb8(0x6B, 0x3F, 0xA0),
+        )
+    };
+    TreeStyle::new(r.accent_soft, r.accent_soft_ink).badge_tones([
+        tone(PillTone::Neutral),
+        tone(PillTone::Info),
+        tone(PillTone::Ok),
+        violet,
+        tone(PillTone::Warn),
+    ])
 }
 
-/// Short kind badge of a document row: SCH / PCB / LIB / BOM / OUT.
-fn kind_badge(node: &TreeNode) -> Option<&'static str> {
+/// Short kind badge of a document row, with its tint: SCH info, PCB ok,
+/// LIB violet, BOM warn, OUT neutral.
+fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
     let label = node.label.to_ascii_lowercase();
     let ext = |e: &str| label.contains(e);
     if ext(".snxbom") {
-        return Some("BOM");
+        return Some(("BOM", BadgeTone::Warn));
     }
     if ext(".snxout") {
-        return Some("OUT");
+        return Some(("OUT", BadgeTone::Neutral));
     }
     match node.icon {
-        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => Some("SCH"),
-        TreeIcon::SnxPcb | TreeIcon::Pcb => Some("PCB"),
-        TreeIcon::SnxLibrary | TreeIcon::SnxSymbol | TreeIcon::SnxFootprint => Some("LIB"),
+        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => {
+            Some(("SCH", BadgeTone::Info))
+        }
+        TreeIcon::SnxPcb | TreeIcon::Pcb => Some(("PCB", BadgeTone::Ok)),
+        TreeIcon::SnxLibrary | TreeIcon::SnxSymbol | TreeIcon::SnxFootprint => {
+            Some(("LIB", BadgeTone::Violet))
+        }
         _ => None,
     }
 }
@@ -47,7 +71,10 @@ pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
         if depth == 1 && node.is_folder {
             out.badge = Some(count_documents(node).to_string());
         } else if node.children.is_empty() && !node.is_folder {
-            out.badge = kind_badge(node).map(str::to_string);
+            if let Some((tag, tone)) = kind_badge(node) {
+                out.badge = Some(tag.to_string());
+                out.badge_tone = tone;
+            }
         }
         out
     }

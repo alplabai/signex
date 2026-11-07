@@ -258,6 +258,9 @@ impl Signex {
                 let ctx = &mut self.document_state.panel_ctx;
                 ctx.signal_mode = ctx.signal_mode.after(*msg);
             }
+            crate::panels::PanelMsg::Projects(msg) => {
+                self.document_state.panel_ctx.projects_view.apply(msg);
+            }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
             }

@@ -536,6 +536,7 @@ impl Signex {
 
                     properties_tab: 0,
                     signal_mode: Default::default(),
+                    projects_view: Default::default(),
                     net_classes: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,

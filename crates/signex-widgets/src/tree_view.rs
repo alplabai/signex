@@ -37,7 +37,7 @@ fn chevron_down_handle() -> svg::Handle {
 use crate::theme_ext;
 
 mod style;
-pub use style::TreeStyle;
+pub use style::{BadgeTone, BadgeTones, TreeStyle};
 
 // ─── Data Model ───────────────────────────────────────────────
 
@@ -243,6 +243,10 @@ pub struct TreeNode {
     /// user can find their place in a multi-sheet project at a
     /// glance — Altium parity.
     pub is_active: bool,
+    /// Tint of the badge pill (themed rows only).
+    pub badge_tone: BadgeTone,
+    /// Small monospace note on the right of the row (themed rows only).
+    pub meta: Option<String>,
 }
 
 impl TreeNode {
@@ -260,6 +264,8 @@ impl TreeNode {
             is_open: false,
             is_dirty: false,
             is_active: false,
+            badge_tone: BadgeTone::Neutral,
+            meta: None,
         }
     }
 
@@ -277,6 +283,8 @@ impl TreeNode {
             is_open: false,
             is_dirty: false,
             is_active: false,
+            badge_tone: BadgeTone::Neutral,
+            meta: None,
         }
     }
 
@@ -294,6 +302,18 @@ impl TreeNode {
     /// Builder variant: mark the node as accented (bold at depth 0).
     pub fn with_accent(mut self, accent: bool) -> Self {
         self.accent = accent;
+        self
+    }
+
+    /// Builder: tint the badge pill.
+    pub fn with_badge_tone(mut self, tone: BadgeTone) -> Self {
+        self.badge_tone = tone;
+        self
+    }
+
+    /// Builder: set the monospace note shown on the right of a themed row.
+    pub fn with_meta(mut self, meta: impl Into<String>) -> Self {
+        self.meta = Some(meta.into());
         self
     }
 
@@ -603,15 +623,35 @@ fn render_node(
     }
     r = r.push(label.boxed());
 
+    // Themed meta note, right-aligned ahead of the badge.
+    let meta = node.meta.as_ref().filter(|_| m.style.is_some());
+    if let Some(meta) = meta {
+        r = r.push(iced::widget::space::horizontal().boxed());
+        r = r.push(
+            text(meta.clone())
+                .size(m.badge)
+                .font(iced::Font::MONOSPACE)
+                .color(theme_ext::text_secondary(tokens))
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        );
+        r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());
+    }
+
     // Badge (right-aligned, very muted, single line)
     if let Some(badge) = &node.badge {
-        r = r.push(iced::widget::space::horizontal().boxed());
+        if meta.is_none() {
+            r = r.push(iced::widget::space::horizontal().boxed());
+        }
         let badge_text = text(badge.clone())
             .size(m.badge)
             .wrapping(iced::widget::text::Wrapping::None);
         if m.style.is_some() {
             // Themed rows draw the badge as a count / kind pill.
-            let (fill, ink) = (hov_bg, theme_ext::text_secondary(tokens));
+            let (fill, ink) = m
+                .style
+                .and_then(|s| s.tone_colors(node.badge_tone))
+                .unwrap_or((hov_bg, theme_ext::text_secondary(tokens)));
             r = r.push(
                 container(badge_text.color(ink))
                     .padding([0.0, 5.0])
@@ -638,7 +678,7 @@ fn render_node(
     // dirty state already implies open and only one indicator's worth
     // of width fits comfortably in narrow Projects panels.
     if node.is_open || node.is_dirty {
-        if node.badge.is_none() {
+        if node.badge.is_none() && meta.is_none() {
             r = r.push(iced::widget::space::horizontal().boxed());
         } else {
             r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());

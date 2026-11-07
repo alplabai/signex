@@ -74,6 +74,8 @@ pub struct PanelContext {
     pub properties_tab: usize, // 0=General, 1=Parameters
     /// Signal panel mode; view-only, kept across context rebuilds.
     pub signal_mode: super::signal::SignalMode,
+    /// Projects panel filter text and collapsed groups; view-only.
+    pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
     /// Persistent project tree — toggle state survives across renders.

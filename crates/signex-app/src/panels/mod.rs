@@ -39,6 +39,7 @@ mod numeric_draft;
 mod palette;
 mod paper;
 mod projects;
+mod projects_graphite;
 mod properties;
 pub mod signal;
 mod status;
@@ -106,6 +107,7 @@ pub use paper::{
     paper_size_options,
 };
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
+pub use projects_graphite::{ProjectsMsg, ProjectsView};
 pub(super) use projects::{view_navigator, view_projects};
 #[cfg(test)]
 pub(crate) use properties::pre_placement_readout;
