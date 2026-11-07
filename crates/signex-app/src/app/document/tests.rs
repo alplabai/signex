@@ -10,6 +10,7 @@ use crate::app::state::LoadedProject;
 use crate::app::{ComponentEditorTab, Signex, TabInfo, TabKind};
 use crate::library::state::{ComponentPreviewState, EditorAddress};
 
+mod close_readers;
 mod dirty_readers;
 
 #[derive(Debug, Clone, Copy)]

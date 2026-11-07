@@ -408,7 +408,7 @@ impl Signex {
     ) -> Vec<Element<'_, Message>> {
         let roots = self.draft_library_roots();
         let drafts: std::collections::HashSet<_> =
-            self.document_state.dirty_primitive_paths().collect();
+            self.document_state.unsaved_drafts().into_iter().collect();
         let path_labels = paths.iter().map(|path| {
             let dir = drafts.contains(path).then(|| {
                 let fold = self.draft_fold(path);
