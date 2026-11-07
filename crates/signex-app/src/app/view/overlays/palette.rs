@@ -277,15 +277,14 @@ pub(super) fn hint_footer<'a, M: 'a>(
     line = line.push(cap(theme_tokens, "\u{2193}"));
     line = line.push(hint("Navigate"));
     line = line.push(cap(theme_tokens, "Enter"));
-    line = line.push(hint("Open"));
-    line = line.push(cap(theme_tokens, "Esc"));
-    line = line.push(hint("Close"));
+    line = line.push(hint("Run"));
     line = line.push(Space::new().width(Length::Fill).boxed());
     if let Some(entry) = selected {
         line = line.push(
             text(format!("Enter runs {}", entry.label))
                 .size(TS.caption)
                 .color(r.ink3)
+                .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
         );
     } else if let Some(more) = extra {

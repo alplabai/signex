@@ -59,7 +59,7 @@ pub(super) fn theme_io_button<'a>(
     msg: PrefMsg,
     t: &ThemeTokens,
 ) -> Element<'a, PrefMsg> {
-    dialog_button(label, DialogButtonKind::Ghost, Some(msg), t)
+    dialog_button(label, DialogButtonKind::Secondary, Some(msg), t)
 }
 
 /// The UI-font pick-list drawn as a Graphite field (field fill, hairline,

@@ -27,10 +27,9 @@ pub(super) fn view_selection<'a>(
     fp: &'a FootprintEditorPanelContext,
     mode_label: &str,
     palette: PanelPalette,
-    custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
+    custom_filter_presets: Option<Vec<crate::active_bar::CustomFilterPreset>>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
-    show_filters: bool,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -360,7 +359,7 @@ pub(super) fn view_selection<'a>(
                 // (redundant with Custom Selection Filters below + the
                 // active bar's Filter dropdown). The Custom presets
                 // section is the single Properties-panel surface.
-                if show_filters {
+                if let Some(custom_filter_presets) = custom_filter_presets {
                     col = col.push(
                         super::super::view_custom_selection_filters_section(
                             custom_filter_presets,

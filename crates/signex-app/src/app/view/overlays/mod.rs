@@ -18,8 +18,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Width of the command palette card in an undocked window.
 const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 /// Width of the Graphite palette card under the chrome strip (the mock's
-/// 640 px); independent of the search field's own width.
-const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
+/// 372 px column); independent of the search field's own width.
+const GRAPHITE_PALETTE_WIDTH: f32 = 372.0;
 
 mod bars;
 mod modals;

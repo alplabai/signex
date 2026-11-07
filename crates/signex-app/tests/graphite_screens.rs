@@ -253,9 +253,9 @@ fn screens() -> Vec<(&'static str, Build)> {
             // Two real log entries, so the Messages tab shows rows and its count.
             signex_app::diagnostics::log_warning("Unconnected input pin TS on U1 (BQ24072)");
             signex_app::diagnostics::log_warning("Unconnected output pin PGOOD on U1 (BQ24072)");
-            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::DraftTheme(
-                app.ui_state.theme_id,
-            ))));
+            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+                PrefMsg::DraftTheme(app.ui_state.theme_id),
+            )));
             Ok(())
         }),
         ("schematic-signal", |app, r, fx| {
@@ -276,8 +276,12 @@ fn screens() -> Vec<(&'static str, Build)> {
             );
             // Collapse the side docks, as the mock does for the browser, so the
             // grid has the width the design assumes.
-            let _ = app.update(Message::Dock(DockMessage::ToggleCollapse(PanelPosition::Left)));
-            let _ = app.update(Message::Dock(DockMessage::ToggleCollapse(PanelPosition::Right)));
+            let _ = app.update(Message::Dock(DockMessage::ToggleCollapse(
+                PanelPosition::Left,
+            )));
+            let _ = app.update(Message::Dock(DockMessage::ToggleCollapse(
+                PanelPosition::Right,
+            )));
             // Select the first row so the preview pane shows.
             let (_, row) = app
                 .library

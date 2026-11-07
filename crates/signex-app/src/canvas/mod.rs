@@ -19,7 +19,6 @@ mod gpu_drag;
 pub(crate) mod gpu_mount;
 mod graphite;
 pub mod grid;
-pub mod zoom_pill;
 mod input;
 mod move_pick;
 mod net_highlight;
@@ -32,6 +31,7 @@ mod special_strings;
 mod surface;
 #[cfg(test)]
 mod tool_click_tests;
+pub mod zoom_pill;
 
 use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;
