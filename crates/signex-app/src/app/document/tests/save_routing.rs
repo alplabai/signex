@@ -289,7 +289,7 @@ fn undocked(kind: Kind) -> Fx {
     f
 }
 
-fn ctrl_s_in_window(f: &mut Fx, kind: Kind) -> (Vec<String>, Vec<u8>) {
+fn ctrl_s_in_window(f: &mut Fx) -> (Vec<String>, Vec<u8>) {
     let window = iced::window::Id::unique();
     f.app.ui_state.windows.insert(
         window,
@@ -308,7 +308,6 @@ fn ctrl_s_in_window(f: &mut Fx, kind: Kind) -> (Vec<String>, Vec<u8>) {
             app.dispatch_command(&command("save_document"), CommandArgs::none(), Some(window));
         settle_task(app, task);
     });
-    let _ = kind;
     (wrote, std::fs::read(main).unwrap())
 }
 
@@ -322,7 +321,7 @@ fn ctrl_s_in_an_undocked_window_writes_that_windows_document_not_the_main_one() 
         (Kind::Project, vec!["p.snxprj"]),
     ] {
         let mut f = undocked(kind);
-        let (wrote, main) = ctrl_s_in_window(&mut f, kind);
+        let (wrote, main) = ctrl_s_in_window(&mut f);
         assert_eq!(wrote, want, "{kind:?}");
         assert_eq!(main, OLD, "{kind:?}: the main window's sheet is untouched");
         assert_eq!(f.app.document_state.active_tab, 0, "{kind:?}");
