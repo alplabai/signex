@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_types::project::RuleProfile;
 
-pub use crate::app::command::{CommandArgs, CommandOutcome};
+pub use crate::app::command::{CommandArgs, CommandOutcome, OperandError, OperandValue};
 use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, Picker};
 use crate::keymap::AppCommandId;
@@ -107,6 +107,17 @@ impl Signex {
             || self.ui_state.io.opener != crate::io_ports::Opener::Refuse
         {
             return (CommandOutcome::NotHeadless, Task::none());
+        }
+        // shortcut: operands are parsed (#1934) but no handler reads them yet;
+        // refuse instead of arming the tool and reporting success. Drop this
+        // when the placement commands build their edit from operands.
+        if args.has_operands() {
+            return (
+                CommandOutcome::Disabled {
+                    reason: "operands are declared but not run yet (#1934)".to_string(),
+                },
+                Task::none(),
+            );
         }
         self.dispatch_command_reporting(command, args, None)
     }

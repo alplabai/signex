@@ -164,6 +164,15 @@ fn run() {
         matches!(outcome, CommandOutcome::Disabled { .. }),
         "{outcome:?}"
     );
+    // Operands parse but nothing runs them yet (#1934): refused, not a
+    // silent "Ran" that only arms the tool.
+    let label = id("place_net_label");
+    let args = CommandArgs::parse_operands(&label, &["at=10,5", "text=VCC"]).expect("operands");
+    let (outcome, _task) = app.dispatch_command_headless(&label, args);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("#1934")),
+        "{outcome:?}"
+    );
 
     let end = app.end_headless_session();
     driver.settle(&mut app, end).expect("session ended");
