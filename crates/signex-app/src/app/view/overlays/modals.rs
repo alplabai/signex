@@ -560,10 +560,10 @@ impl Signex {
         {
             return Vec::new();
         }
-        vec![
-            Self::dismiss_layer(Message::CommandPalette(CommandPaletteMsg::Close)),
+        Self::dismiss_over(
+            Message::CommandPalette(CommandPaletteMsg::Close),
             self.view_command_palette_dropdown(),
-        ]
+        )
     }
 
     pub(in crate::app::view) fn library_updates_overlay(&self) -> Option<Element<'_, Message>> {

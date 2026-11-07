@@ -11,9 +11,16 @@ mod child_sheet;
 mod drawing;
 mod drawing_preview;
 mod font_row;
+mod generic;
+mod label;
 mod library_rows;
 mod pins;
+mod power_port;
+mod rows;
 mod selected;
+mod symbol;
+mod symbol_field;
+mod text_note;
 
 pub(crate) use body_row::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,

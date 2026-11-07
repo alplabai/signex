@@ -565,6 +565,17 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         return Err(ProjectError::UnsupportedExtension(ext));
     }
 
+    let bytes = std::fs::read(path).map_err(|source| ProjectError::Io {
+        path: path.display().to_string(),
+        source,
+    })?;
+    parse_project_bytes(path, &bytes)
+}
+
+/// [`parse_project`] over bytes already read. `path` names the project (its
+/// folder and stem fill `dir` and `name`) and need not hold these bytes: a
+/// recovery copy of the project parses as the project it stands for.
+pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, ProjectError> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let project_name = path
         .file_stem()
@@ -575,14 +586,10 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     // JSON-backed projects: deserialize ProjectData directly. We don't
     // care if the persisted `dir` is stale (projects move); patch it to
     // the parent of the path the user actually opened.
-    let bytes = std::fs::read(path).map_err(|source| ProjectError::Io {
-        path: path.display().to_string(),
-        source,
-    })?;
     // Non-UTF-8 content is not a valid project file: refuse it rather than
     // probing the directory, which would yield an empty project that the
     // next save writes over the file.
-    let text = std::str::from_utf8(&bytes).map_err(|err| ProjectError::Corrupt {
+    let text = std::str::from_utf8(bytes).map_err(|err| ProjectError::Corrupt {
         path: path.display().to_string(),
         reason: err.to_string(),
     })?;

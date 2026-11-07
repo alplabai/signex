@@ -10,6 +10,7 @@ pub mod passive_calculator;
 pub mod status_bar;
 pub mod tab_pill;
 pub mod theme_ext;
+pub mod translate;
 pub mod tree_view;
 
 // The dropdown widget now lives at `active_bar::dropdown`; keep the
@@ -19,6 +20,7 @@ pub use active_bar::dropdown as active_bar_dropdown;
 
 pub use history_pane::{HistoryEntry, history_pane};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
+pub use translate::Translate;
 
 // ─── Extension Traits (Ludusavi pattern) ─────────────────────
 

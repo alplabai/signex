@@ -43,8 +43,9 @@ fn rewrite_primitive_file(
     commit_message: &str,
     rewrite: &mut signex_library::FileRewrite<'_>,
 ) -> Result<bool, LibraryError> {
-    // The adapter commits before it releases the lock.
-    if let SaveLibrary::Mounted(adapter) = library {
+    // The adapter commits before it releases the lock. One opened for this
+    // save (a nested library that is not mounted) commits like a mounted one.
+    if let SaveLibrary::Mounted(adapter) | SaveLibrary::Opened(adapter) = library {
         return adapter.rewrite_file_locked(path, commit_message, rewrite);
     }
     // A file opened on its own may still sit in a library another

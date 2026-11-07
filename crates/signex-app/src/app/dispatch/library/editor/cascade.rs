@@ -26,9 +26,9 @@
 //!   version (a row already at the saved version is skipped).
 //! - **No double cascade.** The editor never calls `adapter.save_*`.
 //! - **One library, found as the save found it.** The adapter is the
-//!   mounted one, or else one opened on `enclosing_library_file`, the same
-//!   lookup `rewrite_primitive_file` falls back to, so the save and the
-//!   cascade never disagree about which library holds the file.
+//!   mounted one unless `enclosing_library_file` names another (a nested
+//!   library that is not mounted); then one opened on that. The write, the
+//!   commit, the lock and the cascade all follow it (#1972).
 //! - Only a save that wrote cascades, only for primitives the merge
 //!   reports as changed, and a Save As never does.
 
@@ -90,29 +90,36 @@ pub(super) enum SaveLibrary {
 
 impl SaveLibrary {
     /// The library holding `path`. `mounted` is the `.snxlib` of the open
-    /// library whose directory holds it, if any. Reads disk: call it from
-    /// the worker, not from `update`.
+    /// library whose directory holds it, if any. The nearest `.snxlib` above
+    /// the file wins over it: a library nested in the mounted one's folder
+    /// and not mounted owns the file, as it does the write lock, so the
+    /// write, the commit and the lock follow it (#1972). Reads disk: call it
+    /// from the worker, not from `update`.
     pub(super) fn resolve(path: &std::path::Path, mounted: Option<&std::path::Path>) -> Self {
-        if let Some(library) = mounted {
-            return match LocalGitAdapter::open(library) {
-                Ok(adapter) => Self::Mounted(Box::new(adapter)),
-                Err(e) => Self::Unavailable {
-                    library: library.to_path_buf(),
-                    reason: e.to_string(),
-                    permanent: signex_library::retry_cannot_fix(&e),
-                },
-            };
-        }
-        let Some(library) = signex_library::enclosing_library_file(path) else {
-            return Self::None;
+        let (library, is_mounted) = match (mounted, signex_library::enclosing_library_file(path)) {
+            (Some(open), Some(nearest)) if !same_library_file(open, &nearest) => (nearest, false),
+            (Some(open), _) => (open.to_path_buf(), true),
+            (None, Some(nearest)) => (nearest, false),
+            (None, None) => return Self::None,
         };
         match LocalGitAdapter::open(&library) {
+            Ok(adapter) if is_mounted => Self::Mounted(Box::new(adapter)),
             Ok(adapter) => Self::Opened(Box::new(adapter)),
             Err(e) => Self::Unavailable {
                 permanent: signex_library::retry_cannot_fix(&e),
                 library,
                 reason: e.to_string(),
             },
+        }
+    }
+
+    /// The `.snxlib` this save goes through; `None` when no library holds
+    /// the file.
+    pub(super) fn root(&self) -> Option<PathBuf> {
+        match self {
+            Self::Mounted(a) | Self::Opened(a) => Some(a.file_path_buf().to_path_buf()),
+            Self::Unavailable { library, .. } => Some(library.clone()),
+            Self::None => Option::None,
         }
     }
 
@@ -140,6 +147,16 @@ impl SaveLibrary {
                 .adapter()
                 .is_some_and(|a| a.manifest().workflow.mode == WorkflowMode::Personal)
     }
+}
+
+/// Whether two spellings name one library file: the same file on disk, or,
+/// when either cannot be resolved, the same path.
+pub(super) fn same_library_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    a == b
+        || matches!(
+            (std::fs::canonicalize(a), std::fs::canonicalize(b)),
+            (Ok(a), Ok(b)) if a == b
+        )
 }
 
 impl Signex {

@@ -67,10 +67,10 @@ impl Signex {
         {
             return Vec::new();
         }
-        vec![
-            Self::dismiss_layer(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+        Self::dismiss_over(
+            Message::Overlay(OverlayMsg::DismissErrorNotice),
             self.view_error_notice(),
-        ]
+        )
     }
 
     /// #431 — netlist-incomplete "Export anyway?" prompt. Same modal idiom as
@@ -85,10 +85,10 @@ impl Signex {
         {
             return Vec::new();
         }
-        vec![
-            Self::dismiss_layer(Message::Export(ExportMsg::NetlistCancelIncomplete)),
+        Self::dismiss_over(
+            Message::Export(ExportMsg::NetlistCancelIncomplete),
             self.view_netlist_incomplete_prompt(),
-        ]
+        )
     }
 
     /// Print preview overlay — Altium parity: opens as a separate OS
@@ -124,10 +124,10 @@ impl Signex {
         {
             return Vec::new();
         }
-        vec![
-            Self::dismiss_layer(Message::NetColor(NetColorMsg::CustomShow(false))),
+        Self::dismiss_over(
+            Message::NetColor(NetColorMsg::CustomShow(false)),
             self.view_net_color_custom_picker(),
-        ]
+        )
     }
 
     /// Altium-style pause overlay: big centered "Placement Paused" card
@@ -392,15 +392,7 @@ impl Signex {
                 ),
             },
         );
-        vec![
-            Self::dismiss_layer(close_msg),
-            container(card.map(Message::Library).boxed())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .boxed(),
-        ]
+        Self::dismiss_and_centre(close_msg, card.map(Message::Library).boxed())
     }
 
     /// #370 — "Align…" dialog for the footprint editor. Mounted at the
@@ -429,15 +421,7 @@ impl Signex {
                 ),
             },
         );
-        vec![
-            Self::dismiss_layer(close_msg),
-            container(card.map(Message::Library).boxed())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .boxed(),
-        ]
+        Self::dismiss_and_centre(close_msg, card.map(Message::Library).boxed())
     }
 
     /// v0.13 — symbol library editor active bar (+ its dropdown overlay)
@@ -676,10 +660,11 @@ impl Signex {
         let popup_h = visible_rows * 22.0 + 12.0;
         let left = (ww - popup_w - 10.0).max(0.0);
         let top = (wh - popup_h - 26.0).max(0.0);
-        vec![
-            Self::dismiss_layer(Message::Overlay(OverlayMsg::TogglePanelList)),
-            super::super::translate::Translate::new(popup.boxed(), (left, top)).boxed(),
-        ]
+        Self::dismiss_and_place(
+            Message::Overlay(OverlayMsg::TogglePanelList),
+            popup.boxed(),
+            (left, top),
+        )
     }
 }
 

@@ -287,7 +287,7 @@ impl Signex {
             let positioned: Element<'_, Message> = if zoom <= 1.0 {
                 img_el
             } else {
-                super::view::translate::Translate::new(img_el, preview.pan).boxed()
+                signex_widgets::Translate::new(img_el, preview.pan).boxed()
             };
             let surface = container(positioned)
                 .width(Length::Fill)

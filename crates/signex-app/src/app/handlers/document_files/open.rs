@@ -377,6 +377,12 @@ impl Signex {
                 case_decided: false,
             });
         self.document_state.active_project = Some(id);
+        // An earlier run's recovery copy of this project (#2141): hold
+        // autosave back and let `update` start the check, as for a sheet.
+        self.document_state.autosave.begin_check(project_path);
+        self.document_state
+            .recovery_check_due
+            .push(project_path.to_path_buf());
         // A project that recorded a rule profile learns, off the update loop,
         // whether the local copy of that profile has changed since (#1608).
         let drift = self.check_profile_drift_task_for(id);

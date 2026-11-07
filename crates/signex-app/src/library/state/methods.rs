@@ -329,7 +329,9 @@ impl LibraryState {
     /// files), so the outer library of a nested pair is never picked. When
     /// several libraries share the deepest folder, the one whose `.snxlib`
     /// file name sorts first by raw bytes: the order `enclosing_library_file`
-    /// (the write lock's pick) uses, so both name one library.
+    /// (the write lock's pick) uses, so both name one library. A nested library
+    /// that is not open is invisible here; the worker settles it from disk and
+    /// reports the library it wrote through (`SaveLibrary::resolve`, #1972).
     pub fn write_target_library(&self, path: &Path, fold: CaseFold) -> Option<&OpenLibrary> {
         self.deepest_libraries(path, fold)
             .into_iter()
@@ -600,7 +602,8 @@ impl LibraryState {
         self.where_used.where_used(row_id)
     }
 
-    /// Editor addresses currently pointing at `root` that have unsaved edits.
+    /// Editor addresses currently pointing at `root` that have unsaved work,
+    /// a half-typed parameter value included (#2132).
     pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
         self.collect_dirty_editors(|key| key.library_path == root)
     }
@@ -624,7 +627,7 @@ impl LibraryState {
         let mut keys: Vec<EditorAddress> = self
             .editors
             .iter()
-            .filter(|(key, st)| Document::is_dirty(*st) && include(key))
+            .filter(|(key, st)| Document::has_unsaved_input(*st) && include(key))
             .map(|(key, _)| key.clone())
             .collect();
         keys.sort_by(|a, b| {

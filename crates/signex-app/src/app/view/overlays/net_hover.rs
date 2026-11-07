@@ -73,7 +73,7 @@ impl Signex {
             (width, height),
             self.card_bounds(window_id),
         );
-        super::super::translate::Translate::new(body, (x, y)).boxed()
+        signex_widgets::Translate::new(body, (x, y)).boxed()
     }
 }
 

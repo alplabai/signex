@@ -129,6 +129,52 @@ pub fn reconcile_with(
     }))
 }
 
+/// [`reconcile`] for a document that is not a file: a Component Preview row,
+/// whose copy is judged against `baseline`, the bytes of the row as stored.
+/// `older_than_file` is set when the stored row's `server_revision` differs
+/// from the one the copy was taken at: the row was saved after the copy.
+pub fn reconcile_snapshot(
+    recovery_dir: &Path,
+    document: &Path,
+    baseline: &[u8],
+    now: SystemTime,
+) -> Result<Option<Recoverable>, String> {
+    let sidecar_file = sidecar::sidecar_path(recovery_dir, document);
+    let modified = match std::fs::metadata(&sidecar_file).and_then(|meta| meta.modified()) {
+        Ok(modified) => modified,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(format!(
+                "{e}: could not read recovery copy {}",
+                sidecar_file.display()
+            ));
+        }
+    };
+    let copy = std::fs::read(&sidecar_file).map_err(|e| {
+        format!(
+            "{e}: could not read recovery copy {}",
+            sidecar_file.display()
+        )
+    })?;
+    if copy == baseline {
+        sidecar::remove(recovery_dir, document)?;
+        return Ok(None);
+    }
+    Ok(Some(Recoverable {
+        age_secs: now.duration_since(modified).map_or(0, |age| age.as_secs()),
+        older_than_file: snapshot_revision(&copy) != snapshot_revision(baseline),
+    }))
+}
+
+/// The `server_revision` a row snapshot was taken at; `None` when the
+/// snapshot has none or does not parse.
+fn snapshot_revision(bytes: &[u8]) -> Option<u64> {
+    serde_json::from_slice::<serde_json::Value>(bytes)
+        .ok()?
+        .get("server_revision")?
+        .as_u64()
+}
+
 /// Why a Restore could not load the copy. The kinds need different
 /// handling: a copy that cannot be parsed protects nothing, one that could
 /// not even be read may be intact and must not be replaced, and one that is
@@ -172,6 +218,11 @@ pub fn load_document(recovery_dir: &Path, document: &Path) -> Result<RestoredDoc
             sidecar_file.display()
         ))
     };
+    if crate::library::state::EditorAddress::is_synthetic_tab_path(document) {
+        return serde_json::from_slice::<signex_library::ComponentRow>(&bytes)
+            .map(|row| RestoredDocument::Row(Box::new(row)))
+            .map_err(|e| unreadable("component row", &e));
+    }
     let extension = document
         .extension()
         .and_then(|e| e.to_str())
@@ -186,6 +237,9 @@ pub fn load_document(recovery_dir: &Path, document: &Path) -> Result<RestoredDoc
                 .map(|file| RestoredDocument::Footprint(Box::new(file)))
                 .map_err(|e| unreadable("footprint", &e))
         }
+        Some("snxprj") => signex_types::project::parse_project_bytes(document, &bytes)
+            .map(|data| RestoredDocument::Project(Box::new(data)))
+            .map_err(|e| unreadable("project", &e)),
         Some("snxpcb" | "standard_pcb") => {
             let text = String::from_utf8(bytes).map_err(|e| unreadable("PCB", &e))?;
             signex_types::format::SnxPcb::parse(&text)
