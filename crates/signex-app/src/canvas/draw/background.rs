@@ -63,7 +63,10 @@ impl SchematicCanvas<'_> {
 
         let text_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
         // Graphite draws the frame lines softer than the title-block text.
-        let frame_color = self.prefs.graphite.map_or(text_color, |ink| ink.line_strong);
+        let frame_color = self
+            .prefs
+            .graphite
+            .map_or(text_color, |ink| ink.line_strong);
         let _probe = crate::frame_probe::span("canvas.background.frame");
         self.draw_sheet_frame(frame, cam, bounds, frame_color, text_color);
     }

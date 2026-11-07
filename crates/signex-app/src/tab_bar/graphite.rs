@@ -173,7 +173,7 @@ pub fn tab_inner(face: TabFace<'_>, tokens: &ThemeTokens) -> Element<'static, Ta
         .padding([0.0, TAB_PAD_X])
         .height(strip_height())
         .align_y(iced::alignment::Vertical::Center)
-        .into()
+        .boxed()
 }
 
 /// Wrap the tab row `tabs` into the strip: the `bg` band with a 1 px
@@ -197,7 +197,8 @@ pub fn strip<'a>(
         .height(Length::Fill)
         .align_y(iced::alignment::Vertical::Bottom);
 
-    let mut top = row![container(tabs).width(Length::Fill)].align_y(iced::Alignment::Center);
+    let mut top =
+        row![container(tabs).width(Length::Fill).boxed()].align_y(iced::Alignment::Center);
     if let Some(name) = project_name {
         top = top.push(
             container(
@@ -205,7 +206,8 @@ pub fn strip<'a>(
                     .size(TS.body)
                     .color(resolve(tokens).ink3),
             )
-            .padding([0.0, NAME_PAD_X]),
+            .padding([0.0, NAME_PAD_X])
+            .boxed(),
         );
     }
     let bg = ti(tokens.bg);
@@ -216,7 +218,7 @@ pub fn strip<'a>(
             background: Some(Background::Color(bg)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]
@@ -254,7 +256,7 @@ mod tests {
     fn the_strip_is_exactly_the_strip_height() {
         use iced::advanced::Widget as _;
         let t = theme_tokens(ThemeId::GraphiteDark);
-        let el = strip(space::horizontal().into(), Some("Sensor node rev B"), &t);
+        let el = strip(space::horizontal().boxed(), Some("Sensor node rev B"), &t);
         assert_eq!(el.size().height, Length::Fixed(34.0));
     }
 }

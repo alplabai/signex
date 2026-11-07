@@ -77,7 +77,7 @@ pub(in crate::app::view) fn wrap_modal_scrim<'a>(
     let backdrop: Element<'a, Message> = container(iced::widget::Space::new())
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(|_: &Theme| container::Style {
+        .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(scrim)),
             ..container::Style::default()
         })

@@ -146,6 +146,7 @@ pub(super) fn floating_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> containe
             width: 1.0,
             color: line,
             radius: Radii::GRAPHITE.card.into(),
+            ..Border::default()
         },
         shadow,
         ..container::Style::default()

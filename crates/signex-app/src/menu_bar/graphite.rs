@@ -4,7 +4,7 @@
 use std::sync::LazyLock;
 
 use iced::widget::{button, svg, text};
-use iced::{Background, Border, Element, Theme};
+use iced::{Background, Border, Element, Theme, Widget as _};
 use iced_aw::style::menu_bar as menu_style;
 
 use super::{MenuColors, MenuMessage, model};
@@ -33,7 +33,7 @@ const BAR_LEFT_PAD: f32 = 10.0;
 
 /// The mark.
 pub(super) fn mark<'a, M: 'a>() -> Element<'a, M> {
-    svg(MARK.clone()).width(MARK_SIZE).height(MARK_SIZE).into()
+    svg(MARK.clone()).width(MARK_SIZE).height(MARK_SIZE).boxed()
 }
 
 /// Flat root button: radius 6, no border, padding 0 8; lit while hovered or

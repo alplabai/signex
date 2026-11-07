@@ -18,7 +18,7 @@ pub fn selection_bounds(
 /// and outline width.
 const HALO_PAD_PX: f32 = 6.0;
 const HALO_RADIUS_PX: f32 = 7.0;
-const HALO_STROKE_PX: f32 = 1.5;
+const HALO_OUTLINE_PX: f32 = 1.5;
 
 /// The selection overlay: an outline in the theme's selection colour, no
 /// fill. With `graphite` a box is a padded, rounded, dashed accent halo on a
@@ -65,18 +65,20 @@ pub(super) fn selection_overlay_inputs(
             });
         } else if let Some(ink) = graphite {
             let mm = |px: f32| screen_px_to_world_mm(px, transform.scale) as f32;
-            overlays.halos.push(signex_renderer::schematic::OverlayHaloInput {
-                min: [bbox.min_x as f32, bbox.min_y as f32],
-                max: [bbox.max_x as f32, bbox.max_y as f32],
-                pad_mm: mm(HALO_PAD_PX),
-                radius_mm: mm(HALO_RADIUS_PX),
-                stroke_width_mm: mm(HALO_STROKE_PX),
-                fill_color: to_rgba(Color {
-                    a: crate::canvas::HALO_FILL_ALPHA,
-                    ..ink.accent_soft
-                }),
-                stroke_color: to_rgba(ink.accent),
-            });
+            overlays
+                .halos
+                .push(signex_renderer::schematic::OverlayHaloInput {
+                    min: [bbox.min_x as f32, bbox.min_y as f32],
+                    max: [bbox.max_x as f32, bbox.max_y as f32],
+                    pad_mm: mm(HALO_PAD_PX),
+                    radius_mm: mm(HALO_RADIUS_PX),
+                    stroke_width_mm: mm(HALO_OUTLINE_PX),
+                    fill_color: to_rgba(Color {
+                        a: crate::canvas::HALO_FILL_ALPHA,
+                        ..ink.accent_soft
+                    }),
+                    stroke_color: to_rgba(ink.accent),
+                });
         } else {
             overlays.ghost_polygons.push(OverlayPolygonInput {
                 vertices: vec![
@@ -98,6 +100,7 @@ pub(super) fn selection_overlay_inputs(
     overlays
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw_selection_overlay(
     frame: &mut canvas::Frame,
     snapshot: &SchematicRenderSnapshot,
@@ -109,7 +112,13 @@ pub fn draw_selection_overlay(
     widths: WireWidths<'_>,
 ) {
     let overlays = selection_overlay_inputs(
-        snapshot, selected, transform, colors, graphite, designators, widths,
+        snapshot,
+        selected,
+        transform,
+        colors,
+        graphite,
+        designators,
+        widths,
     );
     if overlays.preview_lines.is_empty()
         && overlays.halos.is_empty()

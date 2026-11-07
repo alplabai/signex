@@ -3,7 +3,7 @@
 //! Legacy themes keep the old strip and the red-hover X (`widgets.rs`).
 
 use iced::widget::{Space, button, container, row, text};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{
@@ -68,7 +68,7 @@ pub(crate) fn neutral_close_button<'a, M: Clone + 'a>(
     .height(Length::Fixed(side))
     .on_press(message)
     .style(styles::ghost_button(theme_tokens))
-    .into()
+    .boxed()
 }
 
 /// Graphite dialog header: title, optional subtitle, free space, an
@@ -87,13 +87,14 @@ pub(crate) fn graphite_header<'a, M: Clone + 'a>(
         text(title.into())
             .size(TS.heading)
             .color(ti(theme_tokens.text))
+            .boxed()
     ]
     .spacing(SP.l)
     .align_y(Alignment::Center);
     if let Some(sub) = subtitle {
-        line = line.push(text(sub).size(TS.label).color(r.ink3));
+        line = line.push(text(sub).size(TS.label).color(r.ink3).boxed());
     }
-    line = line.push(Space::new().width(Length::Fill));
+    line = line.push(Space::new().width(Length::Fill).boxed());
     if let Some(extra) = trailing {
         line = line.push(extra);
     }
@@ -128,5 +129,5 @@ pub(crate) fn graphite_header<'a, M: Clone + 'a>(
                 ..container::Style::default()
             }
         })
-        .into()
+        .boxed()
 }

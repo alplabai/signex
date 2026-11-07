@@ -87,7 +87,10 @@ pub fn key_cap(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 's
 /// Pair it with `text(label.to_uppercase()).size(TypeScale::DEFAULT.section)`.
 pub fn section_label(tokens: &ThemeTokens) -> impl Fn(&Theme) -> text::Style + 'static {
     let ink = resolve(tokens).ink3;
-    move |_| text::Style { color: Some(ink) }
+    move |_| text::Style {
+        color: Some(ink),
+        ..Default::default()
+    }
 }
 
 /// Card: raised fill, hairline border, card radius, no shadow.

@@ -8,8 +8,8 @@ use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
 use super::{
-    ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button, accent_button_rounded,
-    danger_button, ghost_button, is_graphite, outline_button, primary_button, ti, tokens,
+    ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button, accent_button_rounded, danger_button,
+    ghost_button, is_graphite, outline_button, primary_button, ti, tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;

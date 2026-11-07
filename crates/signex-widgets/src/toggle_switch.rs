@@ -3,7 +3,7 @@
 
 use iced::alignment::Horizontal;
 use iced::widget::{Space, button, container};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 /// Track width in px.
 pub const TRACK_WIDTH: f32 = 32.0;
@@ -108,7 +108,7 @@ pub fn toggle_switch<'a, M: Clone + 'a>(
     if let Some(m) = on_press {
         b = b.on_press(m);
     }
-    b.into()
+    b.boxed()
 }
 
 #[cfg(test)]

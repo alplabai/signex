@@ -134,7 +134,7 @@ fn legacy_tab_inner(
             .push(close_x.boxed()),
     )
     .padding([SP.s, 10.0])
-    .into()
+    .boxed()
 }
 
 pub fn view<'a>(
@@ -275,7 +275,7 @@ pub fn view<'a>(
                 Scrollbar::new().width(3).scroller_width(3),
             ))
             .width(Length::Fill);
-        return graphite::strip(tabs.into(), project_name, tokens);
+        return graphite::strip(tabs.boxed(), project_name, tokens);
     }
 
     // Strip baseline — 1 px theme-border line at the bottom of the

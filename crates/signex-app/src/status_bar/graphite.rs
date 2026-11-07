@@ -157,7 +157,7 @@ fn mono_button(
     s: String,
     color: Color,
     request: StatusBarRequest,
-) -> button::Button<'static, StatusBarRequest> {
+) -> button::Button<'static, StatusBarRequest, Text<'static>> {
     button(mono_text(s, color))
         .padding([1.0, SP.s])
         .style(button::text)

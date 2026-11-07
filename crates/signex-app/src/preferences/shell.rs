@@ -9,7 +9,7 @@ use crate::styles::{
     self, DialogButtonKind, PillTone, Radii, dialog_button, is_graphite, ti, tokens,
 };
 use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
-use iced::{Alignment, Background, Border, Element, Length, Theme};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
 /// Navigation width (236 px at the default base).
@@ -32,7 +32,7 @@ fn hairline<'a>(t: &ThemeTokens) -> Element<'a, PrefMsg> {
             background: Some(Background::Color(line)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// The whole dialog: header (in-window only), banner, nav | content, footer.
@@ -62,22 +62,23 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
                 background: Some(Background::Color(line)),
                 ..container::Style::default()
             })
+            .boxed()
     };
     items.push(
         row![graphite_nav(v.nav, t), divider, build_content(v)]
             .width(Length::Fill)
             .height(Length::Fill)
-            .into(),
+            .boxed(),
     );
     items.push(hairline(t));
     items.push(graphite_footer(&v));
 
-    container(Column::with_children(items))
+    container(Column::with_children(items).boxed())
         .width(Length::Fill)
         .height(Length::Fill)
         .style(styles::modal_card(t))
         .clip(true)
-        .into()
+        .boxed()
 }
 
 fn graphite_nav<'a>(active: PrefNav, t: &ThemeTokens) -> Element<'a, PrefMsg> {
@@ -98,20 +99,21 @@ fn graphite_nav<'a>(active: PrefNav, t: &ThemeTokens) -> Element<'a, PrefMsg> {
                     right: SP.m,
                     bottom: SP.s,
                     left: SP.m,
-                }),
+                })
+                .boxed(),
             );
         }
         col = col.push(nav_row(item, item == active, t));
     }
     let bg = ti(t.panel_bg);
-    container(scrollable(col).width(Length::Fill))
+    container(scrollable(col).width(Length::Fill).boxed())
         .width(Length::Fixed(GRAPHITE_NAV_W))
         .height(Length::Fill)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(bg)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, PrefMsg> {
@@ -143,7 +145,7 @@ fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, Pref
         },
         ..button::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 /// Footer: Restore defaults at the left; hint or unsaved pill, Cancel,
@@ -155,14 +157,14 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
         container(text("Unsaved changes").size(TS.caption))
             .padding([2.0, SP.m])
             .style(styles::pill(t, PillTone::Warn))
-            .into()
+            .boxed()
     } else if v.nav == PrefNav::Appearance {
         text("Theme changes preview live")
             .size(TS.label)
             .color(tokens::resolve(t).ink3)
-            .into()
+            .boxed()
     } else {
-        Space::new().into()
+        Space::new().boxed()
     };
     let ok_msg = if v.dirty {
         PrefMsg::SaveAndClose
@@ -190,12 +192,12 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
     container(
         row![
             dialog_button("Restore defaults", DialogButtonKind::Ghost, None, t),
-            Space::new().width(Length::Fill),
-            buttons,
+            Space::new().width(Length::Fill).boxed(),
+            buttons.boxed(),
         ]
         .align_y(Alignment::Center),
     )
     .padding([SP.m, SP.l])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }

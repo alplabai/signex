@@ -5,7 +5,7 @@
 use super::{PrefMsg, SP, TS};
 use crate::styles::{self, Radii, chrome_px, ti, tokens};
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 
 /// A headline theme: id, card title, tag on the right, description.
@@ -45,13 +45,18 @@ pub(super) fn theme_section<'a>(
         text(s.to_uppercase())
             .size(TS.section)
             .style(styles::section_label(active))
+            .boxed()
     };
     let mut col = column![
-        text("Theme").size(TS.heading).color(ti(active.text)),
+        text("Theme")
+            .size(TS.heading)
+            .color(ti(active.text))
+            .boxed(),
         text("Colours, density and canvas text. Changes preview live; Apply keeps them.")
             .size(TS.label)
-            .color(r.ink3),
-        Space::new().height(SP.l),
+            .color(r.ink3)
+            .boxed(),
+        Space::new().height(SP.l).boxed(),
         label("Application theme"),
     ]
     .spacing(SP.s);
@@ -60,8 +65,8 @@ pub(super) fn theme_section<'a>(
     for (id, name, tag, desc) in FEATURED {
         featured = featured.push(preview_card(id, name, tag, desc, draft, active));
     }
-    col = col.push(featured);
-    col = col.push(Space::new().height(SP.l));
+    col = col.push(featured.boxed());
+    col = col.push(Space::new().height(SP.l).boxed());
     col = col.push(label("Built-in themes"));
 
     let others: Vec<ThemeId> = ThemeId::BUILTINS
@@ -75,22 +80,15 @@ pub(super) fn theme_section<'a>(
             line = line.push(swatch_card(id, id.label(), draft, theme_tokens(id), active));
         }
         for _ in chunk.len()..SWATCHES_PER_ROW {
-            line = line.push(Space::new().width(Length::FillPortion(1)));
+            line = line.push(Space::new().width(Length::FillPortion(1)).boxed());
         }
-        col = col.push(line);
+        col = col.push(line.boxed());
     }
     if let Some(name) = custom_name {
-        let line = row![swatch_card(
-            ThemeId::Custom,
-            name,
-            draft,
-            active.clone(),
-            active
-        )]
-        .spacing(SP.m);
-        col = col.push(line);
+        let line = row![swatch_card(ThemeId::Custom, name, draft, *active, active)].spacing(SP.m);
+        col = col.push(line.boxed());
     }
-    col.into()
+    col.boxed()
 }
 
 fn card_border(selected: bool, accent: Color, line: Color, radius: f32) -> Border {
@@ -128,22 +126,24 @@ fn preview_card<'a>(
                 ..Border::default()
             },
             ..container::Style::default()
-        });
+        })
+        .boxed();
     let body = column![
         mini_preview(&t),
         row![
             radio,
-            text(name.to_string()).size(TS.title).color(ink),
-            Space::new().width(Length::Fill),
-            text(tag.to_string()).size(TS.caption).color(a.ink3),
+            text(name.to_string()).size(TS.title).color(ink).boxed(),
+            Space::new().width(Length::Fill).boxed(),
+            text(tag.to_string()).size(TS.caption).color(a.ink3).boxed(),
         ]
         .spacing(SP.m)
-        .align_y(Alignment::Center),
-        text(desc.to_string()).size(TS.body).color(a.ink3),
+        .align_y(Alignment::Center)
+        .boxed(),
+        text(desc.to_string()).size(TS.body).color(a.ink3).boxed(),
     ]
     .spacing(SP.m);
     let raised = a.raised;
-    button(container(body).padding(SP.l))
+    button(container(body.boxed()).padding(SP.l))
         .padding(0)
         .width(Length::FillPortion(1))
         .on_press(PrefMsg::DraftTheme(id))
@@ -153,7 +153,7 @@ fn preview_card<'a>(
             border: card_border(selected, accent, line, Radii::GRAPHITE.card),
             ..button::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Two boxed parts joined by a copper-style wire, under a title strip, drawn
@@ -174,6 +174,7 @@ fn mini_preview<'a>(t: &ThemeTokens) -> Element<'a, PrefMsg> {
                 },
                 ..container::Style::default()
             })
+            .boxed()
     };
     let wire = container(Space::new())
         .width(Length::Fixed(chrome_px(36.0)))
@@ -181,7 +182,8 @@ fn mini_preview<'a>(t: &ThemeTokens) -> Element<'a, PrefMsg> {
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(accent)),
             ..container::Style::default()
-        });
+        })
+        .boxed();
     let strip = container(Space::new())
         .width(Length::Fixed(chrome_px(8.0)))
         .height(Length::Fixed(chrome_px(8.0)))
@@ -192,17 +194,24 @@ fn mini_preview<'a>(t: &ThemeTokens) -> Element<'a, PrefMsg> {
                 ..Border::default()
             },
             ..container::Style::default()
-        });
+        })
+        .boxed();
     container(
         column![
             strip,
-            container(row![part(), wire, part()].align_y(Alignment::Center))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill),
+            container(
+                row![part(), wire, part()]
+                    .align_y(Alignment::Center)
+                    .boxed()
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .boxed(),
         ]
-        .spacing(SP.s),
+        .spacing(SP.s)
+        .boxed(),
     )
     .padding(SP.m)
     .width(Length::Fill)
@@ -217,7 +226,7 @@ fn mini_preview<'a>(t: &ThemeTokens) -> Element<'a, PrefMsg> {
         },
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 /// One built-in swatch: four colour blocks of `t` over the theme's name.
@@ -239,6 +248,7 @@ fn swatch_card<'a>(
                 background: Some(Background::Color(c)),
                 ..container::Style::default()
             })
+            .boxed()
     };
     let swatch = container(
         row![
@@ -247,7 +257,8 @@ fn swatch_card<'a>(
             block(ti(t.paper), 2),
             block(ti(t.accent), 1),
         ]
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     )
     .clip(true)
     .style(move |_: &Theme| container::Style {
@@ -256,7 +267,8 @@ fn swatch_card<'a>(
             ..Border::default()
         },
         ..container::Style::default()
-    });
+    })
+    .boxed();
     button(
         container(
             column![
@@ -264,9 +276,11 @@ fn swatch_card<'a>(
                 text(name.to_string())
                     .size(TS.body)
                     .color(ink)
-                    .wrapping(iced::widget::text::Wrapping::None),
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .boxed(),
             ]
-            .spacing(SP.s),
+            .spacing(SP.s)
+            .boxed(),
         )
         .padding(SP.m),
     )
@@ -279,5 +293,5 @@ fn swatch_card<'a>(
         border: card_border(selected, accent, line, Radii::GRAPHITE.card),
         ..button::Style::default()
     })
-    .into()
+    .boxed()
 }

@@ -5,7 +5,7 @@
 use super::{PrefMsg, TS};
 use crate::styles::key_cap;
 use iced::widget::{container, row, text};
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_types::theme::ThemeTokens;
 
 /// The keys of `label`, or `None` when it is not one plain stroke.
@@ -27,10 +27,11 @@ pub(super) fn key_caps<'a>(label: &str, tokens: &ThemeTokens) -> Option<Element<
             container(text(key.to_string()).size(TS.dense))
                 .padding([2.0, crate::styles::Spacing::DEFAULT.m])
                 .width(Length::Shrink)
-                .style(key_cap(tokens)),
+                .style(key_cap(tokens))
+                .boxed(),
         );
     }
-    Some(line.align_y(Alignment::Center).into())
+    Some(line.align_y(Alignment::Center).boxed())
 }
 
 #[cfg(test)]

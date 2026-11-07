@@ -28,7 +28,11 @@ fn svg_icon(handle: svg::Handle) -> iced::widget::Svg<'static> {
 fn icon_button_of(
     icon: iced::widget::Svg<'static>,
     tokens: &signex_types::theme::ThemeTokens,
-) -> iced::widget::Button<'static, DockMessage> {
+) -> iced::widget::Button<
+    'static,
+    DockMessage,
+    iced::widget::Container<'static, iced::widget::Svg<'static>>,
+> {
     button(container(icon).center(Length::Fill))
         .width(graphite::ICON_BUTTON)
         .height(graphite::ICON_BUTTON)
@@ -39,9 +43,16 @@ fn icon_button_of(
 fn icon_button(
     handle: svg::Handle,
     tokens: &signex_types::theme::ThemeTokens,
-) -> iced::widget::Button<'static, DockMessage> {
+) -> iced::widget::Button<
+    'static,
+    DockMessage,
+    iced::widget::Container<'static, iced::widget::Svg<'static>>,
+> {
     icon_button_of(svg_icon(handle), tokens)
 }
+
+/// Boxed button style of a rail tab.
+type TabStyleFn = Box<dyn Fn(&Theme, button::Status) -> button::Style>;
 
 impl DockArea {
     pub(crate) fn view_region<'a>(
@@ -215,20 +226,24 @@ impl DockArea {
         let (close_btn, collapse_btn) = if graphite {
             (
                 icon_button(icons::icon_close(tid), &ctx.tokens)
-                    .on_press(DockMessage::ClosePanel(position, region.active)),
+                    .on_press(DockMessage::ClosePanel(position, region.active))
+                    .boxed(),
                 icon_button_of(collapse_icon, &ctx.tokens)
-                    .on_press(DockMessage::ToggleCollapse(position)),
+                    .on_press(DockMessage::ToggleCollapse(position))
+                    .boxed(),
             )
         } else {
             (
                 button(svg_icon(icons::icon_close(tid)))
                     .padding([5.0, SP.s])
                     .style(button::text)
-                    .on_press(DockMessage::ClosePanel(position, region.active)),
+                    .on_press(DockMessage::ClosePanel(position, region.active))
+                    .boxed(),
                 button(collapse_icon)
                     .padding([5.0, SP.s])
                     .style(button::text)
-                    .on_press(DockMessage::ToggleCollapse(position)),
+                    .on_press(DockMessage::ToggleCollapse(position))
+                    .boxed(),
             )
         };
 
@@ -399,7 +414,7 @@ impl DockArea {
                     estimate_text_width(&label, RAIL_FONT_SIZE)
                 };
                 let tab_h = label_w + RAIL_FONT_SIZE;
-                let tab_style: Box<dyn Fn(&Theme, button::Status) -> button::Style> = if graphite {
+                let tab_style: TabStyleFn = if graphite {
                     Box::new(graphite::rail_tab(&ctx.tokens, position, is_active))
                 } else {
                     Box::new(styles::rail_tab(&ctx.tokens, is_active))
@@ -456,7 +471,7 @@ impl DockArea {
                     styles::ti(ctx.tokens.text_secondary)
                 };
 
-                let tab_style: Box<dyn Fn(&Theme, button::Status) -> button::Style> = if graphite {
+                let tab_style: TabStyleFn = if graphite {
                     Box::new(graphite::rail_tab(&ctx.tokens, position, is_active))
                 } else {
                     Box::new(button::text)
@@ -549,7 +564,8 @@ impl DockArea {
                     .padding([0, 10])
                     .width(Length::Fill),
                     icon_button(icons::icon_close(ctx.theme_id), &ctx.tokens)
-                        .on_press(DockMessage::DockFloating(idx)),
+                        .on_press(DockMessage::DockFloating(idx))
+                        .boxed(),
                 ]
                 .align_y(iced::Alignment::Center),
             )

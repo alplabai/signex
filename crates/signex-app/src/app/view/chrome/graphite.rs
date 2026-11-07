@@ -5,7 +5,7 @@
 use std::sync::LazyLock;
 
 use iced::widget::{Space, button, container, mouse_area, row, svg, text, text_input, tooltip};
-use iced::{Alignment, Background, Border, Color, Element, Font, Length, Widget as _};
+use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
 
 use super::{SP, TS, buttons};
 use crate::app::view::{
@@ -65,7 +65,7 @@ fn is_dark(c: signex_types::theme::Color) -> bool {
 impl Signex {
     /// The Graphite main-window strip; see the module docs.
     pub(super) fn view_graphite_window_chrome<'a>(
-        &self,
+        &'a self,
         menu_row: Option<Element<'a, Message>>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
@@ -121,7 +121,7 @@ impl Signex {
             .push(menu_padded.boxed())
             .push(drag_zone())
             .push(drag_zone())
-            .push(cluster)
+            .push(cluster.boxed())
             .push(trailing_controls)
             .width(Length::Fill)
             .align_y(Alignment::Center);
@@ -146,7 +146,7 @@ impl Signex {
     /// The command-palette field: icon, input and the palette's key cap, on
     /// the `field` fill with a radius-7 hairline.
     fn graphite_search_field<'a>(
-        &self,
+        &'a self,
         tokens: &signex_types::theme::ThemeTokens,
         width: f32,
     ) -> Element<'a, Message> {
@@ -158,12 +158,12 @@ impl Signex {
         .width(13)
         .height(13)
         .style(move |_: &iced::Theme, _| svg::Style { color: Some(ink4) });
-        let query = if self.ui_state.command_palette.window.is_none() {
-            self.ui_state.command_palette.query.clone()
+        let query: &'a str = if self.ui_state.command_palette.window.is_none() {
+            &self.ui_state.command_palette.query
         } else {
-            String::new()
+            ""
         };
-        let input = text_input("Search commands, parts, nets", &query)
+        let input = text_input("Search commands, parts, nets", query)
             .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
             .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
             .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
@@ -185,16 +185,14 @@ impl Signex {
             .shortcut_label_for_id("open_command_palette");
         let mut content = row![icon, input].spacing(SP.l).align_y(Alignment::Center);
         if !hint.is_empty() {
-            let cap = container(
-                text(hint)
-                    .size(TS.caption)
-                    .font(Font::with_name(crate::fonts::CHROME_MONO_FONT)),
-            )
+            let cap = container(text(hint).size(TS.caption).font(
+                crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT),
+            ))
             .padding([0.0, SP.m])
             .height(KEY_CAP_H)
             .align_y(iced::alignment::Vertical::Center)
             .style(styles::key_cap(tokens));
-            content = content.push(cap);
+            content = content.push(cap.boxed());
         }
         container(content)
             .padding(iced::Padding {

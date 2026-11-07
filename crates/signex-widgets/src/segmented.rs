@@ -4,7 +4,7 @@
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Row, button, container, text};
-use iced::{Background, Border, Color, Element, Length, Padding, Theme};
+use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget};
 
 /// Track height in px.
 pub const TRACK_HEIGHT: f32 = 28.0;
@@ -98,7 +98,7 @@ where
         Length::Shrink
     };
 
-    let mut row: Row<'a, M> = Row::new().spacing(0.0);
+    let mut row: Row<Element<'a, M>> = Row::new().spacing(0.0);
     for (value, label) in options {
         let is_active = *value == selected;
         let ink = if is_active {
@@ -129,10 +129,11 @@ where
                     },
                     width: if is_active { 1.0 } else { 0.0 },
                     radius: seg_r.into(),
+                    ..Border::default()
                 },
                 ..button::Style::default()
             });
-        row = row.push(seg);
+        row = row.push(seg.boxed());
     }
 
     container(row)
@@ -150,7 +151,7 @@ where
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

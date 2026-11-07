@@ -469,9 +469,9 @@ impl<'a> TreeView<'a> {
             container(col)
                 .padding([0.0, inset])
                 .width(Length::Fill)
-                .into()
+                .boxed()
         } else {
-            col.into()
+            col.boxed()
         };
         mouse_area(scrollable(body).width(Length::Fill))
             .on_right_press(TreeMsg::BackgroundContextMenu)

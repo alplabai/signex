@@ -34,7 +34,7 @@ impl Signex {
     /// buttons, search, and window controls keep their own click
     /// handlers. Double-click on a drag zone toggles maximize.
     pub(super) fn view_main_window_chrome<'a>(
-        &self,
+        &'a self,
         menu_row: Option<Element<'a, Message>>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
