@@ -6,7 +6,8 @@
 //! - content (`content_surface`): retained across pans and moved by a
 //!   translation; cleared when the document changes (see `draw::retained`);
 //! - autofocus dim: drawn over the content when autofocus is active;
-//! - selection overlay (`overlay_cache`): cached, cleared on input events;
+//! - selection overlay (`overlay_cache`): cached, cleared on input events and
+//!   whenever the camera differs from `overlay_cache_camera`;
 //! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
 //!   every frame.
 
@@ -128,6 +129,12 @@ pub struct CanvasSlot {
     /// inputs, so `bg_cache` clears do not reach it.
     background_surface: std::cell::RefCell<draw::RetainedBackground>,
     pub overlay_cache: canvas::Cache,
+    /// Camera `overlay_cache` was last drawn at: the halo, ERC markers and lock
+    /// badges follow every zoom and pan, whichever message moved the camera.
+    pub overlay_cache_camera: std::cell::Cell<Option<(f32, f32, f32)>>,
+    /// Test-only: how often the selection layer was tessellated.
+    #[cfg(test)]
+    pub overlay_tessellations: std::cell::Cell<u32>,
     /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
     /// Camera and paper colour `bg_cache` was last built at; `draw_background`
@@ -300,6 +307,9 @@ impl CanvasSlot {
             content_surface: std::cell::RefCell::new(Default::default()),
             background_surface: std::cell::RefCell::new(Default::default()),
             overlay_cache: canvas::Cache::default(),
+            overlay_cache_camera: std::cell::Cell::new(None),
+            #[cfg(test)]
+            overlay_tessellations: std::cell::Cell::new(0),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             bg_cache_camera: std::cell::Cell::new(None),
             #[cfg(test)]
@@ -922,6 +932,8 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod grid_order_tests;
+#[cfg(test)]
+pub(crate) mod overlay_camera_tests;
 #[cfg(test)]
 mod pan_bench_tests;
 #[cfg(test)]

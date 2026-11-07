@@ -29,6 +29,8 @@ pub(super) mod read_only_badge;
 #[cfg(test)]
 mod window_gate_tests;
 mod zoom_pill;
+#[cfg(test)]
+pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
@@ -730,6 +732,17 @@ impl Signex {
         }
         out
     }
+}
+
+/// `element` with the mouse wheel stopped at its own bounds, so it cannot
+/// reach the canvas underneath (#562). Wrap the painted card, not a
+/// window-sized positioner (`Translate`, a `Fill` column): `mouse_area`
+/// captures wherever its bounds are, so a positioner would take the wheel
+/// over the whole canvas.
+pub(super) fn scroll_guard<'a>(element: Element<'a, Message>) -> Element<'a, Message> {
+    iced::widget::mouse_area(element)
+        .on_scroll(|_| Message::noop())
+        .boxed()
 }
 
 /// The card both hover cards draw: `rows` on the panel background with a 1 px

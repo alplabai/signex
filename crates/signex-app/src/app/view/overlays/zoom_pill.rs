@@ -14,7 +14,7 @@ use crate::styles::is_graphite;
 const EDGE_GAP: f32 = 12.0;
 
 /// Top-left of the pill for a canvas at `canvas`.
-pub(super) fn pill_origin(canvas: iced::Rectangle) -> (f32, f32) {
+pub(in crate::app::view) fn pill_origin(canvas: iced::Rectangle) -> (f32, f32) {
     let (w, h) = pill_size();
     (
         canvas.x + canvas.width - EDGE_GAP - w,
@@ -48,7 +48,8 @@ impl Signex {
             Message::Menu(MenuMessage::ZoomIn),
             Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll),
         );
-        Some(super::super::translate::Translate::new(pill, at).boxed())
+        // The `Translate` spans the window; only the pill may take the wheel.
+        Some(super::super::translate::Translate::new(super::scroll_guard(pill), at).boxed())
     }
 }
 

@@ -72,9 +72,7 @@ pub(crate) fn messages_on_click_at<M>(
     label: Option<&str>,
     point: iced::Point,
 ) -> Vec<M> {
-    use iced::advanced::Shell;
     use iced::advanced::mouse;
-    use iced::advanced::shell::{Bus, Waker};
     let renderer = headless_renderer();
     let mut tree = Tree::new(&element);
     // The fork's widgets build their child trees in `diff`, not in
@@ -96,26 +94,85 @@ pub(crate) fn messages_on_click_at<M>(
         &mut collect,
     );
     let at = label.map_or(point, |label| find(&collect.0, label).bounds.center());
+    deliver(
+        &mut element,
+        &mut tree,
+        &renderer,
+        window,
+        at,
+        &[
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ]
+        .map(iced::Event::Mouse),
+    )
+}
+
+/// The messages one wheel `delta` at `point` publishes from the laid-out
+/// `element`.
+pub(crate) fn messages_on_scroll_at<M>(
+    element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    point: iced::Point,
+    delta: iced::mouse::ScrollDelta,
+) -> Vec<M> {
+    messages_for_events(
+        element,
+        window,
+        point,
+        &[iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+            delta,
+        })],
+    )
+}
+
+/// The messages `events` publish from the laid-out `element`, delivered in
+/// one tree with the cursor at `point` (moved there first), so a widget's
+/// state carries from one event to the next (a held modifier, a press).
+pub(crate) fn messages_for_events<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    point: iced::Point,
+    events: &[iced::Event],
+) -> Vec<M> {
+    let renderer = headless_renderer();
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: point });
+    let events: Vec<iced::Event> = std::iter::once(moved)
+        .chain(events.iter().cloned())
+        .collect();
+    deliver(&mut element, &mut tree, &renderer, window, point, &events)
+}
+
+/// Deliver `events` with the cursor at `at` to a laid-out `element` and
+/// collect what it publishes.
+fn deliver<M>(
+    element: &mut Element<'_, M, Theme, iced::Renderer>,
+    tree: &mut Tree,
+    renderer: &iced::Renderer,
+    window: Size,
+    at: iced::Point,
+    events: &[iced::Event],
+) -> Vec<M> {
+    use iced::advanced::Shell;
+    use iced::advanced::mouse;
+    use iced::advanced::shell::{Bus, Waker};
+    let layout = Layout::new(tree.size);
     let cursor = mouse::Cursor::Available(at);
     let mut bus = Bus::new();
     let viewport = Rectangle::with_size(window);
-    for event in [
-        mouse::Event::CursorMoved { position: at },
-        mouse::Event::ButtonPressed(mouse::Button::Left),
-        mouse::Event::ButtonReleased(mouse::Button::Left),
-    ] {
+    for event in events {
         // One shell per event, as the runtime does: a captured press would
         // otherwise mask the release.
         let mut shell = Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
-        element.update(
-            &mut tree,
-            &iced::Event::Mouse(event),
-            layout,
-            cursor,
-            &renderer,
-            &mut shell,
-            &viewport,
-        );
+        element.update(tree, event, layout, cursor, renderer, &mut shell, &viewport);
     }
     bus.drain().map(|(message, _)| message).collect()
 }

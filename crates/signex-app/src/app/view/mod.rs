@@ -817,9 +817,7 @@ impl Signex {
             if overlay_id::swallows_scroll(*id) {
                 for layer in &mut layers[first_new..] {
                     let inner = std::mem::replace(layer, iced::widget::Space::new().boxed());
-                    *layer = iced::widget::mouse_area(inner)
-                        .on_scroll(|_| Message::noop())
-                        .boxed();
+                    *layer = overlays::scroll_guard(inner);
                 }
             }
         }
@@ -832,6 +830,8 @@ impl Signex {
     }
 }
 
+#[cfg(test)]
+mod canvas_wheel_tests;
 #[cfg(test)]
 mod overlay_paint_tests;
 

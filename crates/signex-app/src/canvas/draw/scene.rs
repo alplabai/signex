@@ -390,6 +390,9 @@ impl SchematicCanvas<'_> {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
             let draw_overlay = |frame: &mut canvas::Frame| {
+                #[cfg(test)]
+                self.overlay_tessellations
+                    .set(self.overlay_tessellations.get() + 1);
                 let transform = crate::schematic_runtime::ScreenTransform {
                     offset_x: cam.offset.x,
                     offset_y: cam.offset.y,
@@ -448,6 +451,14 @@ impl SchematicCanvas<'_> {
                 draw_overlay(&mut frame);
                 return Some(frame.into_geometry());
             } else {
+                // The layer is drawn in screen space, so a camera it was not
+                // drawn at leaves it stale: the zoom pill and the menu zoom
+                // clear only the background and content caches.
+                let key = (cam.offset.x, cam.offset.y, cam.scale);
+                if self.overlay_cache_camera.get() != Some(key) {
+                    self.overlay_cache.clear();
+                    self.overlay_cache_camera.set(Some(key));
+                }
                 let sel_overlay = self
                     .overlay_cache
                     .draw(renderer, bounds.size(), draw_overlay);

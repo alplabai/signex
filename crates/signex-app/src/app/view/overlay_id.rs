@@ -228,6 +228,14 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // canvas whenever a tooltip happened to be showing.
         OverlayId::HoverTooltip | OverlayId::ComponentsRowDragLabel => false,
 
+        // Their layers are window-sized positioners (a `Fill` column, the zoom
+        // pill's `Translate`): a guard there took the wheel over the whole
+        // canvas. The builders guard the bar, pill and dropdown themselves
+        // (`overlays::scroll_guard`).
+        OverlayId::SchematicActiveBar
+        | OverlayId::FootprintActiveBar
+        | OverlayId::SymbolEditorActiveBar => false,
+
         // Everything else paints a surface over the canvas. Scrolling on
         // it — or past the end of its own scrollable — must not reach
         // through.
@@ -237,12 +245,9 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::BomPreview
         | OverlayId::NetColorCustom
         | OverlayId::PlacementPaused
-        | OverlayId::SchematicActiveBar
-        | OverlayId::FootprintActiveBar
         | OverlayId::FootprintContextMenu
         | OverlayId::FootprintMoveBy
         | OverlayId::FootprintAlign
-        | OverlayId::SymbolEditorActiveBar
         | OverlayId::SymbolContextMenu
         | OverlayId::TextEdit
         | OverlayId::ActiveBarMenu

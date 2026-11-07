@@ -257,7 +257,7 @@ impl Signex {
                 iced::widget::Space::new().height(
                     y_offset + crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
                 ),
-                container(bar)
+                container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
@@ -295,7 +295,7 @@ impl Signex {
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + bar_margin),
-                container(bar)
+                container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
@@ -314,7 +314,7 @@ impl Signex {
                 self.ui_state.window_size.0,
             )
         {
-            out.push(overlay.map(Message::Library).boxed());
+            out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
     }
@@ -468,7 +468,7 @@ impl Signex {
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + bar_margin),
-                container(bar)
+                container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
@@ -481,7 +481,7 @@ impl Signex {
             tokens,
             dropdown_top,
         ) {
-            out.push(overlay.map(Message::Library).boxed());
+            out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
     }
