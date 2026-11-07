@@ -51,11 +51,20 @@ impl Signex {
             header_content.boxed()
         };
 
-        let name = offer
-            .path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| offer.path.display().to_string());
+        // A Component Preview row has no file: the prompt names the part.
+        let row_name = self
+            .library
+            .editors
+            .iter()
+            .find(|(address, _)| address.synthetic_tab_path() == offer.path)
+            .map(|(_, editor)| editor.row.internal_pn.as_str().to_string());
+        let name = row_name.unwrap_or_else(|| {
+            offer
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| offer.path.display().to_string())
+        });
         let mut body = column![dialog_message(
             format!(
                 "Signex found a recovery copy of {name} written {} that differs from the \
