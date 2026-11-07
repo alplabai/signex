@@ -14,13 +14,13 @@ use crate::panels::{PrePlacementData, PrePlacementKind};
 const OFF_GRID: (f64, f64) = (10.3, 20.2);
 
 /// Grid point (`i`, `j`) of the 1.27 mm grid, as the snap computes it.
-fn grid(i: f64, j: f64) -> Point {
+pub(crate) fn grid(i: f64, j: f64) -> Point {
     let g = crate::canvas::grid::pitch_mm_exact(1.27);
     Point::new(i * g, j * g)
 }
 
 /// An empty grid-snapping sheet with `tool` armed.
-fn app_with_tool(tool: Tool) -> Signex {
+pub(crate) fn app_with_tool(tool: Tool) -> Signex {
     let path = std::path::PathBuf::from("placement.snxsch");
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -43,14 +43,14 @@ fn app_with_tool(tool: Tool) -> Signex {
     app
 }
 
-fn click(app: &mut Signex, (x, y): (f64, f64)) {
+pub(crate) fn click(app: &mut Signex, (x, y): (f64, f64)) {
     let _task = app.update(Message::CanvasEvent(crate::canvas::CanvasEvent::Clicked {
         world_x: x,
         world_y: y,
     }));
 }
 
-fn doc(app: &Signex) -> &SchematicSheet {
+pub(crate) fn doc(app: &Signex) -> &SchematicSheet {
     app.document_state
         .active_engine()
         .expect("engine")
@@ -59,7 +59,7 @@ fn doc(app: &Signex) -> &SchematicSheet {
 
 /// The sheet as a value with every uuid removed, so placements made in two
 /// apps compare equal when they placed the same things.
-fn sheet_shape(app: &Signex) -> serde_json::Value {
+pub(crate) fn sheet_shape(app: &Signex) -> serde_json::Value {
     fn strip(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(map) => {
@@ -365,7 +365,7 @@ fn wire_and_bus_placements_match_their_clicks() {
     let two = [OFF_GRID, (30.4, 25.3)];
     assert_method_matches_clicks(Tool::Wire, &two, none, |app, at| {
         let mode = app.interaction_state.draw_mode;
-        let end = app.place_wire_at(at, grid(24.0, 20.0), mode);
+        let (end, _) = app.place_wire_at(at, grid(24.0, 20.0), mode);
         assert_eq!(end, grid(24.0, 20.0));
     });
     assert_method_matches_clicks(Tool::Bus, &two, none, |app, at| {
