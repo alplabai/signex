@@ -6,7 +6,7 @@
 
 use super::look;
 use super::*;
-use iced::widget::Row;
+use iced::widget::{Row, column};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;

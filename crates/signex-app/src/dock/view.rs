@@ -345,12 +345,7 @@ impl DockArea {
             let footer = (position == PanelPosition::Left)
                 .then(|| super::summary::erc_drc_card(ctx))
                 .flatten()
-                .map(|card| {
-                    container(card)
-                        .padding(SP.s)
-                        .width(Length::Fill)
-                        .boxed()
-                });
+                .map(|card| container(card).padding(SP.s).width(Length::Fill).boxed());
             let mut body = column![
                 container(title_bar)
                     .width(Length::Fill)

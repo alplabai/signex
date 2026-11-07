@@ -108,8 +108,8 @@ pub use paper::{
     paper_size_options,
 };
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
-pub use projects_graphite::{ProjectsMsg, ProjectsView};
 pub(super) use projects::{view_navigator, view_projects};
+pub use projects_graphite::{ProjectsMsg, ProjectsView};
 #[cfg(test)]
 pub(crate) use properties::pre_placement_readout;
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};

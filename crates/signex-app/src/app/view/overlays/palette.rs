@@ -165,6 +165,26 @@ pub(super) fn label_runs(label: &str, query: &str) -> Vec<(String, bool)> {
     runs
 }
 
+/// The keys of a shortcut label, one per cap: `"Ctrl+Shift+P"` gives
+/// `["Ctrl", "Shift", "P"]`; a trailing `+` key is kept.
+pub(super) fn shortcut_keys(label: &str) -> Vec<String> {
+    label
+        .replace("++", "+\u{0}")
+        .split(|c: char| c == '+' || c == ',' || c.is_whitespace())
+        .filter(|k| !k.is_empty())
+        .map(|k| k.replace('\u{0}', "+"))
+        .collect()
+}
+
+/// A shortcut label as a row of key caps.
+fn caps_row<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
+    let mut caps: Row<Element<'a, M>> = Row::new().spacing(SP.xs + 1.0);
+    for key in shortcut_keys(label) {
+        caps = caps.push(cap(theme_tokens, &key));
+    }
+    caps.boxed()
+}
+
 /// One key cap.
 pub(super) fn cap<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
     container(text(label.to_string()).size(TS.caption).font(mono()))
@@ -208,7 +228,7 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
     line = line.push(label_col.boxed());
     if is_command && !entry.detail.is_empty() {
-        line = line.push(cap(theme_tokens, &entry.detail));
+        line = line.push(caps_row(theme_tokens, &entry.detail));
     }
     let (active_fill, hover_fill) = (
         r.sunken,
@@ -286,6 +306,13 @@ pub(super) fn hint_footer<'a, M: 'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shortcut_label_splits_into_keys() {
+        assert_eq!(shortcut_keys("Ctrl+Shift+P"), ["Ctrl", "Shift", "P"]);
+        assert_eq!(shortcut_keys("Ctrl++"), ["Ctrl", "+"]);
+        assert_eq!(shortcut_keys("T A"), ["T", "A"]);
+    }
 
     #[test]
     fn contiguous_match_is_preferred_and_case_insensitive() {

@@ -132,19 +132,35 @@ macro_rules! bar_icon {
 // ─── Flat top-level (active-bar, dock, and shape_* shapes) ─────────
 
 bar_icon!(icon_align, "align.svg", "active_bar/graphite/align.svg");
-bar_icon!(icon_chevron_45, "chevron_45.svg", "active_bar/graphite/chevron.svg");
+bar_icon!(
+    icon_chevron_45,
+    "chevron_45.svg",
+    "active_bar/graphite/chevron.svg"
+);
 canonical_icon!(icon_close, "close.svg");
 canonical_icon!(icon_collapse_down, "collapse_down.svg");
 canonical_icon!(icon_collapse_left, "collapse_left.svg");
 canonical_icon!(icon_collapse_right, "collapse_right.svg");
 canonical_icon!(icon_component, "component.svg");
-bar_icon!(icon_directives, "directives.svg", "active_bar/graphite/directives.svg");
+bar_icon!(
+    icon_directives,
+    "directives.svg",
+    "active_bar/graphite/directives.svg"
+);
 canonical_icon!(icon_expand_left, "expand_left.svg");
 canonical_icon!(icon_expand_right, "expand_right.svg");
 bar_icon!(icon_filter, "filter.svg", "active_bar/graphite/filter.svg");
-bar_icon!(icon_harness, "harness.svg", "active_bar/graphite/harness.svg");
+bar_icon!(
+    icon_harness,
+    "harness.svg",
+    "active_bar/graphite/harness.svg"
+);
 bar_icon!(icon_move, "move.svg", "active_bar/graphite/move.svg");
-bar_icon!(icon_netcolor, "netcolor.svg", "active_bar/graphite/netcolor.svg");
+bar_icon!(
+    icon_netcolor,
+    "netcolor.svg",
+    "active_bar/graphite/netcolor.svg"
+);
 bar_icon!(icon_port, "port.svg", "active_bar/graphite/port.svg");
 bar_icon!(icon_power, "power.svg", "active_bar/graphite/power.svg");
 bar_icon!(icon_select, "select.svg", "active_bar/graphite/select.svg");
@@ -154,7 +170,11 @@ canonical_icon!(icon_shape_line, "shape_line.svg");
 canonical_icon!(icon_shape_polygon, "shape_polygon.svg");
 canonical_icon!(icon_shape_rect, "shape_rect.svg");
 bar_icon!(icon_shapes, "shapes.svg", "active_bar/graphite/shapes.svg");
-bar_icon!(icon_sheetsym, "sheetsym.svg", "active_bar/graphite/sheetsym.svg");
+bar_icon!(
+    icon_sheetsym,
+    "sheetsym.svg",
+    "active_bar/graphite/sheetsym.svg"
+);
 bar_icon!(icon_text, "text.svg", "active_bar/graphite/text.svg");
 bar_icon!(icon_wire, "wire.svg", "active_bar/graphite/wire.svg");
 

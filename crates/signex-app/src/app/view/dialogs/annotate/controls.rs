@@ -160,13 +160,16 @@ pub(super) fn bordered_style(
     })
 }
 
+/// Boxed button style of the per-row lock toggle.
+pub(super) type LockStyleFn = Box<dyn Fn(&Theme, button::Status) -> button::Style + 'static>;
+
 /// Style of the per-row lock toggle.
 pub(super) fn lock_style(
     theme_tokens: &ThemeTokens,
     is_locked: bool,
     border: Color,
     text_c: Color,
-) -> Box<dyn Fn(&Theme, button::Status) -> button::Style + 'static> {
+) -> LockStyleFn {
     if is_graphite(theme_tokens) {
         return Box::new(ga::toggle_style(theme_tokens, is_locked));
     }

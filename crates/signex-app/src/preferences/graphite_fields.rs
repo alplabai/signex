@@ -91,6 +91,7 @@ pub(super) fn font_pick_list<'a>(
                     line
                 },
                 radius: radius.into(),
+                ..Border::default()
             },
         })
         .menu_style(move |_: &Theme| menu::Style {
@@ -99,6 +100,7 @@ pub(super) fn font_pick_list<'a>(
                 width: 1.0,
                 color: line,
                 radius: radius.into(),
+                ..Border::default()
             },
             text_color: ink,
             selected_text_color: ink,

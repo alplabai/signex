@@ -179,6 +179,7 @@ pub(in crate::panels) fn checkbox_style(
             color: if checked { l.primary } else { l.line_strong },
             ..Border::default()
         },
+        text_color: base.text_color,
     }
 }
 

@@ -476,8 +476,8 @@ impl Signex {
             + crate::active_bar::bar_height_for(&metrics)
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.size_of_window(window_id);
-        let adjusted_x = x_off
-            + crate::active_bar::bar_left_in_window(interaction.current_tool, ww, &metrics);
+        let adjusted_x =
+            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww, &metrics);
         vec![
             Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,

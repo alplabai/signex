@@ -70,11 +70,12 @@ pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
         out.children = node.children.iter().map(|c| walk(c, depth + 1)).collect();
         if depth == 1 && node.is_folder {
             out.badge = Some(count_documents(node).to_string());
-        } else if node.children.is_empty() && !node.is_folder {
-            if let Some((tag, tone)) = kind_badge(node) {
-                out.badge = Some(tag.to_string());
-                out.badge_tone = tone;
-            }
+        } else if node.children.is_empty()
+            && !node.is_folder
+            && let Some((tag, tone)) = kind_badge(node)
+        {
+            out.badge = Some(tag.to_string());
+            out.badge_tone = tone;
         }
         out
     }

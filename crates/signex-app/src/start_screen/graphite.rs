@@ -81,7 +81,11 @@ fn nav_row<'a>(
     active: bool,
 ) -> Element<'a, Message> {
     // The current page is a neutral chip, not the copper selection tint.
-    let (hover, selected, ink) = (hover_overlay(tokens), resolve(tokens).sunken, ti(tokens.text));
+    let (hover, selected, ink) = (
+        hover_overlay(tokens),
+        resolve(tokens).sunken,
+        ti(tokens.text),
+    );
     let mut b = button(text(label).size(TS.label))
         .width(Length::Fill)
         .padding([6.0, 14.0])
