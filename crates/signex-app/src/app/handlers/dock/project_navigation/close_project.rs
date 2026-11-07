@@ -187,7 +187,7 @@ impl Signex {
 
     /// The closing project's dirty documents split by the strict rule, from
     /// the engines and library editors as they are now.
-    pub(super) fn current_close_scan(
+    pub(crate) fn current_close_scan(
         &self,
         project_idx: usize,
         sheet_refs: &SheetRefs,
