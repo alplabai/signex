@@ -45,10 +45,33 @@ fn graphite_rank(kind: &ColumnKind) -> u8 {
         ColumnKind::Rev => 6,
         ColumnKind::Symbol => 7,
         ColumnKind::Price => 8,
-        ColumnKind::Parameter(_) => 9,
-        ColumnKind::Tags => 10,
+        // Other parametric columns and tags follow Updated: the pill and the
+        // date stay in view.
+        ColumnKind::Parameter(_) => 13,
+        ColumnKind::Tags => 14,
         ColumnKind::Updated => 12,
     }
+}
+
+/// The mock's column set and widths: Rev and Symbol are shown in the preview
+/// pane instead, and the rest are compact so the pill and Updated are in view.
+pub(super) fn graphite_columns(columns: &[GridColumn]) -> Vec<GridColumn> {
+    columns
+        .iter()
+        .filter(|c| !matches!(c.kind, ColumnKind::Rev | ColumnKind::Symbol))
+        .map(|c| {
+            let width = match &c.kind {
+                ColumnKind::InternalPn => 124.0,
+                ColumnKind::Description => 150.0,
+                ColumnKind::Parameter(k) if k == "value" => 64.0,
+                ColumnKind::Footprint => 124.0,
+                ColumnKind::Manufacturer | ColumnKind::Mpn => 96.0,
+                ColumnKind::Updated => 84.0,
+                _ => c.width.min(96.0),
+            };
+            GridColumn { width, ..c.clone() }
+        })
+        .collect()
 }
 
 /// Rank of the Lifecycle pill: just before Updated.

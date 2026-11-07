@@ -268,6 +268,26 @@ fn screens() -> Vec<(&'static str, Build)> {
                 app,
                 Message::Library(LibraryMessage::OpenLibraryBrowser(fx.stock.clone())),
             );
+            // Collapse the side docks, as the mock does for the browser, so the
+            // grid has the width the design assumes.
+            let _ = app.update(Message::Dock(DockMessage::ToggleCollapse(PanelPosition::Left)));
+            let _ = app.update(Message::Dock(DockMessage::ToggleCollapse(PanelPosition::Right)));
+            // Select the first row so the preview pane shows.
+            let (_, row) = app
+                .library
+                .all_components()
+                .into_iter()
+                .next()
+                .ok_or("stock lists no component")?;
+            let table = app
+                .library
+                .table_of_row(&fx.stock, row.row_id)
+                .ok_or("no table for the row")?;
+            let _ = app.update(Message::Library(LibraryMessage::BrowserSelectRow {
+                library_path: fx.stock.clone(),
+                table,
+                row_id: signex_library::RowId(row.row_id),
+            }));
             Ok(())
         }),
         ("component", |app, _, fx| {

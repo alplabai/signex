@@ -53,6 +53,8 @@ pub(super) fn view_grid<'a>(
 
     let graphite = crate::styles::is_graphite(tokens);
     // One slot list drives header and rows, so widths and order agree.
+    let compact = graphite.then(|| layout::graphite_columns(columns));
+    let columns = compact.as_deref().unwrap_or(columns);
     let slots = layout::slots(columns, graphite);
     let fit = |s: String, w: f32| {
         if graphite {
