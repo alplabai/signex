@@ -231,6 +231,12 @@ Responsibilities:
 - locale negotiation with an `en-US` fallback, and the `en-XA` pseudolocale
 - number formatting through ICU4X
 
+The app holds the locale in `UiState::i18n`, saves it as `language` in the
+preferences file and restores it at launch. `Signex::set_language` (reached by
+`UiMsg::LanguageChanged`) switches and persists it at runtime. There is no
+Language picker in Preferences yet; it comes with the UI redesign and will call
+that entry.
+
 It is a UI-layer crate and the only one that imports Fluent or ICU4X; domain
 crates cannot depend on it (`scripts/check_arch_guard.sh`).
 

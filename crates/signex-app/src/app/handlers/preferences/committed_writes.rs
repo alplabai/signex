@@ -18,7 +18,6 @@ impl Signex {
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
         let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
         let antialiasing = ui.antialiasing;
-        let language = ui.i18n.pref().clone();
         let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
             ui.grid_style,
             ui.annotate_undo,
@@ -51,9 +50,6 @@ impl Signex {
             }),
             write("net_hover_enabled", move || {
                 crate::fonts::write_net_hover_pref(net_hover)
-            }),
-            write("language", move || {
-                crate::fonts::write_language_pref(&language)
             }),
             write("trackpad_pan", move || {
                 crate::fonts::write_trackpad_pan_pref(trackpad_pan)

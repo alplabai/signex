@@ -146,11 +146,7 @@ impl Signex {
         let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
             &crate::fonts::read_language_pref_from(prefs),
         ));
-        if let Some(lost) = i18n.dropped_locale() {
-            crate::diagnostics::log_warning(format!(
-                "Language: the saved language \"{lost}\" is not available in this version, so Signex shows English. Your choice is kept."
-            ));
-        }
+        crate::app::handlers::preferences::language::log_dropped_language(&i18n);
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
@@ -331,7 +327,6 @@ impl Signex {
                 preferences_draft_net_hover_enabled: net_hover_enabled,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
-                preferences_draft_language: i18n.pref().clone(),
                 i18n,
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,

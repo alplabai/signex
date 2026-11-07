@@ -23,8 +23,6 @@ pub use types::{Arg, Localized, MessageId, UserText};
 pub mod ids {
     use crate::MessageId;
 
-    pub const SETTINGS_LANGUAGE: MessageId = MessageId::new("settings-language");
-    pub const SETTINGS_LANGUAGE_HELP: MessageId = MessageId::new("settings-language-help");
     pub const LANGUAGE_SYSTEM_DEFAULT: MessageId = MessageId::new("language-system-default");
     pub const MENU_FILE: MessageId = MessageId::new("menu-file");
 }

@@ -1,21 +1,18 @@
-//! #2055: the Language setting changes the File menu title, in the in-window
-//! menu model and in the native macOS spec, without a restart.
+//! #2055: switching the language through the one runtime entry changes the
+//! File menu title, in the in-window menu model and in the native macOS spec,
+//! without a restart.
 
 use signex_i18n::LanguagePref;
 
 use super::*;
-use crate::app::PreferencesMsg;
+use crate::app::UiMsg;
 use crate::menu_bar::native::{build, build_for};
-use crate::preferences::PrefMsg;
 
 const EN_US_FILE: &str = "File";
 
-fn pick_and_save(app: &mut Signex, tag: &str) {
-    let draft = Message::Preferences(PreferencesMsg::Inner(PrefMsg::DraftLanguage(
-        LanguagePref::Locale(tag.to_owned()),
-    )));
-    let _ = app.update(draft);
-    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save)));
+fn switch(app: &mut Signex, tag: &str) {
+    let pref = LanguagePref::Locale(tag.to_owned());
+    let _ = app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
 }
 
 fn in_window_title(app: &Signex) -> String {
@@ -31,11 +28,10 @@ fn native_title(app: &Signex) -> String {
 #[test]
 fn the_file_title_follows_the_language_without_a_restart() {
     let (mut app, _task) = Signex::new();
-    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
-    pick_and_save(&mut app, "en-US");
+    switch(&mut app, "en-US");
     assert_eq!(in_window_title(&app), EN_US_FILE);
 
-    pick_and_save(&mut app, "en-XA");
+    switch(&mut app, "en-XA");
     let pseudo = in_window_title(&app);
     assert_ne!(pseudo, EN_US_FILE, "en-XA must change the title");
     assert_eq!(
@@ -44,49 +40,46 @@ fn the_file_title_follows_the_language_without_a_restart() {
         "the native menu reads the same title"
     );
 
-    pick_and_save(&mut app, "en-US");
+    switch(&mut app, "en-US");
     assert_eq!(in_window_title(&app), EN_US_FILE);
     assert_eq!(native_title(&app), EN_US_FILE);
 }
 
 #[test]
-fn a_committed_language_is_not_dirty_and_a_draft_is() {
+fn switching_to_the_language_in_force_keeps_the_same_instance() {
     let (mut app, _task) = Signex::new();
-    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
-    pick_and_save(&mut app, "en-US");
-    assert!(!app.ui_state.preferences_draft_differs());
-
-    let draft = PrefMsg::DraftLanguage(LanguagePref::Locale("en-XA".into()));
-    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(draft)));
-    assert!(app.ui_state.preferences_draft_differs());
-    assert_eq!(in_window_title(&app), EN_US_FILE, "a draft must not commit");
+    switch(&mut app, "en-XA");
+    let before = std::sync::Arc::clone(&app.ui_state.i18n);
+    switch(&mut app, "en-XA");
+    assert!(std::sync::Arc::ptr_eq(&before, &app.ui_state.i18n));
 }
 
 #[test]
 fn a_language_change_makes_the_native_menu_rebuild() {
     let (mut app, _task) = Signex::new();
-    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
-    pick_and_save(&mut app, "en-US");
-    let inputs = |app: &Signex| app.native_menu_inputs();
-    let before = inputs(&app);
-    assert_eq!(before, inputs(&app), "the same locale is the same input");
+    switch(&mut app, "en-US");
+    let before = app.native_menu_inputs();
+    assert_eq!(
+        before,
+        app.native_menu_inputs(),
+        "the same locale is the same input"
+    );
 
-    pick_and_save(&mut app, "en-XA");
-    assert_ne!(before, inputs(&app));
+    switch(&mut app, "en-XA");
+    assert_ne!(before, app.native_menu_inputs());
 }
 
 /// The path the macOS sync takes: Model -> `native_menu_inputs` -> `build_for`.
 #[test]
 fn a_switched_language_reaches_the_native_spec_through_the_sync_path() {
     let (mut app, _task) = Signex::new();
-    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
-    pick_and_save(&mut app, "en-US");
+    switch(&mut app, "en-US");
     assert_eq!(
         build_for(&app.native_menu_inputs()).spec.menus[1].title,
         EN_US_FILE
     );
 
-    pick_and_save(&mut app, "en-XA");
+    switch(&mut app, "en-XA");
     let title = build_for(&app.native_menu_inputs()).spec.menus[1]
         .title
         .clone();

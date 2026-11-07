@@ -1,21 +1,35 @@
-//! Committing the Language draft (#2055).
+//! The one runtime entry that switches the UI language (#2055).
 
 use std::sync::Arc;
 
-use signex_i18n::I18n;
+use iced::Task;
+use signex_i18n::{I18n, LanguagePref};
 
 use super::super::super::*;
 
+/// Say once that a saved or chosen language is not in this build.
+pub(crate) fn log_dropped_language(i18n: &I18n) {
+    if let Some(lost) = i18n.dropped_locale() {
+        crate::diagnostics::log_warning(format!(
+            "Language: \"{lost}\" is not available in this version, so Signex shows English. Your choice is kept."
+        ));
+    }
+}
+
 impl Signex {
-    /// Put the drafted language in force. Menus and Preferences read the new
-    /// `I18n` from the next frame; the native menu rebuilds on its next sync,
-    /// because its inputs hold the instance.
-    pub(super) fn commit_language_draft(&mut self) {
-        if self.ui_state.preferences_draft_language == *self.ui_state.i18n.pref() {
-            return;
+    /// Switch the language now and persist it. Menus read the new `I18n` from
+    /// the next frame; the native menu rebuilds on its next sync because its
+    /// inputs hold the instance. The Preferences picker calls this; no
+    /// restart. A no-op when the language is already in force.
+    pub(crate) fn set_language(&mut self, pref: LanguagePref) -> Task<Message> {
+        if pref == *self.ui_state.i18n.pref() {
+            return Task::none();
         }
-        let next = Arc::new(I18n::new(&self.ui_state.preferences_draft_language));
-        self.ui_state.preferences_draft_language = next.pref().clone();
+        let next = Arc::new(I18n::new(&pref));
+        log_dropped_language(&next);
         self.ui_state.i18n = next;
+        crate::fonts::background_pref_write("language", move || {
+            crate::fonts::write_language_pref(&pref)
+        })
     }
 }

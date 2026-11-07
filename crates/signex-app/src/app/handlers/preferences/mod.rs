@@ -4,7 +4,7 @@ mod committed_writes;
 mod keymap;
 #[cfg(test)]
 mod keymap_tests;
-mod language;
+pub(crate) mod language;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;
@@ -111,7 +111,6 @@ impl Signex {
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
         self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
-        self.ui_state.preferences_draft_language = self.ui_state.i18n.pref().clone();
         self.ui_state.preferences_draft_remember_window_geometry =
             self.ui_state.remember_window_geometry;
         self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
@@ -318,7 +317,6 @@ impl Signex {
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
                 self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
                 self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;
-                self.commit_language_draft();
                 self.ui_state.remember_window_geometry =
                     self.ui_state.preferences_draft_remember_window_geometry;
                 self.ui_state.drag_direction_select =
@@ -530,10 +528,6 @@ impl Signex {
             }
             PrefMsg::DraftNetHoverEnabled(enabled) => {
                 self.ui_state.preferences_draft_net_hover_enabled = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftLanguage(pref) => {
-                self.ui_state.preferences_draft_language = pref;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftTrackpadPan(enabled) => {
