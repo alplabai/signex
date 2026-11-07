@@ -23,6 +23,8 @@ pub enum OperandValue {
     /// An absolute path on the host running the command (`C:\...` on Windows).
     Path(String),
     Bool(bool),
+    /// An opaque colour: red, green, blue.
+    Color(u8, u8, u8),
 }
 
 /// Why operands were refused; every variant names the operand.
@@ -165,7 +167,18 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             "false" => Ok(OperandValue::Bool(false)),
             _ => Err(invalid("true or false")),
         },
+        OperandKind::Color => parse_color(text).ok_or_else(|| invalid("#rrggbb")),
     }
+}
+
+/// `#rrggbb` or `rrggbb`: six hex digits, nothing else.
+fn parse_color(text: &str) -> Option<OperandValue> {
+    let digits = text.strip_prefix('#').unwrap_or(text);
+    if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).ok();
+    Some(OperandValue::Color(channel(0)?, channel(2)?, channel(4)?))
 }
 
 #[cfg(test)]

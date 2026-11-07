@@ -13,6 +13,9 @@ mod args;
 pub(crate) mod bridge;
 pub(crate) mod enablement;
 mod needs;
+#[cfg(test)]
+mod operand_handler_tests;
+mod operand_handlers;
 mod operands;
 mod outcome;
 #[cfg(test)]

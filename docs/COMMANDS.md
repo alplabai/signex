@@ -144,6 +144,7 @@ shrink.
 | `clear_all_net_colors` | Clear all net colors | view | — | — |
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
+| `color_net` | Color net | view | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |

@@ -56,8 +56,114 @@ fn probe() {
         "undo_round_trip" => undo_round_trip(),
         "undo_depth" => undo_depth(),
         "undo_depth_dispatch" => undo_depth_dispatch(),
+        "net_colors" => net_colors(),
         other => panic!("unknown scenario {other}"),
     }
+}
+
+#[test]
+fn net_colours_run_undo_and_save_through_command_ids_alone() {
+    run_probe("net_colors");
+}
+
+/// Colour a net by operands, undo, redo, clear, save: no window, and the
+/// sheet's dirty state follows the history (#661).
+fn net_colors() {
+    use signex_types::schematic::{Point, SchematicSheet, Wire};
+
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, boot).expect("boot settled");
+
+    let path = isolated.path().join("colours.snxsch");
+    let wire = Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    let wire_id = wire.uuid;
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        ..Default::default()
+    };
+    let mut seed = signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("engine");
+    seed.save().expect("seed file");
+    app.headless_answers()
+        .expect("headless answers")
+        .replace_all([("path".to_string(), path.display().to_string())]);
+    let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::Ran);
+    driver.settle(&mut app, task).expect("open settled");
+
+    let painted = |app: &Signex| {
+        app.document_state.engines[&path]
+            .document()
+            .net_colors
+            .get(&wire_id)
+            .copied()
+    };
+    let mut run = |app: &mut Signex, name: &str, operands: &[&str]| {
+        let command = id(name);
+        let args = CommandArgs::parse_operands(&command, operands).expect("operands");
+        let (outcome, task) = app.dispatch_command_headless(&command, args);
+        driver.settle(app, task).expect("command settled");
+        outcome
+    };
+    assert!(!app.document_state.is_document_dirty(&path));
+
+    let ran = run(&mut app, "color_net", &["at=5,0", "color=#336699"]);
+    assert_eq!(ran, CommandOutcome::Ran);
+    assert_eq!(
+        painted(&app),
+        Some(signex_types::theme::Color::new(0x33, 0x66, 0x99, 255)),
+        "the operands changed the sheet"
+    );
+    assert!(app.document_state.is_document_dirty(&path), "an edit");
+
+    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(painted(&app), None);
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "undo back to the saved colours is clean"
+    );
+    assert_eq!(run(&mut app, "redo", &[]), CommandOutcome::Ran);
+    assert!(painted(&app).is_some());
+    assert!(app.document_state.is_document_dirty(&path));
+
+    assert_eq!(run(&mut app, "save_document", &[]), CommandOutcome::Ran);
+    assert!(!app.document_state.is_document_dirty(&path), "saved");
+    let text = std::fs::read_to_string(&path).expect("saved file");
+    let saved = signex_types::format::SnxSchematic::parse(&text)
+        .expect("reopens")
+        .sheet;
+    assert!(
+        saved.net_colors.contains_key(&wire_id),
+        "the file holds the colour"
+    );
+
+    let cleared = run(&mut app, "clear_all_net_colors", &[]);
+    assert_eq!(cleared, CommandOutcome::Ran);
+    assert_eq!(painted(&app), None);
+    assert!(app.document_state.is_document_dirty(&path));
+    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert!(painted(&app).is_some());
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "back at the save"
+    );
+
+    // A command that declares operands and has no handler is still refused.
+    let refused = run(&mut app, "place_net_label", &["at=1,1", "text=A"]);
+    assert!(
+        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("not run yet")),
+        "{refused:?}"
+    );
 }
 
 /// `unused_pin` switched off: a rule the machine profile does not change.

@@ -30,7 +30,8 @@
 //!   - `ActiveBarAction::NetColorFuchsia`
 //!   - `ActiveBarAction::NetColorYellow`
 //!   - `ActiveBarAction::NetColorDarkGreen`
-//!   - `ActiveBarAction::NetColorCustom`
+//!
+//! (`NetColorCustom` is the id `color_net`: the colour is its operand.)
 //!
 //! One more is absent because [`super::bridge`] already maps its id to a
 //! different message: `select_all` goes through `SelectionRequest`. Listing
@@ -61,6 +62,7 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
     ("bring_to_front_of", ActiveBarAction::BringToFrontOf),
     ("clear_all_net_colors", ActiveBarAction::ClearAllNetColors),
     ("clear_net_color", ActiveBarAction::ClearNetColor),
+    ("color_net", ActiveBarAction::NetColorCustom),
     (
         "distribute_horizontally",
         ActiveBarAction::DistributeHorizontally,
@@ -251,7 +253,6 @@ mod tests {
         ActiveBarAction::NetColorFuchsia,
         ActiveBarAction::NetColorYellow,
         ActiveBarAction::NetColorDarkGreen,
-        ActiveBarAction::NetColorCustom,
     ];
 
     /// Actions whose id maps to a DIFFERENT message in `bridge.rs`, so

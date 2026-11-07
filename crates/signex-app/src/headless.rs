@@ -137,18 +137,13 @@ impl Signex {
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
-        // shortcut: operands are parsed (#1934) but no handler reads them yet;
-        // refuse instead of arming the tool and reporting success. Drop this
-        // when the placement commands build their edit from operands.
-        if args.has_operands() {
-            return (
-                CommandOutcome::Disabled {
-                    reason: "operands are declared but not run yet (#1934)".to_string(),
-                },
-                Task::none(),
-            );
-        }
-        let result = self.dispatch_command_reporting(command, args, None);
+        // Operands run only through the command's own operand handler; one
+        // without a handler is refused, never run as if it had none (#2155).
+        let result = if args.has_operands() {
+            self.run_operands(command, &args)
+        } else {
+            self.dispatch_command_reporting(command, args, None)
+        };
         // No `update` runs here, so a history the command created gets its
         // depth now.
         self.sync_undo_depth();
