@@ -481,7 +481,8 @@ fn a_window_without_a_tab_does_not_step_the_main_window() {
     assert!(menu(&app, None, "undo"));
 }
 
-/// The ERC dialog's own Undo / Redo buttons read the menu's predicate.
+/// Guard: the ERC dialog's Undo / Redo buttons read `undo_availability`
+/// over `ProjectRules`, which is the rule history and the menu's answer.
 #[test]
 fn the_erc_dialog_buttons_read_the_same_predicate_as_the_menu() {
     let _ = crate::diagnostics::init_logging();
@@ -493,10 +494,16 @@ fn the_erc_dialog_buttons_read_the_same_predicate_as_the_menu() {
             (menu(&app, window, "undo"), menu(&app, window, "redo")),
             "{stage:?}"
         );
-        assert!(matches!(
-            target,
-            crate::app::document::UndoTarget::ProjectRules(_)
-        ));
+        let crate::app::document::UndoTarget::ProjectRules(project) = target else {
+            panic!("the ERC window resolves to the project rules");
+        };
+        let history = &app.document_state.rules_history;
+        let stored = history.get(&project).map(|h| (h.can_undo(), h.can_redo()));
+        assert_eq!(
+            app.undo_availability(&target),
+            stored.unwrap_or((false, false)),
+            "{stage:?}: the buttons' tuple is the rule history's"
+        );
     }
 }
 
@@ -531,4 +538,38 @@ fn rules_history_is_never_consulted_for_project_dirty() {
         "back at the saved bytes"
     );
     assert!(app.document_state.rules_history[&id].can_undo());
+}
+
+/// An undocked sheet window whose tab is closed but whose dirty engine is
+/// parked still has no tab to step: it never undoes the main window's
+/// document.
+#[test]
+fn an_undocked_window_with_a_parked_engine_and_no_tab_leaves_the_main_window_alone() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _w) = footprint(Stage::HasUndo);
+    let path = PathBuf::from("closed.snxsch");
+    app.document_state
+        .engines
+        .insert(path.clone(), engine_with_a_step());
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path,
+            title: "closed".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let before = fingerprint(&app);
+    assert!(!menu(&app, Some(window), "undo"));
+    let (moved, outcome) = ran(&mut app, Some(window), "undo");
+    assert!(!moved, "{outcome:?}");
+    assert!(matches!(outcome, CommandOutcome::Disabled { .. }));
+    assert_eq!(
+        fingerprint(&app),
+        before,
+        "the main window's footprint is untouched"
+    );
 }

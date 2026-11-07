@@ -106,6 +106,7 @@ impl Signex {
         if let Some(window_id) = window
             && matches!(command.as_str(), "undo" | "redo")
             && self.undocked_tab_has_canvas(window)
+            && self.undo_target(window) != UndoTarget::None
         {
             let mut outcome = CommandOutcome::Ran;
             let task = self.run_in_window(window_id, true, |app| {

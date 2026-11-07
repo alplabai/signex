@@ -21,9 +21,9 @@ pub(crate) enum UndoTarget {
 
 impl Signex {
     /// The history `window` (`None`: the main window) steps. A document window
-    /// answers by its own tab; the main window and the detached panels and
-    /// modals answer by the main window's tab; a window whose tab is gone by
-    /// nothing.
+    /// answers by its own tab, found by path; the main window and the detached
+    /// panels and modals by the main window's active tab; a document window
+    /// whose tab is gone by nothing.
     pub(crate) fn undo_target(&self, window: Option<iced::window::Id>) -> UndoTarget {
         let docs = &self.document_state;
         if self.erc_dialog_takes_input(window) {
@@ -113,12 +113,9 @@ impl Signex {
         } else {
             "the document was redone"
         });
+        // The ERC dialog steps its rules through `ErcMsg::RulesUndone`/`Redone`.
         let UndoTarget::Document(key) = target else {
-            return match target {
-                UndoTarget::ProjectRules(_) if undo => self.undo_project_rules(),
-                UndoTarget::ProjectRules(_) => self.redo_project_rules(),
-                _ => false,
-            };
+            return false;
         };
         match key {
             DocumentKey::Project(id) => self.step_project_tab_history(*id, undo),
