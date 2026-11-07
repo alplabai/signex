@@ -127,7 +127,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             let (sx, sy) = parse_pair(&get("Start"));
             let (ex, ey) = parse_pair(&get("End"));
             col = col.push(
-                collapsible_section(
+                ctx.collapsible(
                     "draw_line",
                     "Properties",
                     &ctx.collapsed_sections,
@@ -181,7 +181,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             let w_mm = parse_f64(&get("Width"));
             let h_mm = parse_f64(&get("Height"));
             col = col.push(
-                collapsible_section(
+                ctx.collapsible(
                     "draw_rect",
                     "Properties",
                     &ctx.collapsed_sections,
@@ -237,7 +237,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             let (cx, cy) = parse_pair(&get("Center"));
             let radius = parse_f64(&get("Radius"));
             col = col.push(
-                collapsible_section(
+                ctx.collapsible(
                     "draw_circle",
                     "Properties",
                     &ctx.collapsed_sections,
@@ -288,7 +288,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             let start_angle = parse_f64(&get("Start Angle"));
             let end_angle = parse_f64(&get("End Angle"));
             col = col.push(
-                collapsible_section(
+                ctx.collapsible(
                     "draw_arc",
                     "Properties",
                     &ctx.collapsed_sections,
@@ -347,7 +347,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         "Polygon" => {
             let vert_count = parse_f64(&get("Vertices")) as i32;
             col = col.push(
-                collapsible_section(
+                ctx.collapsible(
                     "draw_poly",
                     "Properties",
                     &ctx.collapsed_sections,

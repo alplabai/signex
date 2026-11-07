@@ -9,6 +9,8 @@ use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
 
+use crate::panels::form_look;
+
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -80,15 +82,18 @@ pub fn form_input_row<'a, M: 'a>(
             )
             .padding([3, 6])
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(input_bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_border,
-                    ..Border::default()
-                },
-                ..container::Style::default()
+            .style(move |theme: &Theme| {
+                let (bg, bdr, radius) = form_look::value_box(theme, input_bg, input_border, 2.0);
+                container::Style {
+                    background: Some(Background::Color(bg)),
+                    border: Border {
+                        width: 1.0,
+                        radius: radius.into(),
+                        color: bdr,
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                }
             }),
         ]
         .spacing(SP.m)
@@ -148,17 +153,23 @@ pub fn form_mm_edit_row<'a>(
                 .size(TS.body)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(input_bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_border,
-                        ..Border::default()
-                    },
-                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: text_on(input_bg),
-                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
+                .style(move |theme: &Theme, status| {
+                    form_look::text_input_or(
+                        theme,
+                        status,
+                        iced::widget::text_input::Style {
+                            background: Background::Color(input_bg),
+                            border: Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: input_border,
+                                ..Border::default()
+                            },
+                            placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
+                            value: text_on(input_bg),
+                            selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
+                        },
+                    )
                 }),
         ]
         .spacing(SP.m)
@@ -187,6 +198,7 @@ where
                 .on_select(on_change)
                 .text_size(11)
                 .padding([SP.xs, 6.0])
+                .style(form_look::pick_list_style)
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
@@ -213,7 +225,8 @@ pub fn form_check_row<'a>(
                 iced::widget::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
                     .size(TS.heading)
-                    .spacing(SP.s),
+                    .spacing(SP.s)
+                    .style(form_look::checkbox_style),
                 text(if checked { "On" } else { "Off" })
                     .size(TS.body)
                     .color(check_state_color(checked, label_c, surface)),
@@ -273,6 +286,7 @@ pub fn form_grid_row(
             on_size(mm)
         })
         .text_size(11)
+        .style(form_look::pick_list_style)
         .width(Length::Fill);
 
     let label_widget = property_label(label.to_string(), label_c);
@@ -284,7 +298,8 @@ pub fn form_grid_row(
             iced::widget::checkbox(active)
                 .on_toggle(move |_| on_toggle.clone())
                 .size(TS.label)
-                .spacing(SP.s),
+                .spacing(SP.s)
+                .style(form_look::checkbox_style),
             container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.s)
@@ -327,7 +342,8 @@ pub fn form_check_row_shortcut<'a>(
                 iced::widget::checkbox(value)
                     .on_toggle(move |_| on_toggle.clone())
                     .size(TS.label)
-                    .spacing(SP.s),
+                    .spacing(SP.s)
+                    .style(form_look::checkbox_style),
                 Space::new().width(Length::Fill),
                 text(shortcut_owned)
                     .size(TS.caption)
@@ -409,6 +425,7 @@ pub fn canvas_font_popup<'a>(
     )
     .on_select(PanelMsg::SetCanvasFont)
     .text_size(11)
+    .style(form_look::pick_list_style)
     .width(Length::Fill);
 
     let size_input = NumberInput::new(&current_size_px, 6.0..=36.0, PanelMsg::SetCanvasFontSize)
@@ -496,6 +513,7 @@ pub fn form_edit_row<'a>(
                 .on_input(on_input)
                 .size(TS.body)
                 .padding(SP.s)
+                .style(form_look::text_input_style)
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)

@@ -85,7 +85,7 @@ pub fn view_title_block_section<'a>(
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    collapsible_section(
+    ctx.collapsible(
         "prop_title_block",
         "Title Block",
         &ctx.collapsed_sections,

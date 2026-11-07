@@ -12,6 +12,7 @@
 
 mod form_rows;
 mod general;
+mod graphite_table;
 mod net_params;
 mod title_block;
 

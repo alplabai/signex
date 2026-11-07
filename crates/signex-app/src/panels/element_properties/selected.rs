@@ -84,7 +84,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let pos_loc = position.clone();
         let rot_current = rotation_deg;
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "sel_location",
                 "Location",
                 &ctx.collapsed_sections,
@@ -122,7 +122,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let name_val = value.clone();
         let base_lib = lib_id.clone();
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "sel_props",
                 "Properties",
                 &ctx.collapsed_sections,
@@ -180,7 +180,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
         // Add Font + B/I/U/T row to Properties section via a second collapsible
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "sel_props_font",
                 "Font",
                 &ctx.collapsed_sections,
@@ -226,7 +226,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         // ── General (Net) — informational ──
         let phys_name = value.clone();
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "sel_net",
                 "General (Net)",
                 &ctx.collapsed_sections,
@@ -276,7 +276,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
         // ── Parameters (Net) — placeholder (no parameters/rules/classes yet) ──
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "sel_net_params",
                 "Parameters (Net)",
                 &ctx.collapsed_sections,
@@ -352,7 +352,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             if let Some(id) = uuid {
                 // General section — editable
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_general",
                         "General",
                         &ctx.collapsed_sections,
@@ -426,7 +426,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
                 // Location section — read-only for now
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_location",
                         "Location",
                         &ctx.collapsed_sections,
@@ -448,7 +448,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
                 // Graphical section — checkboxes
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_graphical",
                         "Graphical",
                         &ctx.collapsed_sections,
@@ -500,7 +500,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 };
                 let section_params = params.clone();
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_parameters",
                         &header_label,
                         &ctx.collapsed_sections,
@@ -552,7 +552,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
             if let Some(id) = uuid {
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_basic",
                         "Basic Properties",
                         &ctx.collapsed_sections,
@@ -591,7 +591,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 );
 
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_text",
                         "Text Properties",
                         &ctx.collapsed_sections,
@@ -664,7 +664,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 let pos_clone = position.clone();
                 let rot_current = rotation_deg;
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_location",
                         "Location",
                         &ctx.collapsed_sections,
@@ -712,7 +712,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     )
                 });
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_props",
                         "Properties",
                         &ctx.collapsed_sections,
@@ -798,7 +798,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
             if let Some(id) = uuid {
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_basic",
                         "Basic Properties",
                         &ctx.collapsed_sections,
@@ -816,7 +816,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 );
 
                 col = col.push(
-                    collapsible_section(
+                    ctx.collapsible(
                         "sel_text",
                         "Text Properties",
                         &ctx.collapsed_sections,
@@ -885,7 +885,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 .cloned()
                 .collect();
             col = col.push(
-                collapsible_section(
+                ctx.collapsible(
                     "sel_general",
                     "Properties",
                     &ctx.collapsed_sections,
@@ -917,7 +917,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let locked = get("Locked") == "Yes";
         let item = signex_types::schematic::SelectedItem::new(id, kind);
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "sel_state",
                 "State",
                 &ctx.collapsed_sections,

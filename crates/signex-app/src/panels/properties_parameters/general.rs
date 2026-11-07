@@ -7,6 +7,7 @@
 
 use super::super::*;
 use crate::panels::PaperEdge;
+use crate::panels::form_look;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
@@ -64,7 +65,9 @@ pub fn view_custom_selection_filters_section<'a>(
                                 .padding([SP.s, 10.0])
                                 .on_press(PanelMsg::AddCustomFilterPreset)
                                 .style(move |theme: &Theme, status| {
-                                    add_filter_button_style(theme, status, primary_c)
+                                    form_look::ghost_button(theme, status).unwrap_or_else(|| {
+                                        add_filter_button_style(theme, status, primary_c)
+                                    })
                                 }),
                         )
                         .padding([SP.s, SP.m])
@@ -187,7 +190,7 @@ pub fn view_properties_general<'a>(
         let canvas_font_popup_open = ctx.canvas_font_popup_open;
         let sheet_color = ctx.sheet_color;
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "prop_general",
                 "General",
                 &ctx.collapsed_sections,
@@ -225,6 +228,7 @@ pub fn view_properties_general<'a>(
                             .width(Length::Fill),
                         )
                         .padding([SP.xs, SP.m])
+                        .style(form_look::segmented_frame)
                         .boxed(),
                     );
                     // Altium-style: Visible Grid and Snap Grid are independent
@@ -305,7 +309,7 @@ pub fn view_properties_general<'a>(
         let origin = ctx.page_origin;
         let document_font = ctx.document_font_family.clone();
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "prop_page_opts",
                 "Page Options",
                 &ctx.collapsed_sections,
@@ -353,6 +357,7 @@ pub fn view_properties_general<'a>(
                             .width(Length::Fill),
                         )
                         .padding([SP.xs, SP.m])
+                        .style(form_look::segmented_frame)
                         .boxed(),
                     );
                     let (sheet_size, orientation) = SheetSize::parse(&paper_size);
@@ -499,7 +504,31 @@ pub fn view_properties_general<'a>(
     col
 }
 
+/// Standard document parameters the Parameters tab lists.
+pub(super) const DOCUMENT_PARAMETERS: &[(&str, &str)] = &[
+    ("CurrentTime", "*"),
+    ("CurrentDate", "*"),
+    ("Time", "*"),
+    ("Date", "*"),
+    ("DocumentFullPathAndName", "*"),
+    ("DocumentName", "*"),
+    ("ModifiedDate", "*"),
+    ("ApprovedBy", "*"),
+    ("CheckedBy", "*"),
+    ("Author", "*"),
+    ("CompanyName", "*"),
+    ("DrawnBy", "*"),
+    ("Engineer", "*"),
+    ("Organization", "*"),
+    ("Title", "*"),
+    ("Address1", "*"),
+    ("Address2", "*"),
+    ("Address3", "*"),
+    ("Address4", "*"),
+];
+
 pub fn view_properties_parameters<'a>(
+    tokens: &ThemeTokens,
     muted: Color,
     primary: Color,
     border_c: Color,
@@ -509,7 +538,12 @@ pub fn view_properties_parameters<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    col = col.push(section_hdr("\u{25BC} Parameters", primary, border_c).boxed());
+    let graphite = crate::styles::is_graphite(tokens);
+    col = col.push(if graphite {
+        form_look::section_label("Parameters", tokens)
+    } else {
+        section_hdr("\u{25BC} Parameters", primary, border_c).boxed()
+    });
 
     // Sub-tabs: All | Parameters | Rules
     col = col.push(
@@ -550,8 +584,16 @@ pub fn view_properties_parameters<'a>(
             .width(Length::Fill),
         )
         .padding([SP.s, SP.m])
+        .style(form_look::segmented_frame)
         .boxed(),
     );
+
+    if graphite {
+        return col.push(super::graphite_table::parameter_table(
+            tokens,
+            DOCUMENT_PARAMETERS,
+        ));
+    }
 
     // Table header
     col = col.push(thin_sep(border_c));
@@ -578,29 +620,8 @@ pub fn view_properties_parameters<'a>(
     col = col.push(thin_sep(border_c));
 
     // Parameter rows (standard Altium document parameters)
-    let params: &[(&str, &str)] = &[
-        ("CurrentTime", "*"),
-        ("CurrentDate", "*"),
-        ("Time", "*"),
-        ("Date", "*"),
-        ("DocumentFullPathAndName", "*"),
-        ("DocumentName", "*"),
-        ("ModifiedDate", "*"),
-        ("ApprovedBy", "*"),
-        ("CheckedBy", "*"),
-        ("Author", "*"),
-        ("CompanyName", "*"),
-        ("DrawnBy", "*"),
-        ("Engineer", "*"),
-        ("Organization", "*"),
-        ("Title", "*"),
-        ("Address1", "*"),
-        ("Address2", "*"),
-        ("Address3", "*"),
-        ("Address4", "*"),
-    ];
 
-    for (name, val) in params {
+    for (name, val) in DOCUMENT_PARAMETERS {
         col = col.push(param_table_row(name, val, primary, muted, border_c));
     }
 
@@ -655,8 +676,11 @@ pub fn props_tab_btn(
     iced::widget::button(text(label.to_string()).size(TS.body).color(text_c))
         .padding([SP.s, SP.l])
         .on_press(msg)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
+        .style(move |theme: &Theme, status: iced::widget::button::Status| {
             let hover = matches!(status, iced::widget::button::Status::Hovered);
+            if let Some(style) = form_look::tab_chip(theme, active, hover) {
+                return style;
+            }
             iced::widget::button::Style {
                 background: if active || hover {
                     Some(Background::Color(hover_bg))
@@ -843,8 +867,11 @@ pub fn seg_btn<'a>(
     .padding([SP.s, 0.0])
     .width(Length::Fill)
     .on_press(msg)
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
+    .style(move |theme: &Theme, status: iced::widget::button::Status| {
         let hovered = matches!(status, iced::widget::button::Status::Hovered);
+        if let Some(style) = form_look::segment_cell(theme, active, hovered && !active) {
+            return style;
+        }
         iced::widget::button::Style {
             background: Some(Background::Color(if hovered && !active {
                 hover_bg

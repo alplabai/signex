@@ -87,7 +87,7 @@ pub(super) fn push_focused_pin_section<'a>(
     } = PanelPalette::from_tokens(&ctx.tokens);
     let title = format!("Pin {}", pin.designator);
     col.push(
-        collapsible_section(
+        ctx.collapsible(
             FOCUSED_PIN_SECTION_KEY,
             &title,
             &ctx.collapsed_sections,
@@ -139,7 +139,7 @@ pub(super) fn push_pins_section<'a>(
     let title = format!("Pins ({pin_count})");
     let info = &ctx.selection_info;
     col.push(
-        collapsible_section(
+        ctx.collapsible(
             PINS_SECTION_KEY,
             &title,
             &ctx.collapsed_sections,

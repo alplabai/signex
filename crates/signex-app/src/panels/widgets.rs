@@ -15,12 +15,12 @@ const SP: Spacing = Spacing::DEFAULT;
 const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
 const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
 
-fn chevron_right() -> svg::Handle {
+pub(super) fn chevron_right() -> svg::Handle {
     static H: OnceLock<svg::Handle> = OnceLock::new();
     H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
         .clone()
 }
-fn chevron_down() -> svg::Handle {
+pub(super) fn chevron_down() -> svg::Handle {
     static H: OnceLock<svg::Handle> = OnceLock::new();
     H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
         .clone()

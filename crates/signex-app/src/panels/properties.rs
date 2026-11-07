@@ -324,6 +324,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     } else {
         col = col.push(
             view_properties_parameters(
+                &ctx.tokens,
                 muted,
                 primary,
                 border_c,
@@ -345,7 +346,10 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .boxed(),
     );
 
-    scrollable(col).width(Length::Fill).boxed()
+    scrollable(col)
+        .width(Length::Fill)
+        .style(super::form_look::scrollbar_style)
+        .boxed()
 }
 
 /// The pre-placement X/Y readout: Y from the active sheet's page origin
@@ -409,7 +413,7 @@ fn view_pre_placement<'a>(
 
     // ── Location ──
     col = col.push(
-        collapsible_section(
+        ctx.collapsible(
             "preplace_location",
             "Location",
             &ctx.collapsed_sections,
@@ -471,7 +475,7 @@ fn view_pre_placement<'a>(
 
     if show_text_field || show_text_styling {
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "preplace_props",
                 "Properties",
                 &ctx.collapsed_sections,
@@ -550,7 +554,7 @@ fn view_pre_placement<'a>(
         let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
         let numeric_draft = ctx.numeric_draft.as_ref();
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "preplace_shape",
                 "Properties",
                 &ctx.collapsed_sections,
@@ -585,7 +589,11 @@ fn view_pre_placement<'a>(
         );
     }
 
-    container(scrollable(col).width(Length::Fill))
-        .width(Length::Fill)
-        .boxed()
+    container(
+        scrollable(col)
+            .width(Length::Fill)
+            .style(super::form_look::scrollbar_style),
+    )
+    .width(Length::Fill)
+    .boxed()
 }

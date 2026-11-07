@@ -56,7 +56,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 
     // ── Properties (editable identity, read-only geometry) ──
     col = col.push(
-        collapsible_section(
+        ctx.collapsible(
             "sel_child_sheet_props",
             "Properties",
             &ctx.collapsed_sections,
@@ -91,7 +91,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 
     // ── Style (editable) ──
     col = col.push(
-        collapsible_section(
+        ctx.collapsible(
             "sel_child_sheet_style",
             "Style",
             &ctx.collapsed_sections,
