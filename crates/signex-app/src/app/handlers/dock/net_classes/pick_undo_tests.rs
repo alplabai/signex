@@ -413,3 +413,27 @@ fn a_pick_then_a_colour_undo_in_true_time_order() {
     app.handle_undo_requested();
     assert!(nets(&app).is_empty(), "then the pick");
 }
+
+/// Undo is offered only for a step it would move: a marker whose class
+/// edit the panel already undid is dead, and a sheet holding only dead
+/// markers has nothing to undo.
+#[test]
+fn a_dead_marker_is_not_a_step_the_menu_offers() {
+    let (mut app, symbol) = app_with_sheet();
+    let path = app.document_state.active_path.clone().unwrap();
+    pick(&mut app, "GND", Some("Power"));
+    assert!(app.sheet_has_step(&path, true));
+
+    panel(&mut app, NetClassMsg::Undo);
+    assert!(
+        !app.sheet_has_step(&path, true),
+        "the pick is already undone"
+    );
+    assert!(!app.undo_active_sheet(), "and Ctrl+Z moves nothing");
+
+    move_symbol(&mut app, symbol);
+    assert!(
+        app.sheet_has_step(&path, true),
+        "an edit above it is a step"
+    );
+}
