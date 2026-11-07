@@ -53,6 +53,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
+    show_filters: bool,
 ) -> Element<'a, PanelMsg> {
     let PanelPalette {
         muted,
@@ -218,6 +219,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
         custom_filter_presets,
         active_custom_filter_tab,
         collapsed_sections,
+        show_filters,
     );
     col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);
     col = sections::view_sections(col, fp, palette, collapsed_sections, unit);

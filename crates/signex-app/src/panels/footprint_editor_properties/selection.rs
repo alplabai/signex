@@ -30,6 +30,7 @@ pub(super) fn view_selection<'a>(
     custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
+    show_filters: bool,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -359,15 +360,17 @@ pub(super) fn view_selection<'a>(
                 // (redundant with Custom Selection Filters below + the
                 // active bar's Filter dropdown). The Custom presets
                 // section is the single Properties-panel surface.
-                col = col.push(
-                    super::super::view_custom_selection_filters_section(
-                        custom_filter_presets,
-                        active_custom_filter_tab,
-                        collapsed_sections,
-                        palette,
-                    )
-                    .boxed(),
-                );
+                if show_filters {
+                    col = col.push(
+                        super::super::view_custom_selection_filters_section(
+                            custom_filter_presets,
+                            active_custom_filter_tab,
+                            collapsed_sections,
+                            palette,
+                        )
+                        .boxed(),
+                    );
+                }
                 col = col.push(
                     collapsible_section_header(
                         "fp_footprint",

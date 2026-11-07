@@ -234,6 +234,9 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ctx.active_custom_filter_tab,
             &ctx.collapsed_sections,
             ctx.unit,
+            // The Graphite footprint sheet starts at the footprint itself; the
+            // presets stay reachable from the Active Bar's Filter menu.
+            !crate::styles::is_graphite(&ctx.tokens),
         );
     }
 
