@@ -4068,6 +4068,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
+name = "pcb-geom"
+version = "26.11.0-rc.1"
+dependencies = [
+ "rstar",
+ "signex-types",
+ "uuid",
+]
+
+[[package]]
 name = "pdf-extract"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

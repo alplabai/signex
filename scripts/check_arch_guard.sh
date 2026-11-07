@@ -34,7 +34,7 @@ EDGES="${ARCH_GUARD_EDGES:-$ROOT/scripts/arch-edges.txt}"
 DOMAIN=(
   signex-types signex-net signex-history signex-erc signex-erc-dsl signex-engine
   signex-bom signex-output signex-library signex-sketch signex-bake
-  signex-3d-model-importer
+  signex-3d-model-importer pcb-geom
 )
 # Matched as exact names or, with a trailing *, as a prefix.
 UI_STACK=(iced 'iced_*' wgpu 'wgpu-*' naga winit cryoglyph glyphon rfd signex-widgets signex-app)

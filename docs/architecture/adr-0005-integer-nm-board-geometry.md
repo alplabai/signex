@@ -1,0 +1,41 @@
+# ADR-0005 — Board geometry computes in integer nanometres; the model stays `f64` mm
+
+- **Status:** Accepted (2026-11-07, maintainer decision on #2174)
+- **Scope:** `pcb-geom` — the board geometry crate that connectivity, ratsnest, hit-test and later DRC read
+- **Relates to:** #1058 (one `Distance` length type), #662 (one domain-to-drawable lowering), #394 (the unused `Coord`/`Vec2` pair deleted)
+- **Tracking:** #2174
+
+## Context
+
+The board model (`signex_types::pcb`) holds every position and size as `f64` mm, like the schematic. On disk the `.snxpcb` TSV columns are `i64` nm, converted in `signex-types` `format/units.rs`. Nothing in memory is in nm today; #394 deleted the last in-memory nm type because nothing used it.
+
+Board geometry asks questions that floating point answers badly:
+
+- **Equality and order.** Two pads at "the same" point, a track end on a pad centre, a tie between two equal ratsnest edges. In `f64` mm, `3.81` loads back as `3.8099999999999996`, so the answer depends on whether the board came from a file or from an edit.
+- **Orientation and intersection.** Whether a track crosses a marquee edge is the sign of a cross product. Near zero, an `f64` sign is noise.
+- **Determinism.** A ratsnest or a DRC report that changes between two runs on the same board is a bug report. Integer arithmetic gives the same answer on every OS and every build.
+
+## Decision
+
+1. **`pcb-geom` computes in integer nm.** Coordinates and lengths are `i64` nm (`PointNm`, `RectNm`). Every product (squared distance, dot, cross, R-tree area) is `i128`, so none overflows.
+2. **The model stays `f64` mm.** No board type changes, no file format changes. `pcb-geom` reads the model and converts at its boundary.
+3. **One conversion, the file's.** `mm_to_nm` rounds with `signex_types::format::mm_as_stored_nm`, the rounding a save applies. Geometry built from a freshly edited board and from the same board saved and reopened is identical to the nm. `nm_to_mm` uses the loader's arithmetic.
+4. **The boundary refuses, it does not clamp.** NaN, an infinity, or a length beyond 1 km (`MAX_ABS_NM`) is a `GeomError` naming the model field. The board index lists every item it could not convert (`BoardIndex::rejected`) instead of dropping it silently. The 1 km bound is what keeps every `i128` product in range; no board comes near it.
+5. **Where `f64` still appears inside.** Two steps use `sin`/`cos` or a division and round back to the nearest nm: turning a point into a rotated pad's frame, and the foot of a perpendicular on a track. Quarter turns are exact. The error is under 1 nm, below what the file stores. Every comparison after that is integer.
+6. **Hit-tests read the model, never the render output (#662).** The pad world transform (mirror for a bottom-side footprint, then rotate, then translate) is computed here from the footprint and pad fields.
+
+## Relation to #1058
+
+#1058 proposes one `Distance` value type for the `f64` mm model: units, formatting and parsing for the editor and the property panels. This ADR does not replace it and does not conflict with it:
+
+- `Distance` is the **model's** length: what a user types and sees.
+- `PointNm` / `i64` nm is **board geometry's working unit**: what connectivity and DRC compare.
+
+When `Distance` lands, `pcb-geom`'s boundary takes `Distance` instead of a raw `f64`, and the conversion stays `mm_as_stored_nm`. Nothing else in the crate changes.
+
+## Consequences
+
+- Board connectivity, ratsnest and DRC are deterministic and agree with the saved file.
+- Each consumer converts once, at the index or query boundary. A consumer that needs mm back (a ratsnest line to draw) converts with `nm_to_mm`.
+- An item with a non-finite or out-of-range coordinate cannot be hit-tested; the caller sees it in `rejected` and reports it.
+- `pcb-geom` depends on `signex-types` only (plus `rstar` and `uuid`). It is a domain crate: no UI or GPU dependency (`scripts/check_arch_guard.sh`).

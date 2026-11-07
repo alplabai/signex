@@ -133,6 +133,7 @@ signex/
 │   ├── signex-output/              # PDF / netlist / BOM export (+ signex-bom)
 │   ├── signex-renderer/            # domain types → render primitives (+ signex-gfx)
 │   ├── signex-library/             # .snxlib library model (+ signex-library-server)
+│   ├── pcb-geom/                   # integer-nm board geometry: R-tree, hit-test, MST (leaf)
 │   ├── signex-widgets/             # reusable iced widgets
 │   └── signex-3d-model-importer/   # STEP / WRL importer
 └── docs/
