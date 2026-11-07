@@ -164,8 +164,14 @@ fn mono_button(
         .on_press(request)
 }
 
-/// The Graphite status bar: mono X / Y / Grid spans, a Snap pill, the
-/// tool and selection context, and the bordered Panels button on the right.
+/// Label of the Snap pill: "Snap on" while snapping, "Snap off" while free.
+pub(super) fn snap_label(snapping: bool) -> &'static str {
+    if snapping { "Snap on" } else { "Snap off" }
+}
+
+/// The Graphite status bar: mono X / Y / Grid spans, a Snap on/off pill and
+/// the tool at the left; the selection, zoom, unit and the bordered Panels
+/// button at the right.
 /// No separators; the spans are spaced apart.
 pub(super) fn view<'a>(r: &Readout<'_>, tokens: &ThemeTokens) -> Element<'a, StatusBarRequest> {
     let ink = ti(tokens.text);
@@ -183,7 +189,7 @@ pub(super) fn view<'a>(r: &Readout<'_>, tokens: &ThemeTokens) -> Element<'a, Sta
         mono_text(format!("Y {ys} {unit}"), muted).boxed(),
         mono_button(format!("Grid {grid}"), muted, StatusBarRequest::ToggleGrid).boxed(),
         button(mono_text(
-            if r.snap_enabled { "Snap" } else { "Free" }.to_string(),
+            snap_label(r.snap_enabled).to_string(),
             if r.snap_enabled {
                 ti(tokens.success)
             } else {
@@ -194,15 +200,10 @@ pub(super) fn view<'a>(r: &Readout<'_>, tokens: &ThemeTokens) -> Element<'a, Sta
         .style(snap_pill(tokens, r.snap_enabled))
         .on_press(StatusBarRequest::ToggleSnap)
         .boxed(),
-        mono_text("E-Snap".to_string(), muted).boxed(),
         mono_text(format!("Tool: {}", r.tool), muted).boxed(),
     ];
     if let Some(activity) = r.activity {
         bar = bar.push(mono_text(activity.to_owned(), muted).boxed());
-    }
-    if let Some(summary) = r.selection.clone() {
-        bar = bar
-            .push(mono_button(summary, ink, StatusBarRequest::OpenPropertiesForSelection).boxed());
     }
     if r.pending_git_commits > 0 {
         let label = if r.pending_git_commits == 1 {
@@ -222,8 +223,12 @@ pub(super) fn view<'a>(r: &Readout<'_>, tokens: &ThemeTokens) -> Element<'a, Sta
             .boxed(),
         );
     }
+    bar = bar.push(space::horizontal().boxed());
+    if let Some(summary) = r.selection.clone() {
+        bar = bar
+            .push(mono_button(summary, ink, StatusBarRequest::OpenPropertiesForSelection).boxed());
+    }
     let bar = bar
-        .push(space::horizontal().boxed())
         .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())
         .push(mono_button(format!("{unit}"), muted, StatusBarRequest::CycleUnit).boxed())
         .push(
@@ -258,6 +263,12 @@ mod tests {
         assert!(on.background.is_some());
         assert!(off.background.is_none());
         assert_ne!(on.text_color, off.text_color);
+    }
+
+    #[test]
+    fn the_snap_pill_reads_on_or_off() {
+        assert_eq!(snap_label(true), "Snap on");
+        assert_eq!(snap_label(false), "Snap off");
     }
 
     #[test]

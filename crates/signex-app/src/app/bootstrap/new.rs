@@ -366,6 +366,7 @@ impl Signex {
                 prefs_load_error,
                 preferences_prefs_status: String::new(),
                 preferences_keymap_search: String::new(),
+                preferences_nav_search: String::new(),
                 preferences_keymap_recorder: None,
                 preferences_dirty: false,
                 preferences_dirty_sticky: false,

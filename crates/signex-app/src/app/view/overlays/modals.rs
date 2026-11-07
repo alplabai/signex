@@ -64,6 +64,7 @@ impl Signex {
             prefs_load_error: ui.prefs_load_error.as_deref(),
             prefs_status: &ui.preferences_prefs_status,
             keymap_search: &ui.preferences_keymap_search,
+            nav_search: &ui.preferences_nav_search,
             keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
         })
         .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))

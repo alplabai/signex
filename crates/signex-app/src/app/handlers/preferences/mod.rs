@@ -62,6 +62,7 @@ impl Signex {
         self.ui_state.preferences_open = true;
         self.seed_preferences_drafts_from_live();
         self.ui_state.preferences_keymap_search.clear();
+        self.ui_state.preferences_nav_search.clear();
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
         // Open Preferences as a separate OS window so the user can move
@@ -278,6 +279,9 @@ impl Signex {
         match msg {
             PrefMsg::Noop => {}
             PrefMsg::SaveWritesFinished => self.refresh_prefs_load_error(),
+            PrefMsg::NavSearchChanged(query) => {
+                self.ui_state.preferences_nav_search = query;
+            }
             PrefMsg::Nav(nav) => {
                 self.ui_state.preferences_nav = nav;
                 return self.profiles_pane_task();
