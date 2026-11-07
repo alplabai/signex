@@ -5,6 +5,8 @@ use iced::widget::{
 };
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
 
+use super::graphite;
+use super::measure;
 use super::types::*;
 use crate::icons;
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
@@ -20,6 +22,25 @@ const SP: Spacing = Spacing::DEFAULT;
 /// without extra boilerplate.
 fn svg_icon(handle: svg::Handle) -> iced::widget::Svg<'static> {
     svg(handle).width(14).height(14)
+}
+
+/// Graphite 24x24 icon button around an already-built icon.
+fn icon_button_of(
+    icon: iced::widget::Svg<'static>,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> iced::widget::Button<'static, DockMessage> {
+    button(container(icon).center(Length::Fill))
+        .width(graphite::ICON_BUTTON)
+        .height(graphite::ICON_BUTTON)
+        .padding(0)
+        .style(graphite::icon_button(tokens))
+}
+
+fn icon_button(
+    handle: svg::Handle,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> iced::widget::Button<'static, DockMessage> {
+    icon_button_of(svg_icon(handle), tokens)
 }
 
 impl DockArea {
@@ -51,7 +72,11 @@ impl DockArea {
         let can_scroll_left = offset > 0;
         let can_scroll_right = offset + 3 < total_tabs;
 
+        let graphite = styles::is_graphite(&ctx.tokens);
         let mut tab_row = row![].spacing(0.0).align_y(iced::Alignment::End);
+        if graphite {
+            tab_row = tab_row.height(Length::Fill);
+        }
 
         // Left scroll arrow (only when tabs are scrolled)
         if has_overflow {
@@ -102,6 +127,16 @@ impl DockArea {
             let accent = styles::ti(ctx.tokens.accent);
             let fill = if is_dragging_this {
                 iced::Color { a: 0.22, ..accent }
+            } else if graphite {
+                // Graphite: the active tab merges into the panel fill.
+                let panel = styles::ti(ctx.tokens.panel_bg);
+                if is_active {
+                    panel
+                } else if is_hovered {
+                    styles::tokens::hover_overlay(&ctx.tokens)
+                } else {
+                    iced::Color { a: 0.0, ..panel }
+                }
             } else if is_active {
                 tab_active
             } else if is_hovered {
@@ -133,17 +168,19 @@ impl DockArea {
             // lines whenever the dock area squeezes the tab — which
             // happens any time the panel column is in its default
             // ~240 px width with several panels in the strip.
-            let inner = container(
+            let mut inner = container(
                 text(label)
                     .size(TS.body)
                     .color(text_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             )
             .padding([SP.s, 10.0]);
-            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(
-                inner.boxed(),
-                pill_style,
-            ))
+            if graphite {
+                inner = inner.height(Length::Fill).align_y(iced::Alignment::Center);
+            }
+            let tab = mouse_area(
+                signex_widgets::tab_pill::TabPill::new(inner.boxed(), pill_style).square(graphite),
+            )
             .on_enter(DockMessage::TabHoverEnter(position, i))
             .on_exit(DockMessage::TabHoverExit(position, i))
             .on_press(DockMessage::TabDragStart(position, i))
@@ -175,14 +212,25 @@ impl DockArea {
             PanelPosition::Right => svg_icon(icons::icon_collapse_right(tid)),
             PanelPosition::Bottom => svg_icon(icons::icon_collapse_down(tid)),
         };
-        let close_btn = button(svg_icon(icons::icon_close(tid)))
-            .padding([5.0, SP.s])
-            .style(button::text)
-            .on_press(DockMessage::ClosePanel(position, region.active));
-        let collapse_btn = button(collapse_icon)
-            .padding([5.0, SP.s])
-            .style(button::text)
-            .on_press(DockMessage::ToggleCollapse(position));
+        let (close_btn, collapse_btn) = if graphite {
+            (
+                icon_button(icons::icon_close(tid), &ctx.tokens)
+                    .on_press(DockMessage::ClosePanel(position, region.active)),
+                icon_button_of(collapse_icon, &ctx.tokens)
+                    .on_press(DockMessage::ToggleCollapse(position)),
+            )
+        } else {
+            (
+                button(svg_icon(icons::icon_close(tid)))
+                    .padding([5.0, SP.s])
+                    .style(button::text)
+                    .on_press(DockMessage::ClosePanel(position, region.active)),
+                button(collapse_icon)
+                    .padding([5.0, SP.s])
+                    .style(button::text)
+                    .on_press(DockMessage::ToggleCollapse(position)),
+            )
+        };
 
         // Title of the currently active panel — drawn in the top bar
         // so the user can see the panel name without scanning the tab
@@ -192,13 +240,16 @@ impl DockArea {
             .get(region.active)
             .map(|p| p.label().to_string())
             .unwrap_or_default();
+        let title_text = if graphite {
+            text(active_title)
+                .size(graphite::TITLE_SIZE)
+                .font(graphite::title_font())
+        } else {
+            text(active_title).size(TS.body)
+        }
+        .color(styles::ti(ctx.tokens.text));
         let title_bar = row![
-            container(
-                text(active_title)
-                    .size(TS.body)
-                    .color(styles::ti(ctx.tokens.text)),
-            )
-            .padding([5, 10]),
+            container(title_text).padding(if graphite { [0, 10] } else { [5, 10] }),
             Space::new().width(Length::Fill),
             collapse_btn,
             close_btn,
@@ -213,7 +264,12 @@ impl DockArea {
         let tab_strip = row![tab_row, Space::new().width(Length::Fill),]
             .spacing(0)
             .align_y(iced::Alignment::End)
-            .width(Length::Fill);
+            .width(Length::Fill)
+            .height(if graphite {
+                Length::Fill
+            } else {
+                Length::Shrink
+            });
 
         // Panel content
         let content: Element<'_, DockMessage> =
@@ -250,6 +306,25 @@ impl DockArea {
 
         // Altium parity: title + collapse/close on top, tabs on the
         // bottom. Content grows between them.
+        if graphite {
+            return column![
+                container(title_bar)
+                    .width(Length::Fill)
+                    .center_y(graphite::TITLE_H)
+                    .padding([0.0, SP.s])
+                    .style(graphite::title_bar(&ctx.tokens)),
+                container(content)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .padding(0),
+                container(tab_strip)
+                    .width(Length::Fill)
+                    .height(graphite::TAB_STRIP_H)
+                    .clip(true)
+                    .style(graphite::tab_strip(&ctx.tokens)),
+            ]
+            .boxed();
+        }
         column![
             container(title_bar)
                 .width(Length::Fill)
@@ -282,6 +357,7 @@ impl DockArea {
         // Altium-style collapsed panel: vertical tabs with full panel names
         // Each tab is a button with the panel name, stacked vertically
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);
+        let graphite = styles::is_graphite(&ctx.tokens);
 
         if is_vertical {
             let mut rail: Column<Element<'a, DockMessage>> = Column::new().spacing(SP.xs);
@@ -293,14 +369,18 @@ impl DockArea {
                 PanelPosition::Right => svg_icon(icons::icon_expand_right(tid)),
                 _ => svg_icon(icons::icon_expand_left(tid)),
             };
-            rail = rail.push(
+            rail = rail.push(if graphite {
+                icon_button_of(expand_icon, &ctx.tokens)
+                    .on_press(DockMessage::ToggleCollapse(position))
+                    .boxed()
+            } else {
                 button(expand_icon)
                     .padding(SP.s)
                     .width(RAIL_CANVAS_W)
                     .style(button::text)
                     .on_press(DockMessage::ToggleCollapse(position))
-                    .boxed(),
-            );
+                    .boxed()
+            });
 
             for (i, panel) in region.panels.iter().enumerate() {
                 let label = panel.label().to_string();
@@ -311,8 +391,19 @@ impl DockArea {
                     styles::ti(ctx.tokens.text_secondary)
                 };
 
-                // Canvas height = estimated text pixel width + 1× font size padding
-                let tab_h = estimate_text_width(&label, RAIL_FONT_SIZE) + RAIL_FONT_SIZE;
+                // Canvas height = text pixel width + 1× font size padding.
+                // Graphite measures with the real font; legacy keeps the estimate.
+                let label_w = if graphite {
+                    measure::text_width(&label, RAIL_FONT_SIZE)
+                } else {
+                    estimate_text_width(&label, RAIL_FONT_SIZE)
+                };
+                let tab_h = label_w + RAIL_FONT_SIZE;
+                let tab_style: Box<dyn Fn(&Theme, button::Status) -> button::Style> = if graphite {
+                    Box::new(graphite::rail_tab(&ctx.tokens, position, is_active))
+                } else {
+                    Box::new(styles::rail_tab(&ctx.tokens, is_active))
+                };
 
                 rail = rail.push(
                     button(
@@ -320,16 +411,33 @@ impl DockArea {
                             label,
                             color: text_c,
                         })
-                        .width(RAIL_CANVAS_W)
+                        .width(if graphite {
+                            Length::Fill
+                        } else {
+                            Length::Fixed(RAIL_CANVAS_W)
+                        })
                         .height(tab_h),
                     )
                     .padding(0)
+                    .width(if graphite {
+                        Length::Fill
+                    } else {
+                        Length::Shrink
+                    })
                     .on_press(DockMessage::SelectTab(position, i))
-                    .style(styles::rail_tab(&ctx.tokens, is_active))
+                    .style(tab_style)
                     .boxed(),
                 );
             }
 
+            if graphite {
+                return container(rail)
+                    .width(graphite::RAIL_W)
+                    .height(Length::Fill)
+                    .padding([SP.s, SP.xs])
+                    .style(graphite::rail(&ctx.tokens, position))
+                    .boxed();
+            }
             container(rail)
                 .height(Length::Fill)
                 .padding([3.0, SP.xs])
@@ -348,13 +456,28 @@ impl DockArea {
                     styles::ti(ctx.tokens.text_secondary)
                 };
 
+                let tab_style: Box<dyn Fn(&Theme, button::Status) -> button::Style> = if graphite {
+                    Box::new(graphite::rail_tab(&ctx.tokens, position, is_active))
+                } else {
+                    Box::new(button::text)
+                };
                 rail = rail.push(
                     button(text(label).size(TS.caption).color(text_c))
                         .padding([SP.xs, SP.m])
                         .on_press(DockMessage::SelectTab(position, i))
-                        .style(button::text)
+                        .style(tab_style)
                         .boxed(),
                 );
+            }
+
+            if graphite {
+                return container(rail)
+                    .width(Length::Fill)
+                    .height(graphite::TAB_STRIP_H)
+                    .padding([0.0, SP.s])
+                    .center_y(graphite::TAB_STRIP_H)
+                    .style(graphite::rail(&ctx.tokens, position))
+                    .boxed();
             }
 
             container(rail)
@@ -412,6 +535,43 @@ impl DockArea {
                 .map(DockMessage::Panel)
                 .boxed(),
         };
+
+        if styles::is_graphite(&ctx.tokens) {
+            // One radius-10 card: title bar, body, themed shadow.
+            let bar = container(
+                row![
+                    container(
+                        text(label)
+                            .size(graphite::TITLE_SIZE)
+                            .font(graphite::title_font())
+                            .color(styles::ti(ctx.tokens.text)),
+                    )
+                    .padding([0, 10])
+                    .width(Length::Fill),
+                    icon_button(icons::icon_close(ctx.theme_id), &ctx.tokens)
+                        .on_press(DockMessage::DockFloating(idx)),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .center_y(graphite::TITLE_H)
+            .padding([0.0, SP.s])
+            .style(graphite::title_bar(&ctx.tokens));
+            let bar = mouse_area(bar)
+                .on_press(DockMessage::StartDragFloating(idx))
+                .on_release(DockMessage::FloatingDragEnd(idx));
+            let card = container(column![
+                bar,
+                container(iced::widget::scrollable(content).width(Length::Fill))
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            ])
+            .width(fp.width)
+            .height(fp.height + graphite::TITLE_H)
+            .clip(true)
+            .style(graphite::floating_card(&ctx.tokens));
+            return Some(card.boxed());
+        }
 
         let panel_widget = container(
             column![

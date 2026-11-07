@@ -503,15 +503,17 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(size)
                 .height(Length::Fill)
-                .style(crate::styles::resize_handle(
+                .style(crate::styles::resize_handle_edge(
                     &self.document_state.panel_ctx.tokens,
+                    true,
                 ))
         } else {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(size)
-                .style(crate::styles::resize_handle(
+                .style(crate::styles::resize_handle_edge(
                     &self.document_state.panel_ctx.tokens,
+                    false,
                 ))
         };
         let interaction = if horizontal {
