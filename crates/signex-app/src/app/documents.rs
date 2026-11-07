@@ -460,6 +460,13 @@ impl SymbolDocument {
         // The default size above is only a placeholder until the
         // canvas reports its real one.
         self.pending_view = Some(SymbolViewRequest::CenterOrigin);
+        // Fit against the placeholder too, so the first frame is not a
+        // speck at 100% while the real size is still unknown.
+        crate::library::editor::symbol::updates::fit_to_viewport(
+            self,
+            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH,
+            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT,
+        );
     }
 
     /// Borrow the symbol currently being edited. Falls back to the

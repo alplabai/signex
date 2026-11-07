@@ -2,7 +2,7 @@
 //! the bottom (ERC and History as its other tabs). A saved layout never
 //! comes through here.
 
-use super::types::{DockArea, PanelPosition};
+use super::types::{DockArea, EditorSeeds, PanelPosition};
 use crate::panels::PanelKind;
 
 /// Height of the bottom dock in the Graphite design.
@@ -26,6 +26,10 @@ pub fn graphite_first_run() -> DockArea {
     for (position, kind) in layout {
         dock.add_panel(position, kind);
     }
+    dock.editor_seeds = EditorSeeds {
+        footprint: true,
+        symbol: true,
+    };
     dock
 }
 

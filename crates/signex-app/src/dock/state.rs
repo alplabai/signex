@@ -62,6 +62,7 @@ impl DockArea {
             hovered_tab: None,
             drop_preview: None,
             tab_menu: None,
+            editor_seeds: EditorSeeds::default(),
         }
     }
 

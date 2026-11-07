@@ -79,6 +79,21 @@ fn apply_pending_view(editor: &mut SymEditor, width: f32, height: f32) {
     editor.canvas_cache.clear();
 }
 
+/// Fit a symbol that has content into a placeholder `width` x `height`
+/// viewport. The canvas replaces it with the measured size on its first
+/// redraw, so the tab opens fitted even before (or without) a measurement.
+pub(crate) fn fit_to_viewport(editor: &mut SymEditor, width: f32, height: f32) {
+    if has_content(editor.primitive()) {
+        let viewport = iced::Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width,
+            height,
+        };
+        fit_symbol(editor, viewport);
+    }
+}
+
 /// Whether the symbol has anything to fit.
 fn has_content(sym: &signex_library::Symbol) -> bool {
     !sym.pins.is_empty() || !sym.graphics.is_empty()

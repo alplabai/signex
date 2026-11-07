@@ -383,7 +383,7 @@ pub(super) fn view_selection<'a>(
                     // internal footprint's `name` field via
                     // PanelMsg::FpEditorSetFootprintName.
                     let name_val = fp.footprint_name.clone();
-                    col = col.push(super::super::form_edit_row(
+                    col = col.push(super::rows::edit_row(
                         "Name",
                         &name_val,
                         muted,
@@ -396,14 +396,14 @@ pub(super) fn view_selection<'a>(
                     // Pads count below for parity with the Altium
                     // PCB Library Component Properties dialog.
                     let desc_val = fp.footprint_description.clone();
-                    col = col.push(super::super::form_edit_row(
+                    col = col.push(super::rows::edit_row(
                         "Description",
                         &desc_val,
                         muted,
                         PanelMsg::FpEditorSetFootprintDescription,
                     ));
                     let dd_val = fp.footprint_default_designator.clone();
-                    col = col.push(super::super::form_edit_row(
+                    col = col.push(super::rows::edit_row(
                         "Default Designator",
                         &dd_val,
                         muted,
@@ -422,7 +422,7 @@ pub(super) fn view_selection<'a>(
                         .footprint_height_mm
                         .map(|v| format!("{v:.3}"))
                         .unwrap_or_default();
-                    col = col.push(super::super::form_edit_row(
+                    col = col.push(super::rows::edit_row(
                         "Height (mm)",
                         &height_val,
                         muted,

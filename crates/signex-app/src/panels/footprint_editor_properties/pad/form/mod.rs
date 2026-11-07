@@ -268,6 +268,7 @@ where
                 .on_select(on_change)
                 .text_size(10)
                 .padding([3.0, SP.m])
+                .style(crate::panels::form_look::pick_list_style)
                 .width(Length::Fill),
         ]
         .spacing(6)
