@@ -8,7 +8,9 @@
 //! view without a table entry (or the reverse) fails CI instead of
 //! silently shifting hit rects and dropdown anchors.
 
-use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING, SEP_W, offsets_for_widths};
+use signex_widgets::active_bar::{
+    BAR_PADDING, BTN_SIZE, Metrics, ROW_SPACING, SEP_W, offsets_for_widths_with,
+};
 
 use super::ActiveBarMenu;
 use crate::app::Tool;
@@ -25,12 +27,31 @@ pub(crate) enum BarSlot {
 }
 
 impl BarSlot {
-    const fn width(self) -> f32 {
+    /// Width under the legacy metrics (the const bar width reads this).
+    const fn legacy_width(self) -> f32 {
         match self {
             Self::Trigger(_) => BTN_SIZE,
             Self::Separator => SEP_W,
             Self::DrawModePill => DRAW_MODE_PILL_WIDTH_PX,
         }
+    }
+
+    /// Width under `m`: the number the widget draws and the hit-test reads.
+    pub(crate) fn width(self, m: &Metrics) -> f32 {
+        match self {
+            Self::Trigger(_) => m.btn,
+            Self::Separator => m.sep_w,
+            Self::DrawModePill => DRAW_MODE_PILL_WIDTH_PX,
+        }
+    }
+}
+
+/// Bar metrics for the canvas hit-test, which only knows the Graphite flag.
+pub(crate) fn metrics_for(graphite: bool) -> Metrics {
+    if graphite {
+        Metrics::GRAPHITE
+    } else {
+        Metrics::LEGACY
     }
 }
 
@@ -69,7 +90,7 @@ const fn bar_width_px() -> f32 {
         if i > 0 {
             x += ROW_SPACING;
         }
-        x += SCHEMATIC_BAR_SLOTS[i].width();
+        x += SCHEMATIC_BAR_SLOTS[i].legacy_width();
         i += 1;
     }
     x
@@ -97,19 +118,22 @@ pub(crate) fn bar_slots(tool: Tool) -> Vec<BarSlot> {
 /// Total drawn width of the bar while `tool` is active. The single
 /// width the view, the right-click hit-test and the dropdown anchor
 /// all centre with.
-pub(crate) fn bar_width_for(tool: Tool) -> f32 {
-    let widths: Vec<f32> = bar_slots(tool).into_iter().map(BarSlot::width).collect();
-    offsets_for_widths(&widths).1
+pub(crate) fn bar_width_for(tool: Tool, m: &Metrics) -> f32 {
+    let widths: Vec<f32> = bar_slots(tool).into_iter().map(|s| s.width(m)).collect();
+    offsets_for_widths_with(&widths, m).1
 }
 
 /// Window-space x of the bar's left edge: the bar is centred on the
 /// full window width (the overlay layer spans the window, not the canvas).
-pub(crate) fn bar_left_in_window(tool: Tool, window_width: f32) -> f32 {
-    (window_width - bar_width_for(tool)) / 2.0
+pub(crate) fn bar_left_in_window(tool: Tool, window_width: f32, m: &Metrics) -> f32 {
+    (window_width - bar_width_for(tool, m)) / 2.0
 }
 
-/// Height of the bar: one button row plus the container padding.
-pub(crate) const BAR_HEIGHT_PX: f32 = BTN_SIZE + 2.0 * BAR_PADDING;
+/// Bar height under `m`: one button row plus the container padding
+/// (legacy 30, Graphite 36).
+pub(crate) fn bar_height_for(m: &Metrics) -> f32 {
+    m.bar_height()
+}
 
 /// Gap between the top of the canvas overlay layer and the bar.
 pub(crate) const BAR_TOP_MARGIN_PX: f32 = 4.0;
@@ -121,11 +145,34 @@ const GRAPHITE_BAR_TOP_MARGIN_PX: f32 = 10.0;
 /// tab strip, every other theme keeps [`BAR_TOP_MARGIN_PX`]. The bar view
 /// and the dropdown anchor both read this, so they cannot disagree.
 pub(crate) fn bar_top_margin(tokens: &signex_types::theme::ThemeTokens) -> f32 {
-    if crate::styles::is_graphite(tokens) {
+    top_margin_for(&Metrics::of(tokens))
+}
+
+/// [`bar_top_margin`] from the metrics alone (the canvas hit-test).
+pub(crate) fn top_margin_for(m: &Metrics) -> f32 {
+    if *m == Metrics::GRAPHITE {
         GRAPHITE_BAR_TOP_MARGIN_PX
     } else {
         BAR_TOP_MARGIN_PX
     }
+}
+
+/// Extra drop of the symbol editor's floating bar so it sits below the
+/// editor's own toolbar strip (one text line, button padding, strip padding
+/// and the column gap) instead of covering its centre controls. Graphite
+/// only; legacy themes keep the bar where it was.
+pub(crate) fn symbol_editor_bar_drop(tokens: &signex_types::theme::ThemeTokens) -> f32 {
+    if !crate::styles::is_graphite(tokens) {
+        return 0.0;
+    }
+    let ts = crate::styles::TypeScale::DEFAULT;
+    let sp = crate::styles::Spacing::DEFAULT;
+    ts.body * crate::styles::LINE_HEIGHT + 2.0 * sp.s + 2.0 * sp.m + sp.s
+}
+
+/// Canvas-local height of the Active Bar zone under `m` (`pos.y < this`).
+pub(crate) fn bar_zone_height_for(m: &Metrics) -> f32 {
+    top_margin_for(m) + bar_height_for(m) + BAR_ZONE_SLACK_PX
 }
 
 /// Gap between the bar's bottom edge and an open dropdown.
@@ -135,34 +182,31 @@ pub(crate) const BAR_DROPDOWN_GAP_PX: f32 = 6.0;
 /// Bar zone, so a right-click just below the bar does not start a pan.
 pub(crate) const BAR_ZONE_SLACK_PX: f32 = 12.0;
 
-/// Canvas-local height of the Active Bar zone (`pos.y < this`).
-pub(crate) const BAR_ZONE_HEIGHT_PX: f32 = BAR_TOP_MARGIN_PX + BAR_HEIGHT_PX + BAR_ZONE_SLACK_PX;
-
 /// Left edge and width of every slot of the bar drawn for `tool`,
 /// measured from the bar's left edge.
-pub(crate) fn slot_rects(tool: Tool) -> Vec<(f32, f32)> {
-    let widths: Vec<f32> = bar_slots(tool).into_iter().map(BarSlot::width).collect();
-    let (offsets, _) = offsets_for_widths(&widths);
+pub(crate) fn slot_rects(tool: Tool, m: &Metrics) -> Vec<(f32, f32)> {
+    let widths: Vec<f32> = bar_slots(tool).into_iter().map(|s| s.width(m)).collect();
+    let (offsets, _) = offsets_for_widths_with(&widths, m);
     offsets.into_iter().zip(widths).collect()
 }
 
 /// Left edge of `menu`'s trigger button, from the bar's left edge.
 /// The pill sits after every trigger, so this does not depend on the tool.
-pub(crate) fn trigger_left(menu: ActiveBarMenu) -> f32 {
-    slot_rects(Tool::Select)
+pub(crate) fn trigger_left(menu: ActiveBarMenu, m: &Metrics) -> f32 {
+    slot_rects(Tool::Select, m)
         .into_iter()
         .zip(SCHEMATIC_BAR_SLOTS)
         .find_map(|((left, _), slot)| (slot == BarSlot::Trigger(menu)).then_some(left))
-        .unwrap_or(BAR_PADDING)
+        .unwrap_or(m.padding)
 }
 
 /// Menu whose trigger button is drawn under `x` (bar-relative) while
 /// `tool` is active, if any. Gaps, separators, the pill and the bar
 /// padding hit nothing.
-pub(crate) fn menu_at(tool: Tool, x: f32) -> Option<ActiveBarMenu> {
+pub(crate) fn menu_at(tool: Tool, x: f32, m: &Metrics) -> Option<ActiveBarMenu> {
     bar_slots(tool)
         .into_iter()
-        .zip(slot_rects(tool))
+        .zip(slot_rects(tool, m))
         .find_map(|(slot, (left, width))| match slot {
             BarSlot::Trigger(menu) if x >= left && x < left + width => Some(menu),
             _ => None,

@@ -113,34 +113,50 @@ macro_rules! canonical_icon {
     };
 }
 
+/// Like [`canonical_icon`], but Graphite themes get the monochrome stroke
+/// glyph from `assets/icons/active_bar/graphite/`; the Active Bar widget
+/// tints it with the ink token.
+macro_rules! bar_icon {
+    ($name:ident, $path:literal, $graphite:literal) => {
+        pub fn $name(theme: ThemeId) -> svg::Handle {
+            if matches!(theme, ThemeId::GraphiteLight | ThemeId::GraphiteDark) {
+                static GRAPHITE: &[u8] = include_bytes!(concat!("../assets/icons/", $graphite));
+                return tinted_handle($graphite, GRAPHITE, theme);
+            }
+            static BYTES: &[u8] = include_bytes!(concat!("../assets/icons/", $path));
+            tinted_handle($path, BYTES, theme)
+        }
+    };
+}
+
 // ─── Flat top-level (active-bar, dock, and shape_* shapes) ─────────
 
-canonical_icon!(icon_align, "align.svg");
-canonical_icon!(icon_chevron_45, "chevron_45.svg");
+bar_icon!(icon_align, "align.svg", "active_bar/graphite/align.svg");
+bar_icon!(icon_chevron_45, "chevron_45.svg", "active_bar/graphite/chevron.svg");
 canonical_icon!(icon_close, "close.svg");
 canonical_icon!(icon_collapse_down, "collapse_down.svg");
 canonical_icon!(icon_collapse_left, "collapse_left.svg");
 canonical_icon!(icon_collapse_right, "collapse_right.svg");
 canonical_icon!(icon_component, "component.svg");
-canonical_icon!(icon_directives, "directives.svg");
+bar_icon!(icon_directives, "directives.svg", "active_bar/graphite/directives.svg");
 canonical_icon!(icon_expand_left, "expand_left.svg");
 canonical_icon!(icon_expand_right, "expand_right.svg");
-canonical_icon!(icon_filter, "filter.svg");
-canonical_icon!(icon_harness, "harness.svg");
-canonical_icon!(icon_move, "move.svg");
-canonical_icon!(icon_netcolor, "netcolor.svg");
-canonical_icon!(icon_port, "port.svg");
-canonical_icon!(icon_power, "power.svg");
-canonical_icon!(icon_select, "select.svg");
+bar_icon!(icon_filter, "filter.svg", "active_bar/graphite/filter.svg");
+bar_icon!(icon_harness, "harness.svg", "active_bar/graphite/harness.svg");
+bar_icon!(icon_move, "move.svg", "active_bar/graphite/move.svg");
+bar_icon!(icon_netcolor, "netcolor.svg", "active_bar/graphite/netcolor.svg");
+bar_icon!(icon_port, "port.svg", "active_bar/graphite/port.svg");
+bar_icon!(icon_power, "power.svg", "active_bar/graphite/power.svg");
+bar_icon!(icon_select, "select.svg", "active_bar/graphite/select.svg");
 canonical_icon!(icon_shape_arc, "shape_arc.svg");
 canonical_icon!(icon_shape_circle, "shape_circle.svg");
 canonical_icon!(icon_shape_line, "shape_line.svg");
 canonical_icon!(icon_shape_polygon, "shape_polygon.svg");
 canonical_icon!(icon_shape_rect, "shape_rect.svg");
-canonical_icon!(icon_shapes, "shapes.svg");
-canonical_icon!(icon_sheetsym, "sheetsym.svg");
-canonical_icon!(icon_text, "text.svg");
-canonical_icon!(icon_wire, "wire.svg");
+bar_icon!(icon_shapes, "shapes.svg", "active_bar/graphite/shapes.svg");
+bar_icon!(icon_sheetsym, "sheetsym.svg", "active_bar/graphite/sheetsym.svg");
+bar_icon!(icon_text, "text.svg", "active_bar/graphite/text.svg");
+bar_icon!(icon_wire, "wire.svg", "active_bar/graphite/wire.svg");
 
 // ─── Chrome (window controls, search) ──────────────────────────────
 

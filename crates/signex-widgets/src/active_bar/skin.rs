@@ -2,9 +2,8 @@
 //!
 //! A theme that sets any extended token is a Graphite theme (the same
 //! test as `signex-app`'s `is_graphite`); every other theme gets `None`
-//! and keeps the legacy paint. Only paint changes here: the slot widths,
-//! padding and spacing stay the legacy constants, so the hit rects the
-//! app derives from them are unchanged.
+//! and keeps the legacy paint. Paint only: the slot widths, padding and
+//! spacing come from [`super::Metrics`], which the app's hit-test reads too.
 
 use iced::{Color, Shadow, Vector};
 use signex_types::theme::ThemeTokens;
@@ -18,8 +17,6 @@ const BUTTON_RADIUS: f32 = 7.0;
 /// Alpha of the hover wash (the text colour over the bar fill, so it
 /// reads on light themes as well as dark).
 const HOVER_ALPHA: f32 = 0.08;
-/// Alpha of the selected-button tint when the theme has no `accent_soft`.
-const SELECTED_FALLBACK_ALPHA: f32 = 0.15;
 /// Shadow strength when the theme sets none.
 const SHADOW_FALLBACK_ALPHA: f32 = 0.35;
 
@@ -32,7 +29,12 @@ pub(crate) struct Skin {
     pub radius: f32,
     pub button_radius: f32,
     pub hover: Color,
+    /// Fill of the armed tool: the ink token, as in the mock.
     pub selected: Color,
+    /// Tint of every icon (the ink token).
+    pub ink: Color,
+    /// Icon tint on the armed tool's fill (the bar surface colour).
+    pub on_selected: Color,
 }
 
 impl Skin {
@@ -43,7 +45,6 @@ impl Skin {
             return None;
         }
         let ink = text_primary(tokens);
-        let accent = to_color(&tokens.accent);
         Some(Self {
             fill: e
                 .raised
@@ -64,13 +65,12 @@ impl Skin {
                 a: HOVER_ALPHA,
                 ..ink
             },
-            selected: e.accent_soft.as_ref().map_or(
-                Color {
-                    a: SELECTED_FALLBACK_ALPHA,
-                    ..accent
-                },
-                to_color,
-            ),
+            selected: ink,
+            ink,
+            on_selected: e
+                .raised
+                .as_ref()
+                .map_or_else(|| to_color(&tokens.panel_bg), to_color),
         })
     }
 }

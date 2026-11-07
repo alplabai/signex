@@ -467,16 +467,17 @@ impl Signex {
         )
         .map(Message::ActiveBar)
         .boxed();
-        let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
+        let metrics = signex_widgets::active_bar::Metrics::of(&document.panel_ctx.tokens);
+        let x_off = crate::active_bar::dropdown_x_offset(ab_menu, &metrics);
         // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
         // plus a small gap so the dropdown visually touches.
         let ab_y: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens)
             + crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
-            + crate::active_bar::BAR_HEIGHT_PX
+            + crate::active_bar::bar_height_for(&metrics)
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.size_of_window(window_id);
-        let adjusted_x =
-            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
+        let adjusted_x = x_off
+            + crate::active_bar::bar_left_in_window(interaction.current_tool, ww, &metrics);
         vec![
             Self::dismiss_layer(Message::ActiveBar(
                 crate::active_bar::ActiveBarMsg::CloseMenus,

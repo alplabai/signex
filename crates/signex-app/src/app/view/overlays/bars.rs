@@ -456,7 +456,9 @@ impl Signex {
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
-        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens);
+        // Below the editor's own toolbar strip so the bar never covers it.
+        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
+            + crate::active_bar::symbol_editor_bar_drop(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
