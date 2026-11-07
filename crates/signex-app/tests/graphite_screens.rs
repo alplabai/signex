@@ -29,6 +29,7 @@ use iced_wgpu::wgpu;
 use signex_app::app::{AnnotateMsg, CommandPaletteMsg, FileMsg, Message, PreferencesMsg, Signex};
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::library::LibraryMessage;
+use signex_app::library::messages::{FootprintEditorMsg, PrimitiveEdit};
 use signex_app::panels::PanelKind;
 use signex_app::preferences::{PrefMsg, PrefNav};
 use signex_types::theme::ThemeId;
@@ -328,6 +329,19 @@ fn screens() -> Vec<(&'static str, Build)> {
                 app,
                 Message::File(FileMsg::Opened(Some(fx.footprint.clone()))),
             );
+            let _ = draw(r, app);
+            Ok(())
+        }),
+        ("footprint-pad", |app, r, fx| {
+            mount_stock(app, fx);
+            settle_support::settle(
+                app,
+                Message::File(FileMsg::Opened(Some(fx.footprint.clone()))),
+            );
+            let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                path: fx.footprint.clone(),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectPad(Some(0))),
+            }));
             let _ = draw(r, app);
             Ok(())
         }),

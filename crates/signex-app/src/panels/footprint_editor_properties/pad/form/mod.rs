@@ -297,7 +297,8 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
             iced::widget::checkbox(on)
                 .on_toggle(on_toggle)
                 .size(TS.label)
-                .spacing(0),
+                .spacing(0)
+                .style(crate::panels::form_look::checkbox_style),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),

@@ -79,8 +79,7 @@ pub(super) fn view_sections<'a>(
                 .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
                 .style(move |theme: &Theme, status: iced::widget::button::Status| {
                     let hovered = matches!(status, iced::widget::button::Status::Hovered);
-                    if let Some(style) =
-                        crate::panels::form_look::segment_cell(theme, on, hovered)
+                    if let Some(style) = crate::panels::form_look::segment_cell(theme, on, hovered)
                     {
                         return style;
                     }

@@ -294,17 +294,20 @@ pub(in crate::panels::footprint_editor_properties) fn fp_field_style(
     primary: Color,
     border_c: Color,
 ) -> impl Fn(&iced::Theme, iced::widget::text_input::Status) -> iced::widget::text_input::Style {
-    move |_, _| iced::widget::text_input::Style {
-        background: iced::Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
-        border: iced::Border {
-            width: 1.0,
-            radius: 2.0.into(),
-            color: border_c,
-            ..iced::Border::default()
-        },
-        placeholder: muted,
-        value: primary,
-        selection: Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+    move |theme, status| {
+        let legacy = iced::widget::text_input::Style {
+            background: iced::Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
+            border: iced::Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: border_c,
+                ..iced::Border::default()
+            },
+            placeholder: muted,
+            value: primary,
+            selection: Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+        };
+        crate::panels::form_look::text_input_or(theme, status, legacy)
     }
 }
 

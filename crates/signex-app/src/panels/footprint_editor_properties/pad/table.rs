@@ -137,7 +137,8 @@ pub(super) fn pad_table_check_cell<'a>(
         iced::widget::checkbox(on)
             .on_toggle(on_toggle)
             .size(TS.label)
-            .spacing(0),
+            .spacing(0)
+            .style(crate::panels::form_look::checkbox_style),
     )
     .padding([SP.xs, SP.s])
     .boxed()

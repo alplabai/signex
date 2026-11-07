@@ -466,7 +466,11 @@ pub(super) fn pad_stack_tab_strip<'a>(
         .padding([SP.s, 10.0])
         .width(Length::FillPortion(1))
         .on_press(PanelMsg::FpEditorSetPadStackTab(target))
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
+        .style(move |theme: &Theme, status: iced::widget::button::Status| {
+            let hovered = matches!(status, iced::widget::button::Status::Hovered);
+            if let Some(style) = crate::panels::form_look::segment_cell(theme, active, hovered) {
+                return style;
+            }
             let bg = match status {
                 iced::widget::button::Status::Hovered => Some(iced::Background::Color(
                     Color::from_rgba(1.0, 1.0, 1.0, 0.06),
@@ -501,6 +505,7 @@ pub(super) fn pad_stack_tab_strip<'a>(
     )
     .padding([SP.s, SP.m])
     .width(Length::Fill)
+    .style(crate::panels::form_look::segmented_frame)
     .boxed()
 }
 
