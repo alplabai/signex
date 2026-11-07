@@ -43,7 +43,10 @@
 //! floats over the canvas content.
 
 pub mod dropdown;
+mod metrics;
 mod skin;
+
+pub use metrics::Metrics;
 
 use iced::widget::{button, container, image, mouse_area, row, svg, text, tooltip};
 use iced::{Border, Color, Element, Length, Theme, Widget};
@@ -85,9 +88,14 @@ impl<M: 'static + Clone> ActiveBarItem<M> {
 
     /// Width this slot renders at, excluding the row spacing around it.
     pub fn width(&self) -> f32 {
+        self.width_with(&Metrics::LEGACY)
+    }
+
+    /// [`Self::width`] under `m` (Graphite buttons are wider).
+    pub fn width_with(&self, m: &Metrics) -> f32 {
         match self {
-            Self::Button(_) => BTN_SIZE,
-            Self::Separator => SEP_W,
+            Self::Button(_) => m.btn,
+            Self::Separator => m.sep_w,
             Self::Custom { width, .. } => *width,
         }
     }
@@ -104,8 +112,16 @@ impl<M: 'static + Clone> ActiveBarItem<M> {
 /// item list is the only truth about what got drawn, so a bar that
 /// gains, loses, or reorders a slot moves its dropdowns automatically.
 pub fn slot_offsets<M: 'static + Clone>(items: &[ActiveBarItem<M>]) -> (Vec<f32>, f32) {
-    let widths: Vec<f32> = items.iter().map(ActiveBarItem::width).collect();
-    offsets_for_widths(&widths)
+    slot_offsets_with(items, &Metrics::LEGACY)
+}
+
+/// [`slot_offsets`] under `m`; the bar `view` draws with `Metrics::of(tokens)`.
+pub fn slot_offsets_with<M: 'static + Clone>(
+    items: &[ActiveBarItem<M>],
+    m: &Metrics,
+) -> (Vec<f32>, f32) {
+    let widths: Vec<f32> = items.iter().map(|i| i.width_with(m)).collect();
+    offsets_for_widths_with(&widths, m)
 }
 
 /// [`slot_offsets`] for a bar described only by its slot widths.
@@ -114,16 +130,21 @@ pub fn slot_offsets<M: 'static + Clone>(items: &[ActiveBarItem<M>]) -> (Vec<f32>
 /// list (a hit-test running outside the view) use the same row maths
 /// as the renderer instead of re-deriving it.
 pub fn offsets_for_widths(widths: &[f32]) -> (Vec<f32>, f32) {
+    offsets_for_widths_with(widths, &Metrics::LEGACY)
+}
+
+/// [`offsets_for_widths`] under `m`.
+pub fn offsets_for_widths_with(widths: &[f32], m: &Metrics) -> (Vec<f32>, f32) {
     let mut offsets = Vec::with_capacity(widths.len());
-    let mut x = BAR_PADDING;
+    let mut x = m.padding;
     for (i, width) in widths.iter().enumerate() {
         if i > 0 {
-            x += ROW_SPACING;
+            x += m.spacing;
         }
         offsets.push(x);
         x += width;
     }
-    (offsets, x + BAR_PADDING)
+    (offsets, x + m.padding)
 }
 
 /// One clickable button in the Active Bar.
@@ -204,8 +225,6 @@ pub const BAR_PADDING: f32 = 2.0;
 /// Gap the row puts between adjacent slots.
 pub const ROW_SPACING: f32 = 2.0;
 
-const ICON_SIZE: f32 = 20.0;
-const SEP_H: f32 = 18.0;
 const BAR_RADIUS: f32 = 4.0;
 
 /// Render the bar.
@@ -222,13 +241,14 @@ where
     let border = theme_ext::border_color(tokens);
 
     let skin = skin::Skin::of(tokens);
-    let mut row_widget = row![].spacing(ROW_SPACING).align_y(iced::Alignment::Center);
+    let m = Metrics::of(tokens);
+    let mut row_widget = row![].spacing(m.spacing).align_y(iced::Alignment::Center);
     for item in items {
-        row_widget = row_widget.push(view_item(item, tokens));
+        row_widget = row_widget.push(view_item(item, tokens, &m));
     }
 
     container(row_widget)
-        .padding(BAR_PADDING)
+        .padding(m.padding)
         .style(move |_: &Theme| match skin {
             Some(s) => iced::widget::container::Style {
                 background: Some(iced::Background::Color(s.fill)),
@@ -260,17 +280,21 @@ where
         .boxed()
 }
 
-fn view_item<'a, M>(item: ActiveBarItem<M>, tokens: &'a ThemeTokens) -> Element<'a, M>
+fn view_item<'a, M>(
+    item: ActiveBarItem<M>,
+    tokens: &'a ThemeTokens,
+    metrics: &Metrics,
+) -> Element<'a, M>
 where
     M: 'static + Clone,
 {
     match item {
-        ActiveBarItem::Button(b) => view_button(b, tokens),
+        ActiveBarItem::Button(b) => view_button(b, tokens, metrics),
         ActiveBarItem::Separator => {
             let sep_color = theme_ext::border_color(tokens);
             container(iced::widget::Space::new())
-                .width(Length::Fixed(SEP_W))
-                .height(Length::Fixed(SEP_H))
+                .width(Length::Fixed(metrics.sep_w))
+                .height(Length::Fixed(metrics.sep_h))
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: Some(iced::Background::Color(sep_color)),
                     ..iced::widget::container::Style::default()
@@ -285,10 +309,18 @@ where
     }
 }
 
-fn view_button<'a, M>(b: ActiveBarButton<M>, tokens: &'a ThemeTokens) -> Element<'a, M>
+fn view_button<'a, M>(
+    b: ActiveBarButton<M>,
+    tokens: &'a ThemeTokens,
+    metrics: &Metrics,
+) -> Element<'a, M>
 where
     M: 'static + Clone,
 {
+    let btn_size = metrics.btn;
+    let icon_size = metrics.icon;
+    let chevron_size = metrics.chevron;
+    let skin = skin::Skin::of(tokens);
     let text_c = theme_ext::text_primary(tokens);
     let muted_c = theme_ext::text_secondary(tokens);
     let hover_c = theme_ext::hover_color(tokens);
@@ -305,66 +337,62 @@ where
     // inherit a "natural" fill the way SVGs do.
     let glyph_color = if !b.enabled {
         disabled_tint
+    } else if let Some(s) = skin {
+        if b.selected { s.on_selected } else { s.ink }
     } else if b.selected {
         Color::WHITE
     } else {
         text_c
     };
+    // Graphite icons are monochrome strokes tinted with the ink token
+    // (the bar surface colour on the armed tool); legacy keeps natural
+    // colours when enabled.
+    let svg_tint: Option<Color> = if !b.enabled {
+        Some(disabled_tint)
+    } else {
+        skin.map(|s| if b.selected { s.on_selected } else { s.ink })
+    };
 
-    let enabled_for_svg = b.enabled;
     let raw_icon: Element<'a, M> = match b.icon {
         ActiveBarIcon::Svg(handle) => svg(handle)
-            .width(Length::Fixed(ICON_SIZE))
-            .height(Length::Fixed(ICON_SIZE))
-            .style(move |_: &Theme, _| iced::widget::svg::Style {
-                color: if enabled_for_svg {
-                    None
-                } else {
-                    Some(disabled_tint)
-                },
-            })
+            .width(Length::Fixed(icon_size))
+            .height(Length::Fixed(icon_size))
+            .style(move |_: &Theme, _| iced::widget::svg::Style { color: svg_tint })
             .boxed(),
         ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
-            .width(Length::Fixed(ICON_SIZE))
-            .height(Length::Fixed(ICON_SIZE))
+            .width(Length::Fixed(icon_size))
+            .height(Length::Fixed(icon_size))
             .boxed(),
         ActiveBarIcon::Glyph(s) => text(s.to_string()).size(14).color(glyph_color).boxed(),
     };
 
     // Optional dropdown chevron in the bottom-right corner.
     let icon_content: Element<'a, M> = if let Some(indicator) = b.dropdown_indicator {
-        let indicator_enabled = b.enabled;
         let indicator_el: Element<'a, M> = match indicator {
             ActiveBarIcon::Svg(handle) => svg(handle)
-                .width(Length::Fixed(14.0))
-                .height(Length::Fixed(14.0))
-                .style(move |_: &Theme, _| iced::widget::svg::Style {
-                    color: if indicator_enabled {
-                        None
-                    } else {
-                        Some(disabled_tint)
-                    },
-                })
+                .width(Length::Fixed(chevron_size))
+                .height(Length::Fixed(chevron_size))
+                .style(move |_: &Theme, _| iced::widget::svg::Style { color: svg_tint })
                 .boxed(),
             ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
-                .width(Length::Fixed(14.0))
-                .height(Length::Fixed(14.0))
+                .width(Length::Fixed(chevron_size))
+                .height(Length::Fixed(chevron_size))
                 .boxed(),
             ActiveBarIcon::Glyph(s) => text(s.to_string()).size(10).color(glyph_color).boxed(),
         };
         iced::widget::Stack::new()
             .push(
                 container(raw_icon)
-                    .width(Length::Fixed(BTN_SIZE))
-                    .height(Length::Fixed(BTN_SIZE))
-                    .center_x(Length::Fixed(BTN_SIZE))
-                    .center_y(Length::Fixed(BTN_SIZE))
+                    .width(Length::Fixed(btn_size))
+                    .height(Length::Fixed(btn_size))
+                    .center_x(Length::Fixed(btn_size))
+                    .center_y(Length::Fixed(btn_size))
                     .boxed(),
             )
             .push(
                 container(indicator_el)
-                    .width(Length::Fixed(BTN_SIZE))
-                    .height(Length::Fixed(BTN_SIZE))
+                    .width(Length::Fixed(btn_size))
+                    .height(Length::Fixed(btn_size))
                     .align_x(iced::alignment::Horizontal::Right)
                     .align_y(iced::alignment::Vertical::Bottom)
                     .boxed(),
@@ -372,10 +400,10 @@ where
             .boxed()
     } else {
         container(raw_icon)
-            .width(Length::Fixed(BTN_SIZE))
-            .height(Length::Fixed(BTN_SIZE))
-            .center_x(Length::Fixed(BTN_SIZE))
-            .center_y(Length::Fixed(BTN_SIZE))
+            .width(Length::Fixed(btn_size))
+            .height(Length::Fixed(btn_size))
+            .center_x(Length::Fixed(btn_size))
+            .center_y(Length::Fixed(btn_size))
             .boxed()
     };
 
@@ -392,7 +420,6 @@ where
     // bar reads identically wherever it appears.
     // Graphite: token washes instead of white at 6 % (invisible on light
     // themes) and the 7 px control radius. Legacy themes keep their paint.
-    let skin = skin::Skin::of(tokens);
     let mut btn = button(icon_content).padding(0).style(
         move |_: &Theme, status: iced::widget::button::Status| {
             let selected_fill = skin.map_or(hover_c, |s| s.selected);

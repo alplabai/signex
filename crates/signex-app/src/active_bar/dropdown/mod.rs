@@ -163,8 +163,8 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
 }
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
-pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
-    super::layout::trigger_left(menu)
+pub fn dropdown_x_offset(menu: ActiveBarMenu, m: &signex_widgets::active_bar::Metrics) -> f32 {
+    super::layout::trigger_left(menu, m)
 }
 
 fn dd_btn_style_f(

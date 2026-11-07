@@ -63,8 +63,10 @@ pub fn bar_items(
 fn menu_trigger_geometry(
     items: &[ActiveBarItem<LibraryMessage>],
     menu: FpActiveBarMenu,
+    tokens: &ThemeTokens,
 ) -> (Option<f32>, f32) {
-    let (offsets, total) = signex_widgets::active_bar::slot_offsets(items);
+    let metrics = signex_widgets::active_bar::Metrics::of(tokens);
+    let (offsets, total) = signex_widgets::active_bar::slot_offsets_with(items, &metrics);
     let opens = |item: &ActiveBarItem<LibraryMessage>| -> bool {
         let ActiveBarItem::Button(b) = item else {
             return false;
@@ -140,7 +142,8 @@ pub fn dropdown_overlay<'a>(
     // the items this same bar just built. Clamp the panel's right edge
     // inside the viewport so a near-rightmost button still keeps it
     // fully visible.
-    let (trigger_x, bar_w) = menu_trigger_geometry(&bar_items(editor, theme_id, tokens), menu);
+    let (trigger_x, bar_w) =
+        menu_trigger_geometry(&bar_items(editor, theme_id, tokens), menu, tokens);
     // No trigger on the current bar means nothing to anchor to — a
     // stale menu key from a mode switch. Draw nothing rather than
     // park a panel over an unrelated button.
@@ -301,7 +304,7 @@ mod tests {
 
         let sketch = editor_in(EditorMode::Sketch);
         let items = bar_items(&sketch, tid, &tokens);
-        let at = |m| menu_trigger_geometry(&items, m).0;
+        let at = |m| menu_trigger_geometry(&items, m, &tokens).0;
 
         // The first shared trigger sits flush against the bar padding.
         assert_eq!(at(FpActiveBarMenu::Filter), Some(BAR_PADDING));
@@ -324,11 +327,11 @@ mod tests {
         let pads = editor_in(EditorMode::Normal);
         let pads_items = bar_items(&pads, tid, &tokens);
         assert_eq!(
-            menu_trigger_geometry(&pads_items, FpActiveBarMenu::SketchCreate).0,
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::SketchCreate, &tokens).0,
             None
         );
         assert!(
-            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Filter)
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Filter, &tokens)
                 .0
                 .is_some()
         );
@@ -358,7 +361,7 @@ mod tests {
         let expected: f32 = 2.0 * BAR_PADDING
             + items.iter().map(|i| i.width()).sum::<f32>()
             + ROW_SPACING * (items.len() - 1) as f32;
-        let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter);
+        let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter, &tokens);
         assert!(
             (measured - expected).abs() < 0.01,
             "{measured} vs {expected}"

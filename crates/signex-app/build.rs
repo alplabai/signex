@@ -43,6 +43,26 @@ fn main() {
         println!("cargo:rerun-if-changed={svg}");
     }
 
+    // Graphite Active Bar glyphs are `include_bytes!`-embedded too.
+    for name in [
+        "select",
+        "move",
+        "filter",
+        "align",
+        "wire",
+        "power",
+        "harness",
+        "sheetsym",
+        "port",
+        "directives",
+        "text",
+        "shapes",
+        "netcolor",
+        "chevron",
+    ] {
+        println!("cargo:rerun-if-changed=assets/icons/active_bar/graphite/{name}.svg");
+    }
+
     // Wordmark PNGs (1×/2×/3×) are rasterised from the logo SVGs by
     // `installer/build-wordmark.py` and `include_bytes!`-embedded. Cargo
     // doesn't trace include_bytes! through transitively, so regenerating

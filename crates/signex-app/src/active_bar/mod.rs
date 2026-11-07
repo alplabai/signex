@@ -20,8 +20,8 @@ mod planned;
 pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub use layout::BAR_WIDTH_PX;
 pub(crate) use layout::{
-    BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window, bar_top_margin,
-    bar_width_for, menu_at,
+    BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
+    bar_zone_height_for, menu_at, metrics_for, symbol_editor_bar_drop,
 };
 pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
@@ -564,7 +564,14 @@ fn bar_items(
                 .unwrap_or(default),
         )
     };
+    // Graphite draws monochrome stroke glyphs only for the group defaults;
+    // the multi-colour per-action icons would tint into solid blobs, so the
+    // button keeps its group glyph there.
+    let graphite = styles::is_graphite(tokens);
     let last_icon = |group: &str, default_icon: svg::Handle| -> svg::Handle {
+        if graphite {
+            return default_icon;
+        }
         last_tool
             .get(group)
             .filter(|a| !is_planned(a))
@@ -769,26 +776,32 @@ mod pill_tests {
     }
 }
 
-/// Window-space centre x of every dropdown trigger the view draws for
-/// `tool` in a window `window_width` wide, derived from the drawn items
-/// and the widget's own row maths (not from `layout`'s slot table).
 #[cfg(test)]
-pub(crate) fn drawn_trigger_centres(
+mod layout_tests;
+
+/// Window-space centre x of every dropdown trigger the view draws for
+/// `tool` in a window `window_width` wide under theme `tid`, derived from
+/// the drawn items and the widget's own row maths (not from `layout`'s
+/// slot table).
+#[cfg(test)]
+pub(crate) fn drawn_trigger_centres_for(
     tool: crate::app::Tool,
     window_width: f32,
+    tid: ThemeId,
 ) -> Vec<(ActiveBarMenu, f32)> {
-    use signex_widgets::active_bar::{ActiveBarItem, slot_offsets};
-    let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
+    use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets_with};
+    let tokens = signex_types::theme::theme_tokens(tid);
+    let m = Metrics::of(&tokens);
     let items = bar_items(
         tool,
         crate::app::DrawMode::Ortho90,
         &std::collections::HashMap::new(),
         &tokens,
-        ThemeId::Signex,
+        tid,
         false,
         false,
     );
-    let (offsets, total) = slot_offsets(&items);
+    let (offsets, total) = slot_offsets_with(&items, &m);
     let bar_left = (window_width - total) / 2.0;
     items
         .iter()
@@ -796,7 +809,7 @@ pub(crate) fn drawn_trigger_centres(
         .filter_map(|(item, left)| match item {
             ActiveBarItem::Button(b) => match b.on_right_press {
                 Some(ActiveBarMsg::ToggleMenu(menu)) => {
-                    Some((menu, bar_left + left + item.width() / 2.0))
+                    Some((menu, bar_left + left + item.width_with(&m) / 2.0))
                 }
                 _ => None,
             },
@@ -805,104 +818,11 @@ pub(crate) fn drawn_trigger_centres(
         .collect()
 }
 
+/// [`drawn_trigger_centres_for`] under the legacy default theme.
 #[cfg(test)]
-mod layout_tests {
-    use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, bar_slots, slot_rects};
-    use super::*;
-    use crate::app::{DrawMode, Tool};
-    use signex_widgets::active_bar::{BTN_SIZE, slot_offsets};
-
-    fn drawn_items(tool: Tool) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
-        let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
-        bar_items(
-            tool,
-            DrawMode::Ortho90,
-            &std::collections::HashMap::new(),
-            &tokens,
-            ThemeId::Signex,
-            false,
-            false,
-        )
-    }
-
-    /// The view's item list and the slot table must describe the same bar.
-    #[test]
-    fn bar_items_follow_the_slot_table() {
-        use signex_widgets::active_bar::ActiveBarItem;
-        let slots: Vec<BarSlot> = drawn_items(Tool::Select)
-            .iter()
-            .map(|item| match item {
-                ActiveBarItem::Separator => BarSlot::Separator,
-                ActiveBarItem::Button(b) => match b.on_right_press {
-                    Some(ActiveBarMsg::ToggleMenu(menu)) => BarSlot::Trigger(menu),
-                    _ => panic!("bar button without a dropdown trigger"),
-                },
-                ActiveBarItem::Custom { .. } => panic!("unexpected custom slot"),
-            })
-            .collect();
-        assert_eq!(slots, SCHEMATIC_BAR_SLOTS);
-    }
-
-    /// Hit rects are the rects the renderer lays out (same row maths),
-    /// also while the draw-mode pill widens the bar.
-    #[test]
-    fn hit_rects_equal_drawn_rects() {
-        for tool in [Tool::Select, Tool::Wire, Tool::Bus] {
-            let items = drawn_items(tool);
-            let (drawn, total) = slot_offsets(&items);
-            assert_eq!(total, bar_width_for(tool), "{tool:?} total width");
-            if tool == Tool::Select {
-                assert_eq!(total, BAR_WIDTH_PX);
-            } else {
-                assert_eq!(total, BAR_WIDTH_PX + 1.0 + 2.0 + 2.0 + 42.0);
-            }
-            let rects = slot_rects(tool);
-            assert_eq!(rects.len(), items.len(), "{tool:?} slot count");
-            for (i, (left, width)) in rects.iter().copied().enumerate() {
-                assert_eq!(left, drawn[i], "slot {i} left edge");
-                assert_eq!(width, items[i].width(), "slot {i} width");
-                let BarSlot::Trigger(menu) = bar_slots(tool)[i] else {
-                    assert_eq!(menu_at(tool, left + width / 2.0), None, "non-trigger {i}");
-                    continue;
-                };
-                assert_eq!(menu_at(tool, left), Some(menu));
-                assert_eq!(menu_at(tool, left + width - 0.01), Some(menu));
-                assert_ne!(menu_at(tool, left + width), Some(menu));
-                assert_ne!(menu_at(tool, left - 0.01), Some(menu));
-                assert_eq!(dropdown_x_offset(menu), left);
-            }
-        }
-    }
-
-    /// #1509: with the pill shown the dropdown anchor (window-space left
-    /// edge of the trigger) lands on the drawn button, not 23.5 px off.
-    #[test]
-    fn dropdown_anchor_matches_drawn_button_with_pill() {
-        for window_width in [1400.0_f32, 1117.0] {
-            for (menu, centre) in drawn_trigger_centres(Tool::Wire, window_width) {
-                let anchor = dropdown_x_offset(menu) + bar_left_in_window(Tool::Wire, window_width);
-                assert_eq!(
-                    anchor + BTN_SIZE / 2.0,
-                    centre,
-                    "{menu:?} at {window_width}"
-                );
-            }
-        }
-    }
-
-    /// Pre-#1495 literal for the right-click zone.
-    #[test]
-    fn active_bar_zone_height_is_unchanged() {
-        assert_eq!(BAR_ZONE_HEIGHT_PX, 46.0);
-        assert_eq!(layout::BAR_TOP_MARGIN_PX, 4.0);
-    }
-
-    /// Graphite floats the bar 10 px down; the legacy themes keep 4 px.
-    #[test]
-    fn graphite_bar_top_margin_is_ten_and_legacy_four() {
-        let legacy = signex_types::theme::theme_tokens(ThemeId::Signex);
-        let graphite = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
-        assert_eq!(layout::bar_top_margin(&legacy), 4.0);
-        assert_eq!(layout::bar_top_margin(&graphite), 10.0);
-    }
+pub(crate) fn drawn_trigger_centres(
+    tool: crate::app::Tool,
+    window_width: f32,
+) -> Vec<(ActiveBarMenu, f32)> {
+    drawn_trigger_centres_for(tool, window_width, ThemeId::Signex)
 }
