@@ -83,8 +83,9 @@ where
         renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
-        if let Some((l, t)) = layout.iter_mut(&mut tree.children).next() {
-            self.content.operate(t, l, viewport, renderer, operation);
+        if let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() {
+            self.content
+                .operate(child_tree, child_layout, viewport, renderer, operation);
         }
     }
 
@@ -98,9 +99,16 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if let Some((l, t)) = layout.iter_mut(&mut tree.children).next() {
-            self.content
-                .update(t, event, l, cursor, renderer, shell, viewport);
+        if let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() {
+            self.content.update(
+                child_tree,
+                event,
+                child_layout,
+                cursor,
+                renderer,
+                shell,
+                viewport,
+            );
         }
     }
 
@@ -112,11 +120,11 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        let Some((l, t)) = layout.iter(&tree.children).next() else {
+        let Some((child_layout, child_tree)) = layout.iter(&tree.children).next() else {
             return mouse::Interaction::default();
         };
         self.content
-            .mouse_interaction(t, l, cursor, viewport, renderer)
+            .mouse_interaction(child_tree, child_layout, cursor, viewport, renderer)
     }
 
     fn draw(
@@ -131,9 +139,16 @@ where
     ) {
         // The outer viewport passes straight through so the child can paint
         // outside this widget's own bounds (no double clip).
-        if let Some((l, t)) = layout.iter(&tree.children).next() {
-            self.content
-                .draw(t, renderer, theme, style, l, cursor, viewport);
+        if let Some((child_layout, child_tree)) = layout.iter(&tree.children).next() {
+            self.content.draw(
+                child_tree,
+                renderer,
+                theme,
+                style,
+                child_layout,
+                cursor,
+                viewport,
+            );
         }
     }
 
@@ -146,11 +161,17 @@ where
         translation: Vector,
         window: Size,
     ) -> Vec<overlay::Element<'a, Message, Theme, Renderer>> {
-        let Some((l, t)) = layout.iter_mut(&mut tree.children).next() else {
+        let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() else {
             return Vec::new();
         };
-        self.content
-            .overlay(t, l, renderer, viewport, translation, window)
+        self.content.overlay(
+            child_tree,
+            child_layout,
+            renderer,
+            viewport,
+            translation,
+            window,
+        )
     }
 }
 

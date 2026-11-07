@@ -1,5 +1,6 @@
 //! Footprint preview: the footprint editor's own rendering (backdrop, grid,
-//! origin, front and back silk and fab, courtyard, pads with holes, a size readout and a scale bar) over a read-only
+//! origin, front and back silk and fab, courtyard, pads with holes, a size
+//! readout and a scale bar) over a read-only
 //! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
 //! first show, and again when the box changes size while the user has not
 //! zoomed or panned. Shared by the Components panel and the Component Preview
@@ -16,7 +17,6 @@ use crate::library::editor::footprint::canvas::{
 };
 use crate::library::editor::footprint::state::SnapOptions;
 
-#[path = "footprint_scale.rs"]
 mod footprint_scale;
 
 /// Lowest zoom of the preview, px per mm: low enough to fit a large part

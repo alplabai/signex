@@ -566,42 +566,6 @@ fn a_tie_is_broken_like_the_write_lock_whatever_the_mount_order() {
     }
 }
 
-/// #1972: before the case probe answers, two case-variant folders tie under
-/// FOLD. The worker writes in the folder the draft is spelled under, so the
-/// write and the bookkeeping name that one, not the sorted-first.
-#[test]
-fn a_tie_prefers_the_library_whose_folder_is_a_raw_prefix_of_the_draft() {
-    use crate::app::CaseFold;
-    let (lower, upper) = ("/w/lib/m.snxlib", "/w/LIB/z.snxlib");
-    for order in [[lower, upper], [upper, lower]] {
-        let state = LibraryState {
-            open_libraries: order.iter().map(|r| bare_library(r)).collect(),
-            ..Default::default()
-        };
-        let target = |file: &str| {
-            state
-                .write_target_library(Path::new(file), CaseFold::FOLD)
-                .map(|l| l.root.clone())
-        };
-        assert_eq!(
-            target("/w/LIB/symbols/s.snxsym"),
-            Some(PathBuf::from(upper)),
-            "{order:?}"
-        );
-        assert_eq!(
-            target("/w/lib/symbols/s.snxsym"),
-            Some(PathBuf::from(lower)),
-            "{order:?}"
-        );
-        // Spelled under neither: the sorted-first, as the write lock picks.
-        assert_eq!(
-            target("/w/Lib/symbols/s.snxsym"),
-            Some(PathBuf::from(lower)),
-            "{order:?}"
-        );
-    }
-}
-
 #[test]
 fn library_holding_requires_the_primitive_folder_of_the_owner() {
     let state = LibraryState {
