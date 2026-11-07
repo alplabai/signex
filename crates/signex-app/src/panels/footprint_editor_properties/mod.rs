@@ -174,6 +174,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 left: 0.0,
             }))
             .width(Length::Fill)
+            .height(Length::Fill)
+            .style(crate::panels::form_look::scrollbar_style)
             .boxed();
         }
         if in_placement {
@@ -196,6 +198,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 left: 0.0,
             }))
             .width(Length::Fill)
+            .height(Length::Fill)
+            .style(crate::panels::form_look::scrollbar_style)
             .boxed();
         }
         // Empty canvas + idle → fall through to the original chrome.
@@ -228,6 +232,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
         left: 0.0,
     }))
     .width(Length::Fill)
+    .height(Length::Fill)
+    .style(crate::panels::form_look::scrollbar_style)
     .boxed()
 }
 

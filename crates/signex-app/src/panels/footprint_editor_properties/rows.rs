@@ -93,3 +93,34 @@ pub(super) fn value_row<'a>(
     .width(Length::Fill)
     .boxed()
 }
+
+/// A pick-list row aligned with `edit_row`: the Graphite pick-list look and
+/// the same label / value split, so a dropdown is as wide as a text field.
+pub(super) fn pick_row<'a, T>(
+    key: &str,
+    options: &'a [T],
+    selected: T,
+    on_change: impl Fn(T) -> PanelMsg + 'a,
+    label_c: Color,
+) -> Element<'a, PanelMsg>
+where
+    T: Clone + Eq + std::fmt::Display + 'static,
+{
+    container(
+        row![
+            label(key, label_c),
+            iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
+                .on_select(on_change)
+                .text_size(TS.body)
+                .padding(SP.s)
+                .style(form_look::pick_list_style)
+                .width(Length::FillPortion(VALUE_PORTION))
+                .boxed(),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .boxed()
+}

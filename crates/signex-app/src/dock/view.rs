@@ -115,11 +115,11 @@ impl DockArea {
         // tab actually closes off with a right edge.
         let last_panel_idx = region.panels.len().saturating_sub(1);
         // Graphite shrinks the tab padding so all labels of a side dock show.
-        let tab_pad = if graphite && position != PanelPosition::Bottom {
+        let (tab_size, tab_pad) = if graphite && position != PanelPosition::Bottom {
             let labels: Vec<&str> = region.panels.iter().map(|p| p.label()).collect();
-            graphite::tab_padding(&labels, TS.body)
+            graphite::tab_layout(&labels, TS.body, TS.caption)
         } else {
-            10.0
+            (TS.body, 10.0)
         };
         for (i, panel) in region.panels.iter().enumerate().skip(offset) {
             let label = panel.label();
@@ -194,7 +194,7 @@ impl DockArea {
             // ~240 px width with several panels in the strip.
             let mut inner = container(
                 text(label)
-                    .size(TS.body)
+                    .size(tab_size)
                     .color(text_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             )
@@ -368,7 +368,8 @@ impl DockArea {
                 container(content)
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .padding(0),
+                    .padding(0)
+                    .clip(true),
             ];
             if let Some(footer) = footer {
                 body = body.push(footer);

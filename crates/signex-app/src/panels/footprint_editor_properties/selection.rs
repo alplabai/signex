@@ -6,7 +6,7 @@ use super::super::{
 };
 use super::managers::grid_manager_btn;
 use super::pad::{
-    PadEditTarget, PadFormValues, pad_check_row, pad_input_row, pad_pick_row,
+    PadEditTarget, PadFormValues, pad_check_row, pad_input_row,
     render_pad_form_pad_features, render_pad_form_pad_stack, render_pad_form_properties,
 };
 use super::props_kv_row;
@@ -409,7 +409,7 @@ pub(super) fn view_selection<'a>(
                         muted,
                         PanelMsg::FpEditorSetFootprintDefaultDesignator,
                     ));
-                    col = col.push(pad_pick_row(
+                    col = col.push(super::rows::pick_row(
                         "Type",
                         signex_library::primitive::footprint::ComponentType::ALL,
                         fp.footprint_component_type,
