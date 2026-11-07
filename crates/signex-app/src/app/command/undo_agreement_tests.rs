@@ -352,9 +352,80 @@ fn rules(stage: Stage) -> (Signex, Window) {
     (app, Some(window))
 }
 
+/// A symbol or footprint editor in its own window (no canvas), over a main
+/// window on the other kind with a step of its own that must stay put.
+fn undocked_editor(stage: Stage, symbol_editor: bool) -> (Signex, Window) {
+    let (mut app, _w) = if symbol_editor {
+        footprint(Stage::HasUndo)
+    } else {
+        symbol(Stage::HasUndo)
+    };
+    let main_tab = app.document_state.active_tab;
+    let path = PathBuf::from(if symbol_editor {
+        "undocked.snxsym"
+    } else {
+        "undocked.snxfpt"
+    });
+    let kind = if symbol_editor {
+        let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("u"));
+        app.document_state
+            .symbol_editors
+            .insert(path.clone(), SymbolDocument::new(path.clone(), file));
+        TabKind::SymbolEditor(path.clone())
+    } else {
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("u"));
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+        TabKind::FootprintEditor(path.clone())
+    };
+    app.document_state.tabs.insert(
+        0,
+        TabInfo {
+            title: "undocked".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind,
+        },
+    );
+    app.document_state.active_tab = main_tab + 1;
+    let id = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        id,
+        WindowKind::UndockedTab {
+            path: path.clone(),
+            title: "undocked".into(),
+        },
+    );
+    settle(&mut app, Some(id), stage, |app| {
+        if symbol_editor {
+            let doc = app.document_state.symbol_editors.get_mut(&path).unwrap();
+            let snap = doc.snapshot();
+            doc.commit_history(snap);
+        } else {
+            app.document_state
+                .footprint_editors
+                .get_mut(&path)
+                .unwrap()
+                .push_history();
+        }
+    });
+    (app, Some(id))
+}
+
+fn undocked_symbol(stage: Stage) -> (Signex, Window) {
+    undocked_editor(stage, true)
+}
+
+fn undocked_footprint(stage: Stage) -> (Signex, Window) {
+    undocked_editor(stage, false)
+}
+
 type Fixture = fn(Stage) -> (Signex, Window);
 
-const FIXTURES: [(&str, Fixture); 11] = [
+const FIXTURES: [(&str, Fixture); 13] = [
     ("schematic", schematic),
     ("pcb", pcb),
     ("symbol", symbol),
@@ -362,6 +433,8 @@ const FIXTURES: [(&str, Fixture); 11] = [
     ("component row in a tab", component_tab),
     ("component preview window", component_window),
     ("undocked sheet", undocked),
+    ("undocked symbol editor", undocked_symbol),
+    ("undocked footprint editor", undocked_footprint),
     ("window without a tab", window_without_a_tab),
     (
         "library browser over a live engine",
@@ -406,6 +479,8 @@ fn the_fixtures_with_history_light_the_menu() {
         "component row in a tab",
         "component preview window",
         "undocked sheet",
+        "undocked symbol editor",
+        "undocked footprint editor",
         "project rules",
     ] {
         let (_, build) = FIXTURES.iter().find(|(n, _)| *n == name).unwrap();
@@ -572,4 +647,30 @@ fn an_undocked_window_with_a_parked_engine_and_no_tab_leaves_the_main_window_alo
         before,
         "the main window's footprint is untouched"
     );
+}
+
+/// An in-place text edit open on the main window's canvas survives an
+/// Undo / Redo typed in another window that steps its own document.
+#[test]
+fn undo_in_another_window_keeps_the_main_windows_text_edit() {
+    let _ = crate::diagnostics::init_logging();
+    for build in [component_window, undocked_symbol, undocked_footprint] {
+        let (mut app, window) = build(Stage::HasUndo);
+        app.interaction_state.editing_text = Some(crate::app::contracts::TextEditState {
+            uuid: uuid::Uuid::nil(),
+            kind: signex_types::schematic::SelectedKind::Label,
+            text: "typed".into(),
+            original_text: "orig".into(),
+            world_x: 0.0,
+            world_y: 0.0,
+            sheet: None,
+            placement: None,
+        });
+        let (moved, outcome) = ran(&mut app, window, "undo");
+        assert!(moved, "{outcome:?}");
+        assert!(
+            app.interaction_state.editing_text.is_some(),
+            "the main window's in-place edit is kept"
+        );
+    }
 }

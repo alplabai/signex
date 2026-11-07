@@ -108,11 +108,6 @@ impl Signex {
     /// sheet is stepped through the active sheet: a window that shows one is
     /// made the active one first (`run_in_window`).
     pub(crate) fn step_undo_target(&mut self, target: &UndoTarget, undo: bool) -> bool {
-        self.close_text_edit(if undo {
-            "the document was undone"
-        } else {
-            "the document was redone"
-        });
         // The ERC dialog steps its rules through `ErcMsg::RulesUndone`/`Redone`.
         let UndoTarget::Document(key) = target else {
             return false;

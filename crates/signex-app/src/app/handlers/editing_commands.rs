@@ -187,12 +187,14 @@ impl Signex {
     /// Undo in the main window: whatever its tab shows (see
     /// [`Signex::undo_target`]).
     pub(crate) fn handle_undo_requested(&mut self) {
+        self.close_text_edit("the document was undone");
         let target = self.undo_target(None);
         self.step_undo_target(&target, true);
     }
 
     /// Redo in the main window, see [`Self::handle_undo_requested`].
     pub(crate) fn handle_redo_requested(&mut self) {
+        self.close_text_edit("the document was redone");
         let target = self.undo_target(None);
         self.step_undo_target(&target, false);
     }
