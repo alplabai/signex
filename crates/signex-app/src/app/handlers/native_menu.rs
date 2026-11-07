@@ -80,7 +80,8 @@ impl Signex {
             self.has_locking_confirm_modal(),
             self.open_panels(),
         )
-        .with_keymap(Arc::clone(&self.ui_state.active_keymap));
+        .with_keymap(Arc::clone(&self.ui_state.active_keymap))
+        .with_i18n(Arc::clone(&self.ui_state.i18n));
         if !self.native_menu.needs_sync(&inputs) {
             return;
         }
@@ -89,6 +90,7 @@ impl Signex {
             recent_projects: inputs.recent(),
             open_panels: inputs.open_panels().to_vec(),
             active_keymap: inputs.keymap(),
+            i18n: inputs.i18n().unwrap_or_else(signex_i18n::I18n::en_us),
             ..MenuContext::default()
         };
         let built = build(&menu_bar_model(&ctx), inputs.locked());

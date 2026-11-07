@@ -98,6 +98,7 @@ pub(crate) struct MenuInputs {
     locked: bool,
     open_panels: Vec<PanelKind>,
     keymap: Option<Arc<CompiledKeymap>>,
+    i18n: Option<Arc<signex_i18n::I18n>>,
 }
 
 impl PartialEq for MenuInputs {
@@ -107,6 +108,11 @@ impl PartialEq for MenuInputs {
             && self.locked == other.locked
             && self.open_panels == other.open_panels
             && match (&self.keymap, &other.keymap) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+            && match (&self.i18n, &other.i18n) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
                 _ => false,
@@ -130,7 +136,16 @@ impl MenuInputs {
             locked,
             open_panels,
             keymap: None,
+            i18n: None,
         }
+    }
+
+    /// The locale the titles render in. Replaced, never edited, so pointer
+    /// identity says whether a language change happened.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
+    pub(crate) fn with_i18n(mut self, i18n: Arc<signex_i18n::I18n>) -> Self {
+        self.i18n = Some(i18n);
+        self
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
@@ -142,6 +157,11 @@ impl MenuInputs {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn keymap(&self) -> Option<Arc<CompiledKeymap>> {
         self.keymap.clone()
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn i18n(&self) -> Option<Arc<signex_i18n::I18n>> {
+        self.i18n.clone()
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

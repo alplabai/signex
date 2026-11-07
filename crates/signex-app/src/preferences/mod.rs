@@ -23,6 +23,7 @@ mod component_classes;
 mod distributors;
 mod editing;
 mod keymap;
+mod language;
 mod profiles;
 mod widgets;
 
@@ -147,6 +148,8 @@ pub enum PrefMsg {
     DraftDragDirectionSelect(bool),
     /// Toggle "Show net info on hover". Persisted on Save.
     DraftNetHoverEnabled(bool),
+    /// Choose the UI language. Applied to every window and persisted on Save.
+    DraftLanguage(signex_i18n::LanguagePref),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
     DraftTrackpadPan(bool),
     /// Toggle "Remember window size and position". Persisted on Save.
@@ -315,6 +318,8 @@ pub struct PrefsView<'a> {
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,
     pub draft_trackpad_pan: bool,
+    pub draft_language: &'a signex_i18n::LanguagePref,
+    pub i18n: &'a signex_i18n::I18n,
     pub draft_remember_window_geometry: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,

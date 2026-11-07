@@ -175,6 +175,11 @@ pub struct UiState {
     pub trackpad_pan: bool,
     /// Draft mirror of [`Self::trackpad_pan`] for the Preferences dialog.
     pub preferences_draft_trackpad_pan: bool,
+    /// The locale in force: its catalog bundle and the Language list. Shared
+    /// with the menus; replaced on a committed language change (#2055).
+    pub i18n: std::sync::Arc<signex_i18n::I18n>,
+    /// Draft mirror of the language for the Preferences dialog.
+    pub preferences_draft_language: signex_i18n::LanguagePref,
     /// Saved "Remember window size and position" preference. Off by default.
     pub remember_window_geometry: bool,
     /// Draft mirror of [`Self::remember_window_geometry`] for Preferences.
@@ -654,6 +659,7 @@ impl UiState {
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
             || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
             || self.preferences_draft_trackpad_pan != self.trackpad_pan
+            || self.preferences_draft_language != *self.i18n.pref()
             || self.preferences_draft_remember_window_geometry != self.remember_window_geometry
             || self.preferences_draft_drag_direction_select != self.drag_direction_select
             || self.preferences_draft_increment_step != self.increment_step

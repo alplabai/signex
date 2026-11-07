@@ -31,6 +31,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
         draft_trackpad_pan,
+        draft_language,
+        i18n,
         draft_remember_window_geometry,
         draft_ui_scale_percent,
         draft_window_controls_placement,
@@ -177,6 +179,11 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         .boxed(),
     );
     col = col.push(Space::new().height(20).boxed());
+
+    // ── Section: Language ──
+    for row in super::language::language_section(draft_language, i18n) {
+        col = col.push(row);
+    }
 
     // ── Section: Window controls ──
     col = col.push(h_sep());

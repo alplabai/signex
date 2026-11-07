@@ -488,3 +488,21 @@ fn the_native_file_menu_has_the_approved_rows() {
     let print = item_labelled(file, "Print...").unwrap();
     assert!(print.accelerator.is_none());
 }
+
+/// #2055: a new language changes a root title, a change of shape, so the
+/// native menu is rebuilt rather than patched in place.
+#[test]
+fn a_new_language_title_rebuilds_the_native_menu() {
+    let spec_in = |tag: &str| {
+        let ctx = MenuContext {
+            i18n: std::sync::Arc::new(signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale(
+                tag.to_owned(),
+            ))),
+            ..MenuContext::default()
+        };
+        build(&menu_bar_model(&ctx), false).spec
+    };
+    let (en, xa) = (spec_in("en-US"), spec_in("en-XA"));
+    assert_eq!(plan_refresh(Some(&en), &en.clone()), Refresh::Unchanged);
+    assert_eq!(plan_refresh(Some(&en), &xa), Refresh::Rebuild);
+}

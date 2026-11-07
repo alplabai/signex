@@ -223,6 +223,7 @@ impl Signex {
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries(),
             open_panels: self.open_panels(),
+            i18n: std::sync::Arc::clone(&ui.i18n),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
