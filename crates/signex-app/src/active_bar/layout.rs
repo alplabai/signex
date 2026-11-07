@@ -114,6 +114,20 @@ pub(crate) const BAR_HEIGHT_PX: f32 = BTN_SIZE + 2.0 * BAR_PADDING;
 /// Gap between the top of the canvas overlay layer and the bar.
 pub(crate) const BAR_TOP_MARGIN_PX: f32 = 4.0;
 
+/// Gap between the top of the canvas overlay layer and a Graphite bar.
+const GRAPHITE_BAR_TOP_MARGIN_PX: f32 = 10.0;
+
+/// Top margin of the bar under `tokens`: Graphite floats it 10 px below the
+/// tab strip, every other theme keeps [`BAR_TOP_MARGIN_PX`]. The bar view
+/// and the dropdown anchor both read this, so they cannot disagree.
+pub(crate) fn bar_top_margin(tokens: &signex_types::theme::ThemeTokens) -> f32 {
+    if crate::styles::is_graphite(tokens) {
+        GRAPHITE_BAR_TOP_MARGIN_PX
+    } else {
+        BAR_TOP_MARGIN_PX
+    }
+}
+
 /// Gap between the bar's bottom edge and an open dropdown.
 pub(crate) const BAR_DROPDOWN_GAP_PX: f32 = 6.0;
 

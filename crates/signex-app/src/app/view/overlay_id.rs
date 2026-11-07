@@ -369,7 +369,9 @@ impl Signex {
             OverlayId::NetColorCustom => layers.extend(self.net_color_custom_overlay()),
             OverlayId::PlacementPaused => layers.extend(self.placement_paused_overlay(window_id)),
             OverlayId::SchematicActiveBar => layers.extend(scoped_to_window(
-                self.schematic_active_bar_overlay(window_id),
+                self.schematic_active_bar_overlay(window_id)
+                    .into_iter()
+                    .chain(self.canvas_zoom_pill_overlay(window_id)),
                 self.overlay_owner(window_id),
             )),
             OverlayId::FootprintActiveBar => {

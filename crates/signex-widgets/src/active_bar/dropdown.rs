@@ -277,6 +277,11 @@ where
     let muted = theme_ext::text_secondary(tokens);
     let hover_c = crate::theme_ext::to_color(&tokens.hover);
     let accent = theme_ext::to_color(&tokens.accent);
+    // Graphite: the panel matches the bar (raised fill, 10 px radius,
+    // themed shadow, token hover wash). Legacy themes keep the 4 px panel.
+    let skin = super::skin::Skin::of(tokens);
+    let hover_c = skin.map_or(hover_c, |s| s.hover);
+    let row_radius = skin.map_or(0.0, |s| s.button_radius);
 
     // Fill children inside a Shrink column lay out at zero width in the
     // fork, so a fixed-width panel gets a Fill column (buttons stay clickable)
@@ -389,7 +394,10 @@ where
                     };
                     button::Style {
                         background: bg,
-                        border: Border::default(),
+                        border: Border {
+                            radius: row_radius.into(),
+                            ..Border::default()
+                        },
                         text_color: row_text_c,
                         ..button::Style::default()
                     }
@@ -425,20 +433,23 @@ where
     }
     panel
         .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(Background::Color(panel_bg)),
+            background: Some(Background::Color(skin.map_or(panel_bg, |s| s.fill))),
             border: Border {
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: skin.map_or(4.0, |s| s.radius).into(),
                 color: border_c,
                 ..Border::default()
             },
             // Drop shadow lifts the popup off the canvas — shared by every
             // editor's active-bar dropdown so the chrome reads identically.
-            shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                offset: iced::Vector::new(0.0, 4.0),
-                blur_radius: 12.0,
-            },
+            shadow: skin.map_or(
+                iced::Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 12.0,
+                },
+                |s| s.shadow,
+            ),
             ..iced::widget::container::Style::default()
         })
         .boxed()

@@ -254,7 +254,9 @@ impl Signex {
         .boxed();
         Some(
             column![
-                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
+                iced::widget::Space::new().height(
+                    y_offset + crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
+                ),
                 container(bar)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -278,6 +280,7 @@ impl Signex {
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
+        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -291,7 +294,7 @@ impl Signex {
             .boxed();
         out.push(
             column![
-                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
+                iced::widget::Space::new().height(y_offset + bar_margin),
                 container(bar)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -300,7 +303,7 @@ impl Signex {
         );
         // Position the dropdown panel directly below the bar's bottom
         // edge (see the schematic mount for the 42 px derivation).
-        let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+        let dropdown_top: u16 = ((y_offset + bar_margin) as u16).saturating_add(38);
         if let Some(overlay) =
             crate::library::editor::footprint::unified_active_bar::dropdown_overlay(
                 editor,
@@ -453,6 +456,7 @@ impl Signex {
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
+        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
@@ -461,14 +465,14 @@ impl Signex {
             .boxed();
         out.push(
             column![
-                iced::widget::Space::new().height(y_offset + 4.0),
+                iced::widget::Space::new().height(y_offset + bar_margin),
                 container(bar)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
             .boxed(),
         );
-        let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+        let dropdown_top: u16 = ((y_offset + bar_margin) as u16).saturating_add(38);
         if let Some(overlay) = crate::library::editor::symbol::active_bar::dropdown_overlay(
             editor,
             theme_id,

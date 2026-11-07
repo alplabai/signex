@@ -43,6 +43,7 @@
 //! floats over the canvas content.
 
 pub mod dropdown;
+mod skin;
 
 use iced::widget::{button, container, image, mouse_area, row, svg, text, tooltip};
 use iced::{Border, Color, Element, Length, Theme, Widget};
@@ -220,6 +221,7 @@ where
     let bar_bg = theme_ext::to_color(&tokens.panel_bg);
     let border = theme_ext::border_color(tokens);
 
+    let skin = skin::Skin::of(tokens);
     let mut row_widget = row![].spacing(ROW_SPACING).align_y(iced::Alignment::Center);
     for item in items {
         row_widget = row_widget.push(view_item(item, tokens));
@@ -227,20 +229,33 @@ where
 
     container(row_widget)
         .padding(BAR_PADDING)
-        .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(bar_bg)),
-            border: Border {
-                width: 1.0,
-                radius: BAR_RADIUS.into(),
-                color: border,
-                ..Border::default()
+        .style(move |_: &Theme| match skin {
+            Some(s) => iced::widget::container::Style {
+                background: Some(iced::Background::Color(s.fill)),
+                border: Border {
+                    width: 1.0,
+                    radius: s.radius.into(),
+                    color: s.border,
+                    ..Border::default()
+                },
+                shadow: s.shadow,
+                ..iced::widget::container::Style::default()
             },
-            shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                offset: iced::Vector::new(0.0, 2.0),
-                blur_radius: 8.0,
+            None => iced::widget::container::Style {
+                background: Some(iced::Background::Color(bar_bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: BAR_RADIUS.into(),
+                    color: border,
+                    ..Border::default()
+                },
+                shadow: iced::Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                    offset: iced::Vector::new(0.0, 2.0),
+                    blur_radius: 8.0,
+                },
+                ..iced::widget::container::Style::default()
             },
-            ..iced::widget::container::Style::default()
         })
         .boxed()
 }
@@ -375,17 +390,22 @@ where
     // through without changing color register. Same palette across
     // every editor (schematic, SchLib, eventual PCB / PCB-lib) so the
     // bar reads identically wherever it appears.
+    // Graphite: token washes instead of white at 6 % (invisible on light
+    // themes) and the 7 px control radius. Legacy themes keep their paint.
+    let skin = skin::Skin::of(tokens);
     let mut btn = button(icon_content).padding(0).style(
         move |_: &Theme, status: iced::widget::button::Status| {
+            let selected_fill = skin.map_or(hover_c, |s| s.selected);
+            let hover_fill = skin.map_or(Color::from_rgba(1.0, 1.0, 1.0, 0.06), |s| s.hover);
             let bg = if !enabled {
                 None
             } else if selected {
-                Some(iced::Background::Color(hover_c))
+                Some(iced::Background::Color(selected_fill))
             } else {
                 match status {
-                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-                    )),
+                    iced::widget::button::Status::Hovered => {
+                        Some(iced::Background::Color(hover_fill))
+                    }
                     _ => None,
                 }
             };
@@ -393,7 +413,7 @@ where
                 background: bg,
                 border: Border {
                     width: 0.0,
-                    radius: 3.0.into(),
+                    radius: skin.map_or(3.0, |s| s.button_radius).into(),
                     color: border,
                     ..Border::default()
                 },

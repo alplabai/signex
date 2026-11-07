@@ -20,7 +20,7 @@ mod planned;
 pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub use layout::BAR_WIDTH_PX;
 pub(crate) use layout::{
-    BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window,
+    BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window, bar_top_margin,
     bar_width_for, menu_at,
 };
 pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
@@ -894,6 +894,15 @@ mod layout_tests {
     #[test]
     fn active_bar_zone_height_is_unchanged() {
         assert_eq!(BAR_ZONE_HEIGHT_PX, 46.0);
-        assert_eq!(BAR_TOP_MARGIN_PX, 4.0);
+        assert_eq!(layout::BAR_TOP_MARGIN_PX, 4.0);
+    }
+
+    /// Graphite floats the bar 10 px down; the legacy themes keep 4 px.
+    #[test]
+    fn graphite_bar_top_margin_is_ten_and_legacy_four() {
+        let legacy = signex_types::theme::theme_tokens(ThemeId::Signex);
+        let graphite = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        assert_eq!(layout::bar_top_margin(&legacy), 4.0);
+        assert_eq!(layout::bar_top_margin(&graphite), 10.0);
     }
 }
