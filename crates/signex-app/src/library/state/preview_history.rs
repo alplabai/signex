@@ -13,7 +13,7 @@ use super::preview::PinMapInlineState;
 use crate::app::History;
 
 /// Depth cap of the undo and redo stacks.
-const HISTORY_DEPTH: usize = 100;
+const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
 
 /// The snapshot history and saved position of one preview's row.
 #[derive(Debug)]
@@ -23,6 +23,11 @@ impl RowHistory {
     /// A row read from the library: the empty history is the saved state.
     pub fn at_start() -> Self {
         Self(History::at_start(HISTORY_DEPTH))
+    }
+
+    /// Keep `depth` undo steps from now on; lowering it drops the oldest.
+    pub fn set_undo_depth(&mut self, depth: usize) {
+        self.0.set_cap(depth);
     }
 
     /// Is the row away from the state the library stores (or is that state

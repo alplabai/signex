@@ -369,3 +369,39 @@ fn step_ids_are_never_reused_across_eviction_undo_and_redo() {
     assert!(history.top_redo_id().is_some());
     assert!(!history.can_undo());
 }
+
+#[test]
+fn the_depth_is_a_parameter_and_lowering_it_trims_the_oldest() {
+    let mut classes = Vec::new();
+    let mut history = NetClassHistory::with_depth(3);
+    for i in 0..5 {
+        history.apply(&mut classes, add(&format!("C{i}"))).unwrap();
+    }
+    let mut steps = 0;
+    while history.undo(&mut classes) {
+        steps += 1;
+    }
+    assert_eq!((steps, classes.len()), (3, 2), "depth 3 keeps three steps");
+    while history.redo(&mut classes) {}
+
+    history.set_undo_depth(1);
+    assert!(history.undo(&mut classes));
+    assert!(!history.undo(&mut classes), "one step left after lowering");
+    assert_eq!(classes.len(), 4);
+}
+
+#[test]
+fn depth_one_and_a_thousand_are_honoured() {
+    for depth in [1, 1000] {
+        let mut classes = Vec::new();
+        let mut history = NetClassHistory::with_depth(depth);
+        for i in 0..depth + 2 {
+            history.apply(&mut classes, add(&format!("C{i}"))).unwrap();
+        }
+        let mut steps = 0;
+        while history.undo(&mut classes) {
+            steps += 1;
+        }
+        assert_eq!(steps, depth);
+    }
+}

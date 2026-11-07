@@ -222,6 +222,11 @@ impl NetClassHistory {
         self.history.set_cap(depth);
     }
 
+    /// How many undo steps are kept.
+    pub fn undo_depth(&self) -> usize {
+        self.history.cap()
+    }
+
     /// Apply `command` as one undo step. A refused command, or one that
     /// changes nothing, leaves the history untouched.
     pub fn apply(

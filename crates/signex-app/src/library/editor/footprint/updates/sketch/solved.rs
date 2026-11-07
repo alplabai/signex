@@ -159,9 +159,10 @@ fn collapse_batch_history(editor: &mut FootprintDocument, mut batch: UnsolvedEdi
         return;
     };
     rewind_history_to_batch_start(editor, &mut batch);
+    let cap = editor.history.cap();
     let steps = editor.history.undo_steps_mut();
     steps.push(first_step);
-    if steps.len() > FootprintDocument::HISTORY_DEPTH {
+    if steps.len() > cap {
         steps.remove(0);
     }
     // The rewrite dropped or re-added steps by hand: a save point that sat

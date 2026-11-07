@@ -45,7 +45,7 @@ impl SymbolHistorySnapshot {
 
 impl SymbolDocument {
     /// Depth cap for the undo / redo stacks.
-    pub const HISTORY_DEPTH: usize = 100;
+    pub const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
 
     /// Capture the current container and active index. Symbols equal to
     /// ones in the newest undo / redo step share that step's allocation.

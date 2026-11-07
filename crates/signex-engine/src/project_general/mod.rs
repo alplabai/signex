@@ -156,6 +156,11 @@ impl ProjectGeneralHistory {
         self.history.set_cap(depth);
     }
 
+    /// How many undo steps are kept.
+    pub fn undo_depth(&self) -> usize {
+        self.history.cap()
+    }
+
     /// Apply `command` to `data`. Returns `true` when a field changed. A
     /// change opens a new undo step unless it continues the open run; a
     /// no-op records nothing.

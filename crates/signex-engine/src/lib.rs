@@ -59,6 +59,8 @@ mod save_point_tests;
 
 #[cfg(test)]
 mod sheet_identity_tests;
+#[cfg(test)]
+mod undo_depth_tests;
 
 use std::path::{Path, PathBuf};
 

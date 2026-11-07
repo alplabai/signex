@@ -54,6 +54,7 @@ fn probe() {
         "run" => run(),
         "no_override" => no_override(),
         "undo_round_trip" => undo_round_trip(),
+        "undo_depth" => undo_depth(),
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -279,4 +280,64 @@ fn undo_round_trip() {
     run(&mut app, "redo");
     assert_eq!(wires(&app), 0);
     assert!(app.document_state.is_document_dirty(&path));
+}
+
+#[test]
+fn the_undo_depth_comes_from_prefs_or_the_option_and_a_bad_value_is_reported() {
+    run_probe("undo_depth");
+}
+
+/// `prefs.json` first, then the boot option over it: 1000 is taken as is,
+/// 1001 is clamped, zero and text give the default, and each of the last
+/// three is a warning naming the value.
+fn undo_depth() {
+    signex_app::diagnostics::init_logging().expect("logger");
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let prefs = isolated.path().join("prefs.json");
+
+    let cases: [(&str, usize, bool); 5] = [
+        ("1000", 1000, false),
+        ("1001", 1000, true),
+        ("0", 100, true),
+        ("\"many\"", 100, true),
+        ("1", 1, false),
+    ];
+    for (stored, want, warned) in cases {
+        std::fs::write(&prefs, format!(r#"{{"undo_depth":{stored}}}"#)).expect("prefs");
+        let before = signex_app::diagnostics::newest_entry_id();
+        let (app, _boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+        assert_eq!(app.document_state.undo_depth, want, "prefs {stored}");
+        let logged = signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("undo_depth") && e.message.contains("prefs.json"));
+        assert_eq!(logged, warned, "prefs {stored}");
+    }
+
+    std::fs::write(&prefs, br#"{"undo_depth":7}"#).expect("prefs");
+    let cases: [(&str, usize, bool); 5] = [
+        ("1000", 1000, false),
+        ("1001", 1000, true),
+        ("0", 100, true),
+        ("many", 100, true),
+        ("3", 3, false),
+    ];
+    for (typed, want, warned) in cases {
+        let before = signex_app::diagnostics::newest_entry_id();
+        let (app, _boot) =
+            Signex::boot_headless_with_undo_depth(Vec::new(), &rules(), typed).expect("boot");
+        assert_eq!(app.document_state.undo_depth, want, "option {typed}");
+        let logged = signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("the undo depth option") && e.message.contains(typed));
+        assert_eq!(logged, warned, "option {typed}");
+    }
+    let (app, _boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    assert_eq!(
+        app.document_state.undo_depth, 7,
+        "no option: prefs.json wins"
+    );
 }

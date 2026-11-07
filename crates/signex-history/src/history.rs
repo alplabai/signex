@@ -11,13 +11,16 @@ use crate::SavePoint;
 /// says otherwise.
 pub const DEFAULT_UNDO_DEPTH: usize = 100;
 
+/// The fewest steps a history can keep.
+pub const MIN_UNDO_DEPTH: usize = 1;
+
 /// The largest accepted `undo_depth`: a deeper history only costs memory.
-pub const MAX_UNDO_DEPTH: usize = 10_000;
+pub const MAX_UNDO_DEPTH: usize = 1000;
 
 /// Is `depth` a usable `undo_depth` (at least one step, at most
 /// [`MAX_UNDO_DEPTH`])?
 pub const fn undo_depth_in_range(depth: usize) -> bool {
-    depth >= 1 && depth <= MAX_UNDO_DEPTH
+    depth >= MIN_UNDO_DEPTH && depth <= MAX_UNDO_DEPTH
 }
 
 /// Undo and redo stacks of whole-state snapshots plus the saved position.
@@ -62,6 +65,9 @@ impl<S> History<S> {
     /// off the bottom is forgotten, so the document stays dirty until the
     /// next save.
     pub fn set_cap(&mut self, cap: usize) {
+        if cap.max(1) == self.cap {
+            return;
+        }
         self.cap = cap.max(1);
         while self.undo.len() > self.cap {
             self.undo.remove(0);
@@ -355,5 +361,112 @@ mod tests {
         h.mark_saved();
         h.forget_if_current();
         assert!(h.is_dirty());
+    }
+
+    #[test]
+    fn position_counts_past_eviction_and_undo_lowers_it() {
+        let mut h = history();
+        for i in 0..CAP + 4 {
+            h.record(i as u32);
+            assert_eq!(h.position(), i + 1);
+        }
+        assert_eq!(h.undo_len(), CAP);
+        h.step(99, true);
+        assert_eq!(h.position(), CAP + 3);
+        h.step(98, false);
+        assert_eq!(h.position(), CAP + 4);
+    }
+
+    #[test]
+    fn discard_top_drops_the_undone_step_and_the_point_on_it() {
+        let mut h = history();
+        h.record(0);
+        h.record(1);
+        h.mark_saved(); // depth 2
+        h.step(2, true);
+        assert_eq!(h.discard_top(), Some(2));
+        assert!(!h.can_redo());
+        assert!(h.is_dirty(), "the point sat on the discarded state");
+        assert_eq!(h.discard_top(), None);
+    }
+
+    #[test]
+    fn discard_top_keeps_a_point_that_is_not_on_the_discarded_state() {
+        let mut h = history();
+        h.record(0);
+        h.mark_saved(); // depth 1
+        h.record(1);
+        h.step(2, true); // depth 1 again
+        h.record(5);
+        h.step(6, true);
+        assert_eq!(h.discard_top(), Some(6));
+        assert!(!h.is_dirty(), "depth 1 is still the saved state");
+    }
+
+    #[test]
+    fn lowering_the_cap_trims_the_oldest_and_keeps_a_reachable_point() {
+        let mut h = History::at_start(10);
+        for i in 0..6 {
+            h.record(i);
+        }
+        h.mark_saved(); // depth 6
+        h.record(6);
+        h.set_cap(3);
+        assert_eq!(h.undo_steps(), &[4, 5, 6], "the newest steps stay");
+        assert_eq!(h.position(), 7, "the position does not move");
+        h.step(7, true);
+        assert!(!h.is_dirty(), "the saved depth is still reachable");
+    }
+
+    #[test]
+    fn lowering_the_cap_past_the_point_leaves_it_dirty_for_good() {
+        let mut h = History::at_start(10);
+        h.record(0);
+        h.mark_saved(); // depth 1
+        for i in 1..6 {
+            h.record(i);
+        }
+        h.set_cap(2); // evicts depths 0..4: the point is gone
+        assert!(h.is_dirty());
+        while h.can_undo() {
+            h.step(0, true);
+            assert!(h.is_dirty(), "undo cannot reach a trimmed point");
+        }
+        h.mark_saved();
+        assert!(!h.is_dirty(), "a save re-anchors it");
+    }
+
+    #[test]
+    fn lowering_the_cap_trims_the_far_end_of_the_redo_stack() {
+        let mut h = History::at_start(10);
+        for i in 0..5 {
+            h.record(i);
+        }
+        for i in 0..5 {
+            h.step(i, true);
+        }
+        h.set_cap(2);
+        assert_eq!(h.redo_len(), 2);
+        assert_eq!(h.undo_len(), 0);
+    }
+
+    #[test]
+    fn depth_one_keeps_exactly_one_step_and_zero_is_one() {
+        let mut h = History::<u32>::at_start(1);
+        h.record(0);
+        h.record(1);
+        assert_eq!(h.undo_len(), 1);
+        assert_eq!(History::<u32>::at_start(0).cap(), 1);
+        h.set_cap(0);
+        assert_eq!(h.cap(), 1);
+    }
+
+    #[test]
+    fn the_depth_range_is_one_to_a_thousand() {
+        assert!(!undo_depth_in_range(0));
+        assert!(undo_depth_in_range(1));
+        assert!(undo_depth_in_range(1000));
+        assert!(!undo_depth_in_range(1001));
+        assert_eq!((MIN_UNDO_DEPTH, MAX_UNDO_DEPTH), (1, 1000));
     }
 }

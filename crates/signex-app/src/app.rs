@@ -59,6 +59,7 @@ pub(crate) use state::volume_case::probe_directory_case;
 mod draft_save_point_tests;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
+mod undo_depth;
 mod undo_groups;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
@@ -111,6 +112,7 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
+        self.sync_undo_depth();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).
         self.prune_settled_quit_confirm();

@@ -328,3 +328,37 @@ fn an_edit_after_undo_clears_redo_at_the_cap() {
     history.apply(&mut data, set_description("fresh"));
     assert!(!history.can_redo());
 }
+
+#[test]
+fn the_depth_is_a_parameter_and_lowering_it_trims_the_oldest() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::with_depth(3);
+    for i in 0..5 {
+        history.close_run();
+        history.apply(&mut data, set_description(&format!("d{i}")));
+    }
+    history.set_undo_depth(2);
+    let mut steps = 0;
+    while history.undo(&mut data) {
+        steps += 1;
+    }
+    assert_eq!(steps, 2);
+    assert_eq!(data.description.as_deref(), Some("d2"));
+}
+
+#[test]
+fn depth_one_and_a_thousand_are_honoured() {
+    for depth in [1, 1000] {
+        let mut data = project();
+        let mut history = ProjectGeneralHistory::with_depth(depth);
+        for i in 0..depth + 2 {
+            history.close_run();
+            history.apply(&mut data, set_description(&format!("d{i}")));
+        }
+        let mut steps = 0;
+        while history.undo(&mut data) {
+            steps += 1;
+        }
+        assert_eq!(steps, depth);
+    }
+}
