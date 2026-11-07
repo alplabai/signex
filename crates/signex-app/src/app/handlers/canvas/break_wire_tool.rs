@@ -144,6 +144,34 @@ mod tests {
         assert_eq!(logged(needle), before + 1);
     }
 
+    fn painted_wires(app: &Signex) -> usize {
+        let colours = &app.ui_state.wire_color_overrides;
+        app.document_state
+            .active_engine()
+            .expect("engine")
+            .document()
+            .wires
+            .iter()
+            .filter(|w| colours.contains_key(&w.uuid))
+            .count()
+    }
+
+    #[test]
+    fn both_halves_of_a_broken_coloured_wire_keep_the_colour_through_undo_and_redo() {
+        let (mut app, id) = app_with_wire_at(4323.0);
+        let red = signex_types::theme::Color::new(255, 0, 0, 255);
+        app.ui_state.wire_color_overrides.insert(id, red);
+
+        app.break_wire_click(8.0, 4323.0);
+        assert_eq!((wire_count(&app), painted_wires(&app)), (2, 2));
+
+        app.handle_undo_requested();
+        assert_eq!((wire_count(&app), painted_wires(&app)), (1, 1));
+
+        app.handle_redo_requested();
+        assert_eq!((wire_count(&app), painted_wires(&app)), (2, 2));
+    }
+
     #[test]
     fn a_refused_break_of_a_coloured_wire_leaves_the_colours_and_revision_alone() {
         let (mut app, id) = app_with_wire_at(4322.0);

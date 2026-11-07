@@ -447,6 +447,10 @@ fn norm_ccw(a: f64, b: f64) -> f64 {
     if d < 0.0 { d + TAU } else { d }
 }
 
+#[cfg(test)]
+mod net_color_driver;
+#[cfg(test)]
+mod net_color_guard_tests;
 mod net_color_persist;
 #[cfg(test)]
 mod net_color_persist_tests;
