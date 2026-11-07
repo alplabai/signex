@@ -19,6 +19,9 @@ mod operand_handlers;
 mod operands;
 mod outcome;
 #[cfg(test)]
+mod placement_operand_tests;
+mod placement_operands;
+#[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 

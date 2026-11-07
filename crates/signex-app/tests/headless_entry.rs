@@ -175,8 +175,25 @@ fn net_colors() {
     );
     assert!(!app.ui_state.net_color_custom.show, "no picker opened");
 
+    // A placement runs from its operands (#2155): one undo step, as a click.
+    let junctions = |app: &Signex| app.document_state.engines[&path].document().junctions.len();
+    let before = junctions(&app);
+    assert_eq!(
+        run(&mut app, "place_junction", &["at=5.08,0"]),
+        CommandOutcome::Ran
+    );
+    assert_eq!(
+        junctions(&app),
+        before + 1,
+        "the operands placed a junction"
+    );
+    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(junctions(&app), before);
+
     // A command that declares operands and has no handler is still refused.
-    let refused = run(&mut app, "place_net_label", &["at=1,1", "text=A"]);
+    let missing = std::env::temp_dir().join("zq-no-handler.snxsch");
+    let path_operand = format!("path={}", missing.display());
+    let refused = run(&mut app, "open_document", &[&path_operand]);
     assert!(
         matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("not run yet")),
         "{refused:?}"
@@ -290,13 +307,13 @@ fn run() {
         matches!(outcome, CommandOutcome::Disabled { .. }),
         "{outcome:?}"
     );
-    // Operands parse but nothing runs them yet (#1934): refused, not a
+    // A placement with operands and no schematic open is refused, never a
     // silent "Ran" that only arms the tool.
     let label = id("place_net_label");
     let args = CommandArgs::parse_operands(&label, &["at=10,5", "text=VCC"]).expect("operands");
     let (outcome, _task) = app.dispatch_command_headless(&label, args);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("#1934")),
+        matches!(outcome, CommandOutcome::Disabled { .. }),
         "{outcome:?}"
     );
 

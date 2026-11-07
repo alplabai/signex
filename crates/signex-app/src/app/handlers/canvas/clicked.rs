@@ -156,7 +156,8 @@ impl Signex {
                 if !self.interaction_state.wire_drawing {
                     self.start_wire_drawing(pt);
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                    let end_pt = self.place_wire_at(start, pt, self.interaction_state.draw_mode);
+                    let (end_pt, _) =
+                        self.place_wire_at(start, pt, self.interaction_state.draw_mode);
                     self.continue_wire_drawing(end_pt);
                 }
             }
@@ -165,7 +166,8 @@ impl Signex {
                 if !self.interaction_state.wire_drawing {
                     self.start_wire_drawing(pt);
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                    let end_pt = self.place_bus_at(start, pt, self.interaction_state.draw_mode);
+                    let (end_pt, _) =
+                        self.place_bus_at(start, pt, self.interaction_state.draw_mode);
                     self.continue_wire_drawing(end_pt);
                 }
             }

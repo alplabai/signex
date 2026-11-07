@@ -10,8 +10,13 @@ use super::super::super::*;
 impl Signex {
     /// Place wire segments from `start` to `end`, both already snapped, bent
     /// as `mode` routes them. The point the last segment ends on, which the
-    /// next segment starts from.
-    pub(crate) fn place_wire_at(&mut self, start: Point, end: Point, mode: DrawMode) -> Point {
+    /// next segment starts from, and whether the document changed.
+    pub(crate) fn place_wire_at(
+        &mut self,
+        start: Point,
+        end: Point,
+        mode: DrawMode,
+    ) -> (Point, bool) {
         let segments = constrain_segments(start, end, mode);
         let commands: Vec<_> = segments
             .iter()
@@ -26,14 +31,17 @@ impl Signex {
                 },
             })
             .collect();
-        if !commands.is_empty() {
-            self.apply_engine_commands(commands, false, false);
-        }
-        segments.last().map(|s| s.1).unwrap_or(end)
+        let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
+        (segments.last().map(|s| s.1).unwrap_or(end), changed)
     }
 
     /// [`Self::place_wire_at`] for a bus.
-    pub(crate) fn place_bus_at(&mut self, start: Point, end: Point, mode: DrawMode) -> Point {
+    pub(crate) fn place_bus_at(
+        &mut self,
+        start: Point,
+        end: Point,
+        mode: DrawMode,
+    ) -> (Point, bool) {
         let segments = constrain_segments(start, end, mode);
         let commands: Vec<_> = segments
             .iter()
@@ -45,10 +53,8 @@ impl Signex {
                 },
             })
             .collect();
-        if !commands.is_empty() {
-            self.apply_engine_commands(commands, false, false);
-        }
-        segments.last().map(|s| s.1).unwrap_or(end)
+        let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
+        (segments.last().map(|s| s.1).unwrap_or(end), changed)
     }
 
     /// Place a bus entry of `size` at `at`. Its bus end snaps onto the

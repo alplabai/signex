@@ -10,6 +10,7 @@
 use iced::Task;
 use signex_types::theme::Color;
 
+use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, OperandValue, enablement};
 use crate::app::mutation_gateway::CommandOutcome as Mutation;
 use crate::app::{Message, Signex};
@@ -22,11 +23,29 @@ type Ran = (CommandOutcome, Task<Message>);
 pub(crate) type OperandHandler = fn(&mut Signex, &CommandArgs) -> Ran;
 
 /// Every command that runs its operands, by id. Each needs a click-equivalence
-/// test (`operand_handler_tests`); `every_operand_command_has_a_handler_or_is_refused`
+/// test (`operand_handler_tests`, `placement_operand_tests`);
+/// `every_operand_command_has_a_handler_or_is_refused`
 /// keeps this table and the catalog in step.
 const HANDLERS: &[(&str, OperandHandler)] = &[
     ("color_net", color_net),
     ("clear_all_net_colors", clear_all_net_colors),
+    ("place_net_label", place::net_label),
+    ("place_local_net_label", place::net_label),
+    ("place_global_label", place::global_label),
+    ("place_hierarchical_label", place::hierarchical_label),
+    ("place_power_symbol", place::power),
+    ("place_no_connect", place::no_connect),
+    ("place_junction", place::junction),
+    ("place_no_erc", place::no_erc),
+    ("place_wire", place::wire),
+    ("draw_wire", place::wire),
+    ("place_bus", place::bus),
+    ("draw_bus", place::bus),
+    ("place_text", place::text_note),
+    ("place_text_string", place::text_note),
+    ("draw_line", place::line),
+    ("draw_graphic_line", place::line),
+    ("draw_rectangle", place::rectangle),
 ];
 
 /// The handler of `command`, if it runs its operands.
