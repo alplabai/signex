@@ -410,6 +410,9 @@ mod library_update_apply;
 // #1234 — pick a row's footprint when placing and on a placed part.
 #[path = "regression/library_footprint_pick.rs"]
 mod library_footprint_pick;
+// #114 — the Properties FOOTPRINT card of a placed part.
+#[path = "regression/properties_footprint_card.rs"]
+mod properties_footprint_card;
 #[path = "regression/library_value_stamp.rs"]
 mod library_value_stamp;
 #[path = "regression/non_finite_edits.rs"]

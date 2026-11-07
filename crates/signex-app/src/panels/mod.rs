@@ -56,6 +56,9 @@ mod planned_tests;
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
+pub use element_properties::{
+    FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView, FootprintCards,
+};
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
 };
@@ -128,7 +131,7 @@ pub use symbol_context::{
     SymbolPinSummary,
 };
 pub(super) use widgets::{
-    collapsible_section, collapsible_section_header, form_edit_row_f64, is_section_collapsed,
+    LabelInk, collapsible_section, collapsible_section_header, form_edit_row_f64, is_section_collapsed,
     part_tree_row, prop_kv_row, property_label, section_title, separator, shape_fill_row,
     shape_icon_handle, view_stub,
 };

@@ -226,23 +226,64 @@ pub fn part_tree_row<'a>(
     .boxed()
 }
 
-/// Property-row label: wraps at spaces inside its fill-portion column, so a
-/// narrow panel grows the row; a single over-long word is clipped, never split
-/// mid-word, and never reaches the value column.
-pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    property_label_sized(label, color, TS.body, PROPERTY_LABEL_PORTION)
+/// Width of the Properties label column on Graphite: the mock's fixed grid
+/// column, so a label such as "Designator" is never clipped by a narrow dock.
+pub const GRAPHITE_PROPERTY_LABEL_WIDTH: f32 = 92.0;
+
+/// Colour and column width of a property-row label. A bare [`Color`] keeps
+/// the legacy fill-portion column; [`LabelInk::for_tokens`] picks the
+/// Graphite column on a Graphite theme.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LabelInk {
+    pub color: Color,
+    pub width: Length,
+}
+
+impl From<Color> for LabelInk {
+    fn from(color: Color) -> Self {
+        Self {
+            color,
+            width: Length::FillPortion(PROPERTY_LABEL_PORTION),
+        }
+    }
+}
+
+impl LabelInk {
+    /// The label look of `tokens`: the fixed Graphite column, else the
+    /// legacy fill portion.
+    pub fn for_tokens(color: Color, tokens: &ThemeTokens) -> Self {
+        if crate::styles::is_graphite(tokens) {
+            Self {
+                color,
+                width: Length::Fixed(GRAPHITE_PROPERTY_LABEL_WIDTH),
+            }
+        } else {
+            Self::from(color)
+        }
+    }
+}
+
+/// Property-row label: wraps at spaces inside its column, so a narrow panel
+/// grows the row; a single over-long word is clipped, never split mid-word,
+/// and never reaches the value column.
+pub fn property_label<'a, M: 'a>(
+    label: impl Into<String>,
+    ink: impl Into<LabelInk>,
+) -> Element<'a, M> {
+    let ink = ink.into();
+    property_label_sized(label, ink.color, TS.body, ink.width)
 }
 
 /// Like `property_label`, but with a narrower label column (used by `form_edit_row_f64`).
 fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    property_label_sized(label, color, TS.body, 2)
+    property_label_sized(label, color, TS.body, Length::FillPortion(2))
 }
 
 fn property_label_sized<'a, M: 'a>(
     label: impl Into<String>,
     color: Color,
     size: f32,
-    portion: u16,
+    width: Length,
 ) -> Element<'a, M> {
     container(
         text(label.into())
@@ -250,7 +291,7 @@ fn property_label_sized<'a, M: 'a>(
             .color(color)
             .wrapping(iced::widget::text::Wrapping::Word),
     )
-    .width(Length::FillPortion(portion))
+    .width(width)
     .clip(true)
     .boxed()
 }
@@ -329,4 +370,25 @@ pub fn shape_fill_row<'a>(
     .spacing(6)
     .align_y(iced::Alignment::Center)
     .boxed()
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::*;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    #[test]
+    fn graphite_labels_get_the_fixed_92_px_column() {
+        let ink = LabelInk::for_tokens(Color::BLACK, &theme_tokens(ThemeId::GraphiteLight));
+        assert_eq!(ink.width, Length::Fixed(92.0));
+        let ink = LabelInk::for_tokens(Color::BLACK, &theme_tokens(ThemeId::GraphiteDark));
+        assert_eq!(ink.width, Length::Fixed(92.0));
+    }
+
+    #[test]
+    fn legacy_labels_keep_the_fill_portion_column() {
+        let ink = LabelInk::for_tokens(Color::BLACK, &theme_tokens(ThemeId::Signex));
+        assert_eq!(ink, LabelInk::from(Color::BLACK));
+        assert_eq!(ink.width, Length::FillPortion(PROPERTY_LABEL_PORTION));
+    }
 }

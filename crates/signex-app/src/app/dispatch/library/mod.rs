@@ -556,6 +556,10 @@ impl Signex {
                     .finish(&key, generation, result);
                 Task::none()
             }
+            LibraryMessage::PropertiesFootprintCardLoaded { key, result } => {
+                self.finish_footprint_card_load(key, result);
+                Task::none()
+            }
             LibraryMessage::ComponentsPanelFootprintPicked(reference) => {
                 self.handle_components_panel_footprint_picked(reference)
             }

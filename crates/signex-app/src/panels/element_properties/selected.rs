@@ -46,19 +46,22 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             .unwrap_or_default()
     };
 
-    // ── Header ──
-    col = col.push(
-        container(text(elem_type.to_owned()).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
-
     // ── Editable properties based on element type ──
     // Power ports get their own Altium-style panel; regular symbols keep the
     // existing designator/value/footprint layout.
     let is_power_port = elem_type == "Power Port";
+    let is_placed_part =
+        !is_power_port && selected_kind == Some(signex_types::schematic::SelectedKind::Symbol);
+
+    // ── Header ──
+    col = col.push(super::header::selection_header(
+        ctx,
+        elem_type,
+        is_placed_part,
+        &get("Description"),
+        primary,
+    ));
+    col = col.push(thin_sep(border_c));
 
     if is_power_port && let Some(id) = uuid {
         let value = get("Value");
@@ -172,6 +175,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         muted,
                         input_bg,
                         input_bdr,
+                        &ctx.tokens,
                     )
                 },
             )
@@ -349,6 +353,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 .collect();
 
             col = super::pins::push_focused_pin_section(col, ctx, muted, border_c);
+            // Fixed label column on Graphite, so no label is clipped.
+            let lbl = LabelInk::for_tokens(muted, &ctx.tokens);
             if let Some(id) = uuid {
                 // General section — editable
                 col = col.push(
@@ -360,17 +366,17 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
-                            c = c.push(form_edit_row("Designator", &reference, muted, move |s| {
+                            c = c.push(form_edit_row("Designator", &reference, lbl, move |s| {
                                 PanelMsg::EditSymbolDesignator(id, s)
                             }));
-                            c = c.push(form_edit_row("Value", &value, muted, move |s| {
+                            c = c.push(form_edit_row("Value", &value, lbl, move |s| {
                                 PanelMsg::EditSymbolValue(id, s)
                             }));
                             if !description.is_empty() {
                                 c = c.push(form_input_row(
                                     "Description",
                                     &description,
-                                    muted,
+                                    lbl,
                                     input_bg,
                                     input_bdr,
                                 ));
@@ -380,45 +386,45 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 id,
                                 &footprint,
                                 &footprint_choices,
-                                muted,
+                                lbl,
                             );
                             if !datasheet.is_empty() {
                                 c = c.push(form_input_row(
                                     "Datasheet",
                                     &datasheet,
-                                    muted,
+                                    lbl,
                                     input_bg,
                                     input_bdr,
                                 ));
                             }
                             for (label, value) in &documents {
-                                c = c
-                                    .push(form_input_row(label, value, muted, input_bg, input_bdr));
+                                c = c.push(form_input_row(label, value, lbl, input_bg, input_bdr));
                             }
-                            c = c.push(form_input_row(
-                                "Library ID",
+                            c = c.push(super::library_rows::library_id_row(
                                 &lib_id,
-                                muted,
+                                lbl,
                                 input_bg,
                                 input_bdr,
+                                &ctx.tokens,
                             ));
                             c = super::library_rows::push_symbol_choice_row(
                                 c,
                                 id,
                                 &symbol_choices,
-                                muted,
+                                lbl,
                             );
                             c = super::library_rows::push_library_rows(
                                 c,
                                 id,
                                 &library_name,
                                 library_status,
-                                muted,
+                                lbl,
                                 input_bg,
                                 input_bdr,
+                                &ctx.tokens,
                             );
                             c = super::library_rows::push_part_actions(c);
-                            super::body_row::push_body_row(c, id, &body, muted, input_bg, input_bdr)
+                            super::body_row::push_body_row(c, id, &body, lbl, input_bg, input_bdr)
                         },
                     )
                     .boxed(),
@@ -435,10 +441,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_input_row(
-                                "Position", &position, muted, input_bg, input_bdr,
+                                "Position", &position, lbl, input_bg, input_bdr,
                             ));
                             c = c.push(form_input_row(
-                                "Rotation", &rotation, muted, input_bg, input_bdr,
+                                "Rotation", &rotation, lbl, input_bg, input_bdr,
                             ));
                             c
                         },
@@ -460,28 +466,28 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 "Mirror X",
                                 has_mirror_x,
                                 PanelMsg::ToggleSymbolMirrorX(id),
-                                muted,
+                                lbl,
                                 panel_bg,
                             ));
                             c = c.push(form_check_row(
                                 "Mirror Y",
                                 has_mirror_y,
                                 PanelMsg::ToggleSymbolMirrorY(id),
-                                muted,
+                                lbl,
                                 panel_bg,
                             ));
                             c = c.push(form_check_row(
                                 "Locked",
                                 locked,
                                 PanelMsg::ToggleSymbolLocked(id),
-                                muted,
+                                lbl,
                                 panel_bg,
                             ));
                             c = c.push(form_check_row(
                                 "DNP",
                                 dnp,
                                 PanelMsg::ToggleSymbolDnp(id),
-                                muted,
+                                lbl,
                                 panel_bg,
                             ));
                             c
@@ -521,7 +527,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             } else {
                                 for (name, value) in &section_params {
                                     c = c.push(form_input_row(
-                                        name, value, muted, input_bg, input_bdr,
+                                        name, value, lbl, input_bg, input_bdr,
                                     ));
                                 }
                             }
@@ -531,6 +537,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     .boxed(),
                 );
 
+                col = super::footprint_section::push_footprint_section(col, ctx, muted, border_c);
                 col = super::pins::push_pins_section(col, ctx, muted, primary, border_c);
             }
         }

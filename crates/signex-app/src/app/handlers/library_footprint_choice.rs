@@ -71,6 +71,17 @@ impl Signex {
         items
     }
 
+    /// The library footprint the placed part is built with: the binding in
+    /// its value stamp, else its row's default. `None` when the part has no
+    /// open library row or the row binds no footprint.
+    pub(crate) fn bound_footprint_of(
+        &self,
+        symbol: &signex_types::schematic::Symbol,
+    ) -> Option<PrimitiveRef> {
+        let (_, _, row) = self.row_of_placed_symbol(symbol)?;
+        chosen_binding(symbol).or(row.footprint_ref)
+    }
+
     /// Build `symbol_id` with the footprint `binding` names.
     pub(crate) fn handle_switch_footprint_choice(
         &mut self,

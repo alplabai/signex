@@ -91,6 +91,7 @@ impl Default for LibraryState {
             stock_copies_refused: Vec::new(),
             id_clash_notices: Vec::new(),
             components_panel: ComponentsPanelState::default(),
+            properties_footprints: Default::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
             external_poll_stat_running: Default::default(),

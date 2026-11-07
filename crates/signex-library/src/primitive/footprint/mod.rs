@@ -21,6 +21,7 @@ mod load_repair;
 mod mount_style;
 mod pad;
 mod pad_columns;
+mod pitch;
 mod serde_tsv;
 mod silk_marker;
 #[cfg(test)]

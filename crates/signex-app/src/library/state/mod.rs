@@ -621,6 +621,9 @@ pub struct LibraryState {
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
     pub components_panel: ComponentsPanelState,
+    /// Footprints read for the Properties FOOTPRINT card, by footprint and
+    /// `data_version`.
+    pub properties_footprints: crate::panels::FootprintCards,
     /// `.snxlib` mounts currently being prepared off the UI thread —
     /// issue #99 part 2c. Keyed by the `.snxlib` file path, valued by
     /// why the mount was asked for.

@@ -548,6 +548,7 @@ impl Signex {
         let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let footprint_choices = self.document_state.panel_ctx.footprint_choices.clone();
+        let footprint_card = self.document_state.panel_ctx.footprint_card.clone();
         let drawing_edit_buf_page =
             active_schematic_snapshot.map(|sheet| (sheet.page.origin, sheet.paper_size.clone()));
         let drawing_edit_buf =
@@ -697,6 +698,7 @@ impl Signex {
             multi_draft,
             symbol_choices,
             footprint_choices,
+            footprint_card,
             drawing_edit_buf,
             drawing_edit_buf_for,
             drawing_edit_buf_page,

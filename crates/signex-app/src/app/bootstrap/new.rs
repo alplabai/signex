@@ -566,6 +566,7 @@ impl Signex {
                     multi_draft: None,
                     symbol_choices: vec![],
                     footprint_choices: vec![],
+                    footprint_card: None,
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     drawing_edit_buf_page: None,

@@ -14,7 +14,7 @@ pub(super) fn push_symbol_choice_row<'a>(
     c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     choices: &[SymbolChoiceItem],
-    muted: Color,
+    muted: impl Into<LabelInk>,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(current) = choices.iter().find(|i| i.selected) else {
         return c;
@@ -54,6 +54,17 @@ impl std::fmt::Display for FootprintEntry {
     }
 }
 
+/// Label of the free-text footprint field. Under the pick list it is an
+/// override: a name typed there is held over the picked binding (shown in
+/// the list as "(edited)"); alone it is the part's only footprint field.
+pub(super) fn footprint_text_label(has_pick_list: bool) -> &'static str {
+    if has_pick_list {
+        "Footprint override"
+    } else {
+        "Footprint"
+    }
+}
+
 /// The footprint rows of a placed symbol (#1234): a pick list of the
 /// footprints its library row offers, when it offers two or more, above the
 /// free-text field every part keeps.
@@ -62,9 +73,11 @@ pub(super) fn push_footprint_row<'a>(
     id: uuid::Uuid,
     footprint: &str,
     choices: &[FootprintChoiceItem],
-    muted: Color,
+    muted: impl Into<LabelInk>,
 ) -> Column<Element<'a, PanelMsg>> {
-    if let Some(current) = choices.iter().position(|i| i.selected) {
+    let ink: LabelInk = muted.into();
+    let current = choices.iter().position(|i| i.selected);
+    if let Some(current) = current {
         let entry = |index: usize| FootprintEntry {
             index,
             label: choices[index].label.clone(),
@@ -79,12 +92,71 @@ pub(super) fn push_footprint_row<'a>(
                 let binding = bindings.get(picked.index).cloned().unwrap_or_default();
                 PanelMsg::SwitchFootprintChoice(id, binding)
             },
-            muted,
+            ink,
         ));
     }
-    c.push(form_edit_row("Footprint", footprint, muted, move |s| {
-        PanelMsg::EditSymbolFootprint(id, s)
-    }))
+    c.push(form_edit_row(
+        footprint_text_label(current.is_some()),
+        footprint,
+        ink,
+        move |s| PanelMsg::EditSymbolFootprint(id, s),
+    ))
+}
+
+/// The Library ID row: the id in mono on one line, cut with an ellipsis
+/// when the column is narrow, the whole id in a tooltip.
+pub(super) fn library_id_row<'a>(
+    lib_id: &str,
+    label: impl Into<LabelInk>,
+    input_bg: Color,
+    input_bdr: Color,
+    tokens: &ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let value = container(
+        iced::widget::text(lib_id.to_string())
+            .size(TS.body)
+            .font(mono)
+            .color(crate::styles::tokens::readable_on(input_bg))
+            .wrapping(iced::widget::text::Wrapping::None)
+            .ellipsis(iced::widget::text::Ellipsis::End)
+            .width(Length::Fill),
+    )
+    .padding([3, 6])
+    .width(Length::Fill)
+    .clip(true)
+    .style(move |theme: &Theme| {
+        let (bg, bdr, radius) =
+            super::super::form_look::value_box(theme, input_bg, input_bdr, 2.0);
+        container::Style {
+            background: Some(Background::Color(bg)),
+            border: Border {
+                width: 1.0,
+                radius: radius.into(),
+                color: bdr,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        }
+    });
+    let tip = iced::widget::tooltip(
+        value,
+        container(iced::widget::text(lib_id.to_string()).size(TS.body).font(mono))
+            .padding([SP.xs, 6.0]),
+        iced::widget::tooltip::Position::Bottom,
+    )
+    .style(crate::styles::context_menu(tokens));
+    container(
+        iced::widget::row![
+            property_label("Library ID", label),
+            container(tip).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// How the sheet's embedded copy compares with the library (#912, #1845).
@@ -94,24 +166,34 @@ pub(super) struct LibraryStatus {
     pub(super) missing: bool,
 }
 
+/// Text of the out-of-date status.
+pub(super) const OUT_OF_DATE: &str = "Library: out of date";
+
 /// Append the readable `Library` row and, when the sheet's embedded copy
-/// differs from the library, the "out of date" row with its Update button.
-/// Update replaces the sheet's shared copy, so it affects every instance of
-/// the part on the sheet - the tooltip says so.
+/// differs from the library, the "out of date" status with its Update
+/// button. Update replaces the sheet's shared copy, so it affects every
+/// instance of the part on the sheet - the tooltip says so. On Graphite the
+/// status is a warn pill and Update a ghost button.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a view builder: target, label, status, the colours and the theme are all independent"
+)]
 pub(super) fn push_library_rows<'a>(
     mut c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     library_name: &str,
     status: LibraryStatus,
-    muted: Color,
+    muted: impl Into<LabelInk>,
     input_bg: Color,
     input_bdr: Color,
+    tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
+    let ink: LabelInk = muted.into();
     if !library_name.is_empty() {
         c = c.push(form_input_row(
             "Library",
             library_name,
-            muted,
+            ink,
             input_bg,
             input_bdr,
         ));
@@ -121,33 +203,48 @@ pub(super) fn push_library_rows<'a>(
         c = c.push(
             iced::widget::text("Library: symbol missing (sheet keeps its embedded copy)")
                 .size(TS.body)
-                .color(muted)
+                .color(ink.color)
                 .boxed(),
         );
     }
     if drifted {
-        let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
-            .padding([SP.xs, SP.m])
-            .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
-        c = c.push(
-            iced::widget::row![
-                iced::widget::text("Library: out of date")
-                    .size(TS.body)
-                    .color(muted),
-                iced::widget::tooltip(
-                    update,
-                    iced::widget::text("Updates every instance of this part on the sheet")
-                        .size(TS.body),
-                    iced::widget::tooltip::Position::Bottom,
-                ),
-            ]
-            .spacing(SP.m)
-            .padding([SP.xs, SP.m])
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-        );
+        c = c.push(out_of_date_row(id, ink.color, tokens));
     }
     c
+}
+
+/// The out-of-date status and its Update button.
+fn out_of_date_row<'a>(id: uuid::Uuid, muted: Color, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+    let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::UpdateSymbolFromLibrary(id))
+        .style(|theme: &iced::Theme, status| {
+            super::super::form_look::ghost_button(theme, status)
+                .unwrap_or_else(|| iced::widget::button::primary(theme, status))
+        });
+    let status: Element<'a, PanelMsg> = if crate::styles::is_graphite(tokens) {
+        container(iced::widget::text(OUT_OF_DATE).size(TS.caption))
+            .padding([2.0, 8.0])
+            .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
+            .boxed()
+    } else {
+        iced::widget::text(OUT_OF_DATE)
+            .size(TS.body)
+            .color(muted)
+            .boxed()
+    };
+    iced::widget::row![
+        status,
+        iced::widget::tooltip(
+            update,
+            iced::widget::text("Updates every instance of this part on the sheet").size(TS.body),
+            iced::widget::tooltip::Position::Bottom,
+        ),
+    ]
+    .spacing(SP.m)
+    .padding([SP.xs, SP.m])
+    .align_y(iced::Alignment::Center)
+    .boxed()
 }
 
 /// The placed-part actions of the Properties panel, label first.
@@ -217,5 +314,11 @@ mod tests {
             actions,
             [A::OpenDatasheet, A::EditSymbol, A::ChangeComponent]
         );
+    }
+
+    #[test]
+    fn the_text_field_under_a_footprint_pick_list_is_the_override() {
+        assert_eq!(footprint_text_label(true), "Footprint override");
+        assert_eq!(footprint_text_label(false), "Footprint");
     }
 }

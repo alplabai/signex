@@ -122,6 +122,9 @@ pub struct PanelContext {
     /// The footprints the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1234).
     pub footprint_choices: Vec<FootprintChoiceItem>,
+    /// The FOOTPRINT card of the selected placed part; `None` when it has
+    /// no footprint or the selection is not one placed part.
+    pub footprint_card: Option<super::FootprintCardView>,
     /// Transient numeric-input buffers for the drawing properties
     /// panel — keyed on DrawingFieldId. Keeps half-typed strings
     /// ("", "-", "2.") alive between rerenders so fields can be
