@@ -83,9 +83,8 @@ where
         renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
-        if let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() {
-            self.content
-                .operate(child_tree, child_layout, viewport, renderer, operation);
+        if let Some((l, t)) = layout.iter_mut(&mut tree.children).next() {
+            self.content.operate(t, l, viewport, renderer, operation);
         }
     }
 
@@ -99,16 +98,9 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() {
-            self.content.update(
-                child_tree,
-                event,
-                child_layout,
-                cursor,
-                renderer,
-                shell,
-                viewport,
-            );
+        if let Some((l, t)) = layout.iter_mut(&mut tree.children).next() {
+            self.content
+                .update(t, event, l, cursor, renderer, shell, viewport);
         }
     }
 
@@ -120,14 +112,11 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        layout
-            .iter(&tree.children)
-            .next()
-            .map(|(child_layout, child_tree)| {
-                self.content
-                    .mouse_interaction(child_tree, child_layout, cursor, viewport, renderer)
-            })
-            .unwrap_or_default()
+        let Some((l, t)) = layout.iter(&tree.children).next() else {
+            return mouse::Interaction::default();
+        };
+        self.content
+            .mouse_interaction(t, l, cursor, viewport, renderer)
     }
 
     fn draw(
@@ -140,19 +129,11 @@ where
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        // Pass the outer viewport straight through so the child can render
-        // anywhere inside the window, including outside the Translate's own
-        // bounds (otherwise we'd clip off-screen portions twice).
-        if let Some((child_layout, child_tree)) = layout.iter(&tree.children).next() {
-            self.content.draw(
-                child_tree,
-                renderer,
-                theme,
-                style,
-                child_layout,
-                cursor,
-                viewport,
-            );
+        // The outer viewport passes straight through so the child can paint
+        // outside this widget's own bounds (no double clip).
+        if let Some((l, t)) = layout.iter(&tree.children).next() {
+            self.content
+                .draw(t, renderer, theme, style, l, cursor, viewport);
         }
     }
 
@@ -165,17 +146,11 @@ where
         translation: Vector,
         window: Size,
     ) -> Vec<overlay::Element<'a, Message, Theme, Renderer>> {
-        let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() else {
+        let Some((l, t)) = layout.iter_mut(&mut tree.children).next() else {
             return Vec::new();
         };
-        self.content.overlay(
-            child_tree,
-            child_layout,
-            renderer,
-            viewport,
-            translation,
-            window,
-        )
+        self.content
+            .overlay(t, l, renderer, viewport, translation, window)
     }
 }
 
@@ -189,18 +164,4 @@ where
     fn from(w: Translate<'a, Message, Theme, Renderer>) -> Self {
         iced::advanced::Widget::_boxed(w)
     }
-}
-
-#[expect(
-    dead_code,
-    reason = "generic translate wrapper kept for view code that needs to offset an Element"
-)]
-pub fn translate<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-    offset: (f32, f32),
-) -> Translate<'a, Message, Theme, Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-{
-    Translate::new(content, offset)
 }
