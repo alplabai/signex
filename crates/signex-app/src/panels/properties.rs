@@ -218,6 +218,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             muted,
             primary,
             border_c,
+            &ctx.tokens,
         );
     }
 

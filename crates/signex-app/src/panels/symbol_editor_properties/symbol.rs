@@ -3,8 +3,10 @@
 use iced::widget::{Column, Widget, container, row, text};
 use iced::{Color, Element, Length};
 
+use super::super::form_look;
 use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
 use crate::styles::{Spacing, TypeScale};
+use signex_types::theme::ThemeTokens;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -58,7 +60,17 @@ pub(super) fn view_symbol_selection<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
+    let graphite = crate::styles::is_graphite(tokens);
+    let g = graphite.then_some(tokens);
+    let sep = |col: Column<Element<'a, PanelMsg>>| {
+        if graphite {
+            col
+        } else {
+            col.push(super::super::thin_sep(border_c))
+        }
+    };
     // The .snxsym editor is a SYMBOL editor — symbol-level
     // visual / geometric properties only. Component metadata
     // (Designator / Comment / Description / Type / Parameters)
@@ -82,6 +94,7 @@ pub(super) fn view_symbol_selection<'a>(
                     .padding([SP.xs, SP.s])
                     .size(TS.body)
                     .on_input(on_input)
+                    .style(form_look::text_input_style)
                     .width(Length::FillPortion(3)),
             ]
             .spacing(SP.s)
@@ -93,12 +106,8 @@ pub(super) fn view_symbol_selection<'a>(
     };
 
     // ── ▾ Symbol ──
-    col = col.push(super::super::thin_sep(border_c));
-    col = col.push(
-        container(text("Symbol").size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .boxed(),
-    );
+    col = sep(col);
+    col = col.push(super::section_title("Symbol", primary, g));
     col = col.push(text_field(
         "Design Item ID",
         sym.symbol_name.as_str(),
@@ -138,12 +147,8 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(super::prop_row_static("Part", part_label, muted, primary));
 
     // ── ▾ Graphical ──
-    col = col.push(super::super::thin_sep(border_c));
-    col = col.push(
-        container(text("Graphical").size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .boxed(),
-    );
+    col = sep(col);
+    col = col.push(super::section_title("Graphical", primary, g));
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text("Mirrored")
@@ -152,6 +157,7 @@ pub(super) fn view_symbol_selection<'a>(
                 .width(Length::FillPortion(2)),
             iced::widget::checkbox(sym.symbol_mirrored)
                 .size(TS.heading)
+                .style(form_look::checkbox_style)
                 .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),
         ]
         .spacing(SP.s)
@@ -163,12 +169,8 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(mirrored_row);
 
     // ── Local Colors (Fills / Lines / Pins) ──
-    col = col.push(super::super::thin_sep(border_c));
-    col = col.push(
-        container(text("Local Colors").size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .boxed(),
-    );
+    col = sep(col);
+    col = col.push(super::section_title("Local Colors", primary, g));
     col = col.push(local_color_field(
         "Fills",
         crate::app::LocalColorSlot::Fill,

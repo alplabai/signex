@@ -135,14 +135,23 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
             swatch,
             text(label_text)
                 .size(TS.caption)
-                .color(Color::from_rgb(0.90, 0.90, 0.92)),
+                .style(|theme: &Theme| iced::widget::text::Style {
+                    color: Some(match super::form_look::FormLook::of(theme) {
+                        Some(look) => look.ink,
+                        None => Color::from_rgb(0.90, 0.90, 0.92),
+                    }),
+                    ..Default::default()
+                }),
         ]
         .spacing(SP.m)
         .align_y(Alignment::Center),
     )
     .padding([SP.xs, 6.0])
     .on_press(on_toggle)
-    .style(button::secondary);
+    .style(|theme: &Theme, status| {
+        super::form_look::ghost_button(theme, status)
+            .unwrap_or_else(|| button::secondary(theme, status))
+    });
 
     // ── Advanced (HSV / RGB) overlay ──
     if show_advanced {
