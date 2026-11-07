@@ -293,6 +293,12 @@ impl Signex {
                 self.ui_state.preferences_open = false;
                 return self.close_detached_modal(super::super::state::ModalId::Preferences);
             }
+            PrefMsg::SaveAndClose => {
+                // Save as the Save button does; a refused save leaves the
+                // dialog dirty, so the close guard keeps it open.
+                let saved = self.handle_preferences_message(PrefMsg::Save);
+                return Task::batch([saved, self.handle_preferences_close_requested()]);
+            }
             PrefMsg::Save => {
                 // Refuse to commit while any keymap trigger draft is
                 // unparseable — surface the reason and keep the dialog

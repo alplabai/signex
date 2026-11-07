@@ -23,7 +23,10 @@ mod component_classes;
 mod distributors;
 mod editing;
 mod keymap;
+mod keycaps;
 mod profiles;
+mod shell;
+mod theme_cards;
 mod widgets;
 
 use annotation::content_annotation;
@@ -124,6 +127,8 @@ pub enum PrefMsg {
     DiscardAndClose,
     /// Commit the current draft and keep the dialog open.
     Save,
+    /// Commit the current draft, then close (the Graphite footer's OK).
+    SaveAndClose,
     /// Every `prefs.json` write a Save started has finished (#1351). Save
     /// returns them as background tasks, so the file-health probe that
     /// reports a refused write has to wait for this.
@@ -376,7 +381,13 @@ pub struct PrefsView<'a> {
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
 pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let panel_tokens = v.panel_tokens;
     let dialog = build_dialog(v, true);
+    let (card_w, card_h) = if shell::is_graphite_shell(&v) {
+        (shell::GRAPHITE_DLG_W, shell::GRAPHITE_DLG_H)
+    } else {
+        (DLG_W, DLG_H)
+    };
 
     container(
         column![
@@ -386,8 +397,8 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 // In-app overlay: keep a centred, capped card (the detached
                 // window path uses `view_body` directly and fills the window).
                 container(dialog)
-                    .width(Length::Fill.max(DLG_W))
-                    .height(Length::Fill.max(DLG_H)),
+                    .width(Length::Fill.max(card_w))
+                    .height(Length::Fill.max(card_h)),
                 Space::new().width(Length::Fill),
             ],
             Space::new().height(Length::Fill),
@@ -397,10 +408,7 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(|_: &Theme| container::Style {
-        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.65))),
-        ..container::Style::default()
-    })
+    .style(crate::app::view::dialogs::scrim_style(panel_tokens))
     .boxed()
 }
 
@@ -416,6 +424,9 @@ pub(crate) fn view_body<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 }
 
 fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg> {
+    if shell::is_graphite_shell(&v) {
+        return shell::graphite_dialog(v, with_header);
+    }
     let PrefsView {
         nav,
         dirty,
@@ -672,6 +683,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             keymap_backup,
             keymap_search,
             keymap_recorder,
+            panel_tokens,
         ),
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };

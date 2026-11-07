@@ -274,9 +274,6 @@ fn build<'a>(
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(|_: &Theme| container::Style {
-        background: Some(Background::Color(crate::styles::tokens::scrim(0.5))),
-        ..container::Style::default()
-    })
+    .style(crate::app::view::dialogs::scrim_style(tokens))
     .boxed()
 }
