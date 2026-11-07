@@ -182,6 +182,54 @@ board.
 
 </details>
 
+### Graphite: the next interface (design preview)
+
+The next Signex interface, Graphite, in its light and dark themes. These are
+design previews: Graphite, the Signal AI panel (Assistant and Generator) and
+PCB layout are in development for the AI Design gate
+([roadmap](docs/ROADMAP.md)); the screenshots above show the app as it ships
+today.
+
+<p align="center">
+  <img src="assets/screenshots/graphite/schematic-light.webp" alt="Schematic editor with the Signal AI panel, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/schematic-dark.webp" alt="Schematic editor with the Signal AI panel, Graphite Dark" width="400">
+  <br>
+  <em>Schematic editor: Projects, Properties and Messages docks, the Active Bar, and Signal AI</em>
+</p>
+
+<details>
+<summary><strong>More Graphite screens</strong></summary>
+
+<p align="center">
+  <img src="assets/screenshots/graphite/pcb-light.webp" alt="PCB layout with layer stack and DRC, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/pcb-dark.webp" alt="PCB layout with layer stack and DRC, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/start-light.webp" alt="Start screen with the Generator, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/start-dark.webp" alt="Start screen with the Generator, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/library-light.webp" alt="Library Browser, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/library-dark.webp" alt="Library Browser, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/component-light.webp" alt="Component editor pin map, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/component-dark.webp" alt="Component editor pin map, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/footprint-light.webp" alt="Footprint editor with sketch constraints, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/footprint-dark.webp" alt="Footprint editor with sketch constraints, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/symbol-light.webp" alt="Symbol editor, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/symbol-dark.webp" alt="Symbol editor, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/preferences-light.webp" alt="Preferences, theme, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/preferences-dark.webp" alt="Preferences, theme, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/dialogs-light.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/dialogs-dark.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Dark" width="400">
+  <br>
+  <em>PCB layout, start screen with the Generator, Library Browser, component, footprint and symbol editors, Preferences and the main dialogs</em>
+</p>
+
+</details>
+
 ## Architecture
 
 A 17-crate Rust workspace (`edition = 2024`), an acyclic DAG with
