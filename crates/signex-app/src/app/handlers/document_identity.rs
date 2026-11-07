@@ -90,6 +90,8 @@ impl Signex {
                 .pcb_revisions
                 .insert(new_path.to_path_buf(), revision);
         }
+        self.document_state
+            .rekey_parked_pcb_board(old_path, new_path);
         self.rekey_path_keyed_records(old_path, new_path);
         self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);

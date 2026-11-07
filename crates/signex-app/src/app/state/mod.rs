@@ -25,6 +25,7 @@ pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
+mod pcb_board;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
@@ -485,6 +486,8 @@ pub struct DocumentState {
     /// The current board revision per PCB path; a PCB save completion only
     /// marks clean while it still matches.
     pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
+    /// The boards of PCB tabs closed while dirty; see `state/pcb_board.rs`.
+    pub(crate) parked_pcb_boards: std::collections::HashMap<PathBuf, signex_types::pcb::PcbBoard>,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:

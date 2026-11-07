@@ -301,11 +301,8 @@ impl Signex {
             self.document_state.footprint_editors.remove(p);
             self.document_state.mark_document_clean(p);
         }
-        // A PCB has no parked draft, so its marker must not outlive the tab:
-        // Save All has no PCB branch and would fail on it.
-        // ponytail: valid only while a PCB can't be edited; park or prompt once it can.
         if matches!(closing_kind, crate::app::TabKind::Pcb) {
-            self.document_state.mark_document_clean(&closing_path);
+            self.park_or_drop_closing_pcb(idx, park_dirty);
         }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI
@@ -317,6 +314,7 @@ impl Signex {
         // A parked draft keeps its baseline; nothing left means a later engine
         // for the file must start without one (#1865).
         if !self.document_state.engines.contains_key(&closing_path)
+            && !self.document_state.holds_pcb(&closing_path)
             && !self.has_tab_for(&closing_path)
         {
             self.document_state
