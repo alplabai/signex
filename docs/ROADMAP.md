@@ -463,13 +463,12 @@ whatever the language. Epic #2053; decisions in `DECISIONS.md` (2026-11-07,
 2026-11-08). No milestone and no tier yet; its place in this list implies no
 order.
 
-Infrastructure first, UI binding last: the UI design language is going to
-change, so the area migrations and the Preferences language picker wait
-until it has settled, and are not done twice.
+Infrastructure first, UI binding last: the Preferences language picker and
+the area migrations come after the infrastructure.
 
 | Plan | Scope |
 |------|-------|
-| **Internationalisation** | `signex-i18n` crate (Fluent + ICU4X), `Localized` display-only type, runtime language switch with the locale persisted in preferences (#2055); API gate, key-consistency and locale-invariance tests (#2056); locale-aware formatting of numbers, dates, lists and case, engineering number input (#2063, library functions); then, after the UI redesign, the Preferences language picker, the area migrations (#2057–#2062), pseudolocale layout and font coverage (#2064) and the first translation, `tr-TR`, with the translator workflow (#2065) |
+| **Internationalisation** | `signex-i18n` crate (Fluent + ICU4X), `Localized` display-only type, runtime language switch with the locale persisted in preferences (#2055); API gate, key-consistency and locale-invariance tests (#2056); locale-aware formatting of numbers, dates, lists and case, engineering number input (#2063, library functions); then the Preferences language picker, the area migrations (#2057–#2062), pseudolocale layout and font coverage (#2064) and the first translation, `tr-TR`, with the translator workflow (#2065) |
 
 **Not in this plan:** right-to-left layout (#2066), translated user guide
 and sample projects, user content.
