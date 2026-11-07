@@ -20,6 +20,7 @@ use crate::styles::{
 mod controls;
 mod reprefix_confirm;
 
+use super::graphite as gr;
 use controls::{bordered_style, check_pip, order_preview, order_radio};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -73,8 +74,10 @@ impl Signex {
 
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──
-        let header_content: Element<'_, Message> = modal_title_header(
+        let graphite = crate::styles::is_graphite(tokens);
+        let header_content: Element<'_, Message> = gr::titled_header(
             "Annotate",
+            Some("Schematic Annotation Configuration".to_string()),
             Message::Annotate(AnnotateMsg::CloseDialog),
             tokens,
         );
@@ -89,9 +92,15 @@ impl Signex {
         };
 
         // ── Left column: Schematic Annotation Configuration ──
-        let left_title = text("Schematic Annotation Configuration")
-            .size(TS.label)
-            .color(text_c);
+        // Graphite carries this line as the header subtitle.
+        let left_title: Element<'_, Message> = if graphite {
+            Space::new().height(0).boxed()
+        } else {
+            text("Schematic Annotation Configuration")
+                .size(TS.label)
+                .color(text_c)
+                .boxed()
+        };
 
         let order_row = column![
             text("Order of Processing")
@@ -462,28 +471,49 @@ impl Signex {
                     ..button::Style::default()
                 })
                 .boxed();
-                rows_col = rows_col.push(
-                    (row![
-                        container(lock_btn)
-                            .width(Length::Fixed(42.0))
-                            .padding([0.0, 6.0]),
-                        text(entry.current.clone())
-                            .size(TS.body)
-                            .color(cur_color)
-                            .width(Length::FillPortion(2)),
-                        text(proposed_display)
-                            .size(TS.body)
-                            .color(new_color)
-                            .width(Length::FillPortion(2)),
-                        text(entry.sheet.clone())
-                            .size(TS.body)
-                            .color(text_muted)
-                            .width(Length::FillPortion(3)),
-                    ]
-                    .align_y(iced::Alignment::Center)
-                    .padding([SP.xs, SP.m]))
-                    .boxed(),
+                // Graphite: designators in mono; a changing row is tinted and
+                // its proposed designator takes the accent ink.
+                let (cur_text, new_text) = (
+                    text(entry.current.clone())
+                        .size(TS.body)
+                        .color(cur_color)
+                        .width(Length::FillPortion(2)),
+                    text(proposed_display)
+                        .size(TS.body)
+                        .color(if graphite && changing {
+                            gr::changed_ink(tokens)
+                        } else {
+                            new_color
+                        })
+                        .width(Length::FillPortion(2)),
                 );
+                let (cur_text, new_text) = if graphite {
+                    (cur_text.font(gr::mono()), new_text.font(gr::mono()))
+                } else {
+                    (cur_text, new_text)
+                };
+                let line = row![
+                    container(lock_btn)
+                        .width(Length::Fixed(42.0))
+                        .padding([0.0, 6.0]),
+                    cur_text,
+                    new_text,
+                    text(entry.sheet.clone())
+                        .size(TS.body)
+                        .color(text_muted)
+                        .width(Length::FillPortion(3)),
+                ]
+                .align_y(iced::Alignment::Center)
+                .padding([SP.xs, SP.m]);
+                let line: Element<'_, Message> = if graphite {
+                    container(line)
+                        .width(Length::Fill)
+                        .style(gr::changed_row(tokens, changing))
+                        .boxed()
+                } else {
+                    line.boxed()
+                };
+                rows_col = rows_col.push(line);
             }
         }
 
@@ -569,7 +599,7 @@ impl Signex {
                 ),
                 dialog_button(
                     "Accept Changes",
-                    DialogButtonKind::Primary,
+                    gr::call_to_action(tokens),
                     if changes == 0 || self.ui_state.annotate_preview.loading || busy {
                         None
                     } else {

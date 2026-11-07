@@ -10,7 +10,7 @@ use iced::widget::{Space, column, container, row, text, text_input};
 use iced::{Element, Length, Widget};
 
 use super::rule_editor::{RuleEditor, rule_editor};
-use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
+use super::widgets::{draggable_header, fit_modal_size, os_title_bar_slot};
 use crate::app::document::UndoTarget;
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
 
@@ -44,8 +44,13 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let header_content: Element<'_, Message> = modal_title_header(
+        let subtitle = self
+            .document_state
+            .active_document_project()
+            .map_or_else(|| "Machine rules".to_string(), |p| p.data.name.clone());
+        let header_content: Element<'_, Message> = super::graphite::titled_header(
             "Electrical Rules Check",
+            Some(subtitle),
             Message::Erc(ErcMsg::CloseDialog),
             tokens,
         );
@@ -166,6 +171,30 @@ impl Signex {
             on_pin_cell: |row, col| Message::Erc(ErcMsg::PinMatrixCellCycled { row, col }),
         });
 
+        // Graphite: severity chips with the rule counts above the grid.
+        let chips: Element<'_, Message> = if crate::styles::is_graphite(tokens) {
+            let mut counts = [0usize; 4];
+            for rule in &signex_erc::RuleKind::ALL {
+                let current = severity_map
+                    .get(rule)
+                    .copied()
+                    .unwrap_or_else(|| rule.default_severity());
+                let slot = match current {
+                    signex_erc::Severity::Error => 0,
+                    signex_erc::Severity::Warning => 1,
+                    signex_erc::Severity::Info => 2,
+                    signex_erc::Severity::Off => 3,
+                };
+                counts[slot] += 1;
+            }
+            container(super::graphite::severity_chips(tokens, counts))
+                .padding([SP.l, 14.0])
+                .width(Length::Fill)
+                .boxed()
+        } else {
+            Space::new().height(0).boxed()
+        };
+
         // In-window: sized to the window-capped modal. Detached: the OS
         // window owns the size, so fill it. The body scrolls; the footer
         // holds the buttons and stays outside the scrollable (#1227).
@@ -178,6 +207,7 @@ impl Signex {
         let dialog = container(
             column![
                 header,
+                chips,
                 container(iced::widget::scrollable(
                     container(body).padding([14, 14]).width(Length::Fill)
                 ))

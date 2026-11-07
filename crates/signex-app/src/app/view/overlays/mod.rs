@@ -20,6 +20,7 @@ const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 
 mod bars;
 mod modals;
+mod palette;
 mod net_hover;
 mod zoom_pill;
 pub(super) mod read_only_badge;
@@ -210,9 +211,20 @@ impl Signex {
             .selected_index
             .min(total.saturating_sub(1));
 
+        let graphite = crate::styles::is_graphite(tokens);
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
         for (display_idx, entry) in results.iter().enumerate() {
             let is_active = display_idx == selected;
+            if graphite {
+                rows.push(palette::result_row(
+                    tokens,
+                    entry,
+                    &self.ui_state.command_palette.query,
+                    is_active,
+                    Message::CommandPalette(CommandPaletteMsg::Select(display_idx)),
+                ));
+                continue;
+            }
             let row_bg = if is_active {
                 Some(Background::Color(hover_c))
             } else {
@@ -286,7 +298,11 @@ impl Signex {
         };
 
         // Footer when there are more matches than we render.
-        let footer: Element<'_, Message> = if total > MAX_RESULTS {
+        let footer: Element<'_, Message> = if graphite && total > 0 {
+            let more = (total > MAX_RESULTS)
+                .then(|| format!("{} more results — refine query", total - MAX_RESULTS));
+            palette::hint_footer(tokens, results.get(selected), more)
+        } else if total > MAX_RESULTS {
             container(
                 text(format!(
                     "{} more results — refine query",
@@ -332,19 +348,25 @@ impl Signex {
         } else {
             Space::new().height(0).boxed()
         };
+        let graphite_card = crate::styles::modal_card(tokens);
         let card = container(column![input, body, footer])
             .width(card_w)
             .height(Length::Fit.max(360.0))
             .padding(0)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(Background::Color(panel_bg)),
-                border: Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
+            .style(move |theme: &iced::Theme| {
+                if graphite {
+                    return graphite_card(theme);
+                }
+                container::Style {
+                    background: Some(Background::Color(panel_bg)),
+                    border: Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: 6.0.into(),
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                }
             });
 
         let y = if in_window {
