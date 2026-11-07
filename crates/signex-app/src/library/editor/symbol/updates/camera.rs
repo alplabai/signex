@@ -104,7 +104,7 @@ const FIT_MAX_SCALE: f32 = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 4
 /// Margin kept clear on every side of a fit.
 const FIT_MARGIN: f32 = 72.0;
 /// Extra room kept clear at the top for the floating Active Bar.
-const FIT_TOP_CLEARANCE: f32 = 56.0;
+pub(crate) const FIT_TOP_CLEARANCE: f32 = 56.0;
 
 /// Fit the symbol's bounding box into `viewport`, capped at 400% and
 /// centred below the floating Active Bar.

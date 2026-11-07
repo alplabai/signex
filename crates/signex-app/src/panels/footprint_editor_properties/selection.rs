@@ -6,8 +6,8 @@ use super::super::{
 };
 use super::managers::grid_manager_btn;
 use super::pad::{
-    PadEditTarget, PadFormValues, pad_check_row, pad_input_row,
-    render_pad_form_pad_features, render_pad_form_pad_stack, render_pad_form_properties,
+    PadEditTarget, PadFormValues, pad_check_row, pad_input_row, render_pad_form_pad_features,
+    render_pad_form_pad_stack, render_pad_form_properties,
 };
 use super::props_kv_row;
 use super::silk::silk_geometry_rows;

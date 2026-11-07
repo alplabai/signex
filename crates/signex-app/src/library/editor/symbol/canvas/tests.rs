@@ -626,9 +626,13 @@ fn fit_uses_the_real_canvas_size_not_a_hardcoded_viewport() {
 
     assert_eq!(rig.editor.pending_view, None);
     let centre = rig.screen(0.0, 0.0);
+    // The fit centres the symbol below the floating Active Bar, so the centre
+    // sits half the top clearance below the canvas middle (deliberate, #114).
+    let clearance = crate::library::editor::symbol::updates::FIT_TOP_CLEARANCE;
     assert!(
-        (centre.x - BOUNDS.width / 2.0).abs() < 1.0 && (centre.y - BOUNDS.height / 2.0).abs() < 1.0,
-        "symbol centre {centre:?} should sit at the middle of the {}x{} canvas",
+        (centre.x - BOUNDS.width / 2.0).abs() < 1.0
+            && (centre.y - (BOUNDS.height + clearance) / 2.0).abs() < 1.0,
+        "symbol centre {centre:?} should sit at the middle of the {}x{} canvas, shifted for the Active Bar",
         BOUNDS.width,
         BOUNDS.height
     );

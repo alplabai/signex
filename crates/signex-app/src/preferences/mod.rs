@@ -698,14 +698,14 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .width(Length::Fill)
             .style(graphite_fields::scroll_style(panel_tokens)),
     )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .padding(0)
-        .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.palette().background.base.color)),
-            ..container::Style::default()
-        })
-        .boxed()
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .padding(0)
+    .style(move |theme: &Theme| container::Style {
+        background: Some(Background::Color(theme.palette().background.base.color)),
+        ..container::Style::default()
+    })
+    .boxed()
 }
 
 /// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).

@@ -24,11 +24,11 @@ use super::state::{LibraryBrowserState, LibraryState, LifecycleFilter, OpenLibra
 
 mod action_row;
 mod columns;
-mod layout;
 mod empty_state;
 mod grid;
 mod header;
 mod keyed;
+mod layout;
 mod look;
 mod names;
 mod preview;

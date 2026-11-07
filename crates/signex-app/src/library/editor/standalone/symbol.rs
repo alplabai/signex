@@ -313,9 +313,9 @@ fn graphite_toolbar<'a>(
                 sym(SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate)),
             ),
         ]
-        .spacing(2),
+        .spacing(crate::styles::Spacing::DEFAULT.xs),
     )
-    .padding(2)
+    .padding(crate::styles::Spacing::DEFAULT.xs)
     .style(move |_: &Theme| iced::widget::container::Style {
         background: Some(iced::Background::Color(sunken)),
         border: Border {
