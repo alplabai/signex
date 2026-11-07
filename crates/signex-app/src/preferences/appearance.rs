@@ -43,86 +43,95 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         column![].spacing(0).padding([SP.xl, 20.0]);
 
     // ── Section: Theme ──
-    col = col.push(section_title("Theme"));
-    col = col.push(Space::new().height(10).boxed());
-
-    // Built-in theme data: (id, display name, description)
-    let builtins: &[(ThemeId, &str, &str)] = &[
-        (
-            ThemeId::GraphiteLight,
-            "Graphite Light",
-            "Warm paper-white chrome with a copper accent (default)",
-        ),
-        (
-            ThemeId::GraphiteDark,
-            "Graphite Dark",
-            "Graphite Light's dark twin",
-        ),
-        (
-            ThemeId::Signex,
-            "Signex",
-            "Default Signex schematic palette",
-        ),
-        (
-            ThemeId::Alplab,
-            "Alp Lab",
-            "Alp Lab brand cyan accent on the Signex chrome",
-        ),
-        (
-            ThemeId::VsCodeDark,
-            "VS Code Dark",
-            "VS Code inspired dark theme",
-        ),
-        (
-            ThemeId::CatppuccinMocha,
-            "Catppuccin Mocha",
-            "Warm soft dark with pastels",
-        ),
-        (
-            ThemeId::GitHubDark,
-            "GitHub Dark",
-            "GitHub's dark mode colors",
-        ),
-        (
-            ThemeId::SolarizedLight,
-            "Solarized Light",
-            "Warm light tone-on-tone",
-        ),
-        (ThemeId::Nord, "Nord", "Arctic blue cool dark theme"),
-    ];
-
-    // Build list of all theme entries including optional custom
-    let mut entries: Vec<(ThemeId, String, &'static str)> = builtins
-        .iter()
-        .map(|&(id, name, desc)| (id, name.to_string(), desc))
-        .collect();
-    if let Some(name) = custom_name {
-        entries.push((
-            ThemeId::Custom,
-            format!("\u{2728} {name}"),
-            "Custom imported theme",
+    if crate::styles::is_graphite(v.panel_tokens) {
+        col = col.push(super::theme_cards::theme_section(
+            draft_theme,
+            custom_name,
+            v.panel_tokens,
         ));
-    }
-
-    // Rows of 2
-    let mut i = 0;
-    while i < entries.len() {
-        let (id_a, ref name_a, desc_a) = entries[i];
-        let card_a = theme_card(id_a, name_a, desc_a, draft_theme);
-        let row_elem: Element<'_, PrefMsg> = if i + 1 < entries.len() {
-            let (id_b, ref name_b, desc_b) = entries[i + 1];
-            let card_b = theme_card(id_b, name_b, desc_b, draft_theme);
-            row![card_a, Space::new().width(12), card_b]
-                .width(Length::Fill)
-                .boxed()
-        } else {
-            row![card_a, Space::new().width(Length::Fill)]
-                .width(Length::Fill)
-                .boxed()
-        };
-        col = col.push(row_elem);
         col = col.push(Space::new().height(10).boxed());
-        i += 2;
+    } else {
+        col = col.push(section_title("Theme"));
+        col = col.push(Space::new().height(10).boxed());
+
+        // Built-in theme data: (id, display name, description)
+        let builtins: &[(ThemeId, &str, &str)] = &[
+            (
+                ThemeId::GraphiteLight,
+                "Graphite Light",
+                "Warm paper-white chrome with a copper accent (default)",
+            ),
+            (
+                ThemeId::GraphiteDark,
+                "Graphite Dark",
+                "Graphite Light's dark twin",
+            ),
+            (
+                ThemeId::Signex,
+                "Signex",
+                "Default Signex schematic palette",
+            ),
+            (
+                ThemeId::Alplab,
+                "Alp Lab",
+                "Alp Lab brand cyan accent on the Signex chrome",
+            ),
+            (
+                ThemeId::VsCodeDark,
+                "VS Code Dark",
+                "VS Code inspired dark theme",
+            ),
+            (
+                ThemeId::CatppuccinMocha,
+                "Catppuccin Mocha",
+                "Warm soft dark with pastels",
+            ),
+            (
+                ThemeId::GitHubDark,
+                "GitHub Dark",
+                "GitHub's dark mode colors",
+            ),
+            (
+                ThemeId::SolarizedLight,
+                "Solarized Light",
+                "Warm light tone-on-tone",
+            ),
+            (ThemeId::Nord, "Nord", "Arctic blue cool dark theme"),
+        ];
+
+        // Build list of all theme entries including optional custom
+        let mut entries: Vec<(ThemeId, String, &'static str)> = builtins
+            .iter()
+            .map(|&(id, name, desc)| (id, name.to_string(), desc))
+            .collect();
+        if let Some(name) = custom_name {
+            entries.push((
+                ThemeId::Custom,
+                format!("\u{2728} {name}"),
+                "Custom imported theme",
+            ));
+        }
+
+        // Rows of 2
+        let mut i = 0;
+        while i < entries.len() {
+            let (id_a, ref name_a, desc_a) = entries[i];
+            let card_a = theme_card(id_a, name_a, desc_a, draft_theme);
+            let row_elem: Element<'_, PrefMsg> = if i + 1 < entries.len() {
+                let (id_b, ref name_b, desc_b) = entries[i + 1];
+                let card_b = theme_card(id_b, name_b, desc_b, draft_theme);
+                row![card_a, Space::new().width(12), card_b]
+                    .width(Length::Fill)
+                    .boxed()
+            } else {
+                row![card_a, Space::new().width(Length::Fill)]
+                    .width(Length::Fill)
+                    .boxed()
+            };
+            col = col.push(row_elem);
+            col = col.push(Space::new().height(10).boxed());
+            i += 2;
+        }
     }
 
     // ── Custom theme import/export ──

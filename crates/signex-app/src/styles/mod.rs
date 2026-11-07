@@ -312,6 +312,11 @@ pub fn modal_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style +
     let bg = ti(tokens.paper);
     let text = ti(tokens.text);
     let border = ti(tokens.border);
+    let radius = if is_graphite(tokens) {
+        Radii::GRAPHITE.dialog
+    } else {
+        MODAL_CORNER_RADIUS
+    };
     let shadow = floating_shadow(
         tokens,
         iced::Shadow {
@@ -328,17 +333,23 @@ pub fn modal_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style +
                 ..container::Style::default()
             };
         }
-        card_style(bg, text, border, shadow)
+        card_style(bg, text, border, shadow, radius)
     }
 }
 
-fn card_style(bg: Color, text: Color, border: Color, shadow: iced::Shadow) -> container::Style {
+fn card_style(
+    bg: Color,
+    text: Color,
+    border: Color,
+    shadow: iced::Shadow,
+    radius: f32,
+) -> container::Style {
     container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
         border: Border {
             width: 1.0,
-            radius: MODAL_CORNER_RADIUS.into(),
+            radius: radius.into(),
             color: border,
             ..Border::default()
         },

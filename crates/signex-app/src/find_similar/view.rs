@@ -1,6 +1,6 @@
 use super::{FindSimilarMsg, FindSimilarState, SimilarScope};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Background, Element, Length, Theme, Widget};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -173,10 +173,7 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(|_: &Theme| container::Style {
-        background: Some(Background::Color(crate::styles::tokens::scrim(0.5))),
-        ..container::Style::default()
-    })
+    .style(crate::app::view::dialogs::scrim_style(tokens))
     .boxed()
 }
 

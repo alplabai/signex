@@ -46,6 +46,18 @@ pub(in crate::app::view) fn wrap_modal<'a>(
     window_size: (f32, f32),
     modal_size: (f32, f32),
 ) -> Element<'a, Message> {
+    wrap_modal_scrim(inner, offset, window_size, modal_size, BACKDROP)
+}
+
+/// [`wrap_modal`] with the scrim colour chosen by the caller (the themed
+/// one from [`super::header::dialog_scrim`]).
+pub(in crate::app::view) fn wrap_modal_scrim<'a>(
+    inner: Element<'a, Message>,
+    offset: (f32, f32),
+    window_size: (f32, f32),
+    modal_size: (f32, f32),
+    scrim: Color,
+) -> Element<'a, Message> {
     // Absolute top-left = centre + drag offset. The Translate widget (see
     // view/translate.rs) passes full parent limits to the child and then
     // translates the child's layout node, so the modal keeps its fixed
@@ -66,7 +78,7 @@ pub(in crate::app::view) fn wrap_modal<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .style(|_: &Theme| container::Style {
-            background: Some(Background::Color(BACKDROP)),
+            background: Some(Background::Color(scrim)),
             ..container::Style::default()
         })
         .boxed();
@@ -109,7 +121,8 @@ impl Signex {
             .copied()
             .unwrap_or_default();
         let window = self.ui_state.window_size;
-        wrap_modal(body, offset, window, fit_modal_size(window, desired))
+        let scrim = super::header::dialog_scrim(&self.document_state.panel_ctx.tokens);
+        wrap_modal_scrim(body, offset, window, fit_modal_size(window, desired), scrim)
     }
 
     /// [`Self::wrap_dialog`] for a modal that is never dragged.
@@ -119,7 +132,14 @@ impl Signex {
         desired: (f32, f32),
     ) -> Element<'a, Message> {
         let window = self.ui_state.window_size;
-        wrap_modal(body, (0.0, 0.0), window, fit_modal_size(window, desired))
+        let scrim = super::header::dialog_scrim(&self.document_state.panel_ctx.tokens);
+        wrap_modal_scrim(
+            body,
+            (0.0, 0.0),
+            window,
+            fit_modal_size(window, desired),
+            scrim,
+        )
     }
 
     /// `size.0` for the card in the main window, capped like [`fit_modal_size`] so
@@ -222,12 +242,24 @@ pub(crate) fn close_x_button<'a, M: Clone + 'a>(message: M) -> Element<'a, M> {
 
 /// The title strip every app modal opens with: `title` on the left, the
 /// close-X sending `on_close` on the right, on the modal header strip. Pass
-/// it to [`Signex::modal_header`] (or `draggable_header`).
+/// it to [`Signex::modal_header`] (or `draggable_header`). Graphite themes
+/// get the 44 px header with the neutral close instead.
 pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
     title: impl iced::widget::text::IntoFragment<'a>,
     on_close: M,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, M> {
+    if crate::styles::is_graphite(tokens) {
+        let title: String = title.into_fragment().into_owned();
+        return super::header::graphite_header(
+            title,
+            None,
+            None,
+            on_close,
+            super::header::DIALOG_HEADER_H,
+            tokens,
+        );
+    }
     container(
         row![
             text(title)
