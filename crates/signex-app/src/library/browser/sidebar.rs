@@ -5,12 +5,16 @@
 //! Classes section. Extracted verbatim from the former single-file
 //! `browser` module.
 
+use super::look;
 use super::*;
 use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Width of the table sidebar.
+pub(super) const SIDEBAR_W: f32 = 200.0;
 
 /// Vertical table sidebar — replaces the old horizontal tab strip
 /// with a database-style master pane: each table is one row, the
@@ -25,10 +29,13 @@ pub(super) fn view_table_sidebar<'a>(
     tokens: &'a ThemeTokens,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
-    const SIDEBAR_W: f32 = 200.0;
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let active_bg = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10);
+    let active_bg = look::active_fill(tokens);
+    let hover_bg = look::row_hover_fill(tokens);
+    let wash_ink = look::ink_over_wash(tokens);
+    let control_bg = look::control_fill(tokens);
+    let graphite = crate::styles::is_graphite(tokens);
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![]
         .spacing(SP.xs)
@@ -41,14 +48,20 @@ pub(super) fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(text("Tables").size(TS.body).color(muted))
-            .padding(iced::Padding {
-                top: 0.0,
-                right: 8.0,
-                bottom: 4.0,
-                left: 12.0,
-            })
-            .boxed(),
+        container(if graphite {
+            text("TABLES")
+                .size(TS.section)
+                .style(crate::styles::section_label(tokens))
+        } else {
+            text("Tables").size(TS.body).color(muted)
+        })
+        .padding(iced::Padding {
+            top: 0.0,
+            right: 8.0,
+            bottom: 4.0,
+            left: 12.0,
+        })
+        .boxed(),
     );
 
     // Hoist a single owned `PathBuf` out of every per-row loop.
@@ -131,32 +144,20 @@ pub(super) fn view_table_sidebar<'a>(
                 })
                 .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text("✓").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+            let confirm = button(text("✓").size(BROWSER_TEXT_SIZE))
                 .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserConfirmRenameTable {
                     library_path: library_for_confirm,
                 })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 2.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+                .style(look::confirm_style(tokens, 2.0));
             let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserCancelRenameTable {
                     library_path: library_for_cancel,
                 })
-                .style(|_: &Theme, _| iced::widget::button::Style {
+                .style(move |_: &Theme, _| iced::widget::button::Style {
                     background: None,
-                    text_color: iced::Color::WHITE,
+                    text_color: wash_ink,
                     border: Border::default(),
                     ..iced::widget::button::Style::default()
                 });
@@ -213,9 +214,7 @@ pub(super) fn view_table_sidebar<'a>(
             .on_press(on_press)
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let bg = bg_color.or_else(|| match status {
-                    iced::widget::button::Status::Hovered => {
-                        Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04))
-                    }
+                    iced::widget::button::Status::Hovered => Some(hover_bg),
                     _ => None,
                 });
                 iced::widget::button::Style {
@@ -283,12 +282,9 @@ pub(super) fn view_table_sidebar<'a>(
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let (bg, fg) = match status {
                     iced::widget::button::Status::Hovered
-                    | iced::widget::button::Status::Pressed => (
-                        Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.10,
-                        ))),
-                        iced::Color::WHITE,
-                    ),
+                    | iced::widget::button::Status::Pressed => {
+                        (Some(iced::Background::Color(active_bg)), wash_ink)
+                    }
                     _ => (None, muted),
                 };
                 iced::widget::button::Style {
@@ -327,38 +323,20 @@ pub(super) fn view_table_sidebar<'a>(
                 })
                 .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(
-                text("Create")
-                    .size(BROWSER_TEXT_SIZE)
-                    .color(iced::Color::WHITE),
-            )
-            .padding([SP.s, 10.0])
-            .on_press(LibraryMessage::BrowserConfirmAddTable {
-                library_path: library_for_confirm,
-            })
-            .style(|_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.18, 0.36, 0.58,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
+            let confirm = button(text("Create").size(BROWSER_TEXT_SIZE))
+                .padding([SP.s, 10.0])
+                .on_press(LibraryMessage::BrowserConfirmAddTable {
+                    library_path: library_for_confirm,
+                })
+                .style(look::confirm_style(tokens, 3.0));
             let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([SP.s, 10.0])
                 .on_press(LibraryMessage::BrowserCancelAddTable {
                     library_path: library_for_cancel,
                 })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    text_color: iced::Color::WHITE,
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(control_bg)),
+                    text_color: wash_ink,
                     border: Border {
                         width: 0.0,
                         radius: 3.0.into(),
@@ -396,11 +374,9 @@ pub(super) fn view_table_sidebar<'a>(
                 .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserBeginAddTable {
                     library_path: library_for_begin,
                 }))
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    text_color: iced::Color::WHITE,
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(control_bg)),
+                    text_color: wash_ink,
                     border: Border {
                         width: 0.0,
                         radius: 3.0.into(),

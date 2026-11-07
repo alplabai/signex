@@ -28,6 +28,7 @@ mod empty_state;
 mod grid;
 mod header;
 mod keyed;
+mod look;
 mod names;
 mod price;
 mod sidebar;
@@ -124,7 +125,7 @@ pub fn view<'a>(
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
     let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, read_only);
-    let header = view_header(library_path, lib, browser, tokens);
+    let header = view_header(library_path, lib, browser, tokens, read_only);
 
     // Body — left grid, right preview pane.
     let active_table = active_table(lib, browser);
@@ -227,7 +228,14 @@ pub fn view<'a>(
     )
     .map(|bar| container(bar).padding([4, 10]).boxed());
 
+    // Graphite: the uncommitted banner lives in the sidebar footer.
+    let graphite = crate::styles::is_graphite(tokens);
     let banner = view_uncommitted_banner(library_path, library_state, tokens);
+    let (banner, footer) = if graphite {
+        (Space::new().boxed(), Some(banner))
+    } else {
+        (banner, None)
+    };
     let mut right = column![header, banner].spacing(0);
     if let Some(bar) = range_bar {
         right = right.push(bar);
@@ -251,6 +259,19 @@ pub fn view<'a>(
             background: Some(iced::Background::Color(border_c)),
             ..iced::widget::container::Style::default()
         });
+    let table_sidebar = match footer {
+        Some(footer) => column![
+            container(table_sidebar).height(Length::Fill).boxed(),
+            container(footer)
+                .padding(SP.m)
+                .width(Length::Fixed(sidebar::SIDEBAR_W))
+                .boxed(),
+        ]
+        .width(Length::Shrink)
+        .height(Length::Fill)
+        .boxed(),
+        None => table_sidebar,
+    };
     row![table_sidebar, separator, right]
         .width(Length::Fill)
         .height(Length::Fill)

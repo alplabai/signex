@@ -117,6 +117,9 @@ fn view_header<'a>(
         state.row.class.as_str(),
         &format!("{:?}", state.row.state),
     );
+    if crate::styles::is_graphite(tokens) {
+        return graphite_header(state, tokens, address);
+    }
     container(
         row![
             text("Component Preview").size(TS.heading).color(muted),
@@ -130,6 +133,51 @@ fn view_header<'a>(
     .padding([SP.m, SP.l])
     .style(crate::styles::modal_header_strip(tokens))
     .boxed()
+}
+
+/// Graphite document header: the internal PN in mono, then the lifecycle
+/// and class as pills, with the close button at the right.
+fn graphite_header<'a>(
+    state: &'a ComponentPreviewState,
+    tokens: &'a ThemeTokens,
+    address: EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    let pn = state.row.internal_pn.as_str();
+    let pn = if pn.trim().is_empty() {
+        "(no part number)"
+    } else {
+        pn
+    };
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let mut line: iced::widget::Row<Element<'a, LibraryMessage>> = row![
+        text(pn)
+            .size(TS.heading)
+            .font(mono)
+            .color(theme_ext::text_primary(tokens))
+            .boxed(),
+        kit::toned_pill(
+            kit::lifecycle_label(state.row.state).to_string(),
+            kit::lifecycle_tone(state.row.state),
+            tokens,
+        ),
+    ]
+    .spacing(SP.m)
+    .align_y(iced::Alignment::Center);
+    let class = state.row.class.trim();
+    if !class.is_empty() {
+        line = line.push(kit::toned_pill(
+            class.to_string(),
+            crate::styles::PillTone::Neutral,
+            tokens,
+        ));
+    }
+    line = line
+        .push(Space::new().width(Length::Fill).boxed())
+        .push(close_btn(address, tokens));
+    container(line.boxed())
+        .padding([SP.m, SP.l])
+        .style(crate::styles::modal_header_strip(tokens))
+        .boxed()
 }
 
 /// How many required slots of `class` have no usable value. Zero for a
@@ -210,11 +258,11 @@ fn view_tabs<'a>(
         .align_y(iced::Alignment::Center);
         if let Some(count) = tab_badge(*tab, state, library_state) {
             let fill = tokens::danger(tokens);
-            content = content.push(kit::pill(
-                count.to_string(),
-                fill,
-                tokens::readable_on(fill),
-            ));
+            content = content.push(if crate::styles::is_graphite(tokens) {
+                kit::toned_pill(count.to_string(), crate::styles::PillTone::Err, tokens)
+            } else {
+                kit::pill(count.to_string(), fill, tokens::readable_on(fill))
+            });
         }
         let label = container(content.boxed()).padding([SP.s, SP.l]);
         let style = signex_widgets::tab_pill::TabPillStyle {

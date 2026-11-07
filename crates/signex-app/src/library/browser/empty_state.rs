@@ -22,32 +22,49 @@ pub(super) fn view_empty_state<'a>(
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     let library_for_add = lib_pb.clone();
+    let graphite = crate::styles::is_graphite(tokens);
+    let primary = crate::styles::primary_button(tokens);
     let add_btn = button(
         text("Add Component")
             .size(BROWSER_TEXT_SIZE)
-            .color(iced::Color::WHITE),
+            .color(if graphite {
+                crate::styles::tokens::resolve(tokens).primary_ink
+            } else {
+                iced::Color::WHITE
+            }),
     )
     .padding([6, 14])
     .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
         library_path: library_for_add,
         table: None,
     }))
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(if read_only {
-            iced::Color::from_rgb(0.35, 0.35, 0.38)
-        } else {
-            iced::Color::from_rgb(0.00, 0.47, 0.84)
-        })),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            color: iced::Color::TRANSPARENT,
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
+    .style(move |theme: &Theme, status| {
+        if graphite {
+            return primary(theme, status);
+        }
+        iced::widget::button::Style {
+            background: Some(iced::Background::Color(if read_only {
+                iced::Color::from_rgb(0.35, 0.35, 0.38)
+            } else {
+                iced::Color::from_rgb(0.00, 0.47, 0.84)
+            })),
+            text_color: iced::Color::WHITE,
+            border: Border {
+                width: 0.0,
+                radius: 3.0.into(),
+                color: iced::Color::TRANSPARENT,
+                ..Border::default()
+            },
+            ..iced::widget::button::Style::default()
+        }
     });
 
+    let card_bg = super::look::inert_fill(tokens);
+    let card_radius = if graphite {
+        crate::styles::Radii::GRAPHITE.card
+    } else {
+        6.0
+    };
     let card = container(
         column![
             text(format!("{}.snxlib", lib.display_name))
@@ -66,12 +83,10 @@ pub(super) fn view_empty_state<'a>(
     )
     .padding(28)
     .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.02,
-        ))),
+        background: Some(iced::Background::Color(card_bg)),
         border: Border {
             width: 1.0,
-            radius: 6.0.into(),
+            radius: card_radius.into(),
             color: border,
             ..Border::default()
         },
