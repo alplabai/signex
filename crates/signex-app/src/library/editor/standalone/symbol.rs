@@ -347,6 +347,7 @@ fn symbol_canvas<'a>(
             ..crate::styles::ti(tokens.text_secondary)
         },
     )
+    .with_graphite(tokens)
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
     .with_trackpad_pan(editor.trackpad_pan)

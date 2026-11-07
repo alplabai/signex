@@ -44,6 +44,7 @@ use super::state::{self, SymbolSelection};
 mod draw;
 mod fields;
 mod geometry;
+mod graphite;
 mod input;
 mod pins;
 mod press;

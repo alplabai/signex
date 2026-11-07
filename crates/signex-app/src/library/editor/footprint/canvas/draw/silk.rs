@@ -20,7 +20,7 @@ pub(super) fn draw_silk_graphics(
     palette: LayerPalette,
 ) {
     let base_colour = layer.color_in(palette);
-    let highlight = Color::from_rgb(1.0, 1.0, 1.0);
+    let highlight = palette.selection_ink();
     let stroke_default_px: f32 = 1.0;
     // Shapes first, text last: a Frame draws in call order (fork #18), so
     // silk text must follow every line, arc and fill it can overlap.
