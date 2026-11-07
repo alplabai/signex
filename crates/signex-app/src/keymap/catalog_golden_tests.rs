@@ -1,12 +1,12 @@
 //! Characterization of the keymap catalog and the built-in shortcut profiles.
 //!
 //! `testdata/catalog.golden.tsv` pins every catalog command (id, category,
-//! labels, group, icon, default key, enablement, flags) and
+//! labels, group, icon, default key, enablement, flags, operands) and
 //! `testdata/builtin_profiles.golden.tsv` every binding of each built-in
 //! profile (`bind` rows) plus each command's menu hint (`hint` rows). A diff is a behaviour change, not a snapshot
 //! to refresh. Regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-app golden`.
 
-use super::catalog::{CommandMetadata, KeyBind};
+use super::catalog::{CommandMetadata, KeyBind, describe_operands};
 use super::{
     AppCommandId, CompiledKeymap, KeyStroke, Modifiers, ShortcutBindingAction, ShortcutProfileSet,
     ShortcutTrigger, all_command_ids, metadata_for_str,
@@ -15,7 +15,7 @@ use super::{
 const CATALOG: &str = include_str!("testdata/catalog.golden.tsv");
 const PROFILES: &str = include_str!("testdata/builtin_profiles.golden.tsv");
 const CATALOG_HEADER: &str =
-    "# id\tcategory\tlabel\tmenu_label\tgroup\ticon\tkeybind\tenablement\tflags";
+    "# id\tcategory\tlabel\tmenu_label\tgroup\ticon\tkeybind\tenablement\tflags\toperands";
 const PROFILES_HEADER: &str = "# profile\tkind\tcontext\tsequence\taction";
 const MISMATCH_NOTE: &str = "This is a behaviour change: a command or shortcut was added, removed or changed. Update the golden only with a maintainer decision that names it (see docs/DECISIONS.md).";
 
@@ -73,6 +73,7 @@ fn catalog_text() -> String {
             meta.keybind.as_ref().map_or("-".into(), keybind),
             format!("{:?}", meta.enable),
             flags(meta),
+            describe_operands(meta.operands),
         ];
         out.push_str(&row.join("\t"));
         out.push('\n');
