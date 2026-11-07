@@ -159,8 +159,9 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     for entry in &sym.symbols_in_file {
         let is_active = entry.idx == sym.active_idx;
         let label_color = if is_active { primary } else { muted };
-        let bg_active = crate::styles::ti(ctx.tokens.selection);
+        let bg_active = super::graphite::active_fill(&ctx.tokens);
         let row_msg = PanelMsg::SchLibrarySelectSymbol(entry.idx);
+        let wash = super::graphite::wash_fn(&ctx.tokens);
         let row_btn = iced::widget::button(
             row![
                 text(entry.name.clone())
@@ -184,9 +185,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     background: if is_active {
                         Some(iced::Background::Color(bg_active))
                     } else if matches!(status, iced::widget::button::Status::Hovered) {
-                        Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )))
+                        Some(iced::Background::Color(wash(0.04)))
                     } else {
                         None
                     },
@@ -233,6 +232,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(thin_sep(border_c));
 
     // ── Action row: Place / Add / Delete / Edit (Altium parity) ──
+    let wash = super::graphite::wash_fn(&ctx.tokens);
+    let corner = super::graphite::button_radius(&ctx.tokens);
     let action_btn_style = move |is_primary: bool, enabled: bool| {
         let text_color = if enabled { primary } else { muted };
         move |_: &iced::Theme, status: iced::widget::button::Status| {
@@ -250,12 +251,10 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 0.03
             };
             iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, bg_alpha,
-                ))),
+                background: Some(iced::Background::Color(wash(bg_alpha))),
                 border: iced::Border {
                     width: 1.0,
-                    radius: 3.0.into(),
+                    radius: corner.into(),
                     color: border_c,
                     ..Default::default()
                 },
@@ -362,7 +361,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
-    let bg_active = crate::styles::ti(ctx.tokens.selection);
+    let bg_active = super::graphite::active_fill(&ctx.tokens);
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
@@ -507,6 +506,8 @@ fn view_footprint_library_button_row<'a>(
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
 
+    let wash = super::graphite::wash_fn(&ctx.tokens);
+    let corner = super::graphite::button_radius(&ctx.tokens);
     let mk_btn = |label: &'static str, on_press: Option<PanelMsg>| -> Element<'a, PanelMsg> {
         let enabled = on_press.is_some();
         let label_color = if enabled { primary } else { muted };
@@ -520,16 +521,14 @@ fn view_footprint_library_button_row<'a>(
         .width(Length::Fixed(64.0))
         .style(move |_: &Theme, status| {
             let bg = match status {
-                iced::widget::button::Status::Hovered if enabled => {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
-                }
-                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.02),
+                iced::widget::button::Status::Hovered if enabled => wash(0.06),
+                _ => wash(0.02),
             };
             iced::widget::button::Style {
                 background: Some(iced::Background::Color(bg)),
                 border: iced::Border {
                     width: 1.0,
-                    radius: 3.0.into(),
+                    radius: corner.into(),
                     color: border_c,
                     ..Default::default()
                 },
@@ -584,17 +583,17 @@ pub fn view_library_row_properties<'a>(
         d.internal_pn.clone()
     };
 
+    let wash = |alpha: f32| iced::Color::from_rgba(1.0, 1.0, 1.0, alpha);
+    let corner = 3.0_f32;
     let pick_symbol_btn = button(text("Pick Symbol…").size(TS.body).color(primary))
         .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickSymbol))
         .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
+            background: Some(iced::Background::Color(wash(0.04))),
             text_color: primary,
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: corner.into(),
                 color: border_c,
                 ..Default::default()
             },
@@ -605,13 +604,11 @@ pub fn view_library_row_properties<'a>(
         .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickFootprint))
         .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
+            background: Some(iced::Background::Color(wash(0.04))),
             text_color: primary,
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: corner.into(),
                 color: border_c,
                 ..Default::default()
             },

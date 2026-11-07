@@ -606,13 +606,28 @@ fn render_node(
     // Badge (right-aligned, very muted, single line)
     if let Some(badge) = &node.badge {
         r = r.push(iced::widget::space::horizontal().boxed());
-        r = r.push(
-            text(badge.clone())
-                .size(m.badge)
-                .color(badge_c)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .boxed(),
-        );
+        let badge_text = text(badge.clone())
+            .size(m.badge)
+            .wrapping(iced::widget::text::Wrapping::None);
+        if m.style.is_some() {
+            // Themed rows draw the badge as a count / kind pill.
+            let (fill, ink) = (hov_bg, theme_ext::text_secondary(tokens));
+            r = r.push(
+                container(badge_text.color(ink))
+                    .padding([0.0, 5.0])
+                    .style(move |_: &Theme| container::Style {
+                        background: Some(Background::Color(fill)),
+                        border: iced::Border {
+                            radius: 999.0.into(),
+                            ..iced::Border::default()
+                        },
+                        ..container::Style::default()
+                    })
+                    .boxed(),
+            );
+        } else {
+            r = r.push(badge_text.color(badge_c).boxed());
+        }
     }
 
     // Right-side indicators (Altium parity):

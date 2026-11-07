@@ -248,7 +248,11 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             row![
                 iced::widget::button(
                     row![
-                        text(sev_label).size(TS.body).color(sev_color),
+                        if crate::styles::is_graphite(&ctx.tokens) {
+                            erc_severity_pill(&ctx.tokens, v.severity, sev_label)
+                        } else {
+                            text(sev_label).size(TS.body).color(sev_color).boxed()
+                        },
                         Space::new().width(4).height(Length::Shrink),
                         text(v.rule_label.clone()).size(TS.body).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
@@ -431,7 +435,17 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         let primary = theme_ext::text_primary(&ctx.tokens);
         let border = theme_ext::border_color(&ctx.tokens);
-        let header_bg = theme_ext::to_color(&ctx.tokens.hover);
+        let graphite = crate::styles::is_graphite(&ctx.tokens);
+        let header_bg = if graphite {
+            crate::styles::tokens::resolve(&ctx.tokens).sunken
+        } else {
+            theme_ext::to_color(&ctx.tokens.hover)
+        };
+        let border = if graphite {
+            crate::styles::tokens::resolve(&ctx.tokens).line_soft
+        } else {
+            border
+        };
         let row_bg = theme_ext::to_color(&ctx.tokens.panel_bg);
         // Alt-row tint: pull a darker variant from the panel background
         // by shifting alpha. iced::Color lets us blend cheaply.
@@ -460,6 +474,11 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 ]
                 .align_y(iced::Alignment::Center),
             )
+            .height(if graphite {
+                Length::Fixed(super::graphite::TABLE_ROW_HEIGHT)
+            } else {
+                Length::Shrink
+            })
             .style(move |_theme: &Theme| iced::widget::container::Style {
                 background: Some(Background::Color(header_bg)),
                 ..iced::widget::container::Style::default()
@@ -489,7 +508,13 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     theme_ext::text_secondary(&ctx.tokens)
                 }
             };
-            let bg = if i % 2 == 0 { row_bg } else { alt_bg };
+            let bg = if graphite {
+                Color::TRANSPARENT
+            } else if i % 2 == 0 {
+                row_bg
+            } else {
+                alt_bg
+            };
             let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
                 container(text(label).size(size).color(color))
                     .padding([SP.s, SP.m])
@@ -500,15 +525,37 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     row![
                         container(cell(format!("#{}", entry.id), muted, TS.body))
                             .width(Length::Fixed(48.0)),
-                        container(cell(entry.level.label().to_string(), level_color, TS.body))
-                            .width(Length::Fixed(64.0)),
-                        container(cell(entry.code.as_str().to_string(), muted, TS.body))
-                            .width(Length::Fixed(180.0)),
+                        container(if graphite {
+                            level_pill(&ctx.tokens, entry.level)
+                        } else {
+                            cell(entry.level.label().to_string(), level_color, TS.body)
+                        })
+                        .width(Length::Fixed(64.0)),
+                        container(if graphite {
+                            container(
+                                text(entry.code.as_str().to_string())
+                                    .size(TS.body)
+                                    .font(crate::fonts::iced_font_for_family(
+                                        crate::fonts::CHROME_MONO_FONT,
+                                    ))
+                                    .color(muted),
+                            )
+                            .padding([SP.s, SP.m])
+                            .boxed()
+                        } else {
+                            cell(entry.code.as_str().to_string(), muted, TS.body)
+                        })
+                        .width(Length::Fixed(180.0)),
                         container(cell(entry.message.as_str().to_string(), primary, TS.body))
                             .width(Length::Fill),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
+                .height(if graphite {
+                    Length::Fixed(super::graphite::TABLE_ROW_HEIGHT)
+                } else {
+                    Length::Shrink
+                })
                 // No border on the row — the explicit separator line
                 // drawn below is the grid. Boxes around each entry
                 // (the previous look) were too heavy for a log table.
@@ -526,6 +573,43 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 
     container(col).width(Length::Fill).boxed()
+}
+
+/// Severity pill of an ERC row (Graphite).
+fn erc_severity_pill<'a>(
+    tokens: &ThemeTokens,
+    severity: ErcSeverityLite,
+    label: &'static str,
+) -> Element<'a, PanelMsg> {
+    use crate::styles::PillTone;
+    let tone = match severity {
+        ErcSeverityLite::Error => PillTone::Err,
+        ErcSeverityLite::Warning => PillTone::Warn,
+        ErcSeverityLite::Info => PillTone::Info,
+    };
+    container(text(label).size(TS.caption))
+        .padding([1.0, 7.0])
+        .style(crate::styles::pill(tokens, tone))
+        .boxed()
+}
+
+/// Severity pill of a Messages row (Graphite): error, warning, info tones.
+fn level_pill<'a>(
+    tokens: &ThemeTokens,
+    level: crate::diagnostics::DiagnosticLevel,
+) -> Element<'a, PanelMsg> {
+    use crate::diagnostics::DiagnosticLevel as L;
+    use crate::styles::PillTone;
+    let tone = match level {
+        L::Error => PillTone::Err,
+        L::Warning => PillTone::Warn,
+        L::Info => PillTone::Info,
+        L::Debug | L::Trace => PillTone::Neutral,
+    };
+    container(text(level.label().to_string()).size(TS.caption))
+        .padding([1.0, 7.0])
+        .style(crate::styles::pill(tokens, tone))
+        .boxed()
 }
 
 #[cfg(test)]

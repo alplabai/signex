@@ -27,6 +27,7 @@ mod drafts;
 pub use drafts::PanelDrafts;
 mod erc_waivers;
 mod footprint_context;
+mod graphite;
 mod library;
 mod messages;
 mod multi_selection;
