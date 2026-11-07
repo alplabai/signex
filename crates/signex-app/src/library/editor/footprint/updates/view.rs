@@ -14,7 +14,9 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
     match msg {
         FootprintEditorMsg::ToggleLayer(name) => toggle_layer(editor, name),
         FootprintEditorMsg::LayersShowAllClicked => set_layers(editor, LayerPreset::All),
-        FootprintEditorMsg::LayersTopSideOnlyClicked => set_layers(editor, LayerPreset::TopSideOnly),
+        FootprintEditorMsg::LayersTopSideOnlyClicked => {
+            set_layers(editor, LayerPreset::TopSideOnly)
+        }
         FootprintEditorMsg::ToggleAutoFit => toggle_auto_fit(editor),
         FootprintEditorMsg::SetMode(mode) => set_mode(editor, mode),
         FootprintEditorMsg::TogglePlacementPause => toggle_placement_pause(editor),
