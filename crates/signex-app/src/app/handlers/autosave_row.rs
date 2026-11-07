@@ -62,9 +62,11 @@ impl Signex {
     }
 
     /// Restore a row copy into the open editor as unsaved edits, as one undo
-    /// step. The stored row's versions and base revision are kept, so a save
-    /// is not refused as stale for a change the library never saw.
-    pub(super) fn restore_row_copy(&mut self, path: &Path, mut row: ComponentRow) -> bool {
+    /// step. The copy keeps its own versions and base revision: if the stored
+    /// row moved since the copy was written, the next save is refused as
+    /// stale (or rebased when only this session's cascade moved it) instead
+    /// of writing over the newer row.
+    pub(super) fn restore_row_copy(&mut self, path: &Path, row: ComponentRow) -> bool {
         let Some(address) = self
             .library
             .editors
@@ -77,7 +79,6 @@ impl Signex {
         let Some(editor) = self.library.editors.get_mut(&address) else {
             return false;
         };
-        crate::library::preview_rebase::rebase_onto_cascade(&mut row, &editor.row);
         let scope = editor.begin_edit();
         editor.row = row;
         editor.mark_dirty();

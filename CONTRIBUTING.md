@@ -123,8 +123,14 @@ bash scripts/check_arch_guard.sh        # crate dependency edges vs scripts/arch
 bash scripts/check_file_size.sh         # god-file ratchet
 bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
 bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
+bash scripts/check_layer_ratchet.sh   # layer-crossing counts vs scripts/layer-ratchet-baseline.txt
 bash scripts/changelog_assemble.sh --check   # changelog.d fragments
 ```
+
+The layer ratchet fails when a count changes in either direction. If your
+change removes a counted copy or import, run
+`bash scripts/check_layer_ratchet.sh --generate` and commit the new baseline
+in the same PR.
 Clippy runs in CI with `-D warnings`, so any clippy warning fails the job and
 blocks the merge (it feeds the required `ci · required` context). Run it with the
 same `--all-targets --all-features` CI uses, or your local run will silently skip

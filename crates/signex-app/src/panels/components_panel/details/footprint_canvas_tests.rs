@@ -189,6 +189,8 @@ fn preview_paints_the_same_primitives_as_the_editor() {
     // The preview adds only its readouts (size text first, then the scale
     // bar in a later section). Cut them off at the size text and close the
     // dump the way the editor's ends; what is left must equal the editor.
+    // So `draw_readouts` must stay the preview's last draw call: anything
+    // drawn after it would be cut off here and never compared.
     let tail = editor.dump.rsplit("inf } }").next().unwrap();
     let head = preview
         .dump

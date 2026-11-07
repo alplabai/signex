@@ -181,3 +181,39 @@ fn a_copy_equal_to_the_stored_row_is_dropped_not_offered() {
     assert!(next.document_state.autosave.current_offer().is_none());
     assert!(!sidecar_of(&f).exists());
 }
+
+/// A copy taken before a later save is flagged as older, and restoring it
+/// cannot write over that save: the next save is refused as stale.
+#[test]
+fn restoring_a_copy_older_than_the_stored_row_keeps_the_newer_save() {
+    let (f, mut second) = next_run();
+    answer(&mut second, RecoveryChoice::Later);
+    {
+        let s = second.library.editors.get_mut(&f.address).unwrap();
+        s.row.description = "RUN-2".into();
+        s.dirty = true;
+    }
+    second.ui_state.autosave_enabled = false;
+    save_preview(&mut second, &f.address);
+    assert!(sidecar_of(&f).exists(), "Later keeps the copy");
+
+    let (mut third, _) = fresh_run(&f.snxlib, &f.recovery, f.row_id);
+    let warned = third
+        .document_state
+        .autosave
+        .current_offer()
+        .is_some_and(|o| o.older_than_file);
+    answer(&mut third, RecoveryChoice::Restore);
+    third.ui_state.autosave_enabled = false;
+    save_preview(&mut third, &f.address);
+
+    let (check, _) = fresh_run(&f.snxlib, &f.recovery.join("x"), f.row_id);
+    assert_eq!(
+        check.library.editors[&f.address].row.description, "RUN-2",
+        "run 2's saved edit was overwritten by the older copy"
+    );
+    assert!(
+        warned,
+        "the prompt must say the row was saved after the copy"
+    );
+}

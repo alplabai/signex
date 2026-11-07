@@ -131,7 +131,8 @@ pub fn reconcile_with(
 
 /// [`reconcile`] for a document that is not a file: a Component Preview row,
 /// whose copy is judged against `baseline`, the bytes of the row as stored.
-/// `older_than_file` is always false: a stored row has no file time.
+/// `older_than_file` is set when the stored row's `server_revision` differs
+/// from the one the copy was taken at: the row was saved after the copy.
 pub fn reconcile_snapshot(
     recovery_dir: &Path,
     document: &Path,
@@ -161,8 +162,17 @@ pub fn reconcile_snapshot(
     }
     Ok(Some(Recoverable {
         age_secs: now.duration_since(modified).map_or(0, |age| age.as_secs()),
-        older_than_file: false,
+        older_than_file: snapshot_revision(&copy) != snapshot_revision(baseline),
     }))
+}
+
+/// The `server_revision` a row snapshot was taken at; `None` when the
+/// snapshot has none or does not parse.
+fn snapshot_revision(bytes: &[u8]) -> Option<u64> {
+    serde_json::from_slice::<serde_json::Value>(bytes)
+        .ok()?
+        .get("server_revision")?
+        .as_u64()
 }
 
 /// Why a Restore could not load the copy. The kinds need different
