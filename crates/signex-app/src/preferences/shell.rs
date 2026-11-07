@@ -112,14 +112,19 @@ fn graphite_nav<'a>(active: PrefNav, query: &'a str, t: &ThemeTokens) -> Element
         col = col.push(nav_row(item, item == active, t));
     }
     let bg = ti(t.panel_bg);
-    container(scrollable(col).width(Length::Fill).boxed())
-        .width(Length::Fixed(GRAPHITE_NAV_W))
-        .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(bg)),
-            ..container::Style::default()
-        })
-        .boxed()
+    container(
+        scrollable(col)
+            .width(Length::Fill)
+            .style(super::graphite_fields::scroll_style(t))
+            .boxed(),
+    )
+    .width(Length::Fixed(GRAPHITE_NAV_W))
+    .height(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(bg)),
+        ..container::Style::default()
+    })
+    .boxed()
 }
 
 fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, PrefMsg> {

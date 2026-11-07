@@ -693,7 +693,11 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
-    container(scrollable(inner).width(Length::Fill))
+    container(
+        scrollable(inner)
+            .width(Length::Fill)
+            .style(graphite_fields::scroll_style(panel_tokens)),
+    )
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(0)
