@@ -30,7 +30,7 @@ pub struct ClassPickMarker {
 /// changes nothing on it.
 #[derive(Debug)]
 pub(super) enum HistoryStep {
-    Edit(HistoryEntry),
+    Edit(Box<HistoryEntry>),
     Pick(ClassPickMarker),
 }
 
@@ -280,11 +280,11 @@ impl Engine {
         let redo_snapshot =
             SheetSnapshot::capture(redo_snapshot, last_snapshot(self.history.redo_steps()));
         self.history.finish_step(
-            HistoryStep::Edit(HistoryEntry {
+            HistoryStep::Edit(Box::new(HistoryEntry {
                 snapshot: redo_snapshot,
                 patch_pair,
                 group,
-            }),
+            })),
             true,
         );
         Ok(Some(patch_pair))
@@ -324,11 +324,11 @@ impl Engine {
         let undo_snapshot =
             SheetSnapshot::capture(undo_snapshot, last_snapshot(self.history.undo_steps()));
         self.history.finish_step(
-            HistoryStep::Edit(HistoryEntry {
+            HistoryStep::Edit(Box::new(HistoryEntry {
                 snapshot: undo_snapshot,
                 patch_pair,
                 group,
-            }),
+            })),
             false,
         );
         Ok(Some(patch_pair))
@@ -360,10 +360,11 @@ impl Engine {
         let snapshot = SheetSnapshot::capture(snapshot, last_snapshot(self.history.undo_steps()));
         // The new entry drops the redo branch (and a save point inside it)
         // and evicts the oldest entry past the cap.
-        self.history.record(HistoryStep::Edit(HistoryEntry {
-            snapshot,
-            patch_pair,
-            group,
-        }));
+        self.history
+            .record(HistoryStep::Edit(Box::new(HistoryEntry {
+                snapshot,
+                patch_pair,
+                group,
+            })));
     }
 }
