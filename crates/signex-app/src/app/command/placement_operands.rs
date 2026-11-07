@@ -5,10 +5,11 @@
 //! arming or reset, no repeat-placement memory, no wire continuation, no
 //! shape anchor.
 //!
-//! The points are explicit input in mm and are never moved: one a click would
+//! The points are explicit input in mm and are not snapped: one a click would
 //! snap elsewhere is refused, so nothing lands off the grid silently. What the
 //! operands do not name comes from the pre-placement form and the project
-//! defaults, as for a click.
+//! defaults, as for a click; that includes the wire draw mode, so a diagonal
+//! wire or bus bends as a click-drawn one does.
 
 use iced::Task;
 use signex_types::schematic::{LabelType, Point};
@@ -89,12 +90,13 @@ pub(super) fn no_erc(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::NoErc)
 }
 
-/// `place_wire` / `draw_wire start=x,y end=x,y`: one segment.
+/// `place_wire` / `draw_wire start=x,y end=x,y`: one click-to-click run, bent
+/// by the current draw mode as a click run is.
 pub(super) fn wire(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::Wire)
 }
 
-/// `place_bus` / `draw_bus start=x,y end=x,y`: one segment.
+/// `place_bus` / `draw_bus start=x,y end=x,y`: as [`wire`], for a bus.
 pub(super) fn bus(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::Bus)
 }
@@ -150,8 +152,10 @@ impl Signex {
         let (sx, sy) = snap(self, *x, *y);
         let nm = |mm: f64| (mm * 1e6).round() as i64;
         if (nm(sx), nm(sy)) != (nm(*x), nm(*y)) {
+            // The snap may be the grid or, for a wire, a nearby pin end, wire
+            // end or junction (the electrical grid, Shift+E).
             return Err(format!(
-                "`{name}` is not where a click lands on the {} mm grid: a click there lands on {sx},{sy}",
+                "`{name}` is not where a click lands (the {} mm grid, and for a wire the electrical grid): a click there lands on {sx},{sy}; pass that point",
                 self.ui_state.grid_size_mm
             ));
         }
@@ -177,7 +181,15 @@ impl Signex {
             }
             Placement::Power => {
                 let at = self.grid_point(args, "at")?;
-                placed(self.place_power_at(at, &text(args, "net_name")?, &text(args, "lib_id")?))
+                let lib_id = text(args, "lib_id")?;
+                // A click only picks a `power:` style; any other id would turn
+                // a real part's library entry into a power port.
+                if !lib_id.starts_with("power:") {
+                    return Err(format!(
+                        "`lib_id` must name a power port style, `power:<name>` (e.g. power:GND, power:VCC), not {lib_id}"
+                    ));
+                }
+                placed(self.place_power_at(at, &text(args, "net_name")?, &lib_id))
             }
             Placement::NoConnect => placed(self.place_no_connect_at(self.grid_point(args, "at")?)),
             Placement::Junction => placed(self.place_junction_at(self.grid_point(args, "at")?)),

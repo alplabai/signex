@@ -346,3 +346,22 @@ fn a_placement_on_a_read_only_sheet_is_refused_with_the_reason() {
         assert_eq!(sheet_shape(&app), before, "{}", case.id);
     }
 }
+
+/// A click only places `power:` styles; a part's library id is refused, so an
+/// operand run cannot turn a resistor's entry into a power port.
+#[test]
+fn a_power_port_needs_a_power_style_lib_id() {
+    let mut app = app_with_tool(crate::app::Tool::Select);
+    let before = sheet_shape(&app);
+    let at = format!("at={}", pt(grid(4.0, 4.0)));
+    let outcome = run(
+        &mut app,
+        "place_power_symbol",
+        &[&at, "net_name=VCC", "lib_id=Device:R"],
+    );
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("power:")),
+        "{outcome:?}"
+    );
+    assert_eq!(sheet_shape(&app), before);
+}
