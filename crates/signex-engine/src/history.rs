@@ -26,6 +26,20 @@ pub struct ClassPickMarker {
     pub step: crate::NetClassStepId,
 }
 
+impl ClassPickMarker {
+    /// The step id of a dead marker: class history ids count up from 0, so
+    /// none ever reaches it.
+    pub const DEAD_STEP: crate::NetClassStepId = crate::NetClassStepId::MAX;
+
+    /// This marker, no longer able to match any class step.
+    pub const fn dead(self) -> Self {
+        Self {
+            step: Self::DEAD_STEP,
+            ..self
+        }
+    }
+}
+
 /// One step of the sheet's timeline: an edit of the sheet, or a marker that
 /// changes nothing on it.
 #[derive(Debug)]
@@ -154,11 +168,12 @@ impl Engine {
     }
 
     /// Record a net-class pick made from this sheet. It is a step of the
-    /// timeline (undone and redone in order, evicted by the depth, ending
-    /// the redo branch) that never touches the document or its save point.
+    /// timeline (undone and redone in order, evicted by the depth) that
+    /// never touches the document or its save point, and it keeps the
+    /// sheet's redo branch: a pick does not change the sheet.
     pub fn record_class_pick(&mut self, marker: ClassPickMarker) {
         self.field_edit_run = None;
-        self.history.record(HistoryStep::Pick(marker));
+        self.history.record_inert(HistoryStep::Pick(marker));
     }
 
     /// The marker on top of the undo (`undo`) or redo stack, if the next step
@@ -182,6 +197,19 @@ impl Engine {
         };
         self.field_edit_run = None;
         self.history.step(HistoryStep::Pick(marker), undo).is_some()
+    }
+
+    /// [`Engine::pass_class_pick`] for a marker the caller found dead: it
+    /// moves over as a marker that can never match a class step again, so a
+    /// later change of the project's history cannot bring it back to life.
+    pub fn pass_dead_class_pick(&mut self, undo: bool) -> bool {
+        let Some(marker) = self.next_class_pick(undo) else {
+            return false;
+        };
+        self.field_edit_run = None;
+        self.history
+            .step(HistoryStep::Pick(marker.dead()), undo)
+            .is_some()
     }
 
     /// The steps one way from the top, newest first: `None` for an edit of

@@ -161,6 +161,14 @@ impl<S> History<S> {
         self.push_undo(before)
     }
 
+    /// A step that changes nothing in the state (a marker): one new undo
+    /// step with the redo branch kept, so an edit undone before it is still
+    /// redone after it. Returns the step pushed off a full stack.
+    pub fn record_inert(&mut self, step: S) -> Option<S> {
+        self.point.inserted_below(self.undo.len());
+        self.push_undo(step)
+    }
+
     /// First half of an Undo or Redo: take the state to show. The caller
     /// captures the current state, then hands it to [`Self::finish_step`].
     pub fn begin_step(&mut self, undo: bool) -> Option<S> {
@@ -296,6 +304,35 @@ mod tests {
         assert!(!h.is_dirty_past(inert), "the file is one marker ahead");
         h.forget();
         assert!(h.is_dirty_past(inert), "unknown is always dirty");
+    }
+
+    #[test]
+    fn record_inert_keeps_the_redo_branch_and_shifts_a_point_on_it() {
+        let mut h = history();
+        h.record(2);
+        h.mark_saved(); // saved after the real step
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert_eq!(h.redo_len(), 1);
+
+        h.record_inert(1);
+
+        assert_eq!((h.undo_len(), h.redo_len()), (1, 1), "redo kept");
+        assert!(h.is_dirty_past(inert), "the real step is still ahead");
+        let s = h.begin_step(false).unwrap();
+        h.finish_step(s, false);
+        assert!(!h.is_dirty(), "redo lands exactly on the saved position");
+    }
+
+    #[test]
+    fn record_inert_past_the_cap_evicts_the_oldest_and_keeps_counting() {
+        let mut h = history();
+        for step in [2, 4, 6] {
+            h.record(step);
+        }
+        assert_eq!(h.record_inert(1), Some(2));
+        assert_eq!(h.position(), 4);
+        assert_eq!(h.undo_len(), CAP);
     }
 
     #[test]

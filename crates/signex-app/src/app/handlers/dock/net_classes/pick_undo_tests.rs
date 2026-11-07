@@ -8,6 +8,8 @@ use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
 use crate::app::{Signex, TabInfo, TabKind};
 use crate::panels::NetClassMsg;
 
+mod table;
+
 fn app_with_sheet() -> (Signex, uuid::Uuid) {
     let dir = std::env::temp_dir().join(format!("signex-pick-undo-{}", uuid::Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
@@ -500,4 +502,80 @@ fn a_live_pick_on_a_member_sheet_blocks_the_project_wide_undo_until_it_is_dead()
         (0, 0),
         "the group moved"
     );
+}
+
+fn save_sheet(app: &mut Signex) {
+    let path = app.document_state.active_path.clone().unwrap();
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .unwrap()
+        .mark_saved();
+    app.document_state.mark_document_clean(&path);
+}
+
+/// Blocker: a dead marker passed on undo must not come alive on redo when the
+/// panel's own Undo makes its class step the project's next redo.
+#[test]
+fn a_dead_marker_does_not_revive_on_redo() {
+    let (mut app, symbol) = app_with_sheet();
+    move_symbol(&mut app, symbol);
+    pick(&mut app, "GND", Some("Power"));
+    panel(&mut app, NetClassMsg::Undo);
+
+    app.handle_undo_requested(); // passes the dead marker, undoes the move
+    app.handle_redo_requested(); // redoes the move
+    app.handle_redo_requested();
+    assert!(nets(&app).is_empty(), "the panel's undo is not replayed");
+}
+
+/// Symmetric: a marker dead for redo (the panel redid its class edit) must
+/// not come alive for undo once Ctrl+Y has passed it.
+#[test]
+fn a_marker_dead_for_redo_does_not_revive_on_undo() {
+    let (mut app, _symbol) = app_with_sheet();
+    pick(&mut app, "GND", Some("Power"));
+    app.handle_undo_requested();
+    assert!(nets(&app).is_empty());
+    panel(&mut app, NetClassMsg::Redo);
+    assert_eq!(nets(&app), ["GND"]);
+
+    app.handle_redo_requested(); // dead: the panel already redid it
+    app.handle_undo_requested();
+    assert_eq!(nets(&app), ["GND"], "Ctrl+Z has no pick to undo");
+}
+
+/// Blocker: a pick made after undoing a pick above the save point changes
+/// only the project; the sheet stays clean.
+#[test]
+fn a_pick_after_undoing_a_pick_keeps_the_sheet_clean() {
+    let (mut app, _symbol) = app_with_sheet();
+    pick(&mut app, "GND", Some("Power"));
+    save_sheet(&mut app);
+    app.handle_undo_requested();
+    assert!(!sheet_dirty(&app));
+
+    pick(&mut app, "VCC", Some("Power"));
+    let path = app.document_state.active_path.clone().unwrap();
+    assert!(app.document_state.engines[&path].is_at_save_point());
+    assert!(!sheet_dirty(&app));
+}
+
+/// No regression from trunk: a pick does not end the sheet's redo branch, so
+/// a move undone before a pick is still redone after it.
+#[test]
+fn a_pick_does_not_cut_the_sheets_redo_branch() {
+    let (mut app, symbol) = app_with_sheet();
+    let start = symbol_x(&app);
+    move_symbol(&mut app, symbol);
+    app.handle_undo_requested();
+    pick(&mut app, "GND", Some("Power"));
+
+    app.handle_redo_requested();
+    assert_eq!(symbol_x(&app), start + 10.0, "the move is redone");
+    assert_eq!(nets(&app), ["GND"], "the pick stays applied");
+    app.handle_undo_requested();
+    assert_eq!(symbol_x(&app), start, "then the move goes first");
+    app.handle_undo_requested();
+    assert!(nets(&app).is_empty(), "then the pick");
 }

@@ -125,15 +125,65 @@ fn a_marker_has_no_undo_group_and_a_document_step_is_told_apart() {
 }
 
 #[test]
-fn a_marker_ends_the_redo_branch_like_an_edit() {
-    let mut engine = saved();
+fn a_marker_keeps_the_redo_branch_and_the_save_point_on_it() {
+    let mut engine = Engine::new(test_sheet()).unwrap();
     edit(&mut engine, 1);
+    engine.mark_saved(); // saved with the edit applied
     engine.undo().unwrap();
-    assert!(engine.can_redo());
+    assert!(!engine.is_at_save_point());
+
     engine.record_class_pick(MARK);
-    assert!(
-        !engine.can_redo(),
-        "the undone edit can no longer be redone"
+
+    assert!(engine.can_redo(), "a pick does not change the sheet");
+    assert!(!engine.is_at_save_point(), "the saved edit is still ahead");
+    assert!(engine.redo().unwrap().is_some());
+    assert!(engine.is_at_save_point(), "redo reaches the saved state");
+    engine.undo().unwrap();
+    assert_eq!(
+        engine.next_class_pick(true),
+        Some(MARK),
+        "the marker is below"
     );
+}
+
+#[test]
+fn a_marker_over_an_unchanged_redo_branch_of_markers_stays_clean() {
+    let mut engine = saved();
+    engine.record_class_pick(MARK);
+    engine.mark_saved();
+    assert!(engine.pass_class_pick(true));
+    engine.record_class_pick(ClassPickMarker { step: 8, ..MARK });
     assert!(engine.is_at_save_point());
+}
+
+#[test]
+fn an_edit_cutting_a_redo_branch_that_holds_the_save_point_forgets_it() {
+    let mut engine = Engine::new(test_sheet()).unwrap();
+    edit(&mut engine, 1);
+    engine.mark_saved();
+    engine.undo().unwrap();
+    edit(&mut engine, 2); // cuts the saved state off the redo branch
+    assert!(!engine.is_at_save_point());
+    engine.undo().unwrap();
+    assert!(
+        !engine.is_at_save_point(),
+        "unreachable until the next save"
+    );
+}
+
+#[test]
+fn a_dead_marker_passes_over_as_one_that_can_never_match() {
+    let mut engine = saved();
+    engine.record_class_pick(MARK);
+    assert!(engine.pass_dead_class_pick(true));
+    assert_eq!(engine.next_class_pick(false), Some(MARK.dead()));
+    assert_eq!(MARK.dead().project, MARK.project);
+    assert!(engine.pass_dead_class_pick(false));
+    assert_eq!(
+        engine.next_class_pick(true),
+        Some(MARK.dead()),
+        "stays dead both ways"
+    );
+    assert!(!engine.pass_dead_class_pick(false), "nothing left to pass");
+    assert!(!engine.pass_class_pick(false));
 }

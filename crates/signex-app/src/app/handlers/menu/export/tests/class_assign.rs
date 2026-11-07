@@ -8,6 +8,12 @@ use crate::app::Signex;
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::keymap::AppCommandId;
 
+/// A platform-absolute project directory for fixture `name`.
+fn dir(name: &str) -> String {
+    let path = std::env::temp_dir().join(format!("signex-{name}"));
+    path.to_string_lossy().into_owned()
+}
+
 fn run(app: &mut Signex, operands: &[&str]) -> CommandOutcome {
     let command = AppCommandId::new("assign_net_class").expect("catalog id");
     let args = CommandArgs::parse_operands(&command, operands).expect("operands parse");
@@ -27,11 +33,11 @@ fn child_position(app: &Signex) -> usize {
 
 #[test]
 fn the_command_is_the_pickers_assignment_and_one_undo_step_of_the_active_sheet() {
-    let (mut picked, ..) = child_label_selected("/w/assign-click");
+    let (mut picked, ..) = child_label_selected(&dir("assign-click"));
     let project = picked.document_state.active_project.expect("project");
     assign(&mut picked, project, "/LOCAL", "Power");
 
-    let (mut by_command, ..) = child_label_selected("/w/assign-command");
+    let (mut by_command, ..) = child_label_selected(&dir("assign-command"));
     let before = child_position(&by_command);
     let outcome = run(&mut by_command, &["net_name=/LOCAL", "class=Power"]);
 
@@ -56,7 +62,7 @@ fn the_command_is_the_pickers_assignment_and_one_undo_step_of_the_active_sheet()
 
 #[test]
 fn no_class_takes_the_net_out_of_its_listed_class() {
-    let (mut app, ..) = child_label_selected("/w/assign-none");
+    let (mut app, ..) = child_label_selected(&dir("assign-none"));
     assert_eq!(
         run(&mut app, &["net_name=/LOCAL", "class=Power"]),
         CommandOutcome::Ran
@@ -69,7 +75,7 @@ fn no_class_takes_the_net_out_of_its_listed_class() {
 
 #[test]
 fn the_command_refuses_what_it_cannot_do_and_changes_nothing() {
-    let (mut app, ..) = child_label_selected("/w/assign-refuse");
+    let (mut app, ..) = child_label_selected(&dir("assign-refuse"));
     let reason = |outcome: CommandOutcome| match outcome {
         CommandOutcome::Disabled { reason } => reason,
         other => panic!("expected a refusal, got {other:?}"),
@@ -81,10 +87,13 @@ fn the_command_refuses_what_it_cannot_do_and_changes_nothing() {
     assert!(unknown_net.contains("not a net"), "{unknown_net}");
     let unknown_class = reason(run(&mut app, &["net_name=/LOCAL", "class=Nope"]));
     assert!(unknown_class.contains("no net class"), "{unknown_class}");
-    let elsewhere = reason(run(
-        &mut app,
-        &["net_name=/LOCAL", "class=Power", "path=/w/elsewhere.snxsch"],
-    ));
+    let missing = format!(
+        "path={}",
+        std::path::Path::new(&dir("assign-elsewhere"))
+            .join("x.snxsch")
+            .display()
+    );
+    let elsewhere = reason(run(&mut app, &["net_name=/LOCAL", "class=Power", &missing]));
     assert!(elsewhere.contains("not an open sheet"), "{elsewhere}");
 
     assert_eq!(classes(&app), before);
@@ -113,7 +122,7 @@ fn top_sheet(app: &Signex) -> std::path::PathBuf {
 /// the active sheet and tab are untouched, and undoing it there reverts it.
 #[test]
 fn a_path_operand_assigns_on_another_open_sheet_without_activating_it() {
-    let (mut app, ..) = child_label_selected("/w/assign-by-path");
+    let (mut app, ..) = child_label_selected(&dir("assign-by-path"));
     let (child, top) = (
         app.document_state.active_path.clone().unwrap(),
         top_sheet(&app),
@@ -147,7 +156,7 @@ fn a_path_operand_assigns_on_another_open_sheet_without_activating_it() {
 /// refused with a reason, no panel, tab or focus change.
 #[test]
 fn without_operands_the_command_is_refused_and_changes_nothing_else() {
-    let (mut app, ..) = child_label_selected("/w/assign-bare");
+    let (mut app, ..) = child_label_selected(&dir("assign-bare"));
     let command = AppCommandId::new("assign_net_class").expect("catalog id");
     let (path, tab) = (
         app.document_state.active_path.clone(),
@@ -193,7 +202,7 @@ fn did_nothing_lines() -> usize {
 #[test]
 fn only_the_operand_refusal_is_logged_by_a_key_or_palette_dispatch() {
     let _ = crate::diagnostics::init_logging();
-    let (mut app, ..) = child_label_selected("/w/assign-log");
+    let (mut app, ..) = child_label_selected(&dir("assign-log"));
     let id = |name| AppCommandId::new(name).expect("catalog id");
 
     let before = did_nothing_lines();

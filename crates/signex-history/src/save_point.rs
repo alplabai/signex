@@ -91,6 +91,16 @@ impl SavePoint {
         }
     }
 
+    /// A step that changes no state is about to be pushed on an undo stack of
+    /// `undo_len` steps with the redo branch kept: a point on that branch now
+    /// lies one step deeper.
+    pub fn inserted_below(&mut self, undo_len: usize) {
+        let depth = self.depth(undo_len);
+        if let Some(saved) = self.saved.as_mut().filter(|saved| **saved > depth) {
+            *saved += 1;
+        }
+    }
+
     /// The oldest undo step was dropped to keep the stack within its cap.
     pub fn evicted_oldest(&mut self) {
         self.evicted += 1;

@@ -83,7 +83,12 @@ impl crate::app::Signex {
             let applied =
                 self.net_class_pick_is_live(marker, undoing) && self.apply_pick(marker, undoing);
             if let Some(engine) = self.document_state.active_engine_mut() {
-                engine.pass_class_pick(undoing);
+                // A marker not applied is dead for good (see the engine).
+                if applied {
+                    engine.pass_class_pick(undoing);
+                } else {
+                    engine.pass_dead_class_pick(undoing);
+                }
             }
             if applied {
                 self.refresh_panel_ctx();
@@ -105,7 +110,7 @@ impl crate::app::Signex {
             .is_some_and(|marker| !self.net_class_pick_is_live(marker, undoing))
         {
             if let Some(engine) = self.document_state.engines.get_mut(path) {
-                engine.pass_class_pick(undoing);
+                engine.pass_dead_class_pick(undoing);
             }
         }
     }
