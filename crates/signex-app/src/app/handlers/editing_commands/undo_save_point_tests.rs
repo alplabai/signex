@@ -340,7 +340,7 @@ fn a_failed_write_lets_an_undo_to_the_save_point_read_clean() {
         crate::persist::DocumentSaveDone {
             path: d.file.clone(),
             revision: 0,
-            net_color_revision: 0,
+
             save_as_from: None,
             bytes: std::sync::Arc::new(Vec::new()),
             sequence: 0,

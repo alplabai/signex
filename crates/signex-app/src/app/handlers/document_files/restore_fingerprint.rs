@@ -26,8 +26,8 @@ impl Signex {
         if let Some(engine) = ds.engines.get(path) {
             feed(&mut hasher, engine.document());
             engine.revision().hash(&mut hasher);
-            self.net_color_revision_of(path).hash(&mut hasher);
-            let mut colours: Vec<_> = self.ui_state.wire_color_overrides.iter().collect();
+            // Sorted: a map's iteration order is not part of its value.
+            let mut colours: Vec<_> = engine.document().net_colors.iter().collect();
             colours.sort_by_key(|(id, _)| **id);
             feed(&mut hasher, &colours);
         }

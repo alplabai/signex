@@ -49,6 +49,8 @@ mod history_tests;
 #[cfg(test)]
 mod incremental_nets_tests;
 #[cfg(test)]
+mod net_colors_tests;
+#[cfg(test)]
 mod rubber_band_power_tests;
 #[cfg(test)]
 mod rubber_band_tests;
@@ -191,10 +193,6 @@ pub struct Engine {
     /// The pre-move sheet's minted dots and their verdicts, to revalidate only
     /// the dots near changed wires (drag previews).
     preset_dots: Option<std::sync::Arc<transform::DotVerdicts>>,
-    /// Net colour of each wire the app has painted, by wire uuid. The engine
-    /// never changes it; a merge reads it so two wires of different colours
-    /// are not folded into one (see `transform::merge`).
-    wire_colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -245,18 +243,18 @@ impl MovePreview {
     /// dropped.
     #[must_use]
     pub fn moved(&self, moves: &[(SelectedItem, f64, f64)], keep_wires: bool) -> SchematicSheet {
-        self.moved_with(moves, keep_wires, &Default::default()).0
+        self.moved_with(moves, keep_wires).0
     }
 
-    /// [`Self::moved`] with the net colours the commit passes the engine (two
-    /// wires of different colours are not folded), and the references of the
-    /// items the lock holds back, sorted: the reason a held item does not move.
+    /// [`Self::moved`] with the references of the items the lock holds back,
+    /// sorted: the reason a held item does not move. The sheet's own net
+    /// colours keep wires of different colours from being folded, as in the
+    /// commit.
     #[must_use]
     pub fn moved_with(
         &self,
         moves: &[(SelectedItem, f64, f64)],
         keep_wires: bool,
-        wire_colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     ) -> (SchematicSheet, Vec<String>) {
         let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
             return (self.sheet.clone(), Vec::new());
@@ -264,7 +262,6 @@ impl MovePreview {
         engine.preset_before = Some(self.before.clone());
         engine.preset_base.clone_from(&self.base);
         engine.preset_dots.clone_from(&self.dots);
-        engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
         let (command, held) = engine.without_locked_naming(
@@ -310,7 +307,6 @@ impl Engine {
             preset_before: None,
             preset_base: None,
             preset_dots: None,
-            wire_colors: std::collections::HashMap::new(),
         })
     }
 
@@ -343,17 +339,7 @@ impl Engine {
             preset_before: None,
             preset_base: None,
             preset_dots: None,
-            wire_colors: std::collections::HashMap::new(),
         })
-    }
-
-    /// Tell the engine the wires' net colours before a command, so a merge
-    /// keeps wires of different colours apart.
-    pub fn set_wire_colors(
-        &mut self,
-        colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) {
-        self.wire_colors = colors;
     }
 
     /// The pins the last commands could not keep connected (drained).
@@ -380,7 +366,16 @@ impl Engine {
         Self::encode(self.document.clone())
     }
 
-    fn encode(sheet: SchematicSheet) -> Result<String, EngineError> {
+    fn encode(mut sheet: SchematicSheet) -> Result<String, EngineError> {
+        // The colour of a wire or junction the sheet no longer holds is not
+        // written; the engine keeps it so an undo can bring the element back.
+        let live: std::collections::HashSet<uuid::Uuid> = sheet
+            .wires
+            .iter()
+            .map(|w| w.uuid)
+            .chain(sheet.junctions.iter().map(|j| j.uuid))
+            .collect();
+        sheet.net_colors.retain(|id, _| live.contains(id));
         signex_types::format::SnxSchematic::new(sheet)
             .write_string()
             // The typed `FormatError` stays reachable through the io error's
@@ -458,63 +453,30 @@ impl Engine {
         self.instance
     }
 
-    /// [`Self::serialize`] with `colors` as the sheet's net colour overrides.
-    /// The app keeps the live overrides outside the document (they are not
-    /// part of the undo history), so a save passes them in. Overrides whose
-    /// wire or junction is no longer in the sheet are dropped here.
-    pub fn serialize_with_net_colors(
-        &self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> Result<String, EngineError> {
-        self.serialize_with_extents(colors, |_| None)
-    }
-
-    /// [`Self::serialize_with_net_colors`] with the stored text widths
-    /// refreshed on the copy being encoded: `measure` answers for texts whose
-    /// face is installed, the others keep their loaded record (#2029). The
-    /// document itself is untouched.
+    /// [`Self::serialize`] with the stored text widths refreshed on the copy
+    /// being encoded: `measure` answers for texts whose face is installed,
+    /// the others keep their loaded record (#2029). The document itself is
+    /// untouched.
     pub fn serialize_with_extents(
         &self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
         measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
     ) -> Result<String, EngineError> {
         let mut sheet = self.document.clone();
-        let live: std::collections::HashSet<uuid::Uuid> = sheet
-            .wires
-            .iter()
-            .map(|w| w.uuid)
-            .chain(sheet.junctions.iter().map(|j| j.uuid))
-            .collect();
-        sheet.net_colors = colors
-            .iter()
-            .filter(|(id, _)| live.contains(id))
-            .map(|(id, color)| (*id, *color))
-            .collect();
         sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
         Self::encode(sheet)
     }
 
-    /// [`Self::save`] writing `colors` as the net colour overrides; see
-    /// [`Self::serialize_with_net_colors`]. Returns the bytes written, so a
+    /// [`Self::save`] refreshing the stored text widths with `measure`; see
+    /// [`Self::serialize_with_extents`]. Returns the bytes written, so a
     /// caller fingerprints what it wrote instead of re-reading the file.
-    pub fn save_with_net_colors(
-        &mut self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> Result<Vec<u8>, EngineError> {
-        self.save_with_extents(colors, |_| None)
-    }
-
-    /// [`Self::save_with_net_colors`] refreshing the stored text widths with
-    /// `measure`; see [`Self::serialize_with_extents`].
     pub fn save_with_extents(
         &mut self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
         measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
     ) -> Result<Vec<u8>, EngineError> {
         let Some(path) = self.path.clone() else {
             return Err(EngineError::MissingPath);
         };
-        let bytes = self.serialize_with_extents(colors, measure)?.into_bytes();
+        let bytes = self.serialize_with_extents(measure)?.into_bytes();
         signex_types::atomic_io::atomic_write_existing_dir(&path, &bytes)
             .map_err(EngineError::SaveFailed)?;
         Ok(bytes)
@@ -611,7 +573,8 @@ impl Engine {
             | Command::SetSheetColor { .. }
             | Command::SetPageOrigin { .. }
             | Command::SetTitleBlockField { .. }
-            | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
+            | Command::SetDocumentFontFamily { .. }
+            | Command::SetNetColors { .. } => self.exec_structure(before, cmd),
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {
                 self.exec_drawings(before, cmd)
             }

@@ -368,7 +368,7 @@ impl Signex {
             .cloned()
             .collect();
         for path in &dead {
-            self.forget_net_colors_of(path);
+            self.forget_net_class_picks_on(path);
         }
         let doc = &mut self.document_state;
         doc.engines.retain(|p, _| !is_discarded(p));

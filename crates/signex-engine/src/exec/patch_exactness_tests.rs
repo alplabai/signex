@@ -270,6 +270,9 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
     fn sorted<V>(m: &std::collections::HashMap<String, V>) -> BTreeMap<&String, &V> {
         m.iter().collect()
     }
+    fn sorted_by_id<V>(m: &std::collections::HashMap<Uuid, V>) -> BTreeMap<&Uuid, &V> {
+        m.iter().collect()
+    }
     let SchematicSheet {
         uuid: _,
         // Not drawn, so no collection to refresh.
@@ -277,11 +280,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         generator: _,
         generator_version: _,
         unknown: _,
-        // Loaded baseline only; the app owns the live overrides and no command edits them.
         // Derived measurement cache, not document state.
         text_widths: _,
         text_extents: _,
-        net_colors: _,
+        net_colors,
         drawing_placements,
         paper_size,
         font_family,
@@ -343,6 +345,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         DocumentPatch::FONT_FAMILY,
     );
     flag(
+        differ(&sorted_by_id(net_colors), &sorted_by_id(&b.net_colors)),
+        DocumentPatch::NET_COLORS,
+    );
+    flag(
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
             || differ(&sorted(title_block), &sorted(&b.title_block))
@@ -366,7 +372,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 56] = [
+const ALL_KINDS: [CommandKind; 57] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -420,6 +426,7 @@ const ALL_KINDS: [CommandKind; 56] = [
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
+    CommandKind::SetNetColors,
     CommandKind::ArrangeDrawings,
     CommandKind::SetDrawingPlacement,
     CommandKind::MoveEach,
@@ -483,6 +490,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
+        | CommandKind::SetNetColors
         | CommandKind::ArrangeDrawings
         | CommandKind::SetDrawingPlacement
         | CommandKind::MoveEach => {}
@@ -1054,6 +1062,17 @@ fn samples() -> Vec<(String, Command)> {
         "SetDocumentFontFamily",
         Command::SetDocumentFontFamily {
             font_family: Some("Fira Mono".into()),
+        },
+    );
+    add(
+        "SetNetColors",
+        Command::SetNetColors {
+            colors: [(
+                uid(WIRE, 1),
+                signex_types::theme::Color::new(255, 0, 0, 255),
+            )]
+            .into_iter()
+            .collect(),
         },
     );
     out

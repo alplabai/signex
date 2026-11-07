@@ -100,29 +100,13 @@ impl Signex {
     }
 
     /// The records that live beside a document's undo timeline and are read
-    /// through its path: net-colour undo/redo, net-class pick history, the
-    /// colour revision. Without the move, Ctrl+Z after a rename or Save As
-    /// finds nothing.
+    /// through its path: the net-class pick history. Without the move, Ctrl+Z
+    /// after a rename or Save As finds nothing.
     pub(crate) fn rekey_path_keyed_records(
         &mut self,
         old_path: &std::path::Path,
         new_path: &std::path::Path,
     ) {
-        if let Some(count) = self.ui_state.net_color_revision.remove(old_path) {
-            self.ui_state
-                .net_color_revision
-                .insert(new_path.to_path_buf(), count);
-        }
-        if let Some(steps) = self.ui_state.net_color_undo.remove(old_path) {
-            self.ui_state
-                .net_color_undo
-                .insert(new_path.to_path_buf(), steps);
-        }
-        if let Some(steps) = self.ui_state.net_color_redo.remove(old_path) {
-            self.ui_state
-                .net_color_redo
-                .insert(new_path.to_path_buf(), steps);
-        }
         if let Some(picks) = self.document_state.net_class_picks.remove(old_path) {
             self.document_state
                 .net_class_picks

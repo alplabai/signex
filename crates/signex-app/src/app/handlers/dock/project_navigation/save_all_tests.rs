@@ -420,10 +420,7 @@ fn quit_save_all_removes_recovery_copies_of_saved_work() {
         .autosave
         .set_dir(Some(recovery.path().to_path_buf()));
     sidecar::write(recovery.path(), &gone, b"stale").expect("write sidecar");
-    let stamp = DocStamp {
-        revision: 1,
-        net_color_revision: 0,
-    };
+    let stamp = DocStamp { revision: 1 };
     app.document_state.autosave.begin(&gone);
     app.document_state.autosave.finish(&gone, stamp, true);
     let copy = sidecar::sidecar_path(recovery.path(), &gone);

@@ -87,20 +87,13 @@ impl Signex {
         }
     }
 
-    /// `(can_undo, can_redo)` of the sheet at `path`: net-colour steps,
-    /// net-class picks and the engine.
+    /// `(can_undo, can_redo)` of the sheet at `path`: net-class picks and the
+    /// engine (net colours are engine steps).
     fn sheet_history_available(&self, path: &std::path::Path) -> (bool, bool) {
         let engine = self.document_state.engines.get(path);
-        let has_steps = |steps: &std::collections::HashMap<_, Vec<_>>| {
-            steps.get(path).is_some_and(|s| !s.is_empty())
-        };
         (
-            has_steps(&self.ui_state.net_color_undo)
-                || self.has_net_class_pick(path, true)
-                || engine.is_some_and(|e| e.can_undo()),
-            has_steps(&self.ui_state.net_color_redo)
-                || self.has_net_class_pick(path, false)
-                || engine.is_some_and(|e| e.can_redo()),
+            self.has_net_class_pick(path, true) || engine.is_some_and(|e| e.can_undo()),
+            self.has_net_class_pick(path, false) || engine.is_some_and(|e| e.can_redo()),
         )
     }
 

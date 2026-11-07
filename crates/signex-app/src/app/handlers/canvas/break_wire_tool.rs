@@ -20,52 +20,16 @@ impl Signex {
             );
             return;
         };
-        let before: std::collections::HashSet<uuid::Uuid> =
-            engine.document().wires.iter().map(|w| w.uuid).collect();
-        // A locked wire is refused with its own notice by the gateway.
+        // A locked wire is refused with its own notice by the gateway. The
+        // engine paints the new half like the wire it was cut from.
         self.apply_engine_command(signex_engine::Command::BreakWire { wire, at }, true, true);
-        self.paint_new_half_like(wire, &before);
-    }
-
-    /// The half a break adds keeps the net colour of the wire it came from
-    /// (colours are kept per wire uuid, so the new uuid has none yet). An
-    /// engine undo drops the half and leaves this entry unused; a redo
-    /// brings the same uuid back, painted.
-    fn paint_new_half_like(
-        &mut self,
-        wire: uuid::Uuid,
-        before: &std::collections::HashSet<uuid::Uuid>,
-    ) {
-        let Some(color) = self.ui_state.wire_color_overrides.get(&wire).copied() else {
-            return;
-        };
-        let Some(engine) = self.document_state.active_engine() else {
-            return;
-        };
-        let added: Vec<uuid::Uuid> = engine
-            .document()
-            .wires
-            .iter()
-            .map(|w| w.uuid)
-            .filter(|id| !before.contains(id))
-            .collect();
-        // A refused or no-op break adds nothing: leave the colours and the
-        // tab's dirty state alone.
-        if added.is_empty() {
-            return;
-        }
-        for id in added {
-            self.ui_state.wire_color_overrides.insert(id, color);
-        }
-        if let Some(path) = self.document_state.active_path.clone() {
-            self.mark_net_colors_dirty(&path);
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::handlers::editing_commands::net_color_driver::paint;
     use signex_types::schematic::{SchematicSheet, Wire};
 
     fn app_with_wire() -> (Signex, uuid::Uuid) {
@@ -145,14 +109,15 @@ mod tests {
     }
 
     fn painted_wires(app: &Signex) -> usize {
-        let colours = &app.ui_state.wire_color_overrides;
-        app.document_state
+        let document = app
+            .document_state
             .active_engine()
             .expect("engine")
-            .document()
+            .document();
+        document
             .wires
             .iter()
-            .filter(|w| colours.contains_key(&w.uuid))
+            .filter(|w| document.net_colors.contains_key(&w.uuid))
             .count()
     }
 
@@ -160,7 +125,7 @@ mod tests {
     fn both_halves_of_a_broken_coloured_wire_keep_the_colour_through_undo_and_redo() {
         let (mut app, id) = app_with_wire_at(4323.0);
         let red = signex_types::theme::Color::new(255, 0, 0, 255);
-        app.ui_state.wire_color_overrides.insert(id, red);
+        paint(&mut app, &[id], red);
 
         app.break_wire_click(8.0, 4323.0);
         assert_eq!((wire_count(&app), painted_wires(&app)), (2, 2));
@@ -177,7 +142,7 @@ mod tests {
         let (mut app, id) = app_with_wire_at(4324.0);
         let path = app.document_state.active_path.clone().expect("path");
         let red = signex_types::theme::Color::new(255, 0, 0, 255);
-        app.ui_state.wire_color_overrides.insert(id, red);
+        paint(&mut app, &[id], red);
         app.document_state.mark_document_clean(&path);
 
         app.break_wire_click(8.0, 4324.0);
@@ -191,7 +156,7 @@ mod tests {
     fn a_refused_break_of_a_coloured_wire_leaves_the_colours_and_revision_alone() {
         let (mut app, id) = app_with_wire_at(4322.0);
         let red = signex_types::theme::Color::new(255, 0, 0, 255);
-        app.ui_state.wire_color_overrides.insert(id, red);
+        paint(&mut app, &[id], red);
         let engine = app.document_state.active_engine_mut().expect("engine");
         engine
             .execute(signex_engine::Command::SetItemLocked {
@@ -202,13 +167,18 @@ mod tests {
                 locked: true,
             })
             .expect("lock");
-        let revisions = app.ui_state.net_color_revision.clone();
+        let revision = app
+            .document_state
+            .active_engine()
+            .expect("engine")
+            .revision();
 
         app.break_wire_click(8.0, 4322.0);
 
+        let engine = app.document_state.active_engine().expect("engine");
         assert_eq!(wire_count(&app), 1);
-        assert_eq!(app.ui_state.wire_color_overrides.len(), 1);
-        assert_eq!(app.ui_state.net_color_revision, revisions);
+        assert_eq!(engine.document().net_colors.len(), 1);
+        assert_eq!(engine.revision(), revision);
     }
 
     #[test]

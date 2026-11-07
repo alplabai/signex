@@ -141,7 +141,19 @@ fn a_net_colour_edit_during_the_write_keeps_the_other_spelling_dirty() {
     let (mut app, upper, lower) = only_lower_dirty(dir.path(), false);
 
     let task = save_all(&mut app, std::slice::from_ref(&lower));
-    app.mark_net_colors_dirty(&upper);
+    let colors = [(
+        uuid::Uuid::now_v7(),
+        signex_types::theme::Color::new(9, 0, 0, 255),
+    )]
+    .into_iter()
+    .collect();
+    app.document_state
+        .engines
+        .get_mut(&upper)
+        .expect("engine")
+        .execute(signex_engine::Command::SetNetColors { colors })
+        .expect("colour");
+    app.document_state.mark_history_edit_dirty(&upper);
     let after = feed_then_settle(&mut app, outputs(task));
 
     assert!(app.document_state.is_document_dirty(&upper));

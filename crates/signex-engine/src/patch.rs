@@ -48,6 +48,8 @@ impl DocumentPatch {
     /// The sheet-wide default font family changed: every text item that
     /// inherits it redraws.
     pub const FONT_FAMILY: Self = Self(1 << 13);
+    /// The sheet's net colour overrides changed: wires and junctions repaint.
+    pub const NET_COLORS: Self = Self(1 << 14);
     pub const FULL: Self = Self(u16::MAX);
     /// Every collection a net is derived from: pins (symbols and the library
     /// parts they instantiate), wires, labels, junctions, no-connects, buses

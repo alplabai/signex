@@ -261,6 +261,6 @@ fn closing_a_sheet_forgets_its_picks() {
     let path = app.document_state.active_path.clone().unwrap();
     pick(&mut app, "GND", Some("Power"));
     assert!(app.has_net_class_pick(&path, true));
-    app.forget_net_colors_of(&path);
+    app.forget_net_class_picks_on(&path);
     assert!(!app.has_net_class_pick(&path, true));
 }

@@ -297,15 +297,13 @@ impl Signex {
         let engine = self.document_state.engines.get(path)?;
         let stamp = DocStamp {
             revision: engine.revision(),
-            net_color_revision: self.net_color_revision_of(path),
         };
         if !self.document_state.autosave.needs_write(path, stamp) {
             return None;
         }
-        let bytes = match engine.serialize_with_extents(
-            &self.ui_state.wire_color_overrides,
-            crate::schematic_runtime::text_width::live_extent_measure(),
-        ) {
+        let bytes = match engine
+            .serialize_with_extents(crate::schematic_runtime::text_width::live_extent_measure())
+        {
             Ok(text) => text.into_bytes(),
             Err(error) => {
                 let reason = format!(

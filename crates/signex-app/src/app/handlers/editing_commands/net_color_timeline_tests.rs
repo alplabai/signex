@@ -77,3 +77,54 @@ fn a_colour_step_stays_ordered_against_edits_through_undo_and_redo() {
         .x;
     assert_ne!(moved, start);
 }
+
+/// What the canvas draws from (the render snapshot) carries the colours: a
+/// colour step, its undo and its redo each reach it with no copy step, and an
+/// ERC run is not made stale by a colour.
+#[test]
+fn the_render_snapshot_follows_every_colour_step_and_erc_stays_current() {
+    let (mut app, path) = app_with_sheet("timeline-snapshot.snxsch");
+    let wire = wire_of(&app, &path);
+    let drawn = |app: &crate::app::Signex| {
+        app.active_render_snapshot()
+            .expect("snapshot")
+            .net_colors
+            .get(&wire)
+            .copied()
+    };
+    let epoch = app.document_state.sheet_edit_epoch;
+
+    paint(&mut app, &[wire], color(1));
+    assert_eq!(drawn(&app), Some(color(1)));
+    assert_eq!(
+        app.document_state.sheet_edit_epoch, epoch,
+        "a colour changes no finding"
+    );
+
+    app.handle_undo_requested();
+    assert_eq!(drawn(&app), None);
+    app.handle_redo_requested();
+    assert_eq!(drawn(&app), Some(color(1)));
+}
+
+/// Clear All on a sheet that is not the active one is the same engine step,
+/// dirty by the history and clean again when undone.
+#[test]
+fn clear_all_on_a_parked_sheet_is_an_undoable_step_with_a_history_dirty_mark() {
+    let (mut app, a) = app_with_sheet("timeline-parked.snxsch");
+    let b = std::path::PathBuf::from("timeline-parked-b.snxsch");
+    add_sheet(&mut app, &b);
+    let wire_a = wire_of(&app, &a);
+    paint_on(&mut app, &a, &[wire_a], color(1));
+    app.document_state.mark_document_clean(&a);
+
+    let cleared = app.clear_net_colors(None);
+
+    assert_eq!(cleared.sheets, 1);
+    assert_eq!(colour_of(&app, wire_a), None);
+    assert!(is_dirty(&app, &a), "parked sheet: an unsaved edit");
+    activate(&mut app, &a);
+    app.handle_undo_requested();
+    assert_eq!(colour_of(&app, wire_a), Some(color(1)));
+    assert!(!is_dirty(&app, &a), "undo back to its save point is clean");
+}

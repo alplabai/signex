@@ -20,6 +20,11 @@ pub(crate) fn app_with_sheet(name: &str) -> (Signex, PathBuf) {
 
 /// Open another clean sheet at `path` and make it the active one.
 pub(crate) fn add_sheet(app: &mut Signex, path: &Path) {
+    add_sheet_with(app, path, fixture_sheet());
+}
+
+/// [`add_sheet`] holding `sheet`.
+pub(crate) fn add_sheet_with(app: &mut Signex, path: &Path, sheet: SchematicSheet) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: path.display().to_string(),
         path: path.to_path_buf(),
@@ -28,7 +33,7 @@ pub(crate) fn add_sheet(app: &mut Signex, path: &Path) {
         kind: crate::app::TabKind::Schematic,
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
-    app.apply_loaded_schematic(Some(fixture_sheet()), false, false, false);
+    app.apply_loaded_schematic(Some(sheet), false, false, false);
 }
 
 pub(crate) fn fixture_sheet() -> SchematicSheet {
@@ -63,10 +68,12 @@ pub(crate) fn symbol_of(app: &Signex, path: &Path) -> uuid::Uuid {
 
 /// One colour action on the active sheet, as a canvas click makes it.
 pub(crate) fn paint(app: &mut Signex, ids: &[uuid::Uuid], color: Color) {
-    assert!(app.record_net_color_undo(), "the sheet must take a colour");
-    app.ui_state
-        .wire_color_overrides
-        .extend(ids.iter().map(|id| (*id, color)));
+    let (outcome, why) = app.commit_net_colors(ids, color);
+    assert_eq!(
+        outcome,
+        crate::app::mutation_gateway::CommandOutcome::Changed,
+        "the sheet must take a colour: {why:?}"
+    );
 }
 
 /// [`paint`] on the sheet at `path`, whichever is active.
@@ -76,8 +83,12 @@ pub(crate) fn paint_on(app: &mut Signex, path: &Path, ids: &[uuid::Uuid], color:
     app.document_state.active_path = previous;
 }
 
+/// The colour any open sheet holds for `id`.
 pub(crate) fn colour_of(app: &Signex, id: uuid::Uuid) -> Option<Color> {
-    app.ui_state.wire_color_overrides.get(&id).copied()
+    app.document_state
+        .engines
+        .values()
+        .find_map(|engine| engine.document().net_colors.get(&id).copied())
 }
 
 /// The colours a save of the sheet at `path` would write.
@@ -86,7 +97,7 @@ pub(crate) fn saved_colours(
     path: &Path,
 ) -> std::collections::HashMap<uuid::Uuid, Color> {
     let text = app.document_state.engines[path]
-        .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+        .serialize()
         .expect("serialize");
     signex_types::format::SnxSchematic::parse(&text)
         .expect("parse")
