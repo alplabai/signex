@@ -16,6 +16,10 @@ const CELL_MM: f64 = 1.0;
 /// diagonal) is not gridded; it is a candidate for every segment query.
 // ponytail: linear scan of these few wires, a quadtree if diagonals dominate.
 const MAX_WIRE_CELLS: i64 = 4096;
+/// Below this many lookups, handing every wire to each lookup costs less than
+/// gridding the sheet first: a lookup's scan is a few float tests per wire,
+/// the grid a few hash inserts per cell a wire covers.
+const SCAN_BELOW_LOOKUPS: usize = 32;
 
 type Cell = (i64, i64);
 
@@ -40,6 +44,8 @@ pub(crate) struct WireIndex<'a> {
     /// Wires whose bounding box (expanded by `tolerance`) overlaps the cell.
     segments: HashMap<Cell, Vec<usize>>,
     oversized: Vec<usize>,
+    /// Not gridded: every wire is a candidate for every lookup.
+    scan: bool,
 }
 
 impl<'a> WireIndex<'a> {
@@ -50,6 +56,7 @@ impl<'a> WireIndex<'a> {
             endpoints: HashMap::new(),
             segments: HashMap::new(),
             oversized: Vec::new(),
+            scan: false,
         };
         for (i, wire) in wires.iter().enumerate() {
             for p in [wire.start, wire.end] {
@@ -73,6 +80,23 @@ impl<'a> WireIndex<'a> {
             }
         }
         index
+    }
+
+    /// An index for about `lookups` candidate queries: gridded, or for a few
+    /// queries every wire as the candidate set. The answers are the same
+    /// either way; only the cost differs.
+    pub(crate) fn for_lookups(wires: &'a [Wire], tolerance: f64, lookups: usize) -> Self {
+        if lookups >= SCAN_BELOW_LOOKUPS {
+            return Self::new(wires, tolerance);
+        }
+        WireIndex {
+            wires,
+            tolerance,
+            endpoints: HashMap::new(),
+            segments: HashMap::new(),
+            oversized: Vec::new(),
+            scan: true,
+        }
     }
 
     pub(crate) fn tolerance(&self) -> f64 {
@@ -121,7 +145,7 @@ impl<'a> WireIndex<'a> {
     /// `wire`'s tolerance-expanded bounding box.
     pub(crate) fn endpoint_candidates_near_wire(&self, wire: &Wire) -> Vec<usize> {
         let b = self.wire_cell_box(wire);
-        if too_many_cells(b) {
+        if self.scan || too_many_cells(b) {
             return (0..self.wires.len()).collect();
         }
         self.collect(&self.endpoints, b, &[])
@@ -133,6 +157,9 @@ impl<'a> WireIndex<'a> {
         (x0, y0, x1, y1): (i64, i64, i64, i64),
         always: &[usize],
     ) -> Vec<usize> {
+        if self.scan {
+            return (0..self.wires.len()).collect();
+        }
         let mut out: Vec<usize> = always.to_vec();
         for cx in x0..=x1 {
             for cy in y0..=y1 {

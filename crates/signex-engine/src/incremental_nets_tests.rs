@@ -4,8 +4,8 @@
 //! it and hold the ghost to the commit.
 
 use crate::rubber_band_tests::{
-    Case, Lcg, add_label, add_resistor, add_wire, child_fixture, describe, lib_pin, lib_symbol,
-    place, random_case, series_fixture, symbol_item,
+    Case, Lcg, add_dot, add_label, add_resistor, add_wire, child_fixture, describe, lib_pin,
+    lib_symbol, place, random_case, series_fixture, symbol_item,
 };
 use crate::test_support::test_sheet;
 use crate::{Command, Engine, MovePreview};
@@ -80,6 +80,35 @@ fn a_t_junction_is_made_and_unmade_by_a_move() {
     add_wire(&mut sheet, (55.0, 60.0), (55.0, 70.0));
     for (dx, dy) in [(10.0, 0.0), (-10.0, 0.0), (0.0, -10.0), (15.0, 5.0)] {
         ghost_equals_commit(&sheet, &[(symbol_item(r1), dx, dy)]);
+    }
+}
+
+/// The ghost keeps the pre-move dots' verdicts and judges again only the dots
+/// near a changed wire: a T dot the move breaks, one it makes, a T dot and a
+/// stale dot (left over from a removed stub) far from the move, and a user dot.
+#[test]
+fn junction_dots_near_and_far_from_the_move_come_out_as_in_the_commit() {
+    let mut sheet = test_sheet();
+    add_wire(&mut sheet, (30.0, 50.0), (100.0, 50.0));
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 60.0));
+    add_wire(&mut sheet, (45.0, 60.0), (45.0, 50.0));
+    add_dot(&mut sheet, (45.0, 50.0), true);
+    add_wire(&mut sheet, (55.0, 60.0), (55.0, 70.0));
+    // Far away: a real T with its dot, a stale minted dot, a user dot.
+    add_wire(&mut sheet, (200.0, 50.0), (260.0, 50.0));
+    add_wire(&mut sheet, (230.0, 50.0), (230.0, 80.0));
+    add_dot(&mut sheet, (230.0, 50.0), true);
+    add_dot(&mut sheet, (240.0, 50.0), true);
+    add_dot(&mut sheet, (250.0, 50.0), false);
+    let wire = sheet.wires[0].uuid;
+    let wire_item = SelectedItem::new(wire, SelectedKind::Wire);
+    for moves in [
+        vec![(symbol_item(r1), 10.0, 0.0)],
+        vec![(symbol_item(r1), 0.0, -10.0)],
+        vec![(symbol_item(r1), 180.0, 0.0)],
+        vec![(symbol_item(r1), 10.0, 0.0), (wire_item, 0.0, 5.0)],
+    ] {
+        ghost_equals_commit(&sheet, &moves);
     }
 }
 
