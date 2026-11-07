@@ -23,7 +23,8 @@ impl FootprintCanvas<'_> {
             selected_pads_extra: &self.state.selected_pads_extra,
             selected_silk_f: self.state.selected_silk_f,
             pad_labels: PadLabels::Editor,
-            palette: self.state.layer_palette,
+            palette: super::graphite::look_from_bg(self.bg_color)
+                .map_or(self.state.layer_palette, |l| l.palette()),
         }
     }
 

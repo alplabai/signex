@@ -7,6 +7,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle};
 
 use super::super::{FootprintCanvas, FootprintCanvasState};
+use super::graphite::{dot_step_px, look_from_bg};
 use super::grid::{draw_grid, draw_grid_dots};
 use crate::library::editor::footprint::state::{
     EditorMode, GridDisplay as Gd, GuideAxis, SnapOptions,
@@ -39,6 +40,10 @@ pub(crate) fn draw_backdrop(
     bounds: Rectangle,
     look: BackdropLook<'_>,
 ) {
+    if let Some(g) = look_from_bg(look.bg) {
+        draw_graphite_backdrop(frame, cam, bounds, g, look.snap);
+        return;
+    }
     let bg = if look.sketch { Color::WHITE } else { look.bg };
     let grid = if look.sketch {
         Color::from_rgba(0.55, 0.55, 0.55, 1.0)
@@ -74,6 +79,26 @@ pub(crate) fn draw_backdrop(
     }
 }
 
+/// Graphite ground: one dot grid on the paper / charcoal fill, hidden when
+/// the user hides both grids.
+fn draw_graphite_backdrop(
+    frame: &mut canvas::Frame,
+    cam: &FootprintCanvasState,
+    bounds: Rectangle,
+    look: super::graphite::GraphiteLook,
+    snap: &SnapOptions,
+) {
+    frame.fill_rectangle(Point::ORIGIN, bounds.size(), look.bg);
+    if matches!(snap.fine_grid_display, Gd::Hidden)
+        && matches!(snap.coarse_grid_display, Gd::Hidden)
+    {
+        return;
+    }
+    if let Some(step) = dot_step_px((snap.grid_step_mm as f32) * cam.scale) {
+        draw_grid_dots(frame, bounds, cam.offset, step, look.dot);
+    }
+}
+
 fn paint_grid(
     frame: &mut canvas::Frame,
     bounds: Rectangle,
@@ -91,12 +116,17 @@ fn paint_grid(
 
 /// Origin crosshair: yellow on the dark canvas, slate on the sketch canvas.
 pub(crate) fn draw_origin(frame: &mut canvas::Frame, cam: &FootprintCanvasState, sketch: bool) {
-    let origin = cam.world_to_screen((0.0, 0.0));
     let color = if sketch {
         Color::from_rgba(0.20, 0.25, 0.32, 0.85)
     } else {
         Color::from_rgba(1.0, 0.95, 0.30, 0.85)
     };
+    draw_origin_in(frame, cam, color);
+}
+
+/// Origin crosshair in an explicit colour.
+fn draw_origin_in(frame: &mut canvas::Frame, cam: &FootprintCanvasState, color: Color) {
+    let origin = cam.world_to_screen((0.0, 0.0));
     let arms = [
         (
             Point::new(origin.x - 8.0, origin.y),
@@ -179,6 +209,17 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
+        if let Some(g) = look_from_bg(self.bg_color) {
+            draw_origin_in(
+                frame,
+                cstate,
+                Color {
+                    a: 0.85,
+                    ..g.origin
+                },
+            );
+            return;
+        }
         draw_origin(frame, cstate, matches!(self.state.mode, EditorMode::Sketch));
     }
 }

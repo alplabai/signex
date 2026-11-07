@@ -107,9 +107,21 @@ pub enum LayerPalette {
     #[default]
     Legacy,
     Graphite,
+    /// Graphite colours tuned for the paper canvas (dark ink on light).
+    CanvasLight,
+    /// Graphite colours tuned for the charcoal canvas.
+    CanvasDark,
 }
 
 impl LayerPalette {
+    /// Outline colour of a selected pad or silk graphic.
+    pub fn selection_ink(self) -> Color {
+        match self {
+            LayerPalette::CanvasLight => Color::from_rgb8(0x15, 0x17, 0x1A),
+            _ => Color::WHITE,
+        }
+    }
+
     /// The palette a theme paints with.
     pub fn for_tokens(tokens: &signex_types::theme::ThemeTokens) -> Self {
         if crate::styles::is_graphite(tokens) {
@@ -152,10 +164,26 @@ impl FpLayer {
     }
 
     /// Colour in `palette`. Graphite: pad gold on top copper, blue on
-    /// bottom copper, warm white silk, board-outline yellow.
+    /// bottom copper, warm white silk, board-outline yellow. The canvas
+    /// variants put the courtyard (drawn with the Edge.Cuts colour) in
+    /// magenta and keep silk readable on their background.
     pub fn color_in(self, palette: LayerPalette) -> Color {
         match palette {
             LayerPalette::Legacy => self.color(),
+            LayerPalette::CanvasLight => match self {
+                FpLayer::FSilks => Color::from_rgb8(0x2B, 0x2D, 0x33),
+                FpLayer::BSilks => Color::from_rgb8(0x7A, 0x75, 0x68),
+                FpLayer::FFab => Color::from_rgb8(0x2F, 0x7F, 0x90),
+                FpLayer::BFab => Color::from_rgb8(0x3D, 0x7F, 0x8D),
+                FpLayer::EdgeCuts => Color::from_rgb8(0xB5, 0x47, 0x8A),
+                _ => self.color_in(LayerPalette::Graphite),
+            },
+            LayerPalette::CanvasDark => match self {
+                FpLayer::FFab => Color::from_rgb8(0x4F, 0xA6, 0xB8),
+                FpLayer::BFab => Color::from_rgb8(0x3D, 0x7F, 0x8D),
+                FpLayer::EdgeCuts => Color::from_rgb8(0xD1, 0x6B, 0xA5),
+                _ => self.color_in(LayerPalette::Graphite),
+            },
             LayerPalette::Graphite => match self {
                 FpLayer::FCu => Color::from_rgb8(0xD8, 0xB4, 0x6A),
                 FpLayer::BCu => Color::from_rgb8(0x3B, 0x6F, 0xD8),

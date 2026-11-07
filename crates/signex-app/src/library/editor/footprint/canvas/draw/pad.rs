@@ -156,7 +156,7 @@ pub(super) fn draw_pad(
     };
 
     let outline_color = if is_selected {
-        Color::from_rgb(1.0, 1.0, 1.0)
+        palette.selection_ink()
     } else {
         Color { a: 1.0, ..color }
     };

@@ -65,15 +65,11 @@ fn apply_pending_view(editor: &mut SymEditor, width: f32, height: f32) {
         height,
     };
     match request {
-        SymbolViewRequest::Fit => {
-            let (min_x, min_y, max_x, max_y) = symbol_bbox(editor.primitive());
-            let world_rect = iced::Rectangle {
-                x: min_x as f32,
-                y: -(max_y as f32),
-                width: (max_x - min_x).max(1.0) as f32,
-                height: (max_y - min_y).max(1.0) as f32,
-            };
-            editor.camera.fit_rect(world_rect, viewport);
+        SymbolViewRequest::Fit => fit_symbol(editor, viewport),
+        // A fresh tab of a symbol that has content opens fitted, not as a
+        // speck at 100% around the origin; an empty symbol keeps the origin.
+        SymbolViewRequest::CenterOrigin if has_content(editor.primitive()) => {
+            fit_symbol(editor, viewport);
         }
         SymbolViewRequest::CenterOrigin => {
             editor.camera = crate::canvas::Camera::default();
@@ -81,4 +77,21 @@ fn apply_pending_view(editor: &mut SymEditor, width: f32, height: f32) {
         }
     }
     editor.canvas_cache.clear();
+}
+
+/// Whether the symbol has anything to fit.
+fn has_content(sym: &signex_library::Symbol) -> bool {
+    !sym.pins.is_empty() || !sym.graphics.is_empty()
+}
+
+/// Fit the symbol's bounding box into `viewport`.
+fn fit_symbol(editor: &mut SymEditor, viewport: iced::Rectangle) {
+    let (min_x, min_y, max_x, max_y) = symbol_bbox(editor.primitive());
+    let world_rect = iced::Rectangle {
+        x: min_x as f32,
+        y: -(max_y as f32),
+        width: (max_x - min_x).max(1.0) as f32,
+        height: (max_y - min_y).max(1.0) as f32,
+    };
+    editor.camera.fit_rect(world_rect, viewport);
 }

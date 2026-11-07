@@ -66,7 +66,22 @@ pub(crate) fn draw_courtyard(
         return;
     }
     let edge_color = FpLayer::EdgeCuts.color_in(i.palette);
-    let stroke = || Stroke::default().with_width(1.5).with_color(edge_color);
+    // Graphite draws the courtyard dashed; other themes keep it solid.
+    let dashed = matches!(
+        i.palette,
+        LayerPalette::CanvasLight | LayerPalette::CanvasDark
+    );
+    let stroke = || Stroke {
+        line_dash: if dashed {
+            canvas::LineDash {
+                segments: &[6.0, 4.0],
+                offset: 0,
+            }
+        } else {
+            canvas::LineDash::default()
+        },
+        ..Stroke::default().with_width(1.5).with_color(edge_color)
+    };
     if let Some(outline) = i.courtyard_outline {
         if outline.len() >= 3 {
             let path = Path::new(|b| {
