@@ -21,7 +21,7 @@ mod controls;
 mod reprefix_confirm;
 
 use super::graphite as gr;
-use controls::{bordered_style, check_pip, lock_style, order_preview, order_radio};
+use controls::{bordered_style, check_pip, lock_style, order_preview, order_radio, scroll_style};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -268,7 +268,9 @@ impl Signex {
             .align_y(iced::Alignment::Center)
             .spacing(6),
             Space::new().height(6),
-            container(scrollable(param_rows).height(280))
+            container(scrollable(param_rows)
+                .height(280)
+                .style(scroll_style(tokens)))
                 .padding(SP.xs)
                 .style(bordered_style(border_c, tokens)),
             Space::new().height(4),
@@ -365,7 +367,9 @@ impl Signex {
                     .width(Length::FillPortion(2)),
             ]
             .padding([SP.xs, SP.m]),
-            container(scrollable(sheet_rows).height(180))
+            container(scrollable(sheet_rows)
+                .height(180)
+                .style(scroll_style(tokens)))
                 .style(bordered_style(border_c, tokens)),
             Space::new().height(4),
             text("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic.")
@@ -513,10 +517,14 @@ impl Signex {
             }
         }
 
-        let right_list = container(scrollable(rows_col).height(Length::Fill))
-            .height(Length::Fill)
-            .padding(SP.s)
-            .style(bordered_style(border_c, tokens));
+        let right_list = container(
+            scrollable(rows_col)
+                .height(Length::Fill)
+                .style(scroll_style(tokens)),
+        )
+        .height(Length::Fill)
+        .padding(SP.s)
+        .style(bordered_style(border_c, tokens));
 
         // Count only rows where proposed != current (actual changes).
         let changes: usize = proposed.iter().filter(|e| e.current != e.proposed).count();
@@ -612,7 +620,7 @@ impl Signex {
         let body_row = row![
             // Fill portions bound each column, so long lines wrap instead
             // of running past the dialog edge (#1770).
-            container(scrollable(left_col))
+            container(scrollable(left_col).style(scroll_style(tokens)))
                 .padding([14.0, 14.0])
                 .width(Length::FillPortion(10)),
             container(iced::widget::Space::new().width(1).height(Length::Fill),).style(

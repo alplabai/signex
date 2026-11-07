@@ -4,7 +4,7 @@
 //! delegates to `graphite_annotate`; other themes keep the original look.
 
 use super::super::*;
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::ThemeTokens;
 
@@ -15,6 +15,33 @@ use crate::styles::is_graphite;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Scroll-rail style of the modal's lists: a quiet pill thumb on Graphite
+/// (the form-look rail), the stock rail on other themes.
+pub(super) fn scroll_style(
+    theme_tokens: &ThemeTokens,
+) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style + 'static {
+    let graphite = is_graphite(theme_tokens);
+    let r = crate::styles::tokens::resolve(theme_tokens);
+    let (thumb, thumb_hot) = (r.line_strong, r.ink4);
+    move |theme: &Theme, status: scrollable::Status| {
+        let mut style = scrollable::default(theme, status);
+        if !graphite {
+            return style;
+        }
+        let idle = matches!(status, scrollable::Status::Active { .. });
+        for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
+            rail.background = None;
+            rail.border = Border::default();
+            rail.scroller.background = Background::Color(if idle { thumb } else { thumb_hot });
+            rail.scroller.border = Border {
+                radius: 999.0.into(),
+                ..Border::default()
+            };
+        }
+        style
+    }
+}
 
 /// Tiny inline checkbox pip — read-only indicator used inside the Annotate
 /// dialog's parameter list and sheet table.
