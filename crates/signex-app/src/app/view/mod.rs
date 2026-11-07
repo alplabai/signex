@@ -240,9 +240,15 @@ impl Signex {
                 .boxed()
         };
 
-        let left_has_panels = document.dock.has_panels(PanelPosition::Left);
-        let right_has_panels = document.dock.has_panels(PanelPosition::Right);
-        let bottom_has_panels = document.dock.has_panels(PanelPosition::Bottom);
+        // Graphite Start screen: full width, no docks, no empty tab band.
+        // The docks come back as soon as a document or project opens.
+        let bare_start = ui.main_window_id == Some(window_id)
+            && crate::styles::is_graphite(&document.panel_ctx.tokens)
+            && document.tabs.is_empty()
+            && document.active_project.is_none();
+        let left_has_panels = !bare_start && document.dock.has_panels(PanelPosition::Left);
+        let right_has_panels = !bare_start && document.dock.has_panels(PanelPosition::Right);
+        let bottom_has_panels = !bare_start && document.dock.has_panels(PanelPosition::Bottom);
         let left_collapsed = document.dock.is_collapsed(PanelPosition::Left);
         let right_collapsed = document.dock.is_collapsed(PanelPosition::Right);
         let bottom_collapsed = document.dock.is_collapsed(PanelPosition::Bottom);
@@ -406,7 +412,7 @@ impl Signex {
                 .map(move |msg| Message::Tab { window_id, msg })
                 .boxed(),
             );
-        } else {
+        } else if !bare_start {
             // Same height as the tab strip (`tab_bar::TAB_STRIP_HEIGHT`), so
             // the chrome does not jump when the first tab opens.
             main = main.push(tab_bar::placeholder(&document.panel_ctx.tokens));

@@ -88,7 +88,12 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
-            section_title("ERC", &ctx.tokens),
+            // The dock title already says "ERC" on Graphite.
+            if crate::styles::is_graphite(&ctx.tokens) {
+                Space::new().boxed()
+            } else {
+                section_title("ERC", &ctx.tokens).boxed()
+            },
             Space::new().width(Length::Fill).height(Length::Shrink),
             iced::widget::button(
                 text("Run ERC (F8)")
@@ -403,18 +408,20 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    col = col.push(
-        row![
-            section_title("Messages", &ctx.tokens),
-            Space::new().width(Length::Fill).height(Length::Shrink),
-            text(format!("level {}", ctx.diagnostics_level))
-                .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
-        ]
-        .align_y(iced::Alignment::Center)
-        .boxed(),
-    );
-    col = col.push(separator(&ctx.tokens).boxed());
+    if !crate::styles::is_graphite(&ctx.tokens) {
+        col = col.push(
+            row![
+                section_title("Messages", &ctx.tokens),
+                Space::new().width(Length::Fill).height(Length::Shrink),
+                text(format!("level {}", ctx.diagnostics_level))
+                    .size(TS.caption)
+                    .color(theme_ext::text_secondary(&ctx.tokens)),
+            ]
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+        );
+        col = col.push(separator(&ctx.tokens).boxed());
+    }
 
     if ctx.diagnostics.is_empty() {
         col = col.push(
@@ -457,7 +464,17 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         };
 
         let th = |label: &str| -> Element<'a, PanelMsg> {
-            container(text(label.to_string()).size(TS.body).color(muted))
+            // Graphite: the mock's CLASS / SOURCE / MESSAGE header caps.
+            let label = if graphite {
+                match label {
+                    "Level" => "CLASS".to_string(),
+                    other => other.to_uppercase(),
+                }
+            } else {
+                label.to_string()
+            };
+            let size = if graphite { TS.caption } else { TS.body };
+            container(text(label).size(size).color(muted))
                 .padding([SP.s, SP.m])
                 .boxed()
         };

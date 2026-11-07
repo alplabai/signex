@@ -78,12 +78,18 @@ impl DockArea {
 
         // ── Altium-style flat tabs with accent underline + overflow scroll ──
         let total_tabs = region.panels.len();
-        let offset = region.tab_offset.min(total_tabs.saturating_sub(1));
-        let has_overflow = total_tabs > 3;
+        let graphite = styles::is_graphite(&ctx.tokens);
+        // Graphite scrolls the strip itself (wheel or thin bar), so it has
+        // no arrows and never starts mid-strip.
+        let offset = if graphite {
+            0
+        } else {
+            region.tab_offset.min(total_tabs.saturating_sub(1))
+        };
+        let has_overflow = !graphite && total_tabs > 3;
         let can_scroll_left = offset > 0;
         let can_scroll_right = offset + 3 < total_tabs;
 
-        let graphite = styles::is_graphite(&ctx.tokens);
         let mut tab_row = row![].spacing(0.0).align_y(iced::Alignment::End);
         if graphite {
             tab_row = tab_row.height(Length::Fill);
@@ -276,6 +282,19 @@ impl DockArea {
         // Bottom tab strip — just the tab buttons + overflow arrows.
         // Collapse / close moved up to the title bar so they're always
         // visible alongside the active panel name.
+        let tab_row: Element<'_, DockMessage> = if graphite {
+            iced::widget::scrollable(tab_row)
+                .direction(iced::widget::scrollable::Direction::Horizontal(
+                    iced::widget::scrollable::Scrollbar::new()
+                        .width(3)
+                        .scroller_width(3),
+                ))
+                .width(Length::Shrink)
+                .height(Length::Fill)
+                .boxed()
+        } else {
+            tab_row.boxed()
+        };
         let tab_strip = row![tab_row, Space::new().width(Length::Fill),]
             .spacing(0)
             .align_y(iced::Alignment::End)
@@ -322,7 +341,17 @@ impl DockArea {
         // Altium parity: title + collapse/close on top, tabs on the
         // bottom. Content grows between them.
         if graphite {
-            return column![
+            // Left dock footer: ERC/DRC summary, only with real ERC counts.
+            let footer = (position == PanelPosition::Left)
+                .then(|| super::summary::erc_drc_card(ctx))
+                .flatten()
+                .map(|card| {
+                    container(card)
+                        .padding(SP.s)
+                        .width(Length::Fill)
+                        .boxed()
+                });
+            let mut body = column![
                 container(title_bar)
                     .width(Length::Fill)
                     .center_y(graphite::TITLE_H)
@@ -332,13 +361,20 @@ impl DockArea {
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .padding(0),
-                container(tab_strip)
-                    .width(Length::Fill)
-                    .height(graphite::TAB_STRIP_H)
-                    .clip(true)
-                    .style(graphite::tab_strip(&ctx.tokens)),
-            ]
-            .boxed();
+            ];
+            if let Some(footer) = footer {
+                body = body.push(footer);
+            }
+            return body
+                .push(
+                    container(tab_strip)
+                        .width(Length::Fill)
+                        .height(graphite::TAB_STRIP_H)
+                        .clip(true)
+                        .style(graphite::tab_strip(&ctx.tokens))
+                        .boxed(),
+                )
+                .boxed();
         }
         column![
             container(title_bar)

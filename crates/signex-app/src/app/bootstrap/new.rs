@@ -85,8 +85,16 @@ impl Signex {
         // defaults: Projects + Components + Signal on the left,
         // Properties + Messages on the right, ERC on the bottom
         // (user's request — bottom is reserved for future log tails).
-        let mut dock = match crate::fonts::read_dock_layout_from(prefs) {
+        // A fresh Graphite layout opens with the short Messages dock; a saved
+        // layout is never replaced.
+        let saved_dock = crate::fonts::read_dock_layout_from(prefs);
+        let graphite_first_run = saved_dock.is_none()
+            && crate::styles::is_graphite(&signex_types::theme::theme_tokens(
+                crate::fonts::read_theme_pref_from(prefs),
+            ));
+        let mut dock = match saved_dock {
             Some(saved) => saved,
+            None if graphite_first_run => crate::dock::graphite_first_run(),
             None => {
                 // Which panels open, in tab order. *Where* each one
                 // goes is `PanelPosition::default_for`, so the boot
@@ -282,7 +290,11 @@ impl Signex {
                 canvas_font_italic: false,
                 left_width: 240.0,
                 right_width: 220.0,
-                bottom_height: crate::app::state::DEFAULT_BOTTOM_PANEL_HEIGHT,
+                bottom_height: if graphite_first_run {
+                    crate::dock::GRAPHITE_BOTTOM_HEIGHT
+                } else {
+                    crate::app::state::DEFAULT_BOTTOM_PANEL_HEIGHT
+                },
                 window_size: (1400.0, 900.0),
                 window_os_scales: std::collections::HashMap::new(),
                 undocked_window_sizes: std::collections::HashMap::new(),
