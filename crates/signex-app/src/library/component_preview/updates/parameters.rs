@@ -748,4 +748,43 @@ mod tests {
             assert!(state.has_unsaved_edits());
         }
     }
+
+    /// #1756: half-typed text in the new-parameter name and the pin-override
+    /// buffer bumps the edit epoch, so a reload read started before it is
+    /// dropped as stale; it does not dirty the preview.
+    #[test]
+    fn half_typed_name_and_override_text_count_as_edits() {
+        let mut state = fixture();
+        let start = state.edit_epoch;
+        super::super::apply_inline_edit(
+            &mut state,
+            crate::library::messages::EditorMsg::ParamNewNameChanged("Tol".into()),
+        );
+        assert_eq!(state.edit_epoch, start + 1);
+        assert!(!state.dirty);
+
+        super::super::apply_inline_edit(
+            &mut state,
+            crate::library::messages::EditorMsg::PinMapOpenOverrideEdit("1".into()),
+        );
+        let opened = state.edit_epoch;
+        super::super::apply_inline_edit(
+            &mut state,
+            crate::library::messages::EditorMsg::PinMapOverrideBufChanged {
+                pin: "1".into(),
+                value: "A".into(),
+            },
+        );
+        assert_eq!(state.edit_epoch, opened + 1);
+        // A row that is not open takes nothing and is no edit.
+        super::super::apply_inline_edit(
+            &mut state,
+            crate::library::messages::EditorMsg::PinMapOverrideBufChanged {
+                pin: "2".into(),
+                value: "B".into(),
+            },
+        );
+        assert_eq!(state.edit_epoch, opened + 1);
+        assert!(!state.dirty);
+    }
 }

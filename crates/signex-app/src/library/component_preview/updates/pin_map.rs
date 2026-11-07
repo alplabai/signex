@@ -40,10 +40,12 @@ pub(super) fn open_override_edit(state: &mut ComponentPreviewState, pin: String)
 }
 
 /// Live-update the override edit buffer, but only while `pin`'s row is
-/// the one currently expanded.
+/// the one currently expanded. Half-typed text is an edit: a reload read
+/// started before it lands stale (#1756).
 pub(super) fn set_override_buf(state: &mut ComponentPreviewState, pin: String, value: String) {
     if state.pin_map_state.expanded_row.as_deref() == Some(pin.as_str()) {
         state.pin_map_state.override_buf = value;
+        state.note_edit();
     }
 }
 
