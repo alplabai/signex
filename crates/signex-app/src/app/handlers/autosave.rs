@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use iced::Task;
 
+use crate::app::document::DocumentKey;
 use crate::app::{Message, Signex};
 use crate::autosave::{
     AutosaveDone, AutosaveMoved, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, QUIT_WAIT_LIMIT,
@@ -51,12 +52,98 @@ impl Signex {
     /// Does `path` hold edits a recovery copy should protect: a dirty
     /// schematic, PCB, symbol editor, footprint editor, project or
     /// Component Preview row?
-    pub(super) fn holds_recoverable_edits(&self, path: &Path) -> bool {
-        self.is_dirty_schematic(path)
-            || self.is_dirty_pcb(path)
-            || self.is_dirty_primitive_editor(path)
-            || self.is_dirty_project(path)
-            || self.is_dirty_row(path)
+    pub(crate) fn holds_recoverable_edits(&self, path: &Path) -> bool {
+        let kinds: [fn(PathBuf) -> DocumentKey; 4] = [
+            DocumentKey::Schematic,
+            DocumentKey::Pcb,
+            DocumentKey::Symbol,
+            DocumentKey::Footprint,
+        ];
+        let project = (self.document_state.projects.iter())
+            .find(|project| project.path == path)
+            .map(|project| DocumentKey::Project(project.id));
+        let row = (self.library.editors.keys())
+            .find(|address| address.synthetic_tab_path() == path)
+            .map(|address| DocumentKey::Row(address.clone()));
+        kinds
+            .into_iter()
+            .map(|key| key(path.to_path_buf()))
+            .chain(project)
+            .chain(row)
+            .any(|key| self.key_holds_recoverable_edits(&key))
+    }
+
+    /// Does the document `key` names hold edits a recovery copy protects?
+    fn key_holds_recoverable_edits(&self, key: &DocumentKey) -> bool {
+        match key {
+            DocumentKey::Schematic(path) => self.is_dirty_schematic(path),
+            DocumentKey::Pcb(path) => self.is_dirty_pcb(path),
+            DocumentKey::Symbol(path) | DocumentKey::Footprint(path) => {
+                self.is_dirty_primitive_editor(path)
+            }
+            DocumentKey::Project(id) => self
+                .document_state
+                .project_by_id(*id)
+                .is_some_and(|project| self.is_dirty_project(&project.path)),
+            DocumentKey::Row(address) => self.is_dirty_row(&address.synthetic_tab_path()),
+        }
+    }
+
+    /// The documents a tick writes a copy for: dirty sheets, PCBs, symbol
+    /// and footprint drafts, projects and Component rows, in that order.
+    fn autosave_candidates(&self) -> Vec<DocumentKey> {
+        let docs = &self.document_state;
+        let sheets = docs
+            .engines
+            .keys()
+            .filter(|path| self.is_dirty_schematic(path))
+            .cloned()
+            .map(DocumentKey::Schematic);
+        let pcbs = self.dirty_pcb_paths().into_iter().map(DocumentKey::Pcb);
+        let drafts = self.dirty_primitive_editor_paths().into_iter().map(|path| {
+            match docs.symbol_editors.contains_key(&path) {
+                true => DocumentKey::Symbol(path),
+                false => DocumentKey::Footprint(path),
+            }
+        });
+        let projects = docs
+            .projects
+            .iter()
+            .filter(|project| self.is_dirty_project(&project.path))
+            .map(|project| DocumentKey::Project(project.id));
+        let rows = self
+            .library
+            .editors
+            .iter()
+            .filter(|(_, editor)| editor.dirty || editor.saving_row.is_some())
+            .map(|(address, _)| DocumentKey::Row(address.clone()));
+        sheets
+            .chain(pcbs)
+            .chain(drafts)
+            .chain(projects)
+            .chain(rows)
+            .collect()
+    }
+
+    /// The write of `key`'s recovery copy, by the kind of document.
+    fn autosave_snapshot_for(&mut self, dir: &Path, key: &DocumentKey) -> Option<Task<Message>> {
+        match key {
+            DocumentKey::Schematic(path) => self.autosave_snapshot_task(dir, path),
+            DocumentKey::Pcb(path) => self.autosave_pcb_snapshot_task(dir, path),
+            DocumentKey::Symbol(path) | DocumentKey::Footprint(path) => {
+                self.autosave_primitive_snapshot_task(dir, path)
+            }
+            DocumentKey::Project(id) => {
+                let path = self.document_state.project_by_id(*id)?.path.clone();
+                let bytes = self.project_autosave_bytes(&path)?;
+                self.autosave_bytes_task(dir, &path, bytes)
+            }
+            DocumentKey::Row(address) => {
+                let path = address.synthetic_tab_path();
+                let bytes = self.row_autosave_bytes(&path)?;
+                self.autosave_bytes_task(dir, &path, bytes)
+            }
+        }
     }
 
     /// Write `bytes` as the recovery copy of `path`, unless that exact
@@ -198,35 +285,10 @@ impl Signex {
             return sweep;
         };
         let mut tasks = vec![sweep];
-        let dirty: Vec<PathBuf> = self
-            .document_state
-            .engines
-            .keys()
-            .filter(|p| self.is_dirty_schematic(p))
-            .cloned()
-            .collect();
-        for path in dirty {
-            if let Some(task) = self.autosave_snapshot_task(&dir, &path) {
+        for key in self.autosave_candidates() {
+            if let Some(task) = self.autosave_snapshot_for(&dir, &key) {
                 tasks.push(task);
             }
-        }
-        for path in self.dirty_pcb_paths() {
-            if let Some(task) = self.autosave_pcb_snapshot_task(&dir, &path) {
-                tasks.push(task);
-            }
-        }
-        for path in self.dirty_primitive_editor_paths() {
-            if let Some(task) = self.autosave_primitive_snapshot_task(&dir, &path) {
-                tasks.push(task);
-            }
-        }
-        for path in self.dirty_project_paths() {
-            let bytes = self.project_autosave_bytes(&path);
-            tasks.extend(bytes.and_then(|b| self.autosave_bytes_task(&dir, &path, b)));
-        }
-        for path in self.dirty_row_paths() {
-            let bytes = self.row_autosave_bytes(&path);
-            tasks.extend(bytes.and_then(|b| self.autosave_bytes_task(&dir, &path, b)));
         }
         Task::batch(tasks)
     }
