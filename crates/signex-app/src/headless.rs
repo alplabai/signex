@@ -108,6 +108,17 @@ impl Signex {
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
+        // shortcut: operands are parsed (#1934) but no handler reads them yet;
+        // refuse instead of arming the tool and reporting success. Drop this
+        // when the placement commands build their edit from operands.
+        if args.has_operands() {
+            return (
+                CommandOutcome::Disabled {
+                    reason: "operands are declared but not run yet (#1934)".to_string(),
+                },
+                Task::none(),
+            );
+        }
         self.dispatch_command_reporting(command, args, None)
     }
 }

@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use signex_types::format::mm_as_stored_nm;
+
 use crate::keymap::{AppCommandId, Operand, OperandKind, metadata_for};
 
 use super::CommandArgs;
@@ -107,6 +109,11 @@ impl CommandArgs {
     pub fn operand(&self, name: &str) -> Option<&OperandValue> {
         self.operands.values.get(name)
     }
+
+    /// Whether any operand was given.
+    pub(crate) fn has_operands(&self) -> bool {
+        !self.operands.values.is_empty()
+    }
 }
 
 fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandError> {
@@ -126,9 +133,11 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
     match operand.kind {
         OperandKind::Point => {
             let (x, y) = text.split_once(',').ok_or_else(|| invalid("x,y in mm"))?;
-            match (number(x), number(y)) {
+            // A coordinate the document cannot store as nm would make it unsaveable.
+            let storable = |n: Option<f64>| n.filter(|mm| mm_as_stored_nm(*mm).is_some());
+            match (storable(number(x)), storable(number(y))) {
                 (Some(x), Some(y)) => Ok(OperandValue::Point(x, y)),
-                _ => Err(invalid("x,y in mm")),
+                _ => Err(invalid("x,y in mm within the drawing range")),
             }
         }
         // The pre-placement form offers 0, 90, 180 and 270 only, so a right
@@ -144,6 +153,9 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             Err(invalid("non-empty text"))
         }
         OperandKind::Text => Ok(OperandValue::Text(text.to_string())),
+        OperandKind::Path if text.chars().any(char::is_control) => {
+            Err(invalid("a path without control characters"))
+        }
         OperandKind::Path if Path::new(text).is_absolute() => {
             Ok(OperandValue::Path(text.to_string()))
         }
@@ -226,10 +238,12 @@ mod tests {
     #[test]
     fn a_value_of_the_wrong_form_is_named() {
         let save = path_arg("x.snxsch");
+        let nul_path = path_arg("a\0b.snxsch");
         let cases: Vec<(&str, Vec<&str>, &str)> = vec![
             ("place_junction", vec!["at=1"], "at"),
             ("place_junction", vec!["at=a,b"], "at"),
             ("place_junction", vec!["at=1,inf"], "at"),
+            ("place_junction", vec!["at=1e300,0"], "at"),
             (
                 "place_net_label",
                 vec!["at=0,0", "text=A", "rotation=NaN"],
@@ -243,6 +257,7 @@ mod tests {
             ("place_net_label", vec!["at=0,0", "text="], "text"),
             ("place_net_label", vec!["at=0,0", "text=a\nb"], "text"),
             ("save_document_as", vec!["path=relative/x.snxsch"], "path"),
+            ("open_document", vec![&nul_path], "path"),
             (
                 "save_document_as",
                 vec![&save, "overwrite=yes"],
@@ -299,6 +314,7 @@ mod tests {
             ("270", 270.0),
             ("-90", 270.0),
             ("360", 0.0),
+            ("-360", 0.0),
         ] {
             let args = parse(
                 "place_net_label",
@@ -314,6 +330,7 @@ mod tests {
         for refused in [
             ["at=0,0", "text=A", "rotation=1e300"],
             ["at=0,0", "text=A", "rotation=720"],
+            ["at=0,0", "text=A\t", "rotation=0"],
             ["at=0,0", "text= ", "rotation=0"],
         ] {
             assert!(parse("place_net_label", &refused).is_err(), "{refused:?}");
