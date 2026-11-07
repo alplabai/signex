@@ -388,6 +388,21 @@ mod tests {
         assert!(!h.can_redo());
         assert!(h.is_dirty(), "the point sat on the discarded state");
         assert_eq!(h.discard_top(), None);
+        h.record(7); // lands at the depth the point named: a different state
+        assert!(h.is_dirty(), "the discarded state cannot come back");
+    }
+
+    #[test]
+    fn a_point_on_the_oldest_kept_state_survives_eviction() {
+        let mut h = History::at_start(2);
+        h.record(0);
+        h.record(1);
+        h.mark_saved(); // depth 2
+        h.record(2);
+        h.record(3); // evicts two: the floor equals the point
+        h.step(4, true);
+        h.step(3, true);
+        assert!(!h.is_dirty(), "depth 2 is the bottom of the stack");
     }
 
     #[test]
