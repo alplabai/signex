@@ -274,9 +274,10 @@ fn close_first_tab(app: &mut Signex) {
     complete(app, close);
 }
 
+/// Send `message` and run what it starts in the runtime's order, so a Save
+/// All settles after its writes land.
 fn send(app: &mut Signex, message: Message) {
-    let task = app.update(message);
-    complete(app, task);
+    crate::settle_support::settle(app, message);
 }
 
 fn thickness_on_disk(doc: &Path) -> f64 {
