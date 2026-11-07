@@ -286,3 +286,45 @@ fn edits_of_two_defaults_are_two_undo_steps() {
     assert_eq!(data.schematic_defaults.bus_width_mm, None, "one typing run");
     assert_eq!(data.schematic_defaults.wire_width_mm, Some(0.3));
 }
+
+#[test]
+fn a_capped_history_keeps_the_newest_steps_and_still_coalesces_runs() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    for i in 0..(HISTORY_LIMIT + 10) {
+        history.close_run();
+        history.apply(&mut data, set_description(&format!("d{i}")));
+        // A second keystroke of the same run joins the step, even at the cap.
+        history.apply(&mut data, set_description(&format!("d{i}x")));
+    }
+    let mut steps = 0;
+    while history.undo(&mut data) {
+        steps += 1;
+    }
+    assert_eq!(
+        steps, HISTORY_LIMIT,
+        "runs are steps, the oldest 10 are gone"
+    );
+    assert_eq!(
+        data.description.as_deref(),
+        Some("d9x"),
+        "undo stops at the state before the oldest kept run"
+    );
+    assert!(history.redo(&mut data));
+    assert_eq!(data.description.as_deref(), Some("d10x"));
+}
+
+#[test]
+fn an_edit_after_undo_clears_redo_at_the_cap() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    for i in 0..(HISTORY_LIMIT + 2) {
+        history.close_run();
+        history.apply(&mut data, set_description(&format!("d{i}")));
+    }
+    assert!(history.undo(&mut data));
+    assert!(history.can_redo());
+    history.close_run();
+    history.apply(&mut data, set_description("fresh"));
+    assert!(!history.can_redo());
+}

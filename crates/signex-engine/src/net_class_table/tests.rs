@@ -339,3 +339,33 @@ fn assign_net_round_trips_through_json() {
         command
     );
 }
+
+#[test]
+fn step_ids_are_never_reused_across_eviction_undo_and_redo() {
+    let mut classes = Vec::new();
+    let mut history = NetClassHistory::default();
+    let mut seen = std::collections::HashSet::new();
+    for i in 0..(HISTORY_LIMIT + 20) {
+        history.apply(&mut classes, add(&format!("C{i}"))).unwrap();
+        let id = history.top_undo_id().unwrap();
+        assert!(seen.insert(id), "id {id} was minted twice");
+    }
+    // The oldest 20 steps were evicted, their ids stay spent.
+    assert!(history.undo(&mut classes));
+    let redo_id = history.top_redo_id().unwrap();
+    assert!(history.redo(&mut classes));
+    assert_eq!(
+        history.top_undo_id(),
+        Some(redo_id),
+        "an id travels with its step"
+    );
+    history.apply(&mut classes, add("Fresh")).unwrap();
+    assert!(
+        seen.insert(history.top_undo_id().unwrap()),
+        "a new step is a new id"
+    );
+    // Undoing everything leaves the oldest kept step's id below the newest.
+    while history.undo(&mut classes) {}
+    assert!(history.top_redo_id().is_some());
+    assert!(!history.can_undo());
+}

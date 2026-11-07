@@ -53,6 +53,7 @@ fn probe() {
     match scenario.as_str() {
         "run" => run(),
         "no_override" => no_override(),
+        "undo_round_trip" => undo_round_trip(),
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -206,4 +207,76 @@ fn snapshot(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
         }
     }
     out
+}
+
+#[test]
+fn a_headless_undo_and_redo_of_a_sheet_edit_move_the_dirty_state() {
+    run_probe("undo_round_trip");
+}
+
+/// Edit, undo, redo through command ids only, no window: the sheet and its
+/// dirty state follow the history, and a save point trimmed away by the cap
+/// is not reachable by undo.
+fn undo_round_trip() {
+    use signex_types::schematic::{Point, SchematicSheet, Wire};
+
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, boot).expect("boot settled");
+
+    let path = isolated.path().join("round-trip.snxsch");
+    let wire = Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        ..Default::default()
+    };
+    let mut seed = signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("engine");
+    seed.save().expect("seed file");
+    app.headless_answers()
+        .expect("headless answers")
+        .replace_all([("path".to_string(), path.display().to_string())]);
+    let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::Ran);
+    driver.settle(&mut app, task).expect("open settled");
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(path.as_path())
+    );
+
+    let wires = |app: &Signex| app.document_state.engines[&path].document().wires.len();
+    let mut run = |app: &mut Signex, name: &str| {
+        let (outcome, task) = app.dispatch_command_headless(&id(name), CommandArgs::none());
+        assert_eq!(outcome, CommandOutcome::Ran, "{name}");
+        driver.settle(app, task).expect("command settled");
+    };
+    assert!(!app.document_state.is_document_dirty(&path));
+
+    run(&mut app, "select_all");
+    run(&mut app, "delete_selection");
+    assert_eq!(wires(&app), 0, "the delete ran");
+    assert!(
+        app.document_state.is_document_dirty(&path),
+        "an edit is dirty"
+    );
+
+    run(&mut app, "undo");
+    assert_eq!(wires(&app), 1, "undo brought the wire back");
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "undo back to the saved state is clean"
+    );
+
+    run(&mut app, "redo");
+    assert_eq!(wires(&app), 0);
+    assert!(app.document_state.is_document_dirty(&path));
 }
