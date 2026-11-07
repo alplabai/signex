@@ -307,8 +307,8 @@ fn prefs_garbage_json_falls_back_to_defaults() {
 #[test]
 fn prefs_ui_font_round_trip_through_json() {
     let (_tmp, path) = temp_prefs_path();
-    // Default when missing.
-    assert_eq!(signex_app::fonts::read_ui_font_pref_at(&path), "Roboto");
+    // Default when missing: Inter on every theme (maintainer decision 2026-11-07).
+    assert_eq!(signex_app::fonts::read_ui_font_pref_at(&path), "Inter");
 
     for font in ["Iosevka", "Helvetica Neue", "Inter", "Source Code Pro"] {
         signex_app::fonts::write_ui_font_pref_at(&path, font);

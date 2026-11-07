@@ -70,7 +70,7 @@ shrink.
 | `new_document` | New | file | `Ctrl+N` | `Ctrl+N` |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
-| `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+Shift+P` |
+| `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+K`, `Ctrl+Shift+P` |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
 | `open_document` | Open document | file | `Ctrl+O` | `Ctrl+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |

@@ -163,7 +163,7 @@ fn graphite_header<'a>(
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center);
-    let class = state.row.class.trim();
+    let class = state.row.class.as_str().trim();
     if !class.is_empty() {
         line = line.push(kit::toned_pill(
             class.to_string(),

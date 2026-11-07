@@ -8,8 +8,8 @@ use iced::{Border, Color, Font};
 use signex_types::theme::ThemeTokens;
 
 use super::columns::ColumnKind;
-use crate::styles::tokens::{self, Overlay, resolve};
 use crate::styles::is_graphite;
+use crate::styles::tokens::{self, Overlay, resolve};
 
 /// Width of the Graphite "Lifecycle" pill column.
 pub(super) const LIFECYCLE_PILL_W: f32 = 96.0;

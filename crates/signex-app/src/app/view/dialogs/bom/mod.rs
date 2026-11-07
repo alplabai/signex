@@ -12,7 +12,7 @@ use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length, Widget};
 
 use super::widgets::{draggable_header, os_title_bar_slot};
-use crate::styles::{DialogButtonKind, dialog_button};
+use crate::styles::dialog_button;
 
 mod rules;
 mod sidebar;

@@ -213,7 +213,7 @@ pub(super) fn view_table_sidebar<'a>(
             .width(Length::Fill)
             .on_press(on_press)
             .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let bg = bg_color.or_else(|| match status {
+                let bg = bg_color.or(match status {
                     iced::widget::button::Status::Hovered => Some(hover_bg),
                     _ => None,
                 });

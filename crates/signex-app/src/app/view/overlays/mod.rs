@@ -20,12 +20,12 @@ const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 
 mod bars;
 mod modals;
-mod palette;
 mod net_hover;
-mod zoom_pill;
+mod palette;
 pub(super) mod read_only_badge;
 #[cfg(test)]
 mod window_gate_tests;
+mod zoom_pill;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.

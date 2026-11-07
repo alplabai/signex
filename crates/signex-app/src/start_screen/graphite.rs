@@ -22,6 +22,8 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const NAV_W: f32 = 232.0;
 /// Widest the main column gets.
 const MAIN_MAX_W: f32 = 880.0;
+/// Horizontal padding of the main column.
+const MAIN_PAD_X: f32 = 32.0;
 
 fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
@@ -329,6 +331,22 @@ pub fn view<'a>(
     recent: &'a [PathBuf],
 ) -> Element<'a, Message> {
     debug_assert!(is_graphite(tokens));
+    let open_shortcut = open_shortcut.to_owned();
+    // This iced fork has no max-width; the main column takes the room left
+    // beside the navigation, up to `MAIN_MAX_W`.
+    iced::widget::responsive(move |size| {
+        let room = (size.width - NAV_W - 2.0 * MAIN_PAD_X).max(0.0);
+        view_sized(tokens, &open_shortcut, recent, room.min(MAIN_MAX_W))
+    })
+    .boxed()
+}
+
+fn view_sized<'a>(
+    tokens: &'a ThemeTokens,
+    open_shortcut: &str,
+    recent: &'a [PathBuf],
+    main_w: f32,
+) -> Element<'a, Message> {
     let main = column![
         text("What are you building?")
             .size(TS.display * 1.4)
@@ -346,8 +364,12 @@ pub fn view<'a>(
         recent_list(tokens, recent),
     ]
     .spacing(10)
-    .max_width(MAIN_MAX_W);
-    let body = scrollable(container(main).padding([40.0, 32.0]).center_x(Length::Fill));
+    .width(Length::Fixed(main_w));
+    let body = scrollable(
+        container(main)
+            .padding([40.0, MAIN_PAD_X])
+            .center_x(Length::Fill),
+    );
     row![
         nav(tokens, open_shortcut),
         container(body)

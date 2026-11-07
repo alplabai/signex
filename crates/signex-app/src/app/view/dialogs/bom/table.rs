@@ -348,30 +348,27 @@ impl Signex {
             // estimate was too wide. iced 0.14 lacks a built-in
             // ellipsis primitive; clipping is the honest choice.
             const CELL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
-            let cell = |s: String,
-                        width: Length,
-                        _truncate_at: f32,
-                        mono: bool|
-             -> Element<'_, Message> {
-                let face = text(s)
-                    .size(CELL_TEXT_SIZE)
-                    .color(text_c)
-                    .wrapping(iced::widget::text::Wrapping::None);
-                let face = if mono {
-                    face.font(crate::fonts::iced_font_for_family(
-                        crate::fonts::CHROME_MONO_FONT,
-                    ))
-                } else {
-                    face
+            let cell =
+                |s: String, width: Length, _truncate_at: f32, mono: bool| -> Element<'_, Message> {
+                    let face = text(s)
+                        .size(CELL_TEXT_SIZE)
+                        .color(text_c)
+                        .wrapping(iced::widget::text::Wrapping::None);
+                    let face = if mono {
+                        face.font(crate::fonts::iced_font_for_family(
+                            crate::fonts::CHROME_MONO_FONT,
+                        ))
+                    } else {
+                        face
+                    };
+                    container(face)
+                        .width(width)
+                        .height(DATA_ROW_H)
+                        .padding([0, 6])
+                        .align_y(iced::alignment::Vertical::Center)
+                        .clip(true)
+                        .boxed()
                 };
-                container(face)
-                .width(width)
-                .height(DATA_ROW_H)
-                .padding([0, 6])
-                .align_y(iced::alignment::Vertical::Center)
-                .clip(true)
-                .boxed()
-            };
             // Leftmost row-number gutter cell — muted text, right-aligned.
             let num_cell: Element<'_, Message> = container(
                 text((visible_idx + 1).to_string())

@@ -424,7 +424,7 @@ fn pin_map_subsection<'a>(
         Length::FillPortion(2),
         Length::FillPortion(2),
     ];
-    let header = if graphite {
+    let table_header = if graphite {
         kit::table_header(
             &[
                 ("Pin", widths[0]),
@@ -448,7 +448,7 @@ fn pin_map_subsection<'a>(
         )
     };
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let mut table: Column<Element<'a, LibraryMessage>> = column![header].width(Length::Fill);
+    let mut table: Column<Element<'a, LibraryMessage>> = column![table_header].width(Length::Fill);
 
     for (index, line) in pin_lines(
         sym.pins

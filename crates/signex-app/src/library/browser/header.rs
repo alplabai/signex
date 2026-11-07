@@ -4,6 +4,7 @@
 //! search box.
 
 use super::*;
+use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;

@@ -39,8 +39,8 @@ mod numeric_draft;
 mod palette;
 mod paper;
 mod projects;
-pub mod signal;
 mod properties;
+pub mod signal;
 mod status;
 mod symbol_context;
 mod widgets;
@@ -264,9 +264,12 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
-        PanelKind::Filter if crate::styles::is_graphite(&ctx.tokens) => {
-            empty_state_card(&ctx.tokens, "Selection Filter", "All object types enabled", None)
-        }
+        PanelKind::Filter if crate::styles::is_graphite(&ctx.tokens) => empty_state_card(
+            &ctx.tokens,
+            "Selection Filter",
+            "All object types enabled",
+            None,
+        ),
         PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),

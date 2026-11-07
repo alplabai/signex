@@ -1,6 +1,5 @@
 //! Data-to-view tests (iced-rust skill §10): assert on the pure
 //! entry builders — no GPU, no window, no widget tree.
-use super::tables::EntrySpec;
 use super::*;
 
 const TID: ThemeId = ThemeId::CatppuccinMocha;
