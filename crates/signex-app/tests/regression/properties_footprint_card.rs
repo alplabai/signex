@@ -52,7 +52,10 @@ fn the_card_shows_the_placed_parts_library_footprint_once_read() {
     let (app, _) = placed_resistor();
     let shown = card(&app);
     assert_eq!(shown.name, doc(&app).symbols[0].footprint);
-    assert!(shown.key.is_some(), "the part is linked to its library footprint");
+    assert!(
+        shown.key.is_some(),
+        "the part is linked to its library footprint"
+    );
     assert_eq!(shown.version, app.library.data_version);
     let FootprintCardStatus::Ready(facts) = &shown.status else {
         panic!("the read landed: {:?}", shown.status);
@@ -73,7 +76,11 @@ fn selecting_the_part_again_serves_the_card_from_the_cache() {
     select_first(&mut app);
     refresh_selection(&mut app);
     let again = card(&app);
-    assert_eq!(again.key, Some(first), "same footprint, same library version");
+    assert_eq!(
+        again.key,
+        Some(first),
+        "same footprint, same library version"
+    );
     assert!(matches!(again.status, FootprintCardStatus::Ready(_)));
 }
 

@@ -37,7 +37,9 @@ pub(super) fn card_lines(card: &FootprintCardView) -> Vec<String> {
             }
         }
         FootprintCardStatus::Loading => lines.push("Reading footprint\u{2026}".to_string()),
-        FootprintCardStatus::Failed(why) => lines.push(format!("Footprint could not be read: {why}")),
+        FootprintCardStatus::Failed(why) => {
+            lines.push(format!("Footprint could not be read: {why}"))
+        }
         FootprintCardStatus::Unlinked => {
             lines.push("Not linked to a library footprint".to_string());
         }
@@ -114,20 +116,24 @@ fn footprint_card<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Elem
 
 /// The footprint drawn on its canvas ground; an empty box while it is read, none
 /// for a part without a library footprint.
-fn thumbnail<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Option<Element<'a, PanelMsg>> {
+fn thumbnail<'a>(
+    card: &'a FootprintCardView,
+    tokens: &ThemeTokens,
+) -> Option<Element<'a, PanelMsg>> {
     use crate::library::editor::footprint::canvas::{BACKDROP_BG, graphite_look_for};
     // The ground the preview paints, so the box has no seam around it.
     let ground = graphite_look_for(tokens).map_or(BACKDROP_BG, |look| look.bg);
     let inner: Element<'a, PanelMsg> = match &card.status {
-        FootprintCardStatus::Ready(facts) => iced::widget::canvas(
-            FootprintPreview::new(&facts.preview).with_theme_tokens(tokens),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed(),
-        FootprintCardStatus::Loading | FootprintCardStatus::Failed(_) => {
-            Space::new().width(Length::Fill).height(Length::Fill).boxed()
+        FootprintCardStatus::Ready(facts) => {
+            iced::widget::canvas(FootprintPreview::new(&facts.preview).with_theme_tokens(tokens))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .boxed()
         }
+        FootprintCardStatus::Loading | FootprintCardStatus::Failed(_) => Space::new()
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed(),
         FootprintCardStatus::Unlinked => return None,
     };
     Some(

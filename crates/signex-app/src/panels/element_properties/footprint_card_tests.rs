@@ -10,17 +10,23 @@ fn key(version: u64) -> FootprintCardKey {
 
 fn sot23_5() -> Footprint {
     let mut fp = Footprint::empty("SOT-23-5");
-    fp.pads = [(-0.95, 1.1), (0.0, 1.1), (0.95, 1.1), (0.95, -1.1), (-0.95, -1.1)]
-        .iter()
-        .enumerate()
-        .map(|(i, (x, y))| Pad {
-            number: (i + 1).to_string(),
-            kind: PadKind::Smd,
-            position: [*x, *y],
-            size: [0.6, 1.0],
-            ..Pad::default()
-        })
-        .collect();
+    fp.pads = [
+        (-0.95, 1.1),
+        (0.0, 1.1),
+        (0.95, 1.1),
+        (0.95, -1.1),
+        (-0.95, -1.1),
+    ]
+    .iter()
+    .enumerate()
+    .map(|(i, (x, y))| Pad {
+        number: (i + 1).to_string(),
+        kind: PadKind::Smd,
+        position: [*x, *y],
+        size: [0.6, 1.0],
+        ..Pad::default()
+    })
+    .collect();
     fp
 }
 
@@ -76,8 +82,14 @@ fn a_finished_read_is_served_from_the_cache() {
         cards.finish(key(1), Ok(facts())),
         Some(FootprintCardStatus::Ready(_))
     ));
-    assert!(matches!(cards.status(key(1)), FootprintCardStatus::Ready(_)));
-    assert!(cards.take_queued().is_empty(), "a cached footprint is not read again");
+    assert!(matches!(
+        cards.status(key(1)),
+        FootprintCardStatus::Ready(_)
+    ));
+    assert!(
+        cards.take_queued().is_empty(),
+        "a cached footprint is not read again"
+    );
 }
 
 #[test]
@@ -105,7 +117,10 @@ fn a_failed_read_is_kept_until_the_version_moves() {
         other => panic!("expected the failure, got {other:?}"),
     }
     assert!(cards.take_queued().is_empty());
-    assert!(cards.finish(key(1), Ok(facts())).is_none(), "only a pending read lands");
+    assert!(
+        cards.finish(key(1), Ok(facts())).is_none(),
+        "only a pending read lands"
+    );
 }
 
 #[test]

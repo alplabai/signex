@@ -126,8 +126,7 @@ pub(super) fn library_id_row<'a>(
     .width(Length::Fill)
     .clip(true)
     .style(move |theme: &Theme| {
-        let (bg, bdr, radius) =
-            super::super::form_look::value_box(theme, input_bg, input_bdr, 2.0);
+        let (bg, bdr, radius) = super::super::form_look::value_box(theme, input_bg, input_bdr, 2.0);
         container::Style {
             background: Some(Background::Color(bg)),
             border: Border {
@@ -141,8 +140,12 @@ pub(super) fn library_id_row<'a>(
     });
     let tip = iced::widget::tooltip(
         value,
-        container(iced::widget::text(lib_id.to_string()).size(TS.body).font(mono))
-            .padding([SP.xs, 6.0]),
+        container(
+            iced::widget::text(lib_id.to_string())
+                .size(TS.body)
+                .font(mono),
+        )
+        .padding([SP.xs, 6.0]),
         iced::widget::tooltip::Position::Bottom,
     )
     .style(crate::styles::context_menu(tokens));
@@ -214,7 +217,11 @@ pub(super) fn push_library_rows<'a>(
 }
 
 /// The out-of-date status and its Update button.
-fn out_of_date_row<'a>(id: uuid::Uuid, muted: Color, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+fn out_of_date_row<'a>(
+    id: uuid::Uuid,
+    muted: Color,
+    tokens: &ThemeTokens,
+) -> Element<'a, PanelMsg> {
     let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id))

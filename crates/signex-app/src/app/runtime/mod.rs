@@ -2,9 +2,9 @@ use super::*;
 
 mod body_style_info;
 mod designators;
-mod footprint_card;
 #[cfg(test)]
 pub(crate) mod designators_tests;
+mod footprint_card;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;

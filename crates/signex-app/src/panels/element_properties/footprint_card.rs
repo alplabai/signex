@@ -64,7 +64,10 @@ impl FootprintCardFacts {
 /// `pitch` with at most three decimals and no trailing zeros.
 fn trimmed_mm(pitch: f64) -> String {
     let fixed = format!("{pitch:.3}");
-    fixed.trim_end_matches('0').trim_end_matches('.').to_string()
+    fixed
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_string()
 }
 
 /// Where the card's footprint stands.

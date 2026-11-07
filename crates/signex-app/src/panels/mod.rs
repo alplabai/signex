@@ -131,9 +131,9 @@ pub use symbol_context::{
     SymbolPinSummary,
 };
 pub(super) use widgets::{
-    LabelInk, collapsible_section, collapsible_section_header, form_edit_row_f64, is_section_collapsed,
-    part_tree_row, prop_kv_row, property_label, section_title, separator, shape_fill_row,
-    shape_icon_handle, view_stub,
+    LabelInk, collapsible_section, collapsible_section_header, form_edit_row_f64,
+    is_section_collapsed, part_tree_row, prop_kv_row, property_label, section_title, separator,
+    shape_fill_row, shape_icon_handle, view_stub,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
