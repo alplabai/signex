@@ -77,7 +77,13 @@ pub(super) fn view_sections<'a>(
                 )
                 .padding([3.0, SP.l])
                 .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
-                .style(move |_: &Theme, status: iced::widget::button::Status| {
+                .style(move |theme: &Theme, status: iced::widget::button::Status| {
+                    let hovered = matches!(status, iced::widget::button::Status::Hovered);
+                    if let Some(style) =
+                        crate::panels::form_look::segment_cell(theme, on, hovered)
+                    {
+                        return style;
+                    }
                     let bg = match status {
                         iced::widget::button::Status::Hovered => {
                             Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
@@ -113,6 +119,7 @@ pub(super) fn view_sections<'a>(
             )
             .padding([SP.xs, SP.m])
             .width(Length::Fill)
+            .style(crate::panels::form_look::segmented_frame)
             .boxed(),
         );
 
