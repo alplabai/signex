@@ -300,7 +300,14 @@ impl Signex {
                 .boxed()
         } else {
             let list = column(rows).spacing(SP.xs).padding(SP.s);
-            let list = scrollable(list).height(Length::Shrink);
+            // Graphite bounds the list so the 360 px card keeps room for the
+            // search row above and the hint footer below.
+            let list_cap = 360.0 - 2.0 * (TS.body * 1.6 + 2.0 * SP.l);
+            let list = scrollable(list).height(if graphite {
+                Length::Fit.max(list_cap)
+            } else {
+                Length::Shrink
+            });
             if graphite {
                 list.style(palette::scrollbar_style(tokens)).boxed()
             } else {
