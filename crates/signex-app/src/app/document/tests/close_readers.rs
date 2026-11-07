@@ -108,8 +108,22 @@ fn close_scan_of_a_sheet_and_library_two_projects_share() {
 #[test]
 fn close_scan_of_a_half_typed_row_and_a_save_in_flight() {
     let dir = tempfile::tempdir().unwrap();
+    // A half-typed row is unsaved work (#2132), so the scan sees it; its
+    // library is not provably this project's alone, so it is kept open.
     let (app, _) = fixture(dir.path(), Kind::HalfTypedRow, true);
-    assert_eq!(scan_of(&app), (vec![], vec![], 0, 0, None));
+    assert_eq!(
+        scan_of(&app),
+        (
+            vec![],
+            vec![],
+            0,
+            1,
+            Some(
+                "Close Project 'p': kept 1 unsaved document(s) open, not provably this                  project's alone: lib.snxlib"
+                    .to_string()
+            )
+        )
+    );
     for kind in [Kind::Symbol, Kind::Footprint] {
         let (app, t, _dir) = save_in_flight(kind);
         let (mine, kept, ..) = scan_of(&app);
