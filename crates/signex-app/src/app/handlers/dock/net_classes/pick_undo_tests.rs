@@ -264,3 +264,53 @@ fn closing_a_sheet_forgets_its_picks() {
     app.forget_net_class_picks_on(&path);
     assert!(!app.has_net_class_pick(&path, true));
 }
+
+fn paint(app: &mut Signex, id: uuid::Uuid) {
+    use crate::app::handlers::editing_commands::net_color_driver as colours;
+    colours::paint(app, &[id], colours::color(1));
+}
+
+fn painted(app: &Signex, id: uuid::Uuid) -> bool {
+    app.document_state
+        .active_engine()
+        .unwrap()
+        .document()
+        .net_colors
+        .contains_key(&id)
+}
+
+/// A colour, then a pick: Ctrl+Z reverts the newer pick first, the colour
+/// second; Ctrl+Y replays them in the opposite order.
+#[test]
+fn a_colour_then_a_pick_undo_in_true_time_order() {
+    let (mut app, _symbol) = app_with_sheet();
+    let net = uuid::Uuid::now_v7();
+    paint(&mut app, net);
+    pick(&mut app, "GND", Some("Power"));
+
+    app.handle_undo_requested();
+    assert!(nets(&app).is_empty(), "the newer pick goes first");
+    assert!(painted(&app, net));
+    app.handle_undo_requested();
+    assert!(!painted(&app, net), "then the colour");
+
+    app.handle_redo_requested();
+    assert!(painted(&app, net) && nets(&app).is_empty(), "colour first");
+    app.handle_redo_requested();
+    assert_eq!(nets(&app), ["GND"], "then the pick");
+}
+
+/// A pick, then a colour: the newer colour goes first.
+#[test]
+fn a_pick_then_a_colour_undo_in_true_time_order() {
+    let (mut app, _symbol) = app_with_sheet();
+    let net = uuid::Uuid::now_v7();
+    pick(&mut app, "GND", Some("Power"));
+    paint(&mut app, net);
+
+    app.handle_undo_requested();
+    assert!(!painted(&app, net), "the newer colour goes first");
+    assert_eq!(nets(&app), ["GND"]);
+    app.handle_undo_requested();
+    assert!(nets(&app).is_empty(), "then the pick");
+}

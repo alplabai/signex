@@ -158,6 +158,23 @@ fn net_colors() {
         "back at the save"
     );
 
+    // Without its operands `color_net` would only open the colour picker:
+    // refused with the reason, nothing coloured, never `Ran`.
+    let before = app.document_state.engines[&path]
+        .document()
+        .net_colors
+        .clone();
+    let (outcome, _task) = app.dispatch_command_headless(&id("color_net"), CommandArgs::none());
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("needs the operand")),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        app.document_state.engines[&path].document().net_colors,
+        before
+    );
+    assert!(!app.ui_state.net_color_custom.show, "no picker opened");
+
     // A command that declares operands and has no handler is still refused.
     let refused = run(&mut app, "place_net_label", &["at=1,1", "text=A"]);
     assert!(

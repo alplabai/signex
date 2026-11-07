@@ -118,6 +118,18 @@ impl CommandArgs {
     }
 }
 
+/// The first required operand of `command` that a headless run with none
+/// cannot do without. Without it the no-operand form only arms a tool or opens
+/// a picker, and would be reported as run. A `path` is a dialog answer a
+/// headless run gives through its answers, so it is not asked for here.
+pub(crate) fn missing_headless_operand(command: &AppCommandId) -> Option<&'static str> {
+    metadata_for(command)?
+        .operands
+        .iter()
+        .find(|op| op.required && op.kind != OperandKind::Path)
+        .map(|op| op.name)
+}
+
 fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandError> {
     let invalid = |expected: &'static str| OperandError::Invalid {
         operand: operand.name.to_string(),

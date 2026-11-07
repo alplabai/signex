@@ -232,3 +232,27 @@ fn a_stale_resolution_is_dropped_and_the_newer_one_kept() {
         "the late, older answer must not overwrite the newer one"
     );
 }
+
+/// An export draws the colours the sheet has now: the page scope carries the
+/// live colour after a colour edit, and none after its undo (#661).
+#[test]
+fn an_export_carries_the_live_net_colours() {
+    use crate::app::handlers::editing_commands::net_color_driver as colours;
+    let dir = PathBuf::from("/w/class-colours");
+    let (mut app, parent_wire, _) = app_with_open_pair(&dir);
+    let root = dir.join("top.snxsch");
+    let exported = |app: &Signex| {
+        let (ctx, _issues) =
+            super::super::build_page_scope_for_source(&app.document_state, &root).expect("scope");
+        ctx.sheets
+            .iter()
+            .find_map(|s| s.schematic.net_colors.get(&parent_wire).copied())
+    };
+    assert_eq!(exported(&app), None);
+
+    colours::paint(&mut app, &[parent_wire], colours::color(7));
+    assert_eq!(exported(&app), Some(colours::color(7)), "the live colour");
+
+    assert!(app.undo_active_sheet());
+    assert_eq!(exported(&app), None, "an undone colour is not exported");
+}

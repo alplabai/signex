@@ -645,3 +645,81 @@ fn an_undecided_project_keeps_the_other_spelling_dirty_too() {
         "Signex must not quit over the unsaved file"
     );
 }
+
+/// A coloured sheet at `dir/Sheet.snxsch`, clean, and the id of its wire.
+fn clean_sheet_with_a_wire(dir: &Path) -> (Signex, PathBuf, uuid::Uuid) {
+    let (mut app, _symbol, sheet) = app_with_two_dirty_documents(dir);
+    let wire = uuid::Uuid::now_v7();
+    let engine = app.document_state.engines.get_mut(&sheet).expect("engine");
+    let mut document = engine.document().clone();
+    document.wires.push(signex_types::schematic::Wire {
+        uuid: wire,
+        ..Default::default()
+    });
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .expect("wire");
+    app.document_state.mark_document_clean(&sheet);
+    app.document_state.active_path = Some(sheet.clone());
+    app.document_state.active_tab = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == sheet)
+        .expect("tab");
+    (app, sheet, wire)
+}
+
+fn colour(r: u8) -> signex_types::theme::Color {
+    signex_types::theme::Color::new(r, 0, 0, 255)
+}
+
+fn colours_on_disk(sheet: &Path) -> HashMap<uuid::Uuid, signex_types::theme::Color> {
+    let text = std::fs::read_to_string(sheet).expect("file");
+    signex_types::format::SnxSchematic::parse(&text)
+        .expect("parses")
+        .sheet
+        .net_colors
+}
+
+/// A colour is the only change: the sheet is dirty, counts as dirty, Save All
+/// writes it, and the file reopens with it (#661).
+#[test]
+fn a_colour_only_change_is_dirty_and_save_all_writes_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, sheet, wire) = clean_sheet_with_a_wire(dir.path());
+    assert!(!app.document_state.is_document_dirty(&sheet));
+
+    let (outcome, _) = app.commit_net_colors(&[wire], colour(9));
+    assert_eq!(
+        outcome,
+        crate::app::mutation_gateway::CommandOutcome::Changed
+    );
+    assert!(app.document_state.is_document_dirty(&sheet));
+    assert!(app.document_state.has_dirty_documents());
+
+    let task = save_all(&mut app, std::slice::from_ref(&sheet));
+    feed(&mut app, outputs(task));
+
+    assert!(!app.document_state.is_document_dirty(&sheet));
+    assert_eq!(colours_on_disk(&sheet).get(&wire), Some(&colour(9)));
+}
+
+/// A colour made while a Save All write runs is not in the file the write
+/// produced, so the sheet stays dirty and the file holds the earlier colour.
+#[test]
+fn a_colour_during_a_running_save_all_keeps_the_sheet_dirty() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, sheet, wire) = clean_sheet_with_a_wire(dir.path());
+    let _ = app.commit_net_colors(&[wire], colour(1));
+
+    let task = save_all(&mut app, std::slice::from_ref(&sheet));
+    let _ = app.commit_net_colors(&[wire], colour(2));
+    feed(&mut app, outputs(task));
+
+    assert!(
+        app.document_state.is_document_dirty(&sheet),
+        "the file lacks colour 2"
+    );
+    assert_eq!(colours_on_disk(&sheet).get(&wire), Some(&colour(1)));
+}

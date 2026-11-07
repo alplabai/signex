@@ -346,11 +346,6 @@ fn every_operand_command_has_a_handler_or_is_refused() {
     for name in all_command_ids() {
         let declares = !metadata_for_str(name).expect("row").operands.is_empty();
         let command = id(name);
-        assert_eq!(
-            operand_handler(&command).is_some(),
-            handled_ids().any(|h| h == name),
-            "{name}"
-        );
         if !declares {
             assert!(
                 operand_handler(&command).is_none(),

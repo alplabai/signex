@@ -1027,3 +1027,52 @@ fn a_restore_of_a_copy_that_is_gone_resumes_autosave_and_says_so() {
         "with nothing left to protect, autosave writes again"
     );
 }
+
+/// A recovery copy with a net colour restores as unsaved edits holding the
+/// colour, and Save writes it (#661).
+#[test]
+fn a_restored_copy_keeps_its_net_colour_and_save_writes_it() {
+    let mut f = fixture(true);
+    let wire = uuid::Uuid::now_v7();
+    let red = signex_types::theme::Color::new(255, 0, 0, 255);
+    let engine = f.app.document_state.engines.get_mut(&f.doc).unwrap();
+    let mut sheet = engine.document().clone();
+    sheet.wires.push(signex_types::schematic::Wire {
+        uuid: wire,
+        ..Default::default()
+    });
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document: sheet })
+        .unwrap();
+    engine
+        .execute(signex_engine::Command::SetNetColors {
+            colors: [(wire, red)].into_iter().collect(),
+        })
+        .unwrap();
+    let task = tick(&mut f);
+    complete(&mut f.app, task);
+    age(&f.doc, 600);
+
+    let (mut next, _boot) = Signex::new();
+    next.document_state
+        .autosave
+        .set_dir(Some(f.recovery.clone()));
+    open_from_disk(&mut next, &f.doc);
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+
+    assert!(next.document_state.is_document_dirty(&f.doc), "unsaved");
+    assert_eq!(
+        next.document_state.engines[&f.doc]
+            .document()
+            .net_colors
+            .get(&wire),
+        Some(&red)
+    );
+    let task = next.update(Message::File(FileMsg::Save));
+    complete(&mut next, task);
+    let saved =
+        signex_types::format::SnxSchematic::parse(&std::fs::read_to_string(&f.doc).unwrap())
+            .unwrap()
+            .sheet;
+    assert_eq!(saved.net_colors.get(&wire), Some(&red), "the file holds it");
+}
