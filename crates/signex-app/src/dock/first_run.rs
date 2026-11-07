@@ -8,17 +8,17 @@ use crate::panels::PanelKind;
 /// Height of the bottom dock in the Graphite design.
 pub const GRAPHITE_BOTTOM_HEIGHT: f32 = 208.0;
 
-/// Fresh layout: Projects, Components, Navigator, Library and Signal on the
-/// left, Properties on the right, Messages, ERC and History at the bottom.
+/// Fresh layout: Projects, Components and Navigator on the left, Properties
+/// and Signal on the right, Messages, ERC and History at the bottom. Library
+/// opens on demand (View menu, Library menu) into its default home.
 pub fn graphite_first_run() -> DockArea {
     let mut dock = DockArea::new();
     let layout = [
         (PanelPosition::Left, PanelKind::Projects),
         (PanelPosition::Left, PanelKind::Components),
         (PanelPosition::Left, PanelKind::Navigator),
-        (PanelPosition::Left, PanelKind::Library),
-        (PanelPosition::Left, PanelKind::Signal),
         (PanelPosition::Right, PanelKind::Properties),
+        (PanelPosition::Right, PanelKind::Signal),
         (PanelPosition::Bottom, PanelKind::Messages),
         (PanelPosition::Bottom, PanelKind::Erc),
         (PanelPosition::Bottom, PanelKind::History),

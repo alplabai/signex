@@ -114,13 +114,8 @@ impl DockArea {
         // adjacent tabs share their L/R borders and the rightmost
         // tab actually closes off with a right edge.
         let last_panel_idx = region.panels.len().saturating_sub(1);
-        // Graphite shrinks the tab padding so all labels of a side dock show.
-        let (tab_size, tab_pad) = if graphite && position != PanelPosition::Bottom {
-            let labels: Vec<&str> = region.panels.iter().map(|p| p.label()).collect();
-            graphite::tab_layout(&labels, TS.body, TS.caption)
-        } else {
-            (TS.body, 10.0)
-        };
+        // Graphite keeps the label size and padding; a long strip scrolls.
+        let (tab_size, tab_pad) = (TS.body, graphite::TAB_PAD);
         for (i, panel) in region.panels.iter().enumerate().skip(offset) {
             let label = panel.label();
             let is_active = i == region.active;
