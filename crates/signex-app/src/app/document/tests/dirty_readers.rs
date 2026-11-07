@@ -48,7 +48,11 @@ fn cases() -> Vec<(&'static str, Build, usize, bool)> {
         ("clean", |d| fixture(d, Kind::Schematic, false).0, 0, false),
         (
             "dirty sheet tab",
-            |d| fixture(d, Kind::Schematic, true).0,
+            |d| {
+                let (mut app, t) = fixture(d, Kind::Schematic, true);
+                app.document_state.tabs.push(t);
+                app
+            },
             1,
             true,
         ),
@@ -157,40 +161,6 @@ fn quit_lists_a_dirty_library_manifest() {
     let (paths, rows) = quit_lists(&mut app);
     assert!(paths.contains(&want), "{paths:?}");
     assert_eq!(rows, 0);
-}
-
-#[test]
-fn the_enumerator_keys_each_file_by_its_owner_and_leaves_ownerless_members_bare() {
-    use crate::app::document::DocumentKey as K;
-    let key_of = |app: &Signex, path: &Path| {
-        let files = app.document_state.unsaved_files();
-        let hit: Vec<_> = files.iter().filter(|f| f.path == path).collect();
-        assert_eq!(hit.len(), 1, "{path:?} once in {files:?}");
-        hit[0].key.clone()
-    };
-    let dir = tempfile::tempdir().unwrap();
-    let d = dir.path();
-
-    let (app, t) = fixture(d, Kind::Schematic, true);
-    assert_eq!(key_of(&app, &t.path), Some(K::Schematic(t.path.clone())));
-    let (app, t) = fixture(d, Kind::Pcb, true);
-    assert_eq!(key_of(&app, &t.path), Some(K::Pcb(t.path.clone())));
-    let (app, t) = fixture(d, Kind::Symbol, true);
-    assert_eq!(key_of(&app, &t.path), Some(K::Symbol(t.path.clone())));
-    let (app, t) = fixture(d, Kind::Footprint, true);
-    assert_eq!(key_of(&app, &t.path), Some(K::Footprint(t.path.clone())));
-    let (app, t) = fixture(d, Kind::Project, true);
-    let id = app.document_state.projects[0].id;
-    assert_eq!(key_of(&app, &t.path), Some(K::Project(id)));
-
-    // A save in flight is listed once, keyed by its draft.
-    let (app, t, _dir) = save_in_flight(Kind::Symbol);
-    assert_eq!(key_of(&app, &t.path), Some(K::Symbol(t.path.clone())));
-
-    // A manifest has no document: path only.
-    let manifest = d.join("lib.snxlib");
-    let app = manifest_only(d);
-    assert_eq!(key_of(&app, &manifest), None);
 }
 
 #[test]

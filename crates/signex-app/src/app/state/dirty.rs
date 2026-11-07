@@ -83,7 +83,7 @@ impl DocumentState {
 
     /// Every dirty document's path: the stored set plus the dirty drafts.
     pub fn dirty_document_paths(&self) -> HashSet<PathBuf> {
-        self.unsaved_files().into_iter().map(|f| f.path).collect()
+        self.unsaved_files().into_iter().collect()
     }
 
     /// Paths of the symbol and footprint editors with unsaved edits, plus

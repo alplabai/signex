@@ -19,7 +19,7 @@ title-bar "N unsaved", the quit and close-project gates, Save All, the
 History panel and the project tree all read the one query (or
 `dirty_document_paths()`, the union of the stored set and the dirty drafts).
 
-`Signex::unsaved_set()` (`app/document/unsaved.rs`) lists them once: each unsaved file with its `DocumentKey` when a document owns it, and the dirty rows apart. The title count (files only), Save All enablement (files and rows) and `has_dirty_documents` read it.
+`Signex::unsaved_set()` (`app/document/unsaved.rs`) lists them once: each unsaved file's path, and the dirty rows apart. The title count (files only), Save All enablement (files and rows) and `has_dirty_documents` read it.
 
 ## The writers
 
