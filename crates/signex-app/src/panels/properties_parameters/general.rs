@@ -27,10 +27,57 @@ pub fn view_custom_selection_filters_section<'a>(
     collapsed_sections: &'a CollapsedSections,
     palette: PanelPalette,
 ) -> Column<Element<'a, PanelMsg>> {
+    Column::new().spacing(0).width(Length::Fill).push(
+        collapsible_section(
+            "prop_sel_filter",
+            "Custom Selection Filters",
+            collapsed_sections,
+            palette.primary,
+            palette.border,
+            move || selection_filters_body(presets, active_custom_filter_tab, palette),
+        )
+        .boxed(),
+    )
+}
+
+/// The same section on the Graphite section chrome when the theme is
+/// Graphite; the stock section otherwise.
+fn selection_filters_section_for<'a>(
+    ctx: &'a PanelContext,
+    palette: PanelPalette,
+) -> Column<Element<'a, PanelMsg>> {
+    let presets = ctx.custom_filter_presets.clone();
+    let tab = ctx.active_custom_filter_tab;
+    if !crate::styles::is_graphite(&ctx.tokens) {
+        return view_custom_selection_filters_section(
+            presets,
+            tab,
+            &ctx.collapsed_sections,
+            palette,
+        );
+    }
+    Column::new().spacing(0).width(Length::Fill).push(
+        ctx.collapsible(
+            "prop_sel_filter",
+            "Custom Selection Filters",
+            &ctx.collapsed_sections,
+            palette.primary,
+            palette.border,
+            move || selection_filters_body(presets, tab, palette),
+        )
+        .boxed(),
+    )
+}
+
+/// Body of the Custom Selection Filters section.
+fn selection_filters_body<'a>(
+    presets: Vec<crate::active_bar::CustomFilterPreset>,
+    active_custom_filter_tab: usize,
+    palette: PanelPalette,
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
-        border: border_c,
         accent: accent_c,
         tag_hover,
         ..
@@ -39,109 +86,103 @@ pub fn view_custom_selection_filters_section<'a>(
     let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
     let muted_c = muted;
     let primary_c = primary;
-    Column::new().spacing(0).width(Length::Fill).push(
-        collapsible_section(
-            "prop_sel_filter",
-            "Custom Selection Filters",
-            collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c: Column<Element<'a, PanelMsg>> =
-                    Column::new().spacing(6).width(Length::Fill);
-                if presets.is_empty() {
-                    c = c.push(
-                        container(
-                            text("No presets yet. Click + to define one.")
-                                .size(TS.body)
-                                .color(muted_c),
-                        )
-                        .padding([SP.s, SP.m])
-                        .boxed(),
-                    );
-                    c = c.push(
-                        container(
-                            iced::widget::button(text("+ Add Filter").size(TS.body))
-                                .padding([SP.s, 10.0])
-                                .on_press(PanelMsg::AddCustomFilterPreset)
-                                .style(move |theme: &Theme, status| {
-                                    form_look::ghost_button(theme, status).unwrap_or_else(|| {
-                                        add_filter_button_style(theme, status, primary_c)
-                                    })
-                                }),
-                        )
-                        .padding([SP.s, SP.m])
-                        .boxed(),
-                    );
-                    return c;
-                }
-                let mut tabs: iced::widget::Row<Element<'a, PanelMsg>> = iced::widget::Row::new()
-                    .spacing(SP.xs)
-                    .align_y(iced::Alignment::Center);
-                for (idx, preset) in presets.iter().enumerate() {
-                    let label = if preset.name.trim().is_empty() {
-                        format!("Filter {}", idx + 1)
-                    } else {
-                        preset.name.clone()
-                    };
-                    tabs = tabs.push(custom_filter_tab(
-                        label,
-                        idx == active_tab,
-                        idx,
-                        tag_hover,
-                        accent_c,
-                    ));
-                }
-                if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
-                    tabs = tabs.push(
-                        iced::widget::button(text("+").size(TS.label).color(primary_c))
-                            .padding([3, 10])
-                            .on_press(PanelMsg::AddCustomFilterPreset)
-                            .boxed(),
-                    );
-                }
-                c = c.push(container(tabs).padding([SP.s, SP.m]).boxed());
-                let preset = &presets[active_tab];
-                let included: std::collections::HashSet<SelectionFilter> =
-                    preset.filters.iter().copied().collect();
-                let header = row![
-                    iced::widget::text_input("Preset name", preset.name.clone())
-                        .size(TS.body)
-                        .padding([3, 6])
-                        .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
-                        .width(Length::Fill)
-                        .boxed(),
-                    iced::widget::button(text("Delete").size(TS.body).color(primary_c))
-                        .padding([3.0, SP.m])
-                        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
-                        .boxed(),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center);
-                let mut wrap = Wrap::new().spacing(SP.s).line_spacing(4.0);
-                for &f in SelectionFilter::ALL {
-                    wrap = wrap.push(preset_chip(
-                        f.label(),
-                        active_tab,
-                        f,
-                        included.contains(&f),
-                        tag_hover,
-                        accent_c,
-                    ));
-                }
-                c = c.push(
-                    container(
-                        column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()]
-                            .spacing(SP.s),
-                    )
-                    .padding([6.0, SP.m])
-                    .boxed(),
-                );
-                c
-            },
+    let mut c: Column<Element<'a, PanelMsg>> = Column::new().spacing(6).width(Length::Fill);
+    if presets.is_empty() {
+        c = c.push(
+            container(
+                text("No presets yet. Click + to define one.")
+                    .size(TS.body)
+                    .color(muted_c),
+            )
+            .padding([SP.s, SP.m])
+            .boxed(),
+        );
+        c = c.push(
+            container(
+                iced::widget::button(text("+ Add Filter").size(TS.body))
+                    .padding([SP.s, 10.0])
+                    .on_press(PanelMsg::AddCustomFilterPreset)
+                    .style(move |theme: &Theme, status| {
+                        form_look::ghost_button(theme, status)
+                            .unwrap_or_else(|| add_filter_button_style(theme, status, primary_c))
+                    }),
+            )
+            .padding([SP.s, SP.m])
+            .boxed(),
+        );
+        return c;
+    }
+    let mut tabs: iced::widget::Row<Element<'a, PanelMsg>> = iced::widget::Row::new()
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center);
+    for (idx, preset) in presets.iter().enumerate() {
+        let label = if preset.name.trim().is_empty() {
+            format!("Filter {}", idx + 1)
+        } else {
+            preset.name.clone()
+        };
+        tabs = tabs.push(custom_filter_tab(
+            label,
+            idx == active_tab,
+            idx,
+            tag_hover,
+            accent_c,
+        ));
+    }
+    if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
+        tabs = tabs.push(
+            iced::widget::button(text("+").size(TS.label).color(primary_c))
+                .padding([3, 10])
+                .on_press(PanelMsg::AddCustomFilterPreset)
+                .style(move |theme: &Theme, status| {
+                    form_look::ghost_button(theme, status)
+                        .unwrap_or_else(|| iced::widget::button::primary(theme, status))
+                })
+                .boxed(),
+        );
+    }
+    c = c.push(container(tabs).padding([SP.s, SP.m]).boxed());
+    let preset = &presets[active_tab];
+    let included: std::collections::HashSet<SelectionFilter> =
+        preset.filters.iter().copied().collect();
+    let header = row![
+        iced::widget::text_input("Preset name", preset.name.clone())
+            .size(TS.body)
+            .padding([3, 6])
+            .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
+            .style(form_look::text_input_style)
+            .width(Length::Fill)
+            .boxed(),
+        iced::widget::button(text("Delete").size(TS.body).color(primary_c))
+            .padding([3.0, SP.m])
+            .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
+            .style(move |theme: &Theme, status| {
+                form_look::ghost_button(theme, status)
+                    .unwrap_or_else(|| iced::widget::button::primary(theme, status))
+            })
+            .boxed(),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    let mut wrap = Wrap::new().spacing(SP.s).line_spacing(4.0);
+    for &f in SelectionFilter::ALL {
+        wrap = wrap.push(preset_chip(
+            f.label(),
+            active_tab,
+            f,
+            included.contains(&f),
+            tag_hover,
+            accent_c,
+        ));
+    }
+    c = c.push(
+        container(
+            column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()].spacing(SP.s),
         )
+        .padding([6.0, SP.m])
         .boxed(),
-    )
+    );
+    c
 }
 
 pub fn view_properties_general<'a>(
@@ -165,15 +206,7 @@ pub fn view_properties_general<'a>(
     // Custom Selection Filters — shared widget reused by the Footprint
     // editor's Properties panel so both editors render the EXACT same
     // chrome (tabs, chips, name input, accent border).
-    col = col.push(
-        view_custom_selection_filters_section(
-            ctx.custom_filter_presets.clone(),
-            ctx.active_custom_filter_tab,
-            &ctx.collapsed_sections,
-            palette,
-        )
-        .boxed(),
-    );
+    col = col.push(selection_filters_section_for(ctx, palette).boxed());
 
     // General (collapsible)
     {
@@ -699,6 +732,55 @@ pub fn props_tab_btn(
         .boxed()
 }
 
+/// Graphite filter chip: accent-soft fill when on, hairline outline when
+/// off, radius 7. `None` on other themes.
+fn graphite_filter_chip(
+    theme: &Theme,
+    on: bool,
+    hovered: bool,
+) -> Option<iced::widget::button::Style> {
+    let l = form_look::FormLook::of(theme)?;
+    let fill = if on {
+        Some(Background::Color(l.accent_soft))
+    } else if hovered {
+        Some(Background::Color(l.sunken))
+    } else {
+        None
+    };
+    Some(iced::widget::button::Style {
+        background: fill,
+        text_color: if on { l.ink } else { l.ink3 },
+        border: Border {
+            width: 1.0,
+            radius: crate::panels::graphite::PROPERTY_FIELD_RADIUS.into(),
+            color: if on { l.accent } else { l.line },
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    })
+}
+
+/// Label of a filter tab or chip: the legacy fixed on / off colours, or the
+/// Graphite ink pair resolved from the theme.
+fn chip_label<'a>(
+    label: String,
+    on: bool,
+    legacy_on: Color,
+    legacy_off: Color,
+) -> iced::widget::Text<'a> {
+    text(label)
+        .size(TS.body)
+        .style(move |theme: &Theme| iced::widget::text::Style {
+            color: Some(match form_look::FormLook::of(theme) {
+                Some(l) if on => l.ink,
+                Some(l) => l.ink3,
+                None if on => legacy_on,
+                None => legacy_off,
+            }),
+            ..Default::default()
+        })
+}
+
 /// Tab button in the Custom Selection Filters tab strip. Active tab
 /// gets a filled background; both states use the theme accent for the
 /// border so the section reads as one piece with the chips and the
@@ -713,32 +795,35 @@ pub fn custom_filter_tab(
     let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
     let text_on = Color::WHITE;
     let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
-    iced::widget::button(
-        text(label)
-            .size(TS.body)
-            .color(if active { text_on } else { text_off }),
-    )
-    .padding([3, 10])
-    .on_press(PanelMsg::SelectCustomFilterTab(idx))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered if !active => Background::Color(hover_bg),
-            _ if active => Background::Color(active_bg),
-            _ => Background::Color(Color::TRANSPARENT),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-                ..Default::default()
-            },
-            text_color: if active { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
-    })
-    .boxed()
+    iced::widget::button(chip_label(label, active, text_on, text_off))
+        .padding([3, 10])
+        .on_press(PanelMsg::SelectCustomFilterTab(idx))
+        .style(move |theme: &Theme, status: iced::widget::button::Status| {
+            if let Some(style) = form_look::tab_chip(
+                theme,
+                active,
+                matches!(status, iced::widget::button::Status::Hovered),
+            ) {
+                return style;
+            }
+            let bg = match status {
+                iced::widget::button::Status::Hovered if !active => Background::Color(hover_bg),
+                _ if active => Background::Color(active_bg),
+                _ => Background::Color(Color::TRANSPARENT),
+            };
+            iced::widget::button::Style {
+                background: Some(bg),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: border_c,
+                    ..Default::default()
+                },
+                text_color: if active { text_on } else { text_off },
+                ..iced::widget::button::Style::default()
+            }
+        })
+        .boxed()
 }
 
 /// Member chip for a custom-filter preset card (Properties panel).
@@ -757,14 +842,19 @@ pub fn preset_chip(
     let text_on = Color::WHITE;
     let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     iced::widget::button(
-        text(label.to_string())
-            .size(TS.body)
-            .color(if enabled { text_on } else { text_off })
+        chip_label(label.to_string(), enabled, text_on, text_off)
             .align_x(iced::alignment::Horizontal::Center),
     )
     .padding([3.0, SP.m])
     .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
+    .style(move |theme: &Theme, status: iced::widget::button::Status| {
+        if let Some(style) = graphite_filter_chip(
+            theme,
+            enabled,
+            matches!(status, iced::widget::button::Status::Hovered),
+        ) {
+            return style;
+        }
         let bg = match status {
             iced::widget::button::Status::Hovered => Background::Color(hover_bg),
             _ => Background::Color(if enabled { active_bg } else { inactive_bg }),

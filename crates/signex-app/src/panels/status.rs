@@ -405,7 +405,123 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
 // ─── Messages Panel ───────────────────────────────────────────
 
+/// Column widths of the Graphite Messages table; MESSAGE takes the rest.
+const MSG_CLASS_W: f32 = 84.0;
+const MSG_DOCUMENT_W: f32 = 150.0;
+const MSG_SOURCE_W: f32 = 160.0;
+const MSG_TIME_W: f32 = 84.0;
+
+/// The Graphite Messages table: CLASS / DOCUMENT / SOURCE / MESSAGE / TIME
+/// header, hairline rows, and a centred empty state. The log entries carry
+/// no document or time, so those cells read as an honest dash.
+fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let r = crate::styles::tokens::resolve(tokens);
+    let (sunken, line, ink3, ink4) = (r.sunken, r.line_soft, r.ink3, r.ink4);
+    let ink = theme_ext::text_primary(tokens);
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let rule = move || -> Element<'a, PanelMsg> {
+        container(Space::new())
+            .height(Length::Fixed(1.0))
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(line)),
+                ..container::Style::default()
+            })
+            .boxed()
+    };
+    let cell = |content: Element<'a, PanelMsg>, width: Length| -> Element<'a, PanelMsg> {
+        container(content)
+            .padding([0.0, 12.0])
+            .width(width)
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .clip(true)
+            .boxed()
+    };
+    let caps = move |label: &'static str| -> Element<'a, PanelMsg> {
+        text(label).size(TS.section).color(ink3).boxed()
+    };
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
+    col = col.push(
+        container(
+            row![
+                cell(caps("CLASS"), Length::Fixed(MSG_CLASS_W)),
+                cell(caps("DOCUMENT"), Length::Fixed(MSG_DOCUMENT_W)),
+                cell(caps("SOURCE"), Length::Fixed(MSG_SOURCE_W)),
+                cell(caps("MESSAGE"), Length::Fill),
+                cell(caps("TIME"), Length::Fixed(MSG_TIME_W)),
+            ]
+            .width(Length::Fill),
+        )
+        .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT))
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(sunken)),
+            ..container::Style::default()
+        })
+        .boxed(),
+    );
+    col = col.push(rule());
+
+    if ctx.diagnostics.is_empty() {
+        col = col.push(
+            container(
+                iced::widget::column![
+                    text("No runtime messages yet").size(TS.body).color(ink3),
+                    text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
+                        .size(TS.caption)
+                        .color(ink4),
+                ]
+                .spacing(SP.xs)
+                .align_x(iced::Alignment::Center),
+            )
+            .padding([24.0, 12.0])
+            .width(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .boxed(),
+        );
+        return container(col).width(Length::Fill).boxed();
+    }
+
+    let dash =
+        move || -> Element<'a, PanelMsg> { text("\u{2014}").size(TS.body).color(ink4).boxed() };
+    for entry in ctx.diagnostics.iter().rev() {
+        col = col.push(
+            container(
+                row![
+                    cell(level_pill(tokens, entry.level), Length::Fixed(MSG_CLASS_W)),
+                    cell(dash(), Length::Fixed(MSG_DOCUMENT_W)),
+                    cell(
+                        text(entry.code.as_str().to_string())
+                            .size(TS.body)
+                            .font(mono)
+                            .color(ink3)
+                            .boxed(),
+                        Length::Fixed(MSG_SOURCE_W),
+                    ),
+                    cell(
+                        text(entry.message.as_str().to_string())
+                            .size(TS.body)
+                            .color(ink)
+                            .boxed(),
+                        Length::Fill,
+                    ),
+                    cell(dash(), Length::Fixed(MSG_TIME_W)),
+                ]
+                .width(Length::Fill),
+            )
+            .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT))
+            .boxed(),
+        );
+        col = col.push(rule());
+    }
+    container(col).width(Length::Fill).boxed()
+}
+
 pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    if crate::styles::is_graphite(&ctx.tokens) {
+        return view_messages_graphite(ctx);
+    }
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     if !crate::styles::is_graphite(&ctx.tokens) {
