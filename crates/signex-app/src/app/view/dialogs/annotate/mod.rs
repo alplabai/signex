@@ -634,6 +634,12 @@ impl Signex {
                     ))),
                 ),
                 dialog_button(
+                    "Close",
+                    DialogButtonKind::Cancel,
+                    Some(Message::Annotate(AnnotateMsg::CloseDialog)),
+                    tokens,
+                ),
+                dialog_button(
                     "Accept Changes",
                     gr::call_to_action(tokens),
                     if changes == 0 || self.ui_state.annotate_preview.loading || busy {
@@ -645,7 +651,6 @@ impl Signex {
                     },
                     tokens,
                 ),
-                secondary("Close", Some(Message::Annotate(AnnotateMsg::CloseDialog))),
             ],
         );
 

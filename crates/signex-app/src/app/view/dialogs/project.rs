@@ -552,7 +552,7 @@ impl Signex {
 fn with_graphite_intro<'a>(
     icon: DialogIcon,
     title: &'static str,
-    body: iced::widget::Column<'a, Message>,
+    body: iced::widget::Column<Element<'a, Message>>,
     gap: f32,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {

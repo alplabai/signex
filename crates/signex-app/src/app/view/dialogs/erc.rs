@@ -147,12 +147,17 @@ impl Signex {
             extras,
             vec![
                 dialog_button(
+                    "Close",
+                    DialogButtonKind::Cancel,
+                    Some(Message::Erc(ErcMsg::CloseDialog)),
+                    tokens,
+                ),
+                dialog_button(
                     "Run ERC",
                     DialogButtonKind::Primary,
                     Some(Message::Erc(ErcMsg::Run)),
                     tokens,
                 ),
-                secondary("Close", Some(Message::Erc(ErcMsg::CloseDialog))),
             ],
         );
 

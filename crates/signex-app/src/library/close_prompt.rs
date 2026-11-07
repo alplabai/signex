@@ -132,7 +132,7 @@ pub fn view<'a>(
     // to the content) the footer stays at the bottom.
     let mut card = column![header, body];
     if windowed {
-        card = card.push(Space::new().height(Length::Fill));
+        card = card.push(Space::new().height(Length::Fill).boxed());
     }
     container(
         card.push(footer)

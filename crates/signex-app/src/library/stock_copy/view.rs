@@ -100,7 +100,7 @@ pub fn view<'a>(
     // window it fills the window, which is sized to the content.
     let mut card = column![header, container(body).padding(sp.l)];
     if windowed {
-        card = card.push(Space::new().height(Length::Fill));
+        card = card.push(Space::new().height(Length::Fill).boxed());
     }
     let height = if windowed {
         Length::Fill

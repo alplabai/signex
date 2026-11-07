@@ -405,7 +405,7 @@ pub fn view_delete_confirm<'a>(
 
     let mut card = column![header, body];
     if windowed {
-        card = card.push(Space::new().height(Length::Fill));
+        card = card.push(Space::new().height(Length::Fill).boxed());
     }
     container(
         card.push(footer)
