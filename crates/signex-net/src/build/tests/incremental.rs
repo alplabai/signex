@@ -285,6 +285,14 @@ fn a_queried_pin_tip_inside_a_wire_reports_the_wire_like_the_full_derive() {
     let base = NetBase::new(&before);
     let tip = pt_key(&pt(10.0, 0.0));
     let far = pt_key(&pt(15.0, 5.0));
+    let (nets, found) = net_signatures_at(&before, &[(tip, true), (tip, false)]);
+    let named = |name: &str| nets.iter().position(|n| n.name == name);
+    assert_eq!(found[0].1, named("B"), "the tip is on the wire: {nets:?}");
+    assert_ne!(
+        found[1].1,
+        named("B"),
+        "off the wire it is the pin's own net"
+    );
     for at in [
         vec![(tip, true)],
         vec![(tip, false)],

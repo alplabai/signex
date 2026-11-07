@@ -33,16 +33,19 @@ fn unique<I: IntoIterator<Item = Uuid>>(ids: I) -> Option<HashSet<Uuid>> {
     ids.into_iter().all(|id| seen.insert(id)).then_some(seen)
 }
 
-/// Twice the tolerance around a wire: every point the verdict of a dot could
-/// read the wire from.
-fn area_of((a, b): (Point, Point)) -> Area {
+/// The wire's bounding box grown by twice the tolerance: every point the
+/// verdict of a dot could read the wire from. `None` for a non-finite wire.
+fn area_of((a, b): (Point, Point)) -> Option<Area> {
+    if ![a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite()) {
+        return None;
+    }
     let margin = 2.0 * crate::JUNCTION_TOLERANCE_MM;
-    (
+    Some((
         a.x.min(b.x) - margin,
         a.y.min(b.y) - margin,
         a.x.max(b.x) + margin,
         a.y.max(b.y) + margin,
-    )
+    ))
 }
 
 fn inside(p: Point, (x0, y0, x1, y1): Area) -> bool {
@@ -81,7 +84,8 @@ impl DotVerdicts {
 
     /// Where `wires` differ from the judged wires: the areas of every wire
     /// added, removed or changed, as it was and as it is. `None` when two of
-    /// `wires` share an id.
+    /// `wires` share an id, or a changed wire has a non-finite coordinate (its
+    /// key-space extent need not lie in its area): then every dot is judged.
     pub(crate) fn changed_areas(&self, wires: &[Wire]) -> Option<Vec<Area>> {
         let now = unique(wires.iter().map(|w| w.uuid))?;
         let mut areas = Vec::new();
@@ -89,15 +93,16 @@ impl DotVerdicts {
             let geom = (wire.start, wire.end);
             match self.wires.get(&wire.uuid) {
                 Some(&was) if was == geom => {}
-                Some(&was) => areas.extend([area_of(was), area_of(geom)]),
-                None => areas.push(area_of(geom)),
+                Some(&was) => areas.extend([area_of(was)?, area_of(geom)?]),
+                None => areas.push(area_of(geom)?),
             }
         }
         areas.extend(
             self.wires
                 .iter()
                 .filter(|(id, _)| !now.contains(id))
-                .map(|(_, &was)| area_of(was)),
+                .map(|(_, &was)| area_of(was))
+                .collect::<Option<Vec<_>>>()?,
         );
         Some(areas)
     }
@@ -167,8 +172,19 @@ mod tests {
             for _ in 0..12 {
                 sheet.wires.push(random_wire(&mut rng));
             }
+            // Dots on wire ends, and just off them inside the tolerance (on
+            // either axis, and a few key units off in the 1 um key space), so
+            // an area smaller than the tolerance would reuse a stale verdict.
+            const NEAR: [(f64, f64); 5] = [
+                (0.0, 0.0),
+                (0.009, 0.0),
+                (0.0, -0.009),
+                (-0.003, 0.003),
+                (0.0, 0.0004),
+            ];
             let dots: Vec<Point> = (sheet.wires.iter())
                 .flat_map(|w| [w.start, w.end])
+                .flat_map(|p| NEAR.map(|(dx, dy)| Point::new(p.x + dx, p.y + dy)))
                 .chain((0..6).map(|_| rng.spot()))
                 .collect();
             sheet.junctions = dots
@@ -207,6 +223,19 @@ mod tests {
             }
         }
         assert!(reused > 1000, "only {reused} verdicts reused");
+    }
+
+    #[test]
+    fn a_changed_wire_with_a_non_finite_end_judges_every_dot() {
+        let mut sheet = SchematicSheet::default();
+        sheet
+            .wires
+            .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        let verdicts = DotVerdicts::new(&sheet).expect("unique");
+        let mut edited = sheet.wires.clone();
+        edited[0].start.x = f64::NAN;
+        assert!(verdicts.changed_areas(&edited).is_none());
+        assert!(verdicts.changed_areas(&sheet.wires).is_some());
     }
 
     #[test]

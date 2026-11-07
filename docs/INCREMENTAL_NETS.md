@@ -93,10 +93,11 @@ the touched wires need and drops every minted dot no wire meeting justifies
 any more. Whether a dot is justified reads only the wires within the junction
 tolerance of its point. `MovePreview` therefore judges every minted dot of the
 pre-move sheet once (`transform/dot_verdicts.rs`); a step diffs the wires by
-id and judges again only the dots that moved, are new, or lie within twice the
-tolerance of a wire that was added, removed or changed (old and new
-geometry). Every other dot keeps its pre-move verdict. A sheet with two wires
-of one id is judged in full.
+id and judges again only the dots that moved, are new, or lie inside the
+bounding box, grown by twice the tolerance, of a wire that was added, removed
+or changed (old and new geometry). Every other dot keeps its pre-move verdict.
+A sheet with two wires of one id, or a changed wire with a non-finite
+coordinate, is judged in full.
 
 The wire index behind those checks grids every wire of the sheet. With only a
 few lookups to answer (a single dragged part, few dots to judge) it hands
