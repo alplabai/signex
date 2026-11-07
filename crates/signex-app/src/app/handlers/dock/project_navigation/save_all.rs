@@ -12,6 +12,7 @@ use crate::app::FileMsg;
 use crate::app::contracts::{
     CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
 };
+use crate::app::document::DocumentKey;
 use crate::app::handlers::document_files::FoldAnswer;
 use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::path_key_with;
@@ -89,22 +90,18 @@ impl Signex {
     ) -> anyhow::Result<Option<Task<Message>>> {
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
-        if self.document_state.engines.contains_key(path) {
-            return self
+        match self.document_state.document_key_for_path(path) {
+            Some(DocumentKey::Schematic(_)) => self
                 .begin_schematic_save(path.to_path_buf(), None)
-                .map(Some);
+                .map(Some),
+            Some(DocumentKey::Symbol(_) | DocumentKey::Footprint(_)) => {
+                self.save_primitive_tab_at(path).map(Some)
+            }
+            Some(DocumentKey::Project(_)) => self.save_project_at_path(path).map(Some),
+            Some(DocumentKey::Pcb(_) | DocumentKey::Row(_)) | None => anyhow::bail!(
+                "no open editor, engine, or project backs this file — it can't be saved automatically"
+            ),
         }
-        if self.document_state.symbol_editors.contains_key(path)
-            || self.document_state.footprint_editors.contains_key(path)
-        {
-            return self.save_primitive_tab_at(path).map(Some);
-        }
-        if self.document_state.projects.iter().any(|p| p.path == path) {
-            return self.save_project_at_path(path).map(Some);
-        }
-        anyhow::bail!(
-            "no open editor, engine, or project backs this file — it can't be saved automatically"
-        )
     }
 
     /// Start the Save-All pass. A loose document (no open project) is keyed
