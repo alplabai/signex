@@ -29,6 +29,7 @@ mod managers;
 mod pad;
 mod pad_stack_check;
 mod redundant;
+mod rows;
 mod sections;
 mod selection;
 mod silk;
@@ -314,7 +315,5 @@ fn props_kv_row<'a>(
     key: &str,
     value: String,
 ) -> Column<Element<'a, PanelMsg>> {
-    col.push(super::form_input_row(
-        key, &value, label_c, input_bg, input_bdr,
-    ))
+    col.push(rows::value_row(key, &value, label_c, input_bg, input_bdr))
 }

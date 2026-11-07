@@ -263,6 +263,25 @@ impl Signex {
         // window's refresh runs with its sheet swapped in and must not
         // retarget them at that sheet's project.
         let main_level = self.interaction_state.acting_window.is_none();
+        if main_level {
+            let context = match self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .map(|tab| &tab.kind)
+            {
+                Some(crate::app::TabKind::FootprintEditor(_)) => {
+                    Some(crate::dock::EditorContext::Footprint)
+                }
+                Some(crate::app::TabKind::SymbolEditor(_)) => {
+                    Some(crate::dock::EditorContext::Symbol)
+                }
+                _ => None,
+            };
+            if let Some(context) = context {
+                self.document_state.dock.seed_for_editor(context);
+            }
+        }
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
         let navigator = if main_level {
             self.drop_pending_profile_update_for_other_project();

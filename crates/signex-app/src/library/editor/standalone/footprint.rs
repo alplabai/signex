@@ -90,6 +90,7 @@ pub fn view_footprint<'a>(
         EditorMode::Sketch | EditorMode::Normal => {
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
+                .push(super::dof_chip::overlay(editor, tokens))
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)

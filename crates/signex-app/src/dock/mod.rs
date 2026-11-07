@@ -20,5 +20,6 @@ pub use layout_sync::{
 };
 pub use placement::{DropGeometry, RegionExtent, drop_target};
 pub use types::{
-    DockArea, DockMessage, DockTabAction, DockTabMenu, FloatingPanel, PanelPosition, PanelSite,
+    DockArea, DockMessage, DockTabAction, DockTabMenu, EditorContext, FloatingPanel, PanelPosition,
+    PanelSite,
 };
