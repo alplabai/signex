@@ -512,9 +512,8 @@ fn bridging_an_8000_hole_strip_stays_near_linear() {
 }
 
 /// A 1000 : 1 strip of cut-outs triangulates to the right area. The time
-/// bound here only catches a blow-up in the whole pipeline; the clipper still
-/// takes more than linear time on a strip (long thin ears query a box across
-/// it), so the tight bounds are on the bridging above.
+/// bound here only catches a blow-up in the whole pipeline; the tight bound is
+/// the candidate count below.
 #[test]
 fn a_1000_to_1_strip_of_cut_outs_triangulates_exactly() {
     let (outer, holes) = strip_of_cut_outs(1000, 16);
@@ -527,24 +526,44 @@ fn a_1000_to_1_strip_of_cut_outs_triangulates_exactly() {
     );
 }
 
-/// The clipper looks at a bounded number of reflex vertices per ear on a
-/// strip of cut-outs. Its ears are long and thin and most are blocked by a
-/// vertex far along the strip, so a box query or a scan up to the blocker
-/// looks at millions of vertices here (8.2 million for 18004 vertices, and
-/// quadratic in the strip length). Counting vertices rather than time keeps
-/// the bound exact on any machine.
+/// The clipper's order is not the ring's order, so a strip is checked for a
+/// true partition (exact area, every sample covered once or not at all).
 #[test]
-fn clipping_a_strip_of_cut_outs_tests_few_vertices_per_ear() {
-    let (outer, holes) = strip_of_cut_outs(1000, 16);
+fn a_strip_of_cut_outs_is_partitioned_exactly() {
+    let (outer, holes) = strip_of_cut_outs(150, 16);
+    assert_eq!(partition_error(&outer, &holes), None);
+}
+
+/// Reflex vertices the blocking test looked at while clipping a strip of
+/// `count` cut-outs, and the merged ring's size.
+fn strip_candidates(count: usize) -> (usize, usize) {
+    let (outer, holes) = strip_of_cut_outs(count, 16);
     let merged = super::holes::merge_holes(outer, holes);
     super::tolerant_clip::CANDIDATES_TESTED.with(|n| n.set(0));
     let tris = super::tolerant_clip::clip_ears_tolerant(&merged);
     let tested = super::tolerant_clip::CANDIDATES_TESTED.with(|n| n.get());
-    assert_eq!(tris.len(), merged.len() - 2);
+    // Degenerate ring vertices are dropped, so fewer than `len - 2` triangles.
+    assert!(tris.len() + 2 <= merged.len());
+    (tested, merged.len())
+}
+
+/// The clipper looks at a bounded number of reflex vertices per ear on a
+/// strip of cut-outs, and that number does not grow with the strip. Clipping
+/// in strip order makes long thin ears that are blocked by a vertex far along
+/// the strip, so the count per ring vertex grows with the length (456 per
+/// vertex at 1000 holes with a box query, quadratic overall). Counting
+/// vertices rather than time keeps the bound exact on any machine.
+#[test]
+fn clipping_a_strip_of_cut_outs_tests_few_vertices_per_ear() {
+    let (short_tested, short_len) = strip_candidates(500);
+    let (long_tested, long_len) = strip_candidates(2000);
+    let short = short_tested as f64 / short_len as f64;
+    let long = long_tested as f64 / long_len as f64;
+    assert!(long < 120.0, "{long} vertices tested per ring vertex");
+    // Quadratic growth would make the longer strip 4x dearer per vertex.
     assert!(
-        tested < 120 * merged.len(),
-        "{tested} vertices tested for a ring of {}",
-        merged.len()
+        long < 2.0 * short.max(1.0),
+        "per-vertex cost grew from {short} (500 holes) to {long} (2000 holes)"
     );
 }
 
