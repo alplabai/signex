@@ -30,6 +30,7 @@ mod header;
 mod keyed;
 mod look;
 mod names;
+mod preview;
 mod price;
 mod sidebar;
 mod size_sensor;
@@ -211,7 +212,17 @@ pub fn view<'a>(
     // (visible regression: "double-clicking the .snxlib opens
     // nothing"). The original three-child Row hid this because two
     // of the children were fixed-width.
-    let body = row![left].width(Length::Fill).height(Length::Fill);
+    // Graphite: a preview pane for the selected row sits to the right.
+    let mut body: iced::widget::Row<Element<'a, LibraryMessage>> =
+        row![left.boxed()].spacing(SP.m);
+    if crate::styles::is_graphite(tokens)
+        && let Some(selected) = browser.selected_row
+        && let Some(picked) = rows.iter().find(|r| RowId::from_uuid(r.row_id) == selected)
+    {
+        let names = names::PrimitiveNames::of(lib);
+        body = body.push(preview::view_preview(picked, &names, tokens));
+    }
+    let body = body.width(Length::Fill).height(Length::Fill);
 
     // Range filters on the measurement columns (#1572, phase 4).
     let range_bar = range_filter_bar(

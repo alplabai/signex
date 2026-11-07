@@ -89,6 +89,7 @@ fn graphite_header<'a>(
         })
         .padding(SP.s)
         .size(BROWSER_TEXT_SIZE)
+        .style(super::look::bare_input(tokens))
         .width(Length::Fill);
     let search_field = container(search)
         .width(Length::Fill)
