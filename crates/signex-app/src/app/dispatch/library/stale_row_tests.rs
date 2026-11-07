@@ -438,6 +438,7 @@ fn primitive_saved_with_cascade(
             file: WrittenContainer::Symbol(file),
             versions: std::collections::HashMap::new(),
             commit_message: "Save symbol S".into(),
+            library: None,
             cascaded_rows: rows,
             cascade_owed: Vec::new(),
             cascaded_elsewhere: Vec::new(),
