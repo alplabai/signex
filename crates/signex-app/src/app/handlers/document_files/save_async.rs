@@ -55,12 +55,8 @@ impl Signex {
             .get(&source)
             .with_context(|| format!("no open schematic at {}", source.display()))?;
         let revision = engine.revision();
-        let net_color_revision = self.net_color_revision_of(&source);
         let bytes = engine
-            .serialize_with_extents(
-                &self.ui_state.wire_color_overrides,
-                crate::schematic_runtime::text_width::live_extent_measure(),
-            )
+            .serialize_with_extents(crate::schematic_runtime::text_width::live_extent_measure())
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was
@@ -78,7 +74,6 @@ impl Signex {
             job,
             target,
             revision,
-            net_color_revision,
             save_as_from,
             hold,
         ))
@@ -154,9 +149,8 @@ impl Signex {
             .begin(path.clone(), bytes)
             .expecting(expected);
         let hold = self.document_state.autosave.hold_for_save();
-        // Net colours are a schematic concern; a board has none, so 0.
         Ok(Some(Self::spawn_document_write(
-            job, path, revision, 0, None, hold,
+            job, path, revision, None, hold,
         )))
     }
 
@@ -164,7 +158,6 @@ impl Signex {
         job: crate::persist::DocumentSaveJob,
         target: PathBuf,
         revision: u64,
-        net_color_revision: u64,
         save_as_from: Option<PathBuf>,
         hold: crate::autosave::SaveHold,
     ) -> Task<Message> {
@@ -181,7 +174,6 @@ impl Signex {
                 Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
                     path: target.clone(),
                     revision,
-                    net_color_revision,
                     save_as_from: save_as_from.clone(),
                     bytes: Arc::clone(&bytes),
                     sequence,
@@ -201,7 +193,6 @@ impl Signex {
         let DocumentSaveDone {
             path,
             revision,
-            net_color_revision,
             save_as_from,
             bytes,
             sequence,
@@ -253,13 +244,13 @@ impl Signex {
         let mut project_write = Task::none();
         match save_as_from {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision, saved),
-            None => self.mark_saved(&path, revision, net_color_revision, saved),
+            None => self.mark_saved(&path, revision, saved),
             Some(from) => {
                 self.document_state
                     .document_saves
                     .forget_disk_records(&from);
                 self.record_real_path_of(&path);
-                project_write = self.apply_saved_as(&from, path, revision, net_color_revision);
+                project_write = self.apply_saved_as(&from, path, revision);
             }
         }
         self.warn_unwritten_spellings(&outcome_path);
@@ -315,7 +306,6 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
         revision: u64,
-        net_color_revision: u64,
         saved: crate::app::state::CommitBytes,
     ) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
@@ -339,16 +329,6 @@ impl Signex {
                 engine.forget_save_point();
             }
             self.document_state.sync_history_dirty(path);
-            return;
-        }
-        // The engine's document is what is on disk, even if a colour change
-        // keeps the sheet dirty below.
-        if let Some(engine) = self.document_state.engines.get_mut(path) {
-            engine.mark_saved();
-        }
-        // A colour changed while the write ran: the file lacks it, so the
-        // sheet stays dirty and the next save writes it.
-        if self.net_color_revision_of(path) != net_color_revision {
             return;
         }
         self.finish_clean_save(path, saved);
@@ -387,7 +367,7 @@ impl Signex {
         // The tab closed mid-save and parked the engine because it was
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
-            self.forget_net_colors_of(path);
+            self.forget_net_class_picks_on(path);
             self.document_state.remove_engine(path);
             self.document_state.document_saves.forget_disk_records(path);
         }
@@ -412,16 +392,15 @@ impl Signex {
         from: &std::path::Path,
         to: PathBuf,
         revision: u64,
-        net_color_revision: u64,
     ) -> Task<Message> {
         // The window that started the Save As shows the document, whichever
         // tab the main window has active now (#1794).
         if let Some(window) = self.undocked_schematic_window(from) {
             return self.run_in_window_document(window, |app| {
-                app.apply_saved_as_to_active(from, to.clone(), revision, net_color_revision)
+                app.apply_saved_as_to_active(from, to.clone(), revision)
             });
         }
-        self.apply_saved_as_to_active(from, to, revision, net_color_revision)
+        self.apply_saved_as_to_active(from, to, revision)
     }
 
     fn apply_saved_as_to_active(
@@ -429,7 +408,6 @@ impl Signex {
         from: &std::path::Path,
         to: PathBuf,
         revision: u64,
-        net_color_revision: u64,
     ) -> Task<Message> {
         let still_active = matches!(
             self.document_state.tabs.get(self.document_state.active_tab),
@@ -465,14 +443,9 @@ impl Signex {
             session.finish_save_as(to.clone(), revision);
         });
         if renamed.is_some() {
-            let colours_moved_on = self.net_color_revision_of(from) != net_color_revision;
-            // The colour revision and the net-colour / net-class pick history
-            // follow the re-pathed engine; dirty and disk records are Save As's own.
+            // The net-class pick history follows the re-pathed engine; dirty
+            // and disk records are Save As's own.
             self.rekey_path_keyed_records(from, &to);
-            if colours_moved_on {
-                self.document_state.mark_document_dirty(&to);
-                self.refresh_panel_ctx();
-            }
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
             return self.follow_save_as_in_project(owner, from, &to);
         }

@@ -107,7 +107,7 @@ fn engine_of(sheet: SchematicSheet) -> signex_engine::Engine {
 
 fn saved(engine: &signex_engine::Engine) -> SchematicSheet {
     let text = engine
-        .serialize_with_extents(&Default::default(), text_width::live_extent_measure())
+        .serialize_with_extents(text_width::live_extent_measure())
         .expect("serialise");
     signex_types::format::SnxSchematic::parse(&text)
         .expect("parse")

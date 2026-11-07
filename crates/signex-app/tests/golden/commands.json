@@ -115,6 +115,11 @@
     "category": "file"
   },
   {
+    "id": "color_net",
+    "group": "Schematic",
+    "category": "view"
+  },
+  {
     "id": "copy",
     "group": "General",
     "category": "edit"

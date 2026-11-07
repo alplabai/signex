@@ -746,7 +746,7 @@ fn open_edit_save_close_mid_flight_refuses_the_replace_and_keeps_the_saved_edit(
         bytes: std::sync::Arc::new(std::fs::read(&child).unwrap()),
         sequence: 1,
     };
-    app.mark_saved(&child, revision, 0, saved_bytes);
+    app.mark_saved(&child, revision, saved_bytes);
     let idx = app
         .document_state
         .tabs

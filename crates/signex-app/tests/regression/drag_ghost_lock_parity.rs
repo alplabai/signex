@@ -133,7 +133,7 @@ fn sheet(app: &Signex) -> SchematicSheet {
 fn ghost(app: &Signex, selection: &[SelectedItem]) -> SchematicSheet {
     let moves: Vec<_> = selection.iter().map(|item| (*item, 0.0, DY)).collect();
     signex_engine::MovePreview::new(&sheet(app))
-        .moved_with(&moves, app.ui_state.move_keeps_wires, &Default::default())
+        .moved_with(&moves, app.ui_state.move_keeps_wires)
         .0
 }
 
@@ -335,7 +335,7 @@ fn the_ghost_names_each_kind_of_hold_in_its_own_words() {
     let held = |selection: &[SelectedItem]| {
         let moves: Vec<_> = selection.iter().map(|item| (*item, 0.0, DY)).collect();
         signex_engine::MovePreview::new(&sheet(&rig.app))
-            .moved_with(&moves, true, &Default::default())
+            .moved_with(&moves, true)
             .1
     };
     assert_eq!(held(&[rig.symbol]), ["RHOLD1716"], "the part's own lock");
@@ -347,7 +347,7 @@ fn the_ghost_names_each_kind_of_hold_in_its_own_words() {
     let by_wire = self::rig("RHOLD1716W", false, true);
     let moves = [(by_wire.symbol, 0.0, DY)];
     let held = signex_engine::MovePreview::new(&sheet(&by_wire.app))
-        .moved_with(&moves, true, &Default::default())
+        .moved_with(&moves, true)
         .1;
     assert_eq!(held, ["RHOLD1716W (a wire attached to it is locked)"]);
 

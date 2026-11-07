@@ -435,6 +435,19 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetNetColors { colors } => {
+                if self.document.net_colors == colors {
+                    return Ok(CommandResult::unchanged());
+                }
+                self.document.net_colors = colors;
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::NET_COLORS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             _ => unreachable!(),
         }
     }

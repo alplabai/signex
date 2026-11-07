@@ -174,12 +174,11 @@ impl Signex {
         }
         match signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())) {
             Ok(engine) => {
-                self.forget_net_colors_of(path);
                 self.document_state
                     .engines
                     .insert(path.to_path_buf(), engine);
-                self.adopt_net_colors_of(path);
-                self.clear_net_color_steps(path);
+                // The picks were stamped on the engine just replaced.
+                self.forget_net_class_picks_on(path);
                 // An undocked window on this sheet must not keep drawing the
                 // replaced engine, nor select its objects.
                 self.refresh_slots_from_engine(
@@ -212,12 +211,9 @@ impl Signex {
     ) -> bool {
         match result {
             Ok(engine) => {
-                // The incoming sheet's saved colours replace those
-                // of the engine it stands in for.
-                self.forget_net_colors_of(&p);
                 self.document_state.insert_engine(p.clone(), engine);
-                self.adopt_net_colors_of(&p);
-                self.clear_net_color_steps(&p);
+                // The picks were stamped on the engine just replaced.
+                self.forget_net_class_picks_on(&p);
                 self.document_state.active_path = Some(p);
                 true
             }

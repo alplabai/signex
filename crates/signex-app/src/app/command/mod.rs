@@ -13,6 +13,9 @@ mod args;
 pub(crate) mod bridge;
 pub(crate) mod enablement;
 mod needs;
+#[cfg(test)]
+mod operand_handler_tests;
+mod operand_handlers;
 mod operands;
 mod outcome;
 #[cfg(test)]
@@ -24,6 +27,7 @@ pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
+pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;
 

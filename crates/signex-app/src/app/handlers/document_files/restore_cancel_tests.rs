@@ -11,6 +11,7 @@ use super::restore_commit_tests::{
     collect_messages, commit_revision, edit_description, editor_name, file_name, finish_restore,
     footprint_fixture, logged, marker_editor, named_footprint_fixture, open_tab, run_task,
 };
+use crate::app::handlers::editing_commands::net_color_driver::paint;
 use crate::app::{FileMsg, Message, Signex, TabInfo, TabKind};
 use crate::persist::{DocumentSaveDone, SaveOutcome};
 
@@ -366,7 +367,7 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
     let _ = app.handle_document_saved(DocumentSaveDone {
         path: path.clone(),
         revision,
-        net_color_revision: 0,
+
         save_as_from: None,
         bytes,
         sequence,
@@ -408,10 +409,10 @@ fn a_restore_over_edits_marks_the_tab_and_the_dirty_set_together() {
         "a clean tab to start"
     );
     let task = app.click_restore_on_listed_history(&sha);
-    // A colour override changes what the tab holds without either dirty
-    // marker having been told yet.
-    app.ui_state.wire_color_overrides.insert(
-        uuid::Uuid::now_v7(),
+    // A colour edit changes what the tab holds while the restore runs.
+    paint(
+        &mut app,
+        &[uuid::Uuid::now_v7()],
         signex_types::theme::Color::new(9, 0, 0, 255),
     );
 
@@ -644,7 +645,6 @@ fn arm_autosave_copy(app: &mut Signex, path: &Path) -> PathBuf {
     app.document_state.autosave.set_dir(Some(dir.clone()));
     let stamp = crate::autosave::DocStamp {
         revision: app.document_state.engines[path].revision(),
-        net_color_revision: 0,
     };
     let _ = app.document_state.autosave.begin(path);
     app.document_state.autosave.finish(path, stamp, true);
@@ -655,7 +655,6 @@ fn arm_autosave_copy(app: &mut Signex, path: &Path) -> PathBuf {
 fn stamp_of(app: &Signex, path: &Path) -> crate::autosave::DocStamp {
     crate::autosave::DocStamp {
         revision: app.document_state.engines[path].revision(),
-        net_color_revision: app.net_color_revision_of(path),
     }
 }
 
