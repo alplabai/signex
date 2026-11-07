@@ -848,42 +848,41 @@ fn filter_entry(
 /// full row) without `Fill` propagating to the viewport — which is the
 /// `Length::Fill`-inside-`Length::Shrink` trap iced 0.14 falls into.
 ///
-/// Widths are sized to the longest label in each menu (Roboto @ 13 +
+/// Widths are sized to the longest label in each menu (Inter @ 13 +
 /// 28 px icon column + 24 px button padding + a small safety margin).
 /// `Filter` returns `None` because its chip wrap layout already drives
 /// its own width.
 fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
-    // Width formula: ~6.5 px/char × longest_label + 60 px overhead
+    // Width formula: ~7 px/char × longest_label + 60 px overhead
     // (24 px button padding + 20 px icon column + 8 px spacing +
-    //  small safety). Roboto @ 13 px is narrower than the 8 px/char
-    // estimate I used originally — tightening removes the right-side
-    // dead space the user noticed.
+    //  small safety). Inter @ 13 px averages ~7 px/char, about 7% wider than the
+    // Roboto these were first measured in.
     Some(match menu {
         ActiveBarMenu::Filter => return None,
         // "Flip Selected Sheet Symbols Along X" (36 chars)
-        ActiveBarMenu::Select => 300.0,
+        ActiveBarMenu::Select => 320.0,
         // "Touching Rectangle" (18)
-        ActiveBarMenu::SelectMode => 180.0,
+        ActiveBarMenu::SelectMode => 195.0,
         // "Align Horizontal Centers" (24)
-        ActiveBarMenu::Align => 220.0,
+        ActiveBarMenu::Align => 235.0,
         // "Net Label" (9) — keep a usable minimum.
-        ActiveBarMenu::Wiring => 140.0,
+        ActiveBarMenu::Wiring => 150.0,
         // "Place Signal Ground power port" (30)
-        ActiveBarMenu::Power => 260.0,
+        ActiveBarMenu::Power => 280.0,
         // "Harness Connector" (17)
-        ActiveBarMenu::Harness => 180.0,
+        ActiveBarMenu::Harness => 195.0,
         // "Device Sheet Symbol" (19)
-        ActiveBarMenu::SheetSymbol => 190.0,
+        ActiveBarMenu::SheetSymbol => 205.0,
         // "Off Sheet Connector" (19)
-        ActiveBarMenu::Port => 190.0,
+        ActiveBarMenu::Port => 205.0,
         // "Differential Pair" (17)
-        ActiveBarMenu::Directives => 180.0,
+        ActiveBarMenu::Directives => 195.0,
         // "Text String" (11)
-        ActiveBarMenu::TextTools => 140.0,
+        ActiveBarMenu::TextTools => 150.0,
         // "Round Rectangle" (15)
-        ActiveBarMenu::Shapes => 170.0,
+        ActiveBarMenu::Shapes => 180.0,
         // "Clear All Net Colors" (20)
-        ActiveBarMenu::NetColor => 200.0,
+        ActiveBarMenu::NetColor => 215.0,
     })
 }
 
