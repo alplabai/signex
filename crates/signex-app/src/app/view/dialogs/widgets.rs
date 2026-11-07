@@ -47,7 +47,7 @@ pub(in crate::app::view) fn wrap_modal<'a>(
     modal_size: (f32, f32),
 ) -> Element<'a, Message> {
     // Absolute top-left = centre + drag offset. The Translate widget (see
-    // view/translate.rs) passes full parent limits to the child and then
+    // signex_widgets::Translate) passes full parent limits to the child and then
     // translates the child's layout node, so the modal keeps its fixed
     // width/height even when positioned partially off-screen. No clamp is
     // applied here — Altium lets modals drag completely off the client
@@ -72,7 +72,7 @@ pub(in crate::app::view) fn wrap_modal<'a>(
         .boxed();
 
     let positioned: Element<'a, Message> =
-        super::super::translate::Translate::new(inner, (left, top)).into();
+        signex_widgets::Translate::new(inner, (left, top)).into();
 
     iced::widget::stack![backdrop, positioned].boxed()
 }
@@ -94,6 +94,38 @@ pub(in crate::app::view) fn draggable_header<'a>(
 }
 
 impl Signex {
+    /// The click-outside layer for `on_dismiss`, then `card` as drawn (it
+    /// positions itself).
+    pub(in crate::app::view) fn dismiss_over<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+    ) -> Vec<Element<'a, Message>> {
+        vec![Self::dismiss_layer(on_dismiss), card]
+    }
+
+    /// [`Self::dismiss_over`] with `card` placed at the absolute `at`.
+    pub(in crate::app::view) fn dismiss_and_place<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+        at: (f32, f32),
+    ) -> Vec<Element<'a, Message>> {
+        Self::dismiss_over(on_dismiss, signex_widgets::Translate::new(card, at).boxed())
+    }
+
+    /// [`Self::dismiss_over`] with `card` centred in the window.
+    pub(in crate::app::view) fn dismiss_and_centre<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+    ) -> Vec<Element<'a, Message>> {
+        let centred = container(card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .boxed();
+        Self::dismiss_over(on_dismiss, centred)
+    }
+
     /// `body` as the in-window modal `modal`: sized to `desired`, capped to
     /// fit the window (#1227), centred, then moved by the modal's drag offset.
     pub(in crate::app::view) fn wrap_dialog<'a>(
@@ -268,6 +300,18 @@ pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dismiss_helpers_stack_the_backdrop_under_one_card() {
+        let card = || Space::new().boxed();
+        let msg = Message::noop;
+        assert_eq!(Signex::dismiss_over(msg(), card()).len(), 2);
+        assert_eq!(
+            Signex::dismiss_and_place(msg(), card(), (3.0, 4.0)).len(),
+            2
+        );
+        assert_eq!(Signex::dismiss_and_centre(msg(), card()).len(), 2);
+    }
 
     #[test]
     fn the_close_glyph_follows_the_theme_text_colour_on_light_and_dark() {

@@ -242,22 +242,14 @@ impl Signex {
     /// the left, the selected page full-size on the right, with Export PDF
     /// and Close buttons at the bottom. Triggered by File → Print Preview
     /// (Ctrl+P) and File → Export PDF; disappears on Close or when the
-    /// export completes. In-window flavour wraps the body in `wrap_modal`
+    /// export completes. In-window flavour wraps the body in `wrap_dialog`
     /// for backdrop + drag-to-position.
     pub(super) fn view_print_preview(&self) -> Element<'_, Message> {
         use crate::app::state::ModalId;
-        use crate::app::view::dialogs::wrap_modal;
-        let body = self.view_print_preview_inner(true);
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&ModalId::PrintPreview)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(
-            body,
-            offset,
-            self.ui_state.window_size,
+        // `pdf_modal_size` is already fitted; fitting again is a no-op.
+        self.wrap_dialog(
+            ModalId::PrintPreview,
+            self.view_print_preview_inner(true),
             self.pdf_modal_size(),
         )
     }
