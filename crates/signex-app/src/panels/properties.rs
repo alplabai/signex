@@ -357,6 +357,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     scrollable(col)
         .width(Length::Fill)
+        .height(Length::Fill)
         .style(super::form_look::scrollbar_style)
         .boxed()
 }
@@ -601,6 +602,7 @@ fn view_pre_placement<'a>(
     container(
         scrollable(col)
             .width(Length::Fill)
+            .height(Length::Fill)
             .style(super::form_look::scrollbar_style),
     )
     .width(Length::Fill)

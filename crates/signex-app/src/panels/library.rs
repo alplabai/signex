@@ -391,12 +391,16 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     };
 
     // Breadcrumb — file name + footprint count.
-    let file_name = fp
-        .path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("<unknown>")
-        .to_string();
+    // Graphite shows the footprint's display name; the file stem is a uuid.
+    let file_name = if crate::styles::is_graphite(&ctx.tokens) && !fp.footprint_name.is_empty() {
+        fp.footprint_name.clone()
+    } else {
+        fp.path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("<unknown>")
+            .to_string()
+    };
     let breadcrumb = format!(
         "{}  ({} footprint{})",
         file_name,
@@ -517,8 +521,8 @@ fn view_footprint_library_button_row<'a>(
                 .color(label_color)
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([SP.s, SP.l])
-        .width(Length::Fixed(64.0))
+        .padding([SP.s, SP.m])
+        .width(Length::Fill)
         .style(move |_: &Theme, status| {
             let bg = match status {
                 iced::widget::button::Status::Hovered if enabled => wash(0.06),
@@ -556,6 +560,7 @@ fn view_footprint_library_button_row<'a>(
     container(
         row![place, add, delete, edit]
             .spacing(SP.s)
+            .width(Length::Fill)
             .align_y(iced::Alignment::Center),
     )
     .padding([6.0, SP.m])

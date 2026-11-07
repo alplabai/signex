@@ -17,6 +17,7 @@ pub(crate) fn panel_scrollable<'a, M: 'a>(content: impl Into<Element<'a, M>>) ->
     scrollable(content.into())
         .direction(Direction::Vertical(Scrollbar::new().spacing(SCROLLBAR_GAP)))
         .width(Length::Fill)
+        .height(Length::Fill)
 }
 
 #[cfg(test)]

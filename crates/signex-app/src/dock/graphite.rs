@@ -157,20 +157,28 @@ pub(super) fn floating_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> containe
 /// side dock, less the scroll bar.
 const TAB_BUDGET: f32 = 236.0;
 /// Narrowest side padding of a tab label, and the widest (the roomy look).
-const TAB_PAD_MIN: f32 = 4.0;
+const TAB_PAD_MIN: f32 = 3.0;
 const TAB_PAD_MAX: f32 = 10.0;
 
-/// Side padding of every tab so the labels at `size` fit `TAB_BUDGET`:
-/// the roomy 10 px when they fit, down to 4 px as they crowd. The strip
-/// still scrolls when even that is too wide.
-pub(super) fn tab_padding(labels: &[&str], size: f32) -> f32 {
+/// Text size and side padding of every tab so the labels fit `TAB_BUDGET`:
+/// the roomy 10 px padding when they fit, then down to `TAB_PAD_MIN`, then
+/// the label size steps from `body` down to `floor`. The strip still scrolls
+/// when even that is too wide, but each label stays whole.
+pub(super) fn tab_layout(labels: &[&str], body: f32, floor: f32) -> (f32, f32) {
     if labels.is_empty() {
-        return TAB_PAD_MAX;
+        return (body, TAB_PAD_MAX);
     }
-    let text: f32 = labels
-        .iter()
-        .map(|l| super::measure::text_width(l, size))
-        .sum();
-    let pad = (TAB_BUDGET - text) / (2.0 * labels.len() as f32);
-    pad.clamp(TAB_PAD_MIN, TAB_PAD_MAX)
+    let count = labels.len() as f32;
+    let mut size = body;
+    loop {
+        let text: f32 = labels
+            .iter()
+            .map(|l| super::measure::text_width(l, size))
+            .sum();
+        let pad = (TAB_BUDGET - text) / (2.0 * count);
+        if pad >= TAB_PAD_MIN || size <= floor {
+            return (size, pad.clamp(TAB_PAD_MIN, TAB_PAD_MAX));
+        }
+        size = (size - 0.5).max(floor);
+    }
 }
