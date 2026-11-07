@@ -66,26 +66,24 @@ impl DocumentState {
         self.dirty_docs.paths.contains(path)
     }
 
-    /// Is any document dirty? Cheaper than counting.
+    /// The stored dirty set alone (no editor draft consulted).
+    pub(crate) fn stored_dirty_paths(&self) -> impl Iterator<Item = &PathBuf> {
+        self.dirty_docs.paths.iter()
+    }
+
+    /// Is any document dirty?
     pub fn has_dirty_documents(&self) -> bool {
-        !self.dirty_docs.paths.is_empty()
-            || self.symbol_editors.values().any(|e| e.is_dirty())
-            || self.footprint_editors.values().any(|e| e.is_dirty())
+        !self.unsaved_files().is_empty()
     }
 
     /// How many documents are dirty (the title bar's "N unsaved").
     pub fn dirty_document_count(&self) -> usize {
-        self.dirty_document_paths().len()
+        self.unsaved_files().len()
     }
 
     /// Every dirty document's path: the stored set plus the dirty drafts.
     pub fn dirty_document_paths(&self) -> HashSet<PathBuf> {
-        self.dirty_docs
-            .paths
-            .iter()
-            .cloned()
-            .chain(self.dirty_primitive_paths())
-            .collect()
+        self.unsaved_files().into_iter().collect()
     }
 
     /// Paths of the symbol and footprint editors with unsaved edits, plus
