@@ -17,6 +17,7 @@ mod confirms;
 mod create_child_sheet;
 mod erc;
 mod graphite;
+mod graphite_annotate;
 mod header;
 mod project;
 mod rule_editor;

@@ -2,11 +2,12 @@
 //! the typed characters highlighted, key caps for the binding, and a hint
 //! footer. The legacy rows stay in `overlays/mod.rs`.
 
-use iced::widget::{Row, Space, button, column, container, rich_text, span, text};
+use iced::widget::{Row, Space, button, column, container, rich_text, scrollable, span, text};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
-use crate::app::command_palette::{CommandEntry, CommandSource};
+use crate::app::command_palette::{CommandAction, CommandEntry, CommandSource};
+use crate::keymap::metadata_for;
 use crate::styles::{self, Radii, Spacing, TypeScale, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -16,14 +17,106 @@ fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
-/// Three-letter tag of a result source.
-pub(super) fn source_glyph(source: CommandSource) -> &'static str {
-    match source {
-        CommandSource::Command => "CMD",
-        CommandSource::Symbol => "CMP",
-        CommandSource::Net => "NET",
-        CommandSource::Sheet => "SHT",
-        CommandSource::File => "FIL",
+/// Path subtitle of a command row: its catalog category ("Place",
+/// "Modify", ...). Rows of other sources carry their own detail line.
+pub(super) fn path_subtitle(entry: &CommandEntry) -> Option<String> {
+    let category = match &entry.action {
+        CommandAction::Command(id) => metadata_for(id)?.category,
+        CommandAction::Panel(_) => "panels",
+        _ => return None,
+    };
+    let mut chars = category.chars();
+    let first = chars.next()?;
+    Some(first.to_uppercase().chain(chars).collect())
+}
+
+/// Group header: the group's title and how many of its rows are shown.
+pub(super) fn group_header<'a, M: 'a>(
+    theme_tokens: &ThemeTokens,
+    source: CommandSource,
+    count: usize,
+) -> Element<'a, M> {
+    let r = tokens::resolve(theme_tokens);
+    container(
+        Row::<Element<'a, M>>::new()
+            .spacing(SP.m)
+            .align_y(Alignment::Center)
+            .push(
+                text(source.group_title())
+                    .size(TS.section)
+                    .style(styles::section_label(theme_tokens))
+                    .boxed(),
+            )
+            .push(
+                text(count.to_string())
+                    .size(TS.section)
+                    .font(mono())
+                    .color(r.ink4)
+                    .boxed(),
+            ),
+    )
+    .padding([SP.m, SP.l])
+    .width(Length::Fill)
+    .boxed()
+}
+
+/// The card's own search row. The main window types into the chrome strip,
+/// so this echoes the live query (read only); a window palette passes its
+/// real input as `input`.
+pub(super) fn search_row<'a, M: 'a>(
+    theme_tokens: &ThemeTokens,
+    query: &str,
+    input: Option<Element<'a, M>>,
+) -> Element<'a, M> {
+    let r = tokens::resolve(theme_tokens);
+    let ink = ti(theme_tokens.text);
+    let body: Element<'a, M> = match input {
+        Some(input) => input,
+        None if query.is_empty() => text("Search commands, parts, nets")
+            .size(TS.body)
+            .color(r.ink4)
+            .width(Length::Fill)
+            .boxed(),
+        None => text(query.to_string())
+            .size(TS.body)
+            .color(ink)
+            .width(Length::Fill)
+            .boxed(),
+    };
+    let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
+    line = line.push(text("\u{2315}").size(TS.body).color(r.ink4).boxed());
+    line = line.push(body);
+    line = line.push(cap(theme_tokens, "Esc"));
+    let rule = r.line_soft;
+    container(line)
+        .padding([SP.l, SP.l])
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border::default().bottom(iced::border::Side::default().width(1.0).color(rule)),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// Themed scrollbar of the result list: a quiet rail, a thin rounded thumb.
+pub(super) fn scrollbar_style(
+    theme_tokens: &ThemeTokens,
+) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style + 'static {
+    let r = tokens::resolve(theme_tokens);
+    let (thumb, thumb_hot) = (r.line_strong, r.ink4);
+    move |theme: &Theme, status: scrollable::Status| {
+        let mut style = scrollable::default(theme, status);
+        let hot = !matches!(status, scrollable::Status::Active { .. });
+        for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
+            rail.background = None;
+            rail.border = Border::default();
+            rail.scroller.background = Background::Color(if hot { thumb_hot } else { thumb });
+            rail.scroller.border = Border {
+                radius: Radii::GRAPHITE.pill.into(),
+                ..Border::default()
+            };
+        }
+        style
     }
 }
 
@@ -72,31 +165,12 @@ pub(super) fn label_runs(label: &str, query: &str) -> Vec<(String, bool)> {
     runs
 }
 
-/// The keys of a shortcut label, one per cap: `"Ctrl+Shift+P"` gives
-/// `["Ctrl", "Shift", "P"]`; a trailing `+` key is kept.
-pub(super) fn shortcut_keys(label: &str) -> Vec<String> {
-    label
-        .replace("++", "+\u{0}")
-        .split(|c: char| c == '+' || c == ',' || c.is_whitespace())
-        .filter(|k| !k.is_empty())
-        .map(|k| k.replace('\u{0}', "+"))
-        .collect()
-}
-
 /// One key cap.
 pub(super) fn cap<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
     container(text(label.to_string()).size(TS.caption).font(mono()))
         .padding([1.0, SP.s + 1.0])
         .style(styles::key_cap(theme_tokens))
         .boxed()
-}
-
-fn caps_row<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
-    let mut caps: Row<Element<'a, M>> = Row::new().spacing(SP.xs + 1.0);
-    for key in shortcut_keys(label) {
-        caps = caps.push(cap(theme_tokens, &key));
-    }
-    caps.boxed()
 }
 
 /// One result row.
@@ -116,18 +190,13 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
             if hit { s.font(bold()) } else { s }
         })
         .collect();
-    let glyph = container(
-        text(source_glyph(entry.source))
-            .size(TS.caption)
-            .font(mono())
-            .color(r.ink3),
-    )
-    .width(Length::Fixed(TS.caption * 3.2));
     let mut label_col: iced::widget::Column<Element<'a, M>> =
         column![].spacing(SP.xs).width(Length::Fill);
     label_col = label_col.push(rich_text::<(), M, Theme>(spans).size(TS.label).boxed());
     let is_command = entry.source == CommandSource::Command;
-    if !is_command && !entry.detail.is_empty() {
+    if let Some(path) = path_subtitle(entry) {
+        label_col = label_col.push(text(path).size(TS.caption).color(r.ink3).boxed());
+    } else if !is_command && !entry.detail.is_empty() {
         label_col = label_col.push(
             text(entry.detail.clone())
                 .size(TS.caption)
@@ -137,10 +206,9 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
         );
     }
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
-    line = line.push(glyph.boxed());
     line = line.push(label_col.boxed());
     if is_command && !entry.detail.is_empty() {
-        line = line.push(caps_row(theme_tokens, &entry.detail));
+        line = line.push(cap(theme_tokens, &entry.detail));
     }
     let (active_fill, hover_fill) = (
         r.sunken,
@@ -189,7 +257,9 @@ pub(super) fn hint_footer<'a, M: 'a>(
     line = line.push(cap(theme_tokens, "\u{2193}"));
     line = line.push(hint("Navigate"));
     line = line.push(cap(theme_tokens, "Enter"));
-    line = line.push(hint("Run"));
+    line = line.push(hint("Open"));
+    line = line.push(cap(theme_tokens, "Esc"));
+    line = line.push(hint("Close"));
     line = line.push(Space::new().width(Length::Fill).boxed());
     if let Some(entry) = selected {
         line = line.push(
@@ -237,12 +307,5 @@ mod tests {
             label_runs("Place wire", ""),
             vec![("Place wire".into(), false)]
         );
-    }
-
-    #[test]
-    fn shortcut_label_splits_into_keys() {
-        assert_eq!(shortcut_keys("Ctrl+Shift+P"), ["Ctrl", "Shift", "P"]);
-        assert_eq!(shortcut_keys("Ctrl++"), ["Ctrl", "+"]);
-        assert_eq!(shortcut_keys("T A"), ["T", "A"]);
     }
 }

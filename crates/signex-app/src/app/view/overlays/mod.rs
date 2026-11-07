@@ -216,6 +216,12 @@ impl Signex {
         for (display_idx, entry) in results.iter().enumerate() {
             let is_active = display_idx == selected;
             if graphite {
+                // `results` is already grouped (see `group_for_display`), so
+                // a header goes wherever the source changes.
+                if display_idx == 0 || results[display_idx - 1].source != entry.source {
+                    let count = results.iter().filter(|e| e.source == entry.source).count();
+                    rows.push(palette::group_header(tokens, entry.source, count));
+                }
                 rows.push(palette::result_row(
                     tokens,
                     entry,
@@ -294,7 +300,12 @@ impl Signex {
                 .boxed()
         } else {
             let list = column(rows).spacing(SP.xs).padding(SP.s);
-            scrollable(list).height(Length::Shrink).boxed()
+            let list = scrollable(list).height(Length::Shrink);
+            if graphite {
+                list.style(palette::scrollbar_style(tokens)).boxed()
+            } else {
+                list.boxed()
+            }
         };
 
         // Footer when there are more matches than we render.
@@ -330,23 +341,39 @@ impl Signex {
         } else {
             self.chrome_search_bar_geometry()
         };
-        let input: Element<'_, Message> = if let Some(window) = self.ui_state.command_palette.window
-        {
-            text_input(
-                "Search files, symbols, commands…",
-                &self.ui_state.command_palette.query,
-            )
-            .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
-            .on_input(move |q| {
-                Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
-            })
-            .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
-            .padding(SP.l)
-            .size(TS.body)
-            .width(Length::Fill)
-            .boxed()
+        let ink4 = crate::styles::tokens::resolve(tokens).ink4;
+        let window_input: Option<Element<'_, Message>> =
+            self.ui_state.command_palette.window.map(|window| {
+                let field = text_input(
+                    "Search files, symbols, commands…",
+                    &self.ui_state.command_palette.query,
+                )
+                .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
+                .on_input(move |q| {
+                    Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
+                })
+                .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
+                .size(TS.body)
+                .width(Length::Fill);
+                if graphite {
+                    field
+                        .padding(0)
+                        .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
+                            background: Background::Color(Color::TRANSPARENT),
+                            border: Border::default(),
+                            placeholder: ink4,
+                            value: text_c,
+                            selection: Color { a: 0.4, ..text_c },
+                        })
+                        .boxed()
+                } else {
+                    field.padding(SP.l).boxed()
+                }
+            });
+        let input: Element<'_, Message> = if graphite {
+            palette::search_row(tokens, &self.ui_state.command_palette.query, window_input)
         } else {
-            Space::new().height(0).boxed()
+            window_input.unwrap_or_else(|| Space::new().height(0).boxed())
         };
         let graphite_card = crate::styles::modal_card(tokens);
         let card = container(column![input, body, footer])

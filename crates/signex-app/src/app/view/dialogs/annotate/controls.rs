@@ -1,17 +1,16 @@
 //! Small read-only form controls used by the Annotate modal — the inline
 //! checkbox pip, the order-of-processing radio pill, the 2×2 order-preview
-//! legend, and the shared bordered-container style.
-//!
-//! Moved verbatim out of `dialogs/annotate.rs` (ADR-0001, issue #164) as
-//! pure code motion — no behaviour change. These are free helper fns local
-//! to the annotate concern; kept `pub(super)` so only `annotate/mod.rs`
-//! reaches them.
+//! legend, and the shared bordered-container style. On Graphite each one
+//! delegates to `graphite_annotate`; other themes keep the original look.
 
 use super::super::*;
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Theme};
+use signex_types::theme::ThemeTokens;
 
+use super::super::graphite_annotate as ga;
 use crate::app::state::AnnotateOrder;
+use crate::styles::is_graphite;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -19,7 +18,14 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Tiny inline checkbox pip — read-only indicator used inside the Annotate
 /// dialog's parameter list and sheet table.
-pub(super) fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
+pub(super) fn check_pip(
+    on: bool,
+    border: Color,
+    theme_tokens: &ThemeTokens,
+) -> Element<'static, Message> {
+    if is_graphite(theme_tokens) {
+        return ga::checkbox_pip(theme_tokens, on);
+    }
     let inner = if on {
         text("✓").size(TS.caption).color(Color::WHITE)
     } else {
@@ -57,7 +63,9 @@ pub(super) fn order_preview(
     text_c: Color,
     text_muted: Color,
     border: Color,
+    theme_tokens: &ThemeTokens,
 ) -> Element<'static, Message> {
+    let graphite = is_graphite(theme_tokens);
     // Pick labels for each of the four slots (top-left, top-right, bottom-left,
     // bottom-right) matching the selected order.
     // Slot layout:
@@ -82,11 +90,21 @@ pub(super) fn order_preview(
         AnnotateOrder::AcrossThenUp => ("R3", "R4", "R1", "R2"),
     };
     let cell = |label: &'static str| -> Element<'static, Message> {
-        container(text(label.to_string()).size(TS.caption).color(text_c))
+        let label_text = text(label.to_string()).size(TS.caption).color(text_c);
+        let label_text = if graphite {
+            label_text.font(ga::mono())
+        } else {
+            label_text
+        };
+        let framed = container(label_text)
             .width(34)
             .height(20)
             .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
+            .align_y(iced::alignment::Vertical::Center);
+        if graphite {
+            return framed.style(ga::preview_cell(theme_tokens)).boxed();
+        }
+        framed
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
                 border: Border {
@@ -119,12 +137,18 @@ pub(super) fn order_preview(
         .align_x(iced::Alignment::Center),
     )
     .padding(6)
-    .style(bordered_style(border))
+    .style(bordered_style(border, theme_tokens))
     .boxed()
 }
 
-pub(super) fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'static {
-    move |_: &Theme| container::Style {
+pub(super) fn bordered_style(
+    border: Color,
+    theme_tokens: &ThemeTokens,
+) -> Box<dyn Fn(&Theme) -> container::Style + 'static> {
+    if is_graphite(theme_tokens) {
+        return Box::new(ga::field_box(theme_tokens));
+    }
+    Box::new(move |_: &Theme| container::Style {
         border: Border {
             width: 1.0,
             radius: 3.0.into(),
@@ -133,17 +157,51 @@ pub(super) fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Sty
         },
         background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.02))),
         ..container::Style::default()
-    }
+    })
 }
 
-pub(super) fn order_radio(
-    label: &str,
+/// Style of the per-row lock toggle.
+pub(super) fn lock_style(
+    theme_tokens: &ThemeTokens,
+    is_locked: bool,
+    border: Color,
+    text_c: Color,
+) -> Box<dyn Fn(&Theme, button::Status) -> button::Style + 'static> {
+    if is_graphite(theme_tokens) {
+        return Box::new(ga::toggle_style(theme_tokens, is_locked));
+    }
+    Box::new(move |_: &Theme, _| button::Style {
+        background: Some(Background::Color(if is_locked {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.12)
+        } else {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+        })),
+        border: Border {
+            width: 1.0,
+            radius: 2.0.into(),
+            color: border,
+            ..Border::default()
+        },
+        text_color: text_c,
+        ..button::Style::default()
+    })
+}
+
+pub(super) fn order_radio<'a>(
+    label: &'a str,
     value: AnnotateOrder,
     current: AnnotateOrder,
     text_c: Color,
     border: Color,
-) -> Element<'_, Message> {
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let selected = value == current;
+    if is_graphite(theme_tokens) {
+        return button(container(text(label.to_string()).size(TS.body)).padding([SP.s, 10.0]))
+            .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
+            .style(ga::toggle_style(theme_tokens, selected))
+            .boxed();
+    }
     let bg = if selected {
         Color::from_rgb(0.00, 0.47, 0.84)
     } else {
