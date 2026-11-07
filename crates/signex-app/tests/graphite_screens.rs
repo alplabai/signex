@@ -383,10 +383,23 @@ fn render_graphite_screens() {
     let dir = PathBuf::from(std::env::var("GRAPHITE_SHOTS_DIR").expect("GRAPHITE_SHOTS_DIR"));
     std::fs::create_dir_all(&dir).expect("out dir");
     let only = std::env::var("GRAPHITE_ONLY").ok();
+    // `GRAPHITE_THEMES=light,dark,legacy` picks the themes (default light,dark);
+    // `legacy` is the Signex theme, to compare a screen against the old look.
+    let wanted = std::env::var("GRAPHITE_THEMES").unwrap_or_default();
+    let wanted: Vec<&str> = wanted.split(',').filter(|t| !t.is_empty()).collect();
     for (suffix, theme) in [
         ("light", ThemeId::GraphiteLight),
         ("dark", ThemeId::GraphiteDark),
+        ("legacy", ThemeId::Signex),
     ] {
+        let on = if wanted.is_empty() {
+            suffix != "legacy"
+        } else {
+            wanted.contains(&suffix)
+        };
+        if !on {
+            continue;
+        }
         for (name, build) in screens() {
             if only.as_deref().is_some_and(|o| o != name) {
                 continue;

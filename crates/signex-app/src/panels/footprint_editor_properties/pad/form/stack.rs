@@ -49,6 +49,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         border: border_c,
         ..
     } = palette;
+    let fw = palette.field_widths();
     col = col.push(
         collapsible_section_header(
             "fp_pad_stack",
@@ -117,7 +118,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .corner_radius_pct
             .map(|v| format!("{v:.0}"))
             .unwrap_or_default();
-        col = col.push(pad_input_row(
+        col = col.push(pad_input_row_w(
+            fw,
             "Corner radius %",
             "25",
             corner_buf,
@@ -139,7 +141,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         for entry in shape_params.iter() {
             let key = entry.key.clone();
             let value_string = entry.current_expr.clone();
-            col = col.push(pad_input_row(
+            col = col.push(pad_input_row_w(
+                fw,
                 entry.label.as_str(),
                 "0.25mm",
                 value_string,
@@ -250,7 +253,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .hole_tolerance_plus_mm
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
-        col = col.push(pad_input_row(
+        col = col.push(pad_input_row_w(
+            fw,
             "Tolerance + (mm)",
             "0",
             tol_p_buf,
@@ -263,7 +267,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .hole_tolerance_minus_mm
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
-        col = col.push(pad_input_row(
+        col = col.push(pad_input_row_w(
+            fw,
             "Tolerance − (mm)",
             "0",
             tol_m_buf,
@@ -276,7 +281,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .hole_rotation_deg
             .map(|v| format!("{v:.1}"))
             .unwrap_or_default();
-        col = col.push(pad_input_row(
+        col = col.push(pad_input_row_w(
+            fw,
             "Hole rotation (°)",
             "0",
             rot_buf,
@@ -289,7 +295,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .copper_offset_x_mm
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
-        col = col.push(pad_input_row(
+        col = col.push(pad_input_row_w(
+            fw,
             "Copper offset X (mm)",
             "0",
             cox_buf,
@@ -302,7 +309,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .copper_offset_y_mm
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
-        col = col.push(pad_input_row(
+        col = col.push(pad_input_row_w(
+            fw,
             "Copper offset Y (mm)",
             "0",
             coy_buf,

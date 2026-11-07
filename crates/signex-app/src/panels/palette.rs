@@ -93,6 +93,8 @@ pub struct PanelPalette {
     pub panel_bg: Color,
     /// DOF chip looks of the sketch entity row.
     pub dof: DofLooks,
+    /// Whether the panel is drawn in a Graphite theme.
+    pub graphite: bool,
 }
 
 impl PanelPalette {
@@ -118,6 +120,17 @@ impl PanelPalette {
             seg_hover: crate::styles::ti(tokens.hover),
             panel_bg: crate::styles::ti(tokens.panel_bg),
             dof: DofLooks::for_tokens(tokens),
+            graphite: crate::styles::is_graphite(tokens),
+        }
+    }
+
+    /// `(label, value)` widths of a footprint Properties field row: the legacy
+    /// 110 px label, or the Graphite 4:5 split every other form row uses.
+    pub fn field_widths(&self) -> (iced::Length, iced::Length) {
+        if self.graphite {
+            (iced::Length::FillPortion(4), iced::Length::FillPortion(5))
+        } else {
+            (iced::Length::Fixed(110.0), iced::Length::Fill)
         }
     }
 }

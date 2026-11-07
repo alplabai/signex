@@ -6,7 +6,7 @@ use super::super::{
 };
 use super::managers::grid_manager_btn;
 use super::pad::{
-    PadEditTarget, PadFormValues, pad_check_row, pad_input_row, render_pad_form_pad_features,
+    PadEditTarget, PadFormValues, pad_check_row_w, pad_input_row_w, render_pad_form_pad_features,
     render_pad_form_pad_stack, render_pad_form_properties,
 };
 use super::props_kv_row;
@@ -40,6 +40,7 @@ pub(super) fn view_selection<'a>(
         panel_bg,
         ..
     } = palette;
+    let fw = palette.field_widths();
     match (
         fp.mode_kind,
         fp.selected_pad.as_ref(),
@@ -312,7 +313,8 @@ pub(super) fn view_selection<'a>(
                         col = silk_geometry_rows(col, &silk.kind, muted, primary, border_c);
 
                         // Stroke width (all kinds).
-                        col = col.push(pad_input_row(
+                        col = col.push(pad_input_row_w(
+                            fw,
                             "Stroke width (mm)",
                             "0.15",
                             format!("{:.3}", silk.stroke_width_mm),
@@ -324,7 +326,8 @@ pub(super) fn view_selection<'a>(
                         // Filled flag (only meaningful for closed shapes;
                         // surfacing for all so the user can flip it without
                         // hunting for the right tool).
-                        col = col.push(pad_check_row(
+                        col = col.push(pad_check_row_w(
+                            fw,
                             "Filled",
                             silk.filled,
                             PanelMsg::FpEditorToggleSilkFilled,

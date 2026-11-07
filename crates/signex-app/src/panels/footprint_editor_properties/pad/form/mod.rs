@@ -216,7 +216,8 @@ pad_msg_fns! {
 /// v0.20 — single-line label + text-input row used by every Pad
 /// Properties field. Mirrors the existing rotation/size_x rows'
 /// chrome (40 px label, padded input, dim border).
-pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
+pub(in crate::panels::footprint_editor_properties) fn pad_input_row_w<'a>(
+    fw: (Length, Length),
     label: &'a str,
     placeholder: &'a str,
     value: String,
@@ -227,12 +228,10 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
 ) -> iced::Element<'a, PanelMsg> {
     container(
         row![
-            text(label)
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::Fixed(110.0)),
+            text(label).size(TS.caption).color(muted).width(fw.0),
             text_input(placeholder, value)
                 .size(TS.caption)
+                .width(fw.1)
                 .padding(SP.xs)
                 .style(crate::panels::footprint_editor_properties::fp_field_style(
                     muted, primary, border_c
@@ -247,8 +246,31 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     .boxed()
 }
 
+/// Legacy-width [`pad_input_row_w`] (110 px label).
+pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
+    label: &'a str,
+    placeholder: &'a str,
+    value: String,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> iced::Element<'a, PanelMsg> {
+    pad_input_row_w(
+        (Length::Fixed(110.0), Length::Fill),
+        label,
+        placeholder,
+        value,
+        on_input,
+        muted,
+        primary,
+        border_c,
+    )
+}
+
 /// v0.20 — pick_list row for a Pad Properties field.
-pub(in crate::panels::footprint_editor_properties) fn pad_pick_row<'a, T>(
+pub(in crate::panels::footprint_editor_properties) fn pad_pick_row_w<'a, T>(
+    fw: (Length, Length),
     label: &'a str,
     options: &'a [T],
     selected: T,
@@ -260,16 +282,13 @@ where
 {
     container(
         row![
-            text(label)
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::Fixed(110.0)),
+            text(label).size(TS.caption).color(muted).width(fw.0),
             pick_list(Some(selected), options, |t: &T| t.to_string())
                 .on_select(on_change)
                 .text_size(10)
                 .padding([3.0, SP.m])
                 .style(crate::panels::form_look::pick_list_style)
-                .width(Length::Fill),
+                .width(fw.1),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
@@ -279,9 +298,49 @@ where
     .boxed()
 }
 
+/// Legacy-width [`pad_pick_row_w`] (110 px label).
+pub(in crate::panels::footprint_editor_properties) fn pad_pick_row<'a, T>(
+    label: &'a str,
+    options: &'a [T],
+    selected: T,
+    on_change: impl Fn(T) -> PanelMsg + 'a + Clone,
+    muted: Color,
+) -> iced::Element<'a, PanelMsg>
+where
+    T: Clone + Eq + std::fmt::Display + 'static,
+{
+    pad_pick_row_w(
+        (Length::Fixed(110.0), Length::Fill),
+        label,
+        options,
+        selected,
+        on_change,
+        muted,
+    )
+}
+
 /// v0.20 — checkbox row for a Pad Properties field. Label on left,
 /// flat checkbox on right.
+/// Legacy-width [`pad_check_row_w`] (110 px label).
 pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
+    label: &'a str,
+    on: bool,
+    on_toggle: impl Fn(bool) -> PanelMsg + 'a,
+    muted: Color,
+    primary: Color,
+) -> iced::Element<'a, PanelMsg> {
+    pad_check_row_w(
+        (Length::Fixed(110.0), Length::Fill),
+        label,
+        on,
+        on_toggle,
+        muted,
+        primary,
+    )
+}
+
+pub(in crate::panels::footprint_editor_properties) fn pad_check_row_w<'a>(
+    fw: (Length, Length),
     label: &'a str,
     on: bool,
     on_toggle: impl Fn(bool) -> PanelMsg + 'a,
@@ -293,7 +352,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
             text(label)
                 .size(TS.caption)
                 .color(if on { primary } else { muted })
-                .width(Length::Fixed(110.0)),
+                .width(fw.0),
             iced::widget::checkbox(on)
                 .on_toggle(on_toggle)
                 .size(TS.label)
@@ -326,6 +385,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         border: border_c,
         ..
     } = palette;
+    let fw = palette.field_widths();
     col = col.push(
         collapsible_section_header(
             "fp_pad_properties",
@@ -367,7 +427,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         }
     }
 
-    col = col.push(pad_input_row(
+    col = col.push(pad_input_row_w(
+        fw,
         "Designator",
         "(auto)",
         values.designator.clone(),
@@ -378,7 +439,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
     ));
 
     use crate::library::editor::footprint::state::PadSide;
-    col = col.push(pad_pick_row(
+    col = col.push(pad_pick_row_w(
+        fw,
         "Layer",
         PadSide::ALL_OPTIONS,
         values.side,
@@ -386,7 +448,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         muted,
     ));
 
-    col = col.push(pad_pick_row(
+    col = col.push(pad_pick_row_w(
+        fw,
         "Electrical Type",
         signex_sketch::attr::ElectricalType::ALL,
         values.electrical_type,
@@ -394,7 +457,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         muted,
     ));
 
-    col = col.push(pad_input_row(
+    col = col.push(pad_input_row_w(
+        fw,
         "Net",
         "(unassigned)",
         values.net.clone(),
@@ -404,7 +468,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         border_c,
     ));
 
-    col = col.push(pad_input_row(
+    col = col.push(pad_input_row_w(
+        fw,
         "Rotation (°)",
         "0",
         format!("{:.1}", values.rotation_deg),
@@ -414,7 +479,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         border_c,
     ));
 
-    col = col.push(pad_check_row(
+    col = col.push(pad_check_row_w(
+        fw,
         "Locked",
         values.locked,
         move |v| pad_locked_msg(target, v),
@@ -422,7 +488,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         primary,
     ));
 
-    col = col.push(pad_input_row(
+    col = col.push(pad_input_row_w(
+        fw,
         "Template",
         "",
         values.template.clone(),
@@ -431,7 +498,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         primary,
         border_c,
     ));
-    col = col.push(pad_input_row(
+    col = col.push(pad_input_row_w(
+        fw,
         "Library",
         "",
         values.template_library.clone(),
@@ -459,6 +527,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
         border: border_c,
         ..
     } = palette;
+    let fw = palette.field_widths();
     col = col.push(
         collapsible_section_header(
             "fp_pad_features",
@@ -474,14 +543,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     }
 
     use signex_sketch::attr::PadFeature;
-    col = col.push(pad_pick_row(
+    col = col.push(pad_pick_row_w(
+        fw,
         "Top Side",
         PadFeature::ALL,
         values.feature_top,
         move |v: PadFeature| pad_feature_top_msg(target, v),
         muted,
     ));
-    col = col.push(pad_pick_row(
+    col = col.push(pad_pick_row_w(
+        fw,
         "Bottom Side",
         PadFeature::ALL,
         values.feature_bottom,
@@ -495,28 +566,32 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
             .width(Length::Fill)
             .boxed(),
     );
-    col = col.push(pad_check_row(
+    col = col.push(pad_check_row_w(
+        fw,
         "Top Assembly",
         values.testpoint.top_assembly,
         move |v| pad_testpoint_top_assembly_msg(target, v),
         muted,
         primary,
     ));
-    col = col.push(pad_check_row(
+    col = col.push(pad_check_row_w(
+        fw,
         "Top Fab",
         values.testpoint.top_fab,
         move |v| pad_testpoint_top_fab_msg(target, v),
         muted,
         primary,
     ));
-    col = col.push(pad_check_row(
+    col = col.push(pad_check_row_w(
+        fw,
         "Bottom Assembly",
         values.testpoint.bottom_assembly,
         move |v| pad_testpoint_bottom_assembly_msg(target, v),
         muted,
         primary,
     ));
-    col = col.push(pad_check_row(
+    col = col.push(pad_check_row_w(
+        fw,
         "Bottom Fab",
         values.testpoint.bottom_fab,
         move |v| pad_testpoint_bottom_fab_msg(target, v),
