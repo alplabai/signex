@@ -256,7 +256,7 @@ impl Signex {
 
     /// Pick the Save As dialog by the active tab's document kind (#671).
     /// Kinds without Save As log a message and open nothing.
-    fn save_as_dialog_for_active_tab(&mut self) -> Task<Message> {
+    pub(crate) fn save_as_dialog_for_active_tab(&mut self) -> Task<Message> {
         let kind = self
             .document_state
             .tabs

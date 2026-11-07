@@ -10,8 +10,10 @@ use crate::app::state::LoadedProject;
 use crate::app::{ComponentEditorTab, Signex, TabInfo, TabKind};
 use crate::library::state::{ComponentPreviewState, EditorAddress};
 
+mod autosave_tick;
 mod close_readers;
 mod dirty_readers;
+mod save_routing;
 
 #[derive(Debug, Clone, Copy)]
 enum Kind {

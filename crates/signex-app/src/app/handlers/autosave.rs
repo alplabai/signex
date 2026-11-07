@@ -50,7 +50,7 @@ impl Signex {
 
     /// Does `path` hold edits a recovery copy should protect: a dirty
     /// schematic, PCB, symbol editor or footprint editor?
-    pub(super) fn holds_recoverable_edits(&self, path: &Path) -> bool {
+    pub(crate) fn holds_recoverable_edits(&self, path: &Path) -> bool {
         self.is_dirty_schematic(path)
             || self.is_dirty_pcb(path)
             || self.is_dirty_primitive_editor(path)
