@@ -202,6 +202,16 @@ impl super::super::super::Signex {
     /// Handle a Net Classes message: against the active project, except a net
     /// assignment, which goes to the project its label's sheet belongs to.
     pub(super) fn handle_net_class_message(&mut self, msg: &NetClassMsg) {
+        self.handle_net_class_message_on(None, msg);
+    }
+
+    /// [`Self::handle_net_class_message`], with a pick recorded on the
+    /// timeline of the sheet at `sheet` instead of the active one.
+    pub(super) fn handle_net_class_message_on(
+        &mut self,
+        sheet: Option<&std::path::Path>,
+        msg: &NetClassMsg,
+    ) {
         let document = &mut self.document_state;
         let target = match msg {
             NetClassMsg::AssignNet { project, .. } => Some(*project),
@@ -249,7 +259,10 @@ impl super::super::super::Signex {
             document.sync_project_history_dirty(id, false);
         }
         if let Some(step) = pick_step {
-            self.record_net_class_pick(id, step);
+            let sheet = sheet
+                .map(std::path::Path::to_path_buf)
+                .or_else(|| self.document_state.active_path.clone());
+            self.record_net_class_pick(id, step, sheet.as_deref());
         }
         self.refresh_panel_ctx();
     }

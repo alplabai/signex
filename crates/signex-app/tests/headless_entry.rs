@@ -626,10 +626,26 @@ fn net_class_assign() {
     assert!(!app.document_state.is_document_dirty(&prj));
     assert!(!app.document_state.is_document_dirty(&sheet_path));
 
+    // Headless names its document: no operands, or no `path`, is refused and
+    // never falls back to the active sheet; nothing changes.
+    for (operands, wanted) in [
+        (&[][..], "needs the operand `net_name`"),
+        (
+            &["net_name=GND", "class=Power"][..],
+            "needs the operand `path`",
+        ),
+    ] {
+        match run(&mut app, "assign_net_class", operands) {
+            CommandOutcome::Disabled { reason } => assert!(reason.contains(wanted), "{reason}"),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+        assert!(classes(&app).is_empty() && !app.document_state.is_document_dirty(&prj));
+    }
+    let given = format!("path={}", sheet_path.display());
     let ran = run(
         &mut app,
         "assign_net_class",
-        &["net_name=GND", "class=Power"],
+        &["net_name=GND", "class=Power", &given],
     );
     assert_eq!(ran, CommandOutcome::Ran, "{ran:?}");
     assert_eq!(classes(&app), ["GND"]);

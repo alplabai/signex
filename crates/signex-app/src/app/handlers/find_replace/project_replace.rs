@@ -422,7 +422,6 @@ impl Signex {
             Ok(engine) => {
                 self.document_state
                     .insert_engine(path.to_path_buf(), engine);
-
                 true
             }
             Err(error) => {

@@ -380,10 +380,12 @@ fn redo_names_a_sheet_closed_after_the_undo() {
     ));
 }
 
-/// A net-class pick marker on the other member sheet is a later step there,
-/// so it blocks the project-wide undo like any edit (#661).
+/// A DEAD net-class pick marker (its class edit is already undone, here: no
+/// such project) is no later edit: it is passed and the project-wide undo
+/// goes ahead with no "edited after" refusal (#661). A live one blocks; see
+/// `pick_undo_tests`.
 #[test]
-fn a_pick_marker_on_the_other_sheet_blocks_the_project_wide_undo() {
+fn a_dead_pick_marker_on_the_other_sheet_does_not_block_the_project_wide_undo() {
     let _ = signex_app::diagnostics::init_logging();
     let mut p = project(AnnotateUndo::Project);
     annotate(&mut p.app);
@@ -398,16 +400,17 @@ fn a_pick_marker_on_the_other_sheet_blocks_the_project_wide_undo() {
             step: 1,
         });
 
+    assert_ne!(
+        after,
+        (
+            vec!["U?".into(), "C?".into()],
+            vec!["U?".into(), "R?".into()]
+        )
+    );
+
     undo(&mut p.app);
 
-    assert_eq!(annotated_pair(&p), after, "nothing reverts out of order");
-    assert!(warned("Undo the newer edit on child.snxsch first"));
-
-    // The marker is undone on its own sheet (dead: no such project), which
-    // unblocks the project-wide step.
-    activate(&mut p.app, 1);
-    undo(&mut p.app);
-    undo(&mut p.app);
     assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
     assert_eq!(refs(&p.app, &p.child), ["U?", "R?"]);
+    assert!(!warned("Cannot undo the project-wide annotate"));
 }

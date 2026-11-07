@@ -96,12 +96,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::Selection(selection_request::SelectionRequest::CycleMode)
         }
         "previous_grid" | "cycle_snap_grid_backward" => Message::Ui(UiMsg::GridCycleBackward),
-        // Without operands the picker is the answer: it lives in the
-        // Properties panel of a selected net label. With them the operand
-        // handler runs instead (`operand_handlers`).
-        "assign_net_class" | "toggle_properties_panel" => Message::Overlay(
-            OverlayMsg::PanelToggled(crate::panels::PanelKind::Properties),
-        ),
+        "toggle_properties_panel" => Message::Overlay(OverlayMsg::PanelToggled(
+            crate::panels::PanelKind::Properties,
+        )),
         "toggle_schematic_filter_panel" => Message::Overlay(OverlayMsg::PanelToggled(
             crate::panels::PanelKind::SchFilter,
         )),
@@ -380,6 +377,8 @@ mod tests {
     fn resolvable_command_ids(src: &str) -> HashSet<String> {
         let mut ids: HashSet<String> = bridged_command_ids(src).into_iter().collect();
         ids.extend(crate::app::command::active_bar::command_ids().map(str::to_string));
+        // A command served by an operand handler has its own surface.
+        ids.extend(crate::app::command::operand_handlers::handled_ids().map(str::to_string));
         ids
     }
 

@@ -38,6 +38,25 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
         .map(|(_, handler)| *handler)
 }
 
+/// Why `command` does nothing without operands on a surface that gives it
+/// none (palette, key binding, menu): its GUI surface is another widget, and
+/// a command never opens, closes or focuses one as a side effect.
+pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static str> {
+    match command.as_str() {
+        "assign_net_class" => Some(
+            "`assign_net_class` needs the operand `net_name` — \
+             use the Net Class row in Properties",
+        ),
+        _ => None,
+    }
+}
+
+/// Whether a headless caller must name the document (`path`) the command
+/// acts on: it never falls back to the active one.
+pub(crate) fn headless_needs_path(command: &AppCommandId) -> bool {
+    command.as_str() == "assign_net_class"
+}
+
 /// The ids that run their operands.
 #[cfg(test)]
 pub(super) fn handled_ids() -> impl Iterator<Item = &'static str> {
@@ -127,14 +146,15 @@ fn assign_net_class(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(OperandValue::Text(net)) = args.operand("net_name") else {
         return refused("`assign_net_class` needs the operand `net_name`");
     };
-    if let Err(reason) = acts_on_active_document(app, args.operand("path")) {
-        return refused(reason);
-    }
+    let sheet = match args.operand("path") {
+        Some(OperandValue::Path(path)) => Some(std::path::PathBuf::from(path)),
+        _ => None,
+    };
     let class = match args.operand("class") {
         Some(OperandValue::Text(class)) => Some(class.as_str()),
         _ => None,
     };
-    match app.assign_net_to_class(net, class) {
+    match app.assign_net_to_class(sheet.as_deref(), net, class) {
         Ok(()) => ran(),
         Err(reason) => refused(reason),
     }

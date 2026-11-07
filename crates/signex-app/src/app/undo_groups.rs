@@ -187,6 +187,8 @@ impl Signex {
         let mut history_gone = Vec::new();
         let mut closed = Vec::new();
         for path in sheets {
+            // A pick whose class edit was already undone is no later edit.
+            self.pass_dead_class_picks(&path, direction == StepDirection::Undo);
             let Some(engine) = self.document_state.engines.get(&path) else {
                 // A redo owes nothing to a sheet the undo did not revert.
                 if direction == StepDirection::Undo || recorded.undone.contains(&path) {
@@ -216,8 +218,8 @@ impl Signex {
             let names = file_names(&blocked);
             let message = match direction {
                 StepDirection::Undo => format!(
-                    "Cannot undo the project-wide {noun}: {names} was edited after it. \
-                     Undo the newer edit on {names} first."
+                    "Cannot undo the project-wide {noun}: {names} has a later step (an edit or a \
+                     net-class pick). Undo the newer edit on {names} first."
                 ),
                 StepDirection::Redo => format!(
                     "Cannot redo the project-wide {noun}: {names} was edited after the \
@@ -284,7 +286,6 @@ impl Signex {
                         // the file; drop it so the next use re-reads the disk.
                         // Redo is then refused whole (`dropped`).
                         self.document_state.clear_document_dirty(path);
-
                         self.document_state.engines.remove(path);
                         dropped_now.push(path.clone());
                     } else {

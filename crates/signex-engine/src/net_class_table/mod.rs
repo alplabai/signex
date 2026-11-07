@@ -217,6 +217,12 @@ impl NetClassHistory {
         }
     }
 
+    /// Drop every step (the table was replaced). Step ids keep counting, so a
+    /// marker recorded before never matches a step recorded after.
+    pub fn restart(&mut self) {
+        self.history.restart(false);
+    }
+
     /// Keep `depth` undo steps from now on; lowering it drops the oldest.
     pub fn set_undo_depth(&mut self, depth: usize) {
         self.history.set_cap(depth);

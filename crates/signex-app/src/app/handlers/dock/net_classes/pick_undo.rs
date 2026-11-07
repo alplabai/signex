@@ -9,21 +9,29 @@
 use signex_engine::ClassPickMarker;
 
 impl crate::app::Signex {
-    /// Put a pick just applied to `project`'s table on the active sheet's
-    /// timeline. `step` is the pick's step in the project's class history. A
-    /// pick from a sheet with no engine has no timeline and is not recorded.
+    /// Put a pick just applied to `project`'s table on the timeline of the
+    /// sheet at `sheet`. `step` is the pick's step in the project's class
+    /// history. A sheet with no engine has no timeline: nothing is recorded.
     pub(super) fn record_net_class_pick(
         &mut self,
         project: crate::app::ProjectId,
         step: signex_engine::NetClassStepId,
+        sheet: Option<&std::path::Path>,
     ) {
+        let Some(sheet) = sheet else {
+            return;
+        };
         self.end_parameter_edit_runs();
-        if let Some(engine) = self.document_state.active_engine_mut() {
-            engine.record_class_pick(ClassPickMarker {
-                project: project.raw(),
-                step,
-            });
-        }
+        let Some(engine) = self.document_state.engines.get_mut(sheet) else {
+            return;
+        };
+        engine.record_class_pick(ClassPickMarker {
+            project: project.raw(),
+            step,
+        });
+        // A marker moves no save point, but an old edit may fall off the
+        // depth: the tab's dirty dot follows the history.
+        self.document_state.sync_history_dirty(sheet);
     }
 
     /// Whether `marker` is still the step its project's class history would
@@ -83,6 +91,23 @@ impl crate::app::Signex {
             }
         }
         false
+    }
+
+    /// Pass the dead markers on top of the sheet at `path`'s timeline: a
+    /// project-wide step below them is then the sheet's next one. A live
+    /// marker stays and blocks it, like any later edit.
+    pub(crate) fn pass_dead_class_picks(&mut self, path: &std::path::Path, undoing: bool) {
+        while let Some(marker) = self
+            .document_state
+            .engines
+            .get(path)
+            .and_then(|engine| engine.next_class_pick(undoing))
+            .filter(|marker| !self.net_class_pick_is_live(*marker, undoing))
+        {
+            if let Some(engine) = self.document_state.engines.get_mut(path) {
+                engine.pass_class_pick(undoing);
+            }
+        }
     }
 
     /// Revert (`undoing`) or re-apply the class-table step `marker` names.

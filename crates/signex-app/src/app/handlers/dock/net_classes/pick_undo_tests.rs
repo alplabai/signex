@@ -437,3 +437,67 @@ fn a_dead_marker_is_not_a_step_the_menu_offers() {
         "an edit above it is a step"
     );
 }
+
+/// A restored project copy keeps step ids moving forward: a pick made before
+/// the restore must not match a new step, so Ctrl+Z cannot revert an
+/// unrelated panel edit.
+#[test]
+fn a_pick_made_before_a_project_restore_does_not_match_a_later_step() {
+    let (mut app, _symbol) = app_with_sheet();
+    pick(&mut app, "GND", Some("Power"));
+    let path = app.document_state.projects[0].path.clone();
+    let data = app.document_state.projects[0].data.clone();
+    assert!(app.restore_project_copy(&path, data));
+
+    panel(&mut app, NetClassMsg::Add);
+    assert_eq!(class_count(&app), 2);
+    app.handle_undo_requested();
+    assert_eq!(class_count(&app), 2, "the panel edit is not the pick");
+}
+
+/// A LIVE pick on a member sheet is a later step there and blocks a
+/// project-wide undo (decision 5); once the class edit is undone the marker
+/// is dead, is passed, and the project-wide step goes ahead.
+#[test]
+fn a_live_pick_on_a_member_sheet_blocks_the_project_wide_undo_until_it_is_dead() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _symbol) = app_with_sheet();
+    let a = app.document_state.active_path.clone().unwrap();
+    let b = open_second_sheet(&mut app);
+    let group = app.mint_undo_group();
+    for path in [&a, &b] {
+        let wire = signex_types::schematic::Wire {
+            uuid: uuid::Uuid::now_v7(),
+            ..Default::default()
+        };
+        let engine = app.document_state.engines.get_mut(path).unwrap();
+        engine
+            .execute_batch_grouped(
+                [signex_engine::Command::PlaceWireSegment { wire }],
+                Some(group),
+            )
+            .unwrap();
+    }
+    app.set_undo_group_sheets(
+        group,
+        crate::app::UndoGroupSheets {
+            live: vec![a.clone(), b.clone()],
+            ..Default::default()
+        },
+    );
+    pick(&mut app, "GND", Some("Power")); // B is active: the marker lands on B
+    activate(&mut app, &a);
+    let wires = |app: &Signex, path| app.document_state.engines[path].document().wires.len();
+
+    assert!(!app.undo_active_sheet(), "blocked by B's live pick");
+    assert_eq!((wires(&app, &a), wires(&app, &b)), (1, 1));
+    assert_eq!(nets(&app), ["GND"]);
+
+    panel(&mut app, NetClassMsg::Undo); // the pick's class edit is undone: dead
+    assert!(app.undo_active_sheet());
+    assert_eq!(
+        (wires(&app, &a), wires(&app, &b)),
+        (0, 0),
+        "the group moved"
+    );
+}
