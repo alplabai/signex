@@ -8,8 +8,10 @@
 mod key;
 #[cfg(test)]
 mod tests;
+mod undo_target;
 
 pub(crate) use key::DocumentKey;
+pub(crate) use undo_target::UndoTarget;
 
 use std::path::Path;
 

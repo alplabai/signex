@@ -177,12 +177,26 @@ impl ComponentPreviewState {
         self.pin_map_state = PinMapInlineState::default();
     }
 
+    /// Whether Undo has something to do: an edit, or half-typed text to drop.
+    pub fn can_undo_step(&self) -> bool {
+        self.history.can_undo() || !self.params_edit_buf.is_empty()
+    }
+
+    /// Whether Redo has something to do: never with half-typed text.
+    pub fn can_redo_step(&self) -> bool {
+        self.history.can_redo() && self.params_edit_buf.is_empty()
+    }
+
     /// Undo or redo one edit. `false` when there is nothing to step to.
     /// Versions, pins and the base revision stay the current row's: only the
     /// edits move.
     pub fn step_history(&mut self, undo: bool) -> bool {
-        // Half-typed text is not an edit yet: the first step only drops it.
+        // Half-typed text is not an edit yet: an undo only drops it, and a
+        // redo (which re-applies an undone step) leaves it alone.
         if !self.params_edit_buf.is_empty() {
+            if !undo {
+                return false;
+            }
             self.clear_edit_buffers();
             self.note_edit();
             return true;
@@ -361,5 +375,17 @@ mod tests {
         assert_eq!(state.row.state, LifecycleState::Released, "no step yet");
         assert!(state.step_history(true));
         assert!(!state.dirty);
+    }
+
+    #[test]
+    fn a_redo_with_a_half_typed_value_does_nothing_and_keeps_the_text() {
+        let mut state = preview();
+        set_state(&mut state, LifecycleState::Released);
+        assert!(state.step_history(true));
+        state.params_edit_buf.insert("v".into(), "1.".into());
+        assert!(!state.can_redo_step());
+        assert!(!state.step_history(false));
+        assert_eq!(state.params_edit_buf.len(), 1, "the text stays");
+        assert!(state.history.can_redo(), "the undone step is still there");
     }
 }
