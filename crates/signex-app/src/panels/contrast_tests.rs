@@ -13,7 +13,6 @@ use iced::Color;
 use iced::widget::button;
 use signex_types::theme::{ThemeId, theme_tokens};
 
-
 /// A theme is light when its panel is light, whatever its name.
 fn is_light(id: ThemeId) -> bool {
     relative_luminance(ti(theme_tokens(id).panel_bg)) > 0.5

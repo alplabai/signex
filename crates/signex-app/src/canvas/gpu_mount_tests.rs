@@ -495,7 +495,8 @@ fn gpu_stack_draws_the_sheet_and_matches_the_cpu_replay() {
     // Wire: exact colour only where the rasteriser is the reference one.
     let (wx, wy) = world(12.5, 5.0);
     if gpu.is_lavapipe {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         let got = stack.px(wx, wy);
         let want = to_u8(colors.wire);
         assert!(
@@ -941,7 +942,8 @@ fn a_hidpi_window_puts_the_wire_at_twice_the_pixel() {
         "wire spans {min_x}..{max_x}, not 2x {start}..{end}"
     );
     if gpu.is_lavapipe {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         let got = stack.px(wx * 2, wy * 2);
         let want = to_u8(colors.wire);
         assert!(

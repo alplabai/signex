@@ -308,8 +308,16 @@ fn prefs_a_retired_theme_id_loads_as_its_graphite_twin_and_the_file_is_kept() {
         let stored = format!(r#"{{"theme":"{name}","unit":"mil"}}"#);
         fs::write(&path, &stored).unwrap();
         assert_eq!(signex_app::fonts::read_theme_pref_at(&path), want, "{name}");
-        assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil, "{name}");
-        assert_eq!(fs::read_to_string(&path).unwrap(), stored, "{name}: file untouched");
+        assert_eq!(
+            signex_app::fonts::read_unit_pref_at(&path),
+            Unit::Mil,
+            "{name}"
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            stored,
+            "{name}: file untouched"
+        );
     }
 }
 

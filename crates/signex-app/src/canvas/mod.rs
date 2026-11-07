@@ -963,7 +963,8 @@ mod tests {
         filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
         class_styles: &'a crate::schematic_runtime::WireClassStyles,
     ) -> CanvasViewPrefs<'a> {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         CanvasViewPrefs {
             grid_visible: true,
             theme_bg: crate::render_config::to_iced(&colors.background),

@@ -14,7 +14,11 @@ use signex_types::theme::ThemeTokens;
 fn themes() -> [(bool, ThemeTokens, ThemeId); 3] {
     let graphite = |tid| (false, signex_types::theme::theme_tokens(tid), tid);
     [
-        (true, crate::styles::legacy_tokens_fixture(), ThemeId::DEFAULT),
+        (
+            true,
+            crate::styles::legacy_tokens_fixture(),
+            ThemeId::DEFAULT,
+        ),
         graphite(ThemeId::GraphiteLight),
         graphite(ThemeId::GraphiteDark),
     ]
