@@ -22,6 +22,7 @@ mod appearance;
 mod component_classes;
 mod distributors;
 mod editing;
+mod graphite_fields;
 mod keycaps;
 mod keymap;
 mod profiles;
@@ -121,6 +122,8 @@ pub enum PrefMsg {
     Noop,
     /// Navigate to a category.
     Nav(PrefNav),
+    /// The Graphite nav search text changed; only filters the nav rows.
+    NavSearchChanged(String),
     /// Close without saving (only if not dirty; app ignores if dirty).
     Close,
     /// Discard all unsaved changes and close.
@@ -368,6 +371,8 @@ pub struct PrefsView<'a> {
     /// feedback shown in the same banner; empty renders nothing.
     pub prefs_status: &'a str,
     pub keymap_search: &'a str,
+    /// Graphite nav search text (filters the nav rows only).
+    pub nav_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
 }
 

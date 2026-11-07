@@ -367,6 +367,8 @@ pub struct UiState {
     /// grouped shortcut table case-insensitively by label / command id /
     /// trigger. Reset to empty each time Preferences opens.
     pub preferences_keymap_search: String,
+    /// Graphite Preferences nav search; filters the nav rows. Reset on open.
+    pub preferences_nav_search: String,
     /// Chord recorder overlay. `Some` while the user is capturing a new
     /// keystroke for a binding; the keyboard subscription routes raw
     /// strokes to the recorder instead of the live keymap resolver

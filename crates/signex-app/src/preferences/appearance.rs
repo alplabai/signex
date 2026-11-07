@@ -138,9 +138,9 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(Space::new().height(4).boxed());
     col = col.push(
         row![
-            import_btn(),
+            import_btn(v.panel_tokens),
             Space::new().width(8),
-            export_btn(),
+            export_btn(v.panel_tokens),
             Space::new().width(Length::Fill),
         ]
         .align_y(iced::Alignment::Center)
@@ -184,12 +184,23 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             {
                 let families = fonts::system_font_families();
                 let current_owned = draft_font.to_string();
-                iced::widget::pick_list(Some(current_owned), families.as_slice(), |s: &String| {
-                    s.clone()
-                })
-                .on_select(PrefMsg::DraftFont)
-                .text_size(12)
-                .width(200)
+                if crate::styles::is_graphite(v.panel_tokens) {
+                    super::graphite_fields::font_pick_list(
+                        current_owned,
+                        families.as_slice(),
+                        v.panel_tokens,
+                    )
+                } else {
+                    iced::widget::pick_list(
+                        Some(current_owned),
+                        families.as_slice(),
+                        |s: &String| s.clone(),
+                    )
+                    .on_select(PrefMsg::DraftFont)
+                    .text_size(12)
+                    .width(200)
+                    .boxed()
+                }
             },
         ]
         .align_y(iced::Alignment::Center)
@@ -583,7 +594,10 @@ fn theme_card<'a>(
     .boxed()
 }
 
-fn import_btn<'a>() -> Element<'a, PrefMsg> {
+fn import_btn<'a>(t: &signex_types::theme::ThemeTokens) -> Element<'a, PrefMsg> {
+    if crate::styles::is_graphite(t) {
+        return super::graphite_fields::theme_io_button("Import Theme…", PrefMsg::ImportTheme, t);
+    }
     button(text("⬆ Import Theme…").size(TS.body))
         .padding([5.0, SP.l])
         .on_press(PrefMsg::ImportTheme)
@@ -591,7 +605,10 @@ fn import_btn<'a>() -> Element<'a, PrefMsg> {
         .boxed()
 }
 
-fn export_btn<'a>() -> Element<'a, PrefMsg> {
+fn export_btn<'a>(t: &signex_types::theme::ThemeTokens) -> Element<'a, PrefMsg> {
+    if crate::styles::is_graphite(t) {
+        return super::graphite_fields::theme_io_button("Export Theme…", PrefMsg::ExportTheme, t);
+    }
     button(text("⬇ Export Theme…").size(TS.body))
         .padding([5.0, SP.l])
         .on_press(PrefMsg::ExportTheme)

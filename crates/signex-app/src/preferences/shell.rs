@@ -3,6 +3,7 @@
 //! Cancel, Apply and OK reuse the discard, save and save-and-close actions;
 //! Restore defaults has no backend yet and is drawn disabled.
 
+use super::graphite_fields::{graphite_label, nav_matches, nav_search};
 use super::{PrefMsg, PrefNav, PrefsView, SP, TS, build_content, build_prefs_file_banner};
 use crate::app::view::dialogs::{PREFERENCES_HEADER_H, graphite_header};
 use crate::styles::{
@@ -40,7 +41,7 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
     let t = v.panel_tokens;
     let mut items: Vec<Element<'a, PrefMsg>> = Vec::new();
     if with_header {
-        let subtitle = format!("{} / {}", v.nav.group(), v.nav.label());
+        let subtitle = format!("{} / {}", v.nav.group(), graphite_label(v.nav));
         items.push(graphite_header(
             "Preferences",
             Some(subtitle),
@@ -65,10 +66,14 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
             .boxed()
     };
     items.push(
-        row![graphite_nav(v.nav, t), divider, build_content(v)]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
+        row![
+            graphite_nav(v.nav, v.nav_search, t),
+            divider,
+            build_content(v)
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .boxed(),
     );
     items.push(hairline(t));
     items.push(graphite_footer(&v));
@@ -81,10 +86,11 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
         .boxed()
 }
 
-fn graphite_nav<'a>(active: PrefNav, t: &ThemeTokens) -> Element<'a, PrefMsg> {
+fn graphite_nav<'a>(active: PrefNav, query: &'a str, t: &ThemeTokens) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(2).padding(SP.m).width(Length::Fill);
+    col = col.push(nav_search(query, t));
     let mut last_group = "";
-    for &item in PrefNav::ALL {
+    for &item in PrefNav::ALL.iter().filter(|&&n| nav_matches(n, query)) {
         let group = item.group();
         if group != last_group {
             last_group = group;
@@ -123,7 +129,7 @@ fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, Pref
         tokens::overlay(t, tokens::Overlay::Hover),
     );
     button(
-        container(text(item.label()).size(TS.label).color(ink))
+        container(text(graphite_label(item)).size(TS.label).color(ink))
             .padding([SP.s, SP.m])
             .width(Length::Fill),
     )
