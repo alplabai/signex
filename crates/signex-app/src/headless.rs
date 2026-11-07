@@ -66,6 +66,28 @@ impl Signex {
         paths: Vec<PathBuf>,
         rules: &RuleProfile,
     ) -> Result<(Self, Task<Message>), HeadlessBootError> {
+        Self::boot_headless_inner(paths, rules, None)
+    }
+
+    /// [`Self::boot_headless`] keeping `undo_depth` undo steps in every
+    /// history, over the `undo_depth` of the config root's `prefs.json`.
+    /// `undo_depth` is the option as typed: one above
+    /// [`signex_history::MAX_UNDO_DEPTH`] is clamped to it, zero or text
+    /// that is not a whole number gives the default, and either is logged
+    /// as a warning (stderr under a headless run) naming the value.
+    pub fn boot_headless_with_undo_depth(
+        paths: Vec<PathBuf>,
+        rules: &RuleProfile,
+        undo_depth: &str,
+    ) -> Result<(Self, Task<Message>), HeadlessBootError> {
+        Self::boot_headless_inner(paths, rules, Some(undo_depth))
+    }
+
+    fn boot_headless_inner(
+        paths: Vec<PathBuf>,
+        rules: &RuleProfile,
+        undo_depth: Option<&str>,
+    ) -> Result<(Self, Task<Message>), HeadlessBootError> {
         if !crate::config_root::is_override_active() {
             return Err(HeadlessBootError::NoConfigRootOverride);
         }
@@ -73,6 +95,13 @@ impl Signex {
             return Err(HeadlessBootError::NotAbsolute(path.clone()));
         }
         let (mut app, boot) = Self::new();
+        if let Some(text) = undo_depth {
+            let read = crate::undo_depth::parse_undo_depth_text(text);
+            if let Some(problem) = &read.problem {
+                crate::diagnostics::log_warning(problem.clone());
+            }
+            app.set_undo_depth(read.depth);
+        }
         app.ui_state.io = crate::io_ports::IoPorts::headless(Default::default());
         let rules_applied = app.handle_user_default_loaded(&Ok(Some(rules.clone())));
         let opens = Self::startup_open_messages(paths)
@@ -119,6 +148,10 @@ impl Signex {
                 Task::none(),
             );
         }
-        self.dispatch_command_reporting(command, args, None)
+        let result = self.dispatch_command_reporting(command, args, None);
+        // No `update` runs here, so a history the command created gets its
+        // depth now.
+        self.sync_undo_depth();
+        result
     }
 }

@@ -384,6 +384,9 @@ pub struct DocumentState {
     pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
     pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
+    /// How many undo steps every history keeps (`undo_depth`); see
+    /// [`Signex::set_undo_depth`](crate::app::Signex::set_undo_depth).
+    pub undo_depth: usize,
     /// Which font families the Messages panel has already said an open
     /// document names but this machine lacks (#510), so each is reported
     /// once per document.

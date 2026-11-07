@@ -17,7 +17,7 @@
 
 /// The saved depth of one undo history, or unknown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SavePoint {
+pub struct SavePoint {
     /// Steps dropped off the bottom of the undo stack so far.
     evicted: u64,
     /// Absolute depth the content equalled the file at; `None` = unknown.
@@ -26,7 +26,7 @@ pub(crate) struct SavePoint {
 
 impl SavePoint {
     /// Content freshly read from disk: the empty history is the saved state.
-    pub(crate) const fn at_start() -> Self {
+    pub const fn at_start() -> Self {
         Self {
             evicted: 0,
             saved: Some(0),
@@ -34,7 +34,7 @@ impl SavePoint {
     }
 
     /// Content not known to be on disk (a repaired load, a recovery copy).
-    pub(crate) const fn unknown() -> Self {
+    pub const fn unknown() -> Self {
         Self {
             evicted: 0,
             saved: None,
@@ -45,25 +45,31 @@ impl SavePoint {
         self.evicted + undo_len as u64
     }
 
+    /// The state `undo_len` steps deep as a position in the edit timeline:
+    /// the evicted steps count, so it only falls on an undo.
+    pub fn position(&self, undo_len: usize) -> usize {
+        usize::try_from(self.depth(undo_len)).unwrap_or(usize::MAX)
+    }
+
     /// Does the state `undo_len` steps deep equal the file?
-    pub(crate) fn is_at(&self, undo_len: usize) -> bool {
+    pub fn is_at(&self, undo_len: usize) -> bool {
         self.saved == Some(self.depth(undo_len))
     }
 
     /// The current state is what a save is writing.
-    pub(crate) fn mark_saved(&mut self, undo_len: usize) {
+    pub fn mark_saved(&mut self, undo_len: usize) {
         self.saved = Some(self.depth(undo_len));
     }
 
     /// No history step reproduces the file any more.
-    pub(crate) fn forget(&mut self) {
+    pub fn forget(&mut self) {
         self.saved = None;
     }
 
     /// The state at the point changed with no step recorded (an unrecorded
     /// edit, or one amended into the newest step): the point no longer
     /// describes it. A point behind or ahead of the state is unaffected.
-    pub(crate) fn forget_if_at(&mut self, undo_len: usize) {
+    pub fn forget_if_at(&mut self, undo_len: usize) {
         if self.is_at(undo_len) {
             self.forget();
         }
@@ -71,14 +77,14 @@ impl SavePoint {
 
     /// A new step is about to be recorded on an undo stack of `undo_len`
     /// steps and the redo stack cleared: a point on the redo branch is cut.
-    pub(crate) fn redo_cleared(&mut self, undo_len: usize) {
+    pub fn redo_cleared(&mut self, undo_len: usize) {
         if self.saved.is_some_and(|saved| saved > self.depth(undo_len)) {
             self.forget();
         }
     }
 
     /// The oldest undo step was dropped to keep the stack within its cap.
-    pub(crate) fn evicted_oldest(&mut self) {
+    pub fn evicted_oldest(&mut self) {
         self.evicted += 1;
         if self.saved.is_some_and(|saved| saved < self.evicted) {
             self.forget();
@@ -87,7 +93,7 @@ impl SavePoint {
 
     /// The stacks hold `undo_len` and `redo_len` steps: a point outside the
     /// reachable range (a capped redo stack lost its far end) is forgotten.
-    pub(crate) fn limit_to(&mut self, undo_len: usize, redo_len: usize) {
+    pub fn limit_to(&mut self, undo_len: usize, redo_len: usize) {
         let reach = self.depth(undo_len) + redo_len as u64;
         if self
             .saved

@@ -10,7 +10,7 @@ use signex_types::project::ProjectRules;
 use crate::app::History;
 
 /// Depth cap of the undo and redo stacks; a few hundred bytes a step.
-const HISTORY_DEPTH: usize = 100;
+const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
 
 /// One project's rule-edit history.
 ///
@@ -27,6 +27,16 @@ impl Default for RulesHistory {
 }
 
 impl RulesHistory {
+    /// Keep `depth` undo steps from now on; lowering it drops the oldest.
+    pub fn set_undo_depth(&mut self, depth: usize) {
+        self.0.set_cap(depth);
+    }
+
+    /// How many undo steps are kept.
+    pub fn undo_depth(&self) -> usize {
+        self.0.cap()
+    }
+
     /// Remember `before` as the state to return to; a new edit drops redo.
     pub fn record(&mut self, before: Option<ProjectRules>) {
         self.0.record(before);

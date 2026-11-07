@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 signex-types = { workspace = true }
+signex-history = { workspace = true }
 # For `pt_key` / `point_on_segment` — the netlist's own "same point" and
 # "point on wire" predicates. Junction autoplacement gates every dot it mints
 # on the exact rule the netlist will apply to it, instead of hand-rolling a
