@@ -26,16 +26,6 @@ use super::*;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-// ── Submenu chevron — single source of truth ─────────────────────────
-//
-// Right-pointing angle quote (U+203A), NOT the BLACK RIGHT-POINTING
-// TRIANGLE (U+25B6) which Windows renders via the colour emoji font.
-// Same glyph the menu_bar dropdowns use; the matching size below keeps
-// every submenu launcher visually aligned across the whole app
-// (canvas right-click, project-tree right-click, File/Edit/View menu).
-const SUBMENU_ARROW: &str = "›";
-const SUBMENU_ARROW_SIZE: f32 = crate::styles::chrome_px(18.0);
-
 /// Chrome strip search bar width in pixels — the widest it ever gets;
 /// `chrome_search_bar_geometry` shrinks it below this on narrow windows.
 pub(crate) const CHROME_SEARCH_BAR_WIDTH: f32 = 440.0;
@@ -228,17 +218,21 @@ impl Signex {
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
-            menu_bar::view(&document.panel_ctx.tokens, menu_ctx)
-                .map(move |msg| match msg {
-                    msg if undocked && msg.window_command().is_some() => {
-                        Message::Ui(UiMsg::MenuInWindow {
-                            window: window_id,
-                            msg,
-                        })
-                    }
-                    msg => Message::Menu(msg),
-                })
-                .boxed()
+            menu_bar::view(
+                &document.panel_ctx.tokens,
+                &document.panel_ctx.ui_font_name,
+                menu_ctx,
+            )
+            .map(move |msg| match msg {
+                msg if undocked && msg.window_command().is_some() => {
+                    Message::Ui(UiMsg::MenuInWindow {
+                        window: window_id,
+                        msg,
+                    })
+                }
+                msg => Message::Menu(msg),
+            })
+            .boxed()
         };
 
         // Graphite Start screen: full width, no docks, no empty tab band.

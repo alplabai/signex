@@ -357,17 +357,7 @@ impl Signex {
             },
         );
         let card_msg = card.map(Message::Library).boxed();
-        // Conservative footprint so the card stays on screen near the
-        // right / bottom edges.
-        const FOOTPRINT_MENU_ROWS: usize = 12;
-        self.menu_overlay(
-            window_id,
-            close_msg,
-            card_msg,
-            (menu_state.x, menu_state.y),
-            Self::CONTEXT_MENU_WIDTH,
-            FOOTPRINT_MENU_ROWS,
-        )
+        Self::menu_overlay(close_msg, card_msg, (menu_state.x, menu_state.y))
     }
 
     /// v0.14 — typed-delta "Move Selection By X, Y…" modal for the
@@ -515,27 +505,9 @@ impl Signex {
             },
         );
         let card_msg = card.map(Message::Library).boxed();
-        let place_open = menu_state.open_submenu
-            == Some(crate::library::editor::symbol::state::SymbolContextSubmenu::Place);
-        // The collapsed menu is the stable 6-row top-level set (Place ▸,
-        // Join, Delete, Select All, Deselect All, Fit; locked by
-        // rows::tests::top_level_ids_are_stable); an expanded Place ▸ adds
-        // its rows in place (accordion, not a flyout). The estimate must be
-        // tight: the bottom-edge flip lifts the card by exactly its height.
-        const TOP_LEVEL_ROWS: usize = 6;
-        let expanded_rows = if place_open {
-            crate::library::editor::symbol::context_menu::PLACE_TOOLS.len()
-        } else {
-            0
-        };
-        self.menu_overlay(
-            window_id,
-            close_msg,
-            card_msg,
-            (menu_state.x, menu_state.y),
-            crate::library::editor::symbol::context_menu::MENU_WIDTH,
-            TOP_LEVEL_ROWS + expanded_rows,
-        )
+        // An expanded Place ▸ grows the card in place (accordion, not a
+        // flyout); the placement measures the card it really lays out.
+        Self::menu_overlay(close_msg, card_msg, (menu_state.x, menu_state.y))
     }
 
     /// In-canvas text-edit input — the floating `text_input` anchored on

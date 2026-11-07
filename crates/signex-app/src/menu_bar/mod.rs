@@ -363,6 +363,8 @@ struct MenuColors {
     panel_bg: Color,
     border: Color,
     hover: Color,
+    /// Separator line inside a dropdown.
+    line_soft: Color,
     /// Graphite theme: flat roots, radius-10 dropdown, themed shadow.
     graphite: bool,
     shadow: iced::Shadow,
@@ -386,6 +388,11 @@ impl MenuColors {
             },
             border: styles::ti(tokens.border),
             hover: styles::ti(tokens.hover),
+            line_soft: if graphite {
+                styles::tokens::resolve(tokens).line_soft
+            } else {
+                styles::ti(tokens.border)
+            },
             graphite,
             shadow: styles::floating_shadow(
                 tokens,
@@ -661,5 +668,7 @@ fn menu_item_btn(
 
 #[cfg(test)]
 mod golden_tests;
+#[cfg(test)]
+mod layer_tests;
 #[cfg(test)]
 mod tests;
