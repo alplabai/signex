@@ -64,6 +64,16 @@ fn every_step_keeps_its_authored_ratio_to_body_at_any_base() {
     }
 }
 
+/// The Graphite steps: 11 px section labels and 12 px dense text at the
+/// default base, scaling with it.
+#[test]
+fn the_section_and_dense_steps_follow_the_base() {
+    let ts = TypeScale::default();
+    assert_eq!([ts.section, ts.dense], [11.0, 12.0]);
+    let big = TypeScale::from_base(24.0);
+    assert_eq!([big.section, big.dense], [22.0, 24.0]);
+}
+
 #[test]
 fn scale_steps_are_strictly_increasing() {
     let ts = TypeScale::from_base(13.0);

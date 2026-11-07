@@ -10,8 +10,20 @@ use signex_types::theme::ThemeTokens;
 
 mod buttons;
 mod dialog_kit;
+mod graphite;
+mod graphite_buttons;
+pub mod metrics;
+pub mod radii;
 pub mod tokens;
 pub mod typography;
+
+pub use graphite::{
+    PillTone, card, field, floating_shadow, is_graphite, key_cap, pill, pill_colors,
+    resize_handle_edge, section_label,
+};
+pub use graphite_buttons::{accent_button_rounded, ghost_button, primary_button};
+pub use metrics::ChromeMetrics;
+pub use radii::Radii;
 
 pub use buttons::{
     accent_button, close_x_button, danger_button, hover_row, outline_button, subtle_button,
@@ -25,6 +37,9 @@ pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
 
 /// Corner radius, in px, of buttons, badges and cards.
 pub const RADIUS: f32 = 3.0;
+
+#[cfg(test)]
+mod graphite_tests;
 
 #[cfg(test)]
 mod tests;
@@ -150,8 +165,11 @@ pub fn modal_footer_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
 /// Active Bar strip (centered toolbar above canvas)
 pub fn active_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.statusbar_bg);
+    // Legacy has no shadow; Graphite floats the bar.
+    let shadow = floating_shadow(tokens, iced::Shadow::default());
     move |_| container::Style {
         background: Some(bg.into()),
+        shadow,
         ..container::Style::default()
     }
 }
@@ -237,6 +255,14 @@ pub fn context_menu(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
     let bg = ti(tokens.paper);
     let text = ti(tokens.text);
     let border = ti(tokens.border);
+    let shadow = floating_shadow(
+        tokens,
+        iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
+            offset: iced::Vector::new(2.0, 3.0),
+            blur_radius: 8.0,
+        },
+    );
     move |_| container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
@@ -246,11 +272,7 @@ pub fn context_menu(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
             color: border,
             ..Border::default()
         },
-        shadow: iced::Shadow {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
-            offset: iced::Vector::new(2.0, 3.0),
-            blur_radius: 8.0,
-        },
+        shadow,
         ..container::Style::default()
     }
 }
@@ -290,6 +312,14 @@ pub fn modal_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style +
     let bg = ti(tokens.paper);
     let text = ti(tokens.text);
     let border = ti(tokens.border);
+    let shadow = floating_shadow(
+        tokens,
+        iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
+            offset: iced::Vector::new(2.0, 3.0),
+            blur_radius: 12.0,
+        },
+    );
     move |theme| {
         if is_dialog_window(theme) {
             return container::Style {
@@ -298,11 +328,11 @@ pub fn modal_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style +
                 ..container::Style::default()
             };
         }
-        card_style(bg, text, border)
+        card_style(bg, text, border, shadow)
     }
 }
 
-fn card_style(bg: Color, text: Color, border: Color) -> container::Style {
+fn card_style(bg: Color, text: Color, border: Color, shadow: iced::Shadow) -> container::Style {
     container::Style {
         background: Some(bg.into()),
         text_color: Some(text),
@@ -312,11 +342,7 @@ fn card_style(bg: Color, text: Color, border: Color) -> container::Style {
             color: border,
             ..Border::default()
         },
-        shadow: iced::Shadow {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
-            offset: iced::Vector::new(2.0, 3.0),
-            blur_radius: 12.0,
-        },
+        shadow,
         ..container::Style::default()
     }
 }
@@ -355,14 +381,18 @@ pub fn floating_panel_body(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 
 /// Floating panel outer wrapper (shadow only)
 pub fn floating_panel_shadow(
-    _tokens: &ThemeTokens,
+    tokens: &ThemeTokens,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
-    move |_| container::Style {
-        shadow: iced::Shadow {
+    let shadow = floating_shadow(
+        tokens,
+        iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
             offset: iced::Vector::new(0.0, 4.0),
             blur_radius: 12.0,
         },
+    );
+    move |_| container::Style {
+        shadow,
         ..container::Style::default()
     }
 }

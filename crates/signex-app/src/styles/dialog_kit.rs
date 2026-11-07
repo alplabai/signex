@@ -7,7 +7,10 @@ use iced::widget::{Space, Widget, button, column, container, row, scrollable, te
 use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
-use super::{RADIUS, Spacing, TypeScale, accent_button, danger_button, outline_button, ti, tokens};
+use super::{
+    ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button, accent_button_rounded,
+    danger_button, ghost_button, is_graphite, outline_button, primary_button, ti, tokens,
+};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -28,6 +31,11 @@ pub enum DialogButtonKind {
     Secondary,
     /// Destructive actions: outline and text in the `error` colour.
     Danger,
+    /// A copper accent fill, for a call to action beside a `Primary` (Graphite
+    /// look; the accent fill on every theme).
+    Accent,
+    /// A quiet action with no fill or border ("Decide later").
+    Ghost,
 }
 
 /// The main message of a dialog: primary text, body size.
@@ -103,10 +111,17 @@ pub fn dialog_button<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
-    let label_w = label.chars().count() as f32 * TS.body * GLYPH_ADVANCE_EM;
-    let width = (label_w + 2.0 * SP.l).max(TS.body * BUTTON_MIN_WIDTH_EM);
+    let graphite = is_graphite(tokens);
+    // Graphite buttons are taller and set the label one step larger.
+    let (height, size) = if graphite {
+        (ChromeMetrics::DEFAULT.button, TS.label)
+    } else {
+        (TS.body * BUTTON_HEIGHT_EM, TS.body)
+    };
+    let label_w = label.chars().count() as f32 * size * GLYPH_ADVANCE_EM;
+    let width = (label_w + 2.0 * SP.l).max(size * BUTTON_MIN_WIDTH_EM);
     let face = text(label.to_string())
-        .size(TS.body)
+        .size(size)
         .color(color)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -115,11 +130,16 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     let btn = button(face)
         .padding([0.0, SP.l])
         .width(Length::Fixed(width))
-        .height(Length::Fixed(TS.body * BUTTON_HEIGHT_EM))
+        .height(Length::Fixed(height))
         .on_press_maybe(on_press);
     match kind {
+        _ if disabled && kind == DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
         _ if disabled => btn.style(disabled_button(tokens)),
+        DialogButtonKind::Primary if graphite => btn.style(primary_button(tokens)),
         DialogButtonKind::Primary => btn.style(accent_button(tokens)),
+        DialogButtonKind::Accent if graphite => btn.style(accent_button_rounded(tokens)),
+        DialogButtonKind::Accent => btn.style(accent_button(tokens)),
+        DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
         DialogButtonKind::Secondary => btn.style(outline_button(tokens)),
         DialogButtonKind::Danger => btn.style(danger_button(tokens)),
     }
@@ -130,8 +150,9 @@ pub fn dialog_button<'a, M: Clone + 'a>(
 fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> iced::Color {
     match kind {
         _ if disabled => ti(tokens.text_secondary),
-        DialogButtonKind::Primary => tokens::on_accent(tokens),
-        DialogButtonKind::Secondary => ti(tokens.text),
+        DialogButtonKind::Primary if is_graphite(tokens) => tokens::resolve(tokens).primary_ink,
+        DialogButtonKind::Primary | DialogButtonKind::Accent => tokens::on_accent(tokens),
+        DialogButtonKind::Secondary | DialogButtonKind::Ghost => ti(tokens.text),
         DialogButtonKind::Danger => tokens::danger(tokens),
     }
 }
@@ -198,6 +219,8 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::Accent,
+                DialogButtonKind::Ghost,
             ] {
                 let _: Element<'_, ()> = dialog_button("OK", kind, Some(()), &tokens);
                 let _: Element<'_, ()> = dialog_button("OK", kind, None, &tokens);
@@ -229,6 +252,8 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::Accent,
+                DialogButtonKind::Ghost,
             ] {
                 assert_eq!(
                     label_color(kind, true, &tokens),
