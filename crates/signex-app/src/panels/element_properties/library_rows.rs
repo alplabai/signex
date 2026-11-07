@@ -175,6 +175,10 @@ pub(super) fn push_part_actions<'a>(
             iced::widget::button(iced::widget::text(label).size(TS.body))
                 .padding([SP.xs, SP.m])
                 .on_press(message)
+                .style(|theme: &iced::Theme, status| {
+                    super::super::form_look::ghost_button(theme, status)
+                        .unwrap_or_else(|| iced::widget::button::primary(theme, status))
+                })
                 .boxed()
         },
     ))

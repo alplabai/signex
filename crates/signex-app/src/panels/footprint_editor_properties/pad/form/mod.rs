@@ -216,6 +216,7 @@ pad_msg_fns! {
 /// v0.20 — single-line label + text-input row used by every Pad
 /// Properties field. Mirrors the existing rotation/size_x rows'
 /// chrome (40 px label, padded input, dim border).
+#[allow(clippy::too_many_arguments)]
 pub(in crate::panels::footprint_editor_properties) fn pad_input_row_w<'a>(
     fw: (Length, Length),
     label: &'a str,
