@@ -103,7 +103,10 @@ fn power_glyph_is_ground_with_the_stem_on_top_and_three_shrinking_bars() {
     assert!(s_top < bars[0].0);
     for pair in bars.windows(2) {
         let (w0, w1) = (pair[0].2 - pair[0].1, pair[1].2 - pair[1].1);
-        assert!(pair[0].0 < pair[1].0 && w1 < w0, "bars shrink downwards: {bars:?}");
+        assert!(
+            pair[0].0 < pair[1].0 && w1 < w0,
+            "bars shrink downwards: {bars:?}"
+        );
     }
     for (_, l, r) in &bars {
         assert_eq!((l + r) / 2.0, sx, "bars centred on the stem");

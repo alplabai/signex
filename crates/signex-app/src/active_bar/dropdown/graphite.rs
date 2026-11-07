@@ -140,15 +140,27 @@ pub(super) fn all_none(t: &ThemeTokens, scope: FilterScope) -> Element<'static, 
     let sunken = r.sunken;
     let (ink, ink3) = (styles::ti(t.text), r.ink3);
     let cell = |label: &'static str, active: bool, msg: ActiveBarMsg| {
-        button(text(label).size(TS.body).color(if active { ink } else { ink3 }))
-            .padding([SP.xs, SP.l])
-            .on_press(msg)
-            .style(segment_style(t, active))
-            .boxed()
+        button(
+            text(label)
+                .size(TS.body)
+                .color(if active { ink } else { ink3 }),
+        )
+        .padding([SP.xs, SP.l])
+        .on_press(msg)
+        .style(segment_style(t, active))
+        .boxed()
     };
     let cells: iced::widget::Row<Element<'static, ActiveBarMsg>> = row![
-        cell("All", scope == FilterScope::All, ActiveBarMsg::AllFiltersPicked),
-        cell("None", scope == FilterScope::None, ActiveBarMsg::NoFiltersPicked),
+        cell(
+            "All",
+            scope == FilterScope::All,
+            ActiveBarMsg::AllFiltersPicked
+        ),
+        cell(
+            "None",
+            scope == FilterScope::None,
+            ActiveBarMsg::NoFiltersPicked
+        ),
     ]
     .spacing(SEGMENT_INSET);
     container(cells)
@@ -205,7 +217,10 @@ mod tests {
         assert_eq!(off.fill, None);
         assert_eq!(hex(off.border), [0xE4, 0xE2, 0xDC]);
         assert_eq!(hex(off.ink), [0x5B, 0x5E, 0x66]);
-        assert!(ChipPaint::of(&t, false, true).fill.is_some(), "OFF hover wash");
+        assert!(
+            ChipPaint::of(&t, false, true).fill.is_some(),
+            "OFF hover wash"
+        );
     }
 
     #[test]
@@ -223,8 +238,10 @@ mod tests {
         use signex_widgets::active_bar_dropdown::DropdownEntry;
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let t = theme_tokens(id);
-            let filters: std::collections::HashSet<_> =
-                crate::active_bar::SelectionFilter::ALL.iter().copied().collect();
+            let filters: std::collections::HashSet<_> = crate::active_bar::SelectionFilter::ALL
+                .iter()
+                .copied()
+                .collect();
             let entry = super::super::custom::filter_entry(&t, &filters, &[]);
             assert!(matches!(entry, DropdownEntry::Custom(_)));
             let rows = super::super::custom::net_color_entries(&t, id, false, true);
