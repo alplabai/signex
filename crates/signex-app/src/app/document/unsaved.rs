@@ -68,13 +68,7 @@ impl Signex {
     pub(crate) fn unsaved_set(&self) -> UnsavedDocuments {
         UnsavedDocuments {
             files: self.document_state.unsaved_files(),
-            rows: self
-                .library
-                .editors
-                .iter()
-                .filter(|(_, editor)| editor.dirty)
-                .map(|(address, _)| address.clone())
-                .collect(),
+            rows: self.library.dirty_editors(),
         }
     }
 }
@@ -83,6 +77,11 @@ impl UnsavedDocuments {
     /// The title bar's "N unsaved": files only, rows are not counted.
     pub(crate) fn title_count(&self) -> usize {
         self.files.len()
+    }
+
+    /// The files' paths, sorted: the order the quit prompt lists them in.
+    pub(crate) fn paths(&self) -> Vec<PathBuf> {
+        self.files.iter().map(|f| f.path.clone()).collect()
     }
 
     /// Does Save All have anything to write?

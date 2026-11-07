@@ -203,3 +203,117 @@ fn the_enumerator_lists_dirty_rows_apart_and_not_half_typed_ones() {
     let (app, _) = fixture(dir.path(), Kind::HalfTypedRow, true);
     assert!(app.unsaved_set().is_empty());
 }
+
+/// One app holding every kind at once: a sheet with a tab, a parked sheet,
+/// a symbol and a footprint draft, a dirty row, a half-typed-only row, the
+/// project file and a library manifest. Returns the paths the quit prompt
+/// must list and the one dirty row.
+fn every_kind() -> (
+    Signex,
+    Vec<PathBuf>,
+    crate::library::state::EditorAddress,
+    tempfile::TempDir,
+    tempfile::TempDir,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    let (mut app, sheet_tab) = fixture(d, Kind::Schematic, true);
+    let sheet_path = sheet_tab.path.clone();
+    app.document_state.tabs.push(sheet_tab);
+    let parked = d.join("parked.snxsch");
+    app.document_state.insert_engine(
+        parked.clone(),
+        signex_engine::Engine::new(Default::default()).unwrap(),
+    );
+    app.document_state.mark_document_dirty(&parked);
+    let (symbols, sym_tab) = {
+        let (a, t) = fixture(d, Kind::Symbol, true);
+        (a.document_state.symbol_editors, t)
+    };
+    app.document_state.symbol_editors = symbols;
+    let (fps, fp_tab) = {
+        let (a, t) = fixture(d, Kind::Footprint, true);
+        (a.document_state.footprint_editors, t)
+    };
+    app.document_state.footprint_editors = fps;
+    let (row_app, _) = fixture(d, Kind::Row, true);
+    let row = row_app.library.editors.keys().next().unwrap().clone();
+    app.library.editors = row_app.library.editors;
+    let (half, _) = fixture(other.path(), Kind::HalfTypedRow, true);
+    app.library.editors.extend(half.library.editors);
+    let project = app.document_state.projects[0].path.clone();
+    app.document_state.mark_document_dirty(&project);
+    let manifest = d.join("lib.snxlib");
+    app.document_state.mark_document_dirty(&manifest);
+    let mut want = vec![
+        sheet_path,
+        parked,
+        sym_tab.path,
+        fp_tab.path,
+        project,
+        manifest,
+    ];
+    want.sort();
+    (app, want, row, dir, other)
+}
+
+#[test]
+fn the_quit_prompt_for_every_kind_at_once_lists_files_sorted_and_only_the_dirty_row() {
+    let (mut app, want, row, _d, _o) = every_kind();
+    let _ = app.update(crate::app::Message::Window(
+        crate::app::WindowMsg::CloseMainWindow,
+    ));
+    let modal = app.ui_state.app_quit_confirm.as_ref().unwrap();
+    assert_eq!(modal.dirty_paths, want);
+    assert_eq!(modal.dirty_rows, vec![row]);
+}
+
+fn open_quit_prompt(app: &mut Signex) {
+    let _ = app.update(crate::app::Message::Window(
+        crate::app::WindowMsg::CloseMainWindow,
+    ));
+    assert!(app.ui_state.app_quit_confirm.is_some());
+}
+
+fn set_every_row_dirty(app: &mut Signex, dirty: bool) {
+    for editor in app.library.editors.values_mut() {
+        editor.dirty = dirty;
+    }
+}
+
+#[test]
+fn a_row_saved_behind_the_quit_prompt_is_pruned_and_the_prompt_closes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = fixture(dir.path(), Kind::Row, true);
+    open_quit_prompt(&mut app);
+    set_every_row_dirty(&mut app, false);
+    app.prune_settled_quit_confirm();
+    assert!(app.ui_state.app_quit_confirm.is_none());
+}
+
+#[test]
+fn a_row_dirtied_behind_the_quit_prompt_is_not_discarded_and_is_listed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = fixture(dir.path(), Kind::Row, false);
+    app.document_state
+        .mark_document_dirty(&dir.path().join("lib.snxlib"));
+    open_quit_prompt(&mut app);
+    assert!(
+        app.ui_state
+            .app_quit_confirm
+            .as_ref()
+            .unwrap()
+            .dirty_rows
+            .is_empty()
+    );
+    set_every_row_dirty(&mut app, true);
+    let _ = app.handle_app_quit_confirm(crate::app::ProjectCloseChoice::DiscardAll);
+    let modal = app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("prompt stays up");
+    assert_eq!(modal.dirty_rows.len(), 1);
+    assert!(app.ui_state.quit_confirm_refreshed);
+}
