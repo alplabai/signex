@@ -356,6 +356,18 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_arch_guard.sh
 
+      # Layering ratchet (#664): SymbolTransform / union-find copies outside
+      # their crate and app imports of library-editor internals may not grow,
+      # and the baseline is regenerated when they shrink. Rules live in
+      # scripts/check_layer_ratchet.sh.
+      - name: Layer ratchet
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_layer_ratchet.sh
+
+      - name: Layer ratchet controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_layer_ratchet.sh
+
       # Hard gate (NOT continue-on-error): a PR may not add a new production
       # god-file or grow a grandfathered one. Ratchet + rationale live in
       # scripts/check_file_size.sh; the slice model it points to is ADR-0001.
