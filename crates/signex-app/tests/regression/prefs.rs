@@ -162,7 +162,7 @@ fn prefs_theme_round_trip_through_json() {
     // Default when missing.
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::Signex
+        ThemeId::DEFAULT
     );
 
     // Each builtin theme survives a write→read cycle.
@@ -252,6 +252,41 @@ fn prefs_writes_dont_clobber_neighboring_keys() {
     assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
 }
 
+/// Downgrade safety: a theme name this build does not know (written by a
+/// newer build) falls back to the default theme and costs no other pref.
+#[test]
+fn prefs_unknown_theme_falls_back_to_default_and_keeps_the_other_prefs() {
+    let (_tmp, path) = temp_prefs_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, br#"{"theme":"some_future_theme","unit":"mil"}"#).unwrap();
+
+    assert_eq!(
+        signex_app::fonts::read_theme_pref_at(&path),
+        ThemeId::DEFAULT
+    );
+    assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);
+
+    // Writing another key leaves the unknown theme and the rest untouched.
+    signex_app::fonts::write_snap_enabled_pref_at(&path, false);
+    let json: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(json["theme"], "some_future_theme");
+    assert_eq!(json["unit"], "mil");
+}
+
+/// The Graphite names are the stored form of the new themes.
+#[test]
+fn prefs_graphite_themes_use_snake_case_names() {
+    let (_tmp, path) = temp_prefs_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    for (name, want) in [
+        ("graphite_light", ThemeId::GraphiteLight),
+        ("graphite_dark", ThemeId::GraphiteDark),
+    ] {
+        fs::write(&path, format!(r#"{{"theme":"{name}"}}"#)).unwrap();
+        assert_eq!(signex_app::fonts::read_theme_pref_at(&path), want, "{name}");
+    }
+}
+
 #[test]
 fn prefs_garbage_json_falls_back_to_defaults() {
     let (_tmp, path) = temp_prefs_path();
@@ -261,7 +296,7 @@ fn prefs_garbage_json_falls_back_to_defaults() {
     // Each read returns its default rather than panicking on parse error.
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::Signex
+        ThemeId::DEFAULT
     );
     assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mm);
     assert!(signex_app::fonts::read_grid_visible_pref_at(&path));

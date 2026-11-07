@@ -465,7 +465,9 @@ fn read_prefs_json(path: &Path) -> Option<serde_json::Value> {
 // Theme
 // ──────────────────────────────────────────────────────────────────────
 
-/// Read the last-applied theme. Defaults to `ThemeId::Signex`.
+/// Read the last-applied theme. Defaults to [`ThemeId::DEFAULT`] when none
+/// is stored or the stored name is unknown (e.g. written by a newer build);
+/// the other preferences are read separately and stay intact.
 pub fn read_theme_pref() -> ThemeId {
     read_theme_pref_at(&prefs_path())
 }
@@ -479,7 +481,7 @@ pub fn read_theme_pref_at(path: &Path) -> ThemeId {
 pub fn read_theme_pref_from(json: Option<&serde_json::Value>) -> ThemeId {
     json.and_then(|json| json.get("theme").cloned())
         .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or(ThemeId::Signex)
+        .unwrap_or(ThemeId::DEFAULT)
 }
 
 /// Persist theme without clobbering other preference keys.

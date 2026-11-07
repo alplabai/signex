@@ -6,15 +6,31 @@ use super::properties_parameters::{add_filter_button_style, check_state_color, s
 use super::status::{erc_row_text, erc_severity_text};
 use crate::app::Signex;
 use crate::styles::ti;
-use crate::styles::tokens::{MIN_TEXT_CONTRAST, UNREADABLE_CONTRAST, contrast_ratio};
+use crate::styles::tokens::{
+    MIN_TEXT_CONTRAST, UNREADABLE_CONTRAST, contrast_ratio, relative_luminance,
+};
 use iced::Color;
 use iced::widget::button;
 use signex_types::theme::{ThemeId, theme_tokens};
 
-const LIGHT: ThemeId = ThemeId::SolarizedLight;
+/// The built-in whose accent and selection fill are the same colour, which
+/// is what the accent-on-accent label tests below pin.
+const SOLARIZED: ThemeId = ThemeId::SolarizedLight;
+
+/// A theme is light when its panel is light, whatever its name.
+fn is_light(id: ThemeId) -> bool {
+    relative_luminance(ti(theme_tokens(id).panel_bg)) > 0.5
+}
+
+fn light_themes() -> impl Iterator<Item = ThemeId> {
+    ThemeId::BUILTINS.iter().copied().filter(|id| is_light(*id))
+}
 
 fn dark_themes() -> impl Iterator<Item = ThemeId> {
-    ThemeId::BUILTINS.iter().copied().filter(|id| *id != LIGHT)
+    ThemeId::BUILTINS
+        .iter()
+        .copied()
+        .filter(|id| !is_light(*id))
 }
 
 fn solid(fill: Option<iced::Background>) -> Color {
@@ -34,17 +50,21 @@ fn assert_readable(what: &str, text: Color, fill: Color) {
 }
 
 #[test]
-fn selected_segment_text_is_readable_on_solarized_light() {
-    let p = PanelPalette::from_tokens(&theme_tokens(LIGHT));
-    let text = seg_text(true, p.primary, p.muted, p.input_bg);
-    assert_readable("selected segment", text, p.input_bg);
+fn selected_segment_text_is_readable_on_every_light_theme() {
+    for id in light_themes() {
+        let p = PanelPalette::from_tokens(&theme_tokens(id));
+        let text = seg_text(true, p.primary, p.muted, p.input_bg);
+        assert_readable(&format!("{id:?} selected segment"), text, p.input_bg);
+    }
 }
 
+/// Solarized only: its accent equals its selection fill, which is the
+/// collision this label rule exists for.
 #[test]
 fn add_filter_label_is_readable_on_solarized_light() {
-    let tokens = theme_tokens(LIGHT);
+    let tokens = theme_tokens(SOLARIZED);
     let p = PanelPalette::from_tokens(&tokens);
-    let theme = Signex::id_to_iced_theme(LIGHT, None);
+    let theme = Signex::id_to_iced_theme(SOLARIZED, None);
     for status in [
         button::Status::Active,
         button::Status::Hovered,
@@ -60,23 +80,42 @@ fn add_filter_label_is_readable_on_solarized_light() {
 }
 
 #[test]
-fn checkbox_state_word_is_readable_on_solarized_light() {
-    let tokens = theme_tokens(LIGHT);
-    let p = PanelPalette::from_tokens(&tokens);
-    let theme = Signex::id_to_iced_theme(LIGHT, None);
-    let surfaces = [ti(tokens.panel_bg), theme.palette().background.base.color];
-    for surface in surfaces {
-        assert_readable("On", check_state_color(true, p.muted, surface), surface);
+fn checkbox_state_word_is_readable_on_every_light_theme() {
+    for id in light_themes() {
+        let tokens = theme_tokens(id);
+        let p = PanelPalette::from_tokens(&tokens);
+        let theme = Signex::id_to_iced_theme(id, None);
+        let surfaces = [ti(tokens.panel_bg), theme.palette().background.base.color];
+        for surface in surfaces {
+            assert_readable(
+                &format!("{id:?} On"),
+                check_state_color(true, p.muted, surface),
+                surface,
+            );
+        }
     }
 }
 
 #[test]
-fn selected_erc_row_text_is_readable_on_solarized_light() {
-    let tokens = theme_tokens(LIGHT);
-    let fill = ti(tokens.selection);
-    let (label, detail) = erc_row_text(&tokens, true);
-    assert_readable("ERC row label", label, fill);
-    assert_readable("ERC row detail", detail, fill);
+fn selected_erc_row_text_is_readable_on_every_light_theme() {
+    for id in light_themes() {
+        let tokens = theme_tokens(id);
+        let fill = ti(tokens.selection);
+        let (label, detail) = erc_row_text(&tokens, true);
+        assert_readable(&format!("{id:?} ERC row label"), label, fill);
+        assert_readable(&format!("{id:?} ERC row detail"), detail, fill);
+    }
+}
+
+#[test]
+fn the_light_and_dark_sets_split_the_builtins() {
+    assert!(light_themes().any(|id| id == ThemeId::GraphiteLight));
+    assert!(light_themes().any(|id| id == SOLARIZED));
+    assert!(dark_themes().any(|id| id == ThemeId::GraphiteDark));
+    assert_eq!(
+        light_themes().count() + dark_themes().count(),
+        ThemeId::BUILTINS.len()
+    );
 }
 
 /// A dark theme keeps the colour it had, unless that colour was lost on
@@ -150,7 +189,7 @@ fn dark_themes_keep_every_label_that_was_visible() {
 #[test]
 fn focused_erc_severity_letter_is_readable_on_solarized_light() {
     use signex_widgets::theme_ext;
-    let tokens = theme_tokens(LIGHT);
+    let tokens = theme_tokens(SOLARIZED);
     let fill = ti(tokens.selection);
     for (name, colour) in [
         ("E", theme_ext::error_color(&tokens)),
@@ -191,7 +230,7 @@ fn on_label_reads_on_the_panel_background_of_every_builtin() {
             contrast_ratio(on, panel) >= UNREADABLE_CONTRAST,
             "{id:?}: On is lost on the panel background"
         );
-        if id == LIGHT {
+        if is_light(id) {
             assert_readable("On on panel_bg", on, panel);
         }
     }

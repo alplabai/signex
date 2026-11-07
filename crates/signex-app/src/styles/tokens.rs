@@ -246,3 +246,77 @@ pub fn contrast_ratio(a: Color, b: Color) -> f32 {
     let (hi, lo) = if la >= lb { (la, lb) } else { (lb, la) };
     (hi + 0.05) / (lo + 0.05)
 }
+
+/// Every chrome colour a surface can ask for, with the optional
+/// [`ThemeTokens::extended`] entries filled in. A theme that leaves an
+/// extended token unset gets the colour the app derived before those tokens
+/// existed, so legacy themes look the same.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResolvedTokens {
+    pub raised: Color,
+    pub field: Color,
+    pub sunken: Color,
+    pub line_soft: Color,
+    pub line_strong: Color,
+    pub ink3: Color,
+    pub ink4: Color,
+    pub accent_text: Color,
+    pub accent_soft: Color,
+    pub accent_soft_ink: Color,
+    pub primary: Color,
+    pub primary_ink: Color,
+    pub info: Color,
+    pub ok_soft: Color,
+    pub warn_soft: Color,
+    pub err_soft: Color,
+    pub info_soft: Color,
+    /// Drop-shadow colour; `a` is the strength.
+    pub shadow: Color,
+    /// Modal scrim colour; `a` is the strength.
+    pub scrim: Color,
+}
+
+/// Alpha of a soft status / accent tint derived from its base colour.
+const SOFT_TINT_ALPHA: f32 = 0.15;
+
+/// Alpha of the shadow under a floating surface when the theme sets none.
+const FALLBACK_SHADOW_ALPHA: f32 = 0.35;
+
+fn tint(c: Color, alpha: f32) -> Color {
+    Color { a: alpha, ..c }
+}
+
+/// Resolve `tokens`: each extended token if set, else its derived fallback.
+pub fn resolve(tokens: &ThemeTokens) -> ResolvedTokens {
+    let e = &tokens.extended;
+    let pick = |set: Option<signex_types::theme::Color>, fallback: Color| set.map_or(fallback, ti);
+    let panel = ti(tokens.panel_bg);
+    let accent = ti(tokens.accent);
+    ResolvedTokens {
+        raised: pick(e.raised, panel),
+        field: pick(e.field, input_bg(tokens)),
+        sunken: pick(
+            e.sunken,
+            composite_over(overlay(tokens, Overlay::Hover), panel),
+        ),
+        line_soft: pick(
+            e.line_soft,
+            composite_over(tint(ti(tokens.border), 0.5), panel),
+        ),
+        line_strong: pick(e.line_strong, ti(tokens.border)),
+        ink3: pick(e.ink3, muted_text(tokens)),
+        ink4: pick(e.ink4, disabled_text(tokens)),
+        accent_text: pick(e.accent_text, accent),
+        accent_soft: pick(e.accent_soft, tint(accent, SOFT_TINT_ALPHA)),
+        accent_soft_ink: pick(e.accent_soft_ink, ti(tokens.text)),
+        primary: pick(e.primary, accent_fill(tokens)),
+        primary_ink: pick(e.primary_ink, on_accent(tokens)),
+        info: pick(e.info, accent),
+        ok_soft: pick(e.ok_soft, tint(ti(tokens.success), SOFT_TINT_ALPHA)),
+        warn_soft: pick(e.warn_soft, tint(ti(tokens.warning), SOFT_TINT_ALPHA)),
+        err_soft: pick(e.err_soft, tint(ti(tokens.error), SOFT_TINT_ALPHA)),
+        info_soft: pick(e.info_soft, tint(accent, SOFT_TINT_ALPHA)),
+        shadow: pick(e.shadow, scrim(FALLBACK_SHADOW_ALPHA)),
+        scrim: pick(e.scrim, scrim(BACKDROP_ALPHA)),
+    }
+}

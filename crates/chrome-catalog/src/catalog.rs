@@ -51,7 +51,7 @@ impl Catalog {
 
     fn iced_theme(&self) -> Theme {
         match self.theme {
-            ThemeId::SolarizedLight => Theme::Light,
+            ThemeId::SolarizedLight | ThemeId::GraphiteLight => Theme::Light,
             _ => Theme::Dark,
         }
     }

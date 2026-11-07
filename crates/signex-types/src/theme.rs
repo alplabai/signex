@@ -96,13 +96,22 @@ pub enum ThemeId {
     GitHubDark,
     SolarizedLight,
     Nord,
+    /// Graphite Light: warm paper-white chrome, copper accent. The default.
+    GraphiteLight,
+    /// Graphite Dark: the dark twin of [`ThemeId::GraphiteLight`].
+    GraphiteDark,
     /// User-defined custom theme (data stored externally in CustomThemeFile).
     Custom,
 }
 
 impl ThemeId {
+    /// Theme of a new install, i.e. when no theme preference is stored.
+    pub const DEFAULT: ThemeId = ThemeId::GraphiteLight;
+
     /// All built-in themes (excludes Custom).
     pub const BUILTINS: &[ThemeId] = &[
+        ThemeId::GraphiteLight,
+        ThemeId::GraphiteDark,
         ThemeId::Signex,
         ThemeId::Alplab,
         ThemeId::VsCodeDark,
@@ -121,7 +130,26 @@ impl ThemeId {
             ThemeId::GitHubDark => "GitHub Dark",
             ThemeId::SolarizedLight => "Solarized Light",
             ThemeId::Nord => "Nord",
+            ThemeId::GraphiteLight => "Graphite Light",
+            ThemeId::GraphiteDark => "Graphite Dark",
             ThemeId::Custom => "Custom",
+        }
+    }
+
+    /// The theme a light/dark toggle switches to: the Graphite twin of the
+    /// opposite lightness. `Custom` has no known lightness and goes to
+    /// Graphite Light.
+    pub const fn light_dark_counterpart(self) -> ThemeId {
+        match self {
+            ThemeId::GraphiteLight | ThemeId::SolarizedLight => ThemeId::GraphiteDark,
+            ThemeId::GraphiteDark
+            | ThemeId::CatppuccinMocha
+            | ThemeId::VsCodeDark
+            | ThemeId::Signex
+            | ThemeId::Alplab
+            | ThemeId::GitHubDark
+            | ThemeId::Nord
+            | ThemeId::Custom => ThemeId::GraphiteLight,
         }
     }
 }
@@ -162,6 +190,101 @@ pub struct ThemeTokens {
     pub error: Color,
     pub warning: Color,
     pub success: Color,
+    /// Tokens only the Graphite themes define; `None` everywhere else.
+    #[serde(default, skip_serializing_if = "ExtendedTokens::is_empty")]
+    pub extended: ExtendedTokens,
+}
+
+/// Optional chrome tokens beyond the 14 base ones. A theme leaves a field
+/// `None` to keep the colour the app derives from the base tokens (see
+/// `signex-app` `styles::tokens::resolve`), so old themes and old custom
+/// theme files look the same and serialize without these keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ExtendedTokens {
+    /// Floating surfaces: menus, dialogs, the Active Bar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raised: Option<Color>,
+    /// Text-input fill.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<Color>,
+    /// Recessed fill: segmented-control track, table headers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sunken: Option<Color>,
+    /// Hairline between rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_soft: Option<Color>,
+    /// Stronger rule: sheet frame, field outline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_strong: Option<Color>,
+    /// Third text step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ink3: Option<Color>,
+    /// Fourth, faintest text step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ink4: Option<Color>,
+    /// Accent used as text colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_text: Option<Color>,
+    /// Accent-tinted fill.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_soft: Option<Color>,
+    /// Text on [`ExtendedTokens::accent_soft`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_soft_ink: Option<Color>,
+    /// Primary button fill.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary: Option<Color>,
+    /// Text on the primary button.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary_ink: Option<Color>,
+    /// Informational colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub info: Option<Color>,
+    /// Soft fills behind status text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ok_soft: Option<Color>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warn_soft: Option<Color>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err_soft: Option<Color>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub info_soft: Option<Color>,
+    /// Drop-shadow colour; the alpha channel is the shadow strength.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<Color>,
+    /// Modal scrim colour; the alpha channel is its strength.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scrim: Option<Color>,
+}
+
+impl ExtendedTokens {
+    /// Every field `None`: the base tokens decide.
+    pub const NONE: Self = Self {
+        raised: None,
+        field: None,
+        sunken: None,
+        line_soft: None,
+        line_strong: None,
+        ink3: None,
+        ink4: None,
+        accent_text: None,
+        accent_soft: None,
+        accent_soft_ink: None,
+        primary: None,
+        primary_ink: None,
+        info: None,
+        ok_soft: None,
+        warn_soft: None,
+        err_soft: None,
+        info_soft: None,
+        shadow: None,
+        scrim: None,
+    };
+
+    /// True when no field is set (the serde skip test).
+    pub fn is_empty(&self) -> bool {
+        *self == Self::NONE
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +358,7 @@ const CATPPUCCIN_MOCHA_TOKENS: ThemeTokens = ThemeTokens {
     error: c(0xF3, 0x8B, 0xA8),
     warning: c(0xFA, 0xB3, 0x87),
     success: c(0xA6, 0xE3, 0xA1),
+    extended: ExtendedTokens::NONE,
 };
 
 const CATPPUCCIN_MOCHA_CANVAS: CanvasColors = CanvasColors {
@@ -280,6 +404,7 @@ const VSCODE_DARK_TOKENS: ThemeTokens = ThemeTokens {
     error: c(0xF4, 0x44, 0x47),
     warning: c(0xFF, 0x8C, 0x00),
     success: c(0x6A, 0x99, 0x55),
+    extended: ExtendedTokens::NONE,
 };
 
 const VSCODE_DARK_CANVAS: CanvasColors = CanvasColors {
@@ -325,6 +450,7 @@ const SIGNEX_TOKENS: ThemeTokens = ThemeTokens {
     error: c(0xF4, 0x4E, 0x4E),
     warning: c(0xE8, 0x91, 0x2D),
     success: c(0x57, 0xA6, 0x4A),
+    extended: ExtendedTokens::NONE,
 };
 
 const SIGNEX_CANVAS: CanvasColors = CanvasColors {
@@ -380,6 +506,7 @@ const ALPLAB_TOKENS: ThemeTokens = ThemeTokens {
     error: c(0xF4, 0x4E, 0x4E),
     warning: c(0xE8, 0x91, 0x2D),
     success: c(0x57, 0xA6, 0x4A),
+    extended: ExtendedTokens::NONE,
 };
 
 // ===== GitHub Dark =====
@@ -399,6 +526,7 @@ const GITHUB_DARK_TOKENS: ThemeTokens = ThemeTokens {
     error: c(0xFF, 0x7B, 0x72),
     warning: c(0xD2, 0x9A, 0x22),
     success: c(0x3F, 0xB9, 0x50),
+    extended: ExtendedTokens::NONE,
 };
 
 const GITHUB_DARK_CANVAS: CanvasColors = CanvasColors {
@@ -444,6 +572,7 @@ const SOLARIZED_LIGHT_TOKENS: ThemeTokens = ThemeTokens {
     error: c(0xDC, 0x32, 0x2F),
     warning: c(0xCB, 0x4B, 0x16),
     success: c(0x85, 0x99, 0x00),
+    extended: ExtendedTokens::NONE,
 };
 
 const SOLARIZED_LIGHT_CANVAS: CanvasColors = CanvasColors {
@@ -489,6 +618,7 @@ const NORD_TOKENS: ThemeTokens = ThemeTokens {
     error: c(0xBF, 0x61, 0x6A),
     warning: c(0xEB, 0xCB, 0x8B),
     success: c(0xA3, 0xBE, 0x8C),
+    extended: ExtendedTokens::NONE,
 };
 
 const NORD_CANVAS: CanvasColors = CanvasColors {
@@ -517,6 +647,145 @@ const NORD_CANVAS: CanvasColors = CanvasColors {
     cursor: c(0xEC, 0xEF, 0xF4),
 };
 
+// ===== Graphite =====
+//
+// Warm-neutral chrome with a copper accent. The canvas is one sheet: the
+// workspace background equals the paper. Per-net-class wire colours are not
+// part of this palette yet, so wires, bodies and pins share the symbol ink.
+
+const fn s(r: u8, g: u8, b: u8) -> Option<Color> {
+    Some(c(r, g, b))
+}
+
+const GRAPHITE_LIGHT_TOKENS: ThemeTokens = ThemeTokens {
+    bg: c(0xF6, 0xF5, 0xF1),
+    paper: c(0xFD, 0xFC, 0xFA),
+    text: c(0x15, 0x17, 0x1A),
+    text_secondary: c(0x5B, 0x5E, 0x66),
+    accent: c(0xC2, 0x55, 0x2D),
+    border: c(0xE4, 0xE2, 0xDC),
+    panel_bg: c(0xFF, 0xFF, 0xFF),
+    toolbar_bg: c(0xFB, 0xFA, 0xF7),
+    statusbar_bg: c(0xFB, 0xFA, 0xF7),
+    selection: c(0xEF, 0xEC, 0xE6),
+    hover: c(0xF1, 0xEF, 0xEA),
+    error: c(0xA8, 0x30, 0x1F),
+    warning: c(0x8A, 0x5A, 0x10),
+    success: c(0x24, 0x61, 0x3A),
+    extended: ExtendedTokens {
+        raised: s(0xFF, 0xFF, 0xFF),
+        field: s(0xFF, 0xFF, 0xFF),
+        sunken: s(0xF1, 0xEF, 0xEA),
+        line_soft: s(0xEF, 0xED, 0xE8),
+        line_strong: s(0xDC, 0xD9, 0xD1),
+        ink3: s(0x5B, 0x5E, 0x66),
+        ink4: s(0x6B, 0x6E, 0x75),
+        accent_text: s(0xA8, 0x45, 0x2A),
+        accent_soft: s(0xF3, 0xE6, 0xDF),
+        accent_soft_ink: s(0x7E, 0x32, 0x1D),
+        primary: s(0x15, 0x17, 0x1A),
+        primary_ink: s(0xFF, 0xFF, 0xFF),
+        info: s(0x1F, 0x45, 0xAE),
+        ok_soft: s(0xEA, 0xF3, 0xEC),
+        warn_soft: s(0xFD, 0xF7, 0xEA),
+        err_soft: s(0xFB, 0xED, 0xEA),
+        info_soft: s(0xEA, 0xF0, 0xFD),
+        shadow: Some(Color::new(0x15, 0x17, 0x1A, 26)),
+        scrim: Some(Color::new(0x15, 0x17, 0x1A, 87)),
+    },
+};
+
+const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
+    background: c(0xFD, 0xFC, 0xFA),
+    paper: c(0xFD, 0xFC, 0xFA),
+    wire: c(0x2B, 0x2D, 0x33),
+    junction: c(0x2B, 0x2D, 0x33),
+    body: c(0x2B, 0x2D, 0x33),
+    body_fill: c(0xFF, 0xFF, 0xFF),
+    pin: c(0x2B, 0x2D, 0x33),
+    reference: c(0x15, 0x17, 0x1A),
+    value: c(0x5B, 0x5E, 0x66),
+    net_label: c(0x2D, 0x5B, 0xD7),
+    global_label: c(0x2D, 0x5B, 0xD7),
+    hier_label: c(0x7B, 0x4B, 0xB8),
+    no_connect: c(0xA8, 0x30, 0x1F),
+    power: c(0xC0, 0x39, 0x2B),
+    erc_error: c(0xA8, 0x30, 0x1F),
+    erc_warning: c(0xC0, 0x39, 0x2B),
+    drc_error: c(0xA8, 0x30, 0x1F),
+    drc_warning: c(0xC0, 0x39, 0x2B),
+    // Green, not the copper accent: it must stay apart from the power red.
+    selection: c(0x1F, 0x9D, 0x55),
+    ratsnest: s(0x9E, 0xA3, 0xAE),
+    bus: c(0x5B, 0x5E, 0x66),
+    grid: c(0xE2, 0xDF, 0xD8),
+    cursor: c(0x15, 0x17, 0x1A),
+};
+
+const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
+    bg: c(0x11, 0x12, 0x14),
+    paper: c(0x14, 0x15, 0x18),
+    text: c(0xEC, 0xEA, 0xE5),
+    text_secondary: c(0xA3, 0xA5, 0xAB),
+    accent: c(0xC2, 0x55, 0x2D),
+    border: c(0x2A, 0x2C, 0x31),
+    panel_bg: c(0x17, 0x18, 0x1B),
+    toolbar_bg: c(0x17, 0x18, 0x1B),
+    statusbar_bg: c(0x17, 0x18, 0x1B),
+    selection: c(0x2A, 0x2C, 0x32),
+    hover: c(0x22, 0x24, 0x29),
+    error: c(0xF2, 0xA0, 0x93),
+    warning: c(0xE8, 0xC9, 0x7A),
+    success: c(0x7F, 0xD1, 0xA0),
+    extended: ExtendedTokens {
+        raised: s(0x1D, 0x1F, 0x23),
+        field: s(0x1D, 0x1F, 0x23),
+        sunken: s(0x22, 0x24, 0x29),
+        line_soft: s(0x23, 0x25, 0x29),
+        line_strong: s(0x34, 0x36, 0x3C),
+        ink3: s(0xA3, 0xA5, 0xAB),
+        ink4: s(0x8B, 0x8D, 0x93),
+        accent_text: s(0xE0, 0x86, 0x5C),
+        accent_soft: s(0x3A, 0x24, 0x18),
+        accent_soft_ink: s(0xF0, 0xB0, 0x8E),
+        primary: s(0xEC, 0xEA, 0xE5),
+        primary_ink: s(0x11, 0x12, 0x14),
+        info: s(0xA9, 0xC2, 0xFF),
+        ok_soft: s(0x15, 0x29, 0x1D),
+        warn_soft: s(0x2A, 0x22, 0x10),
+        err_soft: s(0x3A, 0x1D, 0x19),
+        info_soft: s(0x16, 0x22, 0x3F),
+        shadow: Some(Color::new(0, 0, 0, 115)),
+        scrim: Some(Color::new(0, 0, 0, 140)),
+    },
+};
+
+const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
+    background: c(0x14, 0x15, 0x18),
+    paper: c(0x14, 0x15, 0x18),
+    wire: c(0xC9, 0xCB, 0xD1),
+    junction: c(0xC9, 0xCB, 0xD1),
+    body: c(0xC9, 0xCB, 0xD1),
+    body_fill: c(0x1B, 0x1D, 0x21),
+    pin: c(0xC9, 0xCB, 0xD1),
+    reference: c(0xEC, 0xEA, 0xE5),
+    value: c(0xA3, 0xA5, 0xAB),
+    net_label: c(0x6E, 0x9B, 0xFF),
+    global_label: c(0x6E, 0x9B, 0xFF),
+    hier_label: c(0xA7, 0x8B, 0xDB),
+    no_connect: c(0xF2, 0xA0, 0x93),
+    power: c(0xE0, 0x6C, 0x5C),
+    erc_error: c(0xF2, 0xA0, 0x93),
+    erc_warning: c(0xE0, 0x6C, 0x5C),
+    drc_error: c(0xF2, 0xA0, 0x93),
+    drc_warning: c(0xE0, 0x6C, 0x5C),
+    selection: c(0x4A, 0xDE, 0x80),
+    ratsnest: s(0x9E, 0xA3, 0xAE),
+    bus: c(0xA3, 0xA5, 0xAB),
+    grid: c(0x26, 0x28, 0x2D),
+    cursor: c(0xEC, 0xEA, 0xE5),
+};
+
 // ---------------------------------------------------------------------------
 // Public accessors
 // ---------------------------------------------------------------------------
@@ -530,6 +799,8 @@ pub fn theme_tokens(id: ThemeId) -> ThemeTokens {
         ThemeId::GitHubDark => GITHUB_DARK_TOKENS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_TOKENS,
         ThemeId::Nord => NORD_TOKENS,
+        ThemeId::GraphiteLight => GRAPHITE_LIGHT_TOKENS,
+        ThemeId::GraphiteDark => GRAPHITE_DARK_TOKENS,
         ThemeId::Custom => SIGNEX_TOKENS, // caller must use CustomThemeFile directly
     }
 }
@@ -545,6 +816,8 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
         ThemeId::GitHubDark => GITHUB_DARK_CANVAS,
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_CANVAS,
         ThemeId::Nord => NORD_CANVAS,
+        ThemeId::GraphiteLight => GRAPHITE_LIGHT_CANVAS,
+        ThemeId::GraphiteDark => GRAPHITE_DARK_CANVAS,
         ThemeId::Custom => SIGNEX_CANVAS, // caller must use CustomThemeFile directly
     }
 }
@@ -615,6 +888,7 @@ mod tests {
             ThemeId::Signex | ThemeId::Alplab | ThemeId::Custom => (0x00, 0x78, 0xD4),
             ThemeId::SolarizedLight => (0x00, 0x2B, 0x36),
             ThemeId::Nord => (0xEC, 0xEF, 0xF4),
+            ThemeId::GraphiteLight | ThemeId::GraphiteDark => (0x9E, 0xA3, 0xAE),
         };
         for &id in ThemeId::BUILTINS {
             let r = canvas_colors(id).ratsnest_color();
@@ -660,5 +934,111 @@ mod tests {
         }
         let back: CustomThemeFile = serde_json::from_str(&json).unwrap();
         assert_eq!(back.canvas, canvas);
+    }
+
+    #[test]
+    fn graphite_is_the_default_and_both_twins_are_builtin() {
+        assert_eq!(ThemeId::DEFAULT, ThemeId::GraphiteLight);
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            assert!(ThemeId::BUILTINS.contains(&id), "{id:?}");
+        }
+        assert_eq!(ThemeId::GraphiteLight.label(), "Graphite Light");
+        assert_eq!(ThemeId::GraphiteDark.label(), "Graphite Dark");
+    }
+
+    #[test]
+    fn the_light_dark_counterpart_flips_lightness() {
+        let flip = ThemeId::light_dark_counterpart;
+        assert_eq!(flip(ThemeId::GraphiteLight), ThemeId::GraphiteDark);
+        assert_eq!(flip(ThemeId::GraphiteDark), ThemeId::GraphiteLight);
+        assert_eq!(flip(ThemeId::Signex), ThemeId::GraphiteLight);
+        assert_eq!(flip(ThemeId::SolarizedLight), ThemeId::GraphiteDark);
+    }
+
+    #[test]
+    fn the_graphite_canvas_is_one_sheet_and_only_graphite_sets_extended_tokens() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let canvas = canvas_colors(id);
+            assert_eq!(canvas.background, canvas.paper, "{id:?}");
+        }
+        for &id in ThemeId::BUILTINS {
+            let graphite = matches!(id, ThemeId::GraphiteLight | ThemeId::GraphiteDark);
+            assert_eq!(theme_tokens(id).extended.is_empty(), !graphite, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn every_graphite_extended_token_is_set() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let json = serde_json::to_value(theme_tokens(id).extended).unwrap();
+            let set = json.as_object().unwrap().len();
+            let all = serde_json::to_value(ExtendedTokens {
+                raised: Some(c(0, 0, 0)),
+                field: Some(c(0, 0, 0)),
+                sunken: Some(c(0, 0, 0)),
+                line_soft: Some(c(0, 0, 0)),
+                line_strong: Some(c(0, 0, 0)),
+                ink3: Some(c(0, 0, 0)),
+                ink4: Some(c(0, 0, 0)),
+                accent_text: Some(c(0, 0, 0)),
+                accent_soft: Some(c(0, 0, 0)),
+                accent_soft_ink: Some(c(0, 0, 0)),
+                primary: Some(c(0, 0, 0)),
+                primary_ink: Some(c(0, 0, 0)),
+                info: Some(c(0, 0, 0)),
+                ok_soft: Some(c(0, 0, 0)),
+                warn_soft: Some(c(0, 0, 0)),
+                err_soft: Some(c(0, 0, 0)),
+                info_soft: Some(c(0, 0, 0)),
+                shadow: Some(c(0, 0, 0)),
+                scrim: Some(c(0, 0, 0)),
+            })
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .len();
+            assert_eq!(set, all, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn graphite_tokens_match_the_spec_hex() {
+        let light = theme_tokens(ThemeId::GraphiteLight);
+        assert_eq!(light.accent, Color::from_hex("#C2552D"));
+        assert_eq!(light.panel_bg, Color::from_hex("#FFFFFF"));
+        assert_eq!(light.extended.accent_soft, Some(Color::from_hex("#F3E6DF")));
+        let light_canvas = canvas_colors(ThemeId::GraphiteLight);
+        assert_eq!(light_canvas.grid, Color::from_hex("#E2DFD8"));
+        let dark = theme_tokens(ThemeId::GraphiteDark);
+        assert_eq!(dark.bg, Color::from_hex("#111214"));
+        assert_eq!(dark.extended.primary_ink, Some(Color::from_hex("#111214")));
+        let dark_canvas = canvas_colors(ThemeId::GraphiteDark);
+        assert_eq!(dark_canvas.wire, Color::from_hex("#C9CBD1"));
+    }
+
+    #[test]
+    fn a_custom_theme_file_without_extended_tokens_loads_and_saves_without_them() {
+        let file = CustomThemeFile {
+            name: "t".into(),
+            tokens: theme_tokens(ThemeId::Signex),
+            canvas: canvas_colors(ThemeId::Signex),
+        };
+        let json = serde_json::to_value(&file).unwrap();
+        assert!(json["tokens"].get("extended").is_none());
+        let back: CustomThemeFile = serde_json::from_value(json.clone()).unwrap();
+        assert!(back.tokens.extended.is_empty());
+        assert_eq!(serde_json::to_value(&back).unwrap(), json);
+    }
+
+    #[test]
+    fn a_graphite_custom_theme_round_trips_its_extended_tokens() {
+        let file = CustomThemeFile {
+            name: "g".into(),
+            tokens: theme_tokens(ThemeId::GraphiteDark),
+            canvas: canvas_colors(ThemeId::GraphiteDark),
+        };
+        let back: CustomThemeFile =
+            serde_json::from_str(&serde_json::to_string(&file).unwrap()).unwrap();
+        assert_eq!(back.tokens, file.tokens);
     }
 }

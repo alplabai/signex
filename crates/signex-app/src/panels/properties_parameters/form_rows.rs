@@ -581,7 +581,10 @@ mod tests {
         let expected = |id: ThemeId| match id {
             // GitHubDark #388BFD and SolarizedLight #268BD2: white < 4.5:1.
             ThemeId::GitHubDark | ThemeId::SolarizedLight => Color::BLACK,
-            ThemeId::Signex
+            // GraphiteLight selection #EFECE6 is near-white; GraphiteDark #2A2C32 is near-black.
+            ThemeId::GraphiteLight => Color::BLACK,
+            ThemeId::GraphiteDark
+            | ThemeId::Signex
             | ThemeId::Alplab
             | ThemeId::VsCodeDark
             | ThemeId::CatppuccinMocha

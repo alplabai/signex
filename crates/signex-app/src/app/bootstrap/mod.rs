@@ -163,6 +163,28 @@ impl Signex {
             ),
             ThemeId::SolarizedLight => Theme::Light,
             ThemeId::Nord => Theme::Nord,
+            ThemeId::GraphiteLight => Theme::custom(
+                "Graphite Light".to_string(),
+                iced::theme::palette::Seed {
+                    background: iced::Color::from_rgb8(0xF6, 0xF5, 0xF1),
+                    text: iced::Color::from_rgb8(0x15, 0x17, 0x1A),
+                    primary: iced::Color::from_rgb8(0xC2, 0x55, 0x2D),
+                    success: iced::Color::from_rgb8(0x24, 0x61, 0x3A),
+                    danger: iced::Color::from_rgb8(0xA8, 0x30, 0x1F),
+                    warning: iced::Color::from_rgb8(0x8A, 0x5A, 0x10),
+                },
+            ),
+            ThemeId::GraphiteDark => Theme::custom(
+                "Graphite Dark".to_string(),
+                iced::theme::palette::Seed {
+                    background: iced::Color::from_rgb8(0x11, 0x12, 0x14),
+                    text: iced::Color::from_rgb8(0xEC, 0xEA, 0xE5),
+                    primary: iced::Color::from_rgb8(0xC2, 0x55, 0x2D),
+                    success: iced::Color::from_rgb8(0x7F, 0xD1, 0xA0),
+                    danger: iced::Color::from_rgb8(0xF2, 0xA0, 0x93),
+                    warning: iced::Color::from_rgb8(0xE8, 0xC9, 0x7A),
+                },
+            ),
         }
     }
 }

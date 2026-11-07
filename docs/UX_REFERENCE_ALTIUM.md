@@ -386,7 +386,8 @@ enum (see `PCB_LAYERS_PLAN.md`).
 
 ## 8. Schematic Canvas Themes
 
-Signex ships with six built-in color themes for the schematic canvas. All
+Signex ships with nine built-in color themes: Graphite Light, Graphite Dark,
+Alp Lab and the six in the table below. All
 themes are available in both Community and Pro editions.
 
 ### 8.1. Theme Color Table
@@ -415,7 +416,9 @@ themes are available in both Community and Pro editions.
 - Every rendered element reads its color from the active theme's token set
 - Theme switching re-renders the entire canvas immediately (invalidate all
   render caches)
-- The default theme is **Catppuccin Mocha** (dark, high contrast, easy on eyes)
+- The default theme for a new install is **Graphite Light**; a stored theme
+  choice is kept. **Graphite Dark** is its dark twin, and Altium Dark stays
+  available. The colour table below covers the legacy themes only.
 - The user selects a theme from View → Theme or from Preferences
 - Theme choice persists across sessions
 - Custom themes are a post-PCB-Viewer feature; the Community Preview ships only the six built-in

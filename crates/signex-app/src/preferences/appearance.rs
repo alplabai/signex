@@ -49,6 +49,16 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // Built-in theme data: (id, display name, description)
     let builtins: &[(ThemeId, &str, &str)] = &[
         (
+            ThemeId::GraphiteLight,
+            "Graphite Light",
+            "Warm paper-white chrome with a copper accent (default)",
+        ),
+        (
+            ThemeId::GraphiteDark,
+            "Graphite Dark",
+            "Graphite Light's dark twin",
+        ),
+        (
             ThemeId::Signex,
             "Signex",
             "Default Signex schematic palette",
