@@ -5,7 +5,7 @@
 use super::{PrefMsg, PrefNav, SP, TS};
 use crate::styles::{self, DialogButtonKind, Radii, dialog_button, ti, tokens};
 use iced::overlay::menu;
-use iced::widget::{container, pick_list, text_input};
+use iced::widget::{container, pick_list, scrollable, text_input};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
@@ -108,6 +108,33 @@ pub(super) fn font_pick_list<'a>(
             shadow: Default::default(),
         })
         .boxed()
+}
+
+/// `scrollable` style of the Preferences panes: a thin neutral scroller on
+/// Graphite, the stock style on legacy themes.
+pub(super) fn scroll_style(
+    t: &ThemeTokens,
+) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style + 'static {
+    let graphite = styles::is_graphite(t);
+    let r = tokens::resolve(t);
+    let (thumb, thumb_hot) = (r.line_strong, r.ink4);
+    move |theme: &Theme, status: scrollable::Status| {
+        let mut style = scrollable::default(theme, status);
+        if !graphite {
+            return style;
+        }
+        let idle = matches!(status, scrollable::Status::Active { .. });
+        for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
+            rail.background = None;
+            rail.border = Border::default();
+            rail.scroller.background = Background::Color(if idle { thumb } else { thumb_hot });
+            rail.scroller.border = Border {
+                radius: 999.0.into(),
+                ..Border::default()
+            };
+        }
+        style
+    }
 }
 
 #[cfg(test)]

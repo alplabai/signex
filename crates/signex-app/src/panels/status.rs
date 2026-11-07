@@ -466,20 +466,23 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.diagnostics.is_empty() {
         col = col.push(
             container(
-                iced::widget::column![
+                row![
                     text("No runtime messages yet").size(TS.body).color(ink3),
                     text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
                         .size(TS.caption)
                         .color(ink4),
                 ]
-                .spacing(SP.xs)
-                .align_x(iced::Alignment::Center),
+                .spacing(SP.m)
+                .align_y(iced::Alignment::Center),
             )
-            .padding([24.0, 12.0])
+            .padding([0.0, 12.0])
+            .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT))
+            .align_y(iced::alignment::Vertical::Center)
             .width(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center)
+            .clip(true)
             .boxed(),
         );
+        col = col.push(rule());
         return container(col).width(Length::Fill).boxed();
     }
 
