@@ -9,6 +9,7 @@ mod key;
 #[cfg(test)]
 mod tests;
 mod undo_target;
+mod unsaved;
 
 pub(crate) use key::DocumentKey;
 pub(crate) use undo_target::UndoTarget;
