@@ -27,6 +27,7 @@ use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use iced_wgpu::wgpu;
 use signex_app::app::{AnnotateMsg, CommandPaletteMsg, FileMsg, Message, PreferencesMsg, Signex};
+use signex_app::canvas::CanvasEvent;
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::{FootprintEditorMsg, PrimitiveEdit};
@@ -248,7 +249,11 @@ type Build = fn(&mut Signex, &mut iced::Renderer, &Fixture) -> Result<(), String
 
 fn screens() -> Vec<(&'static str, Build)> {
     vec![
-        ("start", |_, _, _| Ok(())),
+        ("start", |app, _, fx| {
+            // Libraries the app has loaded, as the start screen counts them.
+            mount_stock(app, fx);
+            Ok(())
+        }),
         ("schematic", |app, r, fx| {
             open_sample(app, r, fx);
             // Two real log entries, so the Messages tab shows rows and its count.
@@ -257,6 +262,16 @@ fn screens() -> Vec<(&'static str, Build)> {
             let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
                 PrefMsg::DraftTheme(app.ui_state.theme_id),
             )));
+            Ok(())
+        }),
+        ("schematic-selected", |app, r, fx| {
+            open_sample(app, r, fx);
+            // Click U1 (88.9, 101.6 mm) so Properties shows the component.
+            let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+                world_x: 88.9,
+                world_y: 101.6,
+            }));
+            let _ = draw(r, app);
             Ok(())
         }),
         ("schematic-signal", |app, r, fx| {

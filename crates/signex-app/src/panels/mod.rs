@@ -29,7 +29,7 @@ mod empty_state;
 pub(crate) use empty_state::empty_state_card;
 mod erc_waivers;
 mod footprint_context;
-mod form_look;
+pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;
 mod messages;
@@ -39,6 +39,7 @@ mod net_class_panel;
 mod numeric_draft;
 mod palette;
 mod paper;
+pub mod pcb_nets;
 mod projects;
 mod projects_graphite;
 mod properties;
@@ -109,6 +110,7 @@ pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
     paper_size_options,
 };
+pub use pcb_nets::PcbNetsSummary;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
@@ -174,6 +176,8 @@ pub enum PanelKind {
     /// Symbol editor pin table (number, name, type, part, visibility).
     /// Visible whenever a Symbol editor tab is focused.
     SymbolPins,
+    /// PCB editor net table: nets with pad counts and routed length.
+    PcbNets,
     /// VSCode-style per-file Git history. Right-dock surface that
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
@@ -207,6 +211,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::FootprintLibrary,
     PanelKind::FootprintLayers,
     PanelKind::SymbolPins,
+    PanelKind::PcbNets,
     PanelKind::History,
 ];
 
@@ -262,6 +267,7 @@ impl PanelKind {
             PanelKind::FootprintLibrary => "Footprint Library",
             PanelKind::FootprintLayers => "Layers",
             PanelKind::SymbolPins => "Pins",
+            PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
         }
     }
@@ -313,6 +319,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::FootprintLibrary => view_footprint_library(ctx),
         PanelKind::FootprintLayers => crate::library::editor::footprint::layers_panel::view(ctx),
         PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
+        PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
     };
 

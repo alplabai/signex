@@ -139,13 +139,18 @@ fn recent_section<'a>(
     Some(list.boxed())
 }
 
+/// A loaded library for the Graphite start screen: file name and how many
+/// components it holds.
+pub type LoadedLibrary = (String, usize);
+
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     open_shortcut: &str,
     recent: &'a [PathBuf],
+    libraries: &[LoadedLibrary],
 ) -> Element<'a, Message> {
     if styles::is_graphite(tokens) {
-        return graphite::view(tokens, open_shortcut, recent);
+        return graphite::view(tokens, open_shortcut, recent, libraries);
     }
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
@@ -244,11 +249,11 @@ mod tests {
     #[test]
     fn recent_section_is_absent_without_entries_and_present_with_them() {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
-        let empty = lay_out_texts(view(&tokens, "Ctrl+O", &[]), SMALL_WINDOW);
+        let empty = lay_out_texts(view(&tokens, "Ctrl+O", &[], &[]), SMALL_WINDOW);
         assert!(empty.iter().all(|t| t.text != "Recent"));
 
         let some = paths(2);
-        let texts = lay_out_texts(view(&tokens, "Ctrl+O", &some), SMALL_WINDOW);
+        let texts = lay_out_texts(view(&tokens, "Ctrl+O", &some, &[]), SMALL_WINDOW);
         let order: Vec<_> = texts
             .iter()
             .filter(|t| t.text.starts_with("proj"))
@@ -268,7 +273,7 @@ mod tests {
     fn labels_stay_on_one_line_and_inside_a_small_window() {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
         let recent = paths(MAX_START_RECENT + 2);
-        let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent), SMALL_WINDOW);
+        let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent, &[]), SMALL_WINDOW);
         let one_line = BASE * 2.0;
         for label in ["New Project", "Open Sample Project", "proj0.snxprj"] {
             let bounds = find(&texts, label).bounds;
@@ -301,7 +306,7 @@ mod tests {
         labels.extend(visible_recent(&recent).iter().map(|p| recent_label(p)));
 
         for window in [MIN_SENSIBLE_WINDOW, SMALL_WINDOW] {
-            let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent), window);
+            let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent, &[]), window);
             for label in &labels {
                 let bounds = find(&texts, label).bounds;
                 let natural = crate::layout_probe::natural::<()>(

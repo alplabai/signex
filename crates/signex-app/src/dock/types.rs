@@ -138,6 +138,7 @@ pub struct DockArea {
 pub(super) struct EditorSeeds {
     pub(super) footprint: bool,
     pub(super) symbol: bool,
+    pub(super) pcb: bool,
 }
 
 /// A document editor whose tab asks for its own default panels.
@@ -145,4 +146,5 @@ pub(super) struct EditorSeeds {
 pub enum EditorContext {
     Footprint,
     Symbol,
+    Pcb,
 }

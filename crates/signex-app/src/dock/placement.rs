@@ -144,6 +144,7 @@ impl PanelPosition {
             | PanelKind::Components
             | PanelKind::Library
             | PanelKind::FootprintLayers
+            | PanelKind::PcbNets
             | PanelKind::Signal => PanelPosition::Left,
             PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
             PanelKind::Navigator
@@ -185,6 +186,10 @@ impl DockArea {
             EditorContext::Symbol if self.editor_seeds.symbol => {
                 self.editor_seeds.symbol = false;
                 self.show_panel_at(PanelPosition::Bottom, PanelKind::SymbolPins);
+            }
+            EditorContext::Pcb if self.editor_seeds.pcb => {
+                self.editor_seeds.pcb = false;
+                self.show_panel_at(PanelPosition::Left, PanelKind::PcbNets);
             }
             _ => {}
         }

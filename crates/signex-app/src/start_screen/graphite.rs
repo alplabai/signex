@@ -110,7 +110,12 @@ fn nav_row<'a>(
     b.boxed()
 }
 
-fn nav<'a>(tokens: &ThemeTokens, open_shortcut: &str) -> Element<'a, Message> {
+fn nav<'a>(
+    tokens: &ThemeTokens,
+    open_shortcut: &str,
+    recent_count: usize,
+    libraries: &[super::LoadedLibrary],
+) -> Element<'a, Message> {
     let open_label = if open_shortcut.is_empty() {
         "Open…".to_string()
     } else {
@@ -143,6 +148,13 @@ fn nav<'a>(tokens: &ThemeTokens, open_shortcut: &str) -> Element<'a, Message> {
     .spacing(8);
     let items = column![
         nav_row(tokens, "Home".into(), None, true),
+        nav_count_row(tokens, "Projects", Some(recent_count)),
+        nav_count_row(tokens, "Libraries", Some(libraries.len())),
+        coming_soon(
+            nav_count_row(tokens, "Parts search", None),
+            tokens,
+            tooltip::Position::Right,
+        ),
         nav_row(
             tokens,
             "Open Sample Project".into(),
@@ -157,18 +169,89 @@ fn nav<'a>(tokens: &ThemeTokens, open_shortcut: &str) -> Element<'a, Message> {
         ),
     ]
     .spacing(2);
-    container(column![top, Space::new().height(10.0), items])
-        .padding([14.0, 10.0])
-        .width(NAV_W)
-        .height(Length::Fill)
-        .style({
-            let chrome = ti(tokens.panel_bg);
-            let line = rule(ti(tokens.border), true);
-            move |theme: &iced::Theme| container::Style {
-                background: Some(Background::Color(chrome)),
-                ..line(theme)
-            }
-        })
+    let loaded = libraries_card(tokens, libraries);
+    container(column![
+        top,
+        Space::new().height(10.0),
+        items,
+        Space::new().height(Length::Fill),
+        loaded,
+    ])
+    .padding([14.0, 10.0])
+    .width(NAV_W)
+    .height(Length::Fill)
+    .style({
+        let chrome = ti(tokens.panel_bg);
+        let line = rule(ti(tokens.border), true);
+        move |theme: &iced::Theme| container::Style {
+            background: Some(Background::Color(chrome)),
+            ..line(theme)
+        }
+    })
+    .boxed()
+}
+
+/// A navigation row with the real count at the right (none when unavailable).
+/// Rows that open nothing yet are wrapped by the caller in the stub tooltip.
+fn nav_count_row<'a>(
+    tokens: &ThemeTokens,
+    label: &'static str,
+    count: Option<usize>,
+) -> Element<'a, Message> {
+    let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
+    let mut line = row![text(label).size(TS.label).color(ink).boxed()].align_y(Alignment::Center);
+    line = line.push(Space::new().width(Length::Fill).boxed());
+    if let Some(n) = count {
+        line = line.push(text(n.to_string()).size(TS.caption).color(ink3).boxed());
+    }
+    container(line)
+        .padding([6.0, 14.0])
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The loaded libraries and their component count, from the library state.
+fn libraries_card<'a>(
+    tokens: &ThemeTokens,
+    libraries: &[super::LoadedLibrary],
+) -> Element<'a, Message> {
+    let (ink, ink2, ink3) = (
+        ti(tokens.text),
+        ti(tokens.text_secondary),
+        resolve(tokens).ink3,
+    );
+    let components: usize = libraries.iter().map(|(_, n)| n).sum();
+    let names = libraries
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>()
+        .join(" \u{00B7} ");
+    let summary = format!(
+        "{} loaded \u{00B7} {} component{}",
+        libraries.len(),
+        components,
+        if components == 1 { "" } else { "s" }
+    );
+    let mut body = column![
+        text("Libraries").size(TS.label).color(ink).boxed(),
+        text(summary).size(TS.dense).color(ink2).boxed(),
+    ]
+    .spacing(2);
+    if !names.is_empty() {
+        body = body.push(
+            text(names)
+                .size(TS.caption)
+                .font(mono())
+                .color(ink3)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        );
+    }
+    container(body)
+        .padding(12)
+        .width(Length::Fill)
+        .clip(true)
+        .style(styles::card(tokens))
         .boxed()
 }
 
@@ -217,9 +300,51 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     ]
     .spacing(6)
     .align_y(Alignment::Center);
+    let mode = |label: &'a str, on: bool| -> Element<'a, Message> {
+        let (raised, ink, ink3) = (
+            resolve(tokens).raised,
+            ti(tokens.text),
+            resolve(tokens).ink3,
+        );
+        let pill = container(
+            text(label)
+                .size(TS.dense)
+                .color(if on { ink } else { ink3 }),
+        )
+        .padding([4.0, 14.0])
+        .style(move |_: &iced::Theme| container::Style {
+            background: on.then_some(Background::Color(raised)),
+            border: Border {
+                radius: Radii::GRAPHITE.control.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+        coming_soon(pill.boxed(), tokens, tooltip::Position::Top)
+    };
+    let sunken = resolve(tokens).sunken;
+    let modes = container(row![mode("Generator", true), mode("Assistant", false)].spacing(2))
+        .padding(2)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(sunken)),
+            border: Border {
+                radius: Radii::GRAPHITE.control.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    let head = row![
+        modes,
+        Space::new().width(Length::Fill),
+        text("Signal uses your loaded libraries first")
+            .size(TS.dense)
+            .color(resolve(tokens).ink3),
+    ]
+    .align_y(Alignment::Center);
     container(
         column![
-            container(input).padding([16.0, 18.0]).height(96.0),
+            container(head).padding([10.0, 12.0]),
+            container(input).padding([6.0, 18.0]).height(96.0),
             container(actions)
                 .padding([10.0, 12.0])
                 .width(Length::Fill)
@@ -284,16 +409,35 @@ fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, M
     }
     let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
     let (hover, line) = (hover_overlay(tokens), resolve(tokens).line_soft);
+    let tile_fill = resolve(tokens).sunken;
     let mut list = column![].width(Length::Fill);
     for path in shown {
-        let entry = column![
-            text(recent_label(path)).size(TS.label).color(ink),
-            text(path.display().to_string())
-                .size(TS.caption)
-                .font(mono())
-                .color(ink3),
+        // No cheap real thumbnail exists, so the mock's tile is drawn empty.
+        let tile =
+            container(Space::new())
+                .width(52.0)
+                .height(40.0)
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(Background::Color(tile_fill)),
+                    border: Border {
+                        radius: Radii::GRAPHITE.small.into(),
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                });
+        let entry = row![
+            tile,
+            column![
+                text(recent_label(path)).size(TS.label).color(ink),
+                text(path.display().to_string())
+                    .size(TS.caption)
+                    .font(mono())
+                    .color(ink3),
+            ]
+            .spacing(2),
         ]
-        .spacing(2);
+        .spacing(12)
+        .align_y(Alignment::Center);
         list = list.push(
             button(entry)
                 .width(Length::Fill)
@@ -332,14 +476,22 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     open_shortcut: &str,
     recent: &'a [PathBuf],
+    libraries: &[super::LoadedLibrary],
 ) -> Element<'a, Message> {
     debug_assert!(is_graphite(tokens));
     let open_shortcut = open_shortcut.to_owned();
+    let libraries = libraries.to_vec();
     // This iced fork has no max-width; the main column takes the room left
     // beside the navigation, up to `MAIN_MAX_W`.
     iced::widget::responsive(move |size| {
         let room = (size.width - NAV_W - 2.0 * MAIN_PAD_X).max(0.0);
-        view_sized(tokens, &open_shortcut, recent, room.min(MAIN_MAX_W))
+        view_sized(
+            tokens,
+            &open_shortcut,
+            recent,
+            &libraries,
+            room.min(MAIN_MAX_W),
+        )
     })
     .boxed()
 }
@@ -348,6 +500,7 @@ fn view_sized<'a>(
     tokens: &'a ThemeTokens,
     open_shortcut: &str,
     recent: &'a [PathBuf],
+    libraries: &[super::LoadedLibrary],
     main_w: f32,
 ) -> Element<'a, Message> {
     let main = column![
@@ -374,7 +527,12 @@ fn view_sized<'a>(
             .center_x(Length::Fill),
     );
     row![
-        nav(tokens, open_shortcut),
+        nav(
+            tokens,
+            open_shortcut,
+            visible_recent(recent).len(),
+            libraries,
+        ),
         container(body)
             .width(Length::Fill)
             .height(Length::Fill)

@@ -110,6 +110,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         FootprintLibrary => "footprint_library",
         FootprintLayers => "footprint_layers",
         SymbolPins => "symbol_pins",
+        PcbNets => "pcb_nets",
         History => "history",
     }
 }
@@ -142,6 +143,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "footprint_library" => FootprintLibrary,
         "footprint_layers" => FootprintLayers,
         "symbol_pins" => SymbolPins,
+        "pcb_nets" => PcbNets,
         "history" => History,
         _ => return None,
     })

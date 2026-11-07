@@ -308,6 +308,7 @@ impl Signex {
                 Some(crate::app::TabKind::SymbolEditor(_)) => {
                     Some(crate::dock::EditorContext::Symbol)
                 }
+                Some(crate::app::TabKind::Pcb) => Some(crate::dock::EditorContext::Pcb),
                 _ => None,
             };
             if let Some(context) = context {
@@ -685,6 +686,9 @@ impl Signex {
             navigator,
             library_row_detail: self.compute_library_row_detail(),
             component_sheet: self.compute_component_sheet(),
+            pcb_nets: self
+                .active_pcb_snapshot()
+                .map(crate::panels::PcbNetsSummary::of),
             selection_count,
             selected_uuid,
             selected_kind,

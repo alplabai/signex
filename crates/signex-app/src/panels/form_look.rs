@@ -118,10 +118,7 @@ fn graphite_text_input(l: FormLook, status: text_input::Status) -> text_input::S
 }
 
 /// `text_input` style for a form field: Graphite, else the stock style.
-pub(in crate::panels) fn text_input_style(
-    theme: &Theme,
-    status: text_input::Status,
-) -> text_input::Style {
+pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
     match FormLook::of(theme) {
         Some(l) => graphite_text_input(l, status),
         None => text_input::default(theme, status),

@@ -29,6 +29,7 @@ pub fn graphite_first_run() -> DockArea {
     dock.editor_seeds = EditorSeeds {
         footprint: true,
         symbol: true,
+        pcb: true,
     };
     dock
 }

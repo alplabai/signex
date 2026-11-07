@@ -132,6 +132,7 @@ fn pin_row<'a>(
         .padding([SP.xs, SP.s])
         .size(TS.dense)
         .font(mono)
+        .style(crate::panels::form_look::text_input_style)
         .on_input(move |value| PanelMsg::SymEditorSetPinName {
             pin_idx: idx,
             value,

@@ -16,6 +16,7 @@ mod context_menu;
 mod modals;
 mod overlays;
 mod parameter_manager;
+mod pcb_strip;
 mod pdf_preview;
 mod print_preview;
 
@@ -703,6 +704,13 @@ impl Signex {
                 })
                 .boxed()
             };
+            // Graphite: the board's layers as a strip under the canvas.
+            let strip = self
+                .pcb_for_window(window_id)
+                .filter(|_| crate::styles::is_graphite(&self.document_state.panel_ctx.tokens))
+                .and_then(|board| {
+                    pcb_strip::layer_strip(board, &self.document_state.panel_ctx.tokens)
+                });
             if pcb_canvas.gpu_render {
                 // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
                 // the opaque background + grid and owns pan/zoom/cursor/fit;
@@ -725,9 +733,9 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);
-                stack![base, content_shader].boxed()
+                pcb_strip::with_strip(stack![base, content_shader].boxed(), strip)
             } else {
-                base
+                pcb_strip::with_strip(base, strip)
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project
@@ -738,10 +746,25 @@ impl Signex {
                 Surface::ProjectHint => start_screen::hint_view(tokens),
                 Surface::Start => {
                     let open_shortcut = self.keymap_shortcut_label("open_document");
+                    let libraries: Vec<start_screen::LoadedLibrary> = self
+                        .library
+                        .open_libraries
+                        .iter()
+                        .map(|lib| {
+                            (
+                                lib.root
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().into_owned())
+                                    .unwrap_or_default(),
+                                lib.cached_components.len(),
+                            )
+                        })
+                        .collect();
                     start_screen::view(
                         tokens,
                         &open_shortcut,
                         self.ui_state.recent_projects.entries(),
+                        &libraries,
                     )
                 }
             }

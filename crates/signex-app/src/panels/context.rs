@@ -100,6 +100,8 @@ pub struct PanelContext {
     /// Row data of the active Component editor tab; shown by the Graphite
     /// Properties dock.
     pub component_sheet: Option<super::ComponentSheet>,
+    /// Nets of the active PCB tab, for the PCB panel.
+    pub pcb_nets: Option<super::PcbNetsSummary>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
