@@ -470,7 +470,7 @@ the area migrations come after the infrastructure.
 |------|-------|
 | **Internationalisation** | `signex-i18n` crate (Fluent + ICU4X), `Localized` display-only type, runtime language switch with the locale persisted in preferences (#2055); API gate, key-consistency and locale-invariance tests (#2056); locale-aware formatting of numbers, dates, lists and case, engineering number input (#2063, library functions); then the Preferences language picker, the area migrations (#2057–#2062), pseudolocale layout and font coverage (#2064) and the first translation, `tr-TR`, with the translator workflow (#2065) |
 
-**Not in this plan:** right-to-left layout, translated user guide
+**Not in this plan:** right-to-left layout (a later phase of #2053), translated user guide
 and sample projects, user content.
 
 ### 3D Viewer (P3)
