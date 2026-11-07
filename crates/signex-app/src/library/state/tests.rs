@@ -538,6 +538,9 @@ fn a_tie_is_broken_like_the_write_lock_whatever_the_mount_order() {
     let file = dir.path().join("symbols").join("a.snxsym");
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     let locked = signex_library::enclosing_library_file(&file).expect("a library file");
+    // Pins the rule itself: raw bytes, so `P` sorts before `c`. A
+    // case-insensitive or locale order would pick the other.
+    assert_eq!(locked, dir.path().join(names[0]));
     for order in [names, [names[1], names[0]]] {
         let state = LibraryState {
             open_libraries: order

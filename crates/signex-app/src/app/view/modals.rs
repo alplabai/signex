@@ -526,6 +526,6 @@ impl Signex {
         let card_capturing = iced::widget::mouse_area(card)
             .on_press(Message::noop())
             .boxed();
-        super::view::translate::Translate::new(card_capturing, (x, y)).into()
+        signex_widgets::Translate::new(card_capturing, (x, y)).into()
     }
 }

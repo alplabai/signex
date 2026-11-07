@@ -272,7 +272,7 @@ impl Signex {
                     .library
                     .editors
                     .get(&address)
-                    .is_some_and(|editor| editor.dirty);
+                    .is_some_and(|editor| editor.has_unsaved_edits());
             if !parked {
                 self.library.editors.remove(&address);
                 self.library.alternate_generations.remove(&address);

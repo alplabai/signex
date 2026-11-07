@@ -71,7 +71,7 @@ Where two domains meet, the handoff is an **explicit, authoritative type in the 
 
 **A3.1 — The schematic → PCB seam: one authoritative `Netlist` contract.** The electrical connectivity drawn in the schematic must drive net assignment on the PCB. This is the single most important boundary in the tool, and today it is *not* a contract:
 
-- Schematic connectivity is computed **ad hoc** — the union-find over wire endpoints in `app/handlers/canvas.rs` (the D4 leak) is exactly this, hand-rolled in a UI handler.
+- Schematic connectivity was computed **ad hoc** — a union-find over wire endpoints hand-rolled in a UI handler (`app/handlers/canvas.rs`, the D4 leak). That copy is gone; see the status note at the end.
 - The netlist "exporter" (`signex-output::NetlistExporter` → `NetlistOutput { bytes }`) is a **stub** returning `NotImplemented` (the Standard emitter moved to a GPL companion repo under #62); the output is an opaque byte blob, not a model.
 - The PCB side carries only a thin `NetDef { number, name }` (`signex-types/pcb.rs`).
 
@@ -135,7 +135,7 @@ Direct application of A2's authoritative-model rule. `signex-app` wires UI state
 - **Rule:** pure computation over domain types belongs in a domain crate (`signex-engine`, `signex-sketch`, `signex-bake`, `signex-output`, `signex-erc`, `signex-bom`), not in a UI handler or draw file.
 - **Model to copy:** `library/editor/footprint/sketch_dispatch.rs` — solves via `signex_sketch`, delegates *all* geometry baking to `signex_bake::bake_*`, and only wires results into fields.
 - **Geometry primitives — DONE.** `point_in_polygon` and point-to-segment distance were reimplemented three times with drifting signatures (`footprint/canvas/geometry.rs`, `schematic_runtime.rs`, `symbol/state.rs`). Consolidated into `signex_sketch::geom::{point_in_polygon, point_to_segment_distance, point_to_segment_distance_sq}` (one tested implementation on the crate's `Point2`); the three surfaces now call it through thin local adapters. Screen-space hit-testing (`screen_dist_to_segment_sq`, on `iced::Point`) stays in the app — it is presentation, not domain.
-- **Net connectivity leak:** `app/handlers/canvas.rs` (~L500–565) hand-rolls a union-find net-connectivity algorithm in a click handler → handled by A3.1 (it becomes the producer of the `Netlist` contract, so net-flood, ratsnest, and netlist export read one source of truth).
+- **Net connectivity leak (resolved):** `app/handlers/canvas.rs` once hand-rolled a union-find net-connectivity algorithm in a click handler → handled by A3.1 (it becomes the producer of the `Netlist` contract, so net-flood, ratsnest, and netlist export read one source of truth).
 - **`find_closed_loops` is NOT a duplicate (correction).** An earlier audit claimed `draw_sketch.rs::find_closed_loops` duplicates `signex-bake::trace_closed_profile`. It does not: they share the *adjacency-walk technique* but have different contracts — `find_closed_loops` enumerates *all* closed loops tolerantly for UI fill/selection (skips construction-only loops), while `trace_closed_profile` traces *one* profile from a seed strictly (errors on branching, tessellates arcs) for baking. Swapping one for the other would change behaviour. The genuine (optional, deferred) dedup is extracting a shared adjacency-walk primitive into `signex-sketch`; until then `find_closed_loops` stays as a legitimate presentation concern.
 
 ### D5. Enforce boundaries with visibility + CI guards, not just crate edges
@@ -144,7 +144,7 @@ Cargo blocks the big violations (a domain crate physically cannot import Iced �
 
 - Slice internals are `pub(super)` / `pub(crate)`. A slice **never** imports a sibling slice's internals, `views`, or `widgets`.
 - Add a CI arch-guard (same mechanism as the existing KiCad-surface guards) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
-- The crate-level half is machine-checked: `scripts/check_arch_guard.sh` (CI job `arch guard`, #664) fails on a workspace dependency edge missing from `scripts/arch-edges.txt` and on a domain crate depending on the UI/GPU stack. The in-crate cross-slice guard above is still to do.
+- The crate-level half is machine-checked: `scripts/check_arch_guard.sh` (CI job `arch guard`, #664) fails on a workspace dependency edge missing from `scripts/arch-edges.txt` and on a domain crate depending on the UI/GPU stack. `scripts/check_layer_ratchet.sh` (#664) adds a ratchet on the in-crate side: a count of `SymbolTransform` / union-find copies outside their owning crate and of `library::editor::<slice>::{state,canvas,updates,views}` imports from outside `library/` may not grow (baseline in `scripts/layer-ratchet-baseline.txt`). A full cross-slice import guard between `library/<a>/` and `library/<b>/` is still to do.
 
 ### D6. Reusable views/widgets use three tiers with promotion-by-need
 
@@ -157,9 +157,10 @@ Reusable pieces are never copied into each slice's `views/`. They live at the lo
 
 ### D7. Respect the crate DAG; resolve the two domain-to-domain couplings
 
-Keep the acyclic `apps → modules → shared` flow (Cargo enforces acyclicity). The graph is clean apart from two peer-domain edges to review:
+Keep the acyclic `apps → modules → shared` flow (Cargo enforces acyclicity). The graph is clean apart from the peer-domain edges below. `scripts/arch-edges.txt` is the source of truth for the full edge list:
 
 - `signex-library → signex-sketch` and `signex-bake → {signex-sketch, signex-library}` are genuine domain-to-domain coupling. Per case: accept as legitimate lower-tier layering, or lift a shared contract/type into `signex-types` so the peer dependency disappears.
+- `signex-gfx → signex-sketch` is known debt (#664): rendering should not depend on the sketch solver. It is recorded as such in `scripts/arch-edges.txt`; the fix is to lift the shared geometry into `signex-types`.
 - `signex-erc-dsl → signex-erc` and `signex-renderer → signex-gfx` are legitimate layering (parser on engine; renderer on a pure-GPU foundation) and are left as-is.
 
 ### D8. Concurrency — `Task` for one-shot async, `Subscription` for streams; tokio stays behind them
@@ -195,13 +196,13 @@ CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so th
 
 **Framework:** Iced `0.14` (retained-mode Elm/MVU) — `iced::daemon(Signex::new, Signex::update, Signex::view)`. No egui/eframe anywhere. Custom GPU rendering via `signex-gfx`/`signex-renderer` + `canvas::Program` impls renders *through* Iced, complementing MVU.
 
-**Crate graph (17 members, acyclic):** apex `signex-app`; foundation `signex-types`. Layers: L0 `{types, bom, gfx, 3d-model-importer}` → L1 `{engine, erc, erc-dsl, sketch, output, renderer, widgets, net}` → L2 `{library}` → L3 `{bake, library-server}` → apex `{app, chrome-catalog}`. Domain crates are UI-pure (Cargo-enforced).
+**Crate graph (acyclic):** apex `signex-app`; foundation `signex-types`. The edge list is `scripts/arch-edges.txt`, checked against `cargo metadata` by `scripts/check_arch_guard.sh` in CI; read it there rather than from a copy here, which goes stale. Domain crates are UI-free (same script).
 
 **`signex-app`:** `app/dispatch/library.rs` no longer exists; `app/view/mod.rs` is 687 lines and `panels/mod.rs` 271. Run `bash scripts/check_file_size.sh` for the live over-cap list rather than trusting a table here, which goes stale.
 
 **Messages:** the root `Message` is namespaced sub-enums (D3); do not add flat leaves.
 
-**Domain leaks — status:** the union-find net-connectivity that lived in `app/handlers/canvas.rs` was replaced by the authoritative `signex-net` contract (ADR-0002). World-space geometry primitives were consolidated into `signex_sketch::geom` (D4). `find_closed_loops` in `draw_sketch.rs` is a distinct UI concern (see D4), left in place.
+**Domain leaks — status:** the union-find net-connectivity that lived in `app/handlers/canvas.rs` was replaced by the authoritative `signex-net` contract (ADR-0002); `signex-net/src/uf.rs` owns the union-find. Two private copies remain outside it (`signex-library` symbol chain, `signex-sketch` redundancy) and are counted by `scripts/check_layer_ratchet.sh`. World-space geometry primitives were consolidated into `signex_sketch::geom` (D4). `find_closed_loops` in `draw_sketch.rs` is a distinct UI concern (see D4), left in place.
 
 **Best-decomposed reference in-tree:** `library/editor/footprint/` (state in 8 files, canvas split by concern). Least: `library/editor/symbol/` (`state.rs` 1,522, `canvas.rs` 1,980 — still flat).
 

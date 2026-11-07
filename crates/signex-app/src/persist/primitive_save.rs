@@ -25,6 +25,11 @@ pub struct PrimitiveWritten {
     pub versions: HashMap<Uuid, String>,
     /// Message of the project git commit queued once the file is on disk.
     pub commit_message: String,
+    /// The `.snxlib` the write went through: the one that took the commit,
+    /// the lock and the cascade. It may not be the mounted library the UI
+    /// thread picked (a nested library that is not mounted, or an alias the
+    /// worker rejected). `None` when unknown: the mounted owner is assumed.
+    pub library: Option<PathBuf>,
     /// Component rows the version cascade moved onto the saved version
     /// (#832); their open Component Previews hold stale content (#1072).
     pub cascaded_rows: Vec<RowId>,

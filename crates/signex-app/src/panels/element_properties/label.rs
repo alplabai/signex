@@ -1,0 +1,163 @@
+//! Properties of a selected net label.
+
+use super::super::*;
+use super::font_row::font_family_row;
+use super::rows::{
+    PanelStyle, font_size_options, h_align_from_row, info_row, justify_h_row, pick_list_degrees,
+    rotation_degrees, rotation_options,
+};
+use crate::styles::Spacing;
+use iced::Widget;
+
+const SP: Spacing = Spacing::DEFAULT;
+
+pub(super) fn push_label_sections<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    ctx: &'a PanelContext,
+    uuid: Option<uuid::Uuid>,
+    st: PanelStyle,
+) -> Column<Element<'a, PanelMsg>> {
+    let PanelStyle {
+        muted,
+        primary,
+        border_c,
+        palette,
+    } = st;
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
+    let get = |key: &str| info_row(&ctx.selection_info, key);
+    let label_text = get("Text");
+    let position = get("Position");
+    let rotation_str = get("Rotation");
+    let text_size_str = get("Text Size");
+    let justify_h_str = justify_h_row(&ctx.selection_info);
+    let label_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
+
+    // Parse numeric values for edit controls (with fallbacks).
+    let rotation_deg = rotation_degrees(&rotation_str);
+    let text_size_pt = text_size_str.parse::<u32>().unwrap_or(10);
+    let justify_h = h_align_from_row(&justify_h_str);
+
+    if let Some(id) = uuid {
+        // ── Location ──
+        let pos_clone = position.clone();
+        let rot_current = rotation_deg;
+        col = col.push(
+            collapsible_section(
+                "sel_location",
+                "Location",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_input_row(
+                        "(X/Y)", &pos_clone, muted, input_bg, input_bdr,
+                    ));
+                    let rotation_opts: Vec<String> = rotation_options();
+                    let rot_label = format!("{:.0} Degrees", rot_current);
+                    c = c.push(form_pick_row(
+                        "Rotation",
+                        rotation_opts,
+                        rot_label,
+                        move |s| {
+                            let deg = pick_list_degrees(&s);
+                            PanelMsg::EditLabelRotation(id, deg)
+                        },
+                        muted,
+                    ));
+                    c
+                },
+            )
+            .boxed(),
+        );
+
+        // ── Properties (Net Name, Font, Justification) ──
+        let net_name = label_text.clone();
+        // The picker works on the net the project netlist puts this
+        // label on (a child sheet's local `LOCAL` is `/LOCAL`), in the
+        // table of the project the label's sheet belongs to.
+        let net_class_picker = ctx.net_classes.label.as_ref().map(|pick| {
+            (
+                pick.project,
+                pick.net.clone(),
+                crate::panels::net_class_choices(&pick.classes),
+                crate::panels::net_class_choice(&pick.classes, &pick.net),
+            )
+        });
+        col = col.push(
+            collapsible_section(
+                "sel_props",
+                "Properties",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
+                        PanelMsg::EditLabelText(id, s)
+                    }));
+                    if let Some((project, net, choices, current)) = net_class_picker {
+                        c = c.push(form_pick_row(
+                            "Net Class",
+                            choices,
+                            current,
+                            move |choice| {
+                                PanelMsg::NetClass(NetClassMsg::AssignNet {
+                                    project,
+                                    net: net.clone(),
+                                    class: choice.into_class(),
+                                })
+                            },
+                            muted,
+                        ));
+                    }
+                    // Font family (stored on the label; size is below, colour is cosmetic for now)
+                    c = c.push(font_family_row(
+                        "Font",
+                        label_font_family.as_deref(),
+                        muted,
+                        move |family| {
+                            PanelMsg::EditTextFontFamily(
+                                signex_engine::TextTarget::Label(id),
+                                family,
+                            )
+                        },
+                    ));
+                    let size_opts: Vec<String> = font_size_options();
+                    c = c.push(form_pick_row(
+                        "Font Size",
+                        size_opts,
+                        text_size_pt.to_string(),
+                        move |s| {
+                            let pt: u32 = s.parse().unwrap_or(10);
+                            PanelMsg::EditLabelFontSizePt(id, pt)
+                        },
+                        muted,
+                    ));
+                    // B/I/U/T row — cosmetic for now.
+                    c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
+                    // 3x3 Justification grid — Altium's 9-point anchor picker.
+                    c = c.push(form_label("Justification", muted));
+                    c = c.push(
+                        container(justification_grid(
+                            id,
+                            rotation_deg,
+                            justify_h,
+                            palette,
+                            ctx.theme_id,
+                        ))
+                        .padding([SP.s, SP.m])
+                        .boxed(),
+                    );
+                    c
+                },
+            )
+            .boxed(),
+        );
+    }
+    col
+}

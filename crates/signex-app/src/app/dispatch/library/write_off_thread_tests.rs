@@ -890,6 +890,9 @@ mod close_primitives_tests;
 #[path = "close_ownership_tests.rs"]
 mod close_ownership_tests;
 
+#[path = "nested_unmounted_tests.rs"]
+mod nested_unmounted_tests;
+
 // Unix only: the test makes its unreadable file with `chmod 000`.
 #[cfg(unix)]
 #[path = "held_back_tests.rs"]
