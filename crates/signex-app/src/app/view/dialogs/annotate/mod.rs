@@ -11,10 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use crate::app::state::AnnotateOrder;
 
-use super::widgets::{
-    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, wrap_modal,
-};
-use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
 use crate::styles::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
     dialog_message,
@@ -32,16 +29,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 impl Signex {
     pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_annotate_dialog_body_inner(true);
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::AnnotateDialog)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(
+        self.wrap_dialog(
+            crate::app::state::ModalId::AnnotateDialog,
             dialog,
-            offset,
-            self.ui_state.window_size,
             self.annotate_modal_size(),
         )
     }
@@ -83,23 +73,11 @@ impl Signex {
 
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──
-        let theme_id = self.ui_state.effective_theme_id();
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Annotate").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::Annotate(AnnotateMsg::CloseDialog),
-                    theme_id,
-                    text_muted
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Annotate",
+            Message::Annotate(AnnotateMsg::CloseDialog),
+            tokens,
+        );
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -647,13 +625,11 @@ impl Signex {
 
     pub(in crate::app::view) fn view_annotate_reset_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_annotate_reset_confirm_body_inner(true);
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::AnnotateResetConfirm)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 180.0))
+        self.wrap_dialog(
+            crate::app::state::ModalId::AnnotateResetConfirm,
+            dialog,
+            super::sizes::ANNOTATE_RESET_CONFIRM,
+        )
     }
 
     pub(in crate::app::view) fn view_annotate_reset_confirm_body(&self) -> Element<'_, Message> {
@@ -662,28 +638,12 @@ impl Signex {
 
     fn view_annotate_reset_confirm_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let theme_id = self.ui_state.effective_theme_id();
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Reset All Annotations")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::Annotate(AnnotateMsg::CloseResetConfirm),
-                    theme_id,
-                    text_muted
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Reset All Annotations",
+            Message::Annotate(AnnotateMsg::CloseResetConfirm),
+            tokens,
+        );
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -718,7 +678,7 @@ This cannot be undone through Ctrl+Z alone — consider saving first.",
                     ),
                 ]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, 420.0)),
+            .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, super::sizes::ANNOTATE_RESET_CONFIRM)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

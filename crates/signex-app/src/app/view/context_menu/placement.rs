@@ -2,23 +2,66 @@
 //! whole card stays inside the window. Every menu overlay uses this one
 //! clamp, and sizes come from the type and spacing scales.
 
-use crate::styles::{Spacing, TypeScale};
+use super::*;
+use crate::styles::Spacing;
 
-const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
-
-/// Line height of a text row, relative to its font size (iced's default).
-const LINE_HEIGHT: f32 = 1.3;
 
 /// Gap kept between a menu and the window edge.
 pub(in crate::app::view) const EDGE_MARGIN: f32 = SP.s;
 
-/// Height of a card with `rows` menu rows: one row is a `title` label
-/// between `SP.s + SP.xs / 2` of padding, and the card pads `SP.s` around
-/// its rows (`signex_widgets::active_bar::dropdown`).
-pub(in crate::app::view) fn menu_height(rows: usize) -> f32 {
-    let row = (TS.title * LINE_HEIGHT).ceil() + 2.0 * (SP.s + SP.xs / 2.0);
-    rows as f32 * row + 2.0 * SP.s
+/// Height of a card with `rows` menu rows, from the dropdown widget's own
+/// row and panel metrics; `has_icons` is whether its rows carry icons.
+pub(in crate::app::view) fn menu_height(rows: usize, has_icons: bool) -> f32 {
+    rows as f32 * signex_widgets::active_bar_dropdown::row_height(has_icons)
+        + 2.0 * signex_widgets::active_bar_dropdown::panel_padding()
+}
+
+/// Height of a menu separator line.
+const SEPARATOR_HEIGHT: f32 = 1.0;
+
+/// Height of the card the dropdown widget lays out for `entries`: its rows
+/// (items, headers and custom rows), its separators and the panel padding.
+/// Rows are icon-tall when any item carries an icon, as in the widget.
+pub(in crate::app::view) fn entries_height<M: Clone + 'static>(
+    entries: &[signex_widgets::active_bar_dropdown::DropdownEntry<M>],
+) -> f32 {
+    use signex_widgets::active_bar_dropdown::DropdownEntry;
+    let separators = entries
+        .iter()
+        .filter(|e| matches!(e, DropdownEntry::Separator))
+        .count();
+    let has_icons = entries
+        .iter()
+        .any(|e| matches!(e, DropdownEntry::Item(item) if item.icon.is_some()));
+    menu_height(entries.len() - separators, has_icons) + separators as f32 * SEPARATOR_HEIGHT
+}
+
+/// Top-left corner of a flyout of width `sub_w` beside the parent card at
+/// `parent` (width `parent_w`) in a window `window_w` wide: right of the
+/// parent, or left of it when the right edge would be crossed. Its top lines
+/// up with the launcher row under `rows_above` rows and `separators_above`
+/// separators of the parent; `has_icons` says whether the parent's rows carry
+/// icons (taller rows).
+pub(in crate::app::view) fn submenu_origin(
+    parent: (f32, f32),
+    parent_w: f32,
+    sub_w: f32,
+    rows_above: usize,
+    separators_above: usize,
+    has_icons: bool,
+    window_w: f32,
+) -> (f32, f32) {
+    let x = if parent.0 + parent_w + sub_w + EDGE_MARGIN > window_w {
+        (parent.0 - sub_w).max(0.0)
+    } else {
+        parent.0 + parent_w
+    };
+    let y = parent.1
+        + signex_widgets::active_bar_dropdown::panel_padding()
+        + rows_above as f32 * signex_widgets::active_bar_dropdown::row_height(has_icons)
+        + separators_above as f32 * SEPARATOR_HEIGHT;
+    (x, y)
 }
 
 /// Top-left corner for a `menu` = `(width, height)` card opened at `anchor`
@@ -63,6 +106,63 @@ pub(in crate::app::view) fn anchored_menu<'a, M: 'a>(
     .boxed()
 }
 
+impl Signex {
+    /// Where a card of `width` and `rows` rows opened at `anchor` in
+    /// `window_id` lands, clamped to that window's own size.
+    pub(in crate::app::view) fn menu_origin(
+        &self,
+        window_id: iced::window::Id,
+        anchor: (f32, f32),
+        width: f32,
+        rows: usize,
+        has_icons: bool,
+    ) -> (f32, f32) {
+        clamp_menu_origin(
+            anchor,
+            (width, menu_height(rows, has_icons)),
+            self.ui_state.size_of_window(window_id),
+        )
+    }
+
+    /// A text-only right-click menu as overlay layers: the click-outside
+    /// layer that sends `close`, then `menu` clamped into `window_id`. A menu
+    /// with icon rows clamps through [`Self::menu_origin`] itself.
+    pub(in crate::app::view) fn menu_overlay<'a>(
+        &self,
+        window_id: iced::window::Id,
+        close: Message,
+        menu: iced::Element<'a, Message>,
+        anchor: (f32, f32),
+        width: f32,
+        rows: usize,
+    ) -> Vec<iced::Element<'a, Message>> {
+        let origin = self.menu_origin(window_id, anchor, width, rows, false);
+        Self::menu_layers(close, menu, origin)
+    }
+
+    /// The click-outside layer for `close`, then `menu` laid at `origin`.
+    pub(in crate::app::view) fn menu_layers<'a>(
+        close: Message,
+        menu: iced::Element<'a, Message>,
+        origin: (f32, f32),
+    ) -> Vec<iced::Element<'a, Message>> {
+        vec![Self::dismiss_layer(close), anchored_menu(menu, origin)]
+    }
+
+    /// A submenu flyout at `origin`; entering or leaving its panel extends
+    /// or restarts the close timer.
+    pub(in crate::app::view) fn submenu_flyout<'a>(
+        submenu: iced::Element<'a, Message>,
+        origin: (f32, f32),
+    ) -> iced::Element<'a, Message> {
+        let panel = iced::widget::mouse_area(submenu)
+            .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
+            .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
+        use iced::Widget as _;
+        anchored_menu(panel.boxed(), origin)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,8 +197,141 @@ mod tests {
         );
     }
 
+    use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, row_height};
+
+    #[test]
+    fn a_flyout_opens_right_of_its_parent_and_level_with_the_launcher() {
+        let (x, y) = submenu_origin((100.0, 50.0), 200.0, 200.0, 3, 1, false, 1000.0);
+        assert_eq!(x, 300.0);
+        assert_eq!(
+            y,
+            50.0 + signex_widgets::active_bar_dropdown::panel_padding()
+                + 3.0 * row_height(false)
+                + SEPARATOR_HEIGHT
+        );
+    }
+
+    #[test]
+    fn icon_rows_are_taller_than_text_rows_and_move_the_flyout_down() {
+        assert!(row_height(true) > row_height(false));
+        let (_, y) = submenu_origin((100.0, 50.0), 200.0, 200.0, 3, 1, true, 1000.0);
+        assert_eq!(
+            y,
+            50.0 + signex_widgets::active_bar_dropdown::panel_padding()
+                + 3.0 * row_height(true)
+                + SEPARATOR_HEIGHT
+        );
+    }
+
+    /// The row height the placement assumes is the one the dropdown really
+    /// lays out: consecutive labels of a real menu are one row apart.
+    #[test]
+    fn the_assumed_row_height_is_what_the_dropdown_lays_out() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let icon = iced::widget::svg::Handle::from_memory(
+            br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>"#.as_slice(),
+        );
+        for has_icons in [false, true] {
+            let entries: Vec<DropdownEntry<()>> = ["Alpha", "Bravo", "Charlie"]
+                .into_iter()
+                .map(|label| {
+                    let item = DropdownItem::new(label, ());
+                    DropdownEntry::Item(if has_icons {
+                        item.icon(icon.clone())
+                    } else {
+                        item
+                    })
+                })
+                .collect();
+            let menu = signex_widgets::active_bar_dropdown::view(entries, &tokens, Some(240.0));
+            let texts = crate::layout_probe::lay_out_texts(menu, iced::Size::new(400.0, 400.0));
+            let y = |label: &str| crate::layout_probe::find(&texts, label).bounds.y;
+            let pitch = (y("Charlie") - y("Alpha")) / 2.0;
+            assert!(
+                (pitch - row_height(has_icons)).abs() < 0.6,
+                "icons {has_icons}: laid out {pitch}, assumed {}",
+                row_height(has_icons)
+            );
+        }
+    }
+
+    /// A submenu launcher is exactly one item row tall, so a flyout placed
+    /// by `submenu_origin` lines up with it (#2136).
+    #[test]
+    fn a_submenu_launcher_row_is_one_item_row_tall() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let icon = iced::widget::svg::Handle::from_memory(
+            br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>"#.as_slice(),
+        );
+        for has_icons in [false, true] {
+            let with_icon = |item: DropdownItem<Message>| {
+                DropdownEntry::Item(if has_icons {
+                    item.icon(icon.clone())
+                } else {
+                    item
+                })
+            };
+            let entries = vec![
+                with_icon(DropdownItem::new("Alpha", Message::Ui(UiMsg::Noop))),
+                super::items::submenu_launcher(
+                    &tokens,
+                    has_icons.then(|| icon.clone()),
+                    "Launcher",
+                    ContextSubmenu::Align,
+                    false,
+                ),
+                with_icon(DropdownItem::new("Charlie", Message::Ui(UiMsg::Noop))),
+            ];
+            let menu = signex_widgets::active_bar_dropdown::view(entries, &tokens, Some(240.0));
+            let texts = crate::layout_probe::lay_out_texts(menu, iced::Size::new(400.0, 400.0));
+            let y = |label: &str| crate::layout_probe::find(&texts, label).bounds.y;
+            let pitch = (y("Charlie") - y("Alpha")) / 2.0;
+            assert!(
+                (pitch - row_height(has_icons)).abs() < 0.6,
+                "icons {has_icons}: rows around a launcher are {pitch} apart, assumed {}",
+                row_height(has_icons)
+            );
+            // Compare text centres: the launcher's text box is a full row's
+            // content tall, an item's is one label line, both centred.
+            let mid = |label: &str| {
+                let b = crate::layout_probe::find(&texts, label).bounds;
+                b.y + b.height / 2.0
+            };
+            let to_launcher = mid("Launcher") - mid("Alpha");
+            assert!(
+                (to_launcher - row_height(has_icons)).abs() < 0.6,
+                "icons {has_icons}: launcher label {to_launcher} below the first row"
+            );
+        }
+    }
+
+    #[test]
+    fn a_flyout_that_would_cross_the_right_edge_opens_left() {
+        let (x, _) = submenu_origin((700.0, 0.0), 200.0, 200.0, 0, 0, false, 1000.0);
+        assert_eq!(x, 500.0);
+    }
+
+    #[test]
+    fn a_menu_in_an_undocked_window_clamps_to_that_windows_own_size() {
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.window_size = WINDOW;
+        let undocked = iced::window::Id::unique();
+        app.ui_state
+            .undocked_window_sizes
+            .insert(undocked, (300.0, 200.0));
+        let anchor = (250.0, 190.0);
+        assert_eq!(
+            app.menu_origin(iced::window::Id::unique(), anchor, MENU.0, 1, false),
+            anchor,
+            "the main window has room"
+        );
+        let (x, y) = app.menu_origin(undocked, anchor, MENU.0, 1, false);
+        assert_eq!(x, 300.0 - MENU.0 - SP.s);
+        assert_eq!(y, anchor.1 - menu_height(1, false));
+    }
+
     #[test]
     fn height_grows_by_one_row_each() {
-        assert!(menu_height(3) - menu_height(2) > TS.title);
+        assert!(menu_height(3, false) - menu_height(2, false) > 13.0);
     }
 }

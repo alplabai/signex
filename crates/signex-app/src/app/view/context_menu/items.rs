@@ -21,6 +21,8 @@ use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// Vertical padding of an item row (the widget's own).
+const ROW_PAD_Y: f32 = 5.0;
 
 /// A keyboard-command row: clicking it dispatches `action` through the
 /// context-menu message bridge. `shortcut` renders right-aligned (empty
@@ -204,6 +206,12 @@ pub(super) fn submenu_launcher(
     let active_bg = crate::styles::ti(tokens.selection);
     let arrow_c = crate::styles::ti(tokens.text_secondary);
 
+    // The arrow and the label (`TS.title`, a little over the item label size)
+    // would each make a taller line than an item row and stretch the row; fix
+    // both to the content height of an item row, so the
+    // launcher is exactly `row_height` and flyouts line up with it.
+    let arrow_line =
+        signex_widgets::active_bar_dropdown::row_height(icon.is_some()) - 2.0 * ROW_PAD_Y;
     let mut row: iced::widget::Row<iced::Element<'static, Message>> = iced::widget::Row::new()
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
@@ -216,6 +224,9 @@ pub(super) fn submenu_launcher(
         .push(
             iced::widget::text(label.to_string())
                 .size(TS.title)
+                .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(
+                    arrow_line,
+                )))
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
@@ -224,13 +235,16 @@ pub(super) fn submenu_launcher(
         .push(
             iced::widget::text(SUBMENU_ARROW.to_string())
                 .size(SUBMENU_ARROW_SIZE)
+                .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(
+                    arrow_line,
+                )))
                 .color(arrow_c)
                 .boxed(),
         );
 
     let btn = iced::widget::button(
         iced::widget::container(row)
-            .padding([5.0, SP.l])
+            .padding([ROW_PAD_Y, SP.l])
             .width(Length::Fill),
     )
     .padding(0)

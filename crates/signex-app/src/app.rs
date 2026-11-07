@@ -18,6 +18,7 @@ pub mod command_palette;
 pub mod contracts;
 mod dir_listing;
 pub(crate) mod dispatch;
+mod document;
 pub mod document_read;
 mod documents;
 pub(crate) mod file_extension;
@@ -56,6 +57,7 @@ pub(crate) use state::scope::{deepest_owner, deepest_owners, path_key_with};
 pub(crate) use state::volume_case::probe_directory_case;
 #[cfg(test)]
 mod draft_save_point_tests;
+mod history;
 mod history_save_point;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
@@ -76,12 +78,14 @@ pub use contracts::{
     TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, UiMsg,
     VersionControlScope, WindowMsg,
 };
+pub(crate) use document::{Document, DocumentKey};
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
     TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
+pub use history::History;
 pub(crate) use history_save_point::SavePoint;
 #[cfg(test)]
 pub(crate) use state::WindowKind;

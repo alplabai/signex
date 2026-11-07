@@ -126,6 +126,40 @@ fn decode_array(
     Ok((Some(first.footprint), rest.to_vec()))
 }
 
+impl crate::component::ComponentRow {
+    /// Every footprint the row can be built with: the default first, carrying
+    /// the row's own version pin and pin map, then the alternates in order.
+    /// Empty when the row binds no footprint.
+    pub fn footprint_bindings(&self) -> Vec<FootprintBinding> {
+        let Some(default) = self.footprint_ref else {
+            return Vec::new();
+        };
+        let mut bindings = vec![FootprintBinding {
+            footprint: default,
+            version: self.footprint_version.clone(),
+            pin_map_overrides: self.pin_map_overrides.clone(),
+        }];
+        bindings.extend(self.alternate_footprints.iter().cloned());
+        bindings
+    }
+
+    /// The binding that names `footprint`, if the row offers it.
+    pub fn footprint_binding(&self, footprint: &PrimitiveRef) -> Option<FootprintBinding> {
+        self.footprint_bindings()
+            .into_iter()
+            .find(|b| b.footprint == *footprint)
+    }
+
+    /// Whether `footprint` is the row's default or one of its alternates.
+    pub fn binds_footprint(&self, footprint: &PrimitiveRef) -> bool {
+        self.footprint_ref == Some(*footprint)
+            || self
+                .alternate_footprints
+                .iter()
+                .any(|a| a.footprint == *footprint)
+    }
+}
+
 /// Pick the binding to use for a placement. `bindings` is the default first,
 /// then alternates, each with its derived [`MountStyle`]. Each preferred style
 /// in order takes the first binding with exactly that style; `Mixed` and
@@ -227,6 +261,27 @@ mod tests {
             decode_footprint_cell(&cell).unwrap(),
             (Some(d), vec![other])
         );
+    }
+
+    #[test]
+    fn bindings_list_the_default_with_the_rows_pin_data_then_the_alternates() {
+        let mut row = crate::component::tests::fixture_row();
+        let (d, alt) = (pr(), FootprintBinding::new(pr()));
+        row.footprint_ref = Some(d);
+        row.footprint_version = "2".into();
+        row.pin_map_overrides = vec![PinPadOverride::new("1", "A1")];
+        row.alternate_footprints = vec![alt.clone()];
+        let bindings = row.footprint_bindings();
+        assert_eq!(bindings.len(), 2);
+        assert_eq!(bindings[0].footprint, d);
+        assert_eq!(bindings[0].version, "2");
+        assert_eq!(bindings[0].pin_map_overrides, row.pin_map_overrides);
+        assert_eq!(bindings[1], alt);
+        assert_eq!(row.footprint_binding(&alt.footprint), Some(alt.clone()));
+        assert!(row.binds_footprint(&d) && row.binds_footprint(&alt.footprint));
+        assert!(!row.binds_footprint(&pr()));
+        row.footprint_ref = None;
+        assert!(row.footprint_bindings().is_empty());
     }
 
     #[test]

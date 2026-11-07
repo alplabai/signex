@@ -292,7 +292,7 @@ fn a_refused_delete_of_baked_silk_keeps_the_redo_step() {
     };
     apply_footprint_primitive_edit(&mut editor, add);
     assert!(editor.undo());
-    let (history, redo) = (editor.history.len(), editor.redo.len());
+    let (history, redo) = (editor.history.undo_len(), editor.history.redo_len());
     assert_eq!(redo, 1);
 
     apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::SelectSilkF(Some(0)));
@@ -300,8 +300,8 @@ fn a_refused_delete_of_baked_silk_keeps_the_redo_step() {
     apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::DeleteSilkF);
 
     assert_eq!(editor.primitive().silk_f, before, "the baked bar stays");
-    assert_eq!(editor.history.len(), history, "no empty undo step");
-    assert_eq!(editor.redo.len(), redo, "Redo is still available");
+    assert_eq!(editor.history.undo_len(), history, "no empty undo step");
+    assert_eq!(editor.history.redo_len(), redo, "Redo is still available");
     assert!(editor.redo());
 }
 

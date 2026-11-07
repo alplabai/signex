@@ -47,6 +47,8 @@ mod wire_merge_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
+mod incremental_nets_tests;
+#[cfg(test)]
 mod rubber_band_power_tests;
 #[cfg(test)]
 mod rubber_band_tests;
@@ -185,6 +187,12 @@ pub struct Engine {
     unkept_pins: Vec<String>,
     /// Pre-move nets computed ahead of time (drag previews).
     preset_before: Option<BeforeNets>,
+    /// The pre-move sheet's connectivity, to derive moved sheets from
+    /// (drag previews).
+    preset_base: Option<std::sync::Arc<signex_net::NetBase>>,
+    /// The pre-move sheet's minted dots and their verdicts, to revalidate only
+    /// the dots near changed wires (drag previews).
+    preset_dots: Option<std::sync::Arc<transform::DotVerdicts>>,
     /// Net colour of each wire the app has painted, by wire uuid. The engine
     /// never changes it; a merge reads it so two wires of different colours
     /// are not folded into one (see `transform::merge`).
@@ -197,20 +205,39 @@ pub(crate) fn next_revision() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// A sheet prepared for repeated drag previews: the pre-move nets are derived
-/// once, not for every cursor step.
+/// A sheet prepared for repeated drag previews: the pre-move nets,
+/// connectivity and junction-dot verdicts are found once, not for every
+/// cursor step, and each step redoes only what the move changed
+/// (`docs/INCREMENTAL_NETS.md`).
 #[derive(Debug)]
 pub struct MovePreview {
     sheet: SchematicSheet,
     before: BeforeNets,
+    base: Option<std::sync::Arc<signex_net::NetBase>>,
+    dots: Option<std::sync::Arc<transform::DotVerdicts>>,
 }
 
 impl MovePreview {
     #[must_use]
     pub fn new(sheet: &SchematicSheet) -> Self {
+        let base = signex_net::NetBase::new(sheet);
         Self {
-            before: before_nets(sheet),
+            // The base derives the unchanged sheet from its own clusters.
+            before: std::sync::Arc::new(base.derive(sheet)),
+            base: Some(std::sync::Arc::new(base)),
+            dots: transform::DotVerdicts::new(sheet).map(std::sync::Arc::new),
             sheet: sheet.clone(),
+        }
+    }
+
+    /// A preview that derives every net and judges every dot from scratch, as
+    /// the commit does: the reference for the timing bench and the tests.
+    #[cfg(test)]
+    pub(crate) fn new_full_derive(sheet: &SchematicSheet) -> Self {
+        Self {
+            base: None,
+            dots: None,
+            ..Self::new(sheet)
         }
     }
 
@@ -237,6 +264,8 @@ impl MovePreview {
             return (self.sheet.clone(), Vec::new());
         };
         engine.preset_before = Some(self.before.clone());
+        engine.preset_base.clone_from(&self.base);
+        engine.preset_dots.clone_from(&self.dots);
         engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
@@ -284,6 +313,8 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            preset_base: None,
+            preset_dots: None,
             wire_colors: std::collections::HashMap::new(),
         })
     }
@@ -318,6 +349,8 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            preset_base: None,
+            preset_dots: None,
             wire_colors: std::collections::HashMap::new(),
         })
     }
@@ -544,6 +577,7 @@ impl Engine {
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }
+            | Command::SetSymbolFootprintBinding { .. }
             | Command::SetSymbolField { .. }
             | Command::RemoveSymbolField { .. }
             | Command::UpdateSymbolFields { .. }
@@ -809,32 +843,16 @@ mod tests {
     fn collect_exposed_sheet_ports_prefers_hierarchical_over_global() {
         let mut document = test_sheet();
         document.labels.push(Label {
-            unknown_columns: Default::default(),
-            uuid: uuid::Uuid::now_v7(),
-            text: "ALERT".to_string(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            label_type: LabelType::Global,
             shape: "output".to_string(),
-            font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
-            font_family: None,
-            locked: false,
+            ..Label::new("ALERT", Point::new(0.0, 0.0), LabelType::Global)
         });
         document.labels.push(Label {
-            unknown_columns: Default::default(),
-            uuid: uuid::Uuid::now_v7(),
-            text: "ALERT".to_string(),
-            position: Point::new(1.0, 1.0),
-            rotation: 0.0,
-            label_type: LabelType::Hierarchical,
             shape: "input".to_string(),
-            font_size: 1.27,
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
-            font_family: None,
-            locked: false,
+            ..Label::new("ALERT", Point::new(1.0, 1.0), LabelType::Hierarchical)
         });
 
         let engine = Engine::new(document).unwrap();

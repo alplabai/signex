@@ -191,15 +191,6 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    /// The project whose Project tab is the active tab.
-    pub(crate) fn active_project_tab(&self) -> Option<ProjectId> {
-        let document = &self.document_state;
-        document
-            .tabs
-            .get(document.active_tab)
-            .and_then(|tab| tab.kind.as_project())
-    }
-
     /// `(can_undo, can_redo)` of a Project tab's history.
     pub(crate) fn project_tab_history_available(&self, project_id: ProjectId) -> (bool, bool) {
         self.document_state

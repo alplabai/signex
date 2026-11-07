@@ -152,7 +152,7 @@ fn symbol_file_round_trip_with_full_pin_payload() {
         body_style: 1,
         number: "VCC".into(),
         name: "Power".into(),
-        electrical: PinDirection::Power,
+        electrical: PinDirection::PowerInput,
         position: [-3.81, 5.08],
         orientation: PinOrientation::Up,
         length: 2.54,
@@ -272,21 +272,80 @@ fn pins_from_tsv_rejects_cell_count_mismatch() {
 
 #[test]
 fn pin_direction_token_round_trip_all_variants() {
-    for d in [
-        PinDirection::Input,
-        PinDirection::Output,
-        PinDirection::Bidirectional,
-        PinDirection::Power,
-        PinDirection::Passive,
-        PinDirection::OpenCollector,
-        PinDirection::OpenEmitter,
-        PinDirection::NotConnected,
-        PinDirection::Tristate,
-        PinDirection::Unspecified,
-    ] {
+    for d in PinDirection::ALL {
         let token = pin_direction_token(d);
         let back = pin_direction_from_token(token).unwrap();
         assert_eq!(d, back);
+    }
+}
+
+#[test]
+fn unknown_pin_direction_token_is_an_error() {
+    assert!(matches!(
+        pin_direction_from_token("Power Input"),
+        Err(SymbolFileError::UnknownEnumToken {
+            kind: "PinDirection",
+            ..
+        })
+    ));
+}
+
+/// Every token the pre-unification library wrote reads and writes back
+/// byte-identical, so a file using only those types re-saves unchanged.
+#[test]
+fn legacy_pin_tokens_write_back_byte_identical() {
+    for token in [
+        "Input",
+        "Output",
+        "Bidirectional",
+        "Power",
+        "Passive",
+        "OpenCollector",
+        "OpenEmitter",
+        "NotConnected",
+        "Tristate",
+        "Unspecified",
+    ] {
+        assert_eq!(
+            pin_direction_token(pin_direction_from_token(token).unwrap()),
+            token
+        );
+    }
+}
+
+/// A pin of every type survives a `.snxsym` write and read.
+#[test]
+fn every_pin_type_survives_a_snxsym_round_trip() {
+    let mut sym = Symbol::empty("ALL-TYPES");
+    sym.pins = PinDirection::ALL
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let mut p = SymbolPin::new((i + 1).to_string(), "P");
+            p.electrical = *d;
+            p
+        })
+        .collect();
+    let text = SymbolFile::from_symbol(sym.clone())
+        .to_toml_string()
+        .unwrap();
+    let back = SymbolFile::from_toml_str(&text).unwrap();
+    let got: Vec<_> = back.symbols[0].pins.iter().map(|p| p.electrical).collect();
+    assert_eq!(got, PinDirection::ALL.to_vec());
+}
+
+/// A shipped `.snxsym` (it holds `Unspecified` and `Power` pins) re-encodes
+/// byte-identical.
+#[test]
+fn stock_snxsym_re_encodes_byte_identical() {
+    for text in [
+        include_str!("../../../../../assets/stock-library/symbols/IC_Generic.snxsym"),
+        include_str!("../../../../../assets/stock-library/symbols/GND.snxsym"),
+        include_str!("../../../../../assets/stock-library/symbols/74HC00.snxsym"),
+    ] {
+        let text = text.replace("\r\n", "\n");
+        let file = SymbolFile::from_toml_str(&text).unwrap();
+        assert_eq!(file.to_toml_string().unwrap(), text);
     }
 }
 
@@ -349,22 +408,36 @@ symbols = []
 
 #[test]
 fn pin_electrical_type_round_trip_all_variants() {
-    for t in [
-        PinDirection::Input,
-        PinDirection::Output,
-        PinDirection::Bidirectional,
-        PinDirection::Power,
-        PinDirection::Passive,
-        PinDirection::OpenCollector,
-        PinDirection::OpenEmitter,
-        PinDirection::NotConnected,
-        PinDirection::Tristate,
-        PinDirection::Unspecified,
-    ] {
-        let json = serde_json::to_string(&t).unwrap();
-        let back: PinDirection = serde_json::from_str(&json).unwrap();
-        assert_eq!(t, back);
+    for t in PinDirection::ALL {
+        let mut pin = SymbolPin::new("1", "A");
+        pin.electrical = t;
+        let json = serde_json::to_string(&pin).unwrap();
+        assert!(
+            json.contains(&format!("\"electrical\":\"{}\"", t.as_token())),
+            "{json}"
+        );
+        let back: SymbolPin = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.electrical, t);
     }
+}
+
+/// A JSON symbol written before the unification (variant names) still reads.
+#[test]
+fn old_json_pin_electrical_names_still_read() {
+    let mut pin = SymbolPin::new("1", "A");
+    pin.electrical = PinDirection::Input;
+    let json = serde_json::to_string(&pin).unwrap();
+    for (old, expected) in [
+        ("Tristate", PinDirection::ThreeStatable),
+        ("Power", PinDirection::PowerInput),
+        ("OpenCollector", PinDirection::OpenDrainLow),
+    ] {
+        let old_json = json.replace("\"Input\"", &format!("\"{old}\""));
+        let back: SymbolPin = serde_json::from_str(&old_json).unwrap();
+        assert_eq!(back.electrical, expected, "{old}");
+    }
+    let bad = json.replace("\"Input\"", "\"input_x\"");
+    assert!(serde_json::from_str::<SymbolPin>(&bad).is_err());
 }
 
 #[test]

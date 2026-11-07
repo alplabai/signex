@@ -550,10 +550,7 @@ mod tests {
                 value.justify_v,
                 None,
             );
-            let overlaps = text.min_x < head.max_x
-                && text.max_x > head.min_x
-                && text.min_y < head.max_y
-                && text.max_y > head.min_y;
+            let overlaps = text.overlaps_interior(&head);
             assert!(!overlaps, "{lib_id}: value {text:?} overlaps head {head:?}");
             if style.hangs_down() {
                 assert!(text.min_y >= head.max_y, "{lib_id}: below the head");

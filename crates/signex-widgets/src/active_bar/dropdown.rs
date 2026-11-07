@@ -39,8 +39,7 @@
 //!   handles that — left-click action + right-click dropdown +
 //!   chevron indicator).
 //! - The toggle state (each editor's state owns it).
-//! - The click-outside backstop layer (`active_bar::view_with_overlay` stacks it under
-//!   the panel).
+//! - The click-outside backstop layer (each editor mounts its own).
 
 use iced::widget::svg;
 use iced::widget::{Column, Row, Space, button, container, text};
@@ -193,14 +192,25 @@ const CHECK_SIZE: f32 = 13.0;
 const HEADER_SIZE: f32 = 10.0;
 /// Horizontal padding of a row.
 const ROW_PAD_X: f32 = 12.0;
+/// Vertical padding of a row.
+const ROW_PAD_Y: f32 = 5.0;
 /// Padding of the panel around its rows.
 const PANEL_PAD: f32 = 4.0;
+/// Height of one item row: the label line, or the icon when the menu has
+/// icons and it is the taller, between [`ROW_PAD_Y`] above and below. The
+/// label sets no line height, so its line is iced's default one.
+pub fn row_height(has_icons: bool) -> f32 {
+    let line = iced::widget::text::LineHeight::default()
+        .to_absolute(iced::Pixels(LABEL_SIZE))
+        .0;
+    let content = if has_icons { line.max(ICON_SIZE) } else { line };
+    content + 2.0 * ROW_PAD_Y
+}
 
-/// Glyph advance per em the fitted width falls back to before the shaper is
-/// installed: a slight overestimate of a UI face, so a label never clips.
-const FIT_GLYPH_EM: f32 = 0.58;
-/// Margin on a shaped width, for hinting and rounding in the real layout.
-const FIT_SHAPED_MARGIN: f32 = 1.05;
+/// Padding of the panel around its rows, on each side.
+pub fn panel_padding() -> f32 {
+    PANEL_PAD
+}
 
 /// Width a menu of `entries` needs, for a context menu that fits its labels
 /// rather than a shared width, at most `max_w`. It mirrors [`view`]'s row
@@ -213,12 +223,9 @@ pub fn fitted_width<M>(entries: &[DropdownEntry<M>], max_w: f32, ui_family: &str
 where
     M: Clone,
 {
-    let family = Some(ui_family).filter(|f| !f.trim().is_empty());
-    let advance = |text: &str, size: f32| match signex_types::font::shaped_advance_em(text, family)
-    {
-        Some(em) => em * size * FIT_SHAPED_MARGIN,
-        None => text.chars().count() as f32 * size * FIT_GLYPH_EM,
-    };
+    let family = signex_types::font::nonblank_family(ui_family);
+    let advance =
+        |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let has_icons = entries
         .iter()
         .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some()));
@@ -371,7 +378,7 @@ where
                 // Wrap in a button that triggers on_press when armed.
                 let mut btn = button(
                     container(row_w)
-                        .padding([5.0, ROW_PAD_X])
+                        .padding([ROW_PAD_Y, ROW_PAD_X])
                         .width(Length::Fill),
                 )
                 .padding(0)

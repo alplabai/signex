@@ -25,17 +25,8 @@ fn wire_at(n: u128, y: f64, locked: bool) -> Wire {
 fn label_at(n: u128, y: f64, locked: bool) -> Label {
     Label {
         uuid: id(n),
-        text: format!("NET{n}"),
-        position: Point::new(0.0, y),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
         locked,
-        unknown_columns: Default::default(),
+        ..Label::new(format!("NET{n}"), Point::new(0.0, y), LabelType::Net)
     }
 }
 

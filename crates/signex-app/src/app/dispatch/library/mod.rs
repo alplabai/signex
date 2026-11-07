@@ -556,6 +556,9 @@ impl Signex {
                     .finish(&key, generation, result);
                 Task::none()
             }
+            LibraryMessage::ComponentsPanelFootprintPicked(reference) => {
+                self.handle_components_panel_footprint_picked(reference)
+            }
             LibraryMessage::ComponentsPanelSetFilter(value) => {
                 self.library.components_panel.filter = value;
                 Task::none()

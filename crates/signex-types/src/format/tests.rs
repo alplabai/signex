@@ -10,8 +10,7 @@ use crate::pcb::{
     Zone,
 };
 use crate::schematic::{
-    HAlign, Junction, Label, LabelType as LType, LibSymbol, Point as SchPoint, SchematicSheet,
-    Symbol, VAlign, Wire,
+    Junction, Label, LabelType as LType, LibSymbol, Point as SchPoint, SchematicSheet, Symbol, Wire,
 };
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -94,18 +93,10 @@ fn escape_tsv_body_for_toml_never_leaves_a_triple_quote_run() {
 
 fn label_with_text(text: &str) -> Label {
     Label {
-        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
-        text: text.to_string(),
-        position: SchPoint { x: 0.0, y: 0.0 },
-        rotation: 0.0,
-        label_type: LType::Net,
-        shape: String::new(),
-        font_size: 1.27,
         justify: Default::default(),
         justify_v: Default::default(),
-        font_family: None,
-        locked: false,
+        ..Label::new(text, SchPoint { x: 0.0, y: 0.0 }, LType::Net)
     }
 }
 
@@ -322,18 +313,8 @@ fn snxsch_round_trip_with_data() {
         ..Default::default()
     });
     sheet.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0003-7000-8000-000000000001").unwrap(),
-        text: "VIN".to_string(),
-        position: SchPoint { x: 10.0, y: 20.0 },
-        rotation: 0.0,
-        label_type: LType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new("VIN", SchPoint { x: 10.0, y: 20.0 }, LType::Net)
     });
 
     let snx = SnxSchematic::new(sheet.clone());

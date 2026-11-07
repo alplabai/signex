@@ -129,6 +129,21 @@ fn derive(sheet: &SchematicSheet) -> Derived {
     }
 }
 
+/// The node a queried point is answered by: a point flagged `on_interior` that
+/// lies inside a wire (not on an endpoint) is on that wire's net, like a
+/// child-sheet pin there; any other point is its own node. Nothing is joined,
+/// so a point that is also a node of another net (a pin tip held by a
+/// no-connect, a power port's tip) never merges the two nets (#2144).
+pub(crate) fn query_node(key: Key, on_interior: bool, index: &SegmentIndex) -> Key {
+    if on_interior
+        && !index.is_endpoint(key)
+        && let Some((a, b)) = index.anchor_segment(key)
+    {
+        return a.min(b);
+    }
+    key
+}
+
 /// [`net_signatures`], plus for each `(point key, anchor to a wire's interior)`
 /// in `at` the net that point sits on: an opaque id shared by every point on one net, and the net's index in
 /// the returned list, or `None` when that net has no terminal, label or
@@ -143,15 +158,11 @@ pub fn net_signatures_at(
         wires,
         nets,
     } = derive(sheet);
-    // A queried point flagged `on_interior` is on the net of a wire passing
-    // through it, like a child-sheet pin there; a component pin is not.
     let index = SegmentIndex::new(&wires);
-    for (key, on_interior) in at {
-        if *on_interior {
-            anchor_point(&mut parent, *key, &index);
-        }
-    }
-    let point_roots: Vec<Key> = at.iter().map(|(k, _)| uf_find(&mut parent, *k)).collect();
+    let point_roots: Vec<Key> = at
+        .iter()
+        .map(|&(key, on_interior)| uf_find(&mut parent, query_node(key, on_interior, &index)))
+        .collect();
     let mut ordered: Vec<(Key, NetSignature)> = nets.into_iter().collect();
     ordered.sort_by(|a, b| a.1.cmp(&b.1));
     let found = point_roots

@@ -38,13 +38,10 @@
 //! conversion is the identity on angle: `Right -> 0°`, `Up -> 90°`,
 //! `Left -> 180°`, `Down -> 270°`. [`to_lib_symbol_tests`] pins all four.
 //!
-//! ## Pin direction — total, no panic
+//! ## Pin direction — lossless
 //!
-//! [`PinDirection`] (10 variants, symbol-editor-curated) and
-//! `signex_types::schematic::PinDirection` (14 variants, independently
-//! curated) are two separate sets with no exact 1:1 twin for several
-//! source variants. [`pin_direction`] documents every non-obvious choice
-//! inline; every source variant is pinned by a test.
+//! The library and the schematic share one [`super::PinDirection`], so the pin's
+//! electrical type is copied across unchanged.
 //!
 //! ## Pin glyphs — lossy by construction
 //!
@@ -61,14 +58,10 @@
 //! FillType::Background`. The RGBA value itself has nowhere to land.
 
 use signex_types::schematic::{
-    FillType, Graphic, HAlign, LibGraphic, LibPin, LibSymbol, Pin,
-    PinDirection as SchematicPinDirection, PinShapeStyle, Point, VAlign,
+    FillType, Graphic, HAlign, LibGraphic, LibPin, LibSymbol, Pin, PinShapeStyle, Point, VAlign,
 };
 
-use super::{
-    PinDirection, PinOrientation, PinSymbolKind, Symbol, SymbolGraphic, SymbolGraphicKind,
-    SymbolPin,
-};
+use super::{PinSymbolKind, Symbol, SymbolGraphic, SymbolGraphicKind, SymbolPin};
 
 impl Symbol {
     /// Convert this library `Symbol` into a schematic `LibSymbol`.
@@ -117,10 +110,10 @@ fn lib_pin_from(pin: &SymbolPin) -> LibPin {
         unit: u32::from(pin.part_number),
         body_style: u32::from(pin.body_style),
         pin: Pin {
-            direction: pin_direction(pin.electrical),
+            direction: pin.electrical,
             shape_style: pin_shape_style(pin.outside_edge_symbol),
             position: Point::new(pin.position[0], pin.position[1]),
-            rotation: pin_rotation_deg(pin.orientation),
+            rotation: pin.orientation.rotation_deg(),
             length: pin.length,
             name: pin.name.clone(),
             number: pin.number.clone(),
@@ -128,54 +121,6 @@ fn lib_pin_from(pin: &SymbolPin) -> LibPin {
             name_visible: pin.name_visible,
             number_visible: pin.designator_visible,
         },
-    }
-}
-
-/// See the module doc's "Pin rotation convention" section for why this
-/// is the identity on angle — both sides already agree.
-///
-/// `PinOrientation` is `#[non_exhaustive]` for downstream crates, but
-/// this match lives in the crate that defines it, so it stays exhaustive
-/// with no wildcard arm — a future variant added to the enum fails this
-/// match at compile time instead of silently falling through.
-fn pin_rotation_deg(orientation: PinOrientation) -> f64 {
-    match orientation {
-        PinOrientation::Right => 0.0,
-        PinOrientation::Up => 90.0,
-        PinOrientation::Left => 180.0,
-        PinOrientation::Down => 270.0,
-    }
-}
-
-/// Total, panic-free map from the library's 10-variant [`PinDirection`]
-/// to the schematic's independently-curated 14-variant
-/// `signex_types::schematic::PinDirection`. Every source variant is
-/// pinned by a test in [`super::to_lib_symbol_tests`].
-///
-/// `PinDirection` is `#[non_exhaustive]` for downstream crates, but this
-/// match lives in the crate that defines it, so it stays exhaustive with
-/// no wildcard arm — a future variant fails this match at compile time
-/// instead of silently defaulting.
-fn pin_direction(source: PinDirection) -> SchematicPinDirection {
-    match source {
-        PinDirection::Input => SchematicPinDirection::Input,
-        PinDirection::Output => SchematicPinDirection::Output,
-        PinDirection::Bidirectional => SchematicPinDirection::Bidirectional,
-        // `Power` doesn't distinguish supply direction the way the
-        // schematic side does (PowerInput / PowerOutput / GroundReference).
-        // The overwhelming common case for a symbol-authored "Power" pin
-        // is a supply INPUT (VCC/VDD on an IC), not a supply source
-        // (regulator/battery output) or a dedicated ground reference, so
-        // PowerInput is the safe default.
-        PinDirection::Power => SchematicPinDirection::PowerInput,
-        PinDirection::Passive => SchematicPinDirection::Passive,
-        // Open-collector is an active-low, open-drain-style output.
-        PinDirection::OpenCollector => SchematicPinDirection::OpenDrainLow,
-        // Open-emitter is the active-high counterpart.
-        PinDirection::OpenEmitter => SchematicPinDirection::OpenDrainHigh,
-        PinDirection::NotConnected => SchematicPinDirection::DoNotConnect,
-        PinDirection::Tristate => SchematicPinDirection::ThreeStatable,
-        PinDirection::Unspecified => SchematicPinDirection::Unclassified,
     }
 }
 
@@ -205,7 +150,7 @@ fn pin_shape_style(outside_edge_symbol: PinSymbolKind) -> PinShapeStyle {
         PinSymbolKind::SchmittTrigger => PinShapeStyle::Schmitt,
         // No matching shape for the rest in the 7-variant target set.
         // Where an electrical meaning exists (open-collector/-emitter,
-        // tri-state) it already survives via `pin_direction`
+        // tri-state) it already survives in the shared `PinDirection`
         // (`OpenDrainLow`/`OpenDrainHigh`/`ThreeStatable`), so the glyph
         // itself safely degrades to `Plain` rather than picking an
         // unrelated shape.

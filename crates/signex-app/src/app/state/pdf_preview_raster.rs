@@ -13,9 +13,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use signex_output::{
-    ExportContext, Margins, Orientation, PageSize, PdfOptions, PdfScale, PreviewOptions,
-    PreviewPage, PreviewPageInfo,
+    ExportContext, Margins, PageSize, PdfOptions, PdfScale, PreviewOptions, PreviewPage,
+    PreviewPageInfo,
 };
+use signex_types::schematic::SheetOrientation;
 
 use super::PreviewState;
 
@@ -257,7 +258,7 @@ impl RasterQueue {
 #[derive(Debug, Clone)]
 pub struct RememberedPageSetup {
     page_size: PageSize,
-    orientation: Orientation,
+    orientation: SheetOrientation,
     margins: Margins,
     scale: PdfScale,
 }
@@ -612,7 +613,7 @@ mod tests {
     fn remembered_setup_round_trips_the_page_setup_fields() {
         let custom = PdfOptions {
             page_size: PageSize::IsoA3,
-            orientation: Orientation::Portrait,
+            orientation: SheetOrientation::Portrait,
             scale: PdfScale::Percent(50.0),
             ..PdfOptions::default()
         };
@@ -621,7 +622,7 @@ mod tests {
         let mut fresh = PdfOptions::default();
         remembered.restore_into(&mut fresh);
         assert_eq!(fresh.page_size, PageSize::IsoA3);
-        assert_eq!(fresh.orientation, Orientation::Portrait);
+        assert_eq!(fresh.orientation, SheetOrientation::Portrait);
         assert_eq!(fresh.scale, PdfScale::Percent(50.0));
     }
 }

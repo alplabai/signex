@@ -240,13 +240,8 @@ impl Rotatable2d for GraphicPointObject {
 /// Returns the (dx, dy) vector from the tip (connection point) to the
 /// body-end (symbol-body attachment point) based on orientation and length.
 pub(super) fn pin_body_delta(pin: &SymbolPin) -> (f64, f64) {
-    match pin.orientation {
-        PinOrientation::Right => (pin.length, 0.0),
-        PinOrientation::Up => (0.0, pin.length),
-        PinOrientation::Left => (-pin.length, 0.0),
-        PinOrientation::Down => (0.0, -pin.length),
-        _ => (-pin.length, 0.0),
-    }
+    let (ux, uy) = pin.orientation.unit_vector();
+    (ux * pin.length, uy * pin.length)
 }
 
 fn rotate_pin_orientation_90(o: PinOrientation, clockwise: bool) -> PinOrientation {

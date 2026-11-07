@@ -235,53 +235,28 @@ impl SnxTable for SchLabelRow {
 // Enum string codecs
 // ---------------------------------------------------------------------------
 
-fn label_kind_str(t: LabelType) -> &'static str {
-    match t {
-        LabelType::Net => "local",
-        LabelType::Global => "global",
-        LabelType::Hierarchical => "hierarchical",
-        LabelType::Power => "power",
+crate::token_enum! {
+    fn label_kind_str / parse_label_kind for LabelType, fallback Net {
+        Net => "local",
+        Global => "global",
+        Hierarchical => "hierarchical",
+        Power => "power",
     }
 }
 
-fn parse_label_kind(s: &str) -> LabelType {
-    match s {
-        "global" => LabelType::Global,
-        "hierarchical" => LabelType::Hierarchical,
-        "power" => LabelType::Power,
-        _ => LabelType::Net,
+crate::token_enum! {
+    fn halign_str / parse_halign for HAlign, fallback Center {
+        Left => "left",
+        Center => "center",
+        Right => "right",
     }
 }
 
-fn halign_str(a: HAlign) -> &'static str {
-    match a {
-        HAlign::Left => "left",
-        HAlign::Center => "center",
-        HAlign::Right => "right",
-    }
-}
-
-fn parse_halign(s: &str) -> HAlign {
-    match s {
-        "left" => HAlign::Left,
-        "right" => HAlign::Right,
-        _ => HAlign::Center,
-    }
-}
-
-fn valign_str(a: VAlign) -> &'static str {
-    match a {
-        VAlign::Top => "top",
-        VAlign::Center => "center",
-        VAlign::Bottom => "bottom",
-    }
-}
-
-fn parse_valign(s: &str) -> VAlign {
-    match s {
-        "top" => VAlign::Top,
-        "center" => VAlign::Center,
-        _ => VAlign::Bottom,
+crate::token_enum! {
+    fn valign_str / parse_valign for VAlign, fallback Bottom {
+        Top => "top",
+        Center => "center",
+        Bottom => "bottom",
     }
 }
 
@@ -521,13 +496,7 @@ pub(in crate::format) fn row_to_label(mut row: SchLabelRow) -> Label {
     let locked = take_locked_cell(&mut row.unknown_columns);
     Label {
         uuid: row.uuid,
-        text: row.text,
-        position: Point {
-            x: nm_to_mm(row.pos_x),
-            y: nm_to_mm(row.pos_y),
-        },
         rotation: row.rotation,
-        label_type: parse_label_kind(&row.kind),
         shape: row.shape,
         font_size: row.font_size,
         font_family,
@@ -535,5 +504,13 @@ pub(in crate::format) fn row_to_label(mut row: SchLabelRow) -> Label {
         justify_v: parse_valign(&row.justify_v),
         locked,
         unknown_columns: row.unknown_columns,
+        ..Label::new(
+            row.text,
+            Point {
+                x: nm_to_mm(row.pos_x),
+                y: nm_to_mm(row.pos_y),
+            },
+            parse_label_kind(&row.kind),
+        )
     }
 }

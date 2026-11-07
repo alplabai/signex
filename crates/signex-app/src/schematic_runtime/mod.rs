@@ -16,7 +16,7 @@ use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
     Aabb, DrawingPlacement, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet,
     SelectedItem, SelectedKind, Symbol, TextField, TextNote, TextProp, VAlign, circumcircle,
-    field_effective_style, text_aabb_with_width, text_height_mm,
+    field_effective_style, text_aabb_lines, text_height_mm,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -349,19 +349,10 @@ pub fn power_port_preview_snapshot(
 
     RendererSnapshot {
         wires,
-        junctions: Vec::new(),
         arcs,
         polygons,
-        labels: Vec::new(),
-        pin_texts: Vec::new(),
-        reference_value_texts: Vec::new(),
         parameter_texts,
-        overlays: OverlayInputs::default(),
-        erc_markers: Vec::new(),
-        drawings: Vec::new(),
-        drawings_front: Vec::new(),
-        wire_color_overrides: HashMap::new(),
-        wire_line_styles: HashMap::new(),
+        ..Default::default()
     }
 }
 
@@ -913,8 +904,9 @@ fn drawn_text_aabb(
     v_align: VAlign,
 ) -> Aabb {
     let width = text_width::text_width_mm(slot, text, family, text_height_mm(font_size));
-    text_aabb_with_width(
+    text_aabb_lines(
         width,
+        signex_types::font::line_count(text),
         font_size,
         anchor,
         rotation_deg,
@@ -1050,10 +1042,6 @@ fn focus_color(base: Color, focus_set: Option<&HashSet<uuid::Uuid>>, uuid: uuid:
     base
 }
 
-fn aabb_overlaps(a: &Aabb, b: &Aabb) -> bool {
-    !(a.max_x < b.min_x || a.min_x > b.max_x || a.max_y < b.min_y || a.min_y > b.max_y)
-}
-
 fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let min_x = p0.x.min(p1.x);
     let max_x = p0.x.max(p1.x);
@@ -1134,6 +1122,8 @@ mod defaults_tests;
 mod drawings_tests;
 #[cfg(test)]
 mod font_geometry_tests;
+#[cfg(test)]
+mod multiline_note_tests;
 #[cfg(test)]
 mod sample_layout_tests;
 #[cfg(test)]

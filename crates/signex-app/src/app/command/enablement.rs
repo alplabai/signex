@@ -170,22 +170,7 @@ impl Signex {
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let (can_undo, can_redo) = if self.erc_dialog_takes_input(window) {
-            self.rules_history_available()
-        } else if let Some(address) = self.window_component_editor(window) {
-            self.component_history_of(&address)
-        } else if let Some(path) = self.undocked_tab_path(window) {
-            // Undo / Redo there step that window's document (#1546), so
-            // its menu rows grey by that document's history (#1550).
-            let kind = document
-                .tabs
-                .iter()
-                .find(|t| &t.path == path)
-                .map(|t| &t.kind);
-            self.history_available(kind, Some(path))
-        } else {
-            self.history_available(active_kind, document.active_path.as_ref())
-        };
+        let (can_undo, can_redo) = self.undo_availability(&self.undo_target(window));
         // A command typed in an undocked sheet window runs against that
         // window's selection, so it is enabled by it (#1966).
         let shown_canvas = match window {
@@ -230,8 +215,7 @@ impl Signex {
             can_redo,
             project_dirty: self.active_project_is_dirty(),
             document_has_file: own.has_file,
-            has_dirty_documents: document.has_dirty_documents()
-                || self.library.editors.values().any(|editor| editor.dirty),
+            has_dirty_documents: !self.unsaved_set().is_empty(),
             has_document: !document.tabs.is_empty(),
             has_open_project: document.active_project.is_some(),
             has_parent_sheet: self.active_sheet_has_parent(),
@@ -301,19 +285,6 @@ impl Signex {
         })
     }
 
-    /// The document path of `window` when it is an undocked tab window
-    /// showing a schematic or a PCB.
-    fn undocked_tab_path(&self, window: Option<iced::window::Id>) -> Option<&std::path::PathBuf> {
-        match self.ui_state.windows.get(&window?)? {
-            crate::app::state::WindowKind::UndockedTab { path, .. }
-                if self.undocked_tab_has_canvas(window) =>
-            {
-                Some(path)
-            }
-            _ => None,
-        }
-    }
-
     /// Whether `window` is an undocked tab window showing a schematic or a
     /// PCB.
     pub(super) fn undocked_tab_has_canvas(&self, window: Option<iced::window::Id>) -> bool {
@@ -337,57 +308,6 @@ impl Signex {
         use crate::app::state::ModalId;
         self.ui_state.erc_dialog_open
             && self.input_target(window) == InputTarget::DetachedModal(ModalId::ErcDialog)
-    }
-
-    /// `(can_undo, can_redo)` of the active project's stored rule set.
-    fn rules_history_available(&self) -> (bool, bool) {
-        let document = &self.document_state;
-        document
-            .active_document_project()
-            .and_then(|p| document.rules_history.get(&p.id))
-            .map_or((false, false), |h| (h.can_undo(), h.can_redo()))
-    }
-
-    /// `(can_undo, can_redo)` for the tab of `kind` showing `path`: an
-    /// editor tab's own history, else net-colour changes and the schematic
-    /// engine.
-    fn history_available(
-        &self,
-        active_kind: Option<&TabKind>,
-        path: Option<&std::path::PathBuf>,
-    ) -> (bool, bool) {
-        let document = &self.document_state;
-        match active_kind {
-            Some(TabKind::SymbolEditor(path)) => document
-                .symbol_editors
-                .get(path)
-                .map_or((false, false), |e| {
-                    (!e.undo_snapshots.is_empty(), !e.redo_snapshots.is_empty())
-                }),
-            Some(TabKind::FootprintEditor(path)) => document
-                .footprint_editors
-                .get(path)
-                .map_or((false, false), |e| {
-                    (!e.history.is_empty(), !e.redo.is_empty())
-                }),
-            Some(TabKind::ComponentEditor(tab)) => self.component_history_available(tab),
-            Some(TabKind::Project(project_id)) => self.project_tab_history_available(*project_id),
-            _ => {
-                let engine = path.and_then(|p| document.engines.get(p));
-                let has_steps = |steps: &std::collections::HashMap<_, Vec<_>>| {
-                    path.and_then(|p| steps.get(p))
-                        .is_some_and(|s| !s.is_empty())
-                };
-                (
-                    has_steps(&self.ui_state.net_color_undo)
-                        || path.is_some_and(|p| self.has_net_class_pick(p, true))
-                        || engine.is_some_and(|e| e.can_undo()),
-                    has_steps(&self.ui_state.net_color_redo)
-                        || path.is_some_and(|p| self.has_net_class_pick(p, false))
-                        || engine.is_some_and(|e| e.can_redo()),
-                )
-            }
-        }
     }
 
     /// Whether the active project's `.snxprj` has unsaved changes.
@@ -509,9 +429,9 @@ mod tests {
         let _ = app.dispatch_command(&id("undo"), CommandArgs::none(), None);
 
         assert!(
-            app.document_state.footprint_editors[&path]
+            !app.document_state.footprint_editors[&path]
                 .history
-                .is_empty()
+                .can_undo()
         );
         assert!(enabled(&app, "redo"));
     }
@@ -522,6 +442,7 @@ mod tests {
         let (mut app, _task) = Signex::new();
         let path = std::path::PathBuf::from("colour.snxsch");
         app.document_state.active_path = Some(path.clone());
+        push_tab(&mut app, &path, TabKind::Schematic);
         app.ui_state.net_color_undo.entry(path).or_default().push(
             crate::app::state::NetColorStep {
                 colors: std::collections::HashMap::new(),
@@ -948,9 +869,9 @@ mod tests {
         let engine = &app.document_state.engines[&path];
         assert!(engine.can_redo(), "the undocked sheet was undone");
         assert!(
-            !app.document_state.footprint_editors[&footprint]
+            app.document_state.footprint_editors[&footprint]
                 .history
-                .is_empty(),
+                .can_undo(),
             "the main window's footprint editor kept its step"
         );
         assert_eq!(app.document_state.active_tab, main_tab);

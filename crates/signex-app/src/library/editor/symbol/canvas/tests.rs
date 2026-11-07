@@ -414,18 +414,14 @@ fn a_pin_drag_is_one_undo_step_and_marks_the_document_dirty() {
     let mut s = Symbol::empty("T");
     s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
-    assert!(!rig.editor.is_dirty() && rig.editor.undo_snapshots.is_empty());
+    assert!(!rig.editor.is_dirty() && !rig.editor.history.can_undo());
 
     rig.press((0.0, 0.0));
     rig.moved((0.0, 1.27));
     rig.moved((0.0, 2.54));
     rig.release((0.0, 2.54));
 
-    assert_eq!(
-        rig.editor.undo_snapshots.len(),
-        1,
-        "one drag, one undo step"
-    );
+    assert_eq!(rig.editor.history.undo_len(), 1, "one drag, one undo step");
     assert!(rig.editor.is_dirty());
 }
 
@@ -597,11 +593,7 @@ fn add_pin_lands_where_the_button_is_released() {
     let pins = &rig.editor.primitive().pins;
     assert_eq!(pins.len(), 1, "one gesture places exactly one pin");
     assert_eq!(pins[0].position, [5.08, 2.54]);
-    assert_eq!(
-        rig.editor.undo_snapshots.len(),
-        1,
-        "one placement, one undo"
-    );
+    assert_eq!(rig.editor.history.undo_len(), 1, "one placement, one undo");
     assert!(rig.editor.is_dirty());
 }
 
@@ -715,7 +707,7 @@ fn dragging_the_designator_moves_it_by_the_snapped_delta_and_stores_the_position
         "expected [2.54, 7.62], got {pos:?}"
     );
     assert!(rig.editor.is_dirty());
-    assert_eq!(rig.editor.undo_snapshots.len(), 1, "one drag, one undo");
+    assert_eq!(rig.editor.history.undo_len(), 1, "one drag, one undo");
     assert_eq!(rig.editor.primitive().comment_pos, None, "value untouched");
 }
 
@@ -843,7 +835,7 @@ fn a_click_that_does_not_move_a_default_field_changes_nothing() {
     );
     assert_eq!(rig.editor.primitive().designator_pos, None);
     assert!(!rig.editor.is_dirty(), "nothing moved, nothing to save");
-    assert!(rig.editor.undo_snapshots.is_empty());
+    assert!(!rig.editor.history.can_undo());
 }
 
 #[test]

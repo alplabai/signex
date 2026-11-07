@@ -23,7 +23,7 @@ use std::collections::{HashMap, HashSet};
 use signex_types::schematic::{BusNameError, Point, parse_bus_name};
 
 use crate::build::anchor_choice;
-use crate::uf::Key;
+use crate::uf::{self, Key};
 use crate::{SheetConnectivity, pt_key};
 
 mod index;
@@ -174,11 +174,11 @@ pub fn analyse_buses(geo: &BusGeometry<'_>) -> BusAnalysis {
 /// Group id of every segment; ids number runs in order of first segment.
 fn group_segments(geo: &BusGeometry<'_>, index: &SegmentIndex) -> Vec<usize> {
     let n = geo.buses.len();
-    let mut dsu = Dsu::new(n);
+    let mut parent: HashMap<usize, usize> = HashMap::new();
     for (s, (a, b)) in geo.buses.iter().enumerate() {
         for end in [pt_key(a), pt_key(b)] {
             for other in index.containing(end) {
-                dsu.union(s, other);
+                uf::union(&mut parent, s, other);
             }
         }
     }
@@ -186,40 +186,18 @@ fn group_segments(geo: &BusGeometry<'_>, index: &SegmentIndex) -> Vec<usize> {
         let mut on = index.containing(pt_key(j));
         if let Some(first) = on.next() {
             for other in on {
-                dsu.union(first, other);
+                uf::union(&mut parent, first, other);
             }
         }
     }
     let mut ids: HashMap<usize, usize> = HashMap::new();
     (0..n)
         .map(|s| {
-            let root = dsu.find(s);
+            let root = uf::find(&mut parent, s);
             let next = ids.len();
             *ids.entry(root).or_insert(next)
         })
         .collect()
-}
-
-struct Dsu(Vec<usize>);
-
-impl Dsu {
-    fn new(n: usize) -> Self {
-        Self((0..n).collect())
-    }
-
-    fn find(&mut self, mut x: usize) -> usize {
-        while self.0[x] != x {
-            self.0[x] = self.0[self.0[x]];
-            x = self.0[x];
-        }
-        x
-    }
-
-    fn union(&mut self, a: usize, b: usize) {
-        let (ra, rb) = (self.find(a), self.find(b));
-        // Keep the smaller index as root so ids do not depend on call order.
-        self.0[ra.max(rb)] = ra.min(rb);
-    }
 }
 
 /// Wire connectivity with the same anchoring `build_netlist` applies to

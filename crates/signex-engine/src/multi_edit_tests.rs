@@ -16,18 +16,9 @@ fn symbol(reference: &str, value: &str) -> Symbol {
 
 fn label(text: &str, font_size: f64) -> Label {
     Label {
-        uuid: Uuid::now_v7(),
-        text: text.into(),
-        position: Point::new(0.0, 0.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
         font_size,
-        justify: HAlign::Left,
         justify_v: Default::default(),
-        font_family: None,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(text, Point::new(0.0, 0.0), LabelType::Net)
     }
 }
 

@@ -167,7 +167,7 @@ fn typing_into_one_field_is_one_undo_step() {
             PanelMsg::FpEditorSetFootprintDescription(typed.into()),
         );
     }
-    assert_eq!(editor_of(&app, &path).history.len(), 1);
+    assert_eq!(editor_of(&app, &path).history.undo_len(), 1);
 
     drop(app.update(Message::Edit(EditMsg::Undo)));
 
@@ -204,7 +204,7 @@ fn same_field_on_two_footprints_is_two_undo_steps() {
     );
 
     assert_eq!(
-        editor_of(&app, &path).history.len(),
+        editor_of(&app, &path).history.undo_len(),
         2,
         "editing B's description must not merge into A's undo step"
     );
@@ -218,8 +218,12 @@ fn rejected_panel_input_keeps_the_redo_stack() {
         PanelMsg::FpEditorSetFootprintDescription("edited".into()),
     );
     drop(app.update(Message::Edit(EditMsg::Undo)));
-    assert_eq!(editor_of(&app, &path).redo.len(), 1, "pre-condition");
-    let history_before = editor_of(&app, &path).history.len();
+    assert_eq!(
+        editor_of(&app, &path).history.redo_len(),
+        1,
+        "pre-condition"
+    );
+    let history_before = editor_of(&app, &path).history.undo_len();
 
     // Names a sketch entity that does not exist, and an unparsable
     // priority: neither changes anything, so neither may cost the redo.
@@ -239,6 +243,14 @@ fn rejected_panel_input_keeps_the_redo_stack() {
     );
 
     let editor = editor_of(&app, &path);
-    assert_eq!(editor.redo.len(), 1, "a no-op edit must not clear Redo");
-    assert_eq!(editor.history.len(), history_before, "no phantom undo step");
+    assert_eq!(
+        editor.history.redo_len(),
+        1,
+        "a no-op edit must not clear Redo"
+    );
+    assert_eq!(
+        editor.history.undo_len(),
+        history_before,
+        "no phantom undo step"
+    );
 }

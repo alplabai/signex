@@ -20,12 +20,11 @@ pub enum SelectionRequest {
         y2: f64,
         direction: crate::canvas::BoxDirection,
     },
-    /// Click-hit a wire/bus; expand to every wire/bus/junction/label that is
-    /// connected to it by shared endpoints (transitive). Labels attached to a
-    /// wire anchor are included; symbols are not — only the net geometry.
+    /// Expand `seed` (a wire, junction, label or bus) to the net geometry
+    /// connected to it, as `signex_net::connected_net_items` derives it.
+    /// Symbols are not included.
     SelectConnected {
-        world_x: f64,
-        world_y: f64,
+        seed: signex_types::schematic::SelectedItem,
     },
     /// Start a move-drag on the next click regardless of whether the click
     /// lands on an already-selected item — used for the Active Bar "Drag"

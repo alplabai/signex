@@ -409,18 +409,14 @@ fn a_queued_descent_that_still_applies_opens_the_child() {
 
 fn net_label(id: u128, text: &str) -> signex_types::schematic::Label {
     signex_types::schematic::Label {
-        unknown_columns: Default::default(),
         uuid: uuid::Uuid::from_u128(id),
-        text: text.into(),
-        position: signex_types::schematic::Point::new(30.48, 30.48),
-        rotation: 0.0,
-        label_type: signex_types::schematic::LabelType::Net,
-        shape: String::new(),
-        font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-        font_family: None,
         justify: Default::default(),
         justify_v: Default::default(),
-        locked: false,
+        ..signex_types::schematic::Label::new(
+            text,
+            signex_types::schematic::Point::new(30.48, 30.48),
+            signex_types::schematic::LabelType::Net,
+        )
     }
 }
 

@@ -154,18 +154,9 @@ mod tests {
         let mut sheet = test_sheet();
         for text in ["D0", "CLK", "A07"] {
             sheet.labels.push(Label {
-                uuid: Uuid::now_v7(),
-                text: text.to_owned(),
-                position: Point::new(0.0, 0.0),
-                rotation: 0.0,
-                label_type: LabelType::Net,
-                shape: String::new(),
-                font_size: 1.27,
-                font_family: None,
                 justify: Default::default(),
                 justify_v: Default::default(),
-                unknown_columns: Default::default(),
-                locked: false,
+                ..Label::new(text.to_owned(), Point::new(0.0, 0.0), LabelType::Net)
             });
         }
         let stepped = PlacementPayload::new(sheet).with_labels_stepped(3);

@@ -18,8 +18,8 @@ use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use iced_wgpu::wgpu;
 use signex_types::schematic::{
-    FillType, HAlign, Junction, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, VAlign, Wire,
+    FillType, Junction, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
+    SelectedKind, Wire,
 };
 
 use super::tests::test_prefs;
@@ -33,13 +33,28 @@ const OFFSET: f32 = 20.0;
 /// leaves showing through.
 const CLEAR: Color = Color::from_rgb(0.0, 0.0, 0.0);
 
+/// One wgpu device at a time in this test process (#2124). Plain
+/// `cargo test` runs tests on parallel threads, and several headless devices
+/// created and dropped at once crash the driver (SIGSEGV on Linux lavapipe,
+/// access violation on Windows). nextest runs each test in its own process,
+/// so CI never saw it. Test-only: the app itself makes one device.
+static GPU_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub(super) struct Gpu {
     pub(super) renderer: iced::Renderer,
     is_lavapipe: bool,
+    /// Held for as long as the renderer lives; declared last so it is
+    /// released after the device drops.
+    _lock: std::sync::MutexGuard<'static, ()>,
 }
 
 /// The renderer. A machine with no adapter fails loudly instead.
 pub(super) fn gpu() -> Gpu {
+    // A test that panicked while holding the lock must not fail every later
+    // GPU test, so a poisoned lock is taken over.
+    let lock = GPU_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let require = std::env::var_os("SIGNEX_REQUIRE_LAVAPIPE").is_some_and(|v| v == "1");
     let instance = wgpu::Instance::default();
     let adapter =
@@ -96,6 +111,7 @@ pub(super) fn gpu() -> Gpu {
             },
         )),
         is_lavapipe,
+        _lock: lock,
     }
 }
 
@@ -176,18 +192,8 @@ fn world(x: f32, y: f32) -> (u32, u32) {
 
 fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
     Label {
-        uuid: uuid::Uuid::now_v7(),
-        text: text.into(),
-        position: Point::new(x, y),
         rotation,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new(text, Point::new(x, y), LabelType::Net)
     }
 }
 

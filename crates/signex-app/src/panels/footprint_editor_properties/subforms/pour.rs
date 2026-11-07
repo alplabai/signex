@@ -1,7 +1,7 @@
 //! Pour role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, Widget, container, pick_list, row, text, text_input};
-use iced::{Color, Element, Length, Theme};
+use iced::{Color, Element, Length};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -42,20 +42,9 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                 text_input("(none)", net_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                        background: iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: border_c,
-                            ..Default::default()
-                        },
-                        placeholder: muted,
-                        value: primary,
-                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                    })
+                    .style(crate::panels::footprint_editor_properties::fp_field_style(
+                        muted, primary, border_c
+                    ))
                     .on_input(move |v| PanelMsg::FpEditorSetPourNet { id, value: v }),
             ]
             .spacing(6)
@@ -103,20 +92,9 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                 text_input("0", pour.priority.to_string())
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                        background: iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: border_c,
-                            ..Default::default()
-                        },
-                        placeholder: muted,
-                        value: primary,
-                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                    })
+                    .style(crate::panels::footprint_editor_properties::fp_field_style(
+                        muted, primary, border_c
+                    ))
                     .on_input(move |v| PanelMsg::FpEditorSetPourPriority { id, value: v }),
             ]
             .spacing(6)

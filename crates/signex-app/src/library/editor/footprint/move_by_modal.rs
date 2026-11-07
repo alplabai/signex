@@ -17,8 +17,8 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{button, column, container, row, text, text_input};
-use iced::{Background, Border, Color, Element, Length, Widget as _};
+use iced::widget::{column, container, row, text, text_input};
+use iced::{Background, Border, Element, Length, Widget as _};
 
 use signex_types::theme::ThemeTokens;
 
@@ -26,6 +26,7 @@ use crate::styles::{Spacing, TypeScale};
 
 use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::library::modal_chrome;
 use crate::styles::ti;
 use crate::styles::tokens::{self, Overlay};
 
@@ -44,7 +45,6 @@ pub fn view_move_by_modal<'a>(
     let text_c = ti(tokens.text);
     let text_muted = ti(tokens.text_secondary);
     let border_c = ti(tokens.border);
-    let toolbar_bg = ti(tokens.toolbar_bg);
     let input_bg = tokens::overlay(tokens, Overlay::Faint);
     let selection = tokens::selection_tint(tokens);
 
@@ -54,35 +54,15 @@ pub fn view_move_by_modal<'a>(
     let input_w = Length::Fixed(ts.label * 7.0);
     let card_w = Length::Fixed(ts.label * 22.0);
 
-    let header = container(
-        row![
-            text("Move Selection By").size(ts.title).color(text_c),
-            iced::widget::Space::new().width(Length::Fill),
-            close_x(
-                LibraryMessage::PrimitiveEditorEvent {
-                    path: path.clone(),
-                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
-                },
-                text_muted,
-                tokens,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.s, sp.m])
-    .style(move |_: &iced::Theme| container::Style {
-        background: Some(Background::Color(toolbar_bg)),
-        text_color: Some(text_c),
-        border: Border {
-            width: 0.0,
-            radius: iced::border::Radius::default()
-                .top_left(crate::styles::MODAL_CORNER_RADIUS)
-                .top_right(crate::styles::MODAL_CORNER_RADIUS),
-            color: border_c,
-            ..Border::default()
+    let header = modal_chrome::header(
+        "Move Selection By",
+        LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
         },
-        ..container::Style::default()
-    });
+        false,
+        tokens,
+    );
 
     let mk_field = |label: &'static str,
                     value: &'a str,
@@ -139,88 +119,32 @@ pub fn view_move_by_modal<'a>(
     ]
     .spacing(sp.m);
 
-    let footer = row![
-        iced::widget::Space::new().width(Length::Fill),
-        secondary_button(
-            "Cancel",
-            LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
-            },
-            tokens,
-        ),
-        iced::widget::Space::new().width(sp.m),
-        primary_button(
-            "OK",
-            LibraryMessage::PrimitiveEditorEvent {
-                path,
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
-            },
-            tokens,
-        ),
-    ]
-    .align_y(iced::Alignment::Center);
+    let footer = modal_chrome::footer_strip(
+        Vec::new(),
+        vec![
+            modal_chrome::secondary_btn(
+                "Cancel",
+                LibraryMessage::PrimitiveEditorEvent {
+                    path: path.clone(),
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
+                },
+                tokens,
+            ),
+            modal_chrome::primary_btn(
+                "OK",
+                LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
+                },
+                tokens,
+            ),
+        ],
+        tokens,
+    );
 
-    let card = container(
-        column![
-            header,
-            container(body).padding(sp.l),
-            container(footer).padding([sp.m, sp.l]),
-        ]
-        .width(card_w),
-    )
-    .style(crate::styles::modal_card(tokens))
-    .clip(true);
+    let card = container(column![header, container(body).padding(sp.l), footer,].width(card_w))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
 
     Some(card.boxed())
-}
-
-fn close_x<'a>(
-    message: LibraryMessage,
-    text_color: Color,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    button(text("\u{2715}").size(ts.body).color(text_color))
-        .padding(sp.xs)
-        .on_press(message)
-        .style(crate::styles::subtle_button(tokens))
-        .boxed()
-}
-
-fn secondary_button<'a>(
-    label: &str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    button(
-        container(text(label.to_string()).size(ts.body).color(ti(tokens.text)))
-            .padding([sp.s, sp.l]),
-    )
-    .on_press(message)
-    .style(crate::styles::outline_button(tokens))
-    .boxed()
-}
-
-fn primary_button<'a>(
-    label: &str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    button(
-        container(
-            text(label.to_string())
-                .size(ts.body)
-                .color(tokens::on_accent(tokens)),
-        )
-        .padding([sp.s, sp.l]),
-    )
-    .on_press(message)
-    .style(crate::styles::accent_button(tokens))
-    .boxed()
 }

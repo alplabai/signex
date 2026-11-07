@@ -10,10 +10,6 @@ fn sample() -> SchematicSheet {
         .sheet
 }
 
-fn overlaps(a: Aabb, b: Aabb) -> bool {
-    a.min_x < b.max_x && a.max_x > b.min_x && a.min_y < b.max_y && a.max_y > b.min_y
-}
-
 #[test]
 fn every_sample_power_port_shows_its_net_name_and_no_designator() {
     let sheet = sample();
@@ -57,7 +53,7 @@ fn no_sample_field_text_overlaps_a_symbol_body() {
             };
             let bbox = text_prop_aabb(text, prop, symbol, None);
             assert!(
-                !overlaps(bbox, body),
+                !bbox.overlaps_interior(&body),
                 "{} field {text:?} {bbox:?} overlaps its body {body:?}",
                 symbol.reference
             );
@@ -82,7 +78,7 @@ fn no_sample_net_label_sits_on_a_power_port_glyph() {
                 label.justify_v,
             );
             assert!(
-                !overlaps(text, glyph),
+                !text.overlaps_interior(&glyph),
                 "label {:?} {text:?} overlaps the {} port glyph {glyph:?}",
                 label.text,
                 port.value

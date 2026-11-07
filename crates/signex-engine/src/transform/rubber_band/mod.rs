@@ -61,6 +61,8 @@
 mod env;
 mod guard;
 
+#[cfg(test)]
+pub(crate) use guard::self_check;
 pub use guard::{BeforeNets, Guard, Policy, before_nets};
 
 use std::collections::{BTreeMap, HashSet};

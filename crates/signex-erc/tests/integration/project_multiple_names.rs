@@ -7,9 +7,8 @@ use std::collections::HashMap;
 use signex_erc::{ProjectNetNames, RuleKind, Violation, project_net_multiple_names};
 use signex_net::{ProjectGraph, ProjectRoot, SheetKey};
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin,
-    PinDirection, PinShapeStyle, Point, SchematicSheet, SelectedKind, SheetPin, Symbol, VAlign,
-    Wire,
+    ChildSheet, FillType, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection,
+    PinShapeStyle, Point, SchematicSheet, SelectedKind, SheetPin, Symbol, Wire,
 };
 use uuid::Uuid;
 
@@ -19,18 +18,7 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn label(text: &str, at: Point, label_type: LabelType) -> Label {
     Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: text.to_string(),
-        position: at,
-        rotation: 0.0,
-        label_type,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
+        ..Label::new(text, at, label_type)
     }
 }
 

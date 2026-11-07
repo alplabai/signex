@@ -1,10 +1,8 @@
 //! Tests for PDF bookmark/outline generation.
 use super::*;
-use crate::pdf::{
-    ColourMode, Margins, Orientation, PageRange, PageSize, PdfScale, SchematicPalette,
-};
+use crate::pdf::{ColourMode, Margins, PageRange, PageSize, PdfScale, SchematicPalette};
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SheetOrientation, Symbol};
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet::default()
@@ -20,18 +18,11 @@ fn ctx_with_one_sheet() -> ExportContext {
         ..Default::default()
     });
     sheet.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: uuid::Uuid::nil(),
-        text: "VCC".to_string(),
-        position: Point::new(20.0, 20.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new("VCC", Point::new(20.0, 20.0), LabelType::Net)
     });
     ExportContext {
         sheets: vec![SheetSnapshot {
@@ -53,7 +44,7 @@ fn ctx_with_one_sheet() -> ExportContext {
 fn default_opts() -> PdfOptions {
     PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         colour_mode: ColourMode::Colour,
         page_range: PageRange::All,
         sheet_template: None,

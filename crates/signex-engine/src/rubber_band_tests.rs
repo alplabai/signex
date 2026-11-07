@@ -6,9 +6,9 @@
 use crate::test_support::test_sheet;
 use crate::{Command, Engine};
 use signex_types::schematic::{
-    ChildSheet, FillType, HAlign, Junction, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection,
+    ChildSheet, FillType, Junction, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection,
     PinShapeStyle, Point, SchematicSheet, SelectedItem, SelectedKind, SheetPin, Symbol,
-    SymbolTransform, VAlign, Wire,
+    SymbolTransform, Wire,
 };
 use uuid::Uuid;
 
@@ -135,23 +135,12 @@ pub(crate) fn add_wire(sheet: &mut SchematicSheet, a: (f64, f64), b: (f64, f64))
 }
 
 pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
-    sheet.labels.push(Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point::new(at.0, at.1),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
-    });
+    sheet
+        .labels
+        .push(Label::new(text, Point::new(at.0, at.1), LabelType::Net));
 }
 
-fn add_dot(sheet: &mut SchematicSheet, at: (f64, f64), minted: bool) {
+pub(crate) fn add_dot(sheet: &mut SchematicSheet, at: (f64, f64), minted: bool) {
     sheet.junctions.push(Junction {
         uuid: Uuid::now_v7(),
         position: Point::new(at.0, at.1),
@@ -845,20 +834,9 @@ pub(crate) fn add_labelled(sheet: &mut SchematicSheet, rng: &mut Lcg, at: (f64, 
         LabelType::Power,
         LabelType::Hierarchical,
     ][rng.next(4) as usize];
-    sheet.labels.push(Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: text.to_string(),
-        position: Point::new(at.0, at.1),
-        rotation: 0.0,
-        label_type,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
-    });
+    sheet
+        .labels
+        .push(Label::new(text, Point::new(at.0, at.1), label_type));
 }
 
 /// A random small schematic and a random move, with nothing pruned: pins

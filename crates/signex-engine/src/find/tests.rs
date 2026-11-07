@@ -1,7 +1,7 @@
 use super::*;
 use crate::{Command, Engine};
 use signex_types::schematic::{
-    HAlign, InstancePath, Label, LabelType, Point, SchematicSheet, Symbol, SymbolInstance, VAlign,
+    InstancePath, Label, LabelType, Point, SchematicSheet, Symbol, SymbolInstance,
 };
 use uuid::Uuid;
 
@@ -22,18 +22,9 @@ fn sheet() -> SchematicSheet {
     };
     SchematicSheet {
         labels: vec![Label {
-            unknown_columns: Default::default(),
             uuid: id(1),
-            text: "GND_RAIL".into(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            label_type: LabelType::Net,
             shape: "input".to_string(),
-            font_size: 1.27,
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
-            font_family: None,
-            locked: false,
+            ..Label::new("GND_RAIL", Point::new(0.0, 0.0), LabelType::Net)
         }],
         symbols: vec![Symbol {
             uuid: id(2),

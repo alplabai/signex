@@ -4,6 +4,7 @@ use signex_types::theme::ThemeTokens;
 
 use super::color_code::ComponentColorCode;
 use super::domain::ComponentKind;
+use super::widgets::token_color;
 
 pub fn color_code_representations<'a, Message: 'a>(
     representations: Vec<ComponentColorCode>,
@@ -79,8 +80,4 @@ fn color_code_unavailable_label(kind: ComponentKind) -> &'static str {
         ComponentKind::Capacitor => "Not representable with capacitor color bands",
         ComponentKind::Inductor => "Not representable with common µH color bands",
     }
-}
-
-fn token_color(color: signex_types::theme::Color) -> iced::Color {
-    iced::Color::from_rgba8(color.r, color.g, color.b, f32::from(color.a) / 255.0)
 }

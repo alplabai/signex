@@ -10,10 +10,8 @@ use iced::widget::{Space, column, container, row, text, text_input};
 use iced::{Element, Length, Widget};
 
 use super::rule_editor::{RuleEditor, rule_editor};
-use super::widgets::{
-    close_x_button, draggable_header, fit_modal_size, os_title_bar_slot, wrap_modal,
-};
-use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
+use crate::app::document::UndoTarget;
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -25,16 +23,9 @@ const PROFILE_OVERWRITE_KIND: DialogButtonKind = DialogButtonKind::Danger;
 impl Signex {
     pub(in crate::app::view) fn view_erc_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_erc_dialog_body_inner(true);
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&super::super::super::state::ModalId::ErcDialog)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(
+        self.wrap_dialog(
+            crate::app::state::ModalId::ErcDialog,
             dialog,
-            offset,
-            self.ui_state.window_size,
             self.erc_modal_size(),
         )
     }
@@ -51,24 +42,13 @@ impl Signex {
 
     fn view_erc_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let theme_id = self.ui_state.effective_theme_id();
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Electrical Rules Check")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(Message::Erc(ErcMsg::CloseDialog), theme_id, text_muted),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Electrical Rules Check",
+            Message::Erc(ErcMsg::CloseDialog),
+            tokens,
+        );
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -94,12 +74,12 @@ impl Signex {
             ),
         };
 
-        let history = self
-            .document_state
-            .active_document_project()
-            .and_then(|p| self.document_state.rules_history.get(&p.id));
-        let can_undo = history.is_some_and(|h| h.can_undo());
-        let can_redo = history.is_some_and(|h| h.can_redo());
+        let (can_undo, can_redo) = self.undo_availability(
+            &self
+                .document_state
+                .active_document_project()
+                .map_or(UndoTarget::None, |p| UndoTarget::ProjectRules(p.id)),
+        );
         let has_project = self.document_state.active_document_project().is_some();
         let unreadable = self.active_project_has_unreadable_rules();
         let scope_note = match (has_project, stored.is_some(), unreadable) {

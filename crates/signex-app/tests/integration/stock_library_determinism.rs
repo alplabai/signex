@@ -262,7 +262,7 @@ fn every_stock_symbol_pin_is_on_the_schematic_grid_and_converts() {
             assert!(!lib.graphics.is_empty(), "{} has no body", symbol.name);
             if symbol.designator == "#PWR?" {
                 assert_eq!(symbol.pins.len(), 1);
-                assert_eq!(symbol.pins[0].electrical, PinDirection::Power);
+                assert_eq!(symbol.pins[0].electrical, PinDirection::PowerInput);
             }
         }
     }
@@ -300,9 +300,9 @@ fn logic_packages_are_14_pin_with_power_on_7_and_14() {
             assert_eq!(numbers, (1..=14).collect::<Vec<_>>(), "{}", symbol.name);
             let find = |n: &str| pins.iter().find(|p| p.number == n).unwrap();
             assert_eq!(find("7").name, "GND");
-            assert_eq!(find("7").electrical, PinDirection::Power);
+            assert_eq!(find("7").electrical, PinDirection::PowerInput);
             assert_eq!(find("14").name, "VCC");
-            assert_eq!(find("14").electrical, PinDirection::Power);
+            assert_eq!(find("14").electrical, PinDirection::PowerInput);
             assert_eq!(symbol.designator, "U?");
         }
     }

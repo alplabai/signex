@@ -1,7 +1,7 @@
 //! Tests for the PDF exporter.
 use std::path::PathBuf;
 
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{SchematicSheet, SheetOrientation};
 
 use super::*;
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
@@ -57,18 +57,10 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         locked: false,
     });
     ctx.sheets[0].schematic.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: uuid::Uuid::nil(),
-        text: label.into(),
-        position: Point::new(20.0, 30.0),
-        rotation: 0.0,
-        label_type: LabelType::Global,
         shape: "input".into(),
         font_size: 2.54,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new(label, Point::new(20.0, 30.0), LabelType::Global)
     });
     ctx
 }
@@ -212,7 +204,7 @@ fn page_size_reflected_in_media_box() {
     let ctx = sample_ctx(1);
     let opts = PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Portrait,
+        orientation: SheetOrientation::Portrait,
         ..Default::default()
     };
     let out = PdfExporter.export(&ctx, &opts).unwrap();
@@ -247,18 +239,11 @@ fn exports_schematic_content() {
 
     // Add one label.
     sheet.labels.push(Label {
-        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
-        text: "VCC".to_string(),
-        position: Point::new(20.0, 20.0),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..Label::new("VCC", Point::new(20.0, 20.0), LabelType::Net)
     });
 
     let mut ctx = sample_ctx(1);
@@ -328,7 +313,7 @@ fn fit_to_page_scales_large_content_down() {
 
     let opts = PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         scale: PdfScale::FitToPage,
         margins: Margins {
             top_mm: 10.0,
@@ -363,7 +348,7 @@ fn fit_to_page_does_not_upscale_small_content() {
 
     let opts = PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         scale: PdfScale::FitToPage,
         margins: Margins {
             top_mm: 10.0,
@@ -563,7 +548,7 @@ fn media_box_matches_every_selectable_page_size_and_custom() {
     let ctx = sample_ctx(1);
     let pt = |mm: f64| mm * 72.0 / 25.4;
     for kind in PageSizeKind::ALL {
-        for orientation in [Orientation::Portrait, Orientation::Landscape] {
+        for orientation in [SheetOrientation::Portrait, SheetOrientation::Landscape] {
             let size = kind.select(PageSize::IsoA4, orientation);
             let opts = PdfOptions {
                 page_size: size,
@@ -626,7 +611,7 @@ fn wire_ctx() -> ExportContext {
 fn one_to_one_with(margins: Margins) -> PdfOptions {
     PdfOptions {
         page_size: PageSize::IsoA4,
-        orientation: Orientation::Landscape,
+        orientation: SheetOrientation::Landscape,
         scale: PdfScale::OneToOne,
         margins,
         ..Default::default()

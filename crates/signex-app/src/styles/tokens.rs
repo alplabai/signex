@@ -190,6 +190,10 @@ pub fn danger(tokens: &ThemeTokens) -> Color {
     ti(tokens.error)
 }
 
+/// Alpha of the backdrop behind an in-window modal and of the click-outside
+/// layer under a menu.
+pub const BACKDROP_ALPHA: f32 = 0.55;
+
 /// Modal backdrop. Black at `alpha` on every theme — a scrim dims the
 /// content behind it, which is theme-neutral by design.
 pub fn scrim(alpha: f32) -> Color {

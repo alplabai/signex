@@ -164,20 +164,9 @@ fn pin_sheet(extra: impl FnOnce(&mut signex_types::schematic::SchematicSheet)) -
 }
 
 fn schematic_label(text: &str, kind: LabelType, at: Point) -> signex_types::schematic::Label {
-    use signex_types::schematic::{HAlign, Label, VAlign};
+    use signex_types::schematic::Label;
     Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: text.into(),
-        position: at,
-        rotation: 0.0,
-        label_type: kind,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        locked: false,
+        ..signex_types::schematic::Label::new(text, at, kind)
     }
 }
 

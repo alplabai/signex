@@ -601,6 +601,15 @@ fn an_undo_while_the_unopened_sheets_are_still_being_written_names_them() {
     let _ = crate::diagnostics::init_logging();
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
     app.ui_state.annotate_undo = crate::annotate_undo::AnnotateUndo::Project;
+    // Ctrl+Z steps the sheet the window's tab shows.
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "a_root.snxsch".into(),
+        path: root_path(&dir),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
     let read = app.handle_annotate(ResetAndRenumber);
     let write = app.update(completion(read));
     let since = crate::diagnostics::newest_entry_id();

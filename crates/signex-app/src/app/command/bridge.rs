@@ -464,7 +464,7 @@ mod tests {
     ///   existence.
     /// - **needs an argument** — the target `Message` carries data this
     ///   entry point cannot supply. `select_expand_connection` wants
-    ///   `SelectionRequest::SelectConnected { world_x, world_y }`, and a
+    ///   `SelectionRequest::SelectConnected { seed }`, and a
     ///   bare id has no cursor. Unblocked by `dispatch(id, args)` (#367),
     ///   not by a match arm.
     /// - **not addressable from a bare id** — the operation exists but

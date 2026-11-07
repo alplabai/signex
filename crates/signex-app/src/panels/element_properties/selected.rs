@@ -309,6 +309,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let lib_id = get("Library ID");
             let library_name = get("Library");
             let symbol_choices = ctx.symbol_choices.clone();
+            let footprint_choices = ctx.footprint_choices.clone();
             let library_drifted = get("Library Drift") == "Yes";
             let library_status = super::library_rows::LibraryStatus {
                 drifted: library_drifted,
@@ -374,9 +375,13 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                     input_bdr,
                                 ));
                             }
-                            c = c.push(form_edit_row("Footprint", &footprint, muted, move |s| {
-                                PanelMsg::EditSymbolFootprint(id, s)
-                            }));
+                            c = super::library_rows::push_footprint_row(
+                                c,
+                                id,
+                                &footprint,
+                                &footprint_choices,
+                                muted,
+                            );
                             if !datasheet.is_empty() {
                                 c = c.push(form_input_row(
                                     "Datasheet",
@@ -1017,22 +1022,9 @@ mod tests {
     #[test]
     fn a_left_justified_label_row_reads_back_as_left() {
         use signex_types::schematic::{
-            Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind, VAlign,
+            Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
         };
-        let label = Label {
-            uuid: uuid::Uuid::now_v7(),
-            text: "NET".into(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            font_family: None,
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
-            unknown_columns: Default::default(),
-            locked: false,
-        };
+        let label = Label::new("NET", Point::new(0.0, 0.0), LabelType::Net);
         let id = label.uuid;
         let engine = signex_engine::Engine::new(SchematicSheet {
             labels: vec![label],

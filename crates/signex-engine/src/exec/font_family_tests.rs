@@ -6,17 +6,7 @@ use uuid::Uuid;
 fn label(id: Uuid) -> Label {
     Label {
         uuid: id,
-        text: "VIN".into(),
-        position: Point { x: 1.0, y: 1.0 },
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify: HAlign::Left,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
+        ..Label::new("VIN", Point { x: 1.0, y: 1.0 }, LabelType::Net)
     }
 }
 

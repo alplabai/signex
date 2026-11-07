@@ -20,18 +20,13 @@ fn parent_with_a_far_child_label() -> (Signex, PathBuf) {
     std::fs::create_dir_all(&dir).expect("tempdir");
     let mut child = sheet_with_net("R_CHILD", "CHILD_NET", &[]);
     child.labels.push(Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::now_v7(),
-        text: "ORPHAN".to_string(),
-        position: Point::new(CHILD_AT.0, CHILD_AT.1),
-        rotation: 0.0,
-        label_type: LabelType::Hierarchical,
-        shape: String::new(),
-        font_size: 1.27,
         justify: HAlign::default(),
         justify_v: VAlign::default(),
-        font_family: None,
-        locked: false,
+        ..Label::new(
+            "ORPHAN",
+            Point::new(CHILD_AT.0, CHILD_AT.1),
+            LabelType::Hierarchical,
+        )
     });
     let text = SnxSchematic::new(child).write_string().expect("serialize");
     std::fs::write(dir.join("child.snxsch"), text).expect("write child");

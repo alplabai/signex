@@ -24,6 +24,8 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
+mod connected_items;
+pub use connected_items::connected_net_items;
 mod extent;
 pub use extent::{NetExtent, net_extent_at};
 mod gate;
@@ -305,6 +307,12 @@ impl SheetConnectivity {
             }
         }
         Self { parent }
+    }
+
+    /// The union-find itself, for a derivation that reads it directly (see
+    /// `incremental`).
+    pub(crate) fn into_parent(self) -> HashMap<Key, Key> {
+        self.parent
     }
 
     /// The canonical net root of point `p` — its union-find representative in

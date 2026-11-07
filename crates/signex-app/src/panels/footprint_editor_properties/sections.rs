@@ -7,8 +7,9 @@ use super::super::{
 };
 use super::conflicts;
 use super::managers::{render_grid_manager, render_other_section};
+use super::props_kv_row;
 use super::snap_options::render_snapping_mode_row;
-use super::{fp_is_collapsed, props_kv_row, props_section_header};
+use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -45,16 +46,16 @@ pub(super) fn view_sections<'a>(
     // canvas summary which made the controls disappear the moment
     // the user clicked a pad.
     col = col.push(
-        props_section_header(
-            "Snap Options",
+        collapsible_section_header(
             "fp_snap_options",
+            "Snap Options",
             collapsed_sections,
             primary,
             border_c,
         )
         .boxed(),
     );
-    let snap_open = !fp_is_collapsed("fp_snap_options", collapsed_sections);
+    let snap_open = !is_section_collapsed("fp_snap_options", collapsed_sections);
     let opts = fp.snap_options;
     if snap_open {
         // v0.13 — Snap target categories as INDEPENDENT toggle pills
@@ -238,20 +239,9 @@ pub(super) fn view_sections<'a>(
                     text_input("", format!("{value:.3}"))
                         .size(TS.caption)
                         .padding(SP.xs)
-                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                            background: iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            )),
-                            border: iced::Border {
-                                width: 1.0,
-                                radius: 2.0.into(),
-                                color: border_c,
-                                ..Default::default()
-                            },
-                            placeholder: muted,
-                            value: primary,
-                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                        })
+                        .style(crate::panels::footprint_editor_properties::fp_field_style(
+                            muted, primary, border_c
+                        ))
                         .on_input(on_input),
                 ]
                 .spacing(6)
@@ -285,26 +275,26 @@ pub(super) fn view_sections<'a>(
     // body to mirror Altium's per-state Properties surface.
     if no_selection {
         col = col.push(
-            props_section_header(
-                "Grid Manager",
+            collapsible_section_header(
                 "fp_grid_manager",
+                "Grid Manager",
                 collapsed_sections,
                 primary,
                 border_c,
             )
             .boxed(),
         );
-        if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
+        if !is_section_collapsed("fp_grid_manager", collapsed_sections) {
             col = render_grid_manager(col, fp, primary, muted, border_c);
         }
         // Guide Manager removed in v0.13 — sketch-mode owns guides /
         // construction geometry; the standalone Guide Manager was
         // redundant.
         col = col.push(
-            props_section_header("Other", "fp_other", collapsed_sections, primary, border_c)
+            collapsible_section_header("fp_other", "Other", collapsed_sections, primary, border_c)
                 .boxed(),
         );
-        if !fp_is_collapsed("fp_other", collapsed_sections) {
+        if !is_section_collapsed("fp_other", collapsed_sections) {
             col = render_other_section(col, fp, palette, unit);
         }
     }
@@ -317,16 +307,16 @@ pub(super) fn view_sections<'a>(
     if fp.mode_kind == FootprintModeKind::Sketch {
         // Parameters
         col = col.push(
-            props_section_header(
-                "Parameters",
+            collapsible_section_header(
                 "fp_parameters",
+                "Parameters",
                 collapsed_sections,
                 primary,
                 border_c,
             )
             .boxed(),
         );
-        if !fp_is_collapsed("fp_parameters", collapsed_sections) {
+        if !is_section_collapsed("fp_parameters", collapsed_sections) {
             if fp.sketch_parameters.is_empty() {
                 col = col.push(
                     container(
@@ -349,20 +339,9 @@ pub(super) fn view_sections<'a>(
                         text_input("expression…", expr)
                             .size(TS.caption)
                             .padding(SP.xs)
-                            .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                                background: iced::Background::Color(iced::Color::from_rgba(
-                                    1.0, 1.0, 1.0, 0.04,
-                                )),
-                                border: iced::Border {
-                                    width: 1.0,
-                                    radius: 2.0.into(),
-                                    color: border_c,
-                                    ..Default::default()
-                                },
-                                placeholder: muted,
-                                value: primary,
-                                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                            })
+                            .style(crate::panels::footprint_editor_properties::fp_field_style(
+                                muted, primary, border_c
+                            ))
                             .on_input(move |new_expr| PanelMsg::FpEditorEditParameter {
                                 name: name_clone.clone(),
                                 expr: new_expr,
@@ -382,16 +361,16 @@ pub(super) fn view_sections<'a>(
 
         // DOF / Last solve
         col = col.push(
-            props_section_header(
-                "DOF / Last solve",
+            collapsible_section_header(
                 "fp_dof",
+                "DOF / Last solve",
                 collapsed_sections,
                 primary,
                 border_c,
             )
             .boxed(),
         );
-        if !fp_is_collapsed("fp_dof", collapsed_sections) {
+        if !is_section_collapsed("fp_dof", collapsed_sections) {
             col = props_kv_row(
                 col,
                 muted,
@@ -490,16 +469,16 @@ pub(super) fn view_sections<'a>(
 
         // Solve warnings
         col = col.push(
-            props_section_header(
-                "Solve warnings",
+            collapsible_section_header(
                 "fp_solve_warnings",
+                "Solve warnings",
                 collapsed_sections,
                 primary,
                 border_c,
             )
             .boxed(),
         );
-        if !fp_is_collapsed("fp_solve_warnings", collapsed_sections) {
+        if !is_section_collapsed("fp_solve_warnings", collapsed_sections) {
             if fp.solve_warnings.is_empty() {
                 col = col.push(
                     container(text("(none)").size(TS.caption).color(muted))

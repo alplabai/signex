@@ -103,3 +103,128 @@ fn detached_export_footer_stays_inside_a_small_window() {
         &["Export PDF", "No files selected for export"],
     );
 }
+
+/// The windows narrower than a card's design width plus both margins: the
+/// card is centred on its fitted width, so it must be that wide too, or its
+/// right edge (the footer buttons) leaves the window.
+fn narrow_windows(design_w: f32) -> [f32; 4] {
+    let margin = super::widgets::MODAL_WINDOW_MARGIN;
+    [
+        design_w,
+        design_w + 10.0,
+        design_w + margin,
+        design_w + 2.0 * margin - 1.0,
+    ]
+}
+
+fn assert_card_inside(
+    app: &mut Signex,
+    design_w: f32,
+    view: impl for<'a> Fn(&'a Signex) -> iced::Element<'a, crate::app::Message>,
+    labels: &[&str],
+) {
+    for width in narrow_windows(design_w) {
+        let window = Size::new(width, 700.0);
+        app.ui_state.window_size = (window.width, window.height);
+        let texts = lay_out_texts(view(app), window);
+        for label in labels {
+            let b = find(&texts, label).bounds;
+            assert!(
+                b.x >= 0.0 && b.x + b.width <= window.width - super::widgets::MODAL_WINDOW_MARGIN,
+                "{label:?} leaves a {width} px window: {b:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_remove_card_fits_a_window_just_wider_than_its_design() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
+        target_path: "p.snxsch".into(),
+        tree_path: vec![0],
+        project_id: None,
+        display_name: "p".into(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+        is_directory_package: false,
+    });
+    assert_card_inside(
+        &mut app,
+        super::sizes::REMOVE.0,
+        |app| app.view_remove_dialog(),
+        &["Remove from Project", "Cancel"],
+    );
+}
+
+#[test]
+fn the_quit_confirm_card_fits_a_window_just_wider_than_its_design() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
+        dirty_paths: vec![std::path::PathBuf::from("a.snxsch")],
+        dirty_rows: Vec::new(),
+    });
+    assert_card_inside(
+        &mut app,
+        super::sizes::APP_QUIT_CONFIRM.0,
+        |app| app.view_app_quit_confirm(),
+        &["Cancel", "Save All"],
+    );
+}
+
+#[test]
+fn the_autosave_recovery_card_fits_a_window_just_wider_than_its_design() {
+    let (mut app, _boot) = Signex::new();
+    let offer = crate::autosave::RecoveryOffer {
+        path: "a.snxsch".into(),
+        age_secs: 30,
+        older_than_file: false,
+    };
+    assert_card_inside(
+        &mut app,
+        super::sizes::AUTOSAVE_RECOVERY.0,
+        |app| app.view_autosave_recovery(&offer),
+        &["Discard", "Restore"],
+    );
+}
+
+#[test]
+fn the_remove_unsaved_edits_card_fits_a_window_just_wider_than_its_design() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
+        target_path: "p.snxsch".into(),
+        tree_path: vec![0],
+        project_id: None,
+        display_name: "p".into(),
+        is_outside_project: false,
+        unsaved_prompt: true,
+        is_directory_package: false,
+    });
+    assert_card_inside(
+        &mut app,
+        super::sizes::REMOVE.0,
+        |app| app.view_remove_dialog(),
+        &["Cancel", "Save"],
+    );
+}
+
+#[test]
+fn the_create_sheet_card_fits_a_window_just_wider_than_its_design() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.create_child_sheet_confirm =
+        Some(crate::app::contracts::CreateChildSheetConfirmState {
+            symbol: uuid::Uuid::from_u128(1),
+            name: "Power".to_string(),
+            parent: "proj/top.snxsch".into(),
+            project_dir: "proj".into(),
+            path_text: "power.snxsch".to_string(),
+            error: None,
+            exists: false,
+        });
+    assert_card_inside(
+        &mut app,
+        super::sizes::CREATE_CHILD_SHEET.0,
+        |app| app.view_create_child_sheet_confirm(),
+        &["Later", "Create"],
+    );
+}

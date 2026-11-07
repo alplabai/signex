@@ -556,6 +556,9 @@ pub enum LibraryMessage {
         generation: u64,
         result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
     },
+    /// A footprint was picked in the details view of the selected row
+    /// (#1234): the details preview shows it and Place builds the part with it.
+    ComponentsPanelFootprintPicked(signex_library::primitive::PrimitiveRef),
     /// Live edit of the Components Panel filter input. Substring
     /// matched across mpn / manufacturer / internal_pn / library
     /// name. Stage 9 ships this; the rich syntax (plan §5) is

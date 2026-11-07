@@ -88,13 +88,6 @@ impl SnapResult {
     }
 }
 
-/// Convert a screen-pixel radius to world-mm at the current camera
-/// scale. Callers pass the canvas's `scale` (px/mm) and we return
-/// the equivalent world-mm radius for distance comparisons.
-pub fn px_to_world_mm(px: f32, scale_px_per_mm: f32) -> f64 {
-    (px / scale_px_per_mm.max(1e-3)) as f64
-}
-
 /// Look up the active tool's anchor — the previously-placed Point
 /// the next click attaches to. Returns `None` for tool states with
 /// no anchor (Idle, Select, Place Point single-shot).

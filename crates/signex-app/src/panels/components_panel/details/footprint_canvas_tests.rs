@@ -269,6 +269,44 @@ fn a_later_resize_does_not_refit_over_the_users_view() {
 }
 
 #[test]
+fn a_resize_of_an_untouched_view_refits_the_footprint_to_the_new_box() {
+    let model = preview_of(&fixture());
+    let mut state = show(&model);
+    let program = FootprintPreview::new(&model);
+    let over = mouse::Cursor::Available(Point::new(100.0, 100.0));
+    let bigger = Rectangle {
+        width: 600.0,
+        ..BOX
+    };
+    let moved = Event::Mouse(mouse::Event::CursorMoved {
+        position: Point::new(50.0, 50.0),
+    });
+    let _ = Program::<()>::update(&program, &mut state, &moved, bigger, over);
+    let fitted = super::fitted_camera(&model, Rectangle::with_size(bigger.size()));
+    assert_eq!(state.scale(), fitted.scale);
+    assert_eq!(state.offset(), fitted.offset);
+}
+
+#[test]
+fn the_fit_centres_the_footprint_inside_a_narrow_and_a_wide_box() {
+    let model = preview_of(&fixture());
+    let (min_x, min_y, max_x, max_y) = model.bbox_mm().expect("pads give a bbox");
+    for size in [iced::Size::new(120.0, 156.0), iced::Size::new(700.0, 156.0)] {
+        let camera = super::fitted_camera(&model, Rectangle::with_size(size));
+        let (scale, off) = (camera.scale, camera.offset);
+        let low = (min_x as f32 * scale + off.x, min_y as f32 * scale + off.y);
+        let high = (max_x as f32 * scale + off.x, max_y as f32 * scale + off.y);
+        assert!(low.0 >= 0.0 && low.1 >= 0.0, "{size:?} {low:?}");
+        assert!(
+            high.0 <= size.width && high.1 <= size.height,
+            "{size:?} {high:?}"
+        );
+        assert!((low.0 + high.0 - size.width).abs() < 1e-2, "{size:?}");
+        assert!((low.1 + high.1 - size.height).abs() < 1e-2, "{size:?}");
+    }
+}
+
+#[test]
 fn wheel_zooms_about_the_cursor_and_drag_pans() {
     let model = preview_of(&fixture());
     let mut state = show(&model);

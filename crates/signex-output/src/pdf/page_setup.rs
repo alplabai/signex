@@ -9,7 +9,9 @@ use std::fmt;
 
 use thiserror::Error;
 
-use super::{Margins, Orientation, PageSize, PdfScale};
+use signex_types::schematic::SheetOrientation;
+
+use super::{Margins, PageSize, PdfScale};
 
 /// Largest page edge a PDF viewer accepts (14 400 pt).
 pub const MAX_PAGE_EDGE_MM: f64 = signex_types::schematic::MAX_PAGE_EDGE_MM;
@@ -88,6 +90,7 @@ pub enum PageSizeKind {
     IsoA3,
     IsoA4,
     IsoA5,
+    IsoB5,
     AnsiA,
     AnsiB,
     AnsiC,
@@ -95,18 +98,20 @@ pub enum PageSizeKind {
     AnsiE,
     UsLetter,
     UsLegal,
+    Tabloid,
     Custom,
 }
 
 impl PageSizeKind {
     /// Every picker entry, in display order.
-    pub const ALL: [PageSizeKind; 14] = [
+    pub const ALL: [PageSizeKind; 16] = [
         PageSizeKind::IsoA0,
         PageSizeKind::IsoA1,
         PageSizeKind::IsoA2,
         PageSizeKind::IsoA3,
         PageSizeKind::IsoA4,
         PageSizeKind::IsoA5,
+        PageSizeKind::IsoB5,
         PageSizeKind::AnsiA,
         PageSizeKind::AnsiB,
         PageSizeKind::AnsiC,
@@ -114,13 +119,14 @@ impl PageSizeKind {
         PageSizeKind::AnsiE,
         PageSizeKind::UsLetter,
         PageSizeKind::UsLegal,
+        PageSizeKind::Tabloid,
         PageSizeKind::Custom,
     ];
 
     /// The [`PageSize`] this entry selects. `Custom` keeps the dimensions of
     /// `current` when it already is custom, otherwise it starts from `current`'s
     /// effective size so switching to Custom does not jump the page.
-    pub fn select(self, current: PageSize, orientation: Orientation) -> PageSize {
+    pub fn select(self, current: PageSize, orientation: SheetOrientation) -> PageSize {
         match self {
             PageSizeKind::IsoA0 => PageSize::IsoA0,
             PageSizeKind::IsoA1 => PageSize::IsoA1,
@@ -128,6 +134,7 @@ impl PageSizeKind {
             PageSizeKind::IsoA3 => PageSize::IsoA3,
             PageSizeKind::IsoA4 => PageSize::IsoA4,
             PageSizeKind::IsoA5 => PageSize::IsoA5,
+            PageSizeKind::IsoB5 => PageSize::IsoB5,
             PageSizeKind::AnsiA => PageSize::AnsiA,
             PageSizeKind::AnsiB => PageSize::AnsiB,
             PageSizeKind::AnsiC => PageSize::AnsiC,
@@ -135,6 +142,7 @@ impl PageSizeKind {
             PageSizeKind::AnsiE => PageSize::AnsiE,
             PageSizeKind::UsLetter => PageSize::UsLetter,
             PageSizeKind::UsLegal => PageSize::UsLegal,
+            PageSizeKind::Tabloid => PageSize::Tabloid,
             PageSizeKind::Custom => match current {
                 PageSize::Custom { .. } => current,
                 preset => {
@@ -158,6 +166,7 @@ impl fmt::Display for PageSizeKind {
             PageSizeKind::IsoA3 => "ISO A3",
             PageSizeKind::IsoA4 => "ISO A4",
             PageSizeKind::IsoA5 => "ISO A5",
+            PageSizeKind::IsoB5 => "ISO B5",
             PageSizeKind::AnsiA => "ANSI A",
             PageSizeKind::AnsiB => "ANSI B",
             PageSizeKind::AnsiC => "ANSI C",
@@ -165,6 +174,7 @@ impl fmt::Display for PageSizeKind {
             PageSizeKind::AnsiE => "ANSI E",
             PageSizeKind::UsLetter => "US Letter",
             PageSizeKind::UsLegal => "US Legal",
+            PageSizeKind::Tabloid => "Tabloid",
             PageSizeKind::Custom => "Custom",
         })
     }
@@ -180,6 +190,7 @@ impl PageSize {
             PageSize::IsoA3 => PageSizeKind::IsoA3,
             PageSize::IsoA4 => PageSizeKind::IsoA4,
             PageSize::IsoA5 => PageSizeKind::IsoA5,
+            PageSize::IsoB5 => PageSizeKind::IsoB5,
             PageSize::AnsiA => PageSizeKind::AnsiA,
             PageSize::AnsiB => PageSizeKind::AnsiB,
             PageSize::AnsiC => PageSizeKind::AnsiC,
@@ -187,17 +198,9 @@ impl PageSize {
             PageSize::AnsiE => PageSizeKind::AnsiE,
             PageSize::UsLetter => PageSizeKind::UsLetter,
             PageSize::UsLegal => PageSizeKind::UsLegal,
+            PageSize::Tabloid => PageSizeKind::Tabloid,
             PageSize::Custom { .. } => PageSizeKind::Custom,
         }
-    }
-}
-
-impl fmt::Display for Orientation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Orientation::Portrait => "Portrait",
-            Orientation::Landscape => "Landscape",
-        })
     }
 }
 
@@ -355,7 +358,7 @@ mod tests {
     #[test]
     fn every_page_size_kind_round_trips_through_the_picker() {
         for kind in PageSizeKind::ALL {
-            let size = kind.select(PageSize::IsoA4, Orientation::Landscape);
+            let size = kind.select(PageSize::IsoA4, SheetOrientation::Landscape);
             assert_eq!(size.kind(), kind, "{kind}");
         }
     }
@@ -373,7 +376,7 @@ mod tests {
 
     #[test]
     fn switching_to_custom_keeps_the_current_effective_size() {
-        let custom = PageSizeKind::Custom.select(PageSize::IsoA3, Orientation::Landscape);
+        let custom = PageSizeKind::Custom.select(PageSize::IsoA3, SheetOrientation::Landscape);
         assert_eq!(
             custom,
             PageSize::Custom {
@@ -381,7 +384,7 @@ mod tests {
                 height_mm: 297.0
             }
         );
-        let again = PageSizeKind::Custom.select(custom, Orientation::Portrait);
+        let again = PageSizeKind::Custom.select(custom, SheetOrientation::Portrait);
         assert_eq!(again, custom);
     }
 

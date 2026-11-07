@@ -817,18 +817,14 @@ fn app_with_sheet_symbol(
 fn sync_sheet_pins_row_reconciles_the_symbols_pins() {
     let mut child = sheet_of(Vec::new());
     child.labels = vec![signex_types::schematic::Label {
-        unknown_columns: Default::default(),
         uuid: Uuid::from_u128(9),
-        text: "SDA".to_string(),
-        position: Point::new(10.0, 10.0),
-        rotation: 0.0,
-        label_type: signex_types::schematic::LabelType::Hierarchical,
-        shape: String::new(),
-        font_size: 1.27,
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
+        ..signex_types::schematic::Label::new(
+            "SDA",
+            Point::new(10.0, 10.0),
+            signex_types::schematic::LabelType::Hierarchical,
+        )
     }];
     let (mut app, _tmp, _child) = app_with_sheet_symbol(Some(child));
     let _ = press(&mut app, "sync_sheet_pins");
@@ -879,4 +875,36 @@ fn properties_row_shows_the_properties_panel() {
     let _ = press(&mut app, "edit_selected_object_properties");
     assert!(app.document_state.dock.is_frontmost(properties));
     assert_menu_closed(&app, "properties");
+}
+
+/// Opened near the bottom edge, the project root's whole card stays inside
+/// the window: the clamp uses the height of the rows it really has (#2129).
+#[test]
+fn the_tree_root_menu_opened_near_the_bottom_edge_stays_inside_the_window() {
+    let mut app = one_symbol();
+    let idx = loaded_project(&mut app, "P.snxprj", true);
+    app.ui_state.window_size = (1000.0, 700.0);
+    let rows = tree_root_rows(&mut app, idx, true);
+    let height = super::super::placement::entries_height(&rows);
+    assert!(
+        height > super::super::placement::menu_height(6, false),
+        "the root menu is taller than the old six-row guess"
+    );
+    let id = app.document_state.projects[idx].id.to_string();
+    for anchor_y in [600.0_f32, 690.0] {
+        let ctx = crate::app::ProjectTreeContextMenuState {
+            x: 20.0,
+            y: anchor_y,
+            key: Some(vec![id.clone()]),
+            window: None,
+        };
+        let (_card, _width, origin) =
+            app.view_project_tree_context_menu(iced::window::Id::unique(), &ctx);
+        assert!(origin.1 >= 0.0, "opens above the window at {anchor_y}");
+        assert!(
+            origin.1 + height <= 700.0,
+            "the card runs past the bottom edge at {anchor_y}: top {} + {height}",
+            origin.1
+        );
+    }
 }

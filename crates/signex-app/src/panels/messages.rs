@@ -659,6 +659,10 @@ pub enum PanelMsg {
     /// Switch a placed symbol to another drawing of its library row: the
     /// symbol's uuid and the `lib_id` of the drawing (#1230).
     SwitchSymbolChoice(uuid::Uuid, String),
+    /// Build a placed library part with another footprint of its row: the
+    /// symbol's uuid and the `<library uuid>:<footprint uuid>` of the
+    /// footprint (#1234).
+    SwitchFootprintChoice(uuid::Uuid, String),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
@@ -745,9 +749,7 @@ pub enum PanelMsg {
         value: f64,
     },
     /// Properties panel — set a pin's electrical type from the
-    /// Altium-spec dropdown (Input / Output / Bidirectional / Power
-    /// / Passive / Open Collector / Open Emitter / Tri-state /
-    /// Not Connected / Unspecified).
+    /// dropdown of every canonical `PinDirection`.
     SymEditorSetPinElectrical {
         pin_idx: usize,
         value: signex_library::PinDirection,

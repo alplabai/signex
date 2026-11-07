@@ -21,7 +21,7 @@
 use std::path::Path;
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Widget};
+use iced::{Element, Length, Widget};
 
 use signex_types::theme::ThemeTokens;
 
@@ -30,6 +30,7 @@ use crate::styles::{Spacing, TypeScale};
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::state::AlignOp;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::library::modal_chrome;
 use crate::styles::ti;
 use crate::styles::tokens;
 
@@ -66,36 +67,12 @@ pub fn view_align_modal<'a>(
     let modal = editor.state.align_modal.as_ref()?;
     let path = editor.path.clone();
 
-    let text_c = ti(tokens.text);
     let text_muted = ti(tokens.text_secondary);
-    let border_c = ti(tokens.border);
-    let toolbar_bg = ti(tokens.toolbar_bg);
 
     // Card width derives from the font size rather than magic pixels.
     let card_w = Length::Fixed(ts.label * 26.0);
 
-    let header = container(
-        row![
-            text("Align Selection").size(ts.title).color(text_c),
-            iced::widget::Space::new().width(Length::Fill),
-            close_x(cancel_msg(&path), text_muted, tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([sp.s, sp.m])
-    .style(move |_: &iced::Theme| container::Style {
-        background: Some(Background::Color(toolbar_bg)),
-        text_color: Some(text_c),
-        border: Border {
-            width: 0.0,
-            radius: iced::border::Radius::default()
-                .top_left(crate::styles::MODAL_CORNER_RADIUS)
-                .top_right(crate::styles::MODAL_CORNER_RADIUS),
-            color: border_c,
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
+    let header = modal_chrome::header("Align Selection", cancel_msg(&path), false, tokens);
 
     // One labelled axis group: a caption over a wrapping row of
     // mutually-exclusive option chips. `selected` drives the accent
@@ -139,31 +116,25 @@ pub fn view_align_modal<'a>(
     ]
     .spacing(sp.l);
 
-    let footer = row![
-        iced::widget::Space::new().width(Length::Fill),
-        secondary_button("Cancel", cancel_msg(&path), tokens),
-        iced::widget::Space::new().width(sp.m),
-        primary_button(
-            "OK",
-            LibraryMessage::PrimitiveEditorEvent {
-                path,
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AlignConfirm),
-            },
-            tokens,
-        ),
-    ]
-    .align_y(iced::Alignment::Center);
+    let footer = modal_chrome::footer_strip(
+        Vec::new(),
+        vec![
+            modal_chrome::secondary_btn("Cancel", cancel_msg(&path), tokens),
+            modal_chrome::primary_btn(
+                "OK",
+                LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AlignConfirm),
+                },
+                tokens,
+            ),
+        ],
+        tokens,
+    );
 
-    let card = container(
-        column![
-            header,
-            container(body).padding(sp.l),
-            container(footer).padding([sp.m, sp.l]),
-        ]
-        .width(card_w),
-    )
-    .style(crate::styles::modal_card(tokens))
-    .clip(true);
+    let card = container(column![header, container(body).padding(sp.l), footer,].width(card_w))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
 
     Some(card.boxed())
 }
@@ -200,54 +171,4 @@ fn option_chip<'a>(
     } else {
         chip.style(crate::styles::outline_button(tokens)).boxed()
     }
-}
-
-fn close_x<'a>(
-    message: LibraryMessage,
-    text_color: Color,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    button(text("\u{2715}").size(ts.body).color(text_color))
-        .padding(sp.xs)
-        .on_press(message)
-        .style(crate::styles::subtle_button(tokens))
-        .boxed()
-}
-
-fn secondary_button<'a>(
-    label: &str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    button(
-        container(text(label.to_string()).size(ts.body).color(ti(tokens.text)))
-            .padding([sp.s, sp.l]),
-    )
-    .on_press(message)
-    .style(crate::styles::outline_button(tokens))
-    .boxed()
-}
-
-fn primary_button<'a>(
-    label: &str,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    button(
-        container(
-            text(label.to_string())
-                .size(ts.body)
-                .color(tokens::on_accent(tokens)),
-        )
-        .padding([sp.s, sp.l]),
-    )
-    .on_press(message)
-    .style(crate::styles::accent_button(tokens))
-    .boxed()
 }

@@ -1,58 +1,18 @@
 //! Tests for single-sheet netlist building.
 use super::*;
+use crate::fixtures::{empty_sheet, junction, label, pt, wire};
 
 mod bus_members;
+mod connected_items;
+mod incremental;
 mod index_equivalence;
 mod multiple_names;
 mod pin_contact_and_power;
 mod wire_order;
 use signex_types::schematic::{
-    Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
+    Junction, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
 };
 use uuid::Uuid;
-
-fn pt(x: f64, y: f64) -> Point {
-    Point::new(x, y)
-}
-
-fn empty_sheet() -> SchematicSheet {
-    SchematicSheet {
-        paper_size: "A4".to_string(),
-        ..Default::default()
-    }
-}
-
-fn wire(a: Point, b: Point) -> Wire {
-    Wire {
-        start: a,
-        end: b,
-        ..Default::default()
-    }
-}
-
-fn junction(pos: Point) -> Junction {
-    Junction {
-        position: pos,
-        ..Default::default()
-    }
-}
-
-fn label(text: &str, pos: Point, ty: LabelType) -> Label {
-    Label {
-        unknown_columns: Default::default(),
-        uuid: Uuid::nil(),
-        text: text.to_string(),
-        position: pos,
-        rotation: 0.0,
-        label_type: ty,
-        shape: String::new(),
-        font_size: 1.27,
-        justify: signex_types::schematic::HAlign::Left,
-        justify_v: signex_types::schematic::VAlign::Bottom,
-        font_family: None,
-        locked: false,
-    }
-}
 
 fn lib_pin(number: &str, local: Point, dir: PinDirection) -> LibPin {
     LibPin {

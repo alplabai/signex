@@ -50,7 +50,10 @@ impl SymbolDocument {
     /// Capture the current container and active index. Symbols equal to
     /// ones in the newest undo / redo step share that step's allocation.
     pub fn snapshot(&self) -> SymbolHistorySnapshot {
-        let neighbours = [self.undo_snapshots.last(), self.redo_snapshots.last()];
+        let neighbours = [
+            self.history.undo_steps().last(),
+            self.history.redo_steps().last(),
+        ];
         let symbols = self
             .file
             .symbols
@@ -76,7 +79,7 @@ impl SymbolDocument {
             },
             symbols,
             active_idx: self.active_idx,
-            point: self.save_point,
+            point: self.history.point(),
         }
     }
 
@@ -108,9 +111,7 @@ impl SymbolDocument {
     /// Dirty exactly when the history is away from the saved depth (or rows
     /// are still owed): the flag after an Undo or Redo (#1854).
     fn sync_dirty_to_history(&mut self) {
-        let (undo, redo) = (self.undo_snapshots.len(), self.redo_snapshots.len());
-        self.save_point.limit_to(undo, redo);
-        self.set_dirty(!self.save_point.is_at(undo) || !self.cascade_owed.is_empty());
+        self.set_dirty(self.history.is_dirty() || !self.cascade_owed.is_empty());
     }
 
     /// Start the newly active symbol on unit 1 with a fresh viewport, so
@@ -130,14 +131,8 @@ impl SymbolDocument {
     /// between the capture and this call cannot cost it; a point on the
     /// cleared redo branch or on the evicted step is forgotten.
     pub fn commit_history(&mut self, snap: SymbolHistorySnapshot) {
-        self.save_point = snap.point;
-        self.save_point.redo_cleared(self.undo_snapshots.len());
-        self.undo_snapshots.push(snap);
-        if self.undo_snapshots.len() > Self::HISTORY_DEPTH {
-            self.undo_snapshots.remove(0);
-            self.save_point.evicted_oldest();
-        }
-        self.redo_snapshots.clear();
+        self.history.set_point(snap.point);
+        self.history.record(snap);
         self.last_edit_key = None;
         self.history_generation += 1;
     }
@@ -170,10 +165,11 @@ impl SymbolDocument {
 
     /// Step back. Returns whether a step was applied.
     pub fn undo(&mut self) -> bool {
-        let Some(snap) = self.undo_snapshots.pop() else {
+        let Some(snap) = self.history.begin_step(true) else {
             return false;
         };
-        self.redo_snapshots.push(self.snapshot());
+        let current = self.snapshot();
+        self.history.finish_step(current, true);
         self.history_generation += 1;
         self.restore(snap);
         self.sync_dirty_to_history();
@@ -182,10 +178,11 @@ impl SymbolDocument {
 
     /// Step forward. Returns whether a step was applied.
     pub fn redo(&mut self) -> bool {
-        let Some(snap) = self.redo_snapshots.pop() else {
+        let Some(snap) = self.history.begin_step(false) else {
             return false;
         };
-        self.undo_snapshots.push(self.snapshot());
+        let current = self.snapshot();
+        self.history.finish_step(current, false);
         self.history_generation += 1;
         self.restore(snap);
         self.sync_dirty_to_history();

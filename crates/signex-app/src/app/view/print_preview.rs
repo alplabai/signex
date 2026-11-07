@@ -279,12 +279,8 @@ impl Signex {
 
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
         use crate::app::state::{ModalId, PdfPreviewTab};
-        use crate::app::view::dialogs::{
-            MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
-            draggable_header, os_title_bar_slot,
-        };
-        use iced::widget::{Space, column, container, row, text};
-        let theme_id = self.ui_state.effective_theme_id();
+        use crate::app::view::dialogs::{draggable_header, modal_title_header, os_title_bar_slot};
+        use iced::widget::{column, container, text};
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -292,28 +288,14 @@ impl Signex {
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         // Header — same chrome as every other modal.
-        let header_content: Element<'_, Message> = container(
-            row![
-                text("Export PDF")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                close_x_button(
-                    Message::PrintPreview(PrintPreviewMsg::Close),
-                    theme_id,
-                    text_muted
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding(MODAL_HEADER_PADDING)
-        .height(MODAL_HEADER_HEIGHT)
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed();
+        let header_content: Element<'_, Message> = modal_title_header(
+            "Export PDF",
+            Message::PrintPreview(PrintPreviewMsg::Close),
+            tokens,
+        );
         let header = if draggable {
             draggable_header(
                 header_content,

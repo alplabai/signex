@@ -480,10 +480,14 @@ pub fn revalidate_parts(
     for (mut sync, group, identity, _) in live {
         let fields: Vec<StampField> = edited[&group].iter().map(|(f, _)| *f).collect();
         for d in sync.skipping(&fields, &identity) {
-            if !d.own
-                && let Some((_, link)) = stamps.iter_mut().find(|(id, _)| *id == sync.symbol)
-            {
-                link.values.set(d.field, None);
+            if let Some((_, link)) = stamps.iter_mut().find(|(id, _)| *id == sync.symbol) {
+                if !d.own {
+                    link.values.set(d.field, None);
+                }
+                // The footprint did not change, so the binding it came from stays.
+                if d.field == StampField::Footprint {
+                    link.values.reset_footprint_binding = false;
+                }
             }
             if said.contains(&(group, d.field)) {
                 continue;

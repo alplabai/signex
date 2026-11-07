@@ -1,7 +1,7 @@
 //! `LibraryState` / `OpenLibrary` methods (open/close/refresh/reload).
 
 use super::*;
-use crate::app::CaseFold;
+use crate::app::{CaseFold, Document};
 
 /// Move one primitive listing onto its cache, keeping the previous
 /// contents when the adapter failed.
@@ -141,6 +141,21 @@ impl LibraryState {
     /// Look up an open library by its on-disk root path.
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)
+    }
+
+    /// The name of the footprint `r` names, from the listing of the open
+    /// library it lives in. `None` when that library is not open or does not
+    /// list it.
+    pub fn footprint_name(&self, r: &signex_library::PrimitiveRef) -> Option<String> {
+        let lib = self
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == r.library_id)?;
+        lib.cached_footprints
+            .iter()
+            .find(|s| s.uuid == r.uuid)
+            .map(|s| s.name.clone())
+            .filter(|name| !name.is_empty())
     }
 
     /// On-disk file of the primitive `r` names, looked up in the open
@@ -609,7 +624,7 @@ impl LibraryState {
         let mut keys: Vec<EditorAddress> = self
             .editors
             .iter()
-            .filter(|(key, st)| st.dirty && include(key))
+            .filter(|(key, st)| Document::is_dirty(*st) && include(key))
             .map(|(key, _)| key.clone())
             .collect();
         keys.sort_by(|a, b| {
@@ -657,20 +672,6 @@ impl LibraryState {
         // File ▸ Library ▸ Open Library… before Stage 9) as
         // Installed so they still surface in the panel.
         ComponentsMountSource::Installed
-    }
-
-    /// Existing editor for `(library_root, table, row_id)`, if any.
-    pub fn editor_for(
-        &self,
-        library_root: &Path,
-        table: &str,
-        row_id: RowId,
-    ) -> Option<&ComponentPreviewState> {
-        self.editors.get(&EditorAddress::new(
-            library_root.to_path_buf(),
-            table.to_string(),
-            row_id,
-        ))
     }
 }
 

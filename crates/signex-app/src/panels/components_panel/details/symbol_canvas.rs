@@ -62,6 +62,10 @@ struct PreviewState {
     /// The symbol the camera was fitted for; an edited or different symbol
     /// has another key and refits.
     fitted_for: Option<FitKey>,
+    /// The box size the camera was fitted for; another size refits.
+    fitted_size: Option<Size>,
+    /// The user zoomed or panned since the last fit: a resize keeps the view.
+    user_moved: bool,
     /// Last cursor position while a drag-pan is running.
     pan_from: Option<Point>,
     /// Ctrl state from the last modifiers event; the wheel zooms with it.
@@ -75,8 +79,8 @@ struct PreviewState {
 type FitKey = (String, [i64; 4]);
 
 impl PreviewState {
-    fn is_fitted_for(&self, key: &FitKey) -> bool {
-        self.fitted_for.as_ref() == Some(key)
+    fn is_fitted_for(&self, key: &FitKey, size: Size) -> bool {
+        self.fitted_for.as_ref() == Some(key) && (self.user_moved || self.fitted_size == Some(size))
     }
 }
 
@@ -240,9 +244,11 @@ impl canvas::Program<()> for SymbolSheetPreview {
     ) -> Option<Action<()>> {
         let size_ok = bounds.width > 0.0 && bounds.height > 0.0;
         let key = self.fit_key();
-        if !state.is_fitted_for(&key) && size_ok {
+        if size_ok && !state.is_fitted_for(&key, bounds.size()) {
             state.camera = self.fitted_camera(bounds.size());
             state.fitted_for = Some(key);
+            state.fitted_size = Some(bounds.size());
+            state.user_moved = false;
             state.pan_from = None;
             state.cache.clear();
         }
@@ -272,6 +278,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
                 ) {
                     return None;
                 }
+                state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
@@ -285,6 +292,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
                 {
                     return None;
                 }
+                state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
@@ -298,6 +306,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
                 let delta = Vector::new(position.x - last.x, position.y - last.y);
                 state.camera.pan(delta.x, delta.y);
                 state.pan_from = Some(*position);
+                state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
@@ -321,9 +330,9 @@ impl canvas::Program<()> for SymbolSheetPreview {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        // Until `update` has fitted this symbol, draw the fitted view
-        // without caching it against the stale camera.
-        let fitted = state.is_fitted_for(&self.fit_key());
+        // Until `update` has fitted this symbol at this size, draw the
+        // fitted view without caching it against the stale camera.
+        let fitted = state.is_fitted_for(&self.fit_key(), bounds.size());
         if !fitted {
             state.cache.clear();
         }

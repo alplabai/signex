@@ -1,0 +1,676 @@
+//! #661 slice 5b: what the Edit menu says about Undo / Redo (`can_undo`,
+//! `can_redo`) is what a dispatched undo / redo does, for every kind of
+//! document and every window that can show one.
+//!
+//! Undo and Redo are not in `explains_when_unavailable`, so a disabled one
+//! is dropped as `Disabled` and never reaches a handler: the menu and the
+//! dispatch agree when "enabled" means "the outcome is `Ran` and some history
+//! moved", and "disabled" means "`Disabled` and nothing moved".
+
+use std::path::PathBuf;
+
+use super::CommandArgs;
+use super::CommandOutcome;
+use super::enablement::is_enabled;
+use crate::app::state::{ModalId, WindowKind};
+use crate::app::{FootprintDocument, Signex, SymbolDocument, TabInfo, TabKind};
+use crate::keymap::AppCommandId;
+use crate::library::state::{ComponentPreviewState, EditorAddress};
+
+type Window = Option<iced::window::Id>;
+
+/// How much history a fixture starts with.
+#[derive(Clone, Copy, Debug)]
+enum Stage {
+    Empty,
+    HasUndo,
+    HasRedo,
+}
+
+const STAGES: [Stage; 3] = [Stage::Empty, Stage::HasUndo, Stage::HasRedo];
+
+fn id(command: &str) -> AppCommandId {
+    AppCommandId::new(command).unwrap()
+}
+
+fn menu(app: &Signex, window: Window, command: &str) -> bool {
+    is_enabled(&id(command), &app.command_context(window))
+}
+
+/// Every history length the app holds, so a step anywhere shows.
+fn fingerprint(app: &Signex) -> String {
+    let ds = &app.document_state;
+    let mut parts: Vec<String> = Vec::new();
+    let mut engines: Vec<_> = ds.engines.iter().collect();
+    engines.sort_by_key(|(p, _)| (*p).clone());
+    for (path, e) in engines {
+        parts.push(format!(
+            "E {} {} {}",
+            path.display(),
+            e.can_undo(),
+            e.can_redo()
+        ));
+    }
+    let mut symbols: Vec<_> = ds.symbol_editors.iter().collect();
+    symbols.sort_by_key(|(p, _)| (*p).clone());
+    for (path, e) in symbols {
+        let h = &e.history;
+        parts.push(format!(
+            "S {} {} {}",
+            path.display(),
+            h.undo_len(),
+            h.redo_len()
+        ));
+    }
+    let mut footprints: Vec<_> = ds.footprint_editors.iter().collect();
+    footprints.sort_by_key(|(p, _)| (*p).clone());
+    for (path, e) in footprints {
+        let h = &e.history;
+        parts.push(format!(
+            "F {} {} {}",
+            path.display(),
+            h.undo_len(),
+            h.redo_len()
+        ));
+    }
+    for (address, e) in &app.library.editors {
+        let h = &e.history;
+        parts.push(format!(
+            "R {:?} {} {} buf={} dirty={}",
+            address,
+            h.can_undo(),
+            h.can_redo(),
+            e.params_edit_buf.len(),
+            e.dirty
+        ));
+    }
+    for (project, h) in &ds.rules_history {
+        parts.push(format!("P {project:?} {} {}", h.can_undo(), h.can_redo()));
+    }
+    for (project, tab) in &ds.project_tabs {
+        parts.push(format!(
+            "T {project:?} {} {}",
+            tab.general_history.can_undo(),
+            tab.general_history.can_redo()
+        ));
+    }
+    parts.join("\n")
+}
+
+/// Dispatch `command` from `window`; whether it ran and moved some history.
+fn ran(app: &mut Signex, window: Window, command: &str) -> (bool, CommandOutcome) {
+    let before = fingerprint(app);
+    let (outcome, _task) =
+        app.dispatch_command_reporting(&id(command), CommandArgs::none(), window);
+    let moved = fingerprint(app) != before;
+    (matches!(outcome, CommandOutcome::Ran) && moved, outcome)
+}
+
+fn push_tab(app: &mut Signex, path: &std::path::Path, kind: TabKind) {
+    app.document_state.tabs.push(TabInfo {
+        title: "doc".into(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        project_id: None,
+        kind,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+}
+
+fn engine_with_a_step() -> signex_engine::Engine {
+    let mut engine =
+        signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
+    let document = engine.document().clone();
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .unwrap();
+    engine
+}
+
+/// Bring the fixture to `stage`: HasRedo is HasUndo plus one dispatched undo.
+fn settle(app: &mut Signex, window: Window, stage: Stage, give_undo: impl FnOnce(&mut Signex)) {
+    if !matches!(stage, Stage::Empty) {
+        give_undo(app);
+    }
+    if matches!(stage, Stage::HasRedo) {
+        let (moved, outcome) = ran(app, window, "undo");
+        assert!(
+            moved,
+            "fixture: the undo that fills redo must run: {outcome:?}"
+        );
+    }
+}
+
+fn schematic(stage: Stage) -> (Signex, Window) {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("agree.snxsch");
+    app.document_state.active_path = Some(path.clone());
+    push_tab(&mut app, &path, TabKind::Schematic);
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new(Default::default()).unwrap(),
+    );
+    settle(&mut app, None, stage, |app| {
+        app.document_state
+            .engines
+            .insert(path, engine_with_a_step());
+    });
+    (app, None)
+}
+
+fn pcb(_stage: Stage) -> (Signex, Window) {
+    let (mut app, _t) = Signex::new();
+    push_tab(&mut app, &PathBuf::from("agree.snxpcb"), TabKind::Pcb);
+    (app, None)
+}
+
+fn symbol(stage: Stage) -> (Signex, Window) {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("agree.snxsym");
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
+    app.document_state
+        .symbol_editors
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
+    push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
+    settle(&mut app, None, stage, |app| {
+        let doc = app.document_state.symbol_editors.get_mut(&path).unwrap();
+        let snap = doc.snapshot();
+        doc.commit_history(snap);
+    });
+    (app, None)
+}
+
+fn footprint(stage: Stage) -> (Signex, Window) {
+    let (mut app, _t) = Signex::new();
+    let path = PathBuf::from("agree.snxfpt");
+    let file = signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+    push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
+    settle(&mut app, None, stage, |app| {
+        app.document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap()
+            .push_history();
+    });
+    (app, None)
+}
+
+/// A Component row open in a tab; `buffer` leaves a half-typed parameter.
+fn open_row(app: &mut Signex) -> (EditorAddress, crate::app::ComponentEditorTab) {
+    let row = crate::library::component_preview::test_row();
+    let library_path = PathBuf::from("/tmp/agree.snxlib");
+    let row_id = signex_library::RowId::from_uuid(row.row_id);
+    let address = EditorAddress::new(library_path.clone(), "R".into(), row_id);
+    app.library.editors.insert(
+        address.clone(),
+        ComponentPreviewState::from_row(library_path.clone(), "R".into(), row),
+    );
+    let tab = crate::app::ComponentEditorTab {
+        library_path,
+        table: "R".into(),
+        row_id,
+    };
+    (address, tab)
+}
+
+fn give_row_a_step(app: &mut Signex, address: &EditorAddress) {
+    let row = app.library.editors.get_mut(address).unwrap();
+    crate::library::component_preview::apply_inline_edit(
+        row,
+        crate::library::messages::EditorMsg::SetLifecycle(signex_library::LifecycleState::Released),
+    );
+}
+
+fn component_tab(stage: Stage) -> (Signex, Window) {
+    let (mut app, _t) = Signex::new();
+    let (address, tab) = open_row(&mut app);
+    let path = PathBuf::from("row.tsv#1");
+    push_tab(&mut app, &path, TabKind::ComponentEditor(tab));
+    settle(&mut app, None, stage, |app| give_row_a_step(app, &address));
+    (app, None)
+}
+
+fn component_window(stage: Stage) -> (Signex, Window) {
+    let (mut app, _t) = Signex::new();
+    let (address, tab) = open_row(&mut app);
+    let kind = WindowKind::ComponentEditor {
+        library_path: tab.library_path.clone(),
+        table: tab.table.clone(),
+        row_id: tab.row_id,
+    };
+    push_tab(
+        &mut app,
+        &PathBuf::from("row.tsv#1"),
+        TabKind::ComponentEditor(tab),
+    );
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(window, kind);
+    settle(&mut app, Some(window), stage, |app| {
+        give_row_a_step(app, &address)
+    });
+    (app, Some(window))
+}
+
+/// A sheet in its own window, with the main window on a footprint editor
+/// that has a step of its own (it must never be touched).
+fn undocked(stage: Stage) -> (Signex, Window) {
+    let (mut app, window) = footprint(Stage::HasUndo);
+    let path = PathBuf::from("undocked.snxsch");
+    let main_tab = app.document_state.active_tab;
+    app.document_state.tabs.insert(
+        0,
+        TabInfo {
+            title: "undocked".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::Schematic,
+        },
+    );
+    app.document_state.active_tab = main_tab + 1;
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new(Default::default()).unwrap(),
+    );
+    let id = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        id,
+        WindowKind::UndockedTab {
+            path: path.clone(),
+            title: "undocked".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(id, crate::canvas::CanvasSlot::new());
+    let _ = window;
+    settle(&mut app, Some(id), stage, |app| {
+        app.document_state
+            .engines
+            .insert(path, engine_with_a_step());
+    });
+    (app, Some(id))
+}
+
+/// A window whose tab is gone, over a main window that holds a sheet with
+/// an undo step: a stroke there must not step the sheet.
+fn window_without_a_tab(_stage: Stage) -> (Signex, Window) {
+    let (mut app, _w) = schematic(Stage::HasUndo);
+    let id = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        id,
+        WindowKind::UndockedTab {
+            path: PathBuf::from("closed.snxsch"),
+            title: "closed".into(),
+        },
+    );
+    (app, Some(id))
+}
+
+/// A Library Browser tab in front, a sheet's engine still live behind it.
+fn library_browser_over_a_live_engine(_stage: Stage) -> (Signex, Window) {
+    let (mut app, _w) = schematic(Stage::HasUndo);
+    push_tab(
+        &mut app,
+        &PathBuf::from("browser"),
+        TabKind::LibraryBrowser(PathBuf::from("/tmp/agree.snxlib")),
+    );
+    app.document_state.active_path = None;
+    (app, None)
+}
+
+fn rules(stage: Stage) -> (Signex, Window) {
+    let dir = std::env::temp_dir().join(format!("signex-agree-{}", uuid::Uuid::now_v7()));
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.to_string_lossy(),
+        &["a_root.snxsch"],
+    );
+    app.ui_state.erc_severity_override.clear();
+    app.ui_state.pin_matrix_overrides.clear();
+    // The sheet behind the dialog has a step of its own.
+    let path = dir.join("a_root.snxsch");
+    app.document_state
+        .engines
+        .insert(path.clone(), engine_with_a_step());
+    push_tab(&mut app, &path, TabKind::Schematic);
+    app.document_state.active_path = Some(path);
+    app.ui_state.erc_dialog_open = true;
+    let window = iced::window::Id::unique();
+    app.ui_state
+        .windows
+        .insert(window, WindowKind::DetachedModal(ModalId::ErcDialog));
+    settle(&mut app, Some(window), stage, |app| {
+        let _ = app.handle_store_erc_rules_in_project();
+        let _ = app.handle_erc_severity_changed(
+            signex_erc::RuleKind::UnusedPin,
+            signex_erc::Severity::Info,
+        );
+    });
+    (app, Some(window))
+}
+
+/// A symbol or footprint editor in its own window (no canvas), over a main
+/// window on the other kind with a step of its own that must stay put.
+fn undocked_editor(stage: Stage, symbol_editor: bool) -> (Signex, Window) {
+    let (mut app, _w) = if symbol_editor {
+        footprint(Stage::HasUndo)
+    } else {
+        symbol(Stage::HasUndo)
+    };
+    let main_tab = app.document_state.active_tab;
+    let path = PathBuf::from(if symbol_editor {
+        "undocked.snxsym"
+    } else {
+        "undocked.snxfpt"
+    });
+    let kind = if symbol_editor {
+        let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("u"));
+        app.document_state
+            .symbol_editors
+            .insert(path.clone(), SymbolDocument::new(path.clone(), file));
+        TabKind::SymbolEditor(path.clone())
+    } else {
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("u"));
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+        TabKind::FootprintEditor(path.clone())
+    };
+    app.document_state.tabs.insert(
+        0,
+        TabInfo {
+            title: "undocked".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind,
+        },
+    );
+    app.document_state.active_tab = main_tab + 1;
+    let id = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        id,
+        WindowKind::UndockedTab {
+            path: path.clone(),
+            title: "undocked".into(),
+        },
+    );
+    settle(&mut app, Some(id), stage, |app| {
+        if symbol_editor {
+            let doc = app.document_state.symbol_editors.get_mut(&path).unwrap();
+            let snap = doc.snapshot();
+            doc.commit_history(snap);
+        } else {
+            app.document_state
+                .footprint_editors
+                .get_mut(&path)
+                .unwrap()
+                .push_history();
+        }
+    });
+    (app, Some(id))
+}
+
+fn undocked_symbol(stage: Stage) -> (Signex, Window) {
+    undocked_editor(stage, true)
+}
+
+fn undocked_footprint(stage: Stage) -> (Signex, Window) {
+    undocked_editor(stage, false)
+}
+
+type Fixture = fn(Stage) -> (Signex, Window);
+
+const FIXTURES: [(&str, Fixture); 13] = [
+    ("schematic", schematic),
+    ("pcb", pcb),
+    ("symbol", symbol),
+    ("footprint", footprint),
+    ("component row in a tab", component_tab),
+    ("component preview window", component_window),
+    ("undocked sheet", undocked),
+    ("undocked symbol editor", undocked_symbol),
+    ("undocked footprint editor", undocked_footprint),
+    ("window without a tab", window_without_a_tab),
+    (
+        "library browser over a live engine",
+        library_browser_over_a_live_engine,
+    ),
+    ("project rules", rules),
+    ("project rules, second pass", rules),
+];
+
+#[test]
+fn the_menu_and_a_dispatched_undo_or_redo_agree() {
+    let _ = crate::diagnostics::init_logging();
+    for (name, build) in FIXTURES {
+        for stage in STAGES {
+            for command in ["undo", "redo"] {
+                let (mut app, window) = build(stage);
+                let enabled = menu(&app, window, command);
+                let (moved, outcome) = ran(&mut app, window, command);
+                assert_eq!(
+                    enabled, moved,
+                    "{name} / {stage:?} / {command}: menu {enabled}, dispatch moved {moved} ({outcome:?})"
+                );
+                if !enabled {
+                    assert!(
+                        matches!(outcome, CommandOutcome::Disabled { .. }),
+                        "{name} / {stage:?} / {command}: a disabled command is dropped: {outcome:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// The fixtures are not vacuous: each one that holds history is enabled.
+#[test]
+fn the_fixtures_with_history_light_the_menu() {
+    let _ = crate::diagnostics::init_logging();
+    for name in [
+        "schematic",
+        "symbol",
+        "footprint",
+        "component row in a tab",
+        "component preview window",
+        "undocked sheet",
+        "undocked symbol editor",
+        "undocked footprint editor",
+        "project rules",
+    ] {
+        let (_, build) = FIXTURES.iter().find(|(n, _)| *n == name).unwrap();
+        let (app, window) = build(Stage::HasUndo);
+        assert!(menu(&app, window, "undo"), "{name}: undo lit");
+        assert!(!menu(&app, window, "redo"), "{name}: redo dark");
+        let (app, window) = build(Stage::HasRedo);
+        assert!(menu(&app, window, "redo"), "{name}: redo lit");
+    }
+}
+
+fn type_half_a_value(app: &mut Signex) {
+    for row in app.library.editors.values_mut() {
+        row.params_edit_buf.insert("v".into(), "1.".into());
+    }
+}
+
+fn buffers(app: &Signex) -> usize {
+    app.library
+        .editors
+        .values()
+        .map(|row| row.params_edit_buf.len())
+        .sum()
+}
+
+/// A row with only half-typed text lights Undo, and Undo drops the text, in
+/// the tab and in the Component Preview window alike.
+#[test]
+fn a_half_typed_row_lights_undo_and_undo_drops_the_text() {
+    let _ = crate::diagnostics::init_logging();
+    for build in [component_tab, component_window] {
+        let (mut app, window) = build(Stage::Empty);
+        type_half_a_value(&mut app);
+        assert!(menu(&app, window, "undo"), "buffer-only row: undo lit");
+        assert!(!menu(&app, window, "redo"));
+        let (moved, outcome) = ran(&mut app, window, "undo");
+        assert!(moved, "{outcome:?}");
+        assert_eq!(buffers(&app), 0, "the half-typed text is dropped");
+        assert!(!menu(&app, window, "undo"));
+    }
+}
+
+/// Redo never touches half-typed text: it is dark and a no-op, and the text
+/// stays; with the text gone Redo is back.
+#[test]
+fn redo_leaves_a_half_typed_row_alone() {
+    let _ = crate::diagnostics::init_logging();
+    for build in [component_tab, component_window] {
+        let (mut app, window) = build(Stage::HasRedo);
+        assert!(menu(&app, window, "redo"));
+        type_half_a_value(&mut app);
+        assert!(!menu(&app, window, "redo"), "redo dark over typed text");
+        let (moved, outcome) = ran(&mut app, window, "redo");
+        assert!(!moved && matches!(outcome, CommandOutcome::Disabled { .. }));
+        assert_eq!(buffers(&app), 1, "the half-typed text stays");
+        assert!(menu(&app, window, "undo"), "the text can still be undone");
+    }
+}
+
+/// A window whose tab is gone has no history: it never steps the main
+/// window's document.
+#[test]
+fn a_window_without_a_tab_does_not_step_the_main_window() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, window) = window_without_a_tab(Stage::Empty);
+    assert!(!menu(&app, window, "undo"));
+    assert!(
+        menu(&app, None, "undo"),
+        "the main window's sheet keeps its step"
+    );
+    let (moved, outcome) = ran(&mut app, window, "undo");
+    assert!(!moved && matches!(outcome, CommandOutcome::Disabled { .. }));
+    assert!(menu(&app, None, "undo"));
+}
+
+/// Guard: the ERC dialog's Undo / Redo buttons read `undo_availability`
+/// over `ProjectRules`, which is the rule history and the menu's answer.
+#[test]
+fn the_erc_dialog_buttons_read_the_same_predicate_as_the_menu() {
+    let _ = crate::diagnostics::init_logging();
+    for stage in STAGES {
+        let (app, window) = rules(stage);
+        let target = app.undo_target(window);
+        assert_eq!(
+            app.undo_availability(&target),
+            (menu(&app, window, "undo"), menu(&app, window, "redo")),
+            "{stage:?}"
+        );
+        let crate::app::document::UndoTarget::ProjectRules(project) = target else {
+            panic!("the ERC window resolves to the project rules");
+        };
+        let history = &app.document_state.rules_history;
+        let stored = history.get(&project).map(|h| (h.can_undo(), h.can_redo()));
+        assert_eq!(
+            app.undo_availability(&target),
+            stored.unwrap_or((false, false)),
+            "{stage:?}: the buttons' tuple is the rule history's"
+        );
+    }
+}
+
+/// Rule undo is capped (it was unbounded before #661).
+#[test]
+fn rules_history_keeps_the_newest_hundred_steps() {
+    let mut history = crate::app::state::rules_history::RulesHistory::default();
+    for _ in 0..101 {
+        history.record(None);
+    }
+    assert_eq!(history.undo_len(), 100);
+}
+
+/// Project dirty is the byte comparison; the rules history's own save point
+/// (never moved by a save) is not consulted: undoing back to the saved bytes
+/// reads clean although the history sits one step above its start.
+#[test]
+fn rules_history_is_never_consulted_for_project_dirty() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _w) = rules(Stage::HasUndo);
+    let path = app.document_state.projects[0].path.clone();
+    let id = app.document_state.projects[0].id;
+    // The file now holds the stored-and-edited rules.
+    app.document_state.mark_documents_clean_where(|_| true);
+    app.document_state.note_project_clean_state(id);
+    let _ =
+        app.handle_erc_severity_changed(signex_erc::RuleKind::UnusedPin, signex_erc::Severity::Off);
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(app.undo_project_rules());
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "back at the saved bytes"
+    );
+    assert!(app.document_state.rules_history[&id].can_undo());
+}
+
+/// An undocked sheet window whose tab is closed but whose dirty engine is
+/// parked still has no tab to step: it never undoes the main window's
+/// document.
+#[test]
+fn an_undocked_window_with_a_parked_engine_and_no_tab_leaves_the_main_window_alone() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _w) = footprint(Stage::HasUndo);
+    let path = PathBuf::from("closed.snxsch");
+    app.document_state
+        .engines
+        .insert(path.clone(), engine_with_a_step());
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path,
+            title: "closed".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let before = fingerprint(&app);
+    assert!(!menu(&app, Some(window), "undo"));
+    let (moved, outcome) = ran(&mut app, Some(window), "undo");
+    assert!(!moved, "{outcome:?}");
+    assert!(matches!(outcome, CommandOutcome::Disabled { .. }));
+    assert_eq!(
+        fingerprint(&app),
+        before,
+        "the main window's footprint is untouched"
+    );
+}
+
+/// An in-place text edit open on the main window's canvas survives an
+/// Undo / Redo typed in another window that steps its own document.
+#[test]
+fn undo_in_another_window_keeps_the_main_windows_text_edit() {
+    let _ = crate::diagnostics::init_logging();
+    for build in [component_window, undocked_symbol, undocked_footprint] {
+        let (mut app, window) = build(Stage::HasUndo);
+        app.interaction_state.editing_text = Some(crate::app::contracts::TextEditState {
+            uuid: uuid::Uuid::nil(),
+            kind: signex_types::schematic::SelectedKind::Label,
+            text: "typed".into(),
+            original_text: "orig".into(),
+            world_x: 0.0,
+            world_y: 0.0,
+            sheet: None,
+            placement: None,
+        });
+        let (moved, outcome) = ran(&mut app, window, "undo");
+        assert!(moved, "{outcome:?}");
+        assert!(
+            app.interaction_state.editing_text.is_some(),
+            "the main window's in-place edit is kept"
+        );
+    }
+}

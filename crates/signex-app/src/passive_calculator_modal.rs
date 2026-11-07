@@ -3,14 +3,12 @@
 //! like the other tool dialogs (docs/DETACHED_MODALS.md); the in-window card
 //! below is the fallback when that window is not available.
 
-use iced::widget::{Space, Widget as _, column, container, row, text};
+use iced::widget::{Widget as _, column, container};
 use iced::{Element, Length};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::passive_calculator::CalculatorControl;
 
-use crate::app::view::dialogs::{
-    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
-};
+use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
 use crate::styles;
 
@@ -22,51 +20,29 @@ const MODAL_H: f32 = 520.0;
 
 /// The calculator painted as a card in the main window (the fallback when
 /// its own window is not available).
-pub fn view<'a>(
-    tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
-    control: &'a CalculatorControl,
-) -> Element<'a, Message> {
-    build(tokens, theme_id, control, false)
+pub fn view<'a>(tokens: &'a ThemeTokens, control: &'a CalculatorControl) -> Element<'a, Message> {
+    build(tokens, control, false)
 }
 
 /// The calculator as the content of its own OS window: no header, filling
 /// the window.
 pub fn window_view<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     control: &'a CalculatorControl,
 ) -> Element<'a, Message> {
-    build(tokens, theme_id, control, true)
+    build(tokens, control, true)
 }
 
 fn build<'a>(
     tokens: &'a ThemeTokens,
-    theme_id: ThemeId,
     control: &'a CalculatorControl,
     windowed: bool,
 ) -> Element<'a, Message> {
-    let text_primary = styles::ti(tokens.text);
-    let text_secondary = styles::ti(tokens.text_secondary);
-
-    let header = container(
-        row![
-            text("Passive Network Calculator")
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .color(text_primary),
-            Space::new().width(Length::Fill),
-            close_x_button(
-                Message::Overlay(OverlayMsg::ClosePassiveCalculator),
-                theme_id,
-                text_secondary,
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .width(Length::Fill)
-    .height(MODAL_HEADER_HEIGHT)
-    .padding(MODAL_HEADER_PADDING)
-    .style(styles::modal_header_strip(tokens));
+    let header = modal_title_header(
+        "Passive Network Calculator",
+        Message::Overlay(OverlayMsg::ClosePassiveCalculator),
+        tokens,
+    );
 
     // The control already scrolls its own body, so this wrapper only
     // bounds it — nesting a second scrollable would swallow wheel

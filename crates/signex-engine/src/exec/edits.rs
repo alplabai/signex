@@ -426,6 +426,32 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetSymbolFootprintBinding {
+                symbol_id,
+                footprint,
+                binding,
+            } => {
+                let changed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|symbol| symbol.uuid == symbol_id)
+                    .map(|symbol| {
+                        let was = (symbol.footprint.clone(), symbol.library_stamp.clone());
+                        symbol.apply_footprint_binding(&footprint, binding);
+                        was != (symbol.footprint.clone(), symbol.library_stamp.clone())
+                    })
+                    .unwrap_or(false);
+                if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetSymbolField {
                 symbol_id,
                 key,

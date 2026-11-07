@@ -13,6 +13,10 @@ const ROBOTO_REGULAR: &str = "F1";
 /// Alias of Iosevka Regular in `text::face_for_alias`.
 const IOSEVKA_REGULAR: &str = "F3";
 
+/// The bundled family an export face outlines, as `family_width_mm` takes it
+/// (`None` is the bundled default, Iosevka).
+const ROBOTO_FAMILY: &str = "Roboto";
+
 /// The alias to draw an item in. `default_alias` is what the item used before
 /// it could name a family, kept for text that names none so existing exports
 /// do not change.
@@ -21,12 +25,25 @@ pub(super) fn alias_for_family(
     document: Option<&str>,
     default_alias: &'static str,
 ) -> &'static str {
-    match requested_family(item, document) {
+    export_face(item, document, default_alias).0
+}
+
+/// The face an item is exported in: its alias, and the family the export must
+/// measure offsets in so they fit the glyphs it draws. An installed family
+/// that cannot be embedded is drawn (and so measured) in Iosevka.
+pub(super) fn export_face(
+    item: Option<&str>,
+    document: Option<&str>,
+    default_alias: &'static str,
+) -> (&'static str, Option<&'static str>) {
+    let alias = match requested_family(item, document) {
         None => default_alias,
-        Some(name) if name.eq_ignore_ascii_case("Roboto") => ROBOTO_REGULAR,
+        Some(name) if name.eq_ignore_ascii_case(ROBOTO_FAMILY) => ROBOTO_REGULAR,
         // The bundled default itself, or a family that cannot be embedded.
         Some(_) => IOSEVKA_REGULAR,
-    }
+    };
+    let family = (alias == ROBOTO_REGULAR).then_some(ROBOTO_FAMILY);
+    (alias, family)
 }
 
 #[cfg(test)]
@@ -49,6 +66,17 @@ mod tests {
     fn any_other_family_exports_in_the_bundled_default() {
         assert_eq!(alias_for_family(Some("Fira Mono"), None, "F1"), "F3");
         assert_eq!(alias_for_family(None, Some("Fira Mono"), "F1"), "F3");
+    }
+
+    #[test]
+    fn an_installed_but_unbundled_family_is_measured_in_the_face_it_is_drawn_in() {
+        // Arial cannot be embedded: drawn in Iosevka, so measured in Iosevka.
+        assert_eq!(export_face(Some("Arial"), None, "F3"), ("F3", None));
+        assert_eq!(
+            export_face(Some("Roboto"), None, "F3"),
+            ("F1", Some("Roboto"))
+        );
+        assert_eq!(export_face(None, None, "F3"), ("F3", None));
     }
 
     #[test]

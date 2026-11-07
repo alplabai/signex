@@ -9,7 +9,7 @@
 //! Pin positions are multiples of the 1.27 mm schematic grid.
 //!
 //! Power ports are ordinary symbols whose single pin is
-//! `PinDirection::Power`, named after the net, with designator `#PWR?`
+//! `PinDirection::PowerInput`, named after the net, with designator `#PWR?`
 //! and the net name as comment. Library placement does not yet turn
 //! them into power ports (`is_power`, `value` = net name), so ERC and
 //! net naming don't see them; tracked in #928.
@@ -21,7 +21,7 @@ use super::{
     with_length,
 };
 
-use PinDirection::{Passive, Power, Unspecified};
+use PinDirection::{Passive, PowerInput, Unclassified};
 use PinOrientation::{Down, Left, Right, Up};
 
 /// All passive/discrete symbols, in panel order.
@@ -358,7 +358,7 @@ fn power_port(name: &str) -> Symbol {
     };
     let body = power_port_body(&lib);
     let pins = vec![labels_hidden(with_length(
-        pin("1", name, Power, 0.0, 0.0, orientation),
+        pin("1", name, PowerInput, 0.0, 0.0, orientation),
         round4(lib.pins[0].pin.length),
     ))];
     let mut sym = symbol(name, "#PWR?", desc, pins, body);
@@ -374,7 +374,7 @@ fn ic_generic() -> Symbol {
         pins.push(pin(
             &left.to_string(),
             &format!("P{left}"),
-            Unspecified,
+            Unclassified,
             -7.62,
             y,
             Right,
@@ -382,7 +382,7 @@ fn ic_generic() -> Symbol {
         pins.push(pin(
             &right.to_string(),
             &format!("P{right}"),
-            Unspecified,
+            Unclassified,
             7.62,
             y,
             Left,

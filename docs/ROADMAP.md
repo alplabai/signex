@@ -1,7 +1,7 @@
 # Signex — Roadmap
 
 > **Status:** Living document. Updated quarterly. Last reconciled against
-> reality 2026-11-04.
+> reality 2026-11-07 (AI Design moved first, §9).
 > **Audience:** Anyone planning work, allocating engineering time, or
 > communicating timelines.
 > **Owns:** the release axis. The ordering, names and gates of every planned
@@ -105,18 +105,19 @@ calendar version says nothing about either.
 **Gates are named, not numbered.** A gate ships when the product is ready,
 not when a date passes. The Community Preview ships because the schematic editor is
 production-ready and users can use it, not to claim a round number. The gates are the
-Community Preview, PCB Viewer, Community Release, Pro Release, Simulation
+Community Preview, AI Design, Community Release, Pro Release, Simulation
 and Signex 365 (§8). The stages, in order:
 
 | Stage | Meaning |
 |-------|---------|
 | Pre-1.0 (shipped, §6) | Foundation and editor build-out. No public users. |
 | Community Preview | First public release. Community schematic editor is real. |
-| Schematic Refinement | Schematic-editor refinement. PCB development happens in parallel. |
-| PCB Viewer | PCB viewer ships. |
-| PCB build-out | Routing, output, 3D, advanced, high-speed. |
-| Pro Release | Pro launch. Signal AI, plugins, and collaboration ship. |
-| Pro refinement | Signal AI core and tools, plugin system, live collaboration. |
+| AI Design | Schematic and PCB design with Signal AI, as an assistant and as a generator: PCB layout from the schematic, routing and the AI tool layer, built together. |
+| Community Release | Manufacturing output for the boards AI Design produces. |
+| Schematic Refinement | Schematic-editor refinement. Deferred until AI Design ships. |
+| PCB build-out | 3D, advanced PCB, high-speed, the rest of the router. |
+| Pro Release | Pro launch: licensing and billing, plugins, live collaboration. |
+| Pro refinement | Plugin system, live collaboration, the rest of Signal AI. |
 | Simulation band | Simulation, advanced output, foreign-format import. |
 | Signex 365 | Cloud PLM platform. |
 
@@ -124,7 +125,7 @@ and Signex 365 (§8). The stages, in order:
 number means "this was tagged and released". It does not mean "the branch
 I am on", and it does not name a future release: which release carries a
 feature is known only when it ships. Plans are identified by **name**
-(Community Preview, Advanced Schematic, PCB Viewer, …). This rule exists
+(Community Preview, AI Design, PCB Layout, …). This rule exists
 because ~100 commits shipped carrying labels v0.13 through v0.26-G, of
 which exactly one (v0.13.0) was ever released — which is how this document
 and the milestone set drifted apart in the first place. Use issue numbers
@@ -140,9 +141,13 @@ feature *can* ship, not whether it ships at all.
 | Tier   | Meaning                                              | Ships in       | Label |
 |:------:|------------------------------------------------------|----------------|-------|
 | **P0** | Required for the Community Preview. Cannot ship Community without it. | Up to and including Community Preview | `tier: p0` |
-| **P1** | Required for the PCB Viewer. Professional users expect it. | Advanced Schematic through PCB Viewer | `tier: p1` |
+| **P1** | Required for AI Design, or a professional schematic feature users expect. | AI Design, then Schematic Refinement | `tier: p1` |
 | **P2** | Differentiator. Drives Pro adoption.                  | PCB Routing through Pro Release | `tier: p2` |
 | **P3** | Nice-to-have. Stable core required first.             | After the Pro Release (Signal AI Core onward) | `tier: p3` |
+
+**AI Design first (2026-11-07):** the plans of the AI Design gate (§8) are
+P1 and are scheduled first. Schematic Refinement issues keep their
+`tier: p1` label but wait until AI Design ships; they are not re-triaged.
 
 **Decision rule:** if a feature is proposed for an earlier plan than
 its tier allows, the answer is "after the current target ships." This is
@@ -237,10 +242,11 @@ implementation detail for whatever is genuinely outstanding.
 
 Strategic. Undated by policy. A gate ships when its exit criteria pass.
 
-**Not every plan here is a gate.** The gates are Community Preview, PCB
-Viewer, Community Release, Pro Release, Simulation, and Signex 365 (the
-former v1.0, v2.0, v2.2, v3.0, v4.0 and v5.0), in that order — they block
-what follows. The first four carry exit criteria below; the exit criteria of
+**Not every plan here is a gate.** The gates are Community Preview, AI
+Design, Community Release, Pro Release, Simulation, and Signex 365, in that
+order — they block what follows. (AI Design took the place of the PCB
+Viewer, the former v2.0, on 2026-11-07; the others are the former v1.0,
+v2.2, v3.0, v4.0 and v5.0.) The first four carry exit criteria below; the exit criteria of
 the Simulation and Signex 365 gates are written when their band is planned. Everything else is a planned
 release: real, scoped, and publishable, but it gates nothing. Certainty
 decreases as the list goes on. Which release number carries a plan is known
@@ -281,7 +287,71 @@ A release candidate is a tag of the form `vYY.MM.MICRO-rc.N`; `release.yml`
 builds the same packages as a final release and publishes them as a
 pre-release. (`v1.0.0-rc.1`, the last SemVer tag, was the first candidate.)
 
+### AI Design (gate) — schematic and PCB with Signal AI
+
+Maintainer decision, 2026-11-07: designing schematics and boards with AI
+comes first after the Community Preview. Work starts now, alongside the
+last Community Preview issues, behind the `pro` feature so none of it is in
+the Community Preview build; it ships in the first release after the
+Community Preview. The plans below are built in parallel. Every other band on this page waits until this gate ships:
+Schematic Refinement, the 3D, Advanced PCB, High-Speed, HQ Render and
+Animation bands, the Plugin System, Live Collaboration, Simulation and
+Signex 365. The PCB Viewer gate is folded into the PCB Layout plan here: a
+viewer for boards that nothing in Signex can create is not a milestone
+worth stopping at.
+
+**Two modes, one tool layer.** Signal AI works as an assistant or as a
+generator. Both call the same undoable commands the menus and keys call
+(the Command Registry, #278, which moves here from Advanced Schematic),
+both act under the user's identity, and neither writes to disk without the
+user's save.
+
+- **Assistant:** the user drives. Chat with the open design as context;
+  explanations, design reviews, and ERC / DRC fix suggestions. The AI edits
+  only when asked, and every edit is shown as a preview and applied as one
+  undoable step.
+- **Generator:** the AI drives from a written specification (function,
+  interfaces, power, size, cost, preferred parts), in stages. Each stage
+  stops for the user's approval as a change list they can review entry by
+  entry: (1) architecture, a block diagram and a power tree; (2) parts,
+  from the user's libraries first and then distributors, as a BOM with
+  alternates; (3) schematic, hierarchical, annotated and ERC-clean; (4)
+  board, created from the schematic, with outline, placement, routing and a
+  DRC-clean result. The user can stop at any stage and go on in Assistant
+  mode or by hand.
+
+| Plan | Scope |
+|------|-------|
+| **PCB Layout** | One part identity across library, schematic and board (#663); a new `.snxpcb` in a project; board outline; Update PCB from schematic with a reviewable change list (#1312); component placement (move, rotate, flip); ratsnest; cross-probe in both directions; PCB rendering via `iced::widget::Shader` with 32 copper and the technical layers, and the layer panel (the former PCB Viewer scope) |
+| **PCB Routing** | As in the PCB Routing band below: single-trace routing, vias, net classes, live DRC with the 15 base rules |
+| **Router: Walkaround** | As below: obstacle-aware A* routing, which the Generator's board stage routes with |
+| **Chat & Context** | Signal panel (streaming chat, markdown rendering); design context (parts, nets, ERC / DRC results); local session history; the Alp Lab API gateway client and the `#[cfg(feature = "pro")]` gate |
+| **Edit & Analysis Tools** | Assistant mode: undoable tools over the Command Registry for schematic and board (place a part, wire, set a value, delete, place a footprint, route a net); check_erc and check_drc; fix suggestions applied as reviewable changes |
+| **Generator: Schematic** | Generator stages 1–3: specification to architecture, parts and an ERC-clean schematic, each stage a reviewable change list |
+| **Generator: Board** | Generator stage 4: the board created from the schematic, outline, placement, routing with the Walkaround router, DRC-clean |
+
+**Exit criteria:**
+
+- A schematic drawn in Signex becomes a board: every footprint placed from
+  the schematic and every net shown as ratsnest; five real `.snxpcb`
+  fixtures render correctly; a 10,000-track board pans and zooms at 60 fps;
+  cross-probe works in both directions.
+- Assistant: a user holds a productive design conversation about an open
+  schematic and board, and every change the AI makes is undoable.
+- Generator: from a written specification for a small board (an MCU, a
+  USB-C supply and a few sensors, say), Signex produces an ERC-clean
+  schematic and a placed, routed, DRC-clean board, with the user approving
+  each stage.
+- No AI change reaches disk without the user's save.
+
+Signal AI ships in the Pro build. Licensing and billing stay in the Pro
+Release; until it ships, AI Design builds go to internal and invited
+testers.
+
 ### Schematic Refinement
+
+**Deferred until AI Design ships (2026-11-07).** The Command Registry
+(#278) moved from Advanced Schematic to AI Design.
 
 Sub-versions are enumerated because they are staged releases, not
 milestones-of-convenience: each one ships on its own. Order within a band
@@ -338,15 +408,14 @@ functional blocks and signal flows, then refine into detailed schematics.
 
 ### PCB Viewer
 
-PCB rendering via `iced::widget::Shader`, 32 copper layers + technical
-layers, layer stack panel, cross-probe with schematic, ratsnest. No
-editing.
-
-**Exit criteria:** five real `.snxpcb` fixtures render correctly;
-10,000-track PCB pans and zooms at 60 fps; cross-probe works
-bidirectionally.
+**Folded into AI Design (2026-11-07)** as the PCB Layout plan, with board
+creation from the schematic and placement added. Its exit criteria are part
+of the AI Design gate's.
 
 ### PCB Routing
+
+**PCB Routing and Router: Walkaround are built in AI Design** (2026-11-07);
+the plans after them in this band wait until it ships.
 
 Professional-grade interactive routing, implemented clean-room under
 Apache-2.0 with no reference to other EDA tools' source or format docs.
@@ -374,7 +443,7 @@ candidates. Autorouting → not scoped.
 
 ### Community Release
 
-Manufacturing output. PCB Viewer, PCB Routing and Community Release together are a complete schematic + PCB
+Manufacturing output. AI Design and Community Release together are a complete schematic + PCB
 editor: design, validate, route, DRC, and export to fabrication.
 
 | Plan | Scope |
@@ -463,10 +532,10 @@ in feature-gated crates; the Community editor continues to ship.
 
 | Plan | Scope |
 |------|-------|
-| **Pro Release** | Alp Lab API gateway client (streaming SSE); Pro license validation with an offline cache; compile-time feature gate (`#[cfg(feature = "pro")]`); Community build hides the Signal panel and shows an upgrade prompt |
+| **Pro Release** | Pro license validation with an offline cache; Community build hides the Signal panel and shows an upgrade prompt. (The API gateway client and the feature gate moved to AI Design, 2026-11-07.) |
 
-**Exit criteria:** a Pro user can hold a productive design conversation
-with Signal AI and its tool use is correctly undoable; three test users
+**Exit criteria:** Signal AI as shipped in AI Design is available to Pro
+users; three test users
 can edit the same schematic and PCB simultaneously without conflicts;
 pricing is set and subscription billing is operational; Pro and Community
 binaries both build clean from a single workspace.
@@ -485,16 +554,17 @@ binaries both build clean from a single workspace.
 
 ### Signal AI Core (Pro)
 
+Chat & Context and Edit & Analysis Tools moved to AI Design (2026-11-07);
+what is left here comes after it.
+
 | Plan | Scope |
 |------|-------|
-| **Chat & Context** | Signal panel (streaming chat, markdown rendering); design context injection (components, nets, ERC / DRC results, notebook annotations); locally persisted session history |
 | **Visual & Polish** | Visual context (schematic / PCB screenshot to a vision model); usage meter; graceful offline degradation |
 
 ### Signal AI Tools (Pro)
 
 | Plan | Scope |
 |------|-------|
-| **Edit & Analysis Tools** | Undoable edit tools (add_component, draw_wire, set_value, delete_element); analysis tools (check_erc, check_drc, check_si); ERC / DRC fix suggestions with auto-apply |
 | **Sim & Templates** | Simulation tools (run_spice_sim, run_openems, run_thermal); notebook tools (read_notebook, write_notebook); design review mode (scored analysis, findings written to the notebook); circuit templates (buck, LDO, op-amp, filter, …); natural-language constraint entry and AI-guided routing suggestions |
 
 ### Plugin System (Pro)
@@ -683,6 +753,32 @@ What that promotion does and does not mean:
   page.** Scope may move between adjacent sub-versions of the same band
   without amending this document. It may not move between bands.
 
+### 2026-11-07 — AI Design moves first
+
+Maintainer decision (Caner): schematic and PCB design with AI is the next
+priority after the Community Preview; the other bands wait. Work starts
+now behind the `pro` feature, and it ships in the first release after the
+Community Preview. What changed:
+
+- **A new gate, AI Design,** follows the Community Preview. It holds PCB
+  Layout, PCB Routing, Router: Walkaround, Chat & Context, Edit & Analysis
+  Tools, Generator: Schematic and Generator: Board.
+- **Signal AI has two modes,** Assistant and Generator, on one tool layer
+  (§8).
+- **The PCB Viewer gate is folded into the PCB Layout plan,** which adds
+  board creation from the schematic (#1312), board outline and placement.
+  A viewer had no board to show: nothing in Signex could create one. The
+  milestone was renamed through `aliases`.
+- **Gate order changed,** which §12 allows only for an architectural
+  reason: the Generator's board stage needs board creation, placement and
+  routing, and both modes need the Command Registry, so the AI and the PCB
+  work are one dependency chain and are scheduled together.
+- **Pulled forward:** the Command Registry (#278, from Advanced Schematic),
+  Chat & Context and Edit & Analysis Tools (from after the Pro Release),
+  PCB Routing and Router: Walkaround. **Pushed back:** Schematic
+  Refinement and the rest of the PCB build-out.
+- The Pro Release keeps licensing, billing, plugins and collaboration.
+
 ### 2026-11-04 — SemVer to CalVer
 
 Maintainers (Hakan, Caner) moved Signex from semantic versioning to
@@ -709,7 +805,7 @@ calendar versioning, `YY.MM.MICRO` (§3). What that changed:
 ## 10. Staffing Assumptions
 
 Planned for a **small team**: 2–3 engineers up to the Community Preview, scaling to
-3–5 from the PCB Viewer through the Pro Release.
+3–5 from AI Design through the Pro Release.
 
 - A single engineer typically owns one workstream at a time
 - If the team shrinks to one engineer, phase durations approximately
