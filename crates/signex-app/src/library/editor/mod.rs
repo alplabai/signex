@@ -210,8 +210,8 @@ fn graphite_header<'a>(
             "Save",
             event(EditorMsg::SaveDraft).filter(|_| editable),
             tokens,
-        ))
-        .push(close_btn(address.clone(), tokens));
+        ));
+    // No close button: the document tab's own cross closes the editor.
     container(line.boxed())
         .padding([SP.m, SP.l])
         .style(crate::styles::modal_header_strip(tokens))
@@ -551,64 +551,10 @@ fn close_background(tokens: &ThemeTokens, status: button::Status) -> Option<iced
     Some(tokens::overlay(tokens, step).into())
 }
 
-/// Cross glyph of the Graphite icon button (stroke colour set by the svg style).
-const CLOSE_CROSS_SVG: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>"##;
-
-/// Graphite icon button: a cross in a square hit area, hover overlay, small radius.
-fn graphite_close_btn<'a>(
-    address: EditorAddress,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ink = theme_ext::text_secondary(tokens);
-    let side = TS.heading * 1.4;
-    let tokens = *tokens;
-    let cross = iced::widget::svg(iced::widget::svg::Handle::from_memory(CLOSE_CROSS_SVG))
-        .width(side * 0.5)
-        .height(side * 0.5)
-        .style(move |_: &Theme, _| iced::widget::svg::Style { color: Some(ink) });
-    button(
-        container(cross)
-            .width(side)
-            .height(side)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center),
-    )
-    .padding(0)
-    .on_press(LibraryMessage::EditorEvent {
-        library_path: address.library_path,
-        table: address.table,
-        row_id: address.row_id,
-        msg: EditorMsg::CloseEditor,
-    })
-    .style(move |_: &Theme, status| button::Style {
-        background: close_background(&tokens, status),
-        border: Border {
-            radius: crate::styles::Radii::GRAPHITE.small.into(),
-            ..Border::default()
-        },
-        text_color: ink,
-        ..button::Style::default()
-    })
-    .boxed()
-}
-
 fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    if crate::styles::is_graphite(tokens) {
-        return graphite_close_btn(address, tokens);
-    }
     let text_c = theme_ext::text_secondary(tokens);
-    // Graphite: a plain glyph at heading size, no outlined square.
-    let graphite = crate::styles::is_graphite(tokens);
-    let border = if graphite {
-        Color::TRANSPARENT
-    } else {
-        theme_ext::border_color(tokens)
-    };
-    let glyph = if graphite {
-        TS.heading
-    } else {
-        TS.heading * CLOSE_GLYPH_SCALE
-    };
+    let border = theme_ext::border_color(tokens);
+    let glyph = TS.heading * CLOSE_GLYPH_SCALE;
     let tokens = *tokens;
     button(container(text("\u{00D7}").size(glyph).color(text_c)).padding([0.0, SP.m]))
         .on_press(LibraryMessage::EditorEvent {
