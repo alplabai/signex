@@ -37,29 +37,39 @@ pub(crate) fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
     let veil = super::read_only_veil(tokens);
-    let body = column![
-        header_row(&state.row, tokens),
-        render_panes(
-            state,
-            library_state,
-            tokens,
-            canvas_colors,
-            (grid, device_px_per_logical_px),
-            &address,
-            read_only,
-        ),
-        super::inert::unless_read_only_veiled(
-            read_only,
-            veil,
-            pin_map_subsection(state, tokens, &address),
-        ),
-        super::inert::unless_read_only_veiled(
-            read_only,
-            veil,
-            super::alternate_symbols::view(state, tokens, &address),
-        ),
-        where_used_footer(state, library_state, tokens),
-    ]
+    let panes = render_panes(
+        state,
+        library_state,
+        tokens,
+        canvas_colors,
+        (grid, device_px_per_logical_px),
+        &address,
+        read_only,
+    );
+    // Graphite moves the pin map and the alternates to their own tabs.
+    let body = if crate::styles::is_graphite(tokens) {
+        column![
+            header_row(&state.row, tokens),
+            panes,
+            where_used_footer(state, library_state, tokens),
+        ]
+    } else {
+        column![
+            header_row(&state.row, tokens),
+            panes,
+            super::inert::unless_read_only_veiled(
+                read_only,
+                veil,
+                pin_map_subsection(state, tokens, &address),
+            ),
+            super::inert::unless_read_only_veiled(
+                read_only,
+                veil,
+                super::alternate_symbols::view(state, tokens, &address),
+            ),
+            where_used_footer(state, library_state, tokens),
+        ]
+    }
     .spacing(SP.l)
     .width(Length::Fill)
     .boxed();
@@ -68,6 +78,51 @@ pub(crate) fn view<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .boxed()
+}
+
+/// The Graphite Pin Map tab: the pin-to-pad table on its own.
+pub(crate) fn pin_map_tab<'a>(
+    state: &'a ComponentPreviewState,
+    tokens: &'a ThemeTokens,
+    address: &EditorAddress,
+    read_only: bool,
+) -> Element<'a, LibraryMessage> {
+    let veil = super::read_only_veil(tokens);
+    scrollable(super::inert::unless_read_only_veiled(
+        read_only,
+        veil,
+        pin_map_subsection(state, tokens, address),
+    ))
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
+}
+
+/// (pins with a pad, pins) of the symbol; `None` before the symbol loads
+/// or when it has no pins. A pin has a pad when it is overridden or the
+/// footprint carries a pad of its number.
+pub(crate) fn pin_map_counts(state: &ComponentPreviewState) -> Option<(usize, usize)> {
+    let sym = state.symbol.as_ref()?;
+    if sym.pins.is_empty() {
+        return None;
+    }
+    let lines = pin_lines(
+        sym.pins
+            .iter()
+            .map(|p| (p.number.as_str(), p.name.as_str())),
+        &state.row.pin_map_overrides,
+    );
+    let mapped = lines
+        .iter()
+        .filter(|l| {
+            l.is_override
+                || state
+                    .footprint
+                    .as_ref()
+                    .is_some_and(|f| f.pads.iter().any(|p| p.number == l.pad))
+        })
+        .count();
+    Some((mapped, lines.len()))
 }
 
 /// Manufacturer and MPN as shown in the header; a blank one reads "Not set".
@@ -268,7 +323,8 @@ fn render_panes<'a>(
             let program =
                 crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
                     model,
-                );
+                )
+                .with_theme_tokens(tokens);
             iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -394,7 +450,29 @@ fn pin_map_subsection<'a>(
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let header = kit::section_header("Pin Map", None, tokens);
+    let summary = crate::styles::is_graphite(tokens)
+        .then(|| pin_map_counts(state))
+        .flatten()
+        .map(|(mapped, total)| {
+            kit::toned_pill(
+                format!("{mapped} of {total} mapped"),
+                if mapped == total {
+                    crate::styles::PillTone::Ok
+                } else {
+                    crate::styles::PillTone::Warn
+                },
+                tokens,
+            )
+        });
+    let header = kit::section_header(
+        if crate::styles::is_graphite(tokens) {
+            "Pin to pad"
+        } else {
+            "Pin Map"
+        },
+        summary,
+        tokens,
+    );
 
     let Some(sym) = state.symbol.as_ref() else {
         return column![
