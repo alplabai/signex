@@ -643,6 +643,8 @@ pub enum PanelMsg {
     NetClass(NetClassMsg),
     /// Signal panel: the Assistant / Generator switch (view-only state).
     Signal(super::signal::SignalMsg),
+    /// Graphite Projects panel: file filter and group chevrons (view-only).
+    Projects(super::ProjectsMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
