@@ -24,6 +24,7 @@ use super::state::{LibraryBrowserState, LibraryState, LifecycleFilter, OpenLibra
 
 mod action_row;
 mod columns;
+mod layout;
 mod empty_state;
 mod grid;
 mod header;
