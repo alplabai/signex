@@ -547,7 +547,23 @@ fn draw_text_bucket<F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    draw_text_items(frame, texts.iter(), world_to_screen, options);
+    draw_text_items(
+        frame,
+        text_draw_order(texts, options).into_iter(),
+        world_to_screen,
+        options,
+    );
+}
+
+/// `texts` with the atlas-drawn ones first and the outline-drawn ones (rotated,
+/// oversize) after, each group in scene order. iced opens a new layer at every
+/// switch between the two, cache hit or not (#2128); the GPU mount draws them
+/// in this order too.
+fn text_draw_order(texts: &[TextItem], options: SceneDrawOptions) -> Vec<&TextItem> {
+    let (atlas, outline): (Vec<&TextItem>, Vec<&TextItem>) = texts
+        .iter()
+        .partition(|text| gpu_stages_text(text, options));
+    atlas.into_iter().chain(outline).collect()
 }
 
 /// Canvas pass for a scene whose atlas text draws on the GPU: paints only what
@@ -1071,6 +1087,36 @@ mod rotated_text_tests {
             !staged.contains(&"invisible") && !canvas.contains(&"invisible"),
             "an invisible text is drawn by neither"
         );
+    }
+
+    /// iced opens a new layer at every switch between atlas text and outline
+    /// meshes, cache hit or not (#2128), so a bucket switches exactly once.
+    #[test]
+    fn atlas_texts_draw_before_outline_texts_each_in_scene_order() {
+        let options = SceneDrawOptions {
+            scale_px_per_mm: 30.0,
+            device_px_per_logical_px: 1.0,
+            text_min_px: 0.0,
+            text_max_px: f32::INFINITY,
+            frame_origin: Point::ORIGIN,
+        };
+        let sized = |content: &str, size_mm: f32, rotation: f32| TextItem {
+            size_mm,
+            ..text(content, rotation)
+        };
+        let texts = [
+            sized("a", 1.27, 0.0),
+            sized("r1", 1.27, FRAC_PI_2),
+            sized("b", 1.27, 0.0),
+            sized("big", 40.0, 0.0),
+            sized("r2", 1.27, 0.61),
+            sized("c", 1.27, -0.0),
+        ];
+        let order: Vec<&str> = text_draw_order(&texts, options)
+            .iter()
+            .map(|t| t.content.as_str())
+            .collect();
+        assert_eq!(order, ["a", "b", "c", "r1", "big", "r2"]);
     }
 
     #[test]
