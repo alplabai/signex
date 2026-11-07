@@ -126,6 +126,7 @@ signex/
 │   ├── signex-types/               # shared domain types (foundation)
 │   ├── signex-engine/              # command / patch / undo engine
 │   ├── signex-net/                 # authoritative netlist + connectivity
+│   ├── signex-history/             # undo/redo history with a save point (leaf)
 │   ├── signex-erc/                 # ERC rule engine (+ signex-erc-dsl)
 │   ├── signex-sketch/              # Newton-LM constraint solver + sketch schema
 │   ├── signex-bake/                # sketch → footprint bake pipeline

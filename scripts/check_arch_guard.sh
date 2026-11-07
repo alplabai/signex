@@ -32,7 +32,7 @@ EDGES="${ARCH_GUARD_EDGES:-$ROOT/scripts/arch-edges.txt}"
 
 # Crates holding domain logic: no UI toolkit, no GPU, no app.
 DOMAIN=(
-  signex-types signex-net signex-erc signex-erc-dsl signex-engine
+  signex-types signex-net signex-history signex-erc signex-erc-dsl signex-engine
   signex-bom signex-output signex-library signex-sketch signex-bake
   signex-3d-model-importer
 )

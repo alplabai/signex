@@ -112,6 +112,7 @@ pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
+use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::schematic::{SchematicSheet, SelectedItem};
 pub(crate) use transform::TouchingPairs;
 pub use transform::place_fields_for_new_symbol;
@@ -137,18 +138,13 @@ const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 pub struct Engine {
     document: SchematicSheet,
     path: Option<PathBuf>,
-    history: std::collections::VecDeque<HistoryEntry>,
-    redo_stack: Vec<HistoryEntry>,
-    /// Entries evicted from the front of `history` by the cap, so
-    /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
-    history_evicted: usize,
-    /// The `undo_position` the document held when it last matched its file
-    /// (set by [`Engine::open`] and [`Engine::mark_saved`]); `None` when it is
-    /// unknown or no step of the history can reproduce the file, which
-    /// reads as dirty. An engine built from content that is not known to be
-    /// on disk (`new`, a recovery copy) starts there. See
+    /// The undo and redo stacks and the save point: the position the
+    /// document held when it last matched its file (set by [`Engine::open`]
+    /// and [`Engine::mark_saved`]), unknown when no step can reproduce the
+    /// file, which reads as dirty. An engine built from content that is not
+    /// known to be on disk (`new`, a recovery copy) starts unknown. See
     /// [`Engine::is_at_save_point`].
-    saved_point: Option<usize>,
+    history: History<HistoryEntry>,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
     /// records one coalesced entry when the loop finishes. Always `false`
@@ -298,10 +294,7 @@ impl Engine {
         Ok(Self {
             document,
             path,
-            history: std::collections::VecDeque::new(),
-            redo_stack: Vec::new(),
-            history_evicted: 0,
-            saved_point: None,
+            history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             field_edit_run: None,
             #[cfg(test)]
@@ -334,10 +327,7 @@ impl Engine {
         Ok(Self {
             document: snx.sheet,
             path: Some(path.to_path_buf()),
-            history: std::collections::VecDeque::new(),
-            redo_stack: Vec::new(),
-            history_evicted: 0,
-            saved_point: Some(0),
+            history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             field_edit_run: None,
             #[cfg(test)]
@@ -661,7 +651,7 @@ impl Engine {
 
     /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.
     pub fn set_document(&mut self, document: SchematicSheet) {
-        self.saved_point = None;
+        self.history.forget();
         self.bump_revision();
         self.bump_connectivity_revision();
         self.document = document;
@@ -771,7 +761,7 @@ mod tests {
         assert_eq!(engine.revision(), revision, "a refusal moves no revision");
         assert_eq!(engine.connectivity_revision(), connectivity);
         assert_eq!(engine.document().paper_size, test_sheet().paper_size);
-        assert!(engine.history.is_empty(), "a refusal writes no history");
+        assert!(!engine.can_undo(), "a refusal writes no history");
     }
 
     #[test]

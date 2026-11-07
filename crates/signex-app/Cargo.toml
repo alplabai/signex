@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 signex-types = { workspace = true }
 signex-engine = { workspace = true }
+signex-history = { workspace = true }
 signex-renderer = { workspace = true }
 signex-gfx = { workspace = true }
 iced = { workspace = true }

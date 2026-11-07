@@ -2,13 +2,26 @@
 //!
 //! The two stacks, the depth cap and the [`SavePoint`] bookkeeping every
 //! snapshot-undo draft needs (a Component row, a symbol file, a footprint
-//! file). What a step holds is the caller's: this type only knows stack
-//! lengths, so the save-point rules live in one place.
+//! file, the schematic engine). What a step holds is the caller's: this type
+//! only knows stack lengths, so the save-point rules live in one place.
 
-use super::SavePoint;
+use crate::SavePoint;
+
+/// How many undo steps every history keeps unless the `undo_depth` setting
+/// says otherwise.
+pub const DEFAULT_UNDO_DEPTH: usize = 100;
+
+/// The largest accepted `undo_depth`: a deeper history only costs memory.
+pub const MAX_UNDO_DEPTH: usize = 10_000;
+
+/// Is `depth` a usable `undo_depth` (at least one step, at most
+/// [`MAX_UNDO_DEPTH`])?
+pub const fn undo_depth_in_range(depth: usize) -> bool {
+    depth >= 1 && depth <= MAX_UNDO_DEPTH
+}
 
 /// Undo and redo stacks of whole-state snapshots plus the saved position.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct History<S> {
     /// Older states, newest last.
     undo: Vec<S>,
@@ -34,8 +47,46 @@ impl<S> History<S> {
             undo: Vec::new(),
             redo: Vec::new(),
             point,
-            cap,
+            // A history that keeps nothing could never undo what it records.
+            cap: cap.max(1),
         }
+    }
+
+    /// How many undo steps are kept.
+    pub fn cap(&self) -> usize {
+        self.cap
+    }
+
+    /// Keep `cap` steps from now on. Lowering it drops the oldest undo steps
+    /// (and the far end of the redo stack) at once; a save point that falls
+    /// off the bottom is forgotten, so the document stays dirty until the
+    /// next save.
+    pub fn set_cap(&mut self, cap: usize) {
+        self.cap = cap.max(1);
+        while self.undo.len() > self.cap {
+            self.undo.remove(0);
+            self.point.evicted_oldest();
+        }
+        if self.redo.len() > self.cap {
+            self.redo.drain(..self.redo.len() - self.cap);
+        }
+        self.settle_point();
+    }
+
+    /// Position in the edit timeline: the steps applied now, counting those
+    /// the cap evicted. An undo lowers it, a redo raises it, an edit raises
+    /// it and cuts the redo branch.
+    pub fn position(&self) -> usize {
+        self.point.position(self.undo.len())
+    }
+
+    /// Drop the newest redo step, the one an undo just produced, so no redo
+    /// can bring it back (a run that failed halfway and is reported as never
+    /// having happened). A save point on the state it held is forgotten.
+    pub fn discard_top(&mut self) -> Option<S> {
+        let top = self.redo.pop()?;
+        self.point.forget_if_at(self.undo.len() + 1);
+        Some(top)
     }
 
     pub fn can_undo(&self) -> bool {
@@ -161,11 +212,11 @@ impl<S> History<S> {
     }
 
     /// The saved position, for a step that gives it back (a rejected edit).
-    pub(crate) fn point(&self) -> SavePoint {
+    pub fn point(&self) -> SavePoint {
         self.point
     }
 
-    pub(crate) fn set_point(&mut self, point: SavePoint) {
+    pub fn set_point(&mut self, point: SavePoint) {
         self.point = point;
     }
 

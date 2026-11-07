@@ -57,8 +57,6 @@ pub(crate) use state::scope::{deepest_owner, deepest_owners, path_key_with};
 pub(crate) use state::volume_case::probe_directory_case;
 #[cfg(test)]
 mod draft_save_point_tests;
-mod history;
-mod history_save_point;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
@@ -85,8 +83,8 @@ pub use documents::{
     TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
-pub use history::History;
-pub(crate) use history_save_point::SavePoint;
+pub use signex_history::History;
+pub(crate) use signex_history::SavePoint;
 #[cfg(test)]
 pub(crate) use state::WindowKind;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};

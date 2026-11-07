@@ -17,13 +17,15 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{
     AnnotationState, ProjectData, SchematicDefaultField, SchematicDefaultOverrides,
 };
 
-/// How many undo steps are kept.
-pub const HISTORY_LIMIT: usize = 100;
+/// How many undo steps are kept unless the `undo_depth` setting says
+/// otherwise.
+pub const HISTORY_LIMIT: usize = DEFAULT_UNDO_DEPTH;
 
 /// One edit of the General section. Plain data, so a script can emit it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -102,10 +104,9 @@ impl GeneralSnapshot {
 }
 
 /// Undo/redo for one project's General settings.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ProjectGeneralHistory {
-    undo: Vec<GeneralSnapshot>,
-    redo: Vec<GeneralSnapshot>,
+    history: History<GeneralSnapshot>,
     /// An edit run is open: the next edit joins the last step.
     run_open: bool,
     /// What the open run edits; an edit of something else starts a new step.
@@ -133,7 +134,28 @@ impl RunField {
     }
 }
 
+impl Default for ProjectGeneralHistory {
+    fn default() -> Self {
+        Self::with_depth(HISTORY_LIMIT)
+    }
+}
+
 impl ProjectGeneralHistory {
+    /// An empty history that keeps `depth` undo steps (the `undo_depth`
+    /// setting).
+    pub fn with_depth(depth: usize) -> Self {
+        Self {
+            history: History::unknown(depth),
+            run_open: false,
+            run_field: None,
+        }
+    }
+
+    /// Keep `depth` undo steps from now on; lowering it drops the oldest.
+    pub fn set_undo_depth(&mut self, depth: usize) {
+        self.history.set_cap(depth);
+    }
+
     /// Apply `command` to `data`. Returns `true` when a field changed. A
     /// change opens a new undo step unless it continues the open run; a
     /// no-op records nothing.
@@ -187,15 +209,12 @@ impl ProjectGeneralHistory {
         if GeneralSnapshot::of(data) == before {
             return false;
         }
+        // An open run follows a recorded step, so no redo step exists to cut.
         if !self.run_open {
-            self.undo.push(before);
-            if self.undo.len() > HISTORY_LIMIT {
-                self.undo.remove(0);
-            }
+            self.history.record(before);
             // A pick stays a step of its own: the next edit opens a new one.
             self.run_open = !is_pick;
         }
-        self.redo.clear();
         true
     }
 
@@ -207,10 +226,10 @@ impl ProjectGeneralHistory {
     /// Step back. `false` when there is nothing to undo.
     pub fn undo(&mut self, data: &mut ProjectData) -> bool {
         self.run_open = false;
-        let Some(previous) = self.undo.pop() else {
+        let Some(previous) = self.history.begin_step(true) else {
             return false;
         };
-        self.redo.push(GeneralSnapshot::of(data));
+        self.history.finish_step(GeneralSnapshot::of(data), true);
         previous.restore(data);
         true
     }
@@ -218,20 +237,20 @@ impl ProjectGeneralHistory {
     /// Step forward. `false` when there is nothing to redo.
     pub fn redo(&mut self, data: &mut ProjectData) -> bool {
         self.run_open = false;
-        let Some(next) = self.redo.pop() else {
+        let Some(next) = self.history.begin_step(false) else {
             return false;
         };
-        self.undo.push(GeneralSnapshot::of(data));
+        self.history.finish_step(GeneralSnapshot::of(data), false);
         next.restore(data);
         true
     }
 
     pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
+        self.history.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
+        self.history.can_redo()
     }
 }
 
