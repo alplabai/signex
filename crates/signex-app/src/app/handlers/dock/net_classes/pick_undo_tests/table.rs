@@ -1,6 +1,5 @@
 //! Nothing that worked on trunk is broken (#661): every pick / undo / redo /
-//! save sequence below ends in the state trunk ended in, except the rows
-//! marked CHANGED, which are decisions listed in the PR. The same table runs
+//! save sequence below ends in the state trunk ended in. The same table runs
 //! unchanged on trunk (it uses no API this PR added).
 
 use super::*;

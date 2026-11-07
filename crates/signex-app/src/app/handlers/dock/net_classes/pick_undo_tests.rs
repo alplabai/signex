@@ -719,3 +719,24 @@ fn a_dead_marker_passed_by_a_group_undo_does_not_revive() {
     app.redo_active_sheet();
     assert!(nets(&app).is_empty(), "the panel's undo is not replayed");
 }
+
+/// The tab's dirty mark follows the engine after a marker-only pass that
+/// drops the save point off a full stack (Ctrl+Y passing a dead marker).
+#[test]
+fn a_marker_pass_that_drops_the_save_point_updates_the_tab_mark() {
+    let (mut app, _symbol) = app_with_sheet();
+    let path = app.document_state.active_path.clone().unwrap();
+    app.set_undo_depth(2);
+    save_sheet(&mut app);
+    pick(&mut app, "GND", Some("Power"));
+    app.handle_undo_requested();
+    pick(&mut app, "VCC", Some("Power")); // cuts the undone pick's class step: dead
+    pick(&mut app, "NET3", Some("Power"));
+    assert!(!sheet_dirty(&app), "only markers above the save");
+
+    app.handle_redo_requested(); // passes the dead marker onto the full stack
+
+    let at_save = app.document_state.engines[&path].is_at_save_point();
+    assert!(!at_save, "fixture: the pass drops the save point");
+    assert_eq!(sheet_dirty(&app), !at_save, "the tab says so too");
+}

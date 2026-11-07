@@ -187,3 +187,27 @@ fn a_dead_marker_passes_over_as_one_that_can_never_match() {
     assert!(!engine.pass_dead_class_pick(false), "nothing left to pass");
     assert!(!engine.pass_class_pick(false));
 }
+
+/// Known edge: a marker passed back onto a full undo stack pushes the oldest
+/// step off, and a save point under it is forgotten, though only markers lay
+/// between. It fails toward dirty only.
+#[test]
+fn passing_a_marker_onto_a_full_stack_can_drop_the_save_point() {
+    let mut engine = saved();
+    engine.set_undo_depth(2);
+    engine.record_class_pick(MARK);
+    assert!(engine.pass_class_pick(true));
+    engine.record_class_pick(ClassPickMarker { step: 8, ..MARK });
+    engine.record_class_pick(ClassPickMarker { step: 9, ..MARK });
+    assert!(
+        engine.is_at_save_point(),
+        "markers only: still the saved sheet"
+    );
+
+    assert!(engine.pass_dead_class_pick(false));
+
+    assert!(
+        !engine.is_at_save_point(),
+        "the saved depth fell off the stack"
+    );
+}

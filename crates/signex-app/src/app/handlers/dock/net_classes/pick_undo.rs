@@ -92,6 +92,10 @@ impl crate::app::Signex {
                     engine.pass_dead_class_pick(undoing);
                 }
             }
+            // A pass can push the saved step off a full stack.
+            if let Some(path) = self.document_state.active_path.clone() {
+                self.document_state.sync_history_dirty(&path);
+            }
             if applied {
                 self.refresh_panel_ctx();
                 return true;

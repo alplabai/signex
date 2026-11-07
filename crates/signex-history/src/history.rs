@@ -335,6 +335,29 @@ mod tests {
         assert_eq!(h.undo_len(), CAP);
     }
 
+    /// A save at the current state stays below an inert step recorded now: a
+    /// later real step, after the inert one is undone, can still be undone
+    /// back to the saved position.
+    #[test]
+    fn record_inert_leaves_a_save_at_the_current_state_below_the_new_step() {
+        let mut h = history();
+        h.record(2);
+        h.mark_saved();
+        h.record_inert(1);
+        assert!(
+            !h.is_dirty_past(inert),
+            "only the inert step above the save"
+        );
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+
+        h.record(4); // cuts the inert step; the saved position is the state under it
+        assert!(h.is_dirty_past(inert));
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert!(!h.is_dirty(), "undoing the real step is back at the save");
+    }
+
     #[test]
     fn record_undo_redo_round_trip() {
         let mut h = history();
