@@ -331,7 +331,18 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // border (matches the breathing room Altium leaves below its
         // panel tabs).
         container({
-            let mut tree = TreeView::new(&ctx.project_tree, &ctx.tokens).text_size(TS.body);
+            let graphite = crate::styles::is_graphite(&ctx.tokens);
+            let decorated;
+            let roots: &[TreeNode] = if graphite {
+                decorated = super::graphite::decorate_tree(&ctx.project_tree);
+                &decorated
+            } else {
+                &ctx.project_tree
+            };
+            let mut tree = TreeView::new(roots, &ctx.tokens).text_size(TS.body);
+            if graphite {
+                tree = tree.style(super::graphite::tree_style(&ctx.tokens));
+            }
             if let Some(sel) = ctx.project_tree_selected.as_deref() {
                 tree = tree.selected(sel);
             }
