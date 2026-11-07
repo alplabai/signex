@@ -42,6 +42,7 @@ fn project_at(app: &mut Signex, dir: &Path) {
         id,
         path: dir.join("p.snxprj"),
         data: signex_types::project::ProjectData {
+            document_id: None,
             description: None,
             name: "p".into(),
             dir: dir.to_string_lossy().into_owned(),

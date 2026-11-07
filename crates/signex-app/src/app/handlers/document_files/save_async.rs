@@ -55,8 +55,18 @@ impl Signex {
             .get(&source)
             .with_context(|| format!("no open schematic at {}", source.display()))?;
         let revision = engine.revision();
-        let bytes = engine
-            .serialize_with_extents(crate::schematic_runtime::text_width::live_extent_measure())
+        let measure = crate::schematic_runtime::text_width::live_extent_measure();
+        // A Save As makes a new document: the copy is written with an id of
+        // its own, and the document takes it when the write lands (#2172).
+        let encoded = if save_as_from.is_some() {
+            engine.serialize_as_copy_with_extents(
+                signex_types::document_id::DocumentId::new().as_uuid(),
+                measure,
+            )
+        } else {
+            engine.serialize_with_extents(measure)
+        };
+        let bytes = encoded
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was
@@ -250,7 +260,8 @@ impl Signex {
                     .document_saves
                     .forget_disk_records(&from);
                 self.record_real_path_of(&path);
-                project_write = self.apply_saved_as(&from, path, revision);
+                project_write = self.apply_saved_as(&from, path.clone(), revision);
+                self.adopt_saved_copy_id(&path, &saved);
             }
         }
         self.warn_unwritten_spellings(&outcome_path);
@@ -262,6 +273,22 @@ impl Signex {
             .collect();
         tasks.push(project_write);
         Task::batch(tasks)
+    }
+
+    /// A Save As landed and the engine now stands for the new file: it takes
+    /// the document id the written copy carries, so the document in memory is
+    /// the one on disk (#2172).
+    fn adopt_saved_copy_id(
+        &mut self,
+        path: &std::path::Path,
+        saved: &crate::app::state::CommitBytes,
+    ) {
+        let Some(id) = signex_types::format::document_id_in_header("snxsch", &saved.bytes) else {
+            return;
+        };
+        if let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine.reassign_document_id(id.as_uuid());
+        }
     }
 
     /// Once no write to the file `path` names (under any spelling) is still owed, warn about

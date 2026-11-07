@@ -21,6 +21,7 @@ use iced::Task;
 use signex_types::project::RuleProfile;
 
 pub use crate::app::command::{CommandArgs, CommandOutcome, OperandError, OperandValue};
+pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, Picker};
 use crate::keymap::AppCommandId;
@@ -142,7 +143,9 @@ impl Signex {
         let missing = (!args.has_operands())
             .then(|| crate::app::command::missing_headless_operand(command))
             .flatten();
-        let result = if let Some(name) = missing {
+        let result = if let Some(answered) = self.run_query(command, &args) {
+            answered
+        } else if let Some(name) = missing {
             (
                 CommandOutcome::Disabled {
                     reason: format!("`{}` needs the operand `{name}`", command.as_str()),

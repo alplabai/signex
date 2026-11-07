@@ -23,6 +23,9 @@ pub enum CommandOutcome {
     /// A headless dispatch on an app that was not booted headless (no config
     /// root override, or native dialogs): nothing ran (#1933).
     NotHeadless,
+    /// A query command ran and this is its answer (#2172). A query never
+    /// reports a bare [`Self::Ran`]: what it found is the point of running it.
+    Answered(serde_json::Value),
 }
 
 impl CommandOutcome {

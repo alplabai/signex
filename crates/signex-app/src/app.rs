@@ -19,6 +19,7 @@ pub mod contracts;
 mod dir_listing;
 pub(crate) mod dispatch;
 mod document;
+pub mod document_ids;
 pub mod document_read;
 mod documents;
 pub(crate) mod file_extension;

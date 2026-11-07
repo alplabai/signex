@@ -101,6 +101,7 @@ fn net_colors() {
     assert_eq!(outcome, CommandOutcome::Ran);
     driver.settle(&mut app, task).expect("open settled");
 
+    let doc = format!("document={}", path.display());
     let painted = |app: &Signex| {
         app.document_state.engines[&path]
             .document()
@@ -117,7 +118,7 @@ fn net_colors() {
     };
     assert!(!app.document_state.is_document_dirty(&path));
 
-    let ran = run(&mut app, "color_net", &["at=5,0", "color=#336699"]);
+    let ran = run(&mut app, "color_net", &["at=5,0", "color=#336699", &doc]);
     assert_eq!(ran, CommandOutcome::Ran);
     assert_eq!(
         painted(&app),
@@ -126,17 +127,17 @@ fn net_colors() {
     );
     assert!(app.document_state.is_document_dirty(&path), "an edit");
 
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
     assert_eq!(painted(&app), None);
     assert!(
         !app.document_state.is_document_dirty(&path),
         "undo back to the saved colours is clean"
     );
-    assert_eq!(run(&mut app, "redo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "redo", &[&doc]), CommandOutcome::Ran);
     assert!(painted(&app).is_some());
     assert!(app.document_state.is_document_dirty(&path));
 
-    assert_eq!(run(&mut app, "save_document", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "save_document", &[&doc]), CommandOutcome::Ran);
     assert!(!app.document_state.is_document_dirty(&path), "saved");
     let text = std::fs::read_to_string(&path).expect("saved file");
     let saved = signex_types::format::SnxSchematic::parse(&text)
@@ -147,11 +148,11 @@ fn net_colors() {
         "the file holds the colour"
     );
 
-    let cleared = run(&mut app, "clear_all_net_colors", &[]);
+    let cleared = run(&mut app, "clear_all_net_colors", &[&doc]);
     assert_eq!(cleared, CommandOutcome::Ran);
     assert_eq!(painted(&app), None);
     assert!(app.document_state.is_document_dirty(&path));
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
     assert!(painted(&app).is_some());
     assert!(
         !app.document_state.is_document_dirty(&path),
@@ -187,7 +188,7 @@ fn net_colors() {
         before + 1,
         "the operands placed a junction"
     );
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
     assert_eq!(junctions(&app), before);
 
     // A command that declares operands and has no handler is still refused.
@@ -395,8 +396,16 @@ fn undo_round_trip() {
     );
 
     let wires = |app: &Signex| app.document_state.engines[&path].document().wires.len();
+    let doc = format!("document={}", path.display());
     let mut run = |app: &mut Signex, name: &str| {
-        let (outcome, task) = app.dispatch_command_headless(&id(name), CommandArgs::none());
+        // Undo and Redo name their document; the editing commands act on
+        // the active one, as a click does.
+        let command = id(name);
+        let args = match name {
+            "undo" | "redo" => CommandArgs::parse_operands(&command, &[&doc]).expect("operands"),
+            _ => CommandArgs::none(),
+        };
+        let (outcome, task) = app.dispatch_command_headless(&command, args);
         assert_eq!(outcome, CommandOutcome::Ran, "{name}");
         driver.settle(app, task).expect("command settled");
     };

@@ -5,14 +5,15 @@
 //! nobody read. There is no flag to switch: a handler is code that reads them.
 //!
 //! A handler runs the same app commit path as the click or the button of the
-//! same id, so one command id has one behaviour on every surface.
+//! same id, so one command id has one behaviour on every surface. A command
+//! that names a document (`document_operands`) acts on that document alone and
+//! is not gated by what the active tab can do.
 
 use iced::Task;
-use signex_types::theme::Color;
 
+use super::document_operands as doc;
 use super::placement_operands as place;
-use super::{CommandArgs, CommandOutcome, OperandValue, enablement};
-use crate::app::mutation_gateway::CommandOutcome as Mutation;
+use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -27,8 +28,13 @@ pub(crate) type OperandHandler = fn(&mut Signex, &CommandArgs) -> Ran;
 /// `every_operand_command_has_a_handler_or_is_refused`
 /// keeps this table and the catalog in step.
 const HANDLERS: &[(&str, OperandHandler)] = &[
-    ("color_net", color_net),
-    ("clear_all_net_colors", clear_all_net_colors),
+    ("color_net", doc::color_net),
+    ("clear_all_net_colors", doc::clear_all_net_colors),
+    ("undo", doc::undo),
+    ("redo", doc::redo),
+    ("save_document", doc::save),
+    ("save_document_as", doc::save_as),
+    ("close_active_document", doc::close),
     ("place_net_label", place::net_label),
     ("place_local_net_label", place::net_label),
     ("place_global_label", place::global_label),
@@ -62,14 +68,27 @@ pub(super) fn handled_ids() -> impl Iterator<Item = &'static str> {
     HANDLERS.iter().map(|(id, _)| *id)
 }
 
+/// Does `command` name its document with the `document` operand?
+pub(crate) fn names_its_document(command: &AppCommandId) -> bool {
+    crate::keymap::metadata_for(command)
+        .is_some_and(|meta| meta.operands.iter().any(|op| op.name == "document"))
+}
+
 impl Signex {
-    /// Run `command` from the operands in `args`: its handler, behind the same
-    /// enablement gate as a dispatch. A command with no handler is refused.
+    /// Run `command` from the operands in `args`: its handler. A command with
+    /// no handler is refused. One that names its document (`document`) is
+    /// run on that document, with ids made unique first and without the
+    /// active tab's enablement; any other is behind the same enablement gate
+    /// as a dispatch.
     pub(crate) fn run_operands(&mut self, command: &AppCommandId, args: &CommandArgs) -> Ran {
         let Some(handler) = operand_handler(command) else {
             return refused("operands are declared but not run yet (#1934)");
         };
-        if let Some(reason) = enablement::disabled_reason(command, &self.command_context(None)) {
+        if names_its_document(command) {
+            self.reconcile_document_ids();
+        } else if let Some(reason) =
+            enablement::disabled_reason(command, &self.command_context(None))
+        {
             return refused(reason);
         }
         handler(self, args)
@@ -78,63 +97,4 @@ impl Signex {
 
 fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
-}
-
-fn ran() -> Ran {
-    (CommandOutcome::Ran, Task::none())
-}
-
-/// `Ok` when no `path` was given, or it names the active document.
-fn acts_on_active_document(app: &Signex, path: Option<&OperandValue>) -> Result<(), String> {
-    let Some(OperandValue::Path(given)) = path else {
-        return Ok(());
-    };
-    match app.document_state.active_path.as_deref() {
-        Some(active) if active == std::path::Path::new(given) => Ok(()),
-        _ => Err(format!("{given} is not the active document")),
-    }
-}
-
-/// `color_net at=x,y color=#rrggbb [path=..]`: colour the net whose wire is
-/// under the point, as a pen click does.
-fn color_net(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let (Some(OperandValue::Point(x, y)), Some(OperandValue::Color(r, g, b))) =
-        (args.operand("at"), args.operand("color"))
-    else {
-        return refused("`color_net` needs the operands `at` and `color`");
-    };
-    if let Err(reason) = acts_on_active_document(app, args.operand("path")) {
-        return refused(reason);
-    }
-    let net = app.net_elements_at(*x, *y);
-    if net.is_empty() {
-        return refused(format!("there is no wire at {x},{y}"));
-    }
-    match app.commit_net_colors(&net, Color::new(*r, *g, *b, 255)) {
-        (Mutation::Changed, _) => ran(),
-        (Mutation::Unchanged, _) => refused("the net already has that colour"),
-        (Mutation::Failed, why) => refused(why.unwrap_or_else(|| "no colour was applied".into())),
-    }
-}
-
-/// `clear_all_net_colors [path=..]`: clear the colours of every open sheet, or
-/// of the one at `path`, as the Active Bar button does.
-fn clear_all_net_colors(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let only = match args.operand("path") {
-        Some(OperandValue::Path(path)) => Some(std::path::PathBuf::from(path)),
-        _ => None,
-    };
-    if let Some(path) = &only
-        && !app.document_state.engines.contains_key(path)
-    {
-        return refused(format!("{} is not an open document", path.display()));
-    }
-    let cleared = app.run_clear_all_net_colors(only.as_deref());
-    if cleared.sheets > 0 {
-        ran()
-    } else if cleared.kept_read_only > 0 {
-        refused("the sheet is read-only: its net colours were kept")
-    } else {
-        refused("there are no net colours to clear")
-    }
 }

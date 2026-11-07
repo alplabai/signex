@@ -19,6 +19,8 @@ pub enum OperandKind {
     Bool,
     /// An opaque colour, `#rrggbb` (the leading `#` is optional).
     Color,
+    /// A document: its id (a hyphenated uuid) or an absolute path (#2172).
+    Document,
 }
 
 impl OperandKind {
@@ -30,6 +32,7 @@ impl OperandKind {
             Self::Path => "path",
             Self::Bool => "bool",
             Self::Color => "color",
+            Self::Document => "document",
         }
     }
 
@@ -38,7 +41,7 @@ impl OperandKind {
         match self {
             Self::Point => Some("mm"),
             Self::Angle => Some("deg"),
-            Self::Text | Self::Path | Self::Bool | Self::Color => None,
+            Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document => None,
         }
     }
 }
@@ -68,6 +71,21 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("path", OperandKind::Path),
     ("overwrite", OperandKind::Bool),
     ("color", OperandKind::Color),
+    ("document", OperandKind::Document),
+    ("id", OperandKind::Text),
+    ("kind", OperandKind::Text),
+    ("project", OperandKind::Text),
+    ("name", OperandKind::Text),
+    ("dirty", OperandKind::Bool),
+    ("designator", OperandKind::Text),
+    ("value", OperandKind::Text),
+    ("net", OperandKind::Text),
+    ("ids", OperandKind::Text),
+    ("kinds", OperandKind::Text),
+    ("region", OperandKind::Text),
+    ("fields", OperandKind::Text),
+    ("offset", OperandKind::Text),
+    ("limit", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -118,14 +136,53 @@ pub const SAVE_PATH: &[Operand] = &[
     optional("overwrite", OperandKind::Bool),
 ];
 
-/// Colour the net under a point on the open sheet (or on the one at `path`).
+/// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[
     required("at", OperandKind::Point),
     required("color", OperandKind::Color),
-    optional("path", OperandKind::Path),
+    required("document", OperandKind::Document),
 ];
-/// An open document to act on, instead of every one.
-pub const DOCUMENT: &[Operand] = &[optional("path", OperandKind::Path)];
+/// The document a command acts on, by id or path. A headless or CLI run names
+/// it every time and never falls back to the active one (#2172).
+pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
+/// A save dialog's answer for the named document.
+pub const SAVE_DOCUMENT_AS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
+];
+/// `resolve`: the uuid to say what it is.
+pub const RESOLVE: &[Operand] = &[required("id", OperandKind::Text)];
+/// Which documents: the filters `list_documents` and `find` share.
+pub const DOCUMENT_FILTERS: &[Operand] = &[
+    optional("kind", OperandKind::Text),
+    optional("project", OperandKind::Text),
+    optional("name", OperandKind::Text),
+    optional("dirty", OperandKind::Bool),
+];
+/// `find`: documents by the shared filters, or elements by what a person
+/// reads on them, in one document or a whole project.
+pub const FIND: &[Operand] = &[
+    optional("document", OperandKind::Document),
+    optional("kind", OperandKind::Text),
+    optional("project", OperandKind::Text),
+    optional("name", OperandKind::Text),
+    optional("dirty", OperandKind::Bool),
+    optional("designator", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("net", OperandKind::Text),
+    optional("text", OperandKind::Text),
+];
+/// `read_document`: the named document's data, narrowed and paged.
+pub const READ_DOCUMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("ids", OperandKind::Text),
+    optional("kinds", OperandKind::Text),
+    optional("region", OperandKind::Text),
+    optional("fields", OperandKind::Text),
+    optional("offset", OperandKind::Text),
+    optional("limit", OperandKind::Text),
+];
 
 /// The golden column: `name:kind` with `/unit`, `?` when optional, comma
 /// separated; `-` when the command takes none.

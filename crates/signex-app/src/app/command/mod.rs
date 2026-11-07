@@ -11,7 +11,10 @@
 pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
+mod document_operands;
 pub(crate) mod enablement;
+#[cfg(test)]
+mod interaction_snapshot_tests;
 mod needs;
 #[cfg(test)]
 mod operand_handler_tests;
@@ -21,6 +24,7 @@ mod outcome;
 #[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
+pub(crate) mod queries;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
@@ -109,6 +113,10 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
+        // A query answers with data and acts on no window (#2172).
+        if let Some(answered) = self.run_query(command, &args) {
+            return answered;
+        }
         // Undo / Redo typed in an undocked tab step that window's document
         // and are gated by its history, not the main window's active tab
         // (#1546).

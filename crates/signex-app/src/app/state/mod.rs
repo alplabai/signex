@@ -341,6 +341,9 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
+    /// Document ids a document cannot say itself: project files not loaded,
+    /// and the order documents were first seen in (#2172).
+    pub document_ids: crate::app::document_ids::DocumentIds,
     /// Counts the changes that can alter an ERC finding: an edit to a sheet
     /// (through the engine, or Annotate, Replace, library update and the like),
     /// a project-file change, and a sheet written behind the engines. Each calls

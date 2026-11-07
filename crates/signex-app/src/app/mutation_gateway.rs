@@ -417,7 +417,7 @@ impl Signex {
 
     /// Drop selected wires the edit removed (a merge folds one wire into its
     /// neighbour), so the selection never names a wire that is gone.
-    fn prune_selected_wires(&mut self) {
+    pub(crate) fn prune_selected_wires(&mut self) {
         let Some(engine) = self.document_state.active_engine() else {
             return;
         };

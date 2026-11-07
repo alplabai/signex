@@ -272,6 +272,7 @@ mod tests {
             id,
             path: dir.join("P.snxprj"),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: "P".to_string(),
                 dir: dir.to_string_lossy().into_owned(),

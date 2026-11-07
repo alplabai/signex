@@ -1451,6 +1451,7 @@ mod tests {
             id,
             path: PathBuf::from(dir).join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                document_id: None,
                 description: None,
                 name: dir.to_owned(),
                 dir: dir.to_owned(),

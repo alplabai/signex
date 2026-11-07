@@ -56,6 +56,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 
     let id = app.document_state.mint_project_id();
     let data = ProjectData {
+        document_id: None,
         description: None,
         name: stem.to_string(),
         dir: dir.to_string_lossy().into_owned(),
@@ -822,6 +823,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("Hotel.snxprj");
     let data = ProjectData {
+        document_id: None,
         description: None,
         name: "Hotel".into(),
         dir: tmp.path().to_string_lossy().into_owned(),
@@ -1562,6 +1564,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
             id,
             path: prj.clone(),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: "Other".to_string(),
                 dir: tmp.path().to_string_lossy().into_owned(),

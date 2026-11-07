@@ -16,6 +16,7 @@ const EDITED: &str = "typed, never saved";
 
 fn project() -> ProjectData {
     ProjectData {
+        document_id: None,
         description: Some(ORIGINAL.to_string()),
         name: "P".to_string(),
         dir: String::new(),

@@ -67,6 +67,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
         id,
         path: prj_path.clone(),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "Proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),
@@ -149,6 +150,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
         id,
         path: prj_path.clone(),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "Proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),

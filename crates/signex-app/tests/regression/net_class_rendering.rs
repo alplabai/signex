@@ -94,6 +94,7 @@ fn fixture() -> Signex {
         id,
         path: dir.join("P.snxprj"),
         data: ProjectData {
+            document_id: None,
             name: "P".to_string(),
             description: None,
             dir: dir.to_string_lossy().into_owned(),

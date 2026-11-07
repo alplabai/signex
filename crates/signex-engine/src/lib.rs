@@ -466,6 +466,20 @@ impl Engine {
         Self::encode(sheet)
     }
 
+    /// [`Self::serialize_with_extents`] for a Save As (#2172): the copy being
+    /// encoded carries `id` as its own document id, a new document's, while
+    /// this document keeps the id it has until the copy is written.
+    pub fn serialize_as_copy_with_extents(
+        &self,
+        id: uuid::Uuid,
+        measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
+    ) -> Result<String, EngineError> {
+        let mut sheet = self.document.clone();
+        sheet.uuid = id;
+        sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
+        Self::encode(sheet)
+    }
+
     /// [`Self::save`] refreshing the stored text widths with `measure`; see
     /// [`Self::serialize_with_extents`]. Returns the bytes written, so a
     /// caller fingerprints what it wrote instead of re-reading the file.
@@ -612,6 +626,14 @@ impl Engine {
 
     pub fn set_path(&mut self, path: Option<PathBuf>) {
         self.path = path;
+    }
+
+    /// Give the sheet a new id of its own (#2172): the repair of a missing or
+    /// repeated one, and Save As, which makes a new document. Not an edit: no
+    /// history entry and no revision, so it is never dirty by itself and the
+    /// next save writes it.
+    pub fn reassign_document_id(&mut self, id: uuid::Uuid) {
+        self.document.uuid = id;
     }
 
     /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.

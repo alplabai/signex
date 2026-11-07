@@ -333,8 +333,12 @@ impl Signex {
                 super::save::file_label(project_path)
             );
         }
-        let data = signex_types::project::parse_project(project_path)
+        let mut data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
+        // A project an older build wrote has no id yet: it gets one now and
+        // the next save writes it (#2172). Not an edit, so not dirty.
+        data.document_id
+            .get_or_insert_with(signex_types::document_id::DocumentId::new);
         let id = self.document_state.mint_project_id();
         // Auto-mount every library referenced by `Project::libraries`
         // so the project tree picks them up before the panel rebuild
@@ -386,7 +390,10 @@ impl Signex {
         // A project that recorded a rule profile learns, off the update loop,
         // whether the local copy of that profile has changed since (#1608).
         let drift = self.check_profile_drift_task_for(id);
-        Ok((id, iced::Task::batch([mount_task, drift])))
+        // Every sheet and the board the project names is listed with its id
+        // without a tab: the ids are read from the file heads (#2172).
+        let headers = self.read_missing_document_headers(id);
+        Ok((id, iced::Task::batch([mount_task, drift, headers])))
     }
 
     /// Whether a document already owns `path`: it has a tab, or its engine

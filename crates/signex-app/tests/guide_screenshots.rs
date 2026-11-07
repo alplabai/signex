@@ -431,6 +431,7 @@ fn open_readme_project(app: &mut Signex, dir: &std::path::Path) -> PathBuf {
         ("Power", "power.snxsch"),
     ];
     let data = ProjectData {
+        document_id: None,
         description: None,
         name: "sensor-node".into(),
         dir: dir.to_string_lossy().into_owned(),

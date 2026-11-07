@@ -325,6 +325,9 @@ impl Signex {
                 .instance_note_scopes
                 .remove(&closed_path);
             self.document_state.forget_project_saved_state(&closed_path);
+            if let Some(dir) = closed_path.parent() {
+                self.document_state.document_ids.forget_headers_under(dir);
+            }
         }
 
         // A pricing walk keeps running: closing a project does not unmount its
@@ -1062,6 +1065,7 @@ mod tests {
             id,
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                document_id: None,
                 description: None,
                 name: "p".into(),
                 dir: dir.to_string_lossy().into_owned(),

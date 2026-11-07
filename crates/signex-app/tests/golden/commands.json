@@ -190,6 +190,11 @@
     "category": "modify"
   },
   {
+    "id": "document_info",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "drag",
     "group": "Schematic",
     "category": "modify"
@@ -418,6 +423,11 @@
     "id": "leave_sheet",
     "group": "Schematic",
     "category": "navigation"
+  },
+  {
+    "id": "list_documents",
+    "group": "General",
+    "category": "file"
   },
   {
     "id": "measure_distance",
@@ -765,6 +775,11 @@
     "category": "file"
   },
   {
+    "id": "read_document",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "redo",
     "group": "General",
     "category": "edit"
@@ -798,6 +813,11 @@
     "id": "reset_schematic_designators",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "resolve",
+    "group": "General",
+    "category": "file"
   },
   {
     "id": "rotate_clockwise",

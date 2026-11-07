@@ -159,6 +159,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
         id,
         path: PathBuf::from(dir).join("ProjectA.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "ProjectA".to_string(),
             dir: dir.to_string(),
@@ -1012,6 +1013,7 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
         id,
         path: PathBuf::from(dir).join("Other.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "Other".to_string(),
             dir: dir.to_string(),

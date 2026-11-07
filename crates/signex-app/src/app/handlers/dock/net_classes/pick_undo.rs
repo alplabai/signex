@@ -97,9 +97,17 @@ impl crate::app::Signex {
         let Some(path) = self.document_state.active_path.clone() else {
             return false;
         };
+        self.step_net_class_pick_on(&path, undoing)
+    }
+
+    /// [`Self::undo_net_class_pick`] / [`Self::redo_net_class_pick`] for the
+    /// sheet at `path`, whether or not a window shows it (#2172).
+    pub(crate) fn step_net_class_pick_on(&mut self, path: &std::path::Path, undoing: bool) -> bool {
+        let path = path.to_path_buf();
         let position = self
             .document_state
-            .active_engine()
+            .engines
+            .get(&path)
             .map_or(0, |e| e.undo_position());
         // Drop picks that are no longer their project's newest class edit
         // (panel edits, a project closed) until a live one is on top.
