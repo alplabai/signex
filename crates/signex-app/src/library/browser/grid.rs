@@ -8,9 +8,7 @@ use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
 use super::keyed::keyed;
 use super::look;
 use super::size_sensor::sense_height;
-use super::window::{
-    BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows,
-};
+use super::window::{BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows};
 use super::*;
 use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
@@ -53,13 +51,18 @@ pub(super) fn view_grid<'a>(
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     let graphite = crate::styles::is_graphite(tokens);
+    // Graphite-only columns (Description, Updated) are skipped elsewhere.
+    let columns: Vec<&GridColumn> = columns
+        .iter()
+        .filter(|c| graphite || !c.kind.graphite_only())
+        .collect();
     let header_ink = look::header_ink(tokens);
     let header_fill = look::header_fill(tokens);
     let header_row = {
         // 16-px gutter aligns with the per-row lifecycle dot below.
         let mut r = row![Space::new().width(Length::Fixed(LIFECYCLE_DOT_GUTTER))].spacing(0);
         let active_sort = browser.sort_by.as_ref();
-        for c in columns {
+        for c in &columns {
             // Indicate the active sort column with a "▲" / "▼" glyph
             // appended to the label. Other columns render plain so the
             // user can spot the sort target at a glance.
@@ -115,7 +118,7 @@ pub(super) fn view_grid<'a>(
         r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)).boxed());
         container(r)
             .padding([SP.xs, SP.s])
-            .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
+            .height(Length::Fixed(look::header_height(tokens)))
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(header_fill)),
                 border: Border {
@@ -198,7 +201,7 @@ pub(super) fn view_grid<'a>(
                 .padding([0.0, SP.s]);
 
             let mut data_row = row![lifecycle_cell].spacing(0);
-            for c in columns {
+            for c in &columns {
                 let column_key = c.kind.sort_key();
                 let row_value = c.kind.cell_value_named(r, &names);
 
@@ -206,13 +209,28 @@ pub(super) fn view_grid<'a>(
                 // released. Stage 14 of v0.9-snxlib-as-file. Edit
                 // path is the bump dialog (Team mode) or auto-bump
                 // on save (Personal mode), not inline grid editing.
+                if matches!(c.kind, ColumnKind::Description | ColumnKind::Updated) {
+                    data_row = data_row.push(
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([SP.s, 6.0])
+                        .width(Length::Fixed(c.width))
+                        .boxed(),
+                    );
+                    continue;
+                }
+
                 if matches!(c.kind, ColumnKind::Rev) {
                     let label = if r.released {
                         format!("🔒 {row_value}")
                     } else {
                         row_value.clone()
                     };
-                    let color = if r.released {
+                    let color = if r.released && !graphite {
                         // Released rows lock-icon-amber so the gate
                         // stands out at a glance.
                         iced::Color::from_rgb(0.96, 0.78, 0.10)

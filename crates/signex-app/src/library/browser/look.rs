@@ -197,3 +197,32 @@ pub(super) fn control_radius(tokens: &ThemeTokens) -> f32 {
         3.0
     }
 }
+
+/// Height of the column-header row: 30 px on Graphite, the legacy height
+/// elsewhere.
+pub(super) fn header_height(tokens: &ThemeTokens) -> f32 {
+    if is_graphite(tokens) {
+        30.0
+    } else {
+        super::window::BROWSER_HEADER_HEIGHT
+    }
+}
+
+/// Text-input style for a field that sits inside a framed container: no
+/// fill or border of its own, so the container's Graphite field look shows.
+pub(super) fn bare_input(
+    tokens: &ThemeTokens,
+) -> impl Fn(&iced::Theme, iced::widget::text_input::Status) -> iced::widget::text_input::Style + 'static
+{
+    use iced::widget::text_input::Style;
+    let r = resolve(tokens);
+    let ink = crate::styles::ti(tokens.text);
+    let accent = crate::styles::ti(tokens.accent);
+    move |_, _| Style {
+        background: iced::Background::Color(Color::TRANSPARENT),
+        border: Border::default(),
+        placeholder: r.ink4,
+        value: ink,
+        selection: Color { a: 0.4, ..accent },
+    }
+}
