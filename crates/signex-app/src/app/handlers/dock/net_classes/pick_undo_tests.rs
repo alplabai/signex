@@ -667,6 +667,8 @@ fn a_pick_that_evicts_the_save_point_marks_the_sheet_dirty_at_once() {
     assert!(!sheet_dirty(&app));
 
     pick(&mut app, "GND", Some("Power"));
+    assert!(!sheet_dirty(&app), "the saved state is still reachable");
+    pick(&mut app, "VCC", Some("Power"));
     assert!(
         sheet_dirty(&app),
         "the saved step is gone: unsaved until a save"
