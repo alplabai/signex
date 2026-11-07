@@ -19,3 +19,6 @@ invalid:
     }
   - "fn f() { drop(self.handle_z()); }"
   - "fn f() { let _ = Self::handle_q(); }"
+  - "fn f() { std::mem::drop(self.handle_z()); }"
+  - "fn f() { mem::drop(self.handle_z()); }"
+  - "fn f() { _ = self.handle_x(); }"

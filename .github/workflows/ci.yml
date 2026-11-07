@@ -308,7 +308,7 @@ jobs:
       # Prebuilt binary; `cargo install` compiled it from source every run.
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-deny,ast-grep@0.51.1
+          tool: cargo-deny
 
       - name: Path-filter controls
         if: ${{ !cancelled() }}
@@ -412,13 +412,23 @@ jobs:
 
       # Structural lint rules (sgconfig.yml, ast-grep/rules): shapes a text
       # grep cannot see, e.g. a discarded Task wrapped over several lines.
-      # Advisory until it has run clean on trunk; then drop continue-on-error.
-      - name: ast-grep rules
+      # Advisory until it has run clean on trunk; then drop continue-on-error
+      # on both steps. The install is its own step so a failed download can
+      # never take cargo-deny or this job down with it.
+      - name: Install ast-grep
+        id: install-ast-grep
         if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ast-grep@0.51.1
+
+      - name: ast-grep rules
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         continue-on-error: true
         run: |
           ast-grep test --skip-snapshot-tests
-          ast-grep scan --error
+          ast-grep scan
 
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its

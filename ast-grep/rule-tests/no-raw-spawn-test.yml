@@ -15,3 +15,4 @@ invalid:
   - "fn f() { tokio::spawn(async {}); }"
   - "fn f() { std::thread::spawn(|| {}); }"
   - "fn f() { thread::spawn(|| {}); }"
+  - "fn f() { tokio::task::spawn(async {}); }"

@@ -7,3 +7,5 @@ invalid:
   - "fn view() -> Element<'_, Message> { let s = std::fs::read_to_string(\"x\"); a() }"
   - "fn view() -> Element<'_, Message> { let s = fs::read(\"x\"); a() }"
   - "fn view() -> Element<'_, Message> { Command::new(\"open\"); a() }"
+  - "fn view() -> Element<'_, Message> { let f = std::fs::File::open(\"x\"); a() }"
+  - "fn view() -> Element<'_, Message> { let f = File::create(\"x\"); a() }"

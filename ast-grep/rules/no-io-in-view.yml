@@ -16,6 +16,8 @@ rule:
         - pattern: fs::$F($$$)
         - pattern: std::process::Command::new($$$)
         - pattern: Command::new($$$)
+        - pattern: std::fs::File::$F($$$)
+        - pattern: File::$F($$$)
         - pattern: Path::new($$$).exists()
         - pattern: $P.exists()
         - pattern: $P.is_file()

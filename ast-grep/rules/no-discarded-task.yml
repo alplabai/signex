@@ -15,6 +15,9 @@ rule:
         - pattern: let _ = $R::$M($$$);
         - pattern: drop($R.$M($$$))
         - pattern: drop($R::$M($$$))
+        - pattern: std::mem::drop($R.$M($$$))
+        - pattern: mem::drop($R.$M($$$))
+        - pattern: _ = $R.$M($$$)
     - not:
         inside:
           stopBy: end
