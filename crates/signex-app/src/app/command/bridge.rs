@@ -244,7 +244,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
-        // Design > Generate BOM opens the same one.
+        // Reports > Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
@@ -875,7 +875,7 @@ mod tests {
         ));
     }
 
-    /// #1991 - Design > Electrical Rules Check opens the ERC dialog through
+    /// #1991 - Project > Electrical Rules Check opens the ERC dialog through
     /// its own id; `run_erc` (F8) keeps running ERC.
     #[test]
     fn open_erc_dialog_opens_the_dialog_and_run_erc_runs() {

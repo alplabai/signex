@@ -384,10 +384,10 @@ Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
 It acts on placed symbols, so with none on the sheet there is nothing to
 annotate (section 5).
 
-- **Design ▸ Annotation ▸ Annotate Schematics…** opens the annotation dialog.
+- **Project ▸ Annotation ▸ Annotate Schematics…** opens the annotation dialog.
   Its right side lists the proposed changes (current and proposed designator
   for each symbol). Press **Accept Changes** to apply them, then **Close**.
-- **Design ▸ Annotation ▸ Annotate Schematics Quietly** (`Alt+A`) applies the
+- **Project ▸ Annotation ▸ Annotate Schematics Quietly** (`Alt+A`) applies the
   changes without opening the dialog.
 - **Reset & Renumber** in the dialog, or **Force Annotate All Schematics**
   (`Shift+Alt+A`), renumbers everything from scratch.
@@ -518,7 +518,7 @@ ERC (electrical rules check) scans the design for wiring mistakes, such as
 pins that connect nothing or two outputs wired together.
 
 1. Press `F8`. This runs the check on the project immediately.
-   Alternatively choose **Design ▸ Electrical Rules Check**, which opens a
+   Alternatively choose **Project ▸ Electrical Rules Check**, which opens a
    dialog where you can set the severity of each rule and press **Run ERC**.
 2. The **ERC** panel opens with the results. Its header shows the number of
    errors, warnings and info items, and `<` and `>` step through them.
@@ -595,7 +595,7 @@ is nothing to lose at save time. Messages says once per opened sheet which file
 was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
-
+The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Reports**. Both need a schematic open.
 Both exports are under **File ▸ Export** and need a schematic open.
 
 **PDF**
@@ -612,7 +612,7 @@ Both exports are under **File ▸ Export** and need a schematic open.
 
 **BOM (bill of materials)**
 
-1. Choose **File ▸ Export ▸ Bill of Materials…**.
+1. Choose **Reports ▸ Bill of Materials…**.
 2. A preview of the table opens. Adjust the options and press **Export…**.
 3. In the save dialog, name the file. The format can be CSV (`.csv`), Excel
    (`.xlsx`) or HTML (`.html`).
@@ -624,7 +624,7 @@ it, and **Save As** in the document's own folder. With no project open, or for
 the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
-The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+The Reports menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. It
 lists the rows the ERC panel shows, and when you have edited the sheet since the
@@ -692,9 +692,9 @@ the default Altium profile; the menu path always works.
 5. **Name the net.** Choose **Place ▸ Net Label** (or press `P` then `N`),
    click the wire, press `Esc`, double-click the label, type the name, and press
    `Enter` (section 7).
-6. **Annotate.** Press `Alt+A` (**Design ▸ Annotation ▸ Annotate Schematics
+6. **Annotate.** Press `Alt+A` (**Project ▸ Annotation ▸ Annotate Schematics
    Quietly**) to give every part a unique reference designator (section 8).
-   **Design ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
+   **Project ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
    first.
 7. **Run ERC.** Press `F8`, read the **ERC** panel, and click a row to jump to
    the item (section 9). Fix what it reports, then run it again.

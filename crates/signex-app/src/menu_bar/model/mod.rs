@@ -83,8 +83,8 @@ impl MenuItem {
 
 /// Titles of the root menus, left to right: the one list both the model and
 /// the chrome's width estimate read.
-pub const ROOT_TITLES: [&str; 8] = [
-    "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help",
+pub const ROOT_TITLES: [&str; 10] = [
+    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window", "Help",
 ];
 
 /// Build the menu bar for `ctx`. Pure: the same context gives the same model.
@@ -93,9 +93,11 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::file(ctx),
         menus::edit(ctx),
         menus::view(ctx),
+        menus::project(ctx),
         menus::place(ctx),
         menus::design(ctx),
         menus::tools(ctx),
+        menus::reports(ctx),
         menus::window(),
         menus::help(ctx),
     ];

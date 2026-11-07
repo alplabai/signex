@@ -461,13 +461,13 @@ fn the_menu_inputs_follow_the_active_keymap() {
     assert_ne!(base().with_keymap(first), base().with_keymap(again));
 }
 
-/// #1765: File gains Close Document, Close Project and Print, and loses Exit
+/// #1765: File gains Close Document and Print, and loses Exit
 /// natively (Quit Signex lives in the app menu).
 #[test]
 fn the_native_file_menu_has_the_approved_rows() {
     let built = build(&menu_bar_model(&variants().remove(1)), false);
     let file = file_menu(&built.spec);
-    for label in ["Close Document", "Close Project", "Print..."] {
+    for label in ["Close Document", "Print..."] {
         assert!(item_labelled(file, label).is_some(), "{label}");
     }
     assert!(item_labelled(file, "Exit").is_none());
@@ -477,8 +477,9 @@ fn the_native_file_menu_has_the_approved_rows() {
         at("File/Close Document"),
         Some(MenuMessage::Command(id)) if id.as_str() == "close_active_document"
     ));
+    // Close Project moved to the Project menu (2026-11-07 decision).
     assert!(matches!(
-        at("File/Close Project"),
+        at("Project/Close Project"),
         Some(MenuMessage::CloseProject)
     ));
     assert!(matches!(

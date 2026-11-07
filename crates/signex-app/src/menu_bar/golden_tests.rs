@@ -366,7 +366,7 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
 }
 
 /// The chrome clamps its search bar with this width; it is derived from the
-/// model's root titles and must stay at its pre-model value (38 label chars).
+/// model's root titles and must follow the root titles (52 label chars, 10 roots).
 #[test]
 fn approx_menu_bar_width_is_unchanged() {
     let titles: Vec<String> = menu_bar_model(&MenuContext::default())
@@ -378,8 +378,9 @@ fn approx_menu_bar_width_is_unchanged() {
     assert_eq!(
         super::model::ROOT_TITLES,
         [
-            "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help"
+            "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window",
+            "Help"
         ]
     );
-    assert_eq!(super::approx_menu_bar_width(), 493.0);
+    assert_eq!(super::approx_menu_bar_width(), 622.0);
 }

@@ -102,7 +102,7 @@ board.
   net-label conflicts, bus checks and completeness checks (part without
   footprint / value / MPN, unannotated designator, single-pin net, net with no
   driver, off-grid, ...); per-finding waivers that carry a reason and an
-  author; File ▸ Export ▸ ERC Report as `.txt`, `.csv`, `.json`, `.html` or
+  author; Reports ▸ ERC Report as `.txt`, `.csv`, `.json`, `.html` or
   `.pdf` ([docs/ERC_RULES.md](docs/ERC_RULES.md),
   [docs/ERC_REPORT.md](docs/ERC_REPORT.md))
 - **Annotation (v0.7)** — four modes, review-and-confirm dialog,

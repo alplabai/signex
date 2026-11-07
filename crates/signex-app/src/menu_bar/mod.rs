@@ -128,7 +128,7 @@ pub enum MenuMessage {
     /// File ▸ Close Document — closes the active tab like the tab menu's
     /// Close; nothing when no tab is open.
     CloseDocument,
-    /// File ▸ Close Project — closes the active project like the project
+    /// Project ▸ Close Project — closes the active project like the project
     /// tree's Close Project, through its unsaved-changes gate; nothing when
     /// no project is open.
     CloseProject,
@@ -184,7 +184,7 @@ pub enum MenuMessage {
     PlaceText,
     /// Place ▸ No Connect — the no-connect tool.
     PlaceNoConnect,
-    // Design
+    // Project ▸ Annotation
     Annotate,
     AnnotateReset,
     AnnotateResetDuplicates,
@@ -427,10 +427,10 @@ pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
 }
 
 /// Menu path of the Electrical Rules Check row, built from the label and menu
-/// the Design menu uses, so a message naming it cannot drift.
+/// the Project menu uses, so a message naming it cannot drift.
 pub(crate) fn erc_menu_path() -> String {
     format!(
-        "Design ▸ {}",
+        "Project ▸ {}",
         cmd_label("open_erc_dialog", "Electrical Rules Check")
     )
 }
