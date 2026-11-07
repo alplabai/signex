@@ -1,0 +1,12 @@
+id: no-binding-silencer
+valid:
+  - "fn f() { let _ = tx.send(1); }"
+  - "fn f() { let _ = foo(); }"
+  - "fn f() { let _ = Plane { x: 1 }; }"
+  - "fn f() { let _guard = lock(); }"
+  - "fn f() { let (a, _) = pair(); }"
+invalid:
+  - "fn f() { let _ = a; }"
+  - "fn f() { let _ = first.name; }"
+  - "fn f() { let _ = &t.far; }"
+  - "fn f() { let _ = (l2, l3, l4); }"

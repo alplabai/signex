@@ -222,6 +222,9 @@ fn drain<R: Read + Send + 'static>(
     pipe: Option<R>,
     keep: Keep,
 ) -> std::thread::JoinHandle<Vec<u8>> {
+    // A blocking pipe read of a child process, inside the import Task: the
+    // child would stall on a full pipe if nobody drained it.
+    // ast-grep-ignore: no-raw-spawn
     std::thread::spawn(move || {
         let mut kept = Vec::new();
         let Some(mut pipe) = pipe else {
