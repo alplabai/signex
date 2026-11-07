@@ -171,6 +171,14 @@ fn ctrl_s_also_saves_the_dirty_active_project_beside_the_document() {
     }
 }
 
+/// A Project tab saves its own project, whichever project is the active one.
+#[test]
+fn ctrl_s_on_a_project_tab_saves_that_project_even_when_none_is_active() {
+    let mut f = setup(Kind::Project, false, false);
+    f.app.document_state.active_project = None;
+    assert_eq!(ctrl_s(&mut f), ["p.snxprj"]);
+}
+
 #[test]
 fn ctrl_s_on_a_library_browser_tab_saves_only_the_dirty_project() {
     for (dirty, want) in [(false, vec![]), (true, vec!["p.snxprj"])] {
@@ -198,6 +206,10 @@ fn ctrl_s_on_an_unwritten_primitive_opens_a_dialog_and_writes_nothing() {
         });
         assert_eq!(wrote, Vec::<String>::new(), "{kind:?}");
         assert!(dialog, "{kind:?}: the save-as dialog task");
+        // Saving the missing file instead would start a write job for it.
+        assert!(f.app.document_state.error_notice.is_none(), "{kind:?}");
+        let saving = f.app.document_state.document_saves.is_saving(&f.tab_path);
+        assert!(!saving, "{kind:?}: no write was started");
         assert!(
             f.app.document_state.is_document_dirty(&f.tab_path),
             "{kind:?}"
