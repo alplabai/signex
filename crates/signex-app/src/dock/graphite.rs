@@ -156,3 +156,21 @@ pub(super) fn floating_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> containe
 /// Side padding of a dock tab label; a strip that is too wide scrolls, the label
 /// size never shrinks.
 pub(super) const TAB_PAD: f32 = 10.0;
+
+/// The count chip after a dock tab label, from the panel's own data: messages
+/// logged, ERC diagnostics (a warning tone) and history entries. `None` when
+/// the panel has nothing to count.
+pub(super) fn tab_badge(
+    kind: crate::panels::PanelKind,
+    ctx: &crate::panels::PanelContext,
+) -> Option<(usize, crate::styles::PillTone)> {
+    use crate::panels::PanelKind;
+    use crate::styles::PillTone;
+    let (count, tone) = match kind {
+        PanelKind::Messages => (ctx.diagnostics.len(), PillTone::Neutral),
+        PanelKind::Erc => (ctx.erc_diagnostics.len(), PillTone::Warn),
+        PanelKind::History => (ctx.history.entries.len(), PillTone::Neutral),
+        _ => return None,
+    };
+    (count > 0).then_some((count, tone))
+}

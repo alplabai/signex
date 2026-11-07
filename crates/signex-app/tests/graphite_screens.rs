@@ -250,6 +250,12 @@ fn screens() -> Vec<(&'static str, Build)> {
         ("start", |_, _, _| Ok(())),
         ("schematic", |app, r, fx| {
             open_sample(app, r, fx);
+            // Two real log entries, so the Messages tab shows rows and its count.
+            signex_app::diagnostics::log_warning("Unconnected input pin TS on U1 (BQ24072)");
+            signex_app::diagnostics::log_warning("Unconnected output pin PGOOD on U1 (BQ24072)");
+            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::DraftTheme(
+                app.ui_state.theme_id,
+            ))));
             Ok(())
         }),
         ("schematic-signal", |app, r, fx| {
@@ -354,6 +360,8 @@ fn render_graphite_screens() {
         eprintln!("no wgpu adapter: skipping Graphite screens");
         return;
     };
+    // The in-app log is what the Messages panel lists.
+    let _ = signex_app::diagnostics::init_logging();
     let dir = PathBuf::from(std::env::var("GRAPHITE_SHOTS_DIR").expect("GRAPHITE_SHOTS_DIR"));
     std::fs::create_dir_all(&dir).expect("out dir");
     let only = std::env::var("GRAPHITE_ONLY").ok();

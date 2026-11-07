@@ -499,6 +499,7 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             .size(TS.body)
                             .font(mono)
                             .color(ink3)
+                            .wrapping(iced::widget::text::Wrapping::None)
                             .boxed(),
                         Length::Fixed(MSG_SOURCE_W),
                     ),
@@ -506,6 +507,7 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         text(entry.message.as_str().to_string())
                             .size(TS.body)
                             .color(ink)
+                            .wrapping(iced::widget::text::Wrapping::None)
                             .boxed(),
                         Length::Fill,
                     ),

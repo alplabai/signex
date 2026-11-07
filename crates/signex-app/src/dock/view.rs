@@ -187,13 +187,27 @@ impl DockArea {
             // lines whenever the dock area squeezes the tab — which
             // happens any time the panel column is in its default
             // ~240 px width with several panels in the strip.
-            let mut inner = container(
-                text(label)
-                    .size(tab_size)
-                    .color(text_c)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            )
-            .padding([SP.s, tab_pad]);
+            let label_text = text(label)
+                .size(tab_size)
+                .color(text_c)
+                .wrapping(iced::widget::text::Wrapping::None);
+            let tab_content: Element<'_, DockMessage> = match graphite
+                .then(|| graphite::tab_badge(*panel, ctx))
+                .flatten()
+            {
+                Some((count, tone)) => row![
+                    label_text.boxed(),
+                    container(text(count.to_string()).size(TS.caption).boxed())
+                        .padding([0.0, SP.s])
+                        .style(styles::pill(&ctx.tokens, tone))
+                        .boxed(),
+                ]
+                .spacing(SP.s)
+                .align_y(iced::Alignment::Center)
+                .boxed(),
+                None => label_text.boxed(),
+            };
+            let mut inner = container(tab_content).padding([SP.s, tab_pad]);
             if graphite {
                 inner = inner.height(Length::Fill).align_y(iced::Alignment::Center);
             }
