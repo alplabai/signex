@@ -7,7 +7,7 @@
 
 use super::*;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use iced::{Background, Color, Element, Length, Theme, Widget};
 
 use crate::app::state::AnnotateOrder;
 
@@ -21,7 +21,7 @@ mod controls;
 mod reprefix_confirm;
 
 use super::graphite as gr;
-use controls::{bordered_style, check_pip, order_preview, order_radio};
+use controls::{bordered_style, check_pip, lock_style, order_preview, order_radio};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -115,6 +115,7 @@ impl Signex {
                             self.ui_state.annotate_order,
                             text_c,
                             border_c,
+                            tokens,
                         ),
                         Space::new().width(4),
                         order_radio(
@@ -123,6 +124,7 @@ impl Signex {
                             self.ui_state.annotate_order,
                             text_c,
                             border_c,
+                            tokens,
                         ),
                     ]
                     .spacing(0),
@@ -134,6 +136,7 @@ impl Signex {
                             self.ui_state.annotate_order,
                             text_c,
                             border_c,
+                            tokens,
                         ),
                         Space::new().width(4),
                         order_radio(
@@ -142,6 +145,7 @@ impl Signex {
                             self.ui_state.annotate_order,
                             text_c,
                             border_c,
+                            tokens,
                         ),
                     ]
                     .spacing(0),
@@ -149,7 +153,13 @@ impl Signex {
                 .spacing(0)
                 .width(Length::FillPortion(3)),
                 Space::new().width(8),
-                order_preview(self.ui_state.annotate_order, text_c, text_muted, border_c),
+                order_preview(
+                    self.ui_state.annotate_order,
+                    text_c,
+                    text_muted,
+                    border_c,
+                    tokens,
+                ),
             ]
             .align_y(iced::Alignment::Start)
             .spacing(0),
@@ -163,7 +173,7 @@ impl Signex {
             container(text("Designator").size(TS.body).color(text_c),)
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
-                .style(bordered_style(border_c)),
+                .style(bordered_style(border_c, tokens)),
         ]
         .spacing(SP.s);
 
@@ -172,7 +182,7 @@ impl Signex {
             container(text("Off").size(TS.body).color(text_muted))
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
-                .style(bordered_style(border_c)),
+                .style(bordered_style(border_c, tokens)),
         ]
         .spacing(SP.s);
 
@@ -215,13 +225,13 @@ impl Signex {
             param_rows = param_rows.push(
                 (row![
                     row![
-                        check_pip(false, border_c),
+                        check_pip(false, border_c, tokens),
                         Space::new().width(6),
                         text(name.clone()).size(TS.body).color(text_c),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(5)),
-                    container(check_pip(true, border_c))
+                    container(check_pip(true, border_c, tokens))
                         .align_x(iced::alignment::Horizontal::Right)
                         .width(Length::FillPortion(1)),
                 ]
@@ -253,14 +263,14 @@ impl Signex {
                 container(text("None").size(TS.body).color(text_muted))
                     .padding([SP.s, SP.m])
                     .width(Length::FillPortion(3))
-                    .style(bordered_style(border_c)),
+                    .style(bordered_style(border_c, tokens)),
             ]
             .align_y(iced::Alignment::Center)
             .spacing(6),
             Space::new().height(6),
             container(scrollable(param_rows).height(280))
                 .padding(SP.xs)
-                .style(bordered_style(border_c)),
+                .style(bordered_style(border_c, tokens)),
             Space::new().height(4),
             text("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now.")
                 .size(TS.caption)
@@ -284,7 +294,7 @@ impl Signex {
             sheet_rows = sheet_rows.push(
                 (row![
                     row![
-                        check_pip(is_active, border_c),
+                        check_pip(is_active, border_c, tokens),
                         Space::new().width(6),
                         text(tab.title.clone()).size(TS.body).color(row_color),
                     ]
@@ -303,7 +313,7 @@ impl Signex {
                         .color(row_color)
                         .width(Length::FillPortion(1)),
                     row![
-                        check_pip(false, border_c),
+                        check_pip(false, border_c, tokens),
                         Space::new().width(6),
                         text(suffix_placeholder.to_string())
                             .size(TS.body)
@@ -356,7 +366,7 @@ impl Signex {
             ]
             .padding([SP.xs, SP.m]),
             container(scrollable(sheet_rows).height(180))
-                .style(bordered_style(border_c)),
+                .style(bordered_style(border_c, tokens)),
             Space::new().height(4),
             text("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic.")
                 .size(TS.caption)
@@ -455,21 +465,7 @@ impl Signex {
                 )
                 .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
                 .padding(0.0)
-                .style(move |_: &Theme, _| button::Style {
-                    background: Some(Background::Color(if is_locked {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.12)
-                    } else {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.03)
-                    })),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: border_c,
-                        ..Border::default()
-                    },
-                    text_color: text_c,
-                    ..button::Style::default()
-                })
+                .style(lock_style(tokens, is_locked, border_c, text_c))
                 .boxed();
                 // Graphite: designators in mono; a changing row is tinted and
                 // its proposed designator takes the accent ink.
@@ -520,7 +516,7 @@ impl Signex {
         let right_list = container(scrollable(rows_col).height(Length::Fill))
             .height(Length::Fill)
             .padding(SP.s)
-            .style(bordered_style(border_c));
+            .style(bordered_style(border_c, tokens));
 
         // Count only rows where proposed != current (actual changes).
         let changes: usize = proposed.iter().filter(|e| e.current != e.proposed).count();

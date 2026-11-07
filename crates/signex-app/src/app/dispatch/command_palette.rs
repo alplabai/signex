@@ -94,6 +94,7 @@ impl Signex {
         let catalog = build_catalog(self);
         let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
         let stamp = catalog_stamp(self);
+        let graphite = crate::styles::is_graphite(&self.document_state.panel_ctx.tokens);
         let palette = &mut self.ui_state.command_palette;
         palette.catalog_stamp = stamp;
         palette.total_matches = ranked.len();
@@ -102,6 +103,9 @@ impl Signex {
             .take(MAX_RESULTS)
             .map(|&(catalog_idx, _)| catalog[catalog_idx].clone())
             .collect();
+        if graphite {
+            crate::app::command_palette::group_for_display(&mut palette.results);
+        }
     }
 
     /// Re-rank the open palette when the symbols or files behind its rows
