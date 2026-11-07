@@ -199,7 +199,7 @@ fn graphite_filter_entry(
                 ActiveBarMsg::ToggleFilter(filter),
             ));
         }
-        chips = chips.push(line);
+        chips = chips.push(line.boxed());
     }
     DropdownEntry::Custom(
         column![
