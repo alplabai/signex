@@ -191,6 +191,8 @@ impl SymbolSheetPreview {
             grid_mm: self.grid.pitch_mm,
             grid_style: self.grid.style,
             device_px_per_logical_px: self.device_px_per_logical_px,
+            border: true,
+            fine_dots: false,
         }
     }
 

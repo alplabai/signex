@@ -245,6 +245,7 @@ fn drawn_grid_vertices(style: GridStyle, dpr: f32) -> Vec<[f32; 2]> {
         210.0,
         style,
         dpr,
+        false,
     );
     let Geometry::Live { sections } = frame.into_geometry() else {
         panic!("a fresh frame is live geometry");

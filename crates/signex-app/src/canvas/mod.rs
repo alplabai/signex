@@ -16,6 +16,7 @@ pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
 mod gpu_drag;
+mod graphite;
 pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
@@ -41,6 +42,7 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::{Camera, ScrollIntent};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
+pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
 mod move_connections;
 pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
 pub use move_pick::MovePick;
@@ -536,6 +538,8 @@ pub struct CanvasViewPrefs<'a> {
     pub theme_grid: Color,
     pub theme_paper: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
+    /// Graphite canvas inks (frame, halo, ERC); `None` keeps the legacy look.
+    pub graphite: Option<GraphiteCanvasInk>,
     pub snap_enabled: bool,
     pub snap_grid_mm: f64,
     /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
@@ -965,6 +969,7 @@ mod tests {
             theme_grid: crate::render_config::to_iced(&colors.grid),
             theme_paper: crate::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
+            graphite: None,
             snap_enabled: true,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
