@@ -83,7 +83,7 @@ fn save_without_running_the_commit(app: &mut Signex, path: &Path, bytes: &[u8]) 
     let _ = app.handle_document_saved(DocumentSaveDone {
         path: path.to_path_buf(),
         revision,
-        net_color_revision: 0,
+
         save_as_from: None,
         bytes: saved,
         sequence,

@@ -71,7 +71,7 @@ baseline, `begin_pcb_save` expects it, and the card offers the same choices
 baseline for sheets and boards.
 
 The baseline after a blocking save is the hash of the bytes the engine wrote
-(`Engine::save_with_net_colors` returns them), never a re-read. A read that
+(`Engine::save_with_extents` returns them), never a re-read. A read that
 makes a running job's own-write hash stale does not wait for the job: the
 request is queued in the ledger and the next holder of the file's slot applies
 it (`DocumentSaves::forget_own_write_hashes`).

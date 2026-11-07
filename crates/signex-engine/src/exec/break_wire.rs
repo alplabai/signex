@@ -49,10 +49,16 @@ impl Engine {
             SelectedItem::new(second.uuid, SelectedKind::Wire),
         ];
         self.document.wires.insert(index + 1, second);
+        // The new half keeps the net colour of the wire it was cut from.
+        let mut document_patch = self.reconciled_patch(&items);
+        if let Some(color) = self.document.net_colors.get(&wire).copied() {
+            self.document.net_colors.insert(items[1].uuid, color);
+            document_patch |= DocumentPatch::NET_COLORS;
+        }
 
         let patch_pair = PatchPair {
             semantic: SemanticPatch::ObjectPlaced,
-            document: self.reconciled_patch(&items),
+            document: document_patch,
         };
         self.record_history(before, patch_pair);
         Ok(CommandResult::changed(patch_pair))

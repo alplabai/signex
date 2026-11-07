@@ -13,6 +13,7 @@ pub(crate) use child_sheet_path::relative_within;
 mod break_wire_tool;
 mod clicked;
 mod descend;
+mod net_color_click;
 mod sheet_open;
 #[cfg(test)]
 pub(crate) mod sheet_open_tests;

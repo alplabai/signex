@@ -324,7 +324,7 @@ mod tests {
         };
         let text = signex_engine::Engine::new(sheet)
             .unwrap()
-            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .serialize()
             .unwrap();
         std::fs::write(dir.path().join("Top.snxsch"), text).unwrap();
         app.document_state
@@ -349,10 +349,7 @@ mod tests {
             .expect("a tab opened")
             .path
             .clone();
-        let stamp = crate::autosave::DocStamp {
-            revision: 1,
-            net_color_revision: 0,
-        };
+        let stamp = crate::autosave::DocStamp { revision: 1 };
         assert!(
             !app.document_state.autosave.needs_write(&opened, stamp),
             "autosave must wait for the recovery check of a freshly opened sheet"
@@ -426,7 +423,7 @@ mod tests {
         };
         let text = signex_engine::Engine::new(sheet)
             .unwrap()
-            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .serialize()
             .unwrap();
         let file = dir.path().join("Top.snxsch");
         std::fs::write(&file, &text).unwrap();

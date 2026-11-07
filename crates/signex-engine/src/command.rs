@@ -108,6 +108,7 @@ pub enum CommandKind {
     SetTextFontFamily,
     SetSymbolDesignatorIn,
     SetDocumentFontFamily,
+    SetNetColors,
     ArrangeDrawings,
     SetDrawingPlacement,
 }
@@ -480,6 +481,15 @@ pub enum Command {
     SetDocumentFontFamily {
         font_family: Option<String>,
     },
+    /// Replace the sheet's net colour overrides (wire and junction uuid to
+    /// colour) with `colors`, as one undo step. One user action is one
+    /// command, a "clear all" on this sheet included (an empty map). Unchanged
+    /// when `colors` equals the stored map. Entries of elements that are not
+    /// in the sheet are kept (a deleted wire's colour returns with the wire on
+    /// undo) and dropped when the sheet is encoded.
+    SetNetColors {
+        colors: std::collections::HashMap<Uuid, signex_types::theme::Color>,
+    },
     /// Move the drawings `ids` within the sheet's drawing list, as one undo
     /// step: the selected drawings keep their order among themselves, and an
     /// id that names no drawing is ignored. Unchanged when nothing moves (the
@@ -622,6 +632,7 @@ impl Command {
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
+            Command::SetNetColors { .. } => CommandKind::SetNetColors,
             Command::ArrangeDrawings { .. } => CommandKind::ArrangeDrawings,
             Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
         }

@@ -84,7 +84,7 @@ fn run(task: iced::Task<Message>) -> Vec<Message> {
 
 fn bytes_of(app: &Signex, path: &Path) -> Vec<u8> {
     app.document_state.engines[path]
-        .serialize_with_net_colors(&Default::default())
+        .serialize_with_extents(|_| None)
         .expect("serialize")
         .into_bytes()
 }

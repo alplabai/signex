@@ -225,7 +225,9 @@ impl Signex {
         let mut resets = 0;
         for path in cached_paths {
             if self.reset_cached_engine(&path, duplicates, placements_of(placed, &path)) {
-                self.document_state.mark_document_dirty(&path);
+                // Recorded in the sheet's history: undo back to the save
+                // point clears the mark.
+                self.document_state.mark_history_edit_dirty(&path);
                 resets += 1;
             }
         }

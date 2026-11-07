@@ -284,7 +284,7 @@ impl Signex {
                         // the file; drop it so the next use re-reads the disk.
                         // Redo is then refused whole (`dropped`).
                         self.document_state.clear_document_dirty(path);
-                        self.forget_net_colors_of(path);
+                        self.forget_net_class_picks_on(path);
                         self.document_state.engines.remove(path);
                         dropped_now.push(path.clone());
                     } else {

@@ -117,7 +117,8 @@ sheet reads dirty when it could read clean; nothing is lost.
 
 `DirtyDocuments` also remembers which marked paths were marked from outside
 the history (`mark_document_dirty` and its display-only twin: a project
-edit, a net colour or class, an annotate pass, a restore). The history can
+edit, a net class, an annotate pass, a restore). A net colour is an engine
+step, so undo back to the save point reads clean. The history can
 only clear a mark it set itself, so undo never hides such a change; only a
 save clears it. This stays inside the one dirty owner: one query, one
 writer set. When #661 moves the flag into the engine, the save point and

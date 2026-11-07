@@ -106,9 +106,6 @@ pub type SharedBytes = Arc<Vec<u8>>;
 pub struct DocumentSaveDone {
     pub path: PathBuf,
     pub revision: u64,
-    /// The sheet's net-colour revision when the snapshot was taken (see
-    /// `UiState::net_color_revision`); `0` for documents without colours.
-    pub net_color_revision: u64,
     pub save_as_from: Option<PathBuf>,
     /// The bytes of the snapshot this write was handed. When `result` is
     /// [`SaveOutcome::Written`] these are what reached disk, so the project

@@ -5,6 +5,7 @@ use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind,
 use signex_types::theme::Color;
 
 use super::super::super::*;
+use crate::app::handlers::editing_commands::net_color_driver::{colour_of, paint};
 
 fn id(n: u128) -> uuid::Uuid {
     uuid::Uuid::from_u128(n)
@@ -66,14 +67,14 @@ const RED: Color = Color::new(255, 0, 0, 255);
 #[test]
 fn a_wire_drawn_on_in_another_colour_is_not_folded_into_a_coloured_one() {
     let mut app = app_with_first_leg();
-    app.ui_state.wire_color_overrides.insert(id(1), RED);
+    paint(&mut app, &[id(1)], RED);
     app.interaction_state.current_tool = Tool::Wire;
 
     click(&mut app, 5.08, 25.4);
     click(&mut app, 10.16, 25.4);
 
     assert_eq!(wires(&app).len(), 2, "the red wire keeps its own extent");
-    assert_eq!(app.ui_state.wire_color_overrides.get(&id(1)), Some(&RED));
+    assert_eq!(colour_of(&app, id(1)).as_ref(), Some(&RED));
 }
 
 #[test]
@@ -90,7 +91,7 @@ fn a_wire_drawn_on_with_no_colour_still_folds_into_an_uncoloured_one() {
 #[test]
 fn both_halves_of_a_broken_wire_keep_its_net_colour() {
     let mut app = app_with_first_leg();
-    app.ui_state.wire_color_overrides.insert(id(1), RED);
+    paint(&mut app, &[id(1)], RED);
     app.interaction_state.current_tool = Tool::BreakWire;
 
     click(&mut app, 2.54, 25.4);
@@ -99,7 +100,7 @@ fn both_halves_of_a_broken_wire_keep_its_net_colour() {
     assert_eq!(halves.len(), 2);
     for half in &halves {
         assert_eq!(
-            app.ui_state.wire_color_overrides.get(&half.uuid),
+            colour_of(&app, half.uuid).as_ref(),
             Some(&RED),
             "half {}",
             half.uuid
@@ -150,7 +151,7 @@ fn moving_a_red_wire_into_line_with_an_uncoloured_one_does_not_fold_them() {
         true,
         true,
     );
-    app.ui_state.wire_color_overrides.insert(id(2), RED);
+    paint(&mut app, &[id(2)], RED);
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(id(2), SelectedKind::Wire)];
     app.ui_state.move_selection.dx = "0".to_string();

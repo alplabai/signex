@@ -145,7 +145,9 @@ impl Signex {
         Self::report_engine_warnings(engine);
         match result {
             Ok(result) if result.changed => {
-                self.document_state.mark_document_dirty(sheet);
+                // Recorded in the sheet's history: undo back to the save
+                // point clears the mark.
+                self.document_state.mark_history_edit_dirty(sheet);
                 if let Some(tab) = self
                     .document_state
                     .tabs

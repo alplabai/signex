@@ -275,6 +275,7 @@ altium	hint	-	-	draw_polygon
 altium	hint	-	-	draw_bezier
 altium	hint	-	-	place_graphic
 altium	hint	-	-	clear_net_color
+altium	hint	-	-	color_net
 altium	hint	-	-	clear_all_net_colors
 altium	hint	-	-	place_component
 altium	hint	-	2	footprint_mode_pads
@@ -568,6 +569,7 @@ classic	hint	-	-	draw_polygon
 classic	hint	-	-	draw_bezier
 classic	hint	-	-	place_graphic
 classic	hint	-	-	clear_net_color
+classic	hint	-	-	color_net
 classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	place_component
 classic	hint	-	2	footprint_mode_pads

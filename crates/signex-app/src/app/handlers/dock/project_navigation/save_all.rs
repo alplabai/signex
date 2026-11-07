@@ -385,7 +385,6 @@ impl Signex {
                 .engines
                 .get(path)
                 .map_or(0, |engine| engine.revision()),
-            net_color_revision: self.net_color_revision_of(path),
         }
     }
 

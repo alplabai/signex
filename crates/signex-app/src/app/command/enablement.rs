@@ -436,19 +436,14 @@ mod tests {
         assert!(enabled(&app, "redo"));
     }
 
-    /// A net-colour change is undone by Ctrl+Z without any engine history.
+    /// A net-colour change is an engine step, so Ctrl+Z has something to undo.
     #[test]
     fn a_net_colour_change_enables_undo() {
-        let (mut app, _task) = Signex::new();
-        let path = std::path::PathBuf::from("colour.snxsch");
-        app.document_state.active_path = Some(path.clone());
-        push_tab(&mut app, &path, TabKind::Schematic);
-        app.ui_state.net_color_undo.entry(path).or_default().push(
-            crate::app::state::NetColorStep {
-                colors: std::collections::HashMap::new(),
-                at: 0,
-            },
-        );
+        use crate::app::handlers::editing_commands::net_color_driver as colours;
+        let (mut app, path) = colours::app_with_sheet("colour.snxsch");
+        assert!(!enabled(&app, "undo"));
+        let wire = colours::wire_of(&app, &path);
+        colours::paint(&mut app, &[wire], colours::color(1));
         assert!(enabled(&app, "undo"));
     }
 

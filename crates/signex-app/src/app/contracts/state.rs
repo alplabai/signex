@@ -289,13 +289,11 @@ pub struct CaseVariants {
 }
 
 /// A spelling's state when a write began. One edited since (its engine
-/// revision or its net-colour revision moved) is not on disk, so its dirty
-/// marker stays.
+/// revision moved) is not on disk, so its dirty marker stays.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinnedSpelling {
     pub path: std::path::PathBuf,
     pub revision: u64,
-    pub net_color_revision: u64,
 }
 
 /// User choice from the project-close confirmation modal.

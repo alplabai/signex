@@ -17,6 +17,8 @@ pub enum OperandKind {
     Path,
     /// `true` or `false`.
     Bool,
+    /// An opaque colour, `#rrggbb` (the leading `#` is optional).
+    Color,
 }
 
 impl OperandKind {
@@ -27,6 +29,7 @@ impl OperandKind {
             Self::Text => "text",
             Self::Path => "path",
             Self::Bool => "bool",
+            Self::Color => "color",
         }
     }
 
@@ -35,7 +38,7 @@ impl OperandKind {
         match self {
             Self::Point => Some("mm"),
             Self::Angle => Some("deg"),
-            Self::Text | Self::Path | Self::Bool => None,
+            Self::Text | Self::Path | Self::Bool | Self::Color => None,
         }
     }
 }
@@ -64,6 +67,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("lib_id", OperandKind::Text),
     ("path", OperandKind::Path),
     ("overwrite", OperandKind::Bool),
+    ("color", OperandKind::Color),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -113,6 +117,15 @@ pub const SAVE_PATH: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("overwrite", OperandKind::Bool),
 ];
+
+/// Colour the net under a point on the open sheet (or on the one at `path`).
+pub const COLOR_NET: &[Operand] = &[
+    required("at", OperandKind::Point),
+    required("color", OperandKind::Color),
+    optional("path", OperandKind::Path),
+];
+/// An open document to act on, instead of every one.
+pub const DOCUMENT: &[Operand] = &[optional("path", OperandKind::Path)];
 
 /// The golden column: `name:kind` with `/unit`, `?` when optional, comma
 /// separated; `-` when the command takes none.
