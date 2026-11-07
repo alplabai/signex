@@ -278,11 +278,16 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── Nothing selected: show Document Options (Altium default) ──
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
+    let graphite = crate::styles::is_graphite(&ctx.tokens);
     col = col.push(
-        container(text("Document Options").size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text("Document Options")
+                .size(if graphite { TS.title } else { TS.body })
+                .color(primary),
+        )
+        .padding(if graphite { [10.0, 12.0] } else { [6.0, SP.m] })
+        .width(Length::Fill)
+        .boxed(),
     );
 
     // ── General | Parameters tab bar ──
@@ -313,10 +318,12 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ]
             .spacing(SP.xs),
         )
-        .padding([SP.s, SP.m])
+        .padding([SP.s, if graphite { 12.0 } else { SP.m }])
         .boxed(),
     );
-    col = col.push(thin_sep(border_c));
+    if !graphite {
+        col = col.push(thin_sep(border_c));
+    }
 
     // ── Tab content ──
     if tab == 0 {
@@ -338,10 +345,12 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── Status: Nothing selected ──
     col = col.push(Space::new().height(8.0).boxed());
-    col = col.push(thin_sep(border_c));
+    if !graphite {
+        col = col.push(thin_sep(border_c));
+    }
     col = col.push(
         container(text("Nothing selected").size(TS.caption).color(muted))
-            .padding([6.0, SP.m])
+            .padding([6.0, if graphite { 12.0 } else { SP.m }])
             .width(Length::Fill)
             .boxed(),
     );
