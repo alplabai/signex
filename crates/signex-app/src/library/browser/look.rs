@@ -157,6 +157,38 @@ pub(super) fn confirm_style(
     }
 }
 
+/// Style of an editable grid cell on Graphite: plain text until hovered or
+/// focused, then the field frame. Typing, focus and commit are unchanged.
+pub(super) fn plain_cell_input(
+    tokens: &ThemeTokens,
+) -> impl Fn(&iced::Theme, iced::widget::text_input::Status) -> iced::widget::text_input::Style + 'static
+{
+    use iced::widget::text_input::{Status, Style};
+    let r = resolve(tokens);
+    let ink = crate::styles::ti(tokens.text);
+    let accent = crate::styles::ti(tokens.accent);
+    let radius = crate::styles::Radii::GRAPHITE.control;
+    move |_, status| {
+        let (fill, line, width) = match status {
+            Status::Focused { .. } => (r.field, accent, 1.0),
+            Status::Hovered => (r.field, r.line_soft, 1.0),
+            _ => (Color::TRANSPARENT, Color::TRANSPARENT, 0.0),
+        };
+        Style {
+            background: iced::Background::Color(fill),
+            border: Border {
+                width,
+                color: line,
+                radius: radius.into(),
+                ..Border::default()
+            },
+            placeholder: r.ink4,
+            value: ink,
+            selection: Color { a: 0.4, ..accent },
+        }
+    }
+}
+
 /// Corner radius of a small bordered control.
 pub(super) fn control_radius(tokens: &ThemeTokens) -> f32 {
     if is_graphite(tokens) {

@@ -337,6 +337,7 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(row_value)
                                 .size(BROWSER_TEXT_SIZE)
+                                .font(look::cell_font(&c.kind, tokens))
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
@@ -410,6 +411,11 @@ pub(super) fn view_grid<'a>(
                     .padding([SP.xs, 6.0])
                     .font(look::cell_font(&c.kind, tokens))
                     .size(BROWSER_TEXT_SIZE);
+                let input = if graphite {
+                    input.style(look::plain_cell_input(tokens))
+                } else {
+                    input
+                };
                 data_row = data_row.push(
                     container(input)
                         .padding([SP.xs, SP.xs])

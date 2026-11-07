@@ -109,6 +109,13 @@ fn graphite_header<'a>(
         .size(TS.heading)
         .color(theme_ext::text_primary(tokens));
 
+    // Real counts only: components across every table, and the table count.
+    let total: usize = lib.tables.values().map(Vec::len).sum();
+    let caption = text(format!("{total} components · {} tables", lib.tables.len()))
+        .size(TS.caption)
+        .color(r.ink3);
+    let title = column![title.boxed(), caption.boxed()].spacing(SP.xs);
+
     let top: iced::widget::Row<Element<'a, LibraryMessage>> =
         row![title.boxed(), search_field.boxed(), add.boxed()]
             .spacing(SP.l)
