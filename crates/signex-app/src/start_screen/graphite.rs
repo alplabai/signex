@@ -14,7 +14,7 @@ use crate::app::Message;
 use crate::panels::signal::coming_soon;
 use crate::styles::{
     self, ChromeMetrics, Radii, TypeScale, is_graphite, ti,
-    tokens::{hover_overlay, resolve, selection_tint},
+    tokens::{hover_overlay, resolve},
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -80,11 +80,8 @@ fn nav_row<'a>(
     action: Option<Message>,
     active: bool,
 ) -> Element<'a, Message> {
-    let (hover, selected, ink) = (
-        hover_overlay(tokens),
-        selection_tint(tokens),
-        ti(tokens.text),
-    );
+    // The current page is a neutral chip, not the copper selection tint.
+    let (hover, selected, ink) = (hover_overlay(tokens), resolve(tokens).sunken, ti(tokens.text));
     let mut b = button(text(label).size(TS.label))
         .width(Length::Fill)
         .padding([6.0, 14.0])
@@ -119,10 +116,10 @@ fn nav<'a>(tokens: &ThemeTokens, open_shortcut: &str) -> Element<'a, Message> {
         button(
             text("New project")
                 .size(TS.dense)
-                .width(Length::Fill)
-                .align_x(iced::alignment::Horizontal::Center)
+                .wrapping(iced::widget::text::Wrapping::None)
         )
-        .width(Length::FillPortion(1))
+        .padding([0.0, 12.0])
+        .width(Length::Shrink)
         .height(ChromeMetrics::DEFAULT.field + 2.0)
         .on_press(Action::NewProject.message())
         .style(styles::primary_button(tokens)),
@@ -130,9 +127,11 @@ fn nav<'a>(tokens: &ThemeTokens, open_shortcut: &str) -> Element<'a, Message> {
             text(open_label)
                 .size(TS.dense)
                 .width(Length::Fill)
+                .wrapping(iced::widget::text::Wrapping::None)
                 .align_x(iced::alignment::Horizontal::Center)
         )
-        .width(Length::FillPortion(1))
+        .padding([0.0, 8.0])
+        .width(Length::Fill)
         .height(ChromeMetrics::DEFAULT.field + 2.0)
         .on_press(Action::OpenProject.message())
         .style(outline_button(tokens)),
