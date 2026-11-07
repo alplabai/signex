@@ -8,7 +8,7 @@ use signex_types::theme::ThemeId;
 
 use crate::app::{Message, WindowMsg};
 use crate::chrome::controls::{WindowButton, WindowControlsLayout, WindowControlsStyle};
-use crate::menu_bar::MENU_BAR_HEIGHT;
+use crate::menu_bar::{GRAPHITE_MENU_BAR_HEIGHT, MENU_BAR_HEIGHT};
 
 /// One Windows-style button.
 pub(crate) const WINDOWS_BTN_W: f32 = 46.0;
@@ -144,7 +144,7 @@ fn group(
             })
             .align_y(Alignment::Center),
     )
-    .height(MENU_BAR_HEIGHT)
+    .height(bar_height(pal.graphite))
     .align_y(iced::alignment::Vertical::Center)
     .boxed()
 }
@@ -199,7 +199,7 @@ fn windows_button(kind: WindowButton, pal: Palette) -> Element<'static, Message>
     let text = pal.text;
     button(centered(icon(kind, pal, WINDOWS_ICON)))
         .width(windows_width(pal.graphite))
-        .height(MENU_BAR_HEIGHT)
+        .height(bar_height(pal.graphite))
         .padding(0)
         .on_press(press_message(kind))
         .style(move |_: &iced::Theme, status| {
@@ -269,6 +269,15 @@ fn mac_drawn_button(kind: WindowButton) -> Element<'static, Message> {
             }
         })
         .boxed()
+}
+
+/// The bar height the window buttons fill.
+fn bar_height(graphite: bool) -> f32 {
+    if graphite {
+        GRAPHITE_MENU_BAR_HEIGHT
+    } else {
+        MENU_BAR_HEIGHT
+    }
 }
 
 #[cfg(test)]

@@ -9,7 +9,9 @@ use signex_types::theme::ThemeTokens;
 /// reserved even with no tab open (`view` pushes a placeholder). Its height
 /// follows the theme: Graphite is taller.
 pub(super) fn chrome_top(tokens: &ThemeTokens) -> f32 {
-    crate::menu_bar::MENU_BAR_HEIGHT + CHROME_SEPARATOR + crate::tab_bar::tab_strip_height(tokens)
+    crate::menu_bar::menu_bar_height(tokens)
+        + CHROME_SEPARATOR
+        + crate::tab_bar::tab_strip_height(tokens)
 }
 const CHROME_SEPARATOR: f32 = 1.0;
 /// Resize handle drawn beside an open dock.
@@ -194,7 +196,7 @@ mod tests {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let b = canvas_bounds((1400.0, 900.0), dock(240.0), dock(220.0), NONE, &tokens);
         let m = crate::styles::ChromeMetrics::DEFAULT;
-        assert_eq!(b.y, crate::menu_bar::MENU_BAR_HEIGHT + 1.0 + m.tab_strip);
+        assert_eq!(b.y, m.menu + 1.0 + m.tab_strip);
         assert_eq!(b.height, 900.0 - b.y - m.status);
     }
 

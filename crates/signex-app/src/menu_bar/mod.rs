@@ -305,8 +305,19 @@ impl Default for MenuContext<'_> {
 
 // ─── Constants ────────────────────────────────────────────────
 
-/// Height of the title and menu bar (the Graphite chrome band).
-pub const MENU_BAR_HEIGHT: f32 = crate::styles::ChromeMetrics::DEFAULT.menu;
+/// Height of the title and menu bar on the legacy themes.
+pub const MENU_BAR_HEIGHT: f32 = 36.0;
+/// Height of the title and menu bar on the Graphite themes.
+pub const GRAPHITE_MENU_BAR_HEIGHT: f32 = crate::styles::ChromeMetrics::DEFAULT.menu;
+
+/// The title and menu bar height for `tokens`' theme.
+pub fn menu_bar_height(tokens: &ThemeTokens) -> f32 {
+    if styles::is_graphite(tokens) {
+        GRAPHITE_MENU_BAR_HEIGHT
+    } else {
+        MENU_BAR_HEIGHT
+    }
+}
 const DROPDOWN_WIDTH: f32 = 240.0;
 
 /// Menu typography scale. Labels are the baseline; shortcuts ride a step
