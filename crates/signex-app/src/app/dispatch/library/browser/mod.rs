@@ -622,7 +622,7 @@ impl Signex {
             .library
             .editors
             .get(&address)
-            .is_some_and(|editor| editor.dirty)
+            .is_some_and(|editor| editor.has_unsaved_edits())
         {
             let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
             self.library.editors.insert(address.clone(), preview);
