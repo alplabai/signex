@@ -57,7 +57,7 @@ board.
 **Two editions from one codebase:**
 
 - **Signex Community** (Apache-2.0, free forever) — the schematic editor
-  today; the PCB editor follows (PCB Viewer, then PCB Routing and Community Release; see the [roadmap](docs/ROADMAP.md))
+  today; PCB layout and routing follow in AI Design, then manufacturing output in the Community Release (see the [roadmap](docs/ROADMAP.md))
 - **Signex Pro** (subscription, planned for the Pro Release) — adds Signal AI
   (Claude-powered design copilot), plugins, real-time collaboration, and
   Signex 365 cloud PLM
@@ -153,9 +153,10 @@ board.
 | Plan | Milestone |
 |---|---|
 | **Community Preview** | Schematic-only release |
-| **PCB Viewer → Community Release** | Full PCB editor (viewer, routing, DRC, output) |
+| **AI Design** | PCB layout from the schematic, routing, and Signal AI as assistant and generator for schematic and board |
+| **Community Release** | Manufacturing output (Gerber, drill, ODB++) |
 | **3D Viewer → High-Speed Design** | 3D Viewer, Advanced PCB, High-Speed Design |
-| **Pro Release** | Signal AI + plugins + collaboration |
+| **Pro Release** | Licensing and billing, plugins, collaboration |
 | **Simulation** | Unified simulation view with SPICE, EM, thermal |
 | **Signex 365** | Cloud PLM |
 
@@ -345,11 +346,10 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
 | Command Registry & Symbol Units | 1.0.0-rc.1 | Done (test follow-up #1727 ships in the next release) |
 | **Community Preview** — schematic-only editor | **Gate** | `v1.0.0-rc.1` shipped 2026-10-29 (last SemVer tag); next release is CalVer |
-| PCB Viewer — GPU rendering, layers, cross-probe | **Gate** | |
-| PCB Routing + DRC + Output | Planned | |
-| **Community Release** — full schematic + PCB editor | **Gate** | |
+| **AI Design** — PCB layout from the schematic, routing, Signal AI assistant and generator | **Gate** | Next after the Community Preview |
+| **Community Release** — manufacturing output; full schematic + PCB editor | **Gate** | |
 | 3D Viewer, Advanced PCB, High-Speed Design | Planned | |
-| **Pro Release** — Signal AI + plugins + collaboration | **Gate** | |
+| **Pro Release** — licensing and billing, plugins, collaboration | **Gate** | |
 | Simulation — SPICE, EM, thermal, simulation wizards | Planned | |
 | **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **Gate** | |
 
