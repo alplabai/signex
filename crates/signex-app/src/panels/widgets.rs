@@ -139,6 +139,11 @@ pub fn prop_kv_row<'a>(
 }
 
 pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
+    if crate::styles::is_graphite(tokens) {
+        return text(title.to_uppercase())
+            .size(TS.section)
+            .style(crate::styles::section_label(tokens));
+    }
     text(title.to_uppercase())
         .size(TS.caption)
         .color(theme_ext::text_secondary(tokens))
