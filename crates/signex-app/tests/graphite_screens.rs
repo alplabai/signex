@@ -27,7 +27,6 @@ use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use iced_wgpu::wgpu;
 use signex_app::app::{AnnotateMsg, CommandPaletteMsg, FileMsg, Message, PreferencesMsg, Signex};
-use signex_app::canvas::CanvasEvent;
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::library::LibraryMessage;
 use signex_app::panels::PanelKind;
@@ -219,7 +218,8 @@ fn open_sample(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) {
         Message::File(FileMsg::Opened(Some(fx.sample.with_extension("snxsch")))),
     );
     let _ = draw(r, app);
-    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
+    // Fit the whole sheet paper, so its frame and title block are in view.
+    app.interaction_state.active_canvas().fit_to_sheet();
     let _ = draw(r, app);
 }
 
