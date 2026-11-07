@@ -17,6 +17,7 @@ use super::*;
 use crate::pcb::{
     DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, Via, ViaType,
 };
+use crate::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer, UserLayer};
 use uuid::Uuid;
 
 /// Bulk row for one [`Footprint`] in the `[footprints]` block.
@@ -308,6 +309,91 @@ crate::token_enum! {
         Blind => "blind",
         Micro => "micro",
     }
+}
+
+// The fallback is a placeholder: `parse_pcb_layer` re-checks the token, so
+// an unknown name is never read as `Margin`.
+crate::token_enum! {
+    fn technical_layer_str / parse_technical_layer_or_margin for TechnicalLayer, fallback Margin {
+        EdgeCuts => "EdgeCuts",
+        Margin => "Margin",
+        SilkscreenTop => "TopSilkscreen",
+        SilkscreenBottom => "BottomSilkscreen",
+        SolderMaskTop => "TopSolderMask",
+        SolderMaskBottom => "BottomSolderMask",
+        PasteTop => "TopPaste",
+        PasteBottom => "BottomPaste",
+        AdhesiveTop => "TopAdhesive",
+        AdhesiveBottom => "BottomAdhesive",
+        FabTop => "TopFab",
+        FabBottom => "BottomFab",
+        AssemblyTop => "TopAssembly",
+        AssemblyBottom => "BottomAssembly",
+        CourtyardTop => "TopCourtyard",
+        CourtyardBottom => "BottomCourtyard",
+        Body3dTop => "Top3DBody",
+        Body3dBottom => "Bottom3DBody",
+        KeepoutTop => "TopKeepout",
+        KeepoutBottom => "BottomKeepout",
+        FiducialTop => "TopFiducial",
+        FiducialBottom => "BottomFiducial",
+        DesignatorTop => "TopDesignator",
+        DesignatorBottom => "BottomDesignator",
+        Dimensions => "Dimensions",
+        Notes => "Notes",
+        DrillDrawing => "DrillDrawing",
+        Eco1 => "Eco1",
+        Eco2 => "Eco2",
+    }
+}
+
+/// The on-disk name of `layer`: `TopCopper`, `Inner<n>Copper`,
+/// `BottomCopper`, a technical name such as `TopSilkscreen`, or `User.<n>`.
+pub fn pcb_layer_token(layer: PcbLayer) -> String {
+    match layer {
+        PcbLayer::Copper(CopperLayer::Top) => "TopCopper".to_string(),
+        PcbLayer::Copper(CopperLayer::Inner(n)) => format!("Inner{}Copper", n.index()),
+        PcbLayer::Copper(CopperLayer::Bottom) => "BottomCopper".to_string(),
+        PcbLayer::Technical(t) => technical_layer_str(t).to_string(),
+        PcbLayer::User(n) => format!("User.{}", n.index()),
+    }
+}
+
+/// The layer `token` names, or `None` for a name this build does not know.
+/// Exact match only, so `pcb_layer_token` of the result is `token` again;
+/// the caller keeps an unknown name as its string.
+pub fn parse_pcb_layer(token: &str) -> Option<PcbLayer> {
+    match token {
+        "TopCopper" => return Some(PcbLayer::Copper(CopperLayer::Top)),
+        "BottomCopper" => return Some(PcbLayer::Copper(CopperLayer::Bottom)),
+        _ => {}
+    }
+    if let Some(n) = token
+        .strip_prefix("Inner")
+        .and_then(|rest| rest.strip_suffix("Copper"))
+    {
+        return canonical_index(n)
+            .and_then(InnerCopper::new)
+            .map(|n| PcbLayer::Copper(CopperLayer::Inner(n)));
+    }
+    if let Some(n) = token.strip_prefix("User.") {
+        return canonical_index(n)
+            .and_then(UserLayer::new)
+            .map(PcbLayer::User);
+    }
+    let technical = parse_technical_layer_or_margin(token);
+    (technical_layer_str(technical) == token).then_some(PcbLayer::Technical(technical))
+}
+
+/// A decimal index written without sign or leading zero.
+fn canonical_index(digits: &str) -> Option<u8> {
+    let canonical = !digits.is_empty()
+        && !digits.starts_with('0')
+        && digits.bytes().all(|b| b.is_ascii_digit());
+    if !canonical {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 fn join_layers(layers: &[String]) -> String {
