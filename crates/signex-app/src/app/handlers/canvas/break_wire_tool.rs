@@ -173,6 +173,21 @@ mod tests {
     }
 
     #[test]
+    fn undoing_a_break_back_to_the_save_point_reads_clean_on_a_coloured_sheet() {
+        let (mut app, id) = app_with_wire_at(4324.0);
+        let path = app.document_state.active_path.clone().expect("path");
+        let red = signex_types::theme::Color::new(255, 0, 0, 255);
+        app.ui_state.wire_color_overrides.insert(id, red);
+        app.document_state.mark_document_clean(&path);
+
+        app.break_wire_click(8.0, 4324.0);
+        assert!(app.document_state.is_document_dirty(&path), "the cut");
+
+        app.handle_undo_requested();
+        assert!(!app.document_state.is_document_dirty(&path), "back at save");
+    }
+
+    #[test]
     fn a_refused_break_of_a_coloured_wire_leaves_the_colours_and_revision_alone() {
         let (mut app, id) = app_with_wire_at(4322.0);
         let red = signex_types::theme::Color::new(255, 0, 0, 255);

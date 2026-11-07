@@ -448,12 +448,14 @@ fn norm_ccw(a: f64, b: f64) -> f64 {
 }
 
 #[cfg(test)]
-mod net_color_driver;
+pub(crate) mod net_color_driver;
 #[cfg(test)]
 mod net_color_guard_tests;
 mod net_color_persist;
 #[cfg(test)]
 mod net_color_persist_tests;
+#[cfg(test)]
+mod net_color_timeline_tests;
 #[cfg(test)]
 mod net_color_undo_order_tests;
 #[cfg(test)]

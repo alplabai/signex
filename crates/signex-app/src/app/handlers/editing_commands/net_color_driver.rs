@@ -6,12 +6,12 @@ use signex_types::schematic::{Junction, SchematicSheet, Symbol, Wire};
 use signex_types::theme::Color;
 use std::path::{Path, PathBuf};
 
-pub(super) fn color(r: u8) -> Color {
+pub(crate) fn color(r: u8) -> Color {
     Color::new(r, 0, 0, 255)
 }
 
 /// A clean, active one-sheet app: one symbol, one wire, one junction.
-pub(super) fn app_with_sheet(name: &str) -> (Signex, PathBuf) {
+pub(crate) fn app_with_sheet(name: &str) -> (Signex, PathBuf) {
     let (mut app, _task) = Signex::new();
     let path = PathBuf::from(name);
     add_sheet(&mut app, &path);
@@ -19,7 +19,7 @@ pub(super) fn app_with_sheet(name: &str) -> (Signex, PathBuf) {
 }
 
 /// Open another clean sheet at `path` and make it the active one.
-pub(super) fn add_sheet(app: &mut Signex, path: &Path) {
+pub(crate) fn add_sheet(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: path.display().to_string(),
         path: path.to_path_buf(),
@@ -31,7 +31,7 @@ pub(super) fn add_sheet(app: &mut Signex, path: &Path) {
     app.apply_loaded_schematic(Some(fixture_sheet()), false, false, false);
 }
 
-pub(super) fn fixture_sheet() -> SchematicSheet {
+pub(crate) fn fixture_sheet() -> SchematicSheet {
     SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
@@ -53,16 +53,16 @@ pub(super) fn fixture_sheet() -> SchematicSheet {
     }
 }
 
-pub(super) fn wire_of(app: &Signex, path: &Path) -> uuid::Uuid {
+pub(crate) fn wire_of(app: &Signex, path: &Path) -> uuid::Uuid {
     app.document_state.engines[path].document().wires[0].uuid
 }
 
-pub(super) fn symbol_of(app: &Signex, path: &Path) -> uuid::Uuid {
+pub(crate) fn symbol_of(app: &Signex, path: &Path) -> uuid::Uuid {
     app.document_state.engines[path].document().symbols[0].uuid
 }
 
 /// One colour action on the active sheet, as a canvas click makes it.
-pub(super) fn paint(app: &mut Signex, ids: &[uuid::Uuid], color: Color) {
+pub(crate) fn paint(app: &mut Signex, ids: &[uuid::Uuid], color: Color) {
     assert!(app.record_net_color_undo(), "the sheet must take a colour");
     app.ui_state
         .wire_color_overrides
@@ -70,18 +70,18 @@ pub(super) fn paint(app: &mut Signex, ids: &[uuid::Uuid], color: Color) {
 }
 
 /// [`paint`] on the sheet at `path`, whichever is active.
-pub(super) fn paint_on(app: &mut Signex, path: &Path, ids: &[uuid::Uuid], color: Color) {
+pub(crate) fn paint_on(app: &mut Signex, path: &Path, ids: &[uuid::Uuid], color: Color) {
     let previous = app.document_state.active_path.replace(path.to_path_buf());
     paint(app, ids, color);
     app.document_state.active_path = previous;
 }
 
-pub(super) fn colour_of(app: &Signex, id: uuid::Uuid) -> Option<Color> {
+pub(crate) fn colour_of(app: &Signex, id: uuid::Uuid) -> Option<Color> {
     app.ui_state.wire_color_overrides.get(&id).copied()
 }
 
 /// The colours a save of the sheet at `path` would write.
-pub(super) fn saved_colours(
+pub(crate) fn saved_colours(
     app: &Signex,
     path: &Path,
 ) -> std::collections::HashMap<uuid::Uuid, Color> {
@@ -94,11 +94,11 @@ pub(super) fn saved_colours(
         .net_colors
 }
 
-pub(super) fn is_dirty(app: &Signex, path: &Path) -> bool {
+pub(crate) fn is_dirty(app: &Signex, path: &Path) -> bool {
     app.document_state.is_document_dirty(path)
 }
 
-pub(super) fn activate(app: &mut Signex, path: &Path) {
+pub(crate) fn activate(app: &mut Signex, path: &Path) {
     app.document_state.active_tab = app
         .document_state
         .tabs
