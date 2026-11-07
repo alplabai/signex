@@ -123,3 +123,17 @@ fn a_marker_has_no_undo_group_and_a_document_step_is_told_apart() {
     let kinds: Vec<_> = engine.steps_from_top(true).collect();
     assert_eq!(kinds, [None, Some(MARK)]);
 }
+
+#[test]
+fn a_marker_ends_the_redo_branch_like_an_edit() {
+    let mut engine = saved();
+    edit(&mut engine, 1);
+    engine.undo().unwrap();
+    assert!(engine.can_redo());
+    engine.record_class_pick(MARK);
+    assert!(
+        !engine.can_redo(),
+        "the undone edit can no longer be redone"
+    );
+    assert!(engine.is_at_save_point());
+}
