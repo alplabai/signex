@@ -13,7 +13,7 @@
 //! would be 23 names to deprecate later. See
 //! `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 
 pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
     CommandMetadata {
@@ -303,7 +303,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Wire"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -313,7 +314,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Bus"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -413,7 +415,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Text String"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::TEXT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -483,7 +486,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Line"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -493,7 +497,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Rectangle"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

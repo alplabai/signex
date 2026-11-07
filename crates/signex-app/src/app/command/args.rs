@@ -11,7 +11,7 @@
 //!   GUI surfaces fill it.
 //! - [`Operands`]: typed values a command acts on (a point to place at, a
 //!   text, a library id). Only a CLI or an agent fills them; no GUI caller
-//!   sets one, so the struct has no fields yet.
+//!   sets one.
 //!
 //! Both are plain `Clone + Debug` data a CLI could build from text: no UI
 //! handles, no window ids.
@@ -29,15 +29,15 @@ pub(crate) struct InvocationContext {
     pub project: Option<String>,
 }
 
-/// Values a command acts on. No field yet: a command that takes one adds it
-/// here as a `pub(super)` field, so only the `command` module (its bridge and
-/// a future CLI entry) can read or set it. GUI modules cannot construct a
+/// Values a command acts on, parsed and checked against the catalog's
+/// operand descriptor ([`CommandArgs::parse_operands`]); only the `command`
+/// module can read or set them. GUI modules cannot construct a
 /// non-empty one, so a context-menu row that carries the click point in
 /// [`InvocationContext::origin`] can never trigger an operand form of the
 /// same command.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Operands {
-    _sealed: (),
+    pub(super) values: std::collections::BTreeMap<String, super::operands::OperandValue>,
 }
 
 #[cfg(test)]
