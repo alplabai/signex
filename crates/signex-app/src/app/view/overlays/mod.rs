@@ -180,7 +180,7 @@ impl Signex {
         let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let (x, y) =
             canvas_region::place_card((sx, sy), (card_w, estimated_h), self.card_bounds(window_id));
-        Some(super::view::translate::Translate::new(card, (x, y)).boxed())
+        Some(signex_widgets::Translate::new(card, (x, y)).boxed())
     }
 
     /// Result list for the chrome-strip command palette. Anchored
@@ -350,7 +350,7 @@ impl Signex {
         } else {
             crate::menu_bar::MENU_BAR_HEIGHT + 4.0
         };
-        super::view::translate::Translate::new(card.boxed(), (card_x, y)).boxed()
+        signex_widgets::Translate::new(card.boxed(), (card_x, y)).boxed()
     }
 
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
@@ -426,12 +426,11 @@ impl Signex {
         let (ww, _) = ui.size_of_window(window_id);
         let adjusted_x =
             x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
-        vec![
-            Self::dismiss_layer(Message::ActiveBar(
-                crate::active_bar::ActiveBarMsg::CloseMenus,
-            )),
-            super::translate::Translate::new(dropdown, (adjusted_x, ab_y)).boxed(),
-        ]
+        Self::dismiss_and_place(
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus),
+            dropdown,
+            (adjusted_x, ab_y),
+        )
     }
 
     /// Canvas right-click context menu (+ its Place/Align submenu).
@@ -651,7 +650,7 @@ impl Signex {
             ) {
                 let fp = &document.dock.floating[i];
                 out.push(
-                    super::translate::Translate::new(
+                    signex_widgets::Translate::new(
                         panel_widget
                             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)))
                             .boxed(),

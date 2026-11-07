@@ -96,12 +96,13 @@ fn cases() -> Vec<(&'static str, Build, usize, bool)> {
         ),
         // Rows are excluded from the title count but enable Save All.
         ("dirty row only", |d| fixture(d, Kind::Row, true).0, 0, true),
-        // A half-typed buffer is unsaved input, not a dirty row.
+        // A half-typed buffer is unsaved work: outside the title count like
+        // every row, but it enables Save All (#2132).
         (
             "half-typed row only",
             |d| fixture(d, Kind::HalfTypedRow, true).0,
             0,
-            false,
+            true,
         ),
         (
             "dirty project file",
@@ -164,24 +165,28 @@ fn quit_lists_a_dirty_library_manifest() {
 }
 
 #[test]
-fn the_enumerator_lists_dirty_rows_apart_and_not_half_typed_ones() {
+fn the_enumerator_lists_dirty_and_half_typed_rows_apart_from_files() {
     let dir = tempfile::tempdir().unwrap();
     let (app, _) = fixture(dir.path(), Kind::Row, true);
     let all = app.unsaved_set();
     assert!(all.files.is_empty());
     assert_eq!(all.rows.len(), 1);
+    // A half-typed value is unsaved work too (#2132).
     let (app, _) = fixture(dir.path(), Kind::HalfTypedRow, true);
-    assert!(app.unsaved_set().is_empty());
+    let half = app.unsaved_set();
+    assert!(half.files.is_empty());
+    assert_eq!(half.rows.len(), 1);
 }
 
 /// One app holding every kind at once: a sheet with a tab, a parked sheet,
 /// a symbol and a footprint draft, a dirty row, a half-typed-only row, the
 /// project file and a library manifest. Returns the paths the quit prompt
-/// must list and the one dirty row.
+/// must list and the two rows it must list (the dirty one and the
+/// half-typed one, #2132).
 fn every_kind() -> (
     Signex,
     Vec<PathBuf>,
-    crate::library::state::EditorAddress,
+    Vec<crate::library::state::EditorAddress>,
     tempfile::TempDir,
     tempfile::TempDir,
 ) {
@@ -211,6 +216,7 @@ fn every_kind() -> (
     let row = row_app.library.editors.keys().next().unwrap().clone();
     app.library.editors = row_app.library.editors;
     let (half, _) = fixture(other.path(), Kind::HalfTypedRow, true);
+    let half_row = half.library.editors.keys().next().unwrap().clone();
     app.library.editors.extend(half.library.editors);
     let project = app.document_state.projects[0].path.clone();
     app.document_state.mark_document_dirty(&project);
@@ -225,18 +231,25 @@ fn every_kind() -> (
         manifest,
     ];
     want.sort();
-    (app, want, row, dir, other)
+    (app, want, vec![row, half_row], dir, other)
 }
 
 #[test]
-fn the_quit_prompt_for_every_kind_at_once_lists_files_sorted_and_only_the_dirty_row() {
-    let (mut app, want, row, _d, _o) = every_kind();
+fn the_quit_prompt_for_every_kind_at_once_lists_files_sorted_and_the_unsaved_rows() {
+    let (mut app, want, rows, _d, _o) = every_kind();
     let _ = app.update(crate::app::Message::Window(
         crate::app::WindowMsg::CloseMainWindow,
     ));
     let modal = app.ui_state.app_quit_confirm.as_ref().unwrap();
     assert_eq!(modal.dirty_paths, want);
-    assert_eq!(modal.dirty_rows, vec![row]);
+    assert_eq!(modal.dirty_rows.len(), rows.len(), "{:?}", modal.dirty_rows);
+    for row in &rows {
+        assert!(
+            modal.dirty_rows.contains(row),
+            "{row:?} in {:?}",
+            modal.dirty_rows
+        );
+    }
 }
 
 fn open_quit_prompt(app: &mut Signex) {

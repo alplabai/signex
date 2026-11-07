@@ -334,7 +334,7 @@ fn view_footer<'a>(
             msg,
         })
     };
-    let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
+    let dirty_marker: Element<'_, LibraryMessage> = if state.has_unsaved_edits() {
         text("\u{2022} unsaved").size(TS.body).color(muted).boxed()
     } else {
         Space::new().width(0.0).boxed()

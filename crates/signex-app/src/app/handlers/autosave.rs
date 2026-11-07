@@ -50,7 +50,8 @@ impl Signex {
     }
 
     /// Does `path` hold edits a recovery copy should protect: a dirty
-    /// schematic, PCB, symbol editor or footprint editor?
+    /// schematic, PCB, symbol editor, footprint editor, project or
+    /// Component Preview row?
     pub(crate) fn holds_recoverable_edits(&self, path: &Path) -> bool {
         let kinds: [fn(PathBuf) -> DocumentKey; 4] = [
             DocumentKey::Schematic,
@@ -108,6 +109,38 @@ impl Signex {
         }
     }
 
+    /// Write `bytes` as the recovery copy of `path`, unless that exact
+    /// content was the last one written. An encode failure is reported.
+    pub(super) fn autosave_bytes_task(
+        &mut self,
+        dir: &Path,
+        path: &Path,
+        bytes: Result<Vec<u8>, String>,
+    ) -> Option<Task<Message>> {
+        let bytes = match bytes {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let reason = format!("could not encode {} for autosave: {error}", path.display());
+                self.report_autosave_failure(&reason);
+                return None;
+            }
+        };
+        let stamp = DocStamp::of_bytes(&bytes);
+        if !self.document_state.autosave.needs_write(path, stamp) {
+            return None;
+        }
+        let superseded = self.document_state.autosave.begin(path);
+        let guard = self.document_state.autosave.track_job();
+        Some(write_task(
+            dir.to_path_buf(),
+            path.to_path_buf(),
+            stamp,
+            bytes,
+            superseded,
+            guard,
+        ))
+    }
+
     /// Remove the sidecar of every document that is closed or no longer
     /// dirty. Cleanup never depends on the preference: a copy written
     /// while autosave was on must go even after it is turned off.
@@ -123,6 +156,8 @@ impl Signex {
             .chain(self.document_state.footprint_editors.keys())
             .cloned()
             .chain(self.open_pcb_paths())
+            .chain(self.document_state.projects.iter().map(|p| p.path.clone()))
+            .chain(self.library.editors.keys().map(|a| a.synthetic_tab_path()))
             .collect();
         self.document_state
             .autosave
@@ -217,6 +252,14 @@ impl Signex {
             if let Some(task) = self.autosave_snapshot_for(&dir, &key) {
                 tasks.push(task);
             }
+        }
+        for path in self.dirty_project_paths() {
+            let bytes = self.project_autosave_bytes(&path);
+            tasks.extend(bytes.and_then(|b| self.autosave_bytes_task(&dir, &path, b)));
+        }
+        for path in self.dirty_row_paths() {
+            let bytes = self.row_autosave_bytes(&path);
+            tasks.extend(bytes.and_then(|b| self.autosave_bytes_task(&dir, &path, b)));
         }
         Task::batch(tasks)
     }

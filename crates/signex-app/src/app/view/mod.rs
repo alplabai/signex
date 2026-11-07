@@ -8,7 +8,6 @@ pub(crate) mod dialogs;
 /// `app/bootstrap/subscription.rs`, hence `pub(crate)` and not a child
 /// of the private `overlays` module.
 pub(crate) mod overlay_id;
-pub(crate) mod translate;
 
 mod canvas_region;
 mod chrome;
@@ -207,7 +206,7 @@ impl Signex {
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
         let (cx, cy) = self.interaction_state.last_mouse_pos;
-        super::view::translate::Translate::new(pill, (cx + 10.0, cy + 6.0)).boxed()
+        signex_widgets::Translate::new(pill, (cx + 10.0, cy + 6.0)).boxed()
     }
 
     fn view_main_for(&self, window_id: iced::window::Id) -> Element<'_, Message> {

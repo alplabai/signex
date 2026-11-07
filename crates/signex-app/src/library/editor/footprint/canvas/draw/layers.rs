@@ -47,6 +47,18 @@ pub(crate) fn draw_fab(frame: &mut canvas::Frame, cam: &FootprintCanvasState, fa
     draw_silk_graphics(frame, cam, fab_f, FpLayer::FFab, None);
 }
 
+/// Back silk and back fab, always drawn (previews only): the editor's
+/// default visibility keeps the back layers off.
+pub(crate) fn draw_back_layers(
+    frame: &mut canvas::Frame,
+    cam: &FootprintCanvasState,
+    silk_b: &[FpGraphic],
+    fab_b: &[FpGraphic],
+) {
+    draw_silk_graphics(frame, cam, fab_b, FpLayer::BFab, None);
+    draw_silk_graphics(frame, cam, silk_b, FpLayer::BSilks, None);
+}
+
 /// Courtyard: the outline polygon when present, else the bbox rectangle.
 pub(crate) fn draw_courtyard(
     frame: &mut canvas::Frame,

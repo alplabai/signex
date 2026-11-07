@@ -8,6 +8,10 @@
 mod pcb;
 #[path = "autosave/primitives.rs"]
 mod primitives;
+#[path = "autosave/project.rs"]
+mod project;
+#[path = "autosave/row.rs"]
+mod row;
 
 use std::path::{Path, PathBuf};
 
