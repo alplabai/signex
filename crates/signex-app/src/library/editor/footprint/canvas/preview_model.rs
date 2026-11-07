@@ -22,6 +22,7 @@ pub struct PreviewFootprint {
     silk_f: Vec<FpGraphic>,
     silk_b: Vec<FpGraphic>,
     fab_f: Vec<FpGraphic>,
+    fab_b: Vec<FpGraphic>,
     courtyard_outline: Option<Vec<(f64, f64)>>,
     courtyard_rect: Option<CourtyardRect>,
     bbox_mm: Option<(f64, f64, f64, f64)>,
@@ -51,7 +52,12 @@ impl PreviewFootprint {
         for (x, y) in courtyard_outline.iter().flatten() {
             grow(*x, *y);
         }
-        for g in fp.silk_f.iter().chain(&fp.fab_f) {
+        for g in fp.silk_f
+            .iter()
+            .chain(&fp.fab_f)
+            .chain(&fp.silk_b)
+            .chain(&fp.fab_b)
+        {
             let mut pts = Vec::new();
             graphic_points(g, &mut pts);
             for p in pts {
@@ -68,11 +74,12 @@ impl PreviewFootprint {
             silk_f: fp.silk_f.clone(),
             silk_b: fp.silk_b.clone(),
             fab_f: fp.fab_f.clone(),
+            fab_b: fp.fab_b.clone(),
         }
     }
 
     /// Bounding box `(min_x, min_y, max_x, max_y)` in mm of pads,
-    /// courtyard, front silk and front fab; `None` for an empty footprint.
+    /// courtyard, silk and fab of both sides; `None` for an empty footprint.
     pub fn bbox_mm(&self) -> Option<(f64, f64, f64, f64)> {
         self.bbox_mm
     }
@@ -85,6 +92,16 @@ impl PreviewFootprint {
     /// Front fab graphics.
     pub(crate) fn fab_f(&self) -> &[FpGraphic] {
         &self.fab_f
+    }
+
+    /// Back silk graphics.
+    pub(crate) fn silk_b(&self) -> &[FpGraphic] {
+        &self.silk_b
+    }
+
+    /// Back fab graphics.
+    pub(crate) fn fab_b(&self) -> &[FpGraphic] {
+        &self.fab_b
     }
 
     /// Default layers (front side on), nothing selected.
