@@ -97,12 +97,12 @@ impl crate::app::Signex {
     /// project-wide step below them is then the sheet's next one. A live
     /// marker stays and blocks it, like any later edit.
     pub(crate) fn pass_dead_class_picks(&mut self, path: &std::path::Path, undoing: bool) {
-        while let Some(marker) = self
+        while self
             .document_state
             .engines
             .get(path)
             .and_then(|engine| engine.next_class_pick(undoing))
-            .filter(|marker| !self.net_class_pick_is_live(*marker, undoing))
+            .is_some_and(|marker| !self.net_class_pick_is_live(marker, undoing))
         {
             if let Some(engine) = self.document_state.engines.get_mut(path) {
                 engine.pass_class_pick(undoing);
