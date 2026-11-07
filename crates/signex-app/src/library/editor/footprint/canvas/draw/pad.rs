@@ -3,6 +3,7 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Radians, Vector};
 
+use super::super::super::layers::LayerPalette;
 use super::super::super::state::{EditorPad, FootprintEditorState, PadsTool, PlaceArcPending};
 use super::super::FootprintCanvasState;
 
@@ -33,10 +34,11 @@ pub(super) fn draw_pad(
     cstate: &FootprintCanvasState,
     pad: &EditorPad,
     is_selected: bool,
+    palette: LayerPalette,
 ) {
     use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
-    let color = layer.color();
+    let color = layer.color_in(palette);
     // Pad-local extents: the shape is built around the origin and the
     // whole path is placed by the saved transform below, so rotation
     // is applied once here rather than smeared through every vertex.

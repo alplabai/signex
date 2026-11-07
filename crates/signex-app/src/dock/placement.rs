@@ -143,8 +143,9 @@ impl PanelPosition {
             PanelKind::Projects
             | PanelKind::Components
             | PanelKind::Library
+            | PanelKind::FootprintLayers
             | PanelKind::Signal => PanelPosition::Left,
-            PanelKind::Erc => PanelPosition::Bottom,
+            PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties
             | PanelKind::Messages

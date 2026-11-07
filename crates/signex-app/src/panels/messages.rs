@@ -19,6 +19,13 @@ pub enum PanelMsg {
     /// footprint editor by tab and flips its `auto_fit_courtyard`
     /// flag via the existing `FootprintToggleAutoFit` path.
     FpEditorToggleAutoFitCourtyard,
+    /// Layers panel — an eye toggle was pressed; carries the standard
+    /// layer name (`F.Cu`, `B.SilkS`, ...).
+    FpEditorLayerEyeClicked(String),
+    /// Layers panel — "Show all" was pressed.
+    FpEditorLayersShowAllClicked,
+    /// Layers panel — "Top side only" was pressed.
+    FpEditorLayersTopSideOnlyClicked,
     /// v0.16.2 — Properties-panel Role pick_list emit. Routed
     /// through the dock handler which forwards to
     /// `LibraryMessage::PrimitiveEditorEvent { ... FootprintSketchSetRole }`

@@ -7,5 +7,6 @@
 pub mod active_bar;
 pub mod canvas;
 pub mod context_menu;
+pub mod pins_panel;
 pub mod state;
 pub(crate) mod updates;

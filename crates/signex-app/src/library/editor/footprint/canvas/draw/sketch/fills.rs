@@ -377,7 +377,7 @@ pub(super) fn draw_filled_closed_loops(
         } else {
             match loop_role {
                 Some(layer) => {
-                    let c = layer.color();
+                    let c = layer.color_in(state.layer_palette);
                     Color {
                         r: c.r,
                         g: c.g,

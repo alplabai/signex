@@ -99,6 +99,76 @@ impl FpLayer {
     }
 }
 
+/// Which colour set the footprint canvas and layer widgets paint with.
+/// Graphite themes get the Graphite values; every other theme keeps the
+/// Altium-flavoured set of [`FpLayer::color`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayerPalette {
+    #[default]
+    Legacy,
+    Graphite,
+}
+
+impl LayerPalette {
+    /// The palette a theme paints with.
+    pub fn for_tokens(tokens: &signex_types::theme::ThemeTokens) -> Self {
+        if crate::styles::is_graphite(tokens) {
+            Self::Graphite
+        } else {
+            Self::Legacy
+        }
+    }
+}
+
+/// The board side a layer sits on; drives the grouping of the layers panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FpSide {
+    Top,
+    Bottom,
+    Board,
+}
+
+impl FpSide {
+    /// Display order of the groups in the layers panel.
+    pub const ORDER: &'static [FpSide] = &[FpSide::Top, FpSide::Bottom, FpSide::Board];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FpSide::Top => "Top side",
+            FpSide::Bottom => "Bottom side",
+            FpSide::Board => "Board",
+        }
+    }
+}
+
+impl FpLayer {
+    /// The side of the board this layer belongs to.
+    pub fn side(self) -> FpSide {
+        match self {
+            FpLayer::FCu | FpLayer::FSilks | FpLayer::FFab => FpSide::Top,
+            FpLayer::BCu | FpLayer::BSilks | FpLayer::BFab => FpSide::Bottom,
+            FpLayer::EdgeCuts => FpSide::Board,
+        }
+    }
+
+    /// Colour in `palette`. Graphite: pad gold on top copper, blue on
+    /// bottom copper, warm white silk, board-outline yellow.
+    pub fn color_in(self, palette: LayerPalette) -> Color {
+        match palette {
+            LayerPalette::Legacy => self.color(),
+            LayerPalette::Graphite => match self {
+                FpLayer::FCu => Color::from_rgb8(0xD8, 0xB4, 0x6A),
+                FpLayer::BCu => Color::from_rgb8(0x3B, 0x6F, 0xD8),
+                FpLayer::FSilks => Color::from_rgb8(0xF2, 0xEF, 0xE6),
+                FpLayer::BSilks => Color::from_rgb8(0xA8, 0xA2, 0xC8),
+                FpLayer::FFab => Color::from_rgb8(0x9E, 0xA3, 0xAE),
+                FpLayer::BFab => Color::from_rgb8(0x6F, 0x73, 0x7C),
+                FpLayer::EdgeCuts => Color::from_rgb8(0xE7, 0xD9, 0xA8),
+            },
+        }
+    }
+}
+
 /// Per-layer visibility map — a 7-entry struct we index by `FpLayer`
 /// rather than a `HashMap` so the footprint state is `Clone +
 /// PartialEq` without a derive dance.
@@ -141,6 +211,32 @@ impl LayerVisibility {
             FpLayer::BFab => self.b_fab,
             FpLayer::EdgeCuts => self.edge_cuts,
         }
+    }
+
+    /// Every layer visible.
+    pub fn show_all(&mut self) {
+        *self = Self {
+            f_cu: true,
+            b_cu: true,
+            f_silks: true,
+            b_silks: true,
+            f_fab: true,
+            b_fab: true,
+            edge_cuts: true,
+        };
+    }
+
+    /// Top-side layers and the board outline visible, bottom side hidden.
+    pub fn show_top_side_only(&mut self) {
+        *self = Self {
+            f_cu: true,
+            b_cu: false,
+            f_silks: true,
+            b_silks: false,
+            f_fab: true,
+            b_fab: false,
+            edge_cuts: true,
+        };
     }
 
     pub fn toggle(&mut self, layer: FpLayer) {
