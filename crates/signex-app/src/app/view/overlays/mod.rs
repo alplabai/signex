@@ -17,6 +17,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Width of the command palette card in an undocked window.
 const WINDOW_PALETTE_WIDTH: f32 = 480.0;
+/// Width of the Graphite palette card under the chrome strip (the mock's
+/// 640 px); independent of the search field's own width.
+const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
 
 mod bars;
 mod modals;
@@ -345,6 +348,11 @@ impl Signex {
         // text input at the top of the card.
         let (card_x, card_w) = if in_window {
             (16.0, WINDOW_PALETTE_WIDTH)
+        } else if graphite {
+            let (x, _) = self.chrome_search_bar_geometry();
+            let window_w = self.ui_state.window_size.0;
+            let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
+            (x.min((window_w - w - 16.0).max(16.0)), w)
         } else {
             self.chrome_search_bar_geometry()
         };

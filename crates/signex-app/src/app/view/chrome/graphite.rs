@@ -41,9 +41,10 @@ static SUN: LazyLock<svg::Handle> = LazyLock::new(|| {
     )
 });
 
-/// `(x, width)` of the Graphite search field: centred on the window, at most
-/// [`SEARCH_MAX_W`], clear of the menu row on the left and of the right
-/// cluster plus window controls on the right.
+/// `(x, width)` of the Graphite search field: at most [`SEARCH_MAX_W`],
+/// centred on the window when that clears the menu row, otherwise flush
+/// right of the menu. The field only shrinks when the room between the menu
+/// row and the right cluster plus window controls is really short.
 pub(super) fn search_geometry(
     window_w: f32,
     leading_w: f32,
@@ -51,9 +52,10 @@ pub(super) fn search_geometry(
     menu_w: f32,
 ) -> (f32, f32) {
     let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
-    let side = menu_end.max(trailing_w + RIGHT_CLUSTER_W + CHROME_SEARCH_RIGHT_GAP);
-    let width = (window_w - 2.0 * side).clamp(CHROME_SEARCH_BAR_MIN_WIDTH, SEARCH_MAX_W);
-    let x = ((window_w - width) / 2.0).max(menu_end);
+    let right_limit = window_w - (trailing_w + RIGHT_CLUSTER_W + CHROME_SEARCH_RIGHT_GAP);
+    let width = (right_limit - menu_end).clamp(CHROME_SEARCH_BAR_MIN_WIDTH, SEARCH_MAX_W);
+    let centred = (window_w - width) / 2.0;
+    let x = centred.min(right_limit - width).max(menu_end);
     (x, width)
 }
 
@@ -314,6 +316,14 @@ mod tests {
         let (x, w) = search_geometry(1600.0, 0.0, 132.0, 440.0);
         assert_eq!(w, 380.0);
         assert_eq!(x, (1600.0 - 380.0) / 2.0);
+    }
+
+    #[test]
+    fn ten_menu_roots_do_not_shrink_the_field_on_a_laptop_window() {
+        let (x, w) = search_geometry(1440.0, 0.0, 138.0, 586.0);
+        assert_eq!(w, 380.0);
+        assert!(x >= 586.0);
+        assert!(x + w <= 1440.0 - 138.0 - RIGHT_CLUSTER_W);
     }
 
     #[test]

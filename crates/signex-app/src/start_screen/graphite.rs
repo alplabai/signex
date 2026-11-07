@@ -134,7 +134,7 @@ fn nav<'a>(tokens: &ThemeTokens, open_shortcut: &str) -> Element<'a, Message> {
                 .wrapping(iced::widget::text::Wrapping::None)
                 .align_x(iced::alignment::Horizontal::Center)
         )
-        .padding([0.0, 8.0])
+        .padding([0.0, 14.0])
         .width(Length::Fill)
         .height(ChromeMetrics::DEFAULT.field + 2.0)
         .on_press(Action::OpenProject.message())
