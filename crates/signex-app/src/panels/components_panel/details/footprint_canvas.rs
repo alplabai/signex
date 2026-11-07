@@ -12,8 +12,9 @@ use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
 use crate::canvas::Camera;
 use crate::library::editor::footprint::canvas::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
-    draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk,
+    draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk, graphite_look_for,
 };
+use crate::library::editor::footprint::layers::LayerPalette;
 use crate::library::editor::footprint::state::SnapOptions;
 
 /// Lowest zoom of the preview, px per mm: low enough to fit a large part
@@ -24,6 +25,9 @@ pub struct FootprintPreview<'a> {
     model: &'a PreviewFootprint,
     /// Per-wheel-notch zoom factor.
     zoom_step: f32,
+    /// Graphite ground colour and layer palette; `None` keeps the legacy
+    /// black board.
+    graphite: Option<(iced::Color, LayerPalette)>,
 }
 
 impl<'a> FootprintPreview<'a> {
@@ -31,7 +35,15 @@ impl<'a> FootprintPreview<'a> {
         Self {
             model,
             zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
+            graphite: None,
         }
+    }
+
+    /// Paint with the Graphite paper / charcoal canvas look when `tokens`
+    /// is a Graphite theme; any other theme is left as it was.
+    pub fn with_theme_tokens(mut self, tokens: &signex_types::theme::ThemeTokens) -> Self {
+        self.graphite = graphite_look_for(tokens).map(|l| (l.bg, l.palette()));
+        self
     }
 }
 
@@ -203,14 +215,20 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
         let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
             let area = Rectangle::new(Point::ORIGIN, bounds.size());
             let look = BackdropLook {
-                bg: BACKDROP_BG,
+                bg: self.graphite.map_or(BACKDROP_BG, |(bg, _)| bg),
                 grid: BACKDROP_GRID,
                 sketch: false,
                 snap: &snap,
             };
             draw_backdrop(frame, &camera, area, look);
-            draw_origin(frame, &camera, false);
-            let layers = self.model.layer_input();
+            // The legacy yellow crosshair does not read on the paper ground.
+            if self.graphite.is_none() {
+                draw_origin(frame, &camera, false);
+            }
+            let mut layers = self.model.layer_input();
+            if let Some((_, palette)) = self.graphite {
+                layers.palette = palette;
+            }
             draw_fab(frame, &camera, self.model.fab_f());
             draw_silk(frame, &camera, &layers);
             draw_courtyard(frame, &camera, &layers);

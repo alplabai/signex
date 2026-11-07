@@ -257,6 +257,34 @@ fn tab_badge(
     }
 }
 
+/// The badge of a Graphite tab: the failing-parameter count (error), the
+/// pins with a pad out of all pins (ok when complete, warning otherwise),
+/// the alternate-symbol count (neutral).
+fn graphite_badge(
+    tab: PreviewTab,
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<(String, crate::styles::PillTone)> {
+    use crate::styles::PillTone;
+    match tab {
+        PreviewTab::Parameters => {
+            tab_badge(tab, state, library_state).map(|n| (n.to_string(), PillTone::Err))
+        }
+        PreviewTab::PinMap => preview::pin_map_counts(state).map(|(mapped, total)| {
+            let tone = if mapped == total {
+                PillTone::Ok
+            } else {
+                PillTone::Warn
+            };
+            (format!("{mapped}/{total}"), tone)
+        }),
+        PreviewTab::Alternates => Some(state.row.alternate_symbols.len())
+            .filter(|n| *n > 0)
+            .map(|n| (n.to_string(), PillTone::Neutral)),
+        _ => None,
+    }
+}
+
 fn view_tabs<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
@@ -277,11 +305,17 @@ fn view_tabs<'a>(
         )
     };
     let accent = crate::styles::ti(tokens.accent);
-    let last = PreviewTab::ORDER.len().saturating_sub(1);
+    let graphite = crate::styles::is_graphite(tokens);
+    let order = if graphite {
+        PreviewTab::GRAPHITE_ORDER
+    } else {
+        PreviewTab::ORDER
+    };
+    let last = order.len().saturating_sub(1);
     let mut row_widget: iced::widget::Row<Element<'_, LibraryMessage>> = iced::widget::Row::new()
         .spacing(0)
         .align_y(iced::Alignment::End);
-    for (i, tab) in PreviewTab::ORDER.iter().enumerate() {
+    for (i, tab) in order.iter().enumerate() {
         let is_active = *tab == state.active_tab;
         let (fill, text_c) = if is_active {
             (active_fill, theme_ext::text_primary(tokens))
@@ -289,7 +323,11 @@ fn view_tabs<'a>(
             (resting_fill, theme_ext::text_secondary(tokens))
         };
         let mut content: iced::widget::Row<Element<'_, LibraryMessage>> = row![
-            text(tab.label())
+            text(if graphite {
+                tab.graphite_label()
+            } else {
+                tab.label()
+            })
                 .size(TS.label)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)
@@ -297,13 +335,17 @@ fn view_tabs<'a>(
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
-        if let Some(count) = tab_badge(*tab, state, library_state) {
+        if graphite {
+            if let Some((label, tone)) = graphite_badge(*tab, state, library_state) {
+                content = content.push(kit::toned_pill(label, tone, tokens));
+            }
+        } else if let Some(count) = tab_badge(*tab, state, library_state) {
             let fill = tokens::danger(tokens);
-            content = content.push(if crate::styles::is_graphite(tokens) {
-                kit::toned_pill(count.to_string(), crate::styles::PillTone::Err, tokens)
-            } else {
-                kit::pill(count.to_string(), fill, tokens::readable_on(fill))
-            });
+            content = content.push(kit::pill(
+                count.to_string(),
+                fill,
+                tokens::readable_on(fill),
+            ));
         }
         let label = container(content.boxed()).padding([SP.s, SP.l]);
         let style = signex_widgets::tab_pill::TabPillStyle {
@@ -385,6 +427,15 @@ fn view_active_tab<'a>(
         PreviewTab::Simulation => {
             inert::unless_read_only_veiled(read_only, veil, sim::view(state, tokens, address))
         }
+        PreviewTab::PinMap => preview::pin_map_tab(state, tokens, &address, read_only),
+        PreviewTab::Alternates => inert::unless_read_only_veiled(
+            read_only,
+            veil,
+            iced::widget::scrollable(alternate_symbols::view(state, tokens, &address))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .boxed(),
+        ),
     };
     // The one body padding. A tab is a scrolling stack of `kit::card`
     // sections with no outer surface of its own.
@@ -495,12 +546,23 @@ fn close_background(tokens: &ThemeTokens, status: button::Status) -> Option<iced
 
 fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
+    // Graphite: a plain glyph at heading size, no outlined square.
+    let graphite = crate::styles::is_graphite(tokens);
+    let border = if graphite {
+        Color::TRANSPARENT
+    } else {
+        theme_ext::border_color(tokens)
+    };
+    let glyph = if graphite {
+        TS.heading
+    } else {
+        TS.heading * CLOSE_GLYPH_SCALE
+    };
     let tokens = *tokens;
     button(
         container(
             text("\u{00D7}")
-                .size(TS.heading * CLOSE_GLYPH_SCALE)
+                .size(glyph)
                 .color(text_c),
         )
         .padding([0.0, SP.m]),
