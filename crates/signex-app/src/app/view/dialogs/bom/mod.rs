@@ -11,7 +11,7 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length, Widget};
 
-use super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
+use super::widgets::{draggable_header, os_title_bar_slot};
 use crate::styles::{DialogButtonKind, dialog_button};
 
 mod rules;
@@ -52,8 +52,9 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
-        let header_content: Element<'_, Message> = modal_title_header(
+        let header_content: Element<'_, Message> = super::graphite::titled_header(
             "Bill of Materials",
+            Some("BOM preview".to_string()),
             Message::BomPreview(BomPreviewMsg::Close),
             tokens,
         );
@@ -211,7 +212,7 @@ impl Signex {
                 Space::new().width(12),
                 dialog_button(
                     "Export\u{2026}",
-                    DialogButtonKind::Primary,
+                    super::graphite::call_to_action(tokens),
                     Some(Message::BomPreview(BomPreviewMsg::Export)),
                     tokens,
                 ),

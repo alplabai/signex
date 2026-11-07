@@ -4,13 +4,14 @@
 //! loads anything.
 
 use super::*;
-use iced::widget::{column, container, text};
+use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length, Widget};
 
 use super::widgets::modal_title_header;
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
 use crate::styles::{
-    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_hint, dialog_message,
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split, dialog_hint,
+    dialog_message,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -85,32 +86,81 @@ impl Signex {
             tokens,
         ));
 
-        let buttons = vec![
-            dialog_button(
-                "Decide later",
-                DialogButtonKind::Secondary,
-                Some(later),
-                tokens,
-            ),
-            dialog_button(
-                "Discard",
-                DialogButtonKind::Danger,
-                Some(Message::Autosave(AutosaveMsg::Recovery(
-                    RecoveryChoice::Discard,
-                ))),
-                tokens,
-            ),
-            dialog_button(
-                "Restore",
-                DialogButtonKind::Primary,
-                Some(Message::Autosave(AutosaveMsg::Recovery(
-                    RecoveryChoice::Restore,
-                ))),
-                tokens,
-            ),
-        ];
+        let graphite = crate::styles::is_graphite(tokens);
+        let restore = dialog_button(
+            "Restore",
+            DialogButtonKind::Primary,
+            Some(Message::Autosave(AutosaveMsg::Recovery(
+                RecoveryChoice::Restore,
+            ))),
+            tokens,
+        );
+        let discard = dialog_button(
+            "Discard",
+            DialogButtonKind::Danger,
+            Some(Message::Autosave(AutosaveMsg::Recovery(
+                RecoveryChoice::Discard,
+            ))),
+            tokens,
+        );
+        // Graphite: Restore and Discard at the left, a quiet Decide later at
+        // the right; Esc keeps meaning Decide later.
+        let footer = if graphite {
+            dialog_footer_split(
+                vec![restore, discard],
+                vec![dialog_button(
+                    "Decide later",
+                    DialogButtonKind::Ghost,
+                    Some(later),
+                    tokens,
+                )],
+            )
+        } else {
+            dialog_footer(vec![
+                dialog_button(
+                    "Decide later",
+                    DialogButtonKind::Secondary,
+                    Some(later),
+                    tokens,
+                ),
+                discard,
+                restore,
+            ])
+        };
+        let body: Element<'_, Message> = if graphite {
+            let r = crate::styles::tokens::resolve(tokens);
+            let card = container(
+                row![
+                    text(name.clone())
+                        .size(TS.dense)
+                        .font(crate::fonts::iced_font_for_family(
+                            crate::fonts::CHROME_MONO_FONT,
+                        ))
+                        .color(crate::styles::ti(tokens.text)),
+                    Space::new().width(Length::Fill),
+                    text(format!("autosaved {}", describe_age(offer.age_secs)))
+                        .size(TS.label)
+                        .color(r.ink3),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([SP.m, SP.l])
+            .width(Length::Fill)
+            .style(crate::styles::card(tokens));
+            row![
+                super::graphite::recovery_icon_tile(tokens),
+                column![body.boxed(), card.boxed()]
+                    .spacing(SP.l)
+                    .width(Length::Fill)
+                    .boxed()
+            ]
+            .spacing(SP.l)
+            .boxed()
+        } else {
+            body.boxed()
+        };
         let dialog = container(
-            column![header, dialog_body(body), dialog_footer(buttons)].width(if windowed {
+            column![header, dialog_body(body), footer].width(if windowed {
                 Length::Fill
             } else {
                 Length::Fixed(super::widgets::modal_card_width(
