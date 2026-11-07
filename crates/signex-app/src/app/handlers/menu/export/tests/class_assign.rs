@@ -180,3 +180,37 @@ fn without_operands_the_command_is_refused_and_changes_nothing_else() {
     );
     assert!(classes(&app)[0].nets.is_empty());
 }
+
+fn did_nothing_lines() -> usize {
+    crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|entry| entry.message.contains("did nothing"))
+        .count()
+}
+
+/// Only the missing-operand refusal is written to the Messages panel by
+/// `dispatch_command`; every other command is exactly as on trunk.
+#[test]
+fn only_the_operand_refusal_is_logged_by_a_key_or_palette_dispatch() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, ..) = child_label_selected("/w/assign-log");
+    let id = |name| AppCommandId::new(name).expect("catalog id");
+
+    let before = did_nothing_lines();
+    let _ = app.dispatch_command(&id("assign_net_class"), CommandArgs::none(), None);
+    assert_eq!(
+        did_nothing_lines(),
+        before + 1,
+        "the refusal says why, once"
+    );
+
+    let before = did_nothing_lines();
+    for name in ["undo", "redo", "leave_sheet"] {
+        let _ = app.dispatch_command(&id(name), CommandArgs::none(), None);
+    }
+    assert_eq!(
+        did_nothing_lines(),
+        before,
+        "nothing new for other commands"
+    );
+}

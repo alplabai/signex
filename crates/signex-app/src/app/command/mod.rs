@@ -57,7 +57,11 @@ impl Signex {
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
         let (outcome, task) = self.dispatch_command_reporting(command, args, window);
-        if let CommandOutcome::Disabled { reason } = outcome {
+        // Only the missing-operand refusal is said here; every other command
+        // reports (or stays silent) exactly as before.
+        if let CommandOutcome::Disabled { reason } = outcome
+            && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
+        {
             crate::diagnostics::log_info(format!(
                 "Command: {} did nothing: {reason}",
                 command.as_str()

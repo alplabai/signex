@@ -188,6 +188,8 @@ impl Signex {
         let mut closed = Vec::new();
         for path in sheets {
             // A pick whose class edit was already undone is no later edit.
+            // Passing it stays even if the group step is then refused: it
+            // only moves that sheet's dead markers.
             self.pass_dead_class_picks(&path, direction == StepDirection::Undo);
             let Some(engine) = self.document_state.engines.get(&path) else {
                 // A redo owes nothing to a sheet the undo did not revert.

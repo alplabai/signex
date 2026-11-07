@@ -24,7 +24,11 @@ impl crate::app::Signex {
             .ok_or("there is no active sheet")?
             .to_path_buf();
         if !document.engines.contains_key(&path) {
-            return Err(format!("{} is not an open sheet", path.display()));
+            return Err(if sheet.is_some() {
+                format!("{} is not an open sheet", path.display())
+            } else {
+                "the active document is not a schematic sheet".into()
+            });
         }
         let project = document
             .document_project(&path)
