@@ -57,18 +57,14 @@ them for all clusters.
 
 ## Queried points
 
-`derive_at` also answers where queried points sit. The full derive anchors a
-point flagged as on a wire's interior in the union-find that already holds the
-name joins, one point after the other, and then looks the net up by the root
-the nets were numbered with before those joins. Normally the point is a fresh
-node and nothing changes; but a point that is already a node of another net
-(a pin tip held by a no-connect, inside a wire with no dot) merges two whole
-classes, for the later queries too, and a net numbered by a root that the merge
-changed is not found. `NetBase::locate` replays exactly that over the class roots, on purpose: the
-full derive's anchoring of queried points is a known bug tracked separately,
-and `locate` mirrors it until that is fixed (then both change together).
-The region argument above is unaffected: every queried key is a dirty key, so
-the wires through it are in the region.
+`derive_at` also answers where queried points sit. A point flagged as on a
+wire's interior that lies inside a wire (not on an endpoint) takes the net of
+that wire's smaller endpoint; any other point takes its own node's net.
+Nothing is joined, so a point that is already a node of another net (a pin tip
+held by a no-connect, a power port's tip) never merges two nets, and no query
+changes another one's answer (#2144). `NetBase::locate` answers the same way
+through the region's own segment index: every queried key is a dirty key, so
+every wire through it is in the region.
 
 ## When it derives in full
 
