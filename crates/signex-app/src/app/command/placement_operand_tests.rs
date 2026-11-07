@@ -284,3 +284,65 @@ fn an_off_grid_point_is_refused_and_changes_nothing() {
         assert_eq!(sheet_shape(&app), before, "{id} changed the document");
     }
 }
+
+/// A wire click pulls onto a wire end within the capture radius: a grid
+/// point next to one is refused (the click would not land there), and the
+/// wire end itself runs and makes the clicked document.
+#[test]
+fn a_wire_point_a_click_would_pull_onto_a_connection_is_refused() {
+    let near = grid(10.0, 10.0);
+    let wire_end = Point::new(near.x + 0.2, near.y);
+    let far = grid(10.0, 20.0);
+    let with_wire = |app: &mut Signex| {
+        let mode = app.interaction_state.draw_mode;
+        let (_, placed) = app.place_wire_at(grid(0.0, 10.0), wire_end, mode);
+        assert!(placed);
+    };
+    let end = format!("end={}", pt(far));
+
+    let mut app = app_with_tool(crate::app::Tool::Select);
+    with_wire(&mut app);
+    let before = sheet_shape(&app);
+    let start = format!("start={}", pt(near));
+    let outcome = run(&mut app, "place_wire", &[&start, &end]);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("grid")),
+        "{outcome:?}"
+    );
+    assert_eq!(sheet_shape(&app), before, "the refused run changed nothing");
+
+    let start = format!("start={}", pt(wire_end));
+    assert_eq!(
+        run(&mut app, "place_wire", &[&start, &end]),
+        CommandOutcome::Ran
+    );
+    let mut clicked = app_with_tool(crate::app::Tool::Select);
+    with_wire(&mut clicked);
+    arm(&mut clicked, "place_wire");
+    click(&mut clicked, (near.x, near.y));
+    click(&mut clicked, (far.x, far.y));
+    assert_eq!(sheet_shape(&app), sheet_shape(&clicked));
+}
+
+/// On a sheet written by a newer Signex (read-only, #1402) every placement is
+/// refused with the gateway's reason and the sheet is unchanged.
+#[test]
+fn a_placement_on_a_read_only_sheet_is_refused_with_the_reason() {
+    for case in cases() {
+        let mut app = operand_app(&case);
+        let path = app.document_state.active_path.clone().expect("a sheet");
+        let mut sheet = signex_types::schematic::SchematicSheet::default();
+        sheet.unknown.newer_minor_source = Some("snxsch/9.9".into());
+        app.document_state
+            .engines
+            .insert(path, signex_engine::Engine::new(sheet).expect("engine"));
+        let before = sheet_shape(&app);
+        let outcome = run(&mut app, case.id, &operand_strs(&case));
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("read-only")),
+            "{}: {outcome:?}",
+            case.id
+        );
+        assert_eq!(sheet_shape(&app), before, "{}", case.id);
+    }
+}

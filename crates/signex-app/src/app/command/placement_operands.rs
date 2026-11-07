@@ -38,6 +38,9 @@ type Ran = (CommandOutcome, Task<Message>);
 fn run(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
     let outcome = if app.document_state.active_engine().is_none() {
         CommandOutcome::disabled("no schematic is open")
+    } else if let Some(reason) = app.refuse_if_active_read_only() {
+        // The gateway would refuse too; say why rather than "nothing placed".
+        CommandOutcome::disabled(reason)
     } else {
         match app.place_from_operands(placement, args) {
             Ok(()) => CommandOutcome::Ran,
@@ -130,14 +133,25 @@ impl Signex {
     /// The point operand `name`, refused when a click would snap it
     /// elsewhere (snapping on, and off the grid).
     fn grid_point(&self, args: &CommandArgs, name: &str) -> Result<Point, String> {
+        self.point_where_a_click_lands(args, name, Self::snap_to_grid)
+    }
+
+    /// The point operand `name`, refused unless `snap` (what the click of
+    /// the same tool applies) leaves it where it is.
+    fn point_where_a_click_lands(
+        &self,
+        args: &CommandArgs,
+        name: &str,
+        snap: fn(&Self, f64, f64) -> (f64, f64),
+    ) -> Result<Point, String> {
         let Some(OperandValue::Point(x, y)) = args.operand(name) else {
             return Err(format!("operand `{name}` is missing"));
         };
-        let (sx, sy) = self.snap_to_grid(*x, *y);
+        let (sx, sy) = snap(self, *x, *y);
         let nm = |mm: f64| (mm * 1e6).round() as i64;
         if (nm(sx), nm(sy)) != (nm(*x), nm(*y)) {
             return Err(format!(
-                "`{name}` is not on the {} mm grid",
+                "`{name}` is not where a click lands on the {} mm grid: a click there lands on {sx},{sy}",
                 self.ui_state.grid_size_mm
             ));
         }
@@ -184,9 +198,16 @@ impl Signex {
         placement: Placement,
         args: &CommandArgs,
     ) -> Result<(), String> {
+        // A wire click also pulls onto a nearby pin end, wire end or junction
+        // (`snap_wire_point`); a bus, line or rectangle click only snaps to
+        // the grid.
+        let snap = match placement {
+            Placement::Wire => Self::snap_wire_point,
+            _ => Self::snap_to_grid,
+        };
         let (start, end) = (
-            self.grid_point(args, "start")?,
-            self.grid_point(args, "end")?,
+            self.point_where_a_click_lands(args, "start", snap)?,
+            self.point_where_a_click_lands(args, "end", snap)?,
         );
         // A zero-length segment places nothing; say so rather than report
         // a run.
@@ -196,14 +217,8 @@ impl Signex {
         let mode = self.interaction_state.draw_mode;
         let (width, fill) = pre_placement_shape(&self.document_state);
         match placement {
-            Placement::Wire => {
-                self.place_wire_at(start, end, mode);
-                Ok(())
-            }
-            Placement::Bus => {
-                self.place_bus_at(start, end, mode);
-                Ok(())
-            }
+            Placement::Wire => placed(self.place_wire_at(start, end, mode).1),
+            Placement::Bus => placed(self.place_bus_at(start, end, mode).1),
             Placement::Line => placed(self.place_line_at(start, end, width)),
             _ => placed(self.place_rect_at(start, end, width, fill)),
         }

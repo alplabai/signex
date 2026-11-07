@@ -365,7 +365,7 @@ fn wire_and_bus_placements_match_their_clicks() {
     let two = [OFF_GRID, (30.4, 25.3)];
     assert_method_matches_clicks(Tool::Wire, &two, none, |app, at| {
         let mode = app.interaction_state.draw_mode;
-        let end = app.place_wire_at(at, grid(24.0, 20.0), mode);
+        let (end, _) = app.place_wire_at(at, grid(24.0, 20.0), mode);
         assert_eq!(end, grid(24.0, 20.0));
     });
     assert_method_matches_clicks(Tool::Bus, &two, none, |app, at| {
