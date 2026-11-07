@@ -414,6 +414,7 @@ fn deliver(
             theme_grid: signex_app::render_config::to_iced(&colors.grid),
             theme_paper: signex_app::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
+            graphite: None,
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,

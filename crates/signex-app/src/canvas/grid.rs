@@ -51,6 +51,10 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
 pub(crate) const MINOR_GRID_LINE_PX: f32 = 0.6;
 const MAJOR_GRID_LINE_PX: f32 = 0.5;
 
+/// Radius of a fine grid dot: the smallest, which `fill_grid_dot` floors to a
+/// 1 px square.
+const FINE_DOT_RADIUS: f32 = 0.5;
+
 /// One grid dot, as a filled square with the area of a `radius` circle.
 ///
 /// A dot is at most a few pixels wide, where a square reads the same as a
@@ -127,7 +131,7 @@ fn grid_cross_bars(centre: Point, arm: f32, width: f32, device_scale: f32) -> [i
 /// process global that this function used to read from inside `draw`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "9 arguments: camera + grid metrics + page bounds + colour + glyph style + device scale, all per-frame draw inputs"
+    reason = "10 arguments: camera + grid metrics + page bounds + colour + glyph style + device scale + dot size, all per-frame draw inputs"
 )]
 pub fn draw_grid<R: GeometryRenderer>(
     frame: &mut canvas::Frame<R>,
@@ -139,6 +143,7 @@ pub fn draw_grid<R: GeometryRenderer>(
     page_h: f32,
     style: GridStyle,
     device_px_per_logical_px: f32,
+    fine_dots: bool,
 ) {
     // #1940 - every glyph and line stays inside the paper in this window's
     // device pixels, so none straddles the edge onto the canvas.
@@ -160,6 +165,7 @@ pub fn draw_grid<R: GeometryRenderer>(
         page_h,
         style,
         device_px_per_logical_px,
+        fine_dots,
     );
 }
 
@@ -266,6 +272,7 @@ fn draw_grid_within<R: GeometryRenderer>(
     page_h: f32,
     style: GridStyle,
     device_px_per_logical_px: f32,
+    fine_dots: bool,
 ) {
     let dpr = device_px_per_logical_px;
     if grid_mm <= 0.0 || camera.scale <= 0.0 {
@@ -314,7 +321,12 @@ fn draw_grid_within<R: GeometryRenderer>(
     const GLYPH_EDGE_SLACK: f32 = MINOR_GRID_LINE_PX / 2.0;
 
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
-    let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
+    // `fine_dots` (Graphite): one logical px, at every zoom.
+    let dot_radius = if fine_dots {
+        FINE_DOT_RADIUS
+    } else {
+        (minor_screen * 0.06).clamp(0.5, 1.6)
+    };
 
     // Small-cross arm length in screen pixels (Standard-style "+").
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);

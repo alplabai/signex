@@ -14,12 +14,21 @@ pub fn selection_bounds(
         .reduce(|a, b| a.union(&b))
 }
 
-/// The selection overlay: an outline in the theme's selection colour, no fill.
+/// Selection halo sizes in screen px (Graphite): box padding, corner radius
+/// and outline width.
+const HALO_PAD_PX: f32 = 6.0;
+const HALO_RADIUS_PX: f32 = 7.0;
+const HALO_STROKE_PX: f32 = 1.5;
+
+/// The selection overlay: an outline in the theme's selection colour, no
+/// fill. With `graphite` a box is a padded, rounded, dashed accent halo on a
+/// soft accent fill instead.
 pub(super) fn selection_overlay_inputs(
     snapshot: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     transform: &ScreenTransform,
     colors: &CanvasColors,
+    graphite: Option<&crate::canvas::GraphiteCanvasInk>,
     designators: &Designators,
     widths: WireWidths<'_>,
 ) -> OverlayInputs {
@@ -54,6 +63,20 @@ pub(super) fn selection_overlay_inputs(
                 ) as f32,
                 color: to_rgba(stroke),
             });
+        } else if let Some(ink) = graphite {
+            let mm = |px: f32| screen_px_to_world_mm(px, transform.scale) as f32;
+            overlays.halos.push(signex_renderer::schematic::OverlayHaloInput {
+                min: [bbox.min_x as f32, bbox.min_y as f32],
+                max: [bbox.max_x as f32, bbox.max_y as f32],
+                pad_mm: mm(HALO_PAD_PX),
+                radius_mm: mm(HALO_RADIUS_PX),
+                stroke_width_mm: mm(HALO_STROKE_PX),
+                fill_color: to_rgba(Color {
+                    a: crate::canvas::HALO_FILL_ALPHA,
+                    ..ink.accent_soft
+                }),
+                stroke_color: to_rgba(ink.accent),
+            });
         } else {
             overlays.ghost_polygons.push(OverlayPolygonInput {
                 vertices: vec![
@@ -81,12 +104,15 @@ pub fn draw_selection_overlay(
     selected: &[SelectedItem],
     transform: &ScreenTransform,
     colors: &CanvasColors,
+    graphite: Option<&crate::canvas::GraphiteCanvasInk>,
     designators: &Designators,
     widths: WireWidths<'_>,
 ) {
-    let overlays =
-        selection_overlay_inputs(snapshot, selected, transform, colors, designators, widths);
+    let overlays = selection_overlay_inputs(
+        snapshot, selected, transform, colors, graphite, designators, widths,
+    );
     if overlays.preview_lines.is_empty()
+        && overlays.halos.is_empty()
         && overlays.ghost_polygons.is_empty()
         && overlays.lasso_lines.is_empty()
         && overlays.snap_circles.is_empty()
@@ -114,7 +140,11 @@ mod tests {
     use signex_types::schematic::Wire;
     use signex_types::theme::{ThemeId, canvas_colors};
 
-    fn overlay_for(scale: f32, colors: &CanvasColors) -> OverlayInputs {
+    fn overlay_with(
+        scale: f32,
+        colors: &CanvasColors,
+        graphite: Option<&crate::canvas::GraphiteCanvasInk>,
+    ) -> OverlayInputs {
         let wire = Wire {
             uuid: uuid::Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
@@ -137,9 +167,42 @@ mod tests {
             &selected,
             &transform,
             colors,
+            graphite,
             &Designators::new(),
             WireWidths::default(),
         )
+    }
+
+    fn overlay_for(scale: f32, colors: &CanvasColors) -> OverlayInputs {
+        overlay_with(scale, colors, None)
+    }
+
+    #[test]
+    fn graphite_selects_with_a_halo_and_other_themes_keep_the_outline() {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let ink = crate::canvas::GraphiteCanvasInk::from_tokens(&tokens).expect("graphite");
+        let colors = canvas_colors(ThemeId::GraphiteLight);
+        let overlays = overlay_with(20.0, &colors, Some(&ink));
+        assert_eq!(overlays.halos.len(), 1);
+        assert!(overlays.ghost_polygons.is_empty());
+        let halo = &overlays.halos[0];
+        assert_eq!(halo.stroke_color, to_rgba(ink.accent));
+        assert_eq!(halo.fill_color[3], crate::canvas::HALO_FILL_ALPHA);
+        // 6 px of padding at 20 px/mm.
+        assert!((halo.pad_mm * 20.0 - HALO_PAD_PX).abs() < 1e-3);
+        // Without the inks the same selection is the legacy outline.
+        let legacy = overlay_with(20.0, &colors, None);
+        assert!(legacy.halos.is_empty() && !legacy.ghost_polygons.is_empty());
+    }
+
+    #[test]
+    fn a_marker_sized_selection_stays_a_ring_in_graphite() {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let ink = crate::canvas::GraphiteCanvasInk::from_tokens(&tokens).expect("graphite");
+        let colors = canvas_colors(ThemeId::GraphiteLight);
+        let overlays = overlay_with(0.1, &colors, Some(&ink));
+        assert!(overlays.halos.is_empty());
+        assert!(!overlays.snap_circles.is_empty());
     }
 
     #[test]

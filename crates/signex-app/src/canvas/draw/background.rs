@@ -61,21 +61,27 @@ impl SchematicCanvas<'_> {
             &self.paper_look(),
         );
 
-        let frame_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
+        let text_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
+        // Graphite draws the frame lines softer than the title-block text.
+        let frame_color = self.prefs.graphite.map_or(text_color, |ink| ink.line_strong);
         let _probe = crate::frame_probe::span("canvas.background.frame");
-        self.draw_sheet_frame(frame, cam, bounds, frame_color);
+        self.draw_sheet_frame(frame, cam, bounds, frame_color, text_color);
     }
 
     /// How the paper and its grid look under the current preferences.
     pub(in crate::canvas) fn paper_look(&self) -> paper::PaperLook {
+        let paper = self.paper_color();
         paper::PaperLook {
             backdrop: self.prefs.theme_bg,
-            paper: self.paper_color(),
+            paper,
             grid: self.prefs.theme_grid,
             grid_visible: self.prefs.grid_visible,
             grid_mm: self.prefs.visible_grid_mm as f32,
             grid_style: self.prefs.grid_style,
             device_px_per_logical_px: self.prefs.device_px_per_logical_px,
+            // Graphite: the sheet is the workspace, so it has no border.
+            border: !(self.prefs.graphite.is_some() && paper == self.prefs.theme_bg),
+            fine_dots: self.prefs.graphite.is_some(),
         }
     }
 
@@ -127,6 +133,7 @@ impl SchematicCanvas<'_> {
         cam: &Camera,
         bounds: Rectangle,
         color: Color,
+        text_color: Color,
     ) {
         let primitives = &self.sheet_frame;
         let at = |x: f64, y: f64| cam.world_to_screen(iced::Point::new(x as f32, y as f32), bounds);
@@ -201,7 +208,7 @@ impl SchematicCanvas<'_> {
                         frame.fill_text(canvas::Text {
                             content: text.clone(),
                             position: at(*x, *y),
-                            color,
+                            color: text_color,
                             size: iced::Pixels(size_px),
                             font: iced::Font {
                                 weight,

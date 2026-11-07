@@ -500,6 +500,9 @@ impl Signex {
             theme_grid: crate::render_config::to_iced(&colors.grid),
             theme_paper: crate::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
+            graphite: crate::canvas::GraphiteCanvasInk::from_tokens(
+                &self.tokens_for(self.ui_state.preferences_draft_theme),
+            ),
             snap_enabled: self.ui_state.snap_enabled,
             snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
             snap_hotspots: self.ui_state.snap_hotspots,
