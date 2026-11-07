@@ -55,7 +55,7 @@ impl Signex {
             return self.detached_modal_title(*modal);
         }
         let version = env!("CARGO_PKG_VERSION");
-        let dirty_count = self.document_state.dirty_document_count();
+        let dirty_count = self.unsaved_set().title_count();
         if dirty_count == 0 {
             format!("Signex {version}")
         } else {
