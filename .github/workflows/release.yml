@@ -182,13 +182,13 @@ jobs:
           # is what rustup installs and cargo builds.
           - target: universal-apple-darwin
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
-            os: macos-14
+            os: macos-15
             arch: universal
             arch_suffix: universal
 
-          # macos-latest was stalling on v0.6.2 (set-up job failed in 2s
-          # — queue exhausted). Pinned to macos-14 (Apple Silicon) for
-          # stable capacity. Bump to macos-15 when macos-14 rolls off.
+          # Pinned (not macos-latest, which stalled on v0.6.2) for stable
+          # capacity. macos-14 was retired: v26.11.0-rc.1's build was refused
+          # with "configuration 'macos-14-arm64-us-default' is not supported".
 
     steps:
       - uses: actions/checkout@v5
@@ -490,7 +490,7 @@ jobs:
     name: Package + sign (macOS)
     needs: [version, build]
     if: ${{ !cancelled() && needs.version.result == 'success' && needs.build.result == 'success' }}
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: read
     env:
