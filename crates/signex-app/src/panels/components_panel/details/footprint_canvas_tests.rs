@@ -186,7 +186,20 @@ fn preview_paints_the_same_primitives_as_the_editor() {
     let preview = draw_preview(&model, &state);
     let editor = draw_editor(&fp, &state);
     assert!(preview.paths() > 10, "a real drawing, not an empty frame");
-    assert_eq!(preview.dump, editor.dump);
+    // The preview adds only its readouts (size text first, then the scale
+    // bar in a later section). Cut them off at the size text and close the
+    // dump the way the editor's ends; what is left must equal the editor.
+    let tail = editor.dump.rsplit("inf } }").next().unwrap();
+    let head = preview
+        .dump
+        .split(", Cached { content: \"4.2 x 4.6 mm\"")
+        .next()
+        .unwrap();
+    assert!(
+        head.len() < preview.dump.len(),
+        "the size readout is painted"
+    );
+    assert_eq!(format!("{head}{tail}"), editor.dump);
 }
 
 #[test]
