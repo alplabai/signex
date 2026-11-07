@@ -180,8 +180,8 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
     use signex_types::project::{ProjectData, SheetEntry};
 
     let tmp = TempDir::new().expect("tempdir");
-    let (mut app, _first, _root) = app_with_one_sheet(&tmp);
-    // `_root` references sheet1.snxsch. A second open sheet of the same project
+    let (mut app, _first, _) = app_with_one_sheet(&tmp);
+    // The root sheet references sheet1.snxsch. A second open sheet of the same project
     // places its own symbol (default sheet2.snxsch).
     let other = tmp.path().join("other.snxsch");
     app.document_state.engines.insert(

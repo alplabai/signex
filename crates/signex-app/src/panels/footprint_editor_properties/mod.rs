@@ -230,8 +230,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
     .boxed()
 }
 
-/// v0.20 — common Settings + Hint footer. Always renders the
-/// Auto-fit Courtyard toggle and a mode-specific hint string.
+/// v0.20 — common Settings + Hint footer: the Settings header and a
+/// mode-specific hint string.
 fn render_fp_settings_and_hint<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
