@@ -56,6 +56,14 @@ impl SavePoint {
         self.saved == Some(self.depth(undo_len))
     }
 
+    /// Steps from the state `undo_len` deep to the saved one: positive when
+    /// the file is that many redo steps ahead, negative when that many undo
+    /// steps behind, `None` when unknown.
+    pub fn steps_to(&self, undo_len: usize) -> Option<i64> {
+        let saved = i64::try_from(self.saved?).ok()?;
+        Some(saved - i64::try_from(self.depth(undo_len)).ok()?)
+    }
+
     /// The current state is what a save is writing.
     pub fn mark_saved(&mut self, undo_len: usize) {
         self.saved = Some(self.depth(undo_len));

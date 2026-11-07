@@ -75,8 +75,8 @@ fn consecutive_entries_share_collections_the_step_did_not_touch() {
         })
         .unwrap();
 
-    let last = &engine.history.undo_steps()[3].snapshot;
-    let before = &engine.history.undo_steps()[2].snapshot;
+    let last = &engine.history.undo_steps()[3].edit().snapshot;
+    let before = &engine.history.undo_steps()[2].edit().snapshot;
     let shared = last.shared_with(before);
     assert!(!shared.contains(&"wires"), "wires differ between the steps");
     for untouched in ["symbols", "junctions", "labels", "drawings", "buses"] {

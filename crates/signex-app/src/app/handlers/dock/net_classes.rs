@@ -255,6 +255,7 @@ impl super::super::super::Signex {
     }
 }
 
+mod assign;
 mod pick_undo;
 #[cfg(test)]
 mod pick_undo_tests;

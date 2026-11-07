@@ -122,7 +122,7 @@ impl Signex {
         match result {
             Ok(done) if done.changed => {
                 self.document_state.sync_history_dirty(path);
-                self.clear_net_class_pick_redo(path);
+
                 self.refresh_slots_from_engine(
                     path,
                     false,

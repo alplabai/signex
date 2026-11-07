@@ -574,6 +574,17 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "assign_net_class",
+        category: "design",
+        label: "Assign net to class",
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::ASSIGN_NET_CLASS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "place_component",
         category: "place",
         label: "Place component",

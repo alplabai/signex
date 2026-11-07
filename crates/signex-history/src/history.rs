@@ -196,6 +196,24 @@ impl<S> History<S> {
         !self.point.is_at(self.undo.len())
     }
 
+    /// [`Self::is_dirty`], where the steps between the state and the saved
+    /// position that `inert` holds for do not count (a marker that changes
+    /// nothing in the state).
+    pub fn is_dirty_past(&self, inert: impl Fn(&S) -> bool) -> bool {
+        let Some(to_saved) = self.point.steps_to(self.undo.len()) else {
+            return true;
+        };
+        let count = to_saved.unsigned_abs() as usize;
+        let (stack, from) = if to_saved <= 0 {
+            // The file is behind: the newest undo steps lie between.
+            (&self.undo, self.undo.len().checked_sub(count))
+        } else {
+            // The file is ahead: the next redo steps lie between.
+            (&self.redo, self.redo.len().checked_sub(count))
+        };
+        from.is_none_or(|from| !stack[from..].iter().all(inert))
+    }
+
     /// The current state is what a save is writing.
     pub fn mark_saved(&mut self) {
         self.point.mark_saved(self.undo.len());
@@ -246,6 +264,38 @@ mod tests {
 
     fn history() -> History<u32> {
         History::at_start(CAP)
+    }
+
+    /// Odd steps are inert (markers); even ones change the state.
+    fn inert(step: &u32) -> bool {
+        step % 2 == 1
+    }
+
+    #[test]
+    fn inert_steps_between_the_state_and_the_save_do_not_dirty_it() {
+        let mut h = history();
+        h.record(1);
+        assert!(
+            h.is_dirty() && !h.is_dirty_past(inert),
+            "behind by one marker"
+        );
+        h.record(2);
+        assert!(h.is_dirty_past(inert), "a real step lies between");
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert!(!h.is_dirty_past(inert), "only the marker is left between");
+    }
+
+    #[test]
+    fn an_inert_gap_ahead_and_an_unknown_point() {
+        let mut h = history();
+        h.record(1);
+        h.mark_saved();
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert!(!h.is_dirty_past(inert), "the file is one marker ahead");
+        h.forget();
+        assert!(h.is_dirty_past(inert), "unknown is always dirty");
     }
 
     #[test]

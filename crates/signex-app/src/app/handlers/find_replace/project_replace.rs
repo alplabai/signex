@@ -422,7 +422,7 @@ impl Signex {
             Ok(engine) => {
                 self.document_state
                     .insert_engine(path.to_path_buf(), engine);
-                self.forget_net_class_picks_on(path);
+
                 true
             }
             Err(error) => {
@@ -439,7 +439,6 @@ impl Signex {
     /// the path for the rest of the session and shadow a later open.
     fn drop_unchanged_tabless(&mut self, path: &Path, tabless: bool) {
         if tabless {
-            self.forget_net_class_picks_on(path);
             self.document_state.remove_engine(path);
         }
     }

@@ -177,8 +177,6 @@ impl Signex {
                 self.document_state
                     .engines
                     .insert(path.to_path_buf(), engine);
-                // The picks were stamped on the engine just replaced.
-                self.forget_net_class_picks_on(path);
                 // An undocked window on this sheet must not keep drawing the
                 // replaced engine, nor select its objects.
                 self.refresh_slots_from_engine(
@@ -212,8 +210,6 @@ impl Signex {
         match result {
             Ok(engine) => {
                 self.document_state.insert_engine(p.clone(), engine);
-                // The picks were stamped on the engine just replaced.
-                self.forget_net_class_picks_on(&p);
                 self.document_state.active_path = Some(p);
                 true
             }

@@ -96,9 +96,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::Selection(selection_request::SelectionRequest::CycleMode)
         }
         "previous_grid" | "cycle_snap_grid_backward" => Message::Ui(UiMsg::GridCycleBackward),
-        "toggle_properties_panel" => Message::Overlay(OverlayMsg::PanelToggled(
-            crate::panels::PanelKind::Properties,
-        )),
+        // Without operands the picker is the answer: it lives in the
+        // Properties panel of a selected net label. With them the operand
+        // handler runs instead (`operand_handlers`).
+        "assign_net_class" | "toggle_properties_panel" => Message::Overlay(
+            OverlayMsg::PanelToggled(crate::panels::PanelKind::Properties),
+        ),
         "toggle_schematic_filter_panel" => Message::Overlay(OverlayMsg::PanelToggled(
             crate::panels::PanelKind::SchFilter,
         )),

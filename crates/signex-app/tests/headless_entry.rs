@@ -57,6 +57,7 @@ fn probe() {
         "undo_depth" => undo_depth(),
         "undo_depth_dispatch" => undo_depth_dispatch(),
         "net_colors" => net_colors(),
+        "net_class_assign" => net_class_assign(),
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -487,4 +488,167 @@ fn undo_depth_dispatch() {
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::Ran);
     assert_eq!(app.document_state.engines[&path].undo_depth(), 3);
+}
+
+#[test]
+fn a_net_class_assignment_runs_undoes_and_dirties_the_project_through_command_ids_alone() {
+    run_probe("net_class_assign");
+}
+
+/// Assign a net to a class by operands, undo, redo: no window, the pick is a
+/// step of the sheet's timeline, the project (not the sheet) reads dirty, and
+/// undoing it reads the project clean again (#661).
+fn net_class_assign() {
+    use signex_types::net_class::NetClass;
+    use signex_types::project::{ProjectData, SheetEntry, write_project};
+    use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
+
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, boot).expect("boot settled");
+
+    let dir = isolated.path().join("proj");
+    std::fs::create_dir_all(&dir).expect("project dir");
+    let (prj, sheet_path) = (dir.join("demo.snxprj"), dir.join("main.snxsch"));
+    let wire = Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    // A net exists in the netlist once a pin sits on it: one resistor pin.
+    let origin = Point::new(0.0, 0.0);
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle};
+    let lib = LibSymbol {
+        id: "Device:R".into(),
+        reference: "R".into(),
+        value: String::new(),
+        footprint: String::new(),
+        datasheet: String::new(),
+        description: String::new(),
+        keywords: String::new(),
+        fp_filters: String::new(),
+        in_bom: true,
+        on_board: true,
+        in_pos_files: true,
+        duplicate_pin_numbers_are_jumpers: false,
+        graphics: Vec::new(),
+        pins: vec![LibPin {
+            unit: 0,
+            body_style: 1,
+            pin: Pin {
+                direction: PinDirection::Passive,
+                shape_style: PinShapeStyle::Plain,
+                position: origin,
+                rotation: 0.0,
+                length: 0.0,
+                name: String::new(),
+                number: "1".into(),
+                visible: true,
+                name_visible: true,
+                number_visible: true,
+            },
+        }],
+        show_pin_numbers: true,
+        show_pin_names: true,
+        pin_name_offset: 0.0,
+    };
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        labels: vec![Label::new("GND", origin, LabelType::Global)],
+        symbols: vec![signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::now_v7(),
+            lib_id: "Device:R".into(),
+            reference: "R1".into(),
+            position: origin,
+            ..Default::default()
+        }],
+        lib_symbols: [("Device:R".to_string(), lib)].into_iter().collect(),
+        ..Default::default()
+    };
+    let mut seed =
+        signex_engine::Engine::new_with_path(sheet, Some(sheet_path.clone())).expect("engine");
+    seed.save().expect("seed sheet");
+    let data = ProjectData {
+        description: None,
+        name: "demo".into(),
+        dir: dir.to_string_lossy().into_owned(),
+        schematic_root: Some("main.snxsch".into()),
+        pcb_file: None,
+        sheets: vec![SheetEntry {
+            name: "Main".into(),
+            filename: "main.snxsch".into(),
+            symbols_count: 0,
+            wires_count: 1,
+            labels_count: 1,
+            unknown: Default::default(),
+        }],
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: Vec::new(),
+        enable_git: false,
+        net_classes: vec![NetClass::named("Power")],
+        rules: None,
+        annotation: None,
+        schematic_defaults: Default::default(),
+        parameters: Default::default(),
+        unknown: Default::default(),
+    };
+    write_project(&prj, &data).expect("seed project");
+
+    let mut run = |app: &mut Signex, name: &str, operands: &[&str]| {
+        let command = id(name);
+        let args = if operands.is_empty() {
+            CommandArgs::none()
+        } else {
+            CommandArgs::parse_operands(&command, operands).expect("operands")
+        };
+        let (outcome, task) = app.dispatch_command_headless(&command, args);
+        driver.settle(app, task).expect("command settled");
+        outcome
+    };
+    for opened in [&prj, &sheet_path] {
+        app.headless_answers()
+            .expect("headless answers")
+            .replace_all([("path".to_string(), opened.display().to_string())]);
+        assert_eq!(run(&mut app, "open_document", &[]), CommandOutcome::Ran);
+    }
+    let classes = |app: &Signex| {
+        app.document_state.projects[0].data.net_classes[0]
+            .nets
+            .clone()
+    };
+    assert!(!app.document_state.is_document_dirty(&prj));
+    assert!(!app.document_state.is_document_dirty(&sheet_path));
+
+    let ran = run(
+        &mut app,
+        "assign_net_class",
+        &["net_name=GND", "class=Power"],
+    );
+    assert_eq!(ran, CommandOutcome::Ran, "{ran:?}");
+    assert_eq!(classes(&app), ["GND"]);
+    assert!(
+        app.document_state.is_document_dirty(&prj),
+        "the project changed"
+    );
+    assert!(
+        !app.document_state.is_document_dirty(&sheet_path),
+        "the sheet did not"
+    );
+
+    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert!(classes(&app).is_empty());
+    assert!(
+        !app.document_state.is_document_dirty(&prj),
+        "back at the saved bytes"
+    );
+    assert_eq!(run(&mut app, "redo", &[]), CommandOutcome::Ran);
+    assert_eq!(classes(&app), ["GND"]);
+    assert!(app.document_state.is_document_dirty(&prj));
 }

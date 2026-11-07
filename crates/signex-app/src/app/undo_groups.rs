@@ -273,7 +273,7 @@ impl Signex {
                     // has nothing to save; redo marks it dirty again.
                     let back_at_disk = direction == StepDirection::Undo
                         && recorded.parked.contains(path)
-                        && !engine.can_undo()
+                        && !engine.has_document_step(true)
                         // A save of the re-prefixed bytes may still be landing;
                         // its `mark_saved` refuses on the revision mismatch, so
                         // clearing the mark now would lose this undo on disk.
@@ -284,7 +284,7 @@ impl Signex {
                         // the file; drop it so the next use re-reads the disk.
                         // Redo is then refused whole (`dropped`).
                         self.document_state.clear_document_dirty(path);
-                        self.forget_net_class_picks_on(path);
+
                         self.document_state.engines.remove(path);
                         dropped_now.push(path.clone());
                     } else {

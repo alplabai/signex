@@ -379,3 +379,35 @@ fn redo_names_a_sheet_closed_after_the_undo() {
         "Annotate redone on open sheets but not on child.snxsch: closed since the annotate"
     ));
 }
+
+/// A net-class pick marker on the other member sheet is a later step there,
+/// so it blocks the project-wide undo like any edit (#661).
+#[test]
+fn a_pick_marker_on_the_other_sheet_blocks_the_project_wide_undo() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut p = project(AnnotateUndo::Project);
+    annotate(&mut p.app);
+    let after = annotated_pair(&p);
+    p.app
+        .document_state
+        .engines
+        .get_mut(&p.child)
+        .unwrap()
+        .record_class_pick(signex_engine::ClassPickMarker {
+            project: 1,
+            step: 1,
+        });
+
+    undo(&mut p.app);
+
+    assert_eq!(annotated_pair(&p), after, "nothing reverts out of order");
+    assert!(warned("Undo the newer edit on child.snxsch first"));
+
+    // The marker is undone on its own sheet (dead: no such project), which
+    // unblocks the project-wide step.
+    activate(&mut p.app, 1);
+    undo(&mut p.app);
+    undo(&mut p.app);
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
+    assert_eq!(refs(&p.app, &p.child), ["U?", "R?"]);
+}

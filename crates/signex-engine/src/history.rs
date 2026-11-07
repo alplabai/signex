@@ -15,6 +15,58 @@ pub(super) struct HistoryEntry {
     pub group: Option<UndoGroupId>,
 }
 
+/// A net-class pick made from this sheet. The class table is project data
+/// (`NetClassHistory`), so the marker only fixes the pick's place among the
+/// sheet's own steps; the app steps the project when it comes up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClassPickMarker {
+    /// The project whose class table the pick changed (the app's project id).
+    pub project: u32,
+    /// The pick's step in that project's class history.
+    pub step: crate::NetClassStepId,
+}
+
+/// One step of the sheet's timeline: an edit of the sheet, or a marker that
+/// changes nothing on it.
+#[derive(Debug)]
+pub(super) enum HistoryStep {
+    Edit(HistoryEntry),
+    Pick(ClassPickMarker),
+}
+
+impl HistoryStep {
+    pub(super) fn group(&self) -> Option<UndoGroupId> {
+        match self {
+            Self::Edit(entry) => entry.group,
+            Self::Pick(_) => None,
+        }
+    }
+
+    fn marker(&self) -> Option<ClassPickMarker> {
+        match self {
+            Self::Pick(marker) => Some(*marker),
+            Self::Edit(_) => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn edit(&self) -> &HistoryEntry {
+        match self {
+            Self::Edit(entry) => entry,
+            Self::Pick(_) => panic!("a marker, not an edit"),
+        }
+    }
+}
+
+/// The snapshot of the newest edit on `steps`, markers skipped, to share
+/// collections with.
+fn last_snapshot(steps: &[HistoryStep]) -> Option<&SheetSnapshot> {
+    steps.iter().rev().find_map(|step| match step {
+        HistoryStep::Edit(entry) => Some(&entry.snapshot),
+        HistoryStep::Pick(_) => None,
+    })
+}
+
 /// Identifies one project-wide undo step (e.g. an annotate run) whose
 /// per-sheet history entries must be undone and redone together. The engine
 /// only stamps and reports it; coordinating sheets is the app's job.
@@ -95,7 +147,57 @@ impl Engine {
     /// the history alone? Undo and redo move this both ways; an edit made
     /// below the save point makes it unreachable until the next save.
     pub fn is_at_save_point(&self) -> bool {
-        !self.history.is_dirty()
+        // A marker between the save and now changed nothing on the sheet.
+        !self
+            .history
+            .is_dirty_past(|step| matches!(step, HistoryStep::Pick(_)))
+    }
+
+    /// Record a net-class pick made from this sheet. It is a step of the
+    /// timeline (undone and redone in order, evicted by the depth, ending
+    /// the redo branch) that never touches the document or its save point.
+    pub fn record_class_pick(&mut self, marker: ClassPickMarker) {
+        self.field_edit_run = None;
+        self.history.record(HistoryStep::Pick(marker));
+    }
+
+    /// The marker on top of the undo (`undo`) or redo stack, if the next step
+    /// that way is one. [`Engine::undo`] and [`Engine::redo`] refuse to step
+    /// over it: the caller applies or drops it, then
+    /// [`Engine::pass_class_pick`]s.
+    pub fn next_class_pick(&self, undo: bool) -> Option<ClassPickMarker> {
+        let steps = if undo {
+            self.history.undo_steps()
+        } else {
+            self.history.redo_steps()
+        };
+        steps.last().and_then(HistoryStep::marker)
+    }
+
+    /// Move the marker on top of the undo (`undo`) or redo stack to the other
+    /// one. `false` when the top step is not a marker.
+    pub fn pass_class_pick(&mut self, undo: bool) -> bool {
+        let Some(marker) = self.next_class_pick(undo) else {
+            return false;
+        };
+        self.field_edit_run = None;
+        self.history.step(HistoryStep::Pick(marker), undo).is_some()
+    }
+
+    /// The steps one way from the top, newest first: `None` for an edit of
+    /// the sheet, the marker for a pick.
+    pub fn steps_from_top(&self, undo: bool) -> impl Iterator<Item = Option<ClassPickMarker>> + '_ {
+        let steps = if undo {
+            self.history.undo_steps()
+        } else {
+            self.history.redo_steps()
+        };
+        steps.iter().rev().map(HistoryStep::marker)
+    }
+
+    /// Is there an edit of the sheet (not just a marker) to undo or redo?
+    pub fn has_document_step(&self, undo: bool) -> bool {
+        self.steps_from_top(undo).any(|marker| marker.is_none())
     }
 
     pub fn can_undo(&self) -> bool {
@@ -123,7 +225,7 @@ impl Engine {
         self.history
             .undo_steps()
             .iter()
-            .any(|entry| entry.group == Some(group))
+            .any(|step| step.group() == Some(group))
     }
 
     /// Group of the entry the next [`Engine::undo`] would revert, if any.
@@ -131,7 +233,7 @@ impl Engine {
         self.history
             .undo_steps()
             .last()
-            .and_then(|entry| entry.group)
+            .and_then(HistoryStep::group)
     }
 
     /// Group of the entry the next [`Engine::redo`] would restore, if any.
@@ -139,7 +241,7 @@ impl Engine {
         self.history
             .redo_steps()
             .last()
-            .and_then(|entry| entry.group)
+            .and_then(HistoryStep::group)
     }
 
     /// Monotonic position in the edit timeline: how many recorded edits
@@ -161,8 +263,12 @@ impl Engine {
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
-        // An empty stack changes nothing, so it moves no revision.
-        let Some(entry) = self.history.begin_step(true) else {
+        // An empty stack, or a marker the app has yet to step, changes
+        // nothing, so it moves no revision.
+        if self.next_class_pick(true).is_some() {
+            return Ok(None);
+        }
+        let Some(HistoryStep::Edit(entry)) = self.history.begin_step(true) else {
             return Ok(None);
         };
         self.bump_revision();
@@ -171,16 +277,14 @@ impl Engine {
         self.note_history_step(patch_pair);
         let group = entry.group;
         let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
-        let redo_snapshot = SheetSnapshot::capture(
-            redo_snapshot,
-            self.history.redo_steps().last().map(|e| &e.snapshot),
-        );
+        let redo_snapshot =
+            SheetSnapshot::capture(redo_snapshot, last_snapshot(self.history.redo_steps()));
         self.history.finish_step(
-            HistoryEntry {
+            HistoryStep::Edit(HistoryEntry {
                 snapshot: redo_snapshot,
                 patch_pair,
                 group,
-            },
+            }),
             true,
         );
         Ok(Some(patch_pair))
@@ -204,8 +308,11 @@ impl Engine {
 
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
-        // An empty stack changes nothing, so it moves no revision.
-        let Some(entry) = self.history.begin_step(false) else {
+        // As in `undo`: nothing to move, no revision.
+        if self.next_class_pick(false).is_some() {
+            return Ok(None);
+        }
+        let Some(HistoryStep::Edit(entry)) = self.history.begin_step(false) else {
             return Ok(None);
         };
         self.bump_revision();
@@ -214,16 +321,14 @@ impl Engine {
         self.note_history_step(patch_pair);
         let group = entry.group;
         let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
-        let undo_snapshot = SheetSnapshot::capture(
-            undo_snapshot,
-            self.history.undo_steps().last().map(|e| &e.snapshot),
-        );
+        let undo_snapshot =
+            SheetSnapshot::capture(undo_snapshot, last_snapshot(self.history.undo_steps()));
         self.history.finish_step(
-            HistoryEntry {
+            HistoryStep::Edit(HistoryEntry {
                 snapshot: undo_snapshot,
                 patch_pair,
                 group,
-            },
+            }),
             false,
         );
         Ok(Some(patch_pair))
@@ -252,16 +357,13 @@ impl Engine {
 
         // Share every collection the step left unchanged with the entry
         // before it, so a long history holds one copy of each.
-        let snapshot = SheetSnapshot::capture(
-            snapshot,
-            self.history.undo_steps().last().map(|e| &e.snapshot),
-        );
+        let snapshot = SheetSnapshot::capture(snapshot, last_snapshot(self.history.undo_steps()));
         // The new entry drops the redo branch (and a save point inside it)
         // and evicts the oldest entry past the cap.
-        self.history.record(HistoryEntry {
+        self.history.record(HistoryStep::Edit(HistoryEntry {
             snapshot,
             patch_pair,
             group,
-        });
+        }));
     }
 }

@@ -27,6 +27,7 @@ pub(crate) type OperandHandler = fn(&mut Signex, &CommandArgs) -> Ran;
 const HANDLERS: &[(&str, OperandHandler)] = &[
     ("color_net", color_net),
     ("clear_all_net_colors", clear_all_net_colors),
+    ("assign_net_class", assign_net_class),
 ];
 
 /// The handler of `command`, if it runs its operands.
@@ -117,5 +118,24 @@ fn clear_all_net_colors(app: &mut Signex, args: &CommandArgs) -> Ran {
         refused("the sheet is read-only: its net colours were kept")
     } else {
         refused("there are no net colours to clear")
+    }
+}
+
+/// `assign_net_class net_name=N [class=C] [path=..]`: put the net in the
+/// class (or take it out of its listed one), as the label picker does.
+fn assign_net_class(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let Some(OperandValue::Text(net)) = args.operand("net_name") else {
+        return refused("`assign_net_class` needs the operand `net_name`");
+    };
+    if let Err(reason) = acts_on_active_document(app, args.operand("path")) {
+        return refused(reason);
+    }
+    let class = match args.operand("class") {
+        Some(OperandValue::Text(class)) => Some(class.as_str()),
+        _ => None,
+    };
+    match app.assign_net_to_class(net, class) {
+        Ok(()) => ran(),
+        Err(reason) => refused(reason),
     }
 }

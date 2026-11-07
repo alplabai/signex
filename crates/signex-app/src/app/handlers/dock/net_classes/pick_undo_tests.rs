@@ -260,9 +260,108 @@ fn closing_a_sheet_forgets_its_picks() {
     let (mut app, _symbol) = app_with_sheet();
     let path = app.document_state.active_path.clone().unwrap();
     pick(&mut app, "GND", Some("Power"));
-    assert!(app.has_net_class_pick(&path, true));
-    app.forget_net_class_picks_on(&path);
-    assert!(!app.has_net_class_pick(&path, true));
+    assert!(app.sheet_has_step(&path, true));
+    app.document_state.remove_engine(&path);
+    assert!(!app.sheet_has_step(&path, true), "the markers left with it");
+}
+
+fn sheet_dirty(app: &Signex) -> bool {
+    let path = app.document_state.active_path.clone().unwrap();
+    app.document_state.is_document_dirty(&path)
+}
+
+fn project_dirty(app: &Signex) -> bool {
+    app.document_state
+        .is_document_dirty(&app.document_state.projects[0].path)
+}
+
+/// A pick changes the project, never the sheet: the sheet stays clean, the
+/// project reads dirty, and undoing the pick reads the project clean again.
+#[test]
+fn a_pick_leaves_the_sheet_clean_and_dirties_only_the_project() {
+    let (mut app, _symbol) = app_with_sheet();
+    let path = app.document_state.active_path.clone().unwrap();
+    app.document_state.mark_document_clean(&path);
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .unwrap()
+        .mark_saved();
+    assert!(!sheet_dirty(&app) && !project_dirty(&app));
+
+    pick(&mut app, "GND", Some("Power"));
+    assert!(!sheet_dirty(&app), "the sheet file did not change");
+    assert!(project_dirty(&app));
+
+    app.handle_undo_requested();
+    assert!(
+        !sheet_dirty(&app) && !project_dirty(&app),
+        "back at both saves"
+    );
+    app.handle_redo_requested();
+    assert!(!sheet_dirty(&app) && project_dirty(&app));
+}
+
+/// A sheet edit on top of a pick is dirty; undoing it leaves only the
+/// marker above the save point, which reads clean.
+#[test]
+fn a_marker_above_the_sheets_save_point_does_not_make_it_dirty() {
+    let (mut app, symbol) = app_with_sheet();
+    let path = app.document_state.active_path.clone().unwrap();
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .unwrap()
+        .mark_saved();
+    app.document_state.mark_document_clean(&path);
+
+    pick(&mut app, "GND", Some("Power"));
+    move_symbol(&mut app, symbol);
+    assert!(sheet_dirty(&app));
+    app.handle_undo_requested();
+    assert!(!sheet_dirty(&app), "only the pick lies above the save");
+    app.handle_redo_requested();
+    assert!(sheet_dirty(&app));
+}
+
+/// Picks share the sheet's undo depth: the oldest step falls off first, a
+/// pick included.
+#[test]
+fn picks_share_the_undo_depth_and_fall_off_oldest_first() {
+    let (mut app, symbol) = app_with_sheet();
+    app.set_undo_depth(2);
+    pick(&mut app, "GND", Some("Power"));
+    move_symbol(&mut app, symbol);
+    move_symbol(&mut app, symbol);
+
+    app.handle_undo_requested();
+    app.handle_undo_requested();
+    app.handle_undo_requested(); // nothing left on the sheet's timeline
+
+    assert_eq!(
+        nets(&app),
+        ["GND"],
+        "the pick step fell off the two-step history"
+    );
+}
+
+/// A pick made on one sheet is ordered on that sheet only: another sheet of
+/// the project keeps its own timeline.
+#[test]
+fn a_pick_is_undone_from_the_sheet_it_was_made_on() {
+    let (mut app, _symbol) = app_with_sheet();
+    let a = app.document_state.active_path.clone().unwrap();
+    open_second_sheet(&mut app);
+    pick(&mut app, "GND", Some("Power"));
+    activate(&mut app, &a);
+    app.handle_undo_requested();
+    assert_eq!(nets(&app), ["GND"], "sheet A has no pick to undo");
+    let b = app.document_state.projects[0]
+        .path
+        .with_file_name("b_sheet.snxsch");
+    activate(&mut app, &b);
+    app.handle_undo_requested();
+    assert!(nets(&app).is_empty());
 }
 
 fn paint(app: &mut Signex, id: uuid::Uuid) {
