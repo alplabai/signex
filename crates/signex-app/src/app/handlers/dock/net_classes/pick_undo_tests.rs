@@ -579,3 +579,96 @@ fn a_pick_does_not_cut_the_sheets_redo_branch() {
     app.handle_undo_requested();
     assert!(nets(&app).is_empty(), "then the pick");
 }
+
+/// Liveness: the marker of a project that was closed names nothing to step.
+#[test]
+fn a_marker_of_a_closed_project_is_dead() {
+    let (mut app, _symbol) = app_with_sheet();
+    let path = app.document_state.active_path.clone().unwrap();
+    pick(&mut app, "GND", Some("Power"));
+    app.document_state.projects.clear();
+
+    assert!(!app.sheet_has_step(&path, true));
+    assert!(
+        !app.undo_active_sheet(),
+        "nothing to step, and nothing stuck"
+    );
+}
+
+/// Liveness: a project whose class history is gone leaves its markers dead.
+#[test]
+fn a_marker_whose_class_history_is_gone_is_dead() {
+    let (mut app, _symbol) = app_with_sheet();
+    let (path, id) = (
+        app.document_state.active_path.clone().unwrap(),
+        app.document_state.projects[0].id,
+    );
+    pick(&mut app, "GND", Some("Power"));
+    app.document_state.net_class_history.remove(&id);
+
+    assert!(!app.sheet_has_step(&path, true));
+    assert!(!app.undo_active_sheet());
+    assert_eq!(nets(&app), ["GND"], "the table is left as it is");
+}
+
+/// The redo direction of the group check: a marker dead for redo on a member
+/// sheet is passed, so the project-wide redo goes ahead.
+#[test]
+fn a_dead_marker_on_a_member_sheets_redo_stack_does_not_block_the_group_redo() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _symbol) = app_with_sheet();
+    let a = app.document_state.active_path.clone().unwrap();
+    let b = open_second_sheet(&mut app);
+    let group = app.mint_undo_group();
+    for path in [&a, &b] {
+        let wire = signex_types::schematic::Wire {
+            uuid: uuid::Uuid::now_v7(),
+            ..Default::default()
+        };
+        app.document_state
+            .engines
+            .get_mut(path)
+            .unwrap()
+            .execute_batch_grouped(
+                [signex_engine::Command::PlaceWireSegment { wire }],
+                Some(group),
+            )
+            .unwrap();
+    }
+    app.set_undo_group_sheets(
+        group,
+        crate::app::UndoGroupSheets {
+            live: vec![a.clone(), b.clone()],
+            ..Default::default()
+        },
+    );
+    activate(&mut app, &a);
+    assert!(app.undo_active_sheet(), "the group is undone on both");
+    activate(&mut app, &b);
+    pick(&mut app, "GND", Some("Power"));
+    assert!(app.undo_active_sheet(), "the pick is undone on B");
+    panel(&mut app, NetClassMsg::Redo); // dead for redo now
+
+    activate(&mut app, &a);
+    assert!(app.redo_active_sheet(), "the group is redone on both");
+    let wires = |app: &Signex, path| app.document_state.engines[path].document().wires.len();
+    assert_eq!((wires(&app, &a), wires(&app, &b)), (1, 1));
+    assert_eq!(nets(&app), ["GND"]);
+}
+
+/// A pick that pushes the sheet's saved step off the undo depth makes the
+/// sheet dirty at once, so the tab's dot is right without another step.
+#[test]
+fn a_pick_that_evicts_the_save_point_marks_the_sheet_dirty_at_once() {
+    let (mut app, symbol) = app_with_sheet();
+    app.set_undo_depth(1);
+    move_symbol(&mut app, symbol);
+    save_sheet(&mut app);
+    assert!(!sheet_dirty(&app));
+
+    pick(&mut app, "GND", Some("Power"));
+    assert!(
+        sheet_dirty(&app),
+        "the saved step is gone: unsaved until a save"
+    );
+}

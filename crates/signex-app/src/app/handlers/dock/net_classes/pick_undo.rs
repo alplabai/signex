@@ -80,8 +80,10 @@ impl crate::app::Signex {
             .active_engine()
             .and_then(|engine| engine.next_class_pick(undoing))
         {
-            let applied =
-                self.net_class_pick_is_live(marker, undoing) && self.apply_pick(marker, undoing);
+            let applied = self.net_class_pick_is_live(marker, undoing);
+            if applied {
+                self.apply_pick(marker, undoing);
+            }
             if let Some(engine) = self.document_state.active_engine_mut() {
                 // A marker not applied is dead for good (see the engine).
                 if applied {
@@ -116,25 +118,28 @@ impl crate::app::Signex {
     }
 
     /// Revert (`undoing`) or re-apply the class-table step `marker` names.
-    fn apply_pick(&mut self, marker: ClassPickMarker, undoing: bool) -> bool {
+    /// Only for a live marker ([`Self::net_class_pick_is_live`]): its project
+    /// is open and its history's next step is the one named.
+    fn apply_pick(&mut self, marker: ClassPickMarker, undoing: bool) {
         let document = &mut self.document_state;
-        let Some(project) = document
+        let history = &mut document.net_class_history;
+        let stepped: Vec<_> = document
             .projects
             .iter_mut()
-            .find(|p| p.id.raw() == marker.project)
-        else {
-            return false;
-        };
-        let id = project.id;
-        let history = document.net_class_history.entry(id).or_default();
-        let moved = if undoing {
-            history.undo(&mut project.data.net_classes)
-        } else {
-            history.redo(&mut project.data.net_classes)
-        };
-        if moved {
+            .filter(|p| p.id.raw() == marker.project)
+            .map(|project| {
+                let history = history.entry(project.id).or_default();
+                let moved = if undoing {
+                    history.undo(&mut project.data.net_classes)
+                } else {
+                    history.redo(&mut project.data.net_classes)
+                };
+                debug_assert!(moved, "a live marker names a step the history can take");
+                project.id
+            })
+            .collect();
+        for id in stepped {
             document.sync_project_history_dirty(id, false);
         }
-        moved
     }
 }
