@@ -52,7 +52,8 @@ impl PreviewFootprint {
         for (x, y) in courtyard_outline.iter().flatten() {
             grow(*x, *y);
         }
-        for g in fp.silk_f
+        for g in fp
+            .silk_f
             .iter()
             .chain(&fp.fab_f)
             .chain(&fp.silk_b)
