@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use iced::Task;
 
+use crate::app::document::DocumentKey;
 use crate::app::{Message, Signex};
 use crate::autosave::{
     AutosaveDone, AutosaveMoved, AutosaveMsg, AutosaveRemoved, DocStamp, InFlight, QUIT_WAIT_LIMIT,
@@ -51,9 +52,60 @@ impl Signex {
     /// Does `path` hold edits a recovery copy should protect: a dirty
     /// schematic, PCB, symbol editor or footprint editor?
     pub(crate) fn holds_recoverable_edits(&self, path: &Path) -> bool {
-        self.is_dirty_schematic(path)
-            || self.is_dirty_pcb(path)
-            || self.is_dirty_primitive_editor(path)
+        let kinds: [fn(PathBuf) -> DocumentKey; 4] = [
+            DocumentKey::Schematic,
+            DocumentKey::Pcb,
+            DocumentKey::Symbol,
+            DocumentKey::Footprint,
+        ];
+        kinds
+            .into_iter()
+            .any(|key| self.key_holds_recoverable_edits(&key(path.to_path_buf())))
+    }
+
+    /// Does the document `key` names hold edits a recovery copy protects?
+    /// Component rows and projects are not autosaved (#2141).
+    fn key_holds_recoverable_edits(&self, key: &DocumentKey) -> bool {
+        match key {
+            DocumentKey::Schematic(path) => self.is_dirty_schematic(path),
+            DocumentKey::Pcb(path) => self.is_dirty_pcb(path),
+            DocumentKey::Symbol(path) | DocumentKey::Footprint(path) => {
+                self.is_dirty_primitive_editor(path)
+            }
+            DocumentKey::Row(_) | DocumentKey::Project(_) => false,
+        }
+    }
+
+    /// The documents a tick writes a copy for: dirty sheets, PCBs and
+    /// symbol and footprint drafts, in that order.
+    fn autosave_candidates(&self) -> Vec<DocumentKey> {
+        let docs = &self.document_state;
+        let sheets = docs
+            .engines
+            .keys()
+            .filter(|path| self.is_dirty_schematic(path))
+            .cloned()
+            .map(DocumentKey::Schematic);
+        let pcbs = self.dirty_pcb_paths().into_iter().map(DocumentKey::Pcb);
+        let drafts = self.dirty_primitive_editor_paths().into_iter().map(|path| {
+            match docs.symbol_editors.contains_key(&path) {
+                true => DocumentKey::Symbol(path),
+                false => DocumentKey::Footprint(path),
+            }
+        });
+        sheets.chain(pcbs).chain(drafts).collect()
+    }
+
+    /// The write of `key`'s recovery copy, by the kind of document.
+    fn autosave_snapshot_for(&mut self, dir: &Path, key: &DocumentKey) -> Option<Task<Message>> {
+        match key {
+            DocumentKey::Schematic(path) => self.autosave_snapshot_task(dir, path),
+            DocumentKey::Pcb(path) => self.autosave_pcb_snapshot_task(dir, path),
+            DocumentKey::Symbol(path) | DocumentKey::Footprint(path) => {
+                self.autosave_primitive_snapshot_task(dir, path)
+            }
+            DocumentKey::Row(_) | DocumentKey::Project(_) => None,
+        }
     }
 
     /// Remove the sidecar of every document that is closed or no longer
@@ -161,25 +213,8 @@ impl Signex {
             return sweep;
         };
         let mut tasks = vec![sweep];
-        let dirty: Vec<PathBuf> = self
-            .document_state
-            .engines
-            .keys()
-            .filter(|p| self.is_dirty_schematic(p))
-            .cloned()
-            .collect();
-        for path in dirty {
-            if let Some(task) = self.autosave_snapshot_task(&dir, &path) {
-                tasks.push(task);
-            }
-        }
-        for path in self.dirty_pcb_paths() {
-            if let Some(task) = self.autosave_pcb_snapshot_task(&dir, &path) {
-                tasks.push(task);
-            }
-        }
-        for path in self.dirty_primitive_editor_paths() {
-            if let Some(task) = self.autosave_primitive_snapshot_task(&dir, &path) {
+        for key in self.autosave_candidates() {
+            if let Some(task) = self.autosave_snapshot_for(&dir, &key) {
                 tasks.push(task);
             }
         }
