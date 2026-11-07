@@ -227,3 +227,74 @@ impl SchematicCanvas<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod graphite_frame_tests {
+    use iced::advanced::graphics::Mesh;
+    use iced::advanced::graphics::color::pack;
+    use iced::widget::canvas;
+    use iced::{Color, Point, Rectangle, Size};
+    use iced_wgpu::Geometry;
+    use signex_output::template::{Frame, lower_sheet_frame, standard_title_block};
+
+    use crate::canvas::grid_order_tests::MeshOnly;
+    use crate::canvas::tests::test_prefs;
+    use crate::canvas::{Camera, CanvasSlot, GraphiteCanvasInk, SchematicCanvas};
+
+    /// Under Graphite the sheet frame and the title block are both emitted:
+    /// the frame lines in the softer `line_strong` ink and the title-block
+    /// strings as text.
+    #[test]
+    fn the_graphite_sheet_frame_and_title_block_are_emitted() {
+        let (overrides, filters) = Default::default();
+        let mut prefs = test_prefs(&overrides, &filters);
+        let line_strong = Color::from_rgb(0.2, 0.4, 0.6);
+        prefs.graphite = Some(GraphiteCanvasInk {
+            line_strong,
+            accent: Color::from_rgb(0.8, 0.3, 0.1),
+            accent_soft: Color::from_rgb(0.9, 0.8, 0.7),
+            warn: Color::from_rgb(0.9, 0.6, 0.1),
+            err: Color::from_rgb(0.8, 0.1, 0.1),
+        });
+
+        let mut slot = CanvasSlot::new();
+        *slot.camera_mut() = Camera {
+            offset: Point::new(20.0, 20.0),
+            scale: 2.0,
+        };
+        slot.sheet_frame = lower_sheet_frame(
+            297.0,
+            210.0,
+            &Frame::default(),
+            Some(&standard_title_block()),
+            |text| text.to_string(),
+        );
+        assert!(
+            !slot.sheet_frame.is_empty(),
+            "an A4 frame with a title block lowers to primitives"
+        );
+
+        let canvas = SchematicCanvas::new(&slot, prefs);
+        let bounds = Rectangle::with_size(Size::new(800.0, 600.0));
+        let mut frame = canvas::Frame::<MeshOnly>::new(&MeshOnly, bounds.size());
+        canvas.paint_background(&mut frame, bounds);
+        let Geometry::Live { sections } = frame.into_geometry() else {
+            panic!("a fresh frame is live geometry");
+        };
+
+        let ink = pack(line_strong).components();
+        let frame_line_drawn = sections.iter().any(|s| {
+            s.meshes.iter().any(|m| match m {
+                Mesh::Solid { buffers, .. } => {
+                    buffers.vertices.iter().any(|v| v.color.components() == ink)
+                }
+                Mesh::Gradient { .. } => false,
+            })
+        });
+        assert!(frame_line_drawn, "the frame lines draw in line_strong");
+        assert!(
+            sections.iter().any(|s| !s.text.is_empty()),
+            "the title block text is emitted"
+        );
+    }
+}
