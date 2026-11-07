@@ -21,9 +21,53 @@ pub(crate) const NOTE_HEIGHT: f32 = 25.0;
 /// Height of one line of message text, and the lines shown before it scrolls.
 const MESSAGE_LINE: f32 = 16.0;
 const MESSAGE_MAX: f32 = 200.0;
-/// Window height of Copy to Library when no library is writable: the intro,
-/// the one-line hint and the footer, with no list area.
-const STOCK_COPY_EMPTY: f32 = 160.0;
+/// Window height of Copy to Library when no library is writable: the body
+/// padding, the two-line intro, the one-line hint and the footer, with no list
+/// area (13 + 33 + 9 + 17 + 13 + 53 px on the legacy layout).
+const STOCK_COPY_EMPTY: f32 = 140.0;
+
+/// Height a Graphite theme adds to `modal`'s window over the legacy layout
+/// the sizes here were measured on: what the shell's intro adds over the
+/// line it replaces, and the taller dense footer buttons. `None` for a
+/// dialog the shell leaves at its legacy height.
+fn graphite_intro_extra(modal: ModalId) -> Option<f32> {
+    use crate::styles::{DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, LINE_HEIGHT, Spacing, TypeScale};
+    let body_line = TypeScale::DEFAULT.body * LINE_HEIGHT;
+    Some(match modal {
+        // A title line over the old message, which becomes the secondary text.
+        ModalId::AnnotateResetConfirm
+        | ModalId::ReprefixConfirm
+        | ModalId::RemoveDialog
+        | ModalId::ProjectCloseConfirm
+        | ModalId::AppQuitConfirm
+        | ModalId::CreateChildSheet
+        | ModalId::LibraryStockCopy
+        | ModalId::LibraryCloseConfirm
+        | ModalId::LibraryDeleteConfirm
+        | ModalId::LibraryRecovery => DIALOG_INTRO_EXTRA,
+        // The message is the title: only the tile is taller than its line.
+        ModalId::RenameDialog => DIALOG_ICON_TILE - body_line,
+        // A title-only intro added above the form, with the form's gap.
+        ModalId::GridProperties => DIALOG_ICON_TILE + 10.0,
+        ModalId::SelectionFilterCustom => DIALOG_ICON_TILE + Spacing::DEFAULT.s,
+        // The tile replaces a taller glyph row, or a summary line and its gap.
+        ModalId::ErrorNotice | ModalId::NetlistIncompletePrompt | ModalId::EnableVersionControl => {
+            0.0
+        }
+        _ => return None,
+    })
+}
+
+/// See [`graphite_intro_extra`]; 0 off Graphite.
+fn graphite_extra(modal: ModalId, tokens: &signex_types::theme::ThemeTokens) -> f32 {
+    if !crate::styles::is_graphite(tokens) {
+        return 0.0;
+    }
+    graphite_intro_extra(modal).map_or(0.0, |intro| {
+        intro + crate::styles::dialog_footer_height_for(tokens)
+            - crate::styles::dialog_footer_height()
+    })
+}
 
 fn list_height(rows: usize) -> f32 {
     (rows as f32 * ROW_HEIGHT).min(LIST_MAX_HEIGHT)
@@ -87,7 +131,9 @@ impl Signex {
             }),
             _ => None,
         };
-        let logical = height.map_or(fixed, |h| Size::new(fixed.width, h.ceil()));
+        let logical = height.map_or(fixed, |h| Size::new(fixed.width, h));
+        let extra = graphite_extra(modal, &self.document_state.panel_ctx.tokens);
+        let logical = Size::new(logical.width, (logical.height + extra).ceil());
         // Every window lays out at the interface scale, so it needs that much
         // more window for the same content.
         let scale = ui.ui_scale;

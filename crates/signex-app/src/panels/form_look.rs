@@ -126,10 +126,7 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
 }
 
 /// `pick_list` style for a form dropdown: Graphite, else the stock style.
-pub(in crate::panels) fn pick_list_style(
-    theme: &Theme,
-    status: pick_list::Status,
-) -> pick_list::Style {
+pub(crate) fn pick_list_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
     let base = pick_list::default(theme, status);
     let Some(l) = FormLook::of(theme) else {
         return base;
@@ -154,10 +151,7 @@ pub(in crate::panels) fn pick_list_style(
 }
 
 /// `checkbox` style for a form toggle: Graphite, else the stock style.
-pub(in crate::panels) fn checkbox_style(
-    theme: &Theme,
-    status: checkbox::Status,
-) -> checkbox::Style {
+pub(crate) fn checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
     let base = checkbox::primary(theme, status);
     let Some(l) = FormLook::of(theme) else {
         return base;

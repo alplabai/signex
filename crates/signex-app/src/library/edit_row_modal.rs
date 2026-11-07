@@ -13,15 +13,17 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
-use super::modal_chrome::{cancel_btn, danger_btn, footer_strip, header, header_title_only, primary_btn, secondary_btn};
+use super::modal_chrome::{
+    cancel_btn, danger_btn, footer_strip, header, header_title_only, primary_btn, secondary_btn,
+};
 use super::state::{DeleteConfirmState, EditRowModalState};
+use crate::styles::{DialogIcon, dialog_intro};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const CONFIRM_W: f32 = 480.0;
-const CONFIRM_H: f32 = 230.0;
 
 /// `pick_list` adapter for the Class dropdown.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +85,7 @@ pub fn view<'a>(
     };
 
     let pn_input = text_input("Internal PN", edit.draft.internal_pn.as_str())
+        .style(crate::panels::form_look::text_input_style)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetInternalPn(s))
@@ -102,6 +105,7 @@ pub fn view<'a>(
         .find(|p| p.key == edit.draft.class.as_str())
         .cloned();
     let class_picker = pick_list(selected_class, class_picks, ClassPick::to_string)
+        .style(crate::panels::form_look::pick_list_style)
         .on_select({
             let send = send.clone();
             move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
@@ -119,6 +123,7 @@ pub fn view<'a>(
         LIFECYCLE_OPTIONS.to_vec(),
         LifecyclePick::to_string,
     )
+    .style(crate::panels::form_look::pick_list_style)
     .on_select({
         let send = send.clone();
         move |pick: LifecyclePick| send(BrowserEditMsg::SetState(pick.0))
@@ -131,6 +136,7 @@ pub fn view<'a>(
     // keystroke can never replace it (and its hash) with a bare URL.
     let datasheet_field: Element<'a, LibraryMessage> = match &edit.draft.datasheet {
         DatasheetRef::Url { url } => text_input("https://example.com/datasheet.pdf", url)
+            .style(crate::panels::form_look::text_input_style)
             .on_input({
                 let send = send.clone();
                 move |s| send(BrowserEditMsg::SetDatasheetUrl(s))
@@ -145,6 +151,7 @@ pub fn view<'a>(
     };
 
     let mfr_input = text_input("Manufacturer", &edit.draft.primary_mpn.manufacturer)
+        .style(crate::panels::form_look::text_input_style)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetManufacturer(s))
@@ -153,6 +160,7 @@ pub fn view<'a>(
         .size(TS.label);
 
     let mpn_input = text_input("MPN", &edit.draft.primary_mpn.mpn)
+        .style(crate::panels::form_look::text_input_style)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetMpn(s))
@@ -161,6 +169,7 @@ pub fn view<'a>(
         .size(TS.label);
 
     let description_input = text_input("e.g. 100 nF 50 V X7R 0603", &edit.draft.description)
+        .style(crate::panels::form_look::text_input_style)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetDescription(s))
@@ -172,6 +181,7 @@ pub fn view<'a>(
     // The buffer flushes to `parameters["tags"]` on Save (see
     // `handle_browser_edit_msg`); empty buffer drops the entry.
     let tags_input = text_input("e.g. low-noise, RoHS, qualified", &edit.tags_buf)
+        .style(crate::panels::form_look::text_input_style)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetTags(s))
@@ -350,8 +360,6 @@ pub fn view_delete_confirm<'a>(
     tokens: &'a ThemeTokens,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-
     let header = header_title_only("Delete Component?", windowed, tokens);
 
     let msg_label = format!(
@@ -359,13 +367,18 @@ pub fn view_delete_confirm<'a>(
         confirm.internal_pn, confirm.table,
     );
 
+    // As tall as its text: the footer follows it, with no empty band.
     let body = container(
-        column![text(msg_label).size(TS.body).color(text_c)]
-            .padding([14.0, SP.xl])
-            .width(Length::Fill),
+        column![dialog_intro(
+            DialogIcon::Warn,
+            format!("Delete {}?", confirm.internal_pn),
+            Some(msg_label),
+            tokens,
+        )]
+        .padding([14.0, SP.xl])
+        .width(Length::Fill),
     )
-    .width(Length::Fill)
-    .height(Length::Fill);
+    .width(Length::Fill);
 
     let footer = footer_strip(
         Vec::new(),
@@ -390,10 +403,18 @@ pub fn view_delete_confirm<'a>(
         tokens,
     );
 
+    let mut card = column![header, body];
+    if windowed {
+        card = card.push(Space::new().height(Length::Fill));
+    }
     container(
-        column![header, body, footer]
+        card.push(footer)
             .width(super::card_len(windowed, CONFIRM_W))
-            .height(super::card_len(windowed, CONFIRM_H)),
+            .height(if windowed {
+                Length::Fill
+            } else {
+                Length::Shrink
+            }),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

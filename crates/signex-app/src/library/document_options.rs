@@ -61,12 +61,14 @@ pub fn view<'a>(
         SheetColor::ALL.to_vec(),
         |c: &SheetColor| c.to_string(),
     )
+    .style(crate::panels::form_look::pick_list_style)
     .on_select(LibraryMessage::DocumentOptionsSetSheetColor)
     .padding([sp.xs, sp.s])
     .text_size(ts.body)
     .boxed();
 
     let grid_check: Element<'a, LibraryMessage> = iced::widget::checkbox(state.draft.grid_visible)
+        .style(crate::panels::form_look::checkbox_style)
         .size(ts.heading)
         .on_toggle(|_| LibraryMessage::DocumentOptionsToggleGrid)
         .boxed();

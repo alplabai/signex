@@ -32,9 +32,12 @@ pub use buttons::{
 };
 pub use dialog_kit::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_height,
-    dialog_footer_split, dialog_hint, dialog_list, dialog_message, dialog_section,
+    dialog_footer_height_for, dialog_footer_split, dialog_hint, dialog_list, dialog_message,
+    dialog_section,
 };
-pub use dialog_shell::{DIALOG_ICON_TILE, DialogIcon, dialog_icon_tile, dialog_intro};
+pub use dialog_shell::{
+    DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_icon_tile, dialog_intro,
+};
 pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
 
 /// Corner radius, in px, of buttons, badges and cards.

@@ -329,8 +329,11 @@ impl Signex {
         } else {
             let submit = || Message::Erc(ErcMsg::ProfileSaveSubmitted);
             let editable = !dialog.busy;
-            let mut name_input = text_input("Profile name", &dialog.name).size(TS.body);
+            let mut name_input = text_input("Profile name", &dialog.name)
+                .style(crate::panels::form_look::text_input_style)
+                .size(TS.body);
             let mut version_input = text_input("Version", &dialog.version)
+                .style(crate::panels::form_look::text_input_style)
                 .size(TS.body)
                 .width(90);
             if editable {

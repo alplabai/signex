@@ -32,6 +32,7 @@ impl Signex {
             column![
                 text(label).size(TS.caption).color(text_muted),
                 text_input("0.00", value)
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(msg)
                     .padding([SP.s, SP.m])
                     .size(TS.label),
@@ -426,6 +427,7 @@ impl Signex {
                         .color(text_muted)
                         .width(iced::Length::Fixed(16.0)),
                     text_input("0", v255.to_string())
+                        .style(crate::panels::form_look::text_input_style)
                         .size(TS.body)
                         .padding([3.0, SP.m])
                         .width(iced::Length::Fixed(70.0))

@@ -492,8 +492,8 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),
         ModalId::LibraryStockCopy => iced::Size::new(520.0, 380.0),
         ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
-        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 410.0),
-        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 240.0),
+        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 234.0),
+        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 100.0),
         ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),
         // Height follows the type scale (authored at the 11 px base).
         ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(390.0)),

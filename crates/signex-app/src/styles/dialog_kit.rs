@@ -243,6 +243,13 @@ pub const fn dialog_footer_height() -> f32 {
     TS.body * BUTTON_HEIGHT_EM + 2.0 * SP.l
 }
 
+/// [`dialog_footer_height`] on `tokens`' theme: Graphite buttons are the
+/// taller dense ones.
+pub fn dialog_footer_height_for(tokens: &ThemeTokens) -> f32 {
+    let (height, _, _) = button_metrics("", DialogButtonKind::Primary, is_graphite(tokens));
+    height + 2.0 * SP.l
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,6 +278,21 @@ mod tests {
             let _: Element<'_, ()> = dialog_footer(vec![dialog_hint("x", &tokens)]);
         }
         assert!(dialog_footer_height() > TS.body * BUTTON_HEIGHT_EM);
+    }
+
+    /// The themed footer height is the legacy one off Graphite and the dense
+    /// button plus padding on it.
+    #[test]
+    fn the_footer_height_follows_the_theme_buttons() {
+        for id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(*id);
+            let want = if is_graphite(&tokens) {
+                ChromeMetrics::DEFAULT.button + 2.0 * SP.l
+            } else {
+                dialog_footer_height()
+            };
+            assert_eq!(dialog_footer_height_for(&tokens), want, "{id:?}");
+        }
     }
 
     /// Cancel is the quiet Ghost on Graphite and the outlined Secondary on

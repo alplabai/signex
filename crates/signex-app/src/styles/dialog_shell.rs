@@ -88,6 +88,13 @@ pub fn dialog_icon_tile<'a, M: 'a>(icon: DialogIcon, tokens: &ThemeTokens) -> El
     .boxed()
 }
 
+/// Height the Graphite intro adds over the plain message line it replaces:
+/// the title line and the gap under it (a one-line title).
+pub const DIALOG_INTRO_EXTRA: f32 = TS.title * super::LINE_HEIGHT + TITLE_GAP;
+
+/// Gap between the title line and the secondary text.
+const TITLE_GAP: f32 = SP.xs + 1.0;
+
 /// The semibold UI face of a dialog's title line.
 fn title_font() -> iced::Font {
     iced::Font {
@@ -98,31 +105,30 @@ fn title_font() -> iced::Font {
 
 /// The leading block of a dialog body. Graphite: the tile, then `title`
 /// with `secondary` under it (left out when empty, so no gap is left).
-/// Other themes: `secondary` as the plain message, or nothing.
+/// Other themes: the plain message line they always had, `secondary` when
+/// given and `title` otherwise (their header already names the dialog).
 pub fn dialog_intro<'a, M: 'a>(
     icon: DialogIcon,
     title: impl Into<String>,
     secondary: Option<String>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
+    let title = title.into();
     let secondary = secondary.filter(|s| !s.trim().is_empty());
     if !is_graphite(tokens) {
-        return match secondary {
-            Some(s) => super::dialog_message(s, tokens),
-            None => iced::widget::Space::new().height(0).boxed(),
-        };
+        return super::dialog_message(secondary.unwrap_or(title), tokens);
     }
     let r = tokens::resolve(tokens);
     let mut lines = column![
-        text(title.into())
-            .size(TS.heading)
+        text(title)
+            .size(TS.title)
             .font(title_font())
             .color(ti(tokens.text))
             .boxed()
     ]
-    .spacing(SP.xs + 1.0);
+    .spacing(TITLE_GAP);
     if let Some(s) = secondary {
-        lines = lines.push(text(s).size(TS.label).color(r.ink3).boxed());
+        lines = lines.push(text(s).size(TS.body).color(r.ink3).boxed());
     }
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m + 2.0).align_y(Alignment::Start);
     line = line.push(dialog_icon_tile(icon, tokens));
@@ -175,8 +181,15 @@ mod tests {
     fn every_dialog_glyph_is_well_formed_svg() {
         for icon in ALL {
             let src = std::str::from_utf8(icon.glyph()).expect("utf-8");
-            assert!(src.starts_with("<svg") && src.ends_with("</svg>"), "{icon:?}");
-            assert_eq!(src.matches('<').count(), src.matches('>').count(), "{icon:?}");
+            assert!(
+                src.starts_with("<svg") && src.ends_with("</svg>"),
+                "{icon:?}"
+            );
+            assert_eq!(
+                src.matches('<').count(),
+                src.matches('>').count(),
+                "{icon:?}"
+            );
         }
     }
 

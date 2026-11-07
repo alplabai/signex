@@ -74,6 +74,7 @@ pub fn view<'a>(
     );
 
     let search = text_input("Search internal PN / MPN / description…", &picker.filter)
+        .style(crate::panels::form_look::text_input_style)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
         .padding(6)
         .size(TS.label);

@@ -14,7 +14,6 @@ use crate::app::state::AnnotateOrder;
 use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
 use crate::styles::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
-    dialog_message,
 };
 
 mod controls;
@@ -723,9 +722,14 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                dialog_body(dialog_message(
-                    "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
-This cannot be undone through Ctrl+Z alone — consider saving first.",
+                dialog_body(crate::styles::dialog_intro(
+                    crate::styles::DialogIcon::Warn,
+                    "Reset every designator?",
+                    Some(
+                        "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
+This cannot be undone through Ctrl+Z alone — consider saving first."
+                            .to_owned()
+                    ),
                     tokens,
                 )),
                 dialog_footer(vec![

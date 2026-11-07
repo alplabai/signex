@@ -12,8 +12,8 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use super::widgets::modal_title_header;
 use crate::app::path_ops::PlacingSymbol;
 use crate::styles::{
-    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_hint, dialog_list,
-    dialog_message,
+    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer, dialog_hint,
+    dialog_intro, dialog_list,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -143,8 +143,13 @@ impl Signex {
         }
         let remove_options: Element<'_, Message> = remove_options.boxed();
 
-        let mut prompt = column![dialog_message(
-            format!("Please choose how to remove file \"{}\"", st.display_name),
+        let mut prompt = column![dialog_intro(
+            DialogIcon::Warn,
+            format!("Remove \"{}\"?", st.display_name),
+            Some(format!(
+                "Please choose how to remove file \"{}\"",
+                st.display_name
+            )),
             tokens,
         )]
         .spacing(SP.s);
@@ -280,7 +285,12 @@ impl Signex {
         container(
             column![
                 header,
-                dialog_body(dialog_message(body, tokens)),
+                dialog_body(dialog_intro(
+                    DialogIcon::Warn,
+                    "Save the unsaved edits first?",
+                    Some(body),
+                    tokens,
+                )),
                 dialog_footer(buttons),
             ]
             .width(width),
@@ -322,12 +332,14 @@ impl Signex {
         let discard_blocked = st.sheet_refs.discard_blocked_reason();
 
         let mut body = column![
-            dialog_message(
-                format!(
+            dialog_intro(
+                DialogIcon::Warn,
+                "Save changes before closing?",
+                Some(format!(
                     "'{}' has {}. What would you like to do?",
                     st.project_name,
                     unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len())
-                ),
+                )),
                 tokens,
             ),
             container(dialog_list(file_rows, tokens)).height(Length::Fit.max(
@@ -457,7 +469,21 @@ impl Signex {
         // Basenames only: full paths would overflow the modal.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
 
-        let mut body: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.m);
+        let quitting = if cfg!(target_os = "macos") {
+            "quitting"
+        } else {
+            "exiting"
+        };
+        let mut body: iced::widget::Column<Element<'_, Message>> = column![dialog_intro(
+            DialogIcon::Warn,
+            format!("Save changes before {quitting}?"),
+            Some(format!(
+                "You have {}. Save before {quitting}?",
+                unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
+            )),
+            tokens,
+        )]
+        .spacing(SP.m);
         if self.ui_state.quit_confirm_refreshed {
             body = body.push(
                 text("The unsaved list changed; review and confirm again.")
@@ -466,27 +492,14 @@ impl Signex {
                     .boxed(),
             );
         }
-        body = body
-            .push(dialog_message(
-                format!(
-                    "You have {}. Save before {}?",
-                    unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
-                    if cfg!(target_os = "macos") {
-                        "quitting"
-                    } else {
-                        "exiting"
-                    }
-                ),
-                tokens,
-            ))
-            .push(
-                container(dialog_list(file_rows, tokens))
-                    .height(Length::Fit.max(
-                        crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
-                            + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
-                    ))
-                    .boxed(),
-            );
+        body = body.push(
+            container(dialog_list(file_rows, tokens))
+                .height(Length::Fit.max(
+                    crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
+                        + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
+                ))
+                .boxed(),
+        );
 
         let choose = |choice| Message::Project(ProjectMsg::AppQuitConfirm(choice));
         let buttons = vec![

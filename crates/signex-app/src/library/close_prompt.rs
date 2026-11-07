@@ -16,7 +16,7 @@ use iced::widget::{Space, column, container, text};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
-use crate::styles::{Spacing, TypeScale, dialog_body, dialog_list, dialog_message};
+use crate::styles::{DialogIcon, Spacing, TypeScale, dialog_body, dialog_intro, dialog_list};
 use signex_widgets::theme_ext;
 
 use super::messages::{CloseLibraryChoice, LibraryMessage};
@@ -62,12 +62,14 @@ pub fn view<'a>(
         tokens,
     );
 
-    let summary = dialog_message(
-        format!(
+    let summary = dialog_intro(
+        DialogIcon::Warn,
+        "Save the drafts before closing?",
+        Some(format!(
             "'{}' has {} unsaved draft(s). What would you like to do?",
             confirm.library_name,
             confirm.dirty_editors.len() + confirm.dirty_paths.len()
-        ),
+        )),
         tokens,
     );
 
@@ -126,16 +128,23 @@ pub fn view<'a>(
         tokens,
     );
 
+    // As tall as the content in the main window; in its own window (sized
+    // to the content) the footer stays at the bottom.
+    let mut card = column![header, body];
+    if windowed {
+        card = card.push(Space::new().height(Length::Fill));
+    }
     container(
-        column![header, body, Space::new().height(Length::Fill), footer]
+        card.push(footer)
             .width(super::card_len(
                 windowed,
                 super::modal_chrome::CLOSE_PROMPT_W,
             ))
-            .height(super::card_len(
-                windowed,
-                super::modal_chrome::CLOSE_PROMPT_H,
-            )),
+            .height(if windowed {
+                Length::Fill
+            } else {
+                Length::Shrink
+            }),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

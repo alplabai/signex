@@ -46,7 +46,9 @@ use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn_if, secondary_btn};
+use super::modal_chrome::{
+    cancel_btn, footer_strip, header_with_note, primary_btn_if, secondary_btn,
+};
 use super::part_sync::{Choice, Choices, ConflictView};
 use crate::styles::{dialog_body, dialog_list, dialog_message};
 
@@ -368,6 +370,7 @@ fn render_entry_row<'a>(
 
     let symbol_uuid = entry.symbol_uuid;
     let cb: Element<'a, LibraryMessage> = checkbox(entry.selected)
+        .style(crate::panels::form_look::checkbox_style)
         .size(TS.heading)
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))
         .boxed();

@@ -28,7 +28,8 @@ impl Signex {
         if !borderless {
             return content;
         }
-        let bar = (DIALOG_TITLE_BAR_H * self.ui_state.ui_scale).ceil();
+        // Whole logical px, so the window scales as the content does.
+        let bar = (DIALOG_TITLE_BAR_H.ceil() * self.ui_state.ui_scale).ceil();
         Size::new(content.width, content.height + bar)
     }
 
@@ -100,7 +101,10 @@ mod tests {
         let framed = app.dialog_window_size(ModalId::RenameDialog, true);
         assert_eq!(framed.width, content.width);
         assert!(framed.height > content.height);
-        assert_eq!(app.dialog_window_size(ModalId::RenameDialog, false), content);
+        assert_eq!(
+            app.dialog_window_size(ModalId::RenameDialog, false),
+            content
+        );
     }
 
     /// A legacy theme keeps the native frame.

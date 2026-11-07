@@ -16,6 +16,12 @@ fn test_app() -> (Signex, iced::window::Id) {
     (app, main)
 }
 
+/// The size the window `id` showing `modal` opens at: the content plus the
+/// title bar a borderless dialog window draws itself.
+fn window_size(app: &Signex, id: iced::window::Id, modal: ModalId) -> iced::Size {
+    app.dialog_window_size(modal, app.dialog_window_is_borderless(id))
+}
+
 /// Put `modal` in its open state, the way its open site does.
 fn open(app: &mut Signex, modal: ModalId) {
     let ui = &mut app.ui_state;
@@ -481,7 +487,7 @@ fn content_bottom(modal: ModalId) -> (f32, f32) {
     open(&mut app, modal);
     let _ = app.sync_detached_modals();
     let id = window_of(&app, modal).expect("window");
-    let size = app.modal_window_size(modal);
+    let size = window_size(&app, id, modal);
     let texts = lay_out_texts(app.view(id), size);
     let bottom = texts
         .iter()
@@ -528,13 +534,14 @@ fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
     let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
     let size = app.modal_window_size(ModalId::LibraryStockCopy);
     let list_case = crate::app::handlers::erc::modal_size(ModalId::LibraryStockCopy);
+    let window = window_size(&app, id, ModalId::LibraryStockCopy);
     assert!(
         size.height < list_case.height * app.ui_state.ui_scale,
         "empty list: {} is shorter than the list case {}",
         size.height,
         list_case.height
     );
-    let texts = lay_out_texts(app.view(id), size);
+    let texts = lay_out_texts(app.view(id), window);
     let hint = texts
         .iter()
         .find(|t| t.text.contains("No writable library"))
@@ -567,7 +574,10 @@ fn copy_to_library_notes_each_add_a_line_and_stay_above_the_footer() {
         let _ = app.sync_detached_modals();
         let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
         let size = app.modal_window_size(ModalId::LibraryStockCopy);
-        let texts = lay_out_texts(app.view(id), size);
+        let texts = lay_out_texts(
+            app.view(id),
+            window_size(&app, id, ModalId::LibraryStockCopy),
+        );
         let footer_top = texts
             .iter()
             .filter(|t| t.text == "Cancel")
@@ -624,7 +634,7 @@ fn a_list_dialog_is_sized_to_its_rows_and_caps_at_a_scrolling_list() {
     // Both fit their windows, without a big empty area.
     for rows in [2, 30] {
         let (app, id) = quit_with_rows(rows);
-        let size = app.modal_window_size(ModalId::AppQuitConfirm);
+        let size = window_size(&app, id, ModalId::AppQuitConfirm);
         let texts = lay_out_texts(app.view(id), size);
         let visible_bottom = texts
             .iter()
@@ -715,7 +725,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
             open(&mut app, modal);
             let _ = app.sync_detached_modals();
             let id = window_of(&app, modal).expect("window");
-            let size = app.modal_window_size(modal);
+            let size = window_size(&app, id, modal);
             let root = crate::layout_probe::root_size(app.view(id), size);
             assert_eq!(
                 (root.width, root.height),
@@ -787,7 +797,8 @@ fn at_a_larger_interface_scale_fixed_dialogs_still_show_their_footer() {
         );
         // iced lays the window out at (window / scale): that is the room the
         // footer has, and it must all be inside it.
-        let layout = iced::Size::new(size.width / 1.5, size.height / 1.5);
+        let window = window_size(&app, id, modal);
+        let layout = iced::Size::new(window.width / 1.5, window.height / 1.5);
         let bottom = lay_out_texts(app.view(id), layout)
             .iter()
             .filter(|t| !t.text.starts_with("sheet"))

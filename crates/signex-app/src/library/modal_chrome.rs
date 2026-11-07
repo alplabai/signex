@@ -18,7 +18,6 @@ use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_
 /// Fixed widths of the Library modals that size themselves (the others
 /// take the picker / dialog default). One home so a resize is one edit.
 pub(crate) const CLOSE_PROMPT_W: f32 = 520.0;
-pub(crate) const CLOSE_PROMPT_H: f32 = 380.0;
 pub(crate) const CREATE_OPTIONS_W: f32 = 480.0;
 pub(crate) const DOCUMENT_OPTIONS_W: f32 = 460.0;
 pub(crate) const EDIT_ROW_W: f32 = 720.0;
@@ -69,6 +68,21 @@ fn header_strip<'a>(
             .boxed(),
             HeaderEnd::Nothing | HeaderEnd::Close(_) => Space::new().height(0).boxed(),
         };
+    }
+    if crate::styles::is_graphite(tokens) {
+        let (subtitle, close) = match end {
+            HeaderEnd::Nothing => (None, None),
+            HeaderEnd::Close(message) => (None, Some(message)),
+            HeaderEnd::Note(note) => (Some(note), None),
+        };
+        return crate::app::view::dialogs::graphite_header_closing(
+            title.to_string(),
+            subtitle,
+            None,
+            close,
+            crate::app::view::dialogs::DIALOG_TITLE_BAR_H,
+            tokens,
+        );
     }
     let mut line = row![
         text(title.to_string())

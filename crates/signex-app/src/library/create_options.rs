@@ -48,6 +48,7 @@ pub fn view<'a>(
     // library lives on disk as plain files; opting in runs `git init`
     // at the parent directory and stages an initial commit.
     let git_check: Element<'a, LibraryMessage> = checkbox(state.enable_git)
+        .style(crate::panels::form_look::checkbox_style)
         .size(TS.heading)
         .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleGit)
         .boxed();
@@ -78,12 +79,16 @@ pub fn view<'a>(
     // Greyed out otherwise (no `on_toggle` so the checkbox is inert).
     let lfs_check: Element<'a, LibraryMessage> = if state.enable_git {
         checkbox(state.use_lfs)
+            .style(crate::panels::form_look::checkbox_style)
             .size(TS.heading)
             .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleLfs)
             .boxed()
     } else {
         // Inert checkbox — same footprint, can't be clicked.
-        checkbox(false).size(TS.heading).boxed()
+        checkbox(false)
+            .style(crate::panels::form_look::checkbox_style)
+            .size(TS.heading)
+            .boxed()
     };
 
     let lfs_text_color = if state.enable_git { text_c } else { muted };

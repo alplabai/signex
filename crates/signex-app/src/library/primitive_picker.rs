@@ -253,6 +253,7 @@ pub fn view<'a>(
     );
 
     let search = text_input("Filter…", &picker.filter)
+        .style(crate::panels::form_look::text_input_style)
         .on_input(|s| LibraryMessage::PrimitivePicker(PrimitivePickerMsg::SetFilter(s)))
         .padding(6)
         .size(TS.label);
