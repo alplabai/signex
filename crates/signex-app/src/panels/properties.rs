@@ -196,6 +196,9 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // instead." Takes precedence over the schematic / pre-placement /
     // symbol-editor branches so when a Library Browser tab is active
     // the panel stays focused on it.
+    if let Some(sheet) = ctx.component_sheet.as_ref() {
+        return super::view_component_sheet(sheet, &ctx.tokens);
+    }
     if let Some(detail) = ctx.library_row_detail.as_ref() {
         return view_library_row_properties(
             detail,

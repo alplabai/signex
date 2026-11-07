@@ -93,8 +93,10 @@ pub use footprint_context::{
     OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
     SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use library::LibraryRowDetail;
-pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
+pub use library::{ComponentSheet, LibraryRowDetail};
+pub(super) use library::{
+    view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
+};
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
 pub use navigator::NavigatorModel;

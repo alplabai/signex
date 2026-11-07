@@ -97,6 +97,9 @@ pub struct PanelContext {
     /// buttons; outside of a Library Browser tab the field stays
     /// `None` and the panel falls through to its existing branches.
     pub library_row_detail: Option<LibraryRowDetail>,
+    /// Row data of the active Component editor tab; shown by the Graphite
+    /// Properties dock.
+    pub component_sheet: Option<super::ComponentSheet>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,

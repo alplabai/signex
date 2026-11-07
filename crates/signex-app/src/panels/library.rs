@@ -657,3 +657,75 @@ pub fn view_library_row_properties<'a>(
 
     container(body).width(Length::Fill).boxed()
 }
+
+/// What the Graphite Properties dock shows for the active Component editor tab:
+/// the row's own data, nothing invented.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentSheet {
+    pub internal_pn: String,
+    pub manufacturer: String,
+    pub mpn: String,
+    pub lifecycle: String,
+    pub version: String,
+    pub library: String,
+    pub table: String,
+    pub updated: String,
+}
+
+/// The Graphite Component sheet: COMPONENT and STORAGE sections of label and
+/// value rows.
+pub fn view_component_sheet<'a>(
+    sheet: &'a ComponentSheet,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let r = crate::styles::tokens::resolve(tokens);
+    let ink = crate::styles::ti(tokens.text);
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let line = |label: &'static str, value: &'a str, is_mono: bool| -> Element<'a, PanelMsg> {
+        let shown = if value.trim().is_empty() {
+            "\u{2014}"
+        } else {
+            value
+        };
+        let mut v = text(shown).size(TS.body).color(ink);
+        if is_mono {
+            v = v.font(mono);
+        }
+        container(
+            iced::widget::row![
+                text(label)
+                    .size(TS.body)
+                    .color(r.ink3)
+                    .width(Length::FillPortion(2))
+                    .boxed(),
+                container(v)
+                    .width(Length::FillPortion(3))
+                    .clip(true)
+                    .boxed(),
+            ]
+            .spacing(SP.m)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([SP.s, 12.0])
+        .width(Length::Fill)
+        .boxed()
+    };
+    let body: Column<Element<'a, PanelMsg>> = column![
+        super::form_look::section_label("Component", tokens),
+        line("Internal PN", &sheet.internal_pn, true),
+        line("MPN", &sheet.mpn, true),
+        line("Manufacturer", &sheet.manufacturer, false),
+        line("Lifecycle", &sheet.lifecycle, false),
+        line("Version", &sheet.version, true),
+        super::form_look::section_label("Storage", tokens),
+        line("Library", &sheet.library, true),
+        line("Table", &sheet.table, true),
+        line("Updated", &sheet.updated, false),
+    ]
+    .width(Length::Fill);
+    iced::widget::scrollable(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(super::form_look::scrollbar_style)
+        .boxed()
+}

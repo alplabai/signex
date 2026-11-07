@@ -556,6 +556,7 @@ impl Signex {
                     project_tree_selected: None,
                     navigator: crate::panels::NavigatorModel::default(),
                     library_row_detail: None,
+                    component_sheet: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,

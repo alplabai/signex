@@ -32,6 +32,38 @@ impl Signex {
         Some((library_path, table, row))
     }
 
+    /// The active Component editor tab's row, for the Graphite Properties dock.
+    fn compute_component_sheet(&self) -> Option<crate::panels::ComponentSheet> {
+        if !crate::styles::is_graphite(&self.document_state.panel_ctx.tokens) {
+            return None;
+        }
+        let tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        let editor = tab.kind.as_component_editor()?;
+        let lib = self.library.library_at(&editor.library_path)?;
+        let row = lib
+            .tables
+            .get(&editor.table)?
+            .iter()
+            .find(|r| signex_library::RowId::from_uuid(r.row_id) == editor.row_id)?;
+        Some(crate::panels::ComponentSheet {
+            internal_pn: row.internal_pn.as_str().to_string(),
+            manufacturer: row.primary_mpn.manufacturer.clone(),
+            mpn: row.primary_mpn.mpn.clone(),
+            lifecycle: crate::library::editor::kit::lifecycle_label(row.state).to_string(),
+            version: row.version.clone(),
+            library: editor
+                .library_path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            table: editor.table.clone(),
+            updated: row.updated.format("%Y-%m-%d").to_string(),
+        })
+    }
+
     /// Record which row's bindings the Properties panel needs summarised;
     /// `start_row_summary_read` fetches them. Never reads the disk.
     pub(super) fn want_row_summaries(&mut self) {
@@ -652,6 +684,7 @@ impl Signex {
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
             navigator,
             library_row_detail: self.compute_library_row_detail(),
+            component_sheet: self.compute_component_sheet(),
             selection_count,
             selected_uuid,
             selected_kind,
