@@ -119,8 +119,7 @@ fn close_scan_of_a_half_typed_row_and_a_save_in_flight() {
             0,
             1,
             Some(
-                "Close Project 'p': kept 1 unsaved document(s) open, not provably this                  project's alone: lib.snxlib"
-                    .to_string()
+                "Close Project 'p': kept 1 unsaved document(s) open, not provably this project's alone: lib.snxlib".to_string()
             )
         )
     );
