@@ -547,7 +547,23 @@ fn draw_text_bucket<F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    draw_text_items(frame, texts.iter(), world_to_screen, options);
+    draw_text_items(
+        frame,
+        text_draw_order(texts, options).into_iter(),
+        world_to_screen,
+        options,
+    );
+}
+
+/// `texts` with the atlas-drawn ones first and the outline-drawn ones (rotated,
+/// oversize) after, each group in scene order. iced opens a new layer at every
+/// switch between the two, cache hit or not (#2128); the GPU mount draws them
+/// in this order too.
+fn text_draw_order(texts: &[TextItem], options: SceneDrawOptions) -> Vec<&TextItem> {
+    let (atlas, outline): (Vec<&TextItem>, Vec<&TextItem>) = texts
+        .iter()
+        .partition(|text| gpu_stages_text(text, options));
+    atlas.into_iter().chain(outline).collect()
 }
 
 /// Canvas pass for a scene whose atlas text draws on the GPU: paints only what
@@ -977,117 +993,7 @@ mod canvas_font_tests {
 }
 
 #[cfg(test)]
-mod rotated_text_tests {
-    use super::*;
-    use signex_gfx::primitive::text::{TextHAlign, TextVAlign};
-    use std::f32::consts::FRAC_PI_2;
-
-    fn item(rotation: f32) -> TextItem {
-        TextItem {
-            content: "PIN1".to_string(),
-            position: [0.0, 0.0],
-            size_mm: 1.0,
-            color: [1.0, 1.0, 1.0, 1.0],
-            bold: false,
-            italic: false,
-            rotation,
-            h_align: TextHAlign::Right,
-            v_align: TextVAlign::Bottom,
-            family: None,
-        }
-    }
-
-    fn text(content: &str, rotation: f32) -> TextItem {
-        TextItem {
-            content: content.to_string(),
-            size_mm: 1.27,
-            color: [1.0; 4],
-            rotation,
-            ..Default::default()
-        }
-    }
-
-    /// The GPU stages what the atlas can draw and the canvas draws the rest,
-    /// so a text that is drawn at all is never lost and never drawn twice
-    /// (#199 S1), over the real predicates: rotated, oversize and tiny items
-    /// included.
-    #[test]
-    fn gpu_staged_plus_canvas_is_exactly_the_drawn_texts() {
-        let options = SceneDrawOptions {
-            scale_px_per_mm: 30.0,
-            device_px_per_logical_px: 1.0,
-            text_min_px: 0.0,
-            text_max_px: f32::INFINITY,
-            frame_origin: Point::ORIGIN,
-        };
-        let sized = |content: &str, size_mm: f32, rotation: f32| TextItem {
-            size_mm,
-            ..text(content, rotation)
-        };
-        let texts = [
-            sized("horizontal", 1.27, 0.0),
-            sized("negative-zero", 1.27, -0.0),
-            sized("vertical", 1.27, std::f32::consts::FRAC_PI_2),
-            sized("arbitrary", 1.27, 0.61),
-            sized("vertical-down", 1.27, -std::f32::consts::FRAC_PI_2),
-            sized("flipped", 1.27, std::f32::consts::PI),
-            sized("oversize", 40.0, 0.0),
-            sized("oversize-rotated", 40.0, 0.61),
-            sized("invisible", f32::NAN, 0.0),
-        ];
-        let staged: Vec<&str> = texts
-            .iter()
-            .filter(|t| gpu_stages_text(t, options))
-            .map(|t| t.content.as_str())
-            .collect();
-        let canvas: Vec<&str> = texts
-            .iter()
-            .filter(|t| cpu_draws_beside_gpu(t, options))
-            .map(|t| t.content.as_str())
-            .collect();
-        assert_eq!(staged, ["horizontal", "negative-zero"]);
-        assert_eq!(
-            canvas,
-            [
-                "vertical",
-                "arbitrary",
-                "vertical-down",
-                "flipped",
-                "oversize",
-                "oversize-rotated"
-            ]
-        );
-        assert!(staged.iter().all(|c| !canvas.contains(c)), "disjoint");
-        let mut union: Vec<&str> = staged.iter().chain(&canvas).copied().collect();
-        let mut drawn: Vec<&str> = texts
-            .iter()
-            .map(|t| t.content.as_str())
-            .filter(|c| *c != "invisible")
-            .collect();
-        union.sort_unstable();
-        drawn.sort_unstable();
-        assert_eq!(union, drawn, "nothing missed, nothing duplicated");
-        assert!(
-            !staged.contains(&"invisible") && !canvas.contains(&"invisible"),
-            "an invisible text is drawn by neither"
-        );
-    }
-
-    #[test]
-    fn quarter_turn_labels_pivot_on_the_anchor_with_their_own_sign() {
-        let anchor = Point::new(100.0, 50.0);
-        for angle in [FRAC_PI_2, -FRAC_PI_2, 3.0 * FRAC_PI_2] {
-            let (shift, rot) = rotated_text_transform(&item(angle), anchor).expect("rotated");
-            assert_eq!((shift.x, shift.y), (100.0, 50.0));
-            assert_eq!(rot.0, angle);
-        }
-    }
-
-    #[test]
-    fn axis_aligned_labels_are_placed_directly() {
-        assert!(rotated_text_transform(&item(0.0), Point::ORIGIN).is_none());
-    }
-}
+mod rotated_text_tests;
 
 #[cfg(test)]
 mod min_stroke_tests {
