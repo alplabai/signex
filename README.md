@@ -57,7 +57,7 @@ board.
 **Two editions from one codebase:**
 
 - **Signex Community** (Apache-2.0, free forever) — the schematic editor
-  today; the PCB editor follows (PCB Viewer, then PCB Routing and Community Release; see the [roadmap](docs/ROADMAP.md))
+  today; PCB layout and routing follow in AI Design, then manufacturing output in the Community Release (see the [roadmap](docs/ROADMAP.md))
 - **Signex Pro** (subscription, planned for the Pro Release) — adds Signal AI
   (Claude-powered design copilot), plugins, real-time collaboration, and
   Signex 365 cloud PLM
@@ -153,9 +153,10 @@ board.
 | Plan | Milestone |
 |---|---|
 | **Community Preview** | Schematic-only release |
-| **PCB Viewer → Community Release** | Full PCB editor (viewer, routing, DRC, output) |
+| **AI Design** | PCB layout from the schematic, routing, and Signal AI as assistant and generator for schematic and board |
+| **Community Release** | Manufacturing output (Gerber, drill, ODB++) |
 | **3D Viewer → High-Speed Design** | 3D Viewer, Advanced PCB, High-Speed Design |
-| **Pro Release** | Signal AI + plugins + collaboration |
+| **Pro Release** | Licensing and billing, plugins, collaboration |
 | **Simulation** | Unified simulation view with SPICE, EM, thermal |
 | **Signex 365** | Cloud PLM |
 
@@ -177,6 +178,54 @@ board.
   <img src="assets/screenshots/solarized-theme.png" alt="Solarized Light theme" width="400">
   <br>
   <em>Catppuccin Mocha, GitHub Dark, Solarized Light — 7 themes built in, fully customizable</em>
+</p>
+
+</details>
+
+### Graphite: the next interface (design preview)
+
+The next Signex interface, Graphite, in its light and dark themes. These are
+design previews: Graphite, the Signal AI panel (Assistant and Generator) and
+PCB layout are in development for the AI Design gate
+([roadmap](docs/ROADMAP.md)); the screenshots above show the app as it ships
+today.
+
+<p align="center">
+  <img src="assets/screenshots/graphite/schematic-light.webp" alt="Schematic editor with the Signal AI panel, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/schematic-dark.webp" alt="Schematic editor with the Signal AI panel, Graphite Dark" width="400">
+  <br>
+  <em>Schematic editor: Projects, Properties and Messages docks, the Active Bar, and Signal AI</em>
+</p>
+
+<details>
+<summary><strong>More Graphite screens</strong></summary>
+
+<p align="center">
+  <img src="assets/screenshots/graphite/pcb-light.webp" alt="PCB layout with layer stack and DRC, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/pcb-dark.webp" alt="PCB layout with layer stack and DRC, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/start-light.webp" alt="Start screen with the Generator, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/start-dark.webp" alt="Start screen with the Generator, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/library-light.webp" alt="Library Browser, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/library-dark.webp" alt="Library Browser, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/component-light.webp" alt="Component editor pin map, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/component-dark.webp" alt="Component editor pin map, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/footprint-light.webp" alt="Footprint editor with sketch constraints, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/footprint-dark.webp" alt="Footprint editor with sketch constraints, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/symbol-light.webp" alt="Symbol editor, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/symbol-dark.webp" alt="Symbol editor, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/preferences-light.webp" alt="Preferences, theme, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/preferences-dark.webp" alt="Preferences, theme, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/dialogs-light.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/dialogs-dark.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Dark" width="400">
+  <br>
+  <em>PCB layout, start screen with the Generator, Library Browser, component, footprint and symbol editors, Preferences and the main dialogs</em>
 </p>
 
 </details>
@@ -345,11 +394,10 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
 | Command Registry & Symbol Units | 1.0.0-rc.1 | Done (test follow-up #1727 ships in the next release) |
 | **Community Preview** — schematic-only editor | **Gate** | `v1.0.0-rc.1` shipped 2026-10-29 (last SemVer tag); next release is CalVer |
-| PCB Viewer — GPU rendering, layers, cross-probe | **Gate** | |
-| PCB Routing + DRC + Output | Planned | |
-| **Community Release** — full schematic + PCB editor | **Gate** | |
+| **AI Design** — PCB layout from the schematic, routing, Signal AI assistant and generator | **Gate** | Next after the Community Preview |
+| **Community Release** — manufacturing output; full schematic + PCB editor | **Gate** | |
 | 3D Viewer, Advanced PCB, High-Speed Design | Planned | |
-| **Pro Release** — Signal AI + plugins + collaboration | **Gate** | |
+| **Pro Release** — licensing and billing, plugins, collaboration | **Gate** | |
 | Simulation — SPICE, EM, thermal, simulation wizards | Planned | |
 | **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **Gate** | |
 
