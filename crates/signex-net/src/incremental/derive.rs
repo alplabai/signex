@@ -11,8 +11,8 @@ use super::merge::{Merged, merge};
 use super::records::{Diff, diff, symbol_tips};
 use super::{Elem, NetBase, sheet_pin_list};
 use crate::build::{SegmentIndex, pt_key};
-use crate::signature::{NetSignature, net_signatures_at};
-use crate::uf::{Key, find, union as uf_union};
+use crate::signature::{NetSignature, net_signatures_at, query_node};
+use crate::uf::{Key, find};
 
 /// A later sheet against the base, element kind by element kind.
 struct Diffs {
@@ -267,14 +267,10 @@ impl NetBase {
         }
     }
 
-    /// Where each queried point sits, as the full derive reports it: a point
-    /// flagged as on a wire's interior is joined to that wire in the union-find
-    /// that already holds the name joins, one point after another, and its net
-    /// is then looked up by the root the nets were numbered with before those
-    /// joins. A point that is already a node of another net (a pin tip held by
-    /// a no-connect, say) therefore merges the two classes for the queries
-    /// after it, and a net found by a stale root is found or missed exactly as
-    /// there.
+    /// Where each queried point sits, as the full derive reports it: the net
+    /// of the node [`query_node`] picks (the wire's, for a point flagged as on
+    /// a wire's interior), with nothing joined. Every queried key is dirty, so
+    /// every wire through it is in the region's index.
     fn locate(
         at: &[(Key, bool)],
         parent: &mut HashMap<Key, Key>,
@@ -283,27 +279,13 @@ impl NetBase {
         merged: &Merged,
     ) -> Vec<(Key, Option<usize>)> {
         let by_id: HashMap<Key, Option<usize>> = merged.of_cluster.iter().copied().collect();
-        // The root a point's class had before any query joined it.
-        let class_of = |parent: &mut HashMap<Key, Key>, key: Key| {
-            let root = find(parent, key);
-            rebuilt_at
-                .get(&root)
-                .map_or(root, |&i| merged.of_cluster[i].0)
-        };
-        let mut joined: HashMap<Key, Key> = HashMap::new();
-        for &(key, on_interior) in at {
-            if !on_interior || index.is_endpoint(key) {
-                continue;
-            }
-            if let Some((a, b)) = index.anchor_segment(key) {
-                let (point, wire) = (class_of(parent, key), class_of(parent, a.min(b)));
-                uf_union(&mut joined, point, wire);
-            }
-        }
         at.iter()
-            .map(|&(key, _)| {
-                let root = find(&mut joined, class_of(parent, key));
-                (root, by_id.get(&root).copied().flatten())
+            .map(|&(key, on_interior)| {
+                let root = find(parent, query_node(key, on_interior, index));
+                let class = rebuilt_at
+                    .get(&root)
+                    .map_or(root, |&i| merged.of_cluster[i].0);
+                (class, by_id.get(&class).copied().flatten())
             })
             .collect()
     }

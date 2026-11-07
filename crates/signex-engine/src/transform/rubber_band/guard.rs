@@ -189,9 +189,9 @@ fn same_wiring(a: &SchematicSheet, b: &SchematicSheet) -> bool {
 
 /// The pre-move nets and the plain-moved reference, to compare candidates
 /// against.
-pub struct Guard {
-    before_sheet: SchematicSheet,
-    plain_sheet: SchematicSheet,
+pub struct Guard<'a> {
+    before_sheet: &'a SchematicSheet,
+    plain_sheet: &'a SchematicSheet,
     before: BeforeNets,
     /// Constant across rounds: computed once.
     plain_view: PlainView,
@@ -206,11 +206,11 @@ pub struct Guard {
     base: Option<Arc<NetBase>>,
 }
 
-impl Guard {
+impl<'a> Guard<'a> {
     #[must_use]
     pub fn new(
-        before_sheet: &SchematicSheet,
-        plain_sheet: &SchematicSheet,
+        before_sheet: &'a SchematicSheet,
+        plain_sheet: &'a SchematicSheet,
         tips: &[PinTip],
         before: Option<BeforeNets>,
     ) -> Self {
@@ -221,8 +221,8 @@ impl Guard {
     /// connectivity of `before_sheet` (the answer is the same, found faster).
     #[must_use]
     pub fn with_base(
-        before_sheet: &SchematicSheet,
-        plain_sheet: &SchematicSheet,
+        before_sheet: &'a SchematicSheet,
+        plain_sheet: &'a SchematicSheet,
         tips: &[PinTip],
         before: Option<BeforeNets>,
         base: Option<Arc<NetBase>>,
@@ -237,8 +237,8 @@ impl Guard {
             .flat_map(|net| net.sheet_pins.iter().copied())
             .collect();
         Self {
-            before_sheet: before_sheet.clone(),
-            plain_sheet: plain_sheet.clone(),
+            before_sheet,
+            plain_sheet,
             before,
             plain_view: PlainView::of(plain_sheet, tips, base.as_deref()),
             seen_terminals,
@@ -264,7 +264,7 @@ impl Guard {
             // only if something is at its tip.
             PinIdent::SheetPin(uuid) => {
                 self.seen_sheet_pins.contains(uuid)
-                    && something_at(&self.before_sheet, tip.old_key())
+                    && something_at(self.before_sheet, tip.old_key())
             }
         }
     }
@@ -331,7 +331,7 @@ impl Guard {
             &self.plain_view
         } else {
             stripped = PlainView::of(
-                &Self::strip(&self.plain_sheet, &skip.power_out),
+                &Self::strip(self.plain_sheet, &skip.power_out),
                 tips,
                 self.base.as_deref(),
             );
@@ -422,7 +422,7 @@ impl Guard {
             let Some(at) = want.iter().position(|n| n.terminals.contains(&key)) else {
                 continue;
             };
-            let carriers = carriers.get_or_insert_with(|| name_carrying_ports(&self.plain_sheet));
+            let carriers = carriers.get_or_insert_with(|| name_carrying_ports(self.plain_sheet));
             let ports: HashSet<Uuid> = carriers
                 .iter()
                 .filter(|(_, v)| *v == value)
@@ -523,7 +523,7 @@ impl Guard {
         let sigs = if skip.power_out.is_empty() {
             self.before.to_vec()
         } else {
-            self.nets_of(&Self::strip(&self.before_sheet, &skip.power_out))
+            self.nets_of(&Self::strip(self.before_sheet, &skip.power_out))
         };
         let same = Exclusions {
             terminals: skip.terminals.clone(),

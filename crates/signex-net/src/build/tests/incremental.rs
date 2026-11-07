@@ -263,12 +263,12 @@ fn no_connects_gate_a_pin() {
 }
 
 /// A queried point that is already a node of another net (a pin tip held by
-/// a no-connect, lying inside a wire without a dot) joins that wire's class for
-/// the queries, and the nets are then found by the roots they were numbered
-/// with: the case `random_edits_derive_the_same_nets_as_the_full_derive` met
-/// at seed 0xa11ce, round 19, step 2.
+/// a no-connect, lying inside a wire without a dot) is answered by the wire's
+/// net and merges nothing (#2144): the case
+/// `random_edits_derive_the_same_nets_as_the_full_derive` met at seed 0xa11ce,
+/// round 19, step 2.
 #[test]
-fn a_queried_pin_tip_inside_a_wire_joins_the_wires_class_like_the_full_derive() {
+fn a_queried_pin_tip_inside_a_wire_reports_the_wire_like_the_full_derive() {
     let mut before = empty_sheet();
     libs(&mut before);
     before.wires.push(fresh_wire(pt(0.0, 0.0), pt(20.0, 0.0)));
@@ -285,6 +285,14 @@ fn a_queried_pin_tip_inside_a_wire_joins_the_wires_class_like_the_full_derive() 
     let base = NetBase::new(&before);
     let tip = pt_key(&pt(10.0, 0.0));
     let far = pt_key(&pt(15.0, 5.0));
+    let (nets, found) = net_signatures_at(&before, &[(tip, true), (tip, false)]);
+    let named = |name: &str| nets.iter().position(|n| n.name == name);
+    assert_eq!(found[0].1, named("B"), "the tip is on the wire: {nets:?}");
+    assert_ne!(
+        found[1].1,
+        named("B"),
+        "off the wire it is the pin's own net"
+    );
     for at in [
         vec![(tip, true)],
         vec![(tip, false)],
@@ -301,11 +309,12 @@ fn a_queried_pin_tip_inside_a_wire_joins_the_wires_class_like_the_full_derive() 
     }
 }
 
-/// The same merge by a power-port tip: a port inside a wire with no dot, a
-/// second port of its value elsewhere, and queries on the port tip and on the
-/// wire.
+/// The same by a power-port tip: a port inside a wire with no dot, a second
+/// port of its value elsewhere, and queries on the port tip and on the wire.
+/// The port's tip, queried as on the wire, reports the wire's net; the GND net
+/// keeps its own answer, whatever the query order (#2144).
 #[test]
-fn a_queried_power_port_tip_inside_a_wire_joins_the_wires_class_like_the_full_derive() {
+fn a_queried_power_port_tip_inside_a_wire_reports_the_wire_like_the_full_derive() {
     let mut before = empty_sheet();
     libs(&mut before);
     before.wires.push(fresh_wire(pt(0.0, 0.0), pt(20.0, 0.0)));
@@ -326,6 +335,22 @@ fn a_queried_power_port_tip_inside_a_wire_joins_the_wires_class_like_the_full_de
     let port = pt_key(&pt(10.0, 0.0));
     let wire = pt_key(&pt(5.0, 0.0));
     let elsewhere = pt_key(&pt(30.0, 10.0));
+    let (nets, found) =
+        net_signatures_at(&before, &[(port, true), (elsewhere, false), (wire, true)]);
+    let named = |name: &str| nets.iter().position(|n| n.name == name);
+    assert_eq!(found[0].1, named("B"), "the tip is on the wire: {nets:?}");
+    assert_eq!(
+        found[1].1,
+        named("GND"),
+        "the GND net is not merged: {nets:?}"
+    );
+    assert_eq!(found[2].1, named("B"));
+    assert_ne!(named("B"), named("GND"));
+    let (_, alone) = net_signatures_at(&before, &[(elsewhere, false)]);
+    assert_eq!(
+        alone[0], found[1],
+        "an earlier query changes no later answer"
+    );
     for at in [
         vec![(port, true), (wire, true)],
         vec![(wire, true), (port, true)],
