@@ -1,0 +1,9 @@
+id: no-io-in-view
+valid:
+  - "fn view(state: &State) -> Element<'_, Message> { text(&state.name).into() }"
+  - "fn view(state: &State) -> Element<'_, Message> { if state.exists { a() } else { b() } }"
+invalid:
+  - "fn view(path: &Path) -> Element<'_, Message> { if path.exists() { a() } else { b() } }"
+  - "fn view() -> Element<'_, Message> { let s = std::fs::read_to_string(\"x\"); a() }"
+  - "fn view() -> Element<'_, Message> { let s = fs::read(\"x\"); a() }"
+  - "fn view() -> Element<'_, Message> { Command::new(\"open\"); a() }"

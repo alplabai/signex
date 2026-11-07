@@ -1,0 +1,31 @@
+id: no-io-in-view
+language: rust
+severity: error
+message: "view() is pure: no filesystem, process or network IO. Do it in update() and return a Task."
+files:
+  - crates/signex-app/src/**/view/**/*.rs
+  - crates/signex-app/src/**/views/**/*.rs
+ignores:
+  - "**/*_tests.rs"
+  - "**/tests.rs"
+  - "**/tests/**"
+rule:
+  all:
+    - any:
+        - pattern: std::fs::$F($$$)
+        - pattern: fs::$F($$$)
+        - pattern: std::process::Command::new($$$)
+        - pattern: Command::new($$$)
+        - pattern: Path::new($$$).exists()
+        - pattern: $P.exists()
+        - pattern: $P.is_file()
+        - pattern: $P.is_dir()
+    - inside:
+        stopBy: end
+        kind: function_item
+    - not:
+        inside:
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'

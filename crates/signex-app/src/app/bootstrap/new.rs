@@ -85,7 +85,7 @@ impl Signex {
         // defaults: Projects + Components + Signal on the left,
         // Properties + Messages on the right, ERC on the bottom
         // (user's request — bottom is reserved for future log tails).
-        let mut dock = match crate::fonts::read_dock_layout_from(prefs) {
+        let dock = match crate::fonts::read_dock_layout_from(prefs) {
             Some(saved) => saved,
             None => {
                 // Which panels open, in tab order. *Where* each one
@@ -107,8 +107,6 @@ impl Signex {
                 d
             }
         };
-        // Silence unused-mut when read_dock_layout returns Some.
-        let _ = &mut dock;
         let dock_layout_sync = crate::dock::DockLayoutSync::new(
             std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
             crate::dock::DockLayoutSnapshot::capture(&dock),

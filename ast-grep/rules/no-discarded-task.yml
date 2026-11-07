@@ -1,0 +1,26 @@
+id: no-discarded-task
+language: rust
+severity: error
+message: "a `handle_*` result (an iced Task) is discarded; return or handle it"
+files:
+  - crates/**/src/**/*.rs
+ignores:
+  - "**/*_tests.rs"
+  - "**/tests.rs"
+  - "**/tests/**"
+rule:
+  all:
+    - any:
+        - pattern: let _ = $R.$M($$$);
+        - pattern: let _ = $R::$M($$$);
+        - pattern: drop($R.$M($$$))
+        - pattern: drop($R::$M($$$))
+    - not:
+        inside:
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'
+constraints:
+  M:
+    regex: '^handle_'

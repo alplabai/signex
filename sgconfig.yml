@@ -1,0 +1,6 @@
+# ast-grep project config: structural lint rules that text search can't
+# express. `ast-grep scan` runs the rules, `ast-grep test` runs their tests.
+ruleDirs:
+  - ast-grep/rules
+testConfigs:
+  - testDir: ast-grep/rule-tests

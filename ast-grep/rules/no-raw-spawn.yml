@@ -1,0 +1,22 @@
+id: no-raw-spawn
+language: rust
+severity: error
+message: "No raw spawn in signex-app: IO and async work is returned as an iced Task (Task::perform) or a Subscription."
+files:
+  - crates/signex-app/src/**/*.rs
+ignores:
+  - "**/*_tests.rs"
+  - "**/tests.rs"
+  - "**/tests/**"
+rule:
+  all:
+    - any:
+        - pattern: tokio::spawn($$$)
+        - pattern: std::thread::spawn($$$)
+        - pattern: thread::spawn($$$)
+    - not:
+        inside:
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'

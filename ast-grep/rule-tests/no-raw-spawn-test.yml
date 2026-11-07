@@ -1,0 +1,17 @@
+id: no-raw-spawn
+valid:
+  - "fn f() -> Task<Message> { Task::perform(load(), Message::Loaded) }"
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn t() { std::thread::spawn(|| {}); }
+    }
+  - |
+    #[cfg(test)]
+    impl Hold {
+        fn take() { std::thread::spawn(|| {}); }
+    }
+invalid:
+  - "fn f() { tokio::spawn(async {}); }"
+  - "fn f() { std::thread::spawn(|| {}); }"
+  - "fn f() { thread::spawn(|| {}); }"
