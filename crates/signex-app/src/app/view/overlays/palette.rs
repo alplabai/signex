@@ -121,7 +121,8 @@ pub(super) fn scrollbar_style(
 }
 
 /// Which characters of `label` the `query` matched: the first contiguous
-/// case-insensitive occurrence, else the in-order subsequence, else none.
+/// case-insensitive occurrence (which includes a word prefix), else none. A
+/// scattered subsequence matches the row but is never highlighted.
 pub(super) fn match_mask(label: &str, query: &str) -> Vec<bool> {
     let low = |c: char| c.to_lowercase().next().unwrap_or(c);
     let chars: Vec<char> = label.chars().map(low).collect();
@@ -138,16 +139,6 @@ pub(super) fn match_mask(label: &str, query: &str) -> Vec<bool> {
     if let Some(start) = run {
         mask[start..start + wanted.len()].fill(true);
         return mask;
-    }
-    let mut next = 0;
-    for (i, c) in chars.iter().enumerate() {
-        if next < wanted.len() && *c == wanted[next] {
-            mask[i] = true;
-            next += 1;
-        }
-    }
-    if next < wanted.len() {
-        mask.fill(false);
     }
     mask
 }
@@ -185,6 +176,20 @@ fn caps_row<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M
     caps.boxed()
 }
 
+/// Characters of a result label that fit one row of the 640 px card beside the
+/// key caps; longer labels end in an ellipsis.
+const LABEL_BUDGET: usize = 58;
+
+/// `text` cut to `budget` characters, ending in an ellipsis when it was cut.
+fn ellipsize(text: &str, budget: usize) -> String {
+    if text.chars().count() <= budget {
+        return text.to_string();
+    }
+    let mut cut: String = text.chars().take(budget.saturating_sub(1)).collect();
+    cut.push('\u{2026}');
+    cut
+}
+
 /// One key cap.
 pub(super) fn cap<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
     container(text(label.to_string()).size(TS.caption).font(mono()))
@@ -203,7 +208,8 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
     let (ink, accent) = (ti(theme_tokens.text), r.accent_text);
-    let spans: Vec<_> = label_runs(&entry.label, query)
+    let shown_label = ellipsize(&entry.label, LABEL_BUDGET);
+    let spans: Vec<_> = label_runs(&shown_label, query)
         .into_iter()
         .map(|(run, hit)| {
             let s = span::<()>(run).color(if hit { accent } else { ink });
@@ -212,7 +218,12 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
         .collect();
     let mut label_col: iced::widget::Column<Element<'a, M>> =
         column![].spacing(SP.xs).width(Length::Fill);
-    label_col = label_col.push(rich_text::<(), M, Theme>(spans).size(TS.label).boxed());
+    label_col = label_col.push(
+        rich_text::<(), M, Theme>(spans)
+            .size(TS.label)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed(),
+    );
     let is_command = entry.source == CommandSource::Command;
     if let Some(path) = path_subtitle(entry) {
         label_col = label_col.push(text(path).size(TS.caption).color(r.ink3).boxed());
@@ -279,16 +290,16 @@ pub(super) fn hint_footer<'a, M: 'a>(
     line = line.push(cap(theme_tokens, "Enter"));
     line = line.push(hint("Run"));
     line = line.push(Space::new().width(Length::Fill).boxed());
-    if let Some(entry) = selected {
+    // "Enter Run" already says what Enter does; no sentence repeats it.
+    let _ = selected;
+    if let Some(more) = extra {
         line = line.push(
-            text(format!("Enter runs {}", entry.label))
+            text(more)
                 .size(TS.caption)
                 .color(r.ink3)
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
         );
-    } else if let Some(more) = extra {
-        line = line.push(text(more).size(TS.caption).color(r.ink3).boxed());
     }
     let rule = r.line_soft;
     container(line)
@@ -321,10 +332,13 @@ mod tests {
     }
 
     #[test]
-    fn subsequence_matches_in_order_or_not_at_all() {
-        let mask = match_mask("Annotate Quietly", "aq");
-        assert_eq!(mask.iter().filter(|m| **m).count(), 2);
+    fn only_a_contiguous_match_is_highlighted() {
+        // A scattered subsequence still matches the row but is not marked.
+        assert!(match_mask("Annotate Quietly", "aq").iter().all(|m| !m));
         assert!(match_mask("abc", "cba").iter().all(|m| !m));
+        let mask = match_mask("Open Project Options", "proj");
+        assert_eq!(mask.iter().filter(|m| **m).count(), 4);
+        assert!(mask[5] && mask[8]);
     }
 
     #[test]

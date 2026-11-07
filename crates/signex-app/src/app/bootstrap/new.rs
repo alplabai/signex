@@ -768,6 +768,10 @@ impl Signex {
             mount_task,
             tour_boot,
         ]);
+        // The panel context above was seeded with Signex tokens; point it at the
+        // saved theme before the first frame, so a Graphite first launch does not
+        // draw one frame (and every dialog window) in the old palette.
+        app.sync_panel_theme();
         (app, boot_task)
     }
 }
@@ -836,6 +840,47 @@ mod tests {
             assert!(!s.exit_on_close_request, "native={native}");
             assert_eq!(s.decorations, native);
         }
+    }
+
+    /// The first frame draws with the saved theme's tokens, not the seed's.
+    #[test]
+    fn the_first_frame_uses_the_saved_themes_tokens() {
+        let (app, _boot) = Signex::new();
+        let saved = app.ui_state.theme_id;
+        assert_eq!(app.document_state.panel_ctx.theme_id, saved);
+        assert_eq!(
+            crate::styles::is_graphite(&app.document_state.panel_ctx.tokens),
+            crate::styles::is_graphite(&signex_types::theme::theme_tokens(saved)),
+        );
+    }
+
+    /// Picking a theme in Preferences previews it live through the real
+    /// message path (no `theme_id` poke): the panel tokens follow the draft
+    /// and fall back when Preferences closes without saving.
+    #[test]
+    fn a_draft_theme_previews_through_the_preferences_messages() {
+        use crate::app::{Message, PreferencesMsg};
+        use crate::preferences::PrefMsg;
+        use signex_types::theme::ThemeId;
+        let (mut app, _boot) = Signex::new();
+        let saved = app.ui_state.theme_id;
+        let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+        for draft in [
+            ThemeId::Signex,
+            ThemeId::GraphiteDark,
+            ThemeId::GraphiteLight,
+        ] {
+            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+                PrefMsg::DraftTheme(draft),
+            )));
+            assert_eq!(app.document_state.panel_ctx.theme_id, draft);
+            assert_eq!(
+                crate::styles::is_graphite(&app.document_state.panel_ctx.tokens),
+                crate::styles::is_graphite(&signex_types::theme::theme_tokens(draft)),
+                "{draft:?}"
+            );
+        }
+        assert_eq!(app.ui_state.theme_id, saved, "the saved theme is untouched");
     }
 
     /// #1470 — startup mounts nothing before the first frame: the stock and

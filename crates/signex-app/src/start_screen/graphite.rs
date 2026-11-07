@@ -116,15 +116,47 @@ fn nav<'a>(
     recent_count: usize,
     libraries: &[super::LoadedLibrary],
 ) -> Element<'a, Message> {
-    let open_label = if open_shortcut.is_empty() {
-        "Open…".to_string()
-    } else {
-        format!("Open…  ({open_shortcut})")
+    let cap_fill = resolve(tokens).sunken;
+    let cap_ink = resolve(tokens).ink3;
+    let open_label: Element<'a, Message> = {
+        let label = text("Open\u{2026}")
+            .size(TS.dense)
+            .wrapping(iced::widget::text::Wrapping::None);
+        let mut line = row![label.boxed()].spacing(8).align_y(Alignment::Center);
+        if !open_shortcut.is_empty() {
+            line = line.push(
+                container(
+                    text(open_shortcut.to_owned())
+                        .size(TS.caption)
+                        .font(mono())
+                        .color(cap_ink)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                )
+                .padding([1.0, 6.0])
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(Background::Color(cap_fill)),
+                    border: Border {
+                        radius: Radii::GRAPHITE.small.into(),
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                })
+                .boxed(),
+            );
+        }
+        container(line)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .boxed()
     };
     let top = row![
         button(
             text("New project")
                 .size(TS.dense)
+                .height(Length::Fill)
+                .align_y(iced::alignment::Vertical::Center)
                 .wrapping(iced::widget::text::Wrapping::None)
         )
         .padding([0.0, 12.0])
@@ -132,18 +164,12 @@ fn nav<'a>(
         .height(ChromeMetrics::DEFAULT.field + 2.0)
         .on_press(Action::NewProject.message())
         .style(styles::primary_button(tokens)),
-        button(
-            text(open_label)
-                .size(TS.dense)
-                .width(Length::Fill)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .align_x(iced::alignment::Horizontal::Center)
-        )
-        .padding([0.0, 14.0])
-        .width(Length::Fill)
-        .height(ChromeMetrics::DEFAULT.field + 2.0)
-        .on_press(Action::OpenProject.message())
-        .style(outline_button(tokens)),
+        button(open_label)
+            .padding([0.0, 14.0])
+            .width(Length::Fill)
+            .height(ChromeMetrics::DEFAULT.field + 2.0)
+            .on_press(Action::OpenProject.message())
+            .style(outline_button(tokens)),
     ]
     .spacing(8);
     let items = column![
@@ -281,13 +307,18 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         selection: Color { a: 0.4, ..ink },
     });
     let stub = |label: &'a str, kind: u8| -> Element<'a, Message> {
-        let b = button(text(label).size(TS.dense))
-            .padding([0.0, 12.0])
-            .height(ChromeMetrics::DEFAULT.field + 2.0);
+        let b = button(
+            text(label)
+                .size(TS.dense)
+                .height(Length::Fill)
+                .align_y(iced::alignment::Vertical::Center),
+        )
+        .padding([0.0, 12.0])
+        .height(ChromeMetrics::DEFAULT.field + 2.0);
         let b: Element<'a, Message> = if kind == 0 {
             b.style(styles::accent_button_rounded(tokens)).boxed()
         } else {
-            b.style(styles::ghost_button(tokens)).boxed()
+            b.style(outline_button(tokens)).boxed()
         };
         coming_soon(b, tokens, tooltip::Position::Top)
     };
@@ -410,6 +441,7 @@ fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, M
     let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
     let (hover, line) = (hover_overlay(tokens), resolve(tokens).line_soft);
     let tile_fill = resolve(tokens).sunken;
+    let mut separators = 0;
     let mut list = column![].width(Length::Fill);
     for path in shown {
         // No cheap real thumbnail exists, so the mock's tile is drawn empty.
@@ -455,18 +487,22 @@ fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, M
                 })
                 .boxed(),
         );
-        list = list.push(
-            container(Space::new().height(1.0))
-                .width(Length::Fill)
-                .style(move |_: &iced::Theme| container::Style {
-                    background: Some(Background::Color(line)),
-                    ..container::Style::default()
-                })
-                .boxed(),
-        );
+        separators += 1;
+        if separators < shown.len() {
+            list = list.push(
+                container(Space::new().height(1.0))
+                    .width(Length::Fill)
+                    .style(move |_: &iced::Theme| container::Style {
+                        background: Some(Background::Color(line)),
+                        ..container::Style::default()
+                    })
+                    .boxed(),
+            );
+        }
     }
     container(list)
         .width(Length::Fill)
+        .padding(1)
         .style(styles::card(tokens))
         .boxed()
 }

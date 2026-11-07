@@ -184,7 +184,7 @@ impl Signex {
         let hint = self
             .ui_state
             .active_keymap
-            .shortcut_label_for_id("open_command_palette");
+            .shortcut_label_preferring("open_command_palette", "Ctrl+K");
         let mut content = row![icon, input].spacing(SP.l).align_y(Alignment::Center);
         if !hint.is_empty() {
             let cap = container(text(hint).size(TS.caption).font(
