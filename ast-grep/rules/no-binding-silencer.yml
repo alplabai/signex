@@ -1,0 +1,27 @@
+id: no-binding-silencer
+language: rust
+severity: error
+message: "`let _ = <binding>;` only hides an unused binding"
+note: |
+  Delete the binding, or name it `_` / `_name` where it is created. A
+  `#[must_use]` Result is discarded with `.ignore("why")` instead
+  (crates/signex-app/src/ignore.rs). A binding unused on one platform only
+  takes `// ast-grep-ignore: no-binding-silencer` with the reason.
+rule:
+  pattern: let _ = $X;
+constraints:
+  X:
+    any:
+      - kind: identifier
+      - kind: field_expression
+      - all:
+          - kind: reference_expression
+          - has:
+              any:
+                - kind: identifier
+                - kind: field_expression
+      - all:
+          - kind: tuple_expression
+          - regex: '^\(\s*&?[a-z_][a-z0-9_.]*(\s*,\s*&?[a-z_][a-z0-9_.]*)*\s*,?\s*\)$'
+ignores:
+  - vendor/**

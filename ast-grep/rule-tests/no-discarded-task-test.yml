@@ -1,0 +1,24 @@
+id: no-discarded-task
+valid:
+  - "fn f() -> Task<Message> { self.handle_x() }"
+  - "fn f() { let _ = self.compute(); }"
+  - "fn f() { let task = self.handle_x(); }"
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn t() { let _ = app.handle_x(); }
+    }
+invalid:
+  - "fn f() { let _ = self.handle_x(); }"
+  - "fn f() { let _ = self.foo().handle_x(); }"
+  - |
+    fn f() {
+        let _ =
+            self
+                .handle_y(2);
+    }
+  - "fn f() { drop(self.handle_z()); }"
+  - "fn f() { let _ = Self::handle_q(); }"
+  - "fn f() { std::mem::drop(self.handle_z()); }"
+  - "fn f() { mem::drop(self.handle_z()); }"
+  - "fn f() { _ = self.handle_x(); }"

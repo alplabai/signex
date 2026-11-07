@@ -5,7 +5,7 @@
 #![cfg(feature = "database")]
 
 use signex_library::adapter::{LibraryAdapter, LibraryError};
-use signex_library::component::{ROW_SCHEMA, ROW_SCHEMA_HEADER};
+use signex_library::component::ROW_SCHEMA_HEADER;
 use signex_library::identity::InternalPn;
 use uuid::Uuid;
 use wiremock::matchers::{header_exists, method, path};
@@ -48,7 +48,6 @@ fn serve(
                     .mount(server)
                     .await;
             }
-            let _ = ROW_SCHEMA;
             Mock::given(method("POST"))
                 .and(path("/tables/resistors/rows"))
                 .respond_with(|req: &wiremock::Request| {
