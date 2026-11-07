@@ -26,7 +26,7 @@ To open the board in the app, write it out:
 SIGNEX_PCB_BENCH_OUT=/tmp/pcb-10k.snxpcb cargo test -p signex-renderer --test integration pcb_10k_write_snxpcb -- --ignored --nocapture
 ```
 
-The file is about a megabyte, so it is generated, not committed.
+The file is about 1.3 MB, so it is generated, not committed.
 
 ## The board
 
