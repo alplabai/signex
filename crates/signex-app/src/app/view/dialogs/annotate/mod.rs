@@ -270,7 +270,7 @@ impl Signex {
             .spacing(6),
             Space::new().height(6),
             container(scrollable(param_rows)
-                .height(280)
+                .height(if graphite { 98 } else { 280 })
                 .style(scroll_style(tokens)))
                 .padding(SP.xs)
                 .style(bordered_style(border_c, tokens)),
