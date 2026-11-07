@@ -125,17 +125,19 @@ mod tests {
     #[test]
     fn status_bar_reservation_matches_the_laid_out_bar() {
         use signex_types::theme::ThemeId;
-        for id in [ThemeId::Signex, ThemeId::GraphiteLight] {
-            status_bar_reservation_matches(id);
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            status_bar_reservation_matches(&format!("{id:?}"), tokens);
         }
+        status_bar_reservation_matches("legacy", legacy());
     }
 
+    /// The legacy chrome sizes these layout pins were written against.
     fn legacy() -> ThemeTokens {
-        signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex)
+        crate::styles::legacy_tokens_fixture()
     }
 
-    fn status_bar_reservation_matches(id: signex_types::theme::ThemeId) {
-        let tokens = signex_types::theme::theme_tokens(id);
+    fn status_bar_reservation_matches(id: &str, tokens: ThemeTokens) {
         let reserved = crate::status_bar::status_bar_height(&tokens);
         let bar = crate::status_bar::view(
             0.0,

@@ -707,7 +707,7 @@ fn dialog_windows_are_titled_without_an_application_suffix_and_drawn_flat() {
 #[test]
 fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
     use signex_types::theme::ThemeId;
-    for theme_id in [ThemeId::CatppuccinMocha, ThemeId::SolarizedLight] {
+    for theme_id in [ThemeId::GraphiteDark, ThemeId::GraphiteLight] {
         for modal in testable() {
             let (mut app, _main) = test_app();
             app.ui_state.theme_id = theme_id;

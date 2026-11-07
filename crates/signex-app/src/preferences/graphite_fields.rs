@@ -1,9 +1,9 @@
 //! Graphite controls of the Preferences dialog: the nav search field, the
-//! mock's page names, the font pick-list and the ghost theme buttons.
+//! mock's page names and the font pick-list.
 //! Legacy themes never reach these helpers.
 
 use super::{PrefMsg, PrefNav, SP, TS};
-use crate::styles::{self, DialogButtonKind, Radii, dialog_button, ti, tokens};
+use crate::styles::{self, Radii, ti, tokens};
 use iced::overlay::menu;
 use iced::widget::{container, pick_list, scrollable, text_input};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
@@ -51,15 +51,6 @@ pub(super) fn nav_search<'a>(query: &'a str, t: &ThemeTokens) -> Element<'a, Pre
         .width(Length::Fill)
         .style(styles::field(t, false))
         .boxed()
-}
-
-/// A ghost button for the Import / Export theme actions.
-pub(super) fn theme_io_button<'a>(
-    label: &str,
-    msg: PrefMsg,
-    t: &ThemeTokens,
-) -> Element<'a, PrefMsg> {
-    dialog_button(label, DialogButtonKind::Secondary, Some(msg), t)
 }
 
 /// The UI-font pick-list drawn as a Graphite field (field fill, hairline,

@@ -21,8 +21,8 @@
 //! ```ignore
 //! pub fn icon_logo(theme: ThemeId) -> svg::Handle {
 //!     match theme {
-//!         ThemeId::Alplab => {
-//!             // Shape override — cyan-baked SVG with different strokes.
+//!         ThemeId::GraphiteDark => {
+//!             // Shape override — a pre-tinted SVG with different strokes.
 //!             svg::Handle::from_memory(
 //!                 include_bytes!("../assets/icons/alplab/logo.svg").as_slice(),
 //!             )
@@ -359,23 +359,23 @@ mod tests {
     #[test]
     fn tinted_handles_are_memoised_per_icon_and_theme() {
         let before = handle_cache_len();
-        let first = icon_justify_tl(ThemeId::CatppuccinMocha);
+        let first = icon_justify_tl(ThemeId::GraphiteDark);
         let after_first = handle_cache_len();
         assert!(after_first <= before + 1);
         for _ in 0..5 {
-            assert_eq!(icon_justify_tl(ThemeId::CatppuccinMocha), first);
+            assert_eq!(icon_justify_tl(ThemeId::GraphiteDark), first);
         }
         assert_eq!(handle_cache_len(), after_first);
-        let other = icon_justify_tl(ThemeId::VsCodeDark);
+        let other = icon_justify_tl(ThemeId::GraphiteLight);
         assert!(handle_cache_len() <= after_first + 1);
-        assert_eq!(icon_justify_tl(ThemeId::VsCodeDark), other);
+        assert_eq!(icon_justify_tl(ThemeId::GraphiteLight), other);
     }
 
     /// The memoised handle equals a freshly built one (behaviour unchanged).
     #[test]
     fn memoised_handle_matches_fresh_build() {
         static BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
-        let theme = ThemeId::CatppuccinMocha;
+        let theme = ThemeId::GraphiteDark;
         assert_eq!(
             tinted_handle("justify/tr.svg", BYTES, theme),
             build_tinted_handle(BYTES, theme)
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn identical_bytes_under_distinct_paths_do_not_collide() {
         static BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
-        let theme = ThemeId::CatppuccinMocha;
+        let theme = ThemeId::GraphiteDark;
         let before = handle_cache_len();
         let a = tinted_handle("test/identical_a.svg", BYTES, theme);
         let b = tinted_handle("test/identical_b.svg", BYTES, theme);

@@ -604,7 +604,7 @@ mod tests {
         state.touch_data();
         state.sync_view_caches();
 
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let window = iced::Size::new(600.0, 100_000.0);
         fn build<'a>(
             state: &'a LibraryState,

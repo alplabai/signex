@@ -84,85 +84,12 @@ impl Signex {
     }
 
     fn resolve_theme(&self) -> Theme {
-        Self::id_to_iced_theme(
-            self.ui_state.effective_theme_id(),
-            self.ui_state.custom_theme.as_ref(),
-        )
+        Self::id_to_iced_theme(self.ui_state.effective_theme_id())
     }
 
     /// Map a ThemeId to an iced::Theme with a properly tuned palette.
-    pub(crate) fn id_to_iced_theme(
-        id: ThemeId,
-        custom: Option<&signex_types::theme::CustomThemeFile>,
-    ) -> Theme {
-        use crate::render_config::to_iced;
+    pub(crate) fn id_to_iced_theme(id: ThemeId) -> Theme {
         match id {
-            ThemeId::Custom => {
-                if let Some(c) = custom {
-                    let t = &c.tokens;
-                    Theme::custom(
-                        c.name.clone(),
-                        iced::theme::palette::Seed {
-                            background: to_iced(&t.bg),
-                            text: to_iced(&t.text),
-                            primary: to_iced(&t.accent),
-                            success: to_iced(&t.success),
-                            danger: to_iced(&t.error),
-                            warning: to_iced(&t.warning),
-                        },
-                    )
-                } else {
-                    Theme::CatppuccinMocha
-                }
-            }
-            ThemeId::CatppuccinMocha => Theme::CatppuccinMocha,
-            ThemeId::VsCodeDark => Theme::custom(
-                "VS Code Dark".to_string(),
-                iced::theme::palette::Seed {
-                    background: iced::Color::from_rgb(0.118, 0.118, 0.118),
-                    text: iced::Color::from_rgb(0.831, 0.831, 0.831),
-                    primary: iced::Color::from_rgb(0.000, 0.478, 0.800),
-                    success: iced::Color::from_rgb(0.416, 0.600, 0.333),
-                    danger: iced::Color::from_rgb(0.957, 0.267, 0.278),
-                    warning: iced::Color::from_rgb(1.000, 0.549, 0.000),
-                },
-            ),
-            ThemeId::Signex => Theme::custom(
-                "Altium Dark".to_string(),
-                iced::theme::palette::Seed {
-                    background: iced::Color::from_rgb(0.18, 0.18, 0.19),
-                    text: iced::Color::from_rgb(0.86, 0.86, 0.86),
-                    primary: iced::Color::from_rgb(0.91, 0.57, 0.18),
-                    success: iced::Color::from_rgb(0.34, 0.65, 0.29),
-                    danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
-                    warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
-                },
-            ),
-            ThemeId::Alplab => Theme::custom(
-                "Alp Lab".to_string(),
-                iced::theme::palette::Seed {
-                    background: iced::Color::from_rgb(0.18, 0.18, 0.19),
-                    text: iced::Color::from_rgb(0.86, 0.86, 0.86),
-                    // Alp Lab cyan #0891b2 as primary accent.
-                    primary: iced::Color::from_rgb(0.031, 0.569, 0.698),
-                    success: iced::Color::from_rgb(0.34, 0.65, 0.29),
-                    danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
-                    warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
-                },
-            ),
-            ThemeId::GitHubDark => Theme::custom(
-                "GitHub Dark".to_string(),
-                iced::theme::palette::Seed {
-                    background: iced::Color::from_rgb(0.051, 0.067, 0.090),
-                    text: iced::Color::from_rgb(0.902, 0.929, 0.953),
-                    primary: iced::Color::from_rgb(0.345, 0.651, 1.000),
-                    success: iced::Color::from_rgb(0.247, 0.725, 0.314),
-                    danger: iced::Color::from_rgb(1.000, 0.482, 0.447),
-                    warning: iced::Color::from_rgb(0.824, 0.604, 0.133),
-                },
-            ),
-            ThemeId::SolarizedLight => Theme::Light,
-            ThemeId::Nord => Theme::Nord,
             ThemeId::GraphiteLight => Theme::custom(
                 "Graphite Light".to_string(),
                 iced::theme::palette::Seed {

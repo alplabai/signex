@@ -527,7 +527,7 @@ mod tests {
     /// content with `Fit` (#2043).
     #[test]
     fn panel_without_a_width_hint_fits_its_content() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let entries = vec![DropdownEntry::Item(DropdownItem::new("Place", ()))];
         let panel = view(entries, &tokens, None);
         use iced::advanced::Widget as _;

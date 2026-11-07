@@ -503,7 +503,7 @@ mod tests {
     fn the_strip_and_its_placeholder_both_use_the_height_token() {
         use iced::Length;
         use iced::advanced::Widget as _;
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = crate::styles::legacy_tokens_fixture();
         let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
 
         let placeholder = super::placeholder::<()>(&tokens);
@@ -539,7 +539,7 @@ mod tests {
         };
         let strip = super::view(&[], 0, None, &none, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);
-        let legacy = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let legacy = crate::styles::legacy_tokens_fixture();
         assert_eq!(super::tab_strip_height(&legacy), TAB_STRIP_HEIGHT);
     }
 

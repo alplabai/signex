@@ -89,7 +89,8 @@ board.
 - Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
   `.snxprj` formats (`.snxsch`: TOML envelope + TSV bulk blocks, line-diffable
   in git; `.snxprj`: JSON, see [why](docs/architecture/snxprj-format.md))
-- 9 built-in themes (Graphite Light by default) with customizable theme editor
+- Two themes: Graphite Light (the default) and Graphite Dark, switchable from
+  Preferences ▸ Theme or the title-bar light/dark toggle
 - Altium-style docking panels with drag-to-undock/dock
 - Active Bar — 13-button floating toolbar with dropdown menus
 - Context menu, in-place text editing (F2), selection filter
@@ -166,20 +167,6 @@ board.
   <br>
   <em>Active Bar, project tree with native <code>.snxsch</code> / <code>.snxprj</code> files, and the Properties panel for the selected symbol</em>
 </p>
-
-<details>
-<summary><strong>More themes</strong></summary>
-
-<p align="center">
-  <img src="assets/screenshots/catppuccin-theme.png" alt="Catppuccin Mocha theme" width="400">
-  <img src="assets/screenshots/github-dark-theme.png" alt="GitHub Dark theme" width="400">
-  <br>
-  <img src="assets/screenshots/solarized-theme.png" alt="Solarized Light theme" width="400">
-  <br>
-  <em>Catppuccin Mocha, GitHub Dark, Solarized Light — 9 themes built in (Graphite Light is the default for new installs, Graphite Dark its dark twin), fully customizable</em>
-</p>
-
-</details>
 
 ## Architecture
 

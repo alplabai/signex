@@ -18,8 +18,8 @@ pub mod tokens;
 pub mod typography;
 
 pub use graphite::{
-    PillTone, card, field, floating_shadow, is_graphite, key_cap, pill, pill_colors,
-    resize_handle_edge, section_label,
+    PillTone, card, field, floating_shadow, is_graphite, key_cap, legacy_tokens_fixture, pill,
+    pill_colors, resize_handle_edge, section_label,
 };
 pub use graphite_buttons::{accent_button_rounded, ghost_button, primary_button};
 pub use metrics::ChromeMetrics;

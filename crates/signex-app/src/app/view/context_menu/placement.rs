@@ -227,7 +227,7 @@ mod tests {
     /// lays out: consecutive labels of a real menu are one row apart.
     #[test]
     fn the_assumed_row_height_is_what_the_dropdown_lays_out() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let icon = iced::widget::svg::Handle::from_memory(
             br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>"#.as_slice(),
         );
@@ -259,7 +259,7 @@ mod tests {
     /// by `submenu_origin` lines up with it (#2136).
     #[test]
     fn a_submenu_launcher_row_is_one_item_row_tall() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let icon = iced::widget::svg::Handle::from_memory(
             br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>"#.as_slice(),
         );

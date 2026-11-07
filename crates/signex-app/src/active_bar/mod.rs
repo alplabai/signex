@@ -789,14 +789,26 @@ pub(crate) fn drawn_trigger_centres_for(
     window_width: f32,
     tid: ThemeId,
 ) -> Vec<(ActiveBarMenu, f32)> {
-    use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets_with};
     let tokens = signex_types::theme::theme_tokens(tid);
-    let m = Metrics::of(&tokens);
+    drawn_trigger_centres_with(tool, window_width, &tokens, tid)
+}
+
+/// [`drawn_trigger_centres_for`] with explicit `tokens`, so a test can
+/// drive the legacy metrics through [`crate::styles::legacy_tokens_fixture`].
+#[cfg(test)]
+pub(crate) fn drawn_trigger_centres_with(
+    tool: crate::app::Tool,
+    window_width: f32,
+    tokens: &signex_types::theme::ThemeTokens,
+    tid: ThemeId,
+) -> Vec<(ActiveBarMenu, f32)> {
+    use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets_with};
+    let m = Metrics::of(tokens);
     let items = bar_items(
         tool,
         crate::app::DrawMode::Ortho90,
         &std::collections::HashMap::new(),
-        &tokens,
+        tokens,
         tid,
         false,
         false,
@@ -818,11 +830,13 @@ pub(crate) fn drawn_trigger_centres_for(
         .collect()
 }
 
-/// [`drawn_trigger_centres_for`] under the legacy default theme.
+/// [`drawn_trigger_centres_with`] under the legacy metrics, which the
+/// canvas test prefs (no Graphite look) hit-test with.
 #[cfg(test)]
 pub(crate) fn drawn_trigger_centres(
     tool: crate::app::Tool,
     window_width: f32,
 ) -> Vec<(ActiveBarMenu, f32)> {
-    drawn_trigger_centres_for(tool, window_width, ThemeId::Signex)
+    let tokens = crate::styles::legacy_tokens_fixture();
+    drawn_trigger_centres_with(tool, window_width, &tokens, ThemeId::DEFAULT)
 }

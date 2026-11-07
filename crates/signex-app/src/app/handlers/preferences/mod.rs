@@ -134,11 +134,10 @@ impl Signex {
             crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
         self.ui_state.preferences_keymap_status.clear();
         self.ui_state.preferences_keymap_recorder = None;
-        // The Appearance status line is transient feedback about one
-        // export, not a draft — a fresh dialog (or a Discard) must not
+        // The Rule Profiles status line is transient feedback about one
+        // action, not a draft — a fresh dialog (or a Discard) must not
         // reopen showing the last session's result.
         self.ui_state.profile_manager.clear_transient();
-        self.ui_state.preferences_theme_status.clear();
         // Same rule for the prefs-file recovery result — one action's
         // outcome, not a draft.
         self.ui_state.preferences_prefs_status.clear();
@@ -154,7 +153,6 @@ impl Signex {
         // can appear or be removed between two openings of this dialog.
         self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
-        self.ui_state.preferences_dirty_sticky = false;
     }
 
     /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).
@@ -495,7 +493,6 @@ impl Signex {
                 // banner through the probe; the dialog does not turn the
                 // "Saved" line into an error after the fact.
                 self.ui_state.preferences_dirty = false;
-                self.ui_state.preferences_dirty_sticky = false;
                 return self.save_follow_up(writes, ui_scale_changed);
             }
             PrefMsg::DraftTheme(id) => {
@@ -617,130 +614,6 @@ impl Signex {
             PrefMsg::DraftSymbolPinSelection(mode) => {
                 self.ui_state.preferences_draft_symbol_pin_selection = mode;
                 self.recompute_preferences_dirty();
-            }
-            PrefMsg::ImportTheme => {
-                let picker = self.ui_state.io.picker.clone();
-                return Task::future(async move {
-                    let picked = picker
-                        .dialog()
-                        .set_title("Import Signex Theme")
-                        .add_filter("Signex Theme", &["json"])
-                        .pick_file()
-                        .await;
-                    let Some(path) = picked else {
-                        return Message::noop();
-                    };
-                    let loaded = match read_picked(&path).await {
-                        Ok(s) => PrefMsg::ThemeFileLoaded(s),
-                        Err(reason) => PrefMsg::ThemeFileUnreadable(reason),
-                    };
-                    Message::Preferences(PreferencesMsg::Inner(loaded))
-                });
-            }
-            PrefMsg::ExportTheme => {
-                let id = self.ui_state.preferences_draft_theme;
-                let name = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.name.clone())
-                        .unwrap_or_else(|| "Custom".to_string())
-                } else {
-                    id.label().to_string()
-                };
-                let tokens = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-                } else {
-                    signex_types::theme::theme_tokens(id)
-                };
-                let canvas = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.canvas)
-                        .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
-                } else {
-                    signex_types::theme::canvas_colors(id)
-                };
-                let export = signex_types::theme::CustomThemeFile {
-                    name,
-                    tokens,
-                    canvas,
-                };
-                let json = serde_json::to_string_pretty(&export).unwrap_or_default();
-                // Drop any status from a previous attempt so the line the
-                // user sees always describes the export they just started.
-                self.ui_state.preferences_theme_status.clear();
-                let picker = self.ui_state.io.picker.clone();
-                return Task::future(async move {
-                    let picked = picker
-                        .dialog()
-                        .set_title("Export Signex Theme")
-                        .add_filter("Signex Theme", &["json"])
-                        .set_file_name("custom-theme.json")
-                        .save_file()
-                        .await;
-                    let Some(path) = picked else {
-                        // Cancelled the save dialog — nothing was
-                        // attempted, so there is nothing to report.
-                        return Message::noop();
-                    };
-                    // A whole-file write yielding `io::Result<()>` — no
-                    // short write to handle, but a
-                    // real failure (read-only volume, full disk, a path
-                    // that vanished between pick and write) used to be
-                    // discarded here, leaving the user believing the
-                    // theme had been exported (#533).
-                    let outcome = match tokio::fs::write(&path, json.as_bytes()).await {
-                        Ok(()) => Ok(path),
-                        Err(error) => Err(format!("{path}: {error}", path = path.display())),
-                    };
-                    Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeExportFinished(
-                        outcome,
-                    )))
-                });
-            }
-            PrefMsg::ThemeExportFinished(result) => {
-                self.ui_state.preferences_theme_status = match result {
-                    Ok(path) => format!("Exported theme to {}.", path.display()),
-                    Err(detail) => format!("Could not export theme: {detail}"),
-                };
-            }
-            PrefMsg::ThemeFileUnreadable(reason) => {
-                self.ui_state.preferences_theme_status =
-                    format!("Could not import theme: {reason}");
-            }
-            PrefMsg::ThemeFileLoaded(content) => {
-                match serde_json::from_str::<signex_types::theme::CustomThemeFile>(&content) {
-                    Err(e) => {
-                        self.ui_state.preferences_theme_status =
-                            format!("Could not import theme: {e}");
-                    }
-                    Ok(custom) => {
-                        self.ui_state.custom_theme = Some(custom);
-                        self.ui_state.preferences_draft_theme = ThemeId::Custom;
-                        self.sync_panel_theme();
-                        // Preview the imported colours on every open canvas.
-                        self.apply_canvas_theme(ThemeId::Custom);
-                        // Import swaps the live `custom_theme` in place — the
-                        // draft comparator can't see it, so pin the dirty flag
-                        // sticky until Save or a draft reseed clears it. Sticky
-                        // MUST be set before the recompute below so the flag
-                        // lands `true` even when every draft compares equal.
-                        // (Discard & Close cannot restore the previous custom
-                        // theme content; the sticky flag at least guarantees
-                        // the user is asked before the dialog closes. Note the
-                        // imported theme is session-only either way — nothing
-                        // persists `custom_theme` to disk yet, so it is lost on
-                        // restart even after Save; pre-existing gap.)
-                        self.ui_state.preferences_dirty_sticky = true;
-                        self.recompute_preferences_dirty();
-                    }
-                }
             }
             PrefMsg::Profiles(msg) => return self.handle_profiles_message(msg),
             PrefMsg::ResetPrefsFile => {

@@ -365,7 +365,6 @@ impl Signex {
                 preferences_draft_symbol_grid_style: symbol_grid_style,
                 symbol_pin_selection,
                 preferences_draft_symbol_pin_selection: symbol_pin_selection,
-                preferences_theme_status: String::new(),
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 keymap_load_error,
@@ -381,8 +380,6 @@ impl Signex {
                 preferences_nav_search: String::new(),
                 preferences_keymap_recorder: None,
                 preferences_dirty: false,
-                preferences_dirty_sticky: false,
-                custom_theme: None,
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
@@ -525,9 +522,9 @@ impl Signex {
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
                     symbol_lists_key: None,
-                    tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
-                    theme_id: ThemeId::Signex,
-                    canvas_colors: signex_types::theme::canvas_colors(ThemeId::Signex),
+                    tokens: signex_types::theme::theme_tokens(ThemeId::DEFAULT),
+                    theme_id: ThemeId::DEFAULT,
+                    canvas_colors: signex_types::theme::canvas_colors(ThemeId::DEFAULT),
                     device_px_per_logical_px:
                         signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
                     unit: Unit::Mm,
@@ -849,8 +846,8 @@ mod tests {
         let saved = app.ui_state.theme_id;
         assert_eq!(app.document_state.panel_ctx.theme_id, saved);
         assert_eq!(
-            crate::styles::is_graphite(&app.document_state.panel_ctx.tokens),
-            crate::styles::is_graphite(&signex_types::theme::theme_tokens(saved)),
+            app.document_state.panel_ctx.tokens,
+            signex_types::theme::theme_tokens(saved),
         );
     }
 
@@ -861,22 +858,21 @@ mod tests {
     fn a_draft_theme_previews_through_the_preferences_messages() {
         use crate::app::{Message, PreferencesMsg};
         use crate::preferences::PrefMsg;
-        use signex_types::theme::ThemeId;
         let (mut app, _boot) = Signex::new();
         let saved = app.ui_state.theme_id;
         let _ = app.update(Message::Preferences(PreferencesMsg::Open));
         for draft in [
-            ThemeId::Signex,
-            ThemeId::GraphiteDark,
-            ThemeId::GraphiteLight,
+            saved.light_dark_counterpart(),
+            saved,
+            saved.light_dark_counterpart(),
         ] {
             let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
                 PrefMsg::DraftTheme(draft),
             )));
             assert_eq!(app.document_state.panel_ctx.theme_id, draft);
             assert_eq!(
-                crate::styles::is_graphite(&app.document_state.panel_ctx.tokens),
-                crate::styles::is_graphite(&signex_types::theme::theme_tokens(draft)),
+                app.document_state.panel_ctx.tokens,
+                signex_types::theme::theme_tokens(draft),
                 "{draft:?}"
             );
         }

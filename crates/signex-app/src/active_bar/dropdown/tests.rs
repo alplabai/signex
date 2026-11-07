@@ -2,7 +2,7 @@
 //! entry builders — no GPU, no window, no widget tree.
 use super::*;
 
-const TID: ThemeId = ThemeId::CatppuccinMocha;
+const TID: ThemeId = ThemeId::GraphiteDark;
 
 /// #1248 - a fresh session's Directives button must be clickable.
 #[test]

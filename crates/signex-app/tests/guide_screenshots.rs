@@ -514,10 +514,9 @@ fn render_readme_screenshots() {
         world_y: 71.12,
     }));
     for (theme, name) in [
-        (ThemeId::Signex, "editor.png"),
-        (ThemeId::CatppuccinMocha, "catppuccin-theme.png"),
-        (ThemeId::GitHubDark, "github-dark-theme.png"),
-        (ThemeId::SolarizedLight, "solarized-theme.png"),
+        // The retired-theme shots (catppuccin-, github-dark-, solarized-theme.png)
+        // are no longer rendered; see docs/DECISIONS.md, "Graphite-only themes".
+        (ThemeId::GraphiteLight, "editor.png"),
     ] {
         // Pick the theme the way Preferences does: draft it, then save.
         let _ = app.update(Message::Preferences(PreferencesMsg::Inner(

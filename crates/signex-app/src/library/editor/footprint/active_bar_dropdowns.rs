@@ -826,7 +826,7 @@ mod tests {
     #[test]
     fn shapes_dropdown_has_exactly_one_arc_row() {
         let labels: Vec<String> =
-            shapes_entries(PathBuf::from("t.snxfp"), ThemeId::CatppuccinMocha)
+            shapes_entries(PathBuf::from("t.snxfp"), ThemeId::GraphiteDark)
                 .into_iter()
                 .filter_map(|e| match e {
                     DropdownEntry::Item(it) => Some(it.label),

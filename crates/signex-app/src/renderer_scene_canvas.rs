@@ -930,7 +930,7 @@ mod canvas_font_tests {
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let colors =
-            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark);
         let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
         let snapshot = crate::schematic_runtime::build_renderer_snapshot(
             &sheet,

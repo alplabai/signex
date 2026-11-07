@@ -13,7 +13,7 @@
 //! wires / mustard symbols) so historical /Page byte snapshots stay
 //! stable. The unified Print Preview hands the active theme's
 //! palette in when it kicks off an export, so users see Altium-style
-//! cream / Catppuccin Mocha / etc. honoured on paper too.
+//! cream / Graphite Dark / etc. honoured on paper too.
 
 use signex_types::theme::CanvasColors;
 
@@ -151,8 +151,8 @@ mod tests {
 
     #[test]
     fn from_canvas_colors_normalises_u8_rgb() {
-        let signex = canvas_colors(ThemeId::Signex);
-        let pal = SchematicPalette::from(&signex);
+        let graphite = canvas_colors(ThemeId::GraphiteLight);
+        let pal = SchematicPalette::from(&graphite);
         assert!(pal.paper.0 >= 0.0 && pal.paper.0 <= 1.0);
         assert!(pal.wire.2 >= 0.0 && pal.wire.2 <= 1.0);
     }
@@ -164,18 +164,18 @@ mod tests {
             let pal = SchematicPalette::from(&colors);
             assert_eq!(pal.bus_entry, pal.wire, "{id:?}");
         }
-        let mocha = canvas_colors(ThemeId::CatppuccinMocha);
-        let pal = SchematicPalette::from(&mocha);
+        let graphite = canvas_colors(ThemeId::GraphiteLight);
+        let pal = SchematicPalette::from(&graphite);
         assert_ne!(pal.bus, pal.wire, "fixture needs distinct wire and bus");
         assert_ne!(pal.bus_entry, pal.bus);
     }
 
     #[test]
-    fn altium_dark_paper_is_dark() {
-        // Catppuccin Mocha is dark; the canvas paper should be a
+    fn graphite_dark_paper_is_dark() {
+        // Graphite Dark is dark; the canvas paper should be a
         // dark colour (channels close to 0), not white.
-        let mocha = canvas_colors(ThemeId::CatppuccinMocha);
-        let pal = SchematicPalette::from(&mocha);
+        let dark = canvas_colors(ThemeId::GraphiteDark);
+        let pal = SchematicPalette::from(&dark);
         assert!(pal.paper.0 < 0.5);
         assert!(pal.paper.1 < 0.5);
         assert!(pal.paper.2 < 0.5);

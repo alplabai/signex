@@ -15,7 +15,7 @@ use signex_widgets::tree_view::TreeIcon;
 
 mod row_effects;
 
-const TID: ThemeId = ThemeId::CatppuccinMocha;
+const TID: ThemeId = ThemeId::GraphiteDark;
 
 fn labels(entries: &[DropdownEntry<Message>]) -> Vec<String> {
     entries

@@ -180,20 +180,6 @@ pub enum PrefMsg {
     DraftUiScalePercent(u16),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
-    /// Open a file picker to import a custom theme JSON.
-    ImportTheme,
-    /// Save the current draft theme as a JSON file.
-    ExportTheme,
-    /// Outcome of the theme-export write (#533). `Ok` carries the path
-    /// actually written, `Err` the `std::io::Error` rendered for the
-    /// user. Cancelling the save dialog emits nothing — only a real
-    /// attempt reports. Without this the write result was discarded and
-    /// a failed export looked identical to a successful one.
-    ThemeExportFinished(Result<std::path::PathBuf, String>),
-    /// Loaded JSON content from an import pick dialog.
-    ThemeFileLoaded(String),
-    /// The picked theme file could not be read; the reason.
-    ThemeFileUnreadable(String),
     /// Rule Profiles pane (#1608). Its edits are written to the profile
     /// files at once, so they are not drafts and never mark the dialog dirty.
     Profiles(ProfilesMsg),
@@ -258,8 +244,9 @@ pub enum PrefMsg {
     KeymapProfileUnreadable(String),
     /// Save the active profile to a `.toml` file.
     KeymapExportProfile,
-    /// Outcome of the keymap-export write (#533) — same shape and same
-    /// reason as [`Self::ThemeExportFinished`]. Reports through
+    /// Outcome of the keymap-export write (#533). `Ok` carries the path
+    /// actually written, `Err` the IO error rendered for the user;
+    /// cancelling the save dialog emits nothing. Reports through
     /// `preferences_keymap_status`, where the serialization failure at
     /// the same call site already reported.
     KeymapExportFinished(Result<std::path::PathBuf, String>),
@@ -336,9 +323,6 @@ pub struct PrefsView<'a> {
     pub draft_symbol_pin_selection: PinSelectionMode,
     pub draft_zoom_step_percent: u8,
     pub draft_ui_scale_percent: u16,
-    pub custom_name: Option<&'a str>,
-    /// Appearance ▸ theme import/export status line. Empty renders nothing.
-    pub theme_status: &'a str,
     pub dirty: bool,
     pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
     /// The profile new projects start from; `None` is automatic.
@@ -383,7 +367,6 @@ pub struct PrefsView<'a> {
 /// * `draft_theme`      — theme currently selected in the dialog (not yet saved)
 /// * `saved_theme`      — the committed theme (used to detect unsaved changes)
 /// * `draft_font`       — UI font name pending save
-/// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
 pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let panel_tokens = v.panel_tokens;

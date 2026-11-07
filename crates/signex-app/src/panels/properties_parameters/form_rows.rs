@@ -597,17 +597,9 @@ mod tests {
         use crate::styles::tokens::contrast_ratio;
         use signex_types::theme::{ThemeId, theme_tokens};
         let expected = |id: ThemeId| match id {
-            // GitHubDark #388BFD and SolarizedLight #268BD2: white < 4.5:1.
-            ThemeId::GitHubDark | ThemeId::SolarizedLight => Color::BLACK,
             // GraphiteLight selection #EFECE6 is near-white; GraphiteDark #2A2C32 is near-black.
             ThemeId::GraphiteLight => Color::BLACK,
-            ThemeId::GraphiteDark
-            | ThemeId::Signex
-            | ThemeId::Alplab
-            | ThemeId::VsCodeDark
-            | ThemeId::CatppuccinMocha
-            | ThemeId::Nord => Color::WHITE,
-            ThemeId::Custom => unreachable!("BUILTINS excludes Custom"),
+            ThemeId::GraphiteDark => Color::WHITE,
         };
         for &id in ThemeId::BUILTINS {
             let bg = crate::styles::ti(theme_tokens(id).selection);

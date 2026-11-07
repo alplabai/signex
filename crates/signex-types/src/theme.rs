@@ -83,91 +83,80 @@ impl Color {
 // Theme identity
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// The two Graphite themes are the only themes (decision 2026-11-07, see
+/// `docs/DECISIONS.md`). An id saved by an older build is read through
+/// [`ThemeId::from_stored`], so a stale preferences file still loads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeId {
-    CatppuccinMocha,
-    VsCodeDark,
-    Signex,
-    /// Alp Lab brand theme — clones the Signex chrome palette and swaps
-    /// the accent (and any visually-linked iconography) to cyan
-    /// `#0891b2`. Used for co-branded or white-labelled builds.
-    Alplab,
-    GitHubDark,
-    SolarizedLight,
-    Nord,
     /// Graphite Light: warm paper-white chrome, copper accent. The default.
     GraphiteLight,
     /// Graphite Dark: the dark twin of [`ThemeId::GraphiteLight`].
     GraphiteDark,
-    /// User-defined custom theme (data stored externally in CustomThemeFile).
-    Custom,
 }
+
+/// Stored ids of the retired light themes.
+const RETIRED_LIGHT_IDS: &[&str] = &["solarized_light"];
+
+/// Stored ids of the retired dark themes, plus the retired `custom` id,
+/// whose lightness is unknown.
+const RETIRED_DARK_IDS: &[&str] = &[
+    "signex",
+    "alplab",
+    "vs_code_dark",
+    "catppuccin_mocha",
+    "git_hub_dark",
+    "nord",
+    "custom",
+];
 
 impl ThemeId {
     /// Theme of a new install, i.e. when no theme preference is stored.
     pub const DEFAULT: ThemeId = ThemeId::GraphiteLight;
 
-    /// All built-in themes (excludes Custom).
-    pub const BUILTINS: &[ThemeId] = &[
-        ThemeId::GraphiteLight,
-        ThemeId::GraphiteDark,
-        ThemeId::Signex,
-        ThemeId::Alplab,
-        ThemeId::VsCodeDark,
-        ThemeId::CatppuccinMocha,
-        ThemeId::GitHubDark,
-        ThemeId::SolarizedLight,
-        ThemeId::Nord,
-    ];
+    /// Every theme, in the order the Preferences page shows them.
+    pub const BUILTINS: &[ThemeId] = &[ThemeId::GraphiteLight, ThemeId::GraphiteDark];
 
     pub fn label(self) -> &'static str {
         match self {
-            ThemeId::CatppuccinMocha => "Catppuccin Mocha",
-            ThemeId::VsCodeDark => "VS Code Dark",
-            ThemeId::Signex => "Signex",
-            ThemeId::Alplab => "Alp Lab",
-            ThemeId::GitHubDark => "GitHub Dark",
-            ThemeId::SolarizedLight => "Solarized Light",
-            ThemeId::Nord => "Nord",
             ThemeId::GraphiteLight => "Graphite Light",
             ThemeId::GraphiteDark => "Graphite Dark",
-            ThemeId::Custom => "Custom",
         }
     }
 
-    /// The theme a light/dark toggle switches to: the Graphite twin of the
-    /// opposite lightness. `Custom` has no known lightness and goes to
-    /// Graphite Light.
+    /// True for the light theme.
+    pub const fn is_light(self) -> bool {
+        matches!(self, ThemeId::GraphiteLight)
+    }
+
+    /// The theme a light/dark toggle switches to.
     pub const fn light_dark_counterpart(self) -> ThemeId {
         match self {
-            ThemeId::GraphiteLight | ThemeId::SolarizedLight => ThemeId::GraphiteDark,
-            ThemeId::GraphiteDark
-            | ThemeId::CatppuccinMocha
-            | ThemeId::VsCodeDark
-            | ThemeId::Signex
-            | ThemeId::Alplab
-            | ThemeId::GitHubDark
-            | ThemeId::Nord
-            | ThemeId::Custom => ThemeId::GraphiteLight,
+            ThemeId::GraphiteLight => ThemeId::GraphiteDark,
+            ThemeId::GraphiteDark => ThemeId::GraphiteLight,
+        }
+    }
+
+    /// Read a stored theme id. A retired theme maps to the Graphite twin of
+    /// its lightness; an unknown id (e.g. written by a newer build) reads as
+    /// [`ThemeId::DEFAULT`]. Never fails.
+    pub fn from_stored(stored: &str) -> ThemeId {
+        match stored {
+            "graphite_light" => ThemeId::GraphiteLight,
+            "graphite_dark" => ThemeId::GraphiteDark,
+            s if RETIRED_LIGHT_IDS.contains(&s) => ThemeId::GraphiteLight,
+            s if RETIRED_DARK_IDS.contains(&s) => ThemeId::GraphiteDark,
+            _ => ThemeId::DEFAULT,
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Custom theme file (JSON import/export)
-// ---------------------------------------------------------------------------
-
-/// A user-defined theme stored as JSON. Contains the full set of UI tokens
-/// and canvas palette colours so it can be round-tripped to/from disk.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CustomThemeFile {
-    /// Display name shown in the Preferences dialog.
-    pub name: String,
-    /// Panel chrome / UI widget colour tokens.
-    pub tokens: ThemeTokens,
-    /// Schematic canvas colour palette.
-    pub canvas: CanvasColors,
+/// Tolerant: any string is a theme id (see [`ThemeId::from_stored`]).
+impl<'de> Deserialize<'de> for ThemeId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let stored = String::deserialize(deserializer)?;
+        Ok(ThemeId::from_stored(&stored))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -190,15 +179,15 @@ pub struct ThemeTokens {
     pub error: Color,
     pub warning: Color,
     pub success: Color,
-    /// Tokens only the Graphite themes define; `None` everywhere else.
+    /// Chrome tokens beyond the 14 base ones; both Graphite themes set them all.
     #[serde(default, skip_serializing_if = "ExtendedTokens::is_empty")]
     pub extended: ExtendedTokens,
 }
 
 /// Optional chrome tokens beyond the 14 base ones. A theme leaves a field
 /// `None` to keep the colour the app derives from the base tokens (see
-/// `signex-app` `styles::tokens::resolve`), so old themes and old custom
-/// theme files look the same and serialize without these keys.
+/// `signex-app` `styles::tokens::resolve`); an all-`None` set serializes
+/// without these keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ExtendedTokens {
     /// Floating surfaces: menus, dialogs, the Active Bar.
@@ -316,8 +305,7 @@ pub struct CanvasColors {
     /// DRC violation marker, warning severity.
     pub drc_warning: Color,
     pub selection: Color,
-    /// PCB ratsnest lines; `None` (a custom theme file from before this
-    /// field) draws them in the selection colour, as they always were.
+    /// PCB ratsnest lines; `None` draws them in the selection colour.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ratsnest: Option<Color>,
     pub bus: Color,
@@ -340,312 +328,6 @@ impl CanvasColors {
 const fn c(r: u8, g: u8, b: u8) -> Color {
     Color { r, g, b, a: 0xFF }
 }
-
-// ===== Catppuccin Mocha =====
-
-const CATPPUCCIN_MOCHA_TOKENS: ThemeTokens = ThemeTokens {
-    bg: c(0x1E, 0x1E, 0x2E),
-    paper: c(0x31, 0x32, 0x44),
-    text: c(0xCD, 0xD6, 0xF4),
-    text_secondary: c(0xA6, 0xAD, 0xC8),
-    accent: c(0x89, 0xB4, 0xFA),
-    border: c(0x45, 0x47, 0x5A),
-    panel_bg: c(0x18, 0x18, 0x25),
-    toolbar_bg: c(0x1E, 0x1E, 0x2E),
-    statusbar_bg: c(0x18, 0x18, 0x25),
-    selection: c(0x58, 0x5B, 0x70),
-    hover: c(0x45, 0x47, 0x5A),
-    error: c(0xF3, 0x8B, 0xA8),
-    warning: c(0xFA, 0xB3, 0x87),
-    success: c(0xA6, 0xE3, 0xA1),
-    extended: ExtendedTokens::NONE,
-};
-
-const CATPPUCCIN_MOCHA_CANVAS: CanvasColors = CanvasColors {
-    background: c(0x1E, 0x1E, 0x2E),
-    paper: c(0x31, 0x32, 0x44),
-    wire: c(0xA6, 0xE3, 0xA1),
-    junction: c(0xA6, 0xE3, 0xA1),
-    body: c(0x89, 0xB4, 0xFA),
-    body_fill: c(0x31, 0x32, 0x44),
-    pin: c(0xCD, 0xD6, 0xF4),
-    reference: c(0x89, 0xB4, 0xFA),
-    value: c(0xF5, 0xC2, 0xE7),
-    net_label: c(0x94, 0xE2, 0xD5),
-    global_label: c(0xF9, 0xE2, 0xAF),
-    hier_label: c(0xFA, 0xB3, 0x87),
-    no_connect: c(0xF3, 0x8B, 0xA8),
-    power: c(0xF3, 0x8B, 0xA8),
-    erc_error: c(0xF3, 0x8B, 0xA8),
-    erc_warning: c(0xF3, 0x8B, 0xA8),
-    drc_error: c(0xF3, 0x8B, 0xA8),
-    drc_warning: c(0xF3, 0x8B, 0xA8),
-    selection: c(0xFF, 0xEE, 0x00), // Bright yellow: apart from the pin, wire and label colours
-    ratsnest: Some(c(0xF5, 0xE0, 0xDC)),
-    bus: c(0x89, 0xDC, 0xEB),
-    grid: c(0x45, 0x47, 0x5A),
-    cursor: c(0xF5, 0xE0, 0xDC),
-};
-
-// ===== VS Code Dark =====
-
-const VSCODE_DARK_TOKENS: ThemeTokens = ThemeTokens {
-    bg: c(0x1E, 0x1E, 0x1E),
-    paper: c(0x25, 0x25, 0x26),
-    text: c(0xD4, 0xD4, 0xD4),
-    text_secondary: c(0x80, 0x80, 0x80),
-    accent: c(0x00, 0x7A, 0xCC),
-    border: c(0x3C, 0x3C, 0x3C),
-    panel_bg: c(0x18, 0x18, 0x18),
-    toolbar_bg: c(0x33, 0x33, 0x33),
-    statusbar_bg: c(0x00, 0x7A, 0xCC),
-    selection: c(0x26, 0x4F, 0x78),
-    hover: c(0x2A, 0x2D, 0x2E),
-    error: c(0xF4, 0x44, 0x47),
-    warning: c(0xFF, 0x8C, 0x00),
-    success: c(0x6A, 0x99, 0x55),
-    extended: ExtendedTokens::NONE,
-};
-
-const VSCODE_DARK_CANVAS: CanvasColors = CanvasColors {
-    background: c(0x1E, 0x1E, 0x1E),
-    paper: c(0x25, 0x25, 0x26),
-    wire: c(0x6A, 0x99, 0x55),
-    junction: c(0x6A, 0x99, 0x55),
-    body: c(0x56, 0x9C, 0xD6),
-    body_fill: c(0x25, 0x25, 0x26),
-    pin: c(0xD4, 0xD4, 0xD4),
-    reference: c(0x56, 0x9C, 0xD6),
-    value: c(0xCE, 0x91, 0x78),
-    net_label: c(0x4E, 0xC9, 0xB0),
-    global_label: c(0xDC, 0xDC, 0xAA),
-    hier_label: c(0xFF, 0x8C, 0x00),
-    no_connect: c(0xF4, 0x44, 0x47),
-    power: c(0xF4, 0x44, 0x47),
-    erc_error: c(0xF4, 0x44, 0x47),
-    erc_warning: c(0xF4, 0x44, 0x47),
-    drc_error: c(0xF4, 0x44, 0x47),
-    drc_warning: c(0xF4, 0x44, 0x47),
-    selection: c(0xFF, 0xFF, 0x00), // Bright yellow: apart from the pin, wire and label colours
-    ratsnest: Some(c(0xFF, 0xFF, 0xFF)),
-    bus: c(0x9C, 0xDC, 0xFE),
-    grid: c(0x3C, 0x3C, 0x3C),
-    cursor: c(0xFF, 0xFF, 0xFF),
-};
-
-// ===== Signex =====
-
-const SIGNEX_TOKENS: ThemeTokens = ThemeTokens {
-    bg: c(0x2D, 0x2D, 0x30),
-    paper: c(0x1E, 0x1E, 0x1E),
-    text: c(0xDC, 0xDC, 0xDC),
-    text_secondary: c(0x9B, 0x9B, 0x9B),
-    accent: c(0xE8, 0x91, 0x2D),
-    border: c(0x3F, 0x3F, 0x46),
-    panel_bg: c(0x25, 0x25, 0x28),
-    toolbar_bg: c(0x2D, 0x2D, 0x30),
-    statusbar_bg: c(0x25, 0x25, 0x28),
-    selection: c(0x51, 0x51, 0x55),
-    hover: c(0x3F, 0x3F, 0x46),
-    error: c(0xF4, 0x4E, 0x4E),
-    warning: c(0xE8, 0x91, 0x2D),
-    success: c(0x57, 0xA6, 0x4A),
-    extended: ExtendedTokens::NONE,
-};
-
-const SIGNEX_CANVAS: CanvasColors = CanvasColors {
-    // Classic schematic palette — near-white sheet, dark elements. The workspace
-    // OUTSIDE the sheet follows the chrome (`SIGNEX_TOKENS.bg`) so the canvas
-    // backdrop reads as part of the dark UI instead of a detached gray slab.
-    background: c(0x2D, 0x2D, 0x30), // Chrome-aligned workspace outside sheet
-    paper: c(0xFC, 0xFC, 0xFC),      // Near-white sheet (252,252,252)
-    wire: c(0x00, 0x00, 0x80),       // Navy blue wires
-    junction: c(0x00, 0x00, 0x80),   // Navy blue junction dots
-    body: c(0x80, 0x60, 0x00),       // Brown component body border
-    body_fill: c(0xFF, 0xFF, 0x80),  // Light yellow component fill
-    pin: c(0x00, 0x00, 0x00),        // Black pin lines
-    reference: c(0x80, 0x00, 0x00),  // Dark red designator (R1, C1…)
-    value: c(0x00, 0x00, 0x80),      // Navy blue value/comment text
-    net_label: c(0x80, 0x00, 0x00),  // Dark red / burgundy net labels
-    global_label: c(0x80, 0x00, 0x00), // Altium maroon port outline/text
-    hier_label: c(0x80, 0x00, 0x00), // Altium maroon hierarchical port outline/text
-    no_connect: c(0x80, 0x00, 0x00), // Dark red X marks
-    power: c(0x80, 0x00, 0x00),      // Dark red power ports (VCC/GND)
-    erc_error: c(0x80, 0x00, 0x00),
-    erc_warning: c(0x80, 0x00, 0x00),
-    drc_error: c(0x80, 0x00, 0x00),
-    drc_warning: c(0x80, 0x00, 0x00),
-    selection: c(0x00, 0xA0, 0x00), // Altium-style green; reads on the white sheet and on dark chrome
-    ratsnest: Some(c(0x00, 0x78, 0xD4)),
-    bus: c(0x00, 0x00, 0x80),    // Navy blue bus (rendered thicker)
-    grid: c(0xC0, 0xC0, 0xC0),   // Light gray grid dots/lines
-    cursor: c(0x00, 0x00, 0x00), // Black cursor crosshair
-};
-
-// ===== Alp Lab =====
-//
-// Clone of the Signex chrome tokens with the accent swapped to the Alp
-// Lab brand cyan. The icon tree in `assets/icons/alplab/` pre-tints the
-// SVG fills to this same cyan; keeping the accent aligned so dropdown
-// chevrons, focus rings and button highlights read as one palette.
-// Canvas colours reuse SIGNEX_CANVAS for now — the schematic sheet
-// keeps the near-white sheet regardless of chrome theme.
-
-const ALPLAB_TOKENS: ThemeTokens = ThemeTokens {
-    bg: c(0x2D, 0x2D, 0x30),
-    paper: c(0x1E, 0x1E, 0x1E),
-    text: c(0xDC, 0xDC, 0xDC),
-    text_secondary: c(0x9B, 0x9B, 0x9B),
-    accent: c(0x08, 0x91, 0xB2),
-    border: c(0x3F, 0x3F, 0x46),
-    panel_bg: c(0x25, 0x25, 0x28),
-    toolbar_bg: c(0x2D, 0x2D, 0x30),
-    statusbar_bg: c(0x25, 0x25, 0x28),
-    selection: c(0x51, 0x51, 0x55),
-    hover: c(0x3F, 0x3F, 0x46),
-    error: c(0xF4, 0x4E, 0x4E),
-    warning: c(0xE8, 0x91, 0x2D),
-    success: c(0x57, 0xA6, 0x4A),
-    extended: ExtendedTokens::NONE,
-};
-
-// ===== GitHub Dark =====
-
-const GITHUB_DARK_TOKENS: ThemeTokens = ThemeTokens {
-    bg: c(0x0D, 0x11, 0x17),
-    paper: c(0x16, 0x1B, 0x22),
-    text: c(0xE6, 0xED, 0xF3),
-    text_secondary: c(0x8B, 0x94, 0x9E),
-    accent: c(0x58, 0xA6, 0xFF),
-    border: c(0x30, 0x36, 0x3D),
-    panel_bg: c(0x01, 0x04, 0x09),
-    toolbar_bg: c(0x16, 0x1B, 0x22),
-    statusbar_bg: c(0x01, 0x04, 0x09),
-    selection: c(0x38, 0x8B, 0xFD),
-    hover: c(0x17, 0x1B, 0x22),
-    error: c(0xFF, 0x7B, 0x72),
-    warning: c(0xD2, 0x9A, 0x22),
-    success: c(0x3F, 0xB9, 0x50),
-    extended: ExtendedTokens::NONE,
-};
-
-const GITHUB_DARK_CANVAS: CanvasColors = CanvasColors {
-    background: c(0x0D, 0x11, 0x17),
-    paper: c(0x16, 0x1B, 0x22),
-    wire: c(0x3F, 0xB9, 0x50),
-    junction: c(0x3F, 0xB9, 0x50),
-    body: c(0x58, 0xA6, 0xFF),
-    body_fill: c(0x16, 0x1B, 0x22),
-    pin: c(0xE6, 0xED, 0xF3),
-    reference: c(0x58, 0xA6, 0xFF),
-    value: c(0xD2, 0xA8, 0xFF),
-    net_label: c(0x7E, 0xE7, 0x87),
-    global_label: c(0xD2, 0x9A, 0x22),
-    hier_label: c(0xFE, 0xA5, 0x5F),
-    no_connect: c(0xFF, 0x7B, 0x72),
-    power: c(0xFF, 0x7B, 0x72),
-    erc_error: c(0xFF, 0x7B, 0x72),
-    erc_warning: c(0xFF, 0x7B, 0x72),
-    drc_error: c(0xFF, 0x7B, 0x72),
-    drc_warning: c(0xFF, 0x7B, 0x72),
-    selection: c(0xFF, 0xDD, 0x00), // Bright yellow: apart from the pin, wire and label colours
-    ratsnest: Some(c(0xFF, 0xFF, 0xFF)),
-    bus: c(0x79, 0xC0, 0xFF),
-    grid: c(0x30, 0x36, 0x3D),
-    cursor: c(0xFF, 0xFF, 0xFF),
-};
-
-// ===== Solarized Light =====
-
-const SOLARIZED_LIGHT_TOKENS: ThemeTokens = ThemeTokens {
-    bg: c(0xFD, 0xF6, 0xE3),
-    paper: c(0xEE, 0xE8, 0xD5),
-    text: c(0x65, 0x7B, 0x83),
-    text_secondary: c(0x93, 0xA1, 0xA1),
-    accent: c(0x26, 0x8B, 0xD2),
-    border: c(0x93, 0xA1, 0xA1),
-    panel_bg: c(0xFD, 0xF6, 0xE3),
-    toolbar_bg: c(0xEE, 0xE8, 0xD5),
-    statusbar_bg: c(0xEE, 0xE8, 0xD5),
-    selection: c(0x26, 0x8B, 0xD2),
-    hover: c(0xEE, 0xE8, 0xD5),
-    error: c(0xDC, 0x32, 0x2F),
-    warning: c(0xCB, 0x4B, 0x16),
-    success: c(0x85, 0x99, 0x00),
-    extended: ExtendedTokens::NONE,
-};
-
-const SOLARIZED_LIGHT_CANVAS: CanvasColors = CanvasColors {
-    background: c(0xFD, 0xF6, 0xE3),
-    paper: c(0xEE, 0xE8, 0xD5),
-    wire: c(0x85, 0x99, 0x00),
-    junction: c(0x85, 0x99, 0x00),
-    body: c(0x26, 0x8B, 0xD2),
-    body_fill: c(0xEE, 0xE8, 0xD5),
-    pin: c(0x65, 0x7B, 0x83),
-    reference: c(0x26, 0x8B, 0xD2),
-    value: c(0xD3, 0x36, 0x82),
-    net_label: c(0x2A, 0xA1, 0x98),
-    global_label: c(0xB5, 0x89, 0x00),
-    hier_label: c(0xCB, 0x4B, 0x16),
-    no_connect: c(0xDC, 0x32, 0x2F),
-    power: c(0xDC, 0x32, 0x2F),
-    erc_error: c(0xDC, 0x32, 0x2F),
-    erc_warning: c(0xDC, 0x32, 0x2F),
-    drc_error: c(0xDC, 0x32, 0x2F),
-    drc_warning: c(0xDC, 0x32, 0x2F),
-    selection: c(0x00, 0x2B, 0x36),
-    ratsnest: Some(c(0x00, 0x2B, 0x36)),
-    bus: c(0x6C, 0x71, 0xC4),
-    grid: c(0x93, 0xA1, 0xA1),
-    cursor: c(0x00, 0x2B, 0x36),
-};
-
-// ===== Nord =====
-
-const NORD_TOKENS: ThemeTokens = ThemeTokens {
-    bg: c(0x2E, 0x34, 0x40),
-    paper: c(0x3B, 0x42, 0x52),
-    text: c(0xEC, 0xEF, 0xF4),
-    text_secondary: c(0xD8, 0xDE, 0xE9),
-    accent: c(0x88, 0xC0, 0xD0),
-    border: c(0x4C, 0x56, 0x6A),
-    panel_bg: c(0x2E, 0x34, 0x40),
-    toolbar_bg: c(0x3B, 0x42, 0x52),
-    statusbar_bg: c(0x2E, 0x34, 0x40),
-    selection: c(0x43, 0x4C, 0x5E),
-    hover: c(0x43, 0x4C, 0x5E),
-    error: c(0xBF, 0x61, 0x6A),
-    warning: c(0xEB, 0xCB, 0x8B),
-    success: c(0xA3, 0xBE, 0x8C),
-    extended: ExtendedTokens::NONE,
-};
-
-const NORD_CANVAS: CanvasColors = CanvasColors {
-    background: c(0x2E, 0x34, 0x40),
-    paper: c(0x3B, 0x42, 0x52),
-    wire: c(0xA3, 0xBE, 0x8C),
-    junction: c(0xA3, 0xBE, 0x8C),
-    body: c(0x88, 0xC0, 0xD0),
-    body_fill: c(0x3B, 0x42, 0x52),
-    pin: c(0xEC, 0xEF, 0xF4),
-    reference: c(0x88, 0xC0, 0xD0),
-    value: c(0xB4, 0x8E, 0xAD),
-    net_label: c(0x8F, 0xBC, 0xBB),
-    global_label: c(0xEB, 0xCB, 0x8B),
-    hier_label: c(0xD0, 0x87, 0x70),
-    no_connect: c(0xBF, 0x61, 0x6A),
-    power: c(0xBF, 0x61, 0x6A),
-    erc_error: c(0xBF, 0x61, 0x6A),
-    erc_warning: c(0xBF, 0x61, 0x6A),
-    drc_error: c(0xBF, 0x61, 0x6A),
-    drc_warning: c(0xBF, 0x61, 0x6A),
-    selection: c(0xFF, 0xCC, 0x00), // Bright amber: apart from the pin, wire and label colours
-    ratsnest: Some(c(0xEC, 0xEF, 0xF4)),
-    bus: c(0x81, 0xA1, 0xC1),
-    grid: c(0x4C, 0x56, 0x6A),
-    cursor: c(0xEC, 0xEF, 0xF4),
-};
 
 // ===== Graphite =====
 //
@@ -792,33 +474,15 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
 
 pub fn theme_tokens(id: ThemeId) -> ThemeTokens {
     match id {
-        ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_TOKENS,
-        ThemeId::VsCodeDark => VSCODE_DARK_TOKENS,
-        ThemeId::Signex => SIGNEX_TOKENS,
-        ThemeId::Alplab => ALPLAB_TOKENS,
-        ThemeId::GitHubDark => GITHUB_DARK_TOKENS,
-        ThemeId::SolarizedLight => SOLARIZED_LIGHT_TOKENS,
-        ThemeId::Nord => NORD_TOKENS,
         ThemeId::GraphiteLight => GRAPHITE_LIGHT_TOKENS,
         ThemeId::GraphiteDark => GRAPHITE_DARK_TOKENS,
-        ThemeId::Custom => SIGNEX_TOKENS, // caller must use CustomThemeFile directly
     }
 }
 
 pub fn canvas_colors(id: ThemeId) -> CanvasColors {
     match id {
-        ThemeId::CatppuccinMocha => CATPPUCCIN_MOCHA_CANVAS,
-        ThemeId::VsCodeDark => VSCODE_DARK_CANVAS,
-        ThemeId::Signex => SIGNEX_CANVAS,
-        // Alp Lab reuses the Signex schematic palette; only
-        // the chrome accent differs.
-        ThemeId::Alplab => SIGNEX_CANVAS,
-        ThemeId::GitHubDark => GITHUB_DARK_CANVAS,
-        ThemeId::SolarizedLight => SOLARIZED_LIGHT_CANVAS,
-        ThemeId::Nord => NORD_CANVAS,
         ThemeId::GraphiteLight => GRAPHITE_LIGHT_CANVAS,
         ThemeId::GraphiteDark => GRAPHITE_DARK_CANVAS,
-        ThemeId::Custom => SIGNEX_CANVAS, // caller must use CustomThemeFile directly
     }
 }
 
@@ -826,11 +490,16 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
 mod tests {
     use super::*;
 
+    fn read(stored: &str) -> ThemeId {
+        serde_json::from_value(serde_json::json!(stored)).expect("any string is a theme id")
+    }
+
     #[test]
-    fn the_signex_sheet_is_near_white() {
-        for id in [ThemeId::Signex, ThemeId::Alplab] {
-            assert_eq!(canvas_colors(id).paper, c(0xFC, 0xFC, 0xFC), "{id:?}");
-        }
+    fn the_graphite_light_sheet_is_near_white() {
+        assert_eq!(
+            canvas_colors(ThemeId::GraphiteLight).paper,
+            c(0xFD, 0xFC, 0xFA)
+        );
     }
 
     #[test]
@@ -847,8 +516,7 @@ mod tests {
 
     /// The selection outline must stand out from every item colour it can
     /// sit on or beside: wires, buses, junctions, bodies, pins, every label
-    /// kind, power and no-connect (Nord and the VS Code / GitHub darks once
-    /// matched their pin colour, and two themes a label colour).
+    /// kind, power and no-connect.
     #[test]
     fn selection_is_distinct_from_every_item_colour_in_every_builtin() {
         let apart = |a: Color, b: Color| {
@@ -881,24 +549,16 @@ mod tests {
     }
 
     #[test]
-    fn the_ratsnest_keeps_the_colour_selection_used_to_have() {
-        let old = |id| match id {
-            ThemeId::CatppuccinMocha => (0xF5, 0xE0, 0xDC),
-            ThemeId::VsCodeDark | ThemeId::GitHubDark => (0xFF, 0xFF, 0xFF),
-            ThemeId::Signex | ThemeId::Alplab | ThemeId::Custom => (0x00, 0x78, 0xD4),
-            ThemeId::SolarizedLight => (0x00, 0x2B, 0x36),
-            ThemeId::Nord => (0xEC, 0xEF, 0xF4),
-            ThemeId::GraphiteLight | ThemeId::GraphiteDark => (0x9E, 0xA3, 0xAE),
-        };
+    fn the_ratsnest_keeps_its_graphite_grey() {
         for &id in ThemeId::BUILTINS {
             let r = canvas_colors(id).ratsnest_color();
-            assert_eq!((r.r, r.g, r.b), old(id), "{id:?}");
+            assert_eq!((r.r, r.g, r.b), (0x9E, 0xA3, 0xAE), "{id:?}");
         }
     }
 
     #[test]
-    fn an_old_custom_theme_file_draws_its_ratsnest_in_its_selection_colour() {
-        let mut canvas = canvas_colors(ThemeId::Signex);
+    fn a_canvas_palette_without_a_ratsnest_draws_it_in_its_selection_colour() {
+        let mut canvas = canvas_colors(ThemeId::GraphiteLight);
         canvas.selection = Color::new(1, 2, 3, 255);
         let mut json = serde_json::to_value(canvas).unwrap();
         json.as_object_mut().unwrap().remove("ratsnest");
@@ -908,42 +568,33 @@ mod tests {
     }
 
     #[test]
-    fn the_signex_and_alplab_selection_is_green() {
-        for id in [ThemeId::Signex, ThemeId::Alplab] {
+    fn the_graphite_selection_is_green_not_the_copper_accent() {
+        assert_eq!(
+            canvas_colors(ThemeId::GraphiteLight).selection,
+            Color::from_hex("#1F9D55")
+        );
+        assert_eq!(
+            canvas_colors(ThemeId::GraphiteDark).selection,
+            Color::from_hex("#4ADE80")
+        );
+        for &id in ThemeId::BUILTINS {
             let s = canvas_colors(id).selection;
-            assert!(
-                s.g > s.r.saturating_add(0x60) && s.g > s.b.saturating_add(0x60),
-                "{id:?}"
-            );
+            assert!(s.g > s.r && s.g > s.b, "{id:?}");
+            assert_ne!(s, theme_tokens(id).accent, "{id:?}");
         }
     }
 
     #[test]
-    fn custom_theme_round_trips_marker_slots() {
-        let mut canvas = canvas_colors(ThemeId::Signex);
-        canvas.erc_error = Color::new(1, 2, 3, 255);
-        canvas.drc_warning = Color::new(9, 8, 7, 255);
-        let file = CustomThemeFile {
-            name: "t".into(),
-            tokens: theme_tokens(ThemeId::Signex),
-            canvas,
-        };
-        let json = serde_json::to_string(&file).unwrap();
-        for key in ["erc_error", "erc_warning", "drc_error", "drc_warning"] {
-            assert!(json.contains(key), "{key} missing from export");
-        }
-        let back: CustomThemeFile = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.canvas, canvas);
-    }
-
-    #[test]
-    fn graphite_is_the_default_and_both_twins_are_builtin() {
+    fn graphite_is_the_default_and_the_only_pair_of_themes() {
         assert_eq!(ThemeId::DEFAULT, ThemeId::GraphiteLight);
-        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
-            assert!(ThemeId::BUILTINS.contains(&id), "{id:?}");
-        }
+        assert_eq!(
+            ThemeId::BUILTINS,
+            &[ThemeId::GraphiteLight, ThemeId::GraphiteDark]
+        );
         assert_eq!(ThemeId::GraphiteLight.label(), "Graphite Light");
         assert_eq!(ThemeId::GraphiteDark.label(), "Graphite Dark");
+        assert!(ThemeId::GraphiteLight.is_light());
+        assert!(!ThemeId::GraphiteDark.is_light());
     }
 
     #[test]
@@ -951,19 +602,14 @@ mod tests {
         let flip = ThemeId::light_dark_counterpart;
         assert_eq!(flip(ThemeId::GraphiteLight), ThemeId::GraphiteDark);
         assert_eq!(flip(ThemeId::GraphiteDark), ThemeId::GraphiteLight);
-        assert_eq!(flip(ThemeId::Signex), ThemeId::GraphiteLight);
-        assert_eq!(flip(ThemeId::SolarizedLight), ThemeId::GraphiteDark);
     }
 
     #[test]
-    fn the_graphite_canvas_is_one_sheet_and_only_graphite_sets_extended_tokens() {
-        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+    fn the_graphite_canvas_is_one_sheet_and_every_theme_sets_extended_tokens() {
+        for &id in ThemeId::BUILTINS {
             let canvas = canvas_colors(id);
             assert_eq!(canvas.background, canvas.paper, "{id:?}");
-        }
-        for &id in ThemeId::BUILTINS {
-            let graphite = matches!(id, ThemeId::GraphiteLight | ThemeId::GraphiteDark);
-            assert_eq!(theme_tokens(id).extended.is_empty(), !graphite, "{id:?}");
+            assert!(!theme_tokens(id).extended.is_empty(), "{id:?}");
         }
     }
 
@@ -1017,28 +663,44 @@ mod tests {
     }
 
     #[test]
-    fn a_custom_theme_file_without_extended_tokens_loads_and_saves_without_them() {
-        let file = CustomThemeFile {
-            name: "t".into(),
-            tokens: theme_tokens(ThemeId::Signex),
-            canvas: canvas_colors(ThemeId::Signex),
-        };
-        let json = serde_json::to_value(&file).unwrap();
-        assert!(json["tokens"].get("extended").is_none());
-        let back: CustomThemeFile = serde_json::from_value(json.clone()).unwrap();
-        assert!(back.tokens.extended.is_empty());
-        assert_eq!(serde_json::to_value(&back).unwrap(), json);
+    fn the_graphite_ids_round_trip_through_their_stored_names() {
+        for (&id, stored) in ThemeId::BUILTINS
+            .iter()
+            .zip(["graphite_light", "graphite_dark"])
+        {
+            assert_eq!(serde_json::to_value(id).unwrap(), serde_json::json!(stored));
+            assert_eq!(read(stored), id);
+        }
     }
 
     #[test]
-    fn a_graphite_custom_theme_round_trips_its_extended_tokens() {
-        let file = CustomThemeFile {
-            name: "g".into(),
-            tokens: theme_tokens(ThemeId::GraphiteDark),
-            canvas: canvas_colors(ThemeId::GraphiteDark),
-        };
-        let back: CustomThemeFile =
-            serde_json::from_str(&serde_json::to_string(&file).unwrap()).unwrap();
-        assert_eq!(back.tokens, file.tokens);
+    fn the_retired_light_theme_migrates_to_graphite_light() {
+        assert_eq!(read("solarized_light"), ThemeId::GraphiteLight);
+    }
+
+    #[test]
+    fn each_retired_dark_theme_migrates_to_graphite_dark() {
+        for stored in [
+            "signex",
+            "alplab",
+            "vs_code_dark",
+            "catppuccin_mocha",
+            "git_hub_dark",
+            "nord",
+        ] {
+            assert_eq!(read(stored), ThemeId::GraphiteDark, "{stored}");
+        }
+    }
+
+    #[test]
+    fn the_retired_custom_id_migrates_to_graphite_dark() {
+        assert_eq!(read("custom"), ThemeId::GraphiteDark);
+    }
+
+    #[test]
+    fn an_unknown_stored_id_reads_as_the_default_without_failing() {
+        for stored in ["", "monokai", "Graphite Light", "GRAPHITE_DARK"] {
+            assert_eq!(read(stored), ThemeId::DEFAULT, "{stored:?}");
+        }
     }
 }

@@ -92,7 +92,16 @@ fn white_on_accent_fill_reaches_4_5_to_1_in_every_state_on_every_builtin() {
 
 #[test]
 fn accent_fill_keeps_a_passing_accent_and_the_hue_of_a_darkened_one() {
-    for (id, t) in builtin_tokens() {
+    // Both Graphite accents pass, so an orange that fails (the retired
+    // Signex accent) keeps the darkening branch covered.
+    let failing = ThemeTokens {
+        accent: signex_types::theme::Color::from_hex("#E8912D"),
+        ..crate::styles::legacy_tokens_fixture()
+    };
+    assert!(contrast_ratio(Color::WHITE, accent(&failing)) < 4.5);
+    let mut cases = builtin_tokens();
+    cases.push((ThemeId::DEFAULT, failing));
+    for (id, t) in cases {
         let (acc, fill) = (accent(&t), accent_fill(&t));
         if contrast_ratio(Color::WHITE, acc) >= 4.5 {
             assert_eq!(fill, acc, "{id:?}: passing accent must be unchanged");
@@ -103,7 +112,7 @@ fn accent_fill_keeps_a_passing_accent_and_the_hue_of_a_darkened_one() {
             assert!(relative_luminance(fill) < relative_luminance(acc), "{id:?}");
         }
     }
-    let vs = signex_types::theme::theme_tokens(ThemeId::VsCodeDark);
+    let vs = signex_types::theme::theme_tokens(ThemeId::GraphiteDark);
     assert_eq!(accent_fill(&vs), accent(&vs));
 }
 

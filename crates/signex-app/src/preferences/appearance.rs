@@ -1,5 +1,5 @@
-//! Appearance section — theme picker cards, custom-theme import/export,
-//! UI font, and the schematic / symbol-editor render-style pick-lists.
+//! Appearance section — theme picker cards, UI font, and the
+//! schematic / symbol-editor render-style pick-lists.
 //!
 //! Moved verbatim from the former single-file `preferences` module —
 //! pure view code, zero behaviour change.
@@ -35,8 +35,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_ui_scale_percent,
         draft_window_controls_placement,
         window_controls_restart_note,
-        custom_name,
-        theme_status,
         ..
     } = v;
     let mut col: iced::widget::Column<Element<'a, PrefMsg>> =
@@ -46,7 +44,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     if crate::styles::is_graphite(v.panel_tokens) {
         col = col.push(super::theme_cards::theme_section(
             draft_theme,
-            custom_name,
             v.panel_tokens,
         ));
         col = col.push(Space::new().height(10).boxed());
@@ -66,51 +63,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 "Graphite Dark",
                 "Graphite Light's dark twin",
             ),
-            (
-                ThemeId::Signex,
-                "Signex",
-                "Default Signex schematic palette",
-            ),
-            (
-                ThemeId::Alplab,
-                "Alp Lab",
-                "Alp Lab brand cyan accent on the Signex chrome",
-            ),
-            (
-                ThemeId::VsCodeDark,
-                "VS Code Dark",
-                "VS Code inspired dark theme",
-            ),
-            (
-                ThemeId::CatppuccinMocha,
-                "Catppuccin Mocha",
-                "Warm soft dark with pastels",
-            ),
-            (
-                ThemeId::GitHubDark,
-                "GitHub Dark",
-                "GitHub's dark mode colors",
-            ),
-            (
-                ThemeId::SolarizedLight,
-                "Solarized Light",
-                "Warm light tone-on-tone",
-            ),
-            (ThemeId::Nord, "Nord", "Arctic blue cool dark theme"),
         ];
 
-        // Build list of all theme entries including optional custom
-        let mut entries: Vec<(ThemeId, String, &'static str)> = builtins
+        let entries: Vec<(ThemeId, String, &'static str)> = builtins
             .iter()
             .map(|&(id, name, desc)| (id, name.to_string(), desc))
             .collect();
-        if let Some(name) = custom_name {
-            entries.push((
-                ThemeId::Custom,
-                format!("\u{2728} {name}"),
-                "Custom imported theme",
-            ));
-        }
 
         // Rows of 2
         let mut i = 0;
@@ -132,34 +90,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             col = col.push(Space::new().height(10).boxed());
             i += 2;
         }
-    }
-
-    // ── Custom theme import/export ──
-    col = col.push(Space::new().height(4).boxed());
-    col = col.push(
-        row![
-            import_btn(v.panel_tokens),
-            Space::new().width(8),
-            export_btn(v.panel_tokens),
-            Space::new().width(Length::Fill),
-        ]
-        .align_y(iced::Alignment::Center)
-        .boxed(),
-    );
-
-    // Export writes a file the user picked in a save dialog; the write
-    // can fail (read-only volume, full disk, a path that vanished
-    // between pick and write). Report it here rather than letting the
-    // user assume the theme was saved (#533). Empty = nothing painted,
-    // so the row keeps its old height until there is something to say.
-    if !theme_status.is_empty() {
-        col = col.push(Space::new().height(6).boxed());
-        col = col.push(
-            text(theme_status)
-                .size(TS.caption)
-                .style(text_muted)
-                .boxed(),
-        );
     }
 
     // ── Divider ──
@@ -592,28 +522,6 @@ fn theme_card<'a>(
         }
     })
     .boxed()
-}
-
-fn import_btn<'a>(t: &signex_types::theme::ThemeTokens) -> Element<'a, PrefMsg> {
-    if crate::styles::is_graphite(t) {
-        return super::graphite_fields::theme_io_button("Import Theme…", PrefMsg::ImportTheme, t);
-    }
-    button(text("⬆ Import Theme…").size(TS.body))
-        .padding([5.0, SP.l])
-        .on_press(PrefMsg::ImportTheme)
-        .style(primary_button_style)
-        .boxed()
-}
-
-fn export_btn<'a>(t: &signex_types::theme::ThemeTokens) -> Element<'a, PrefMsg> {
-    if crate::styles::is_graphite(t) {
-        return super::graphite_fields::theme_io_button("Export Theme…", PrefMsg::ExportTheme, t);
-    }
-    button(text("⬇ Export Theme…").size(TS.body))
-        .padding([5.0, SP.l])
-        .on_press(PrefMsg::ExportTheme)
-        .style(primary_button_style)
-        .boxed()
 }
 
 /// Where the minimize / maximize / close buttons go, with a restart note

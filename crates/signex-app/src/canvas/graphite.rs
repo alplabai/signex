@@ -51,12 +51,13 @@ mod tests {
     use signex_types::theme::{ThemeId, theme_tokens};
 
     #[test]
-    fn only_graphite_themes_have_canvas_inks() {
+    fn every_theme_has_canvas_inks_and_legacy_tokens_none() {
         for &id in ThemeId::BUILTINS {
             let ink = GraphiteCanvasInk::from_tokens(&theme_tokens(id));
-            let graphite = matches!(id, ThemeId::GraphiteLight | ThemeId::GraphiteDark);
-            assert_eq!(ink.is_some(), graphite, "{id:?}");
+            assert!(ink.is_some(), "{id:?}");
         }
+        let legacy = crate::styles::legacy_tokens_fixture();
+        assert!(GraphiteCanvasInk::from_tokens(&legacy).is_none());
     }
 
     #[test]
