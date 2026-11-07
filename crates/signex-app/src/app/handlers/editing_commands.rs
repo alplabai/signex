@@ -184,47 +184,22 @@ impl Signex {
             .clear_content_cache();
     }
 
+    /// Undo in the main window: whatever its tab shows (see
+    /// [`Signex::undo_target`]).
     pub(crate) fn handle_undo_requested(&mut self) {
-        self.close_text_edit("the document was undone");
-        // A Project tab undoes its own section edits (#1202).
-        if let Some(project_id) = self.active_project_tab() {
-            self.step_project_tab_history(project_id, true);
-            return;
-        }
-        if self.step_component_editor_history(true) {
-            return;
-        }
-        // If the active tab is a symbol editor, delegate undo to it.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
-        {
-            if self.editor_edit_allowed(&path)
-                && let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
-                && editor.undo()
-            {
-                self.refresh_panel_ctx();
-            }
-            return;
-        }
+        let target = self.undo_target(None);
+        self.step_undo_target(&target, true);
+    }
 
-        // v0.24 Phase 1 (Track B) — footprint editor undo. When the
-        // active tab is a footprint editor, route through that
-        // editor's per-instance history stack instead of the
-        // schematic engine. Schematic + PCB tabs continue to use
-        // the engine path below.
-        if let Some(path) = self.active_footprint_editor_path()
-            && self.document_state.footprint_editors.contains_key(&path)
-        {
-            let allowed = self.editor_edit_allowed(&path);
-            if allowed
-                && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
-                && editor.undo()
-            {
-                self.refresh_panel_ctx();
-            }
-            return;
-        }
+    /// Redo in the main window, see [`Self::handle_undo_requested`].
+    pub(crate) fn handle_redo_requested(&mut self) {
+        let target = self.undo_target(None);
+        self.step_undo_target(&target, false);
+    }
 
+    /// One undo of the active sheet: its newest net-colour step, net-class
+    /// pick or engine edit, whichever came last. Whether a step ran.
+    pub(crate) fn undo_active_sheet(&mut self) -> bool {
         // Net-colour floods aren't persisted to the Standard document so
         // they don't enter the engine's history. Each colour step is
         // stamped with the engine's edit-timeline position; it is the
@@ -236,10 +211,10 @@ impl Signex {
             && let Some(step) = stack.pop()
         {
             self.swap_net_colors(path, step, true);
-            return;
+            return true;
         }
         if self.undo_net_class_pick() {
-            return;
+            return true;
         }
         let undone = self.apply_engine_undo(true);
 
@@ -250,44 +225,11 @@ impl Signex {
             // (#1831). The tool stays armed, the next click starts afresh.
             self.clear_drawing_buffers();
         }
+        undone
     }
 
-    pub(crate) fn handle_redo_requested(&mut self) {
-        self.close_text_edit("the document was redone");
-        // A Project tab redoes its own section edits (#1202).
-        if let Some(project_id) = self.active_project_tab() {
-            self.step_project_tab_history(project_id, false);
-            return;
-        }
-        if self.step_component_editor_history(false) {
-            return;
-        }
-        // If the active tab is a symbol editor, delegate redo to it.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
-        {
-            if self.editor_edit_allowed(&path)
-                && let Some(editor) = self.document_state.symbol_editors.get_mut(&path)
-                && editor.redo()
-            {
-                self.refresh_panel_ctx();
-            }
-            return;
-        }
-
-        // v0.24 Phase 1 (Track B) — same fork as undo.
-        if let Some(path) = self.active_footprint_editor_path()
-            && self.document_state.footprint_editors.contains_key(&path)
-        {
-            let allowed = self.editor_edit_allowed(&path);
-            if allowed
-                && let Some(editor) = self.document_state.footprint_editors.get_mut(&path)
-                && editor.redo()
-            {
-                self.refresh_panel_ctx();
-            }
-            return;
-        }
+    /// One redo of the active sheet, see [`Self::undo_active_sheet`].
+    pub(crate) fn redo_active_sheet(&mut self) -> bool {
         // A colour step undone at `at` came after the `at`-th engine edit
         // and before the next, so it is redone before that edit.
         let position = self.engine_undo_position();
@@ -297,16 +239,17 @@ impl Signex {
             && let Some(step) = stack.pop()
         {
             self.swap_net_colors(path, step, false);
-            return;
+            return true;
         }
         if self.redo_net_class_pick() {
-            return;
+            return true;
         }
         let redone = self.apply_engine_redo(true);
 
         if redone {
             self.interaction_state.active_canvas_mut().selected.clear();
         }
+        redone
     }
 
     pub(crate) fn handle_update_drawing_field(

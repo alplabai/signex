@@ -11,6 +11,7 @@ use iced::{Element, Length, Widget};
 
 use super::rule_editor::{RuleEditor, rule_editor};
 use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
+use crate::app::document::UndoTarget;
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -73,12 +74,12 @@ impl Signex {
             ),
         };
 
-        let history = self
-            .document_state
-            .active_document_project()
-            .and_then(|p| self.document_state.rules_history.get(&p.id));
-        let can_undo = history.is_some_and(|h| h.can_undo());
-        let can_redo = history.is_some_and(|h| h.can_redo());
+        let (can_undo, can_redo) = self.undo_availability(
+            &self
+                .document_state
+                .active_document_project()
+                .map_or(UndoTarget::None, |p| UndoTarget::ProjectRules(p.id)),
+        );
         let has_project = self.document_state.active_document_project().is_some();
         let unreadable = self.active_project_has_unreadable_rules();
         let scope_note = match (has_project, stored.is_some(), unreadable) {

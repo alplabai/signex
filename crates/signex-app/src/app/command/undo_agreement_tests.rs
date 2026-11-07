@@ -416,3 +416,119 @@ fn the_fixtures_with_history_light_the_menu() {
         assert!(menu(&app, window, "redo"), "{name}: redo lit");
     }
 }
+
+fn type_half_a_value(app: &mut Signex) {
+    for row in app.library.editors.values_mut() {
+        row.params_edit_buf.insert("v".into(), "1.".into());
+    }
+}
+
+fn buffers(app: &Signex) -> usize {
+    app.library
+        .editors
+        .values()
+        .map(|row| row.params_edit_buf.len())
+        .sum()
+}
+
+/// A row with only half-typed text lights Undo, and Undo drops the text, in
+/// the tab and in the Component Preview window alike.
+#[test]
+fn a_half_typed_row_lights_undo_and_undo_drops_the_text() {
+    let _ = crate::diagnostics::init_logging();
+    for build in [component_tab, component_window] {
+        let (mut app, window) = build(Stage::Empty);
+        type_half_a_value(&mut app);
+        assert!(menu(&app, window, "undo"), "buffer-only row: undo lit");
+        assert!(!menu(&app, window, "redo"));
+        let (moved, outcome) = ran(&mut app, window, "undo");
+        assert!(moved, "{outcome:?}");
+        assert_eq!(buffers(&app), 0, "the half-typed text is dropped");
+        assert!(!menu(&app, window, "undo"));
+    }
+}
+
+/// Redo never touches half-typed text: it is dark and a no-op, and the text
+/// stays; with the text gone Redo is back.
+#[test]
+fn redo_leaves_a_half_typed_row_alone() {
+    let _ = crate::diagnostics::init_logging();
+    for build in [component_tab, component_window] {
+        let (mut app, window) = build(Stage::HasRedo);
+        assert!(menu(&app, window, "redo"));
+        type_half_a_value(&mut app);
+        assert!(!menu(&app, window, "redo"), "redo dark over typed text");
+        let (moved, outcome) = ran(&mut app, window, "redo");
+        assert!(!moved && matches!(outcome, CommandOutcome::Disabled { .. }));
+        assert_eq!(buffers(&app), 1, "the half-typed text stays");
+        assert!(menu(&app, window, "undo"), "the text can still be undone");
+    }
+}
+
+/// A window whose tab is gone has no history: it never steps the main
+/// window's document.
+#[test]
+fn a_window_without_a_tab_does_not_step_the_main_window() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, window) = window_without_a_tab(Stage::Empty);
+    assert!(!menu(&app, window, "undo"));
+    assert!(
+        menu(&app, None, "undo"),
+        "the main window's sheet keeps its step"
+    );
+    let (moved, outcome) = ran(&mut app, window, "undo");
+    assert!(!moved && matches!(outcome, CommandOutcome::Disabled { .. }));
+    assert!(menu(&app, None, "undo"));
+}
+
+/// The ERC dialog's own Undo / Redo buttons read the menu's predicate.
+#[test]
+fn the_erc_dialog_buttons_read_the_same_predicate_as_the_menu() {
+    let _ = crate::diagnostics::init_logging();
+    for stage in STAGES {
+        let (app, window) = rules(stage);
+        let target = app.undo_target(window);
+        assert_eq!(
+            app.undo_availability(&target),
+            (menu(&app, window, "undo"), menu(&app, window, "redo")),
+            "{stage:?}"
+        );
+        assert!(matches!(
+            target,
+            crate::app::document::UndoTarget::ProjectRules(_)
+        ));
+    }
+}
+
+/// Rule undo is capped (it was unbounded before #661).
+#[test]
+fn rules_history_keeps_the_newest_hundred_steps() {
+    let mut history = crate::app::state::rules_history::RulesHistory::default();
+    for _ in 0..101 {
+        history.record(None);
+    }
+    assert_eq!(history.undo_len(), 100);
+}
+
+/// Project dirty is the byte comparison; the rules history's own save point
+/// (never moved by a save) is not consulted: undoing back to the saved bytes
+/// reads clean although the history sits one step above its start.
+#[test]
+fn rules_history_is_never_consulted_for_project_dirty() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _w) = rules(Stage::HasUndo);
+    let path = app.document_state.projects[0].path.clone();
+    let id = app.document_state.projects[0].id;
+    // The file now holds the stored-and-edited rules.
+    app.document_state.mark_documents_clean_where(|_| true);
+    app.document_state.note_project_clean_state(id);
+    let _ =
+        app.handle_erc_severity_changed(signex_erc::RuleKind::UnusedPin, signex_erc::Severity::Off);
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(app.undo_project_rules());
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "back at the saved bytes"
+    );
+    assert!(app.document_state.rules_history[&id].can_undo());
+}

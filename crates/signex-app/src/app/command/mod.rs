@@ -27,6 +27,8 @@ pub use outcome::CommandOutcome;
 
 use iced::Task;
 
+use super::document::{DocumentKey, UndoTarget};
+
 use super::*;
 
 impl Signex {
@@ -113,13 +115,21 @@ impl Signex {
             });
             return (outcome, task);
         }
-        // Undo / Redo typed in a Component Preview window step that
-        // window's row history, not the main window's active tab (#1854).
+        // Undo / Redo typed in a window that shows a document of its own
+        // (a Component Preview, an undocked editor) step that document, gated
+        // by its history, never the main window's tab (#1854). A sheet is
+        // stepped through the swap above; the ERC dialog through its message.
         if matches!(command.as_str(), "undo" | "redo")
-            && let Some(address) = self.window_component_editor(window)
+            && self.undo_window_is_own(window)
+            && let target = self.undo_target(window)
+            && !matches!(
+                target,
+                UndoTarget::ProjectRules(_)
+                    | UndoTarget::Document(DocumentKey::Schematic(_) | DocumentKey::Pcb(_))
+            )
         {
-            let (can_undo, can_redo) = self.component_history_of(&address);
             let undo = command.as_str() == "undo";
+            let (can_undo, can_redo) = self.undo_availability(&target);
             if !(if undo { can_undo } else { can_redo }) {
                 let reason = if undo {
                     "Nothing to undo"
@@ -128,7 +138,7 @@ impl Signex {
                 };
                 return (CommandOutcome::disabled(reason), Task::none());
             }
-            self.step_component_editor_at(&address, undo);
+            self.step_undo_target(&target, undo);
             return (CommandOutcome::Ran, Task::none());
         }
         // Close Document follows the window the stroke came from (#1787).

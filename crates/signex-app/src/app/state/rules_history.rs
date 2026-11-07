@@ -2,43 +2,56 @@
 //!
 //! The rule set is a few hundred bytes, so each step keeps the whole prior
 //! `Option<ProjectRules>` rather than an inverse command: `None` is "the
-//! project stored no rules", which makes the store action undoable too.
+//! project stores no rules", which makes the store action undoable too.
+//! The steps live in the shared snapshot [`History`] (depth capped).
 
 use signex_types::project::ProjectRules;
 
+use crate::app::History;
+
+/// Depth cap of the undo and redo stacks; a few hundred bytes a step.
+const HISTORY_DEPTH: usize = 100;
+
 /// One project's rule-edit history.
-#[derive(Debug, Default, Clone)]
-pub struct RulesHistory {
-    undo: Vec<Option<ProjectRules>>,
-    redo: Vec<Option<ProjectRules>>,
+///
+/// Its save point is never read: the `.snxprj` is clean when it encodes to
+/// the bytes on disk (`state/dirty/project_history.rs`), so no `is_dirty`
+/// is exposed here.
+#[derive(Debug)]
+pub struct RulesHistory(History<Option<ProjectRules>>);
+
+impl Default for RulesHistory {
+    fn default() -> Self {
+        Self(History::at_start(HISTORY_DEPTH))
+    }
 }
 
 impl RulesHistory {
     /// Remember `before` as the state to return to; a new edit drops redo.
     pub fn record(&mut self, before: Option<ProjectRules>) {
-        self.undo.push(before);
-        self.redo.clear();
+        self.0.record(before);
     }
 
     /// Step back from `current`; returns the state to restore.
     pub fn undo(&mut self, current: Option<ProjectRules>) -> Option<Option<ProjectRules>> {
-        let previous = self.undo.pop()?;
-        self.redo.push(current);
-        Some(previous)
+        self.0.step(current, true)
     }
 
     /// Step forward from `current`; returns the state to restore.
     pub fn redo(&mut self, current: Option<ProjectRules>) -> Option<Option<ProjectRules>> {
-        let next = self.redo.pop()?;
-        self.undo.push(current);
-        Some(next)
+        self.0.step(current, false)
     }
 
     pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
+        self.0.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
+        self.0.can_redo()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn undo_len(&self) -> usize {
+        self.0.undo_len()
     }
 }
