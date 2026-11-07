@@ -22,6 +22,8 @@ use crate::app::Message;
 use crate::menu_bar::MenuMessage;
 use crate::styles;
 
+mod graphite;
+
 /// Base text size every other measure on this screen is derived from.
 const BASE: f32 = crate::styles::TypeScale::DEFAULT.body;
 
@@ -142,6 +144,9 @@ pub fn view<'a>(
     open_shortcut: &str,
     recent: &'a [PathBuf],
 ) -> Element<'a, Message> {
+    if styles::is_graphite(tokens) {
+        return graphite::view(tokens, open_shortcut, recent);
+    }
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
     let button_w = Length::Fixed(BASE * 20.0);

@@ -72,6 +72,8 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Signal panel mode; view-only, kept across context rebuilds.
+    pub signal_mode: super::signal::SignalMode,
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
     /// Persistent project tree — toggle state survives across renders.

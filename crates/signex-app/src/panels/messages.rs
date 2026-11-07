@@ -634,6 +634,8 @@ pub enum PanelMsg {
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
+    /// Signal panel: the Assistant / Generator switch (view-only state).
+    Signal(super::signal::SignalMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to

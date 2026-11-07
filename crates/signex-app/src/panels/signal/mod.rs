@@ -1,0 +1,33 @@
+//! Signal panel: the AI Design shell. The layout is real; every action that
+//! needs the AI backend is a disabled control with a tooltip.
+
+mod state;
+mod view;
+
+pub use state::{SignalMode, SignalMsg};
+pub use view::view;
+
+/// Tooltip of every Signal / Start control that has no backend yet.
+pub const COMING_SOON: &str = "Coming in AI Design";
+
+/// Wrap a disabled stub in the "Coming in AI Design" tooltip.
+pub fn coming_soon<'a, M: 'a>(
+    content: iced::Element<'a, M>,
+    tokens: &signex_types::theme::ThemeTokens,
+    position: iced::widget::tooltip::Position,
+) -> iced::Element<'a, M> {
+    use crate::styles::{TypeScale, ti};
+    use iced::Widget as _;
+    use iced::widget::{container, text, tooltip};
+    let hint = container(
+        text(COMING_SOON)
+            .size(TypeScale::DEFAULT.caption)
+            .color(ti(tokens.text)),
+    )
+    .padding([3, 8])
+    .style(signex_widgets::active_bar_dropdown::tooltip_style(
+        ti(tokens.hover),
+        ti(tokens.border),
+    ));
+    tooltip(content, hint, position).gap(4).boxed()
+}
