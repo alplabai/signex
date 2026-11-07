@@ -4,7 +4,7 @@ One question, one owner: "does this document hold edits that are not on
 disk?" is answered by `DocumentState::is_document_dirty(path)`
 (`crates/signex-app/src/app/state/dirty.rs`). Epic #661, ADR-0003 gap G8.
 
-The tab dot and the Component row collector ask `Document` (`app/document`, a `DocumentKey` derived from the tab, resolved by `Signex::document`); quit, Close Project and the title count read `unsaved_set()` (below). Ctrl+S, the Save As dialog and the autosave tick name their document as a `DocumentKey` and dispatch by kind; Component rows and projects are not autosaved (#2141).
+The tab dot and the Component row collector ask `Document` (`app/document`, a `DocumentKey` derived from the tab, resolved by `Signex::document`); quit, Close Project and the title count read `unsaved_set()` (below). Ctrl+S, the Save As dialog and the autosave tick name their document as a `DocumentKey` and dispatch by kind; the tick writes dirty projects and Component rows as bytes (`autosave_project.rs`, `autosave_row.rs`).
 
 ## What is stored
 

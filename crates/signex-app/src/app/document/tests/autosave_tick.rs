@@ -15,6 +15,8 @@ struct Fx {
     dir: tempfile::TempDir,
     recovery: PathBuf,
     names: Vec<&'static str>,
+    /// The dirty Component row's tab path, listed in `names` as `"row"`.
+    row_path: PathBuf,
     /// The save job and the autosave flag that mark two documents busy.
     _holds: (Box<dyn std::any::Any>, Box<dyn std::any::Any>),
 }
@@ -92,6 +94,13 @@ fn setup() -> Fx {
     app.document_state.mark_document_dirty(&project);
     let (row_app, row_tab) = fixture(dir.path(), Kind::Row, true);
     app.library.editors = row_app.library.editors;
+    let row_path = app
+        .library
+        .editors
+        .keys()
+        .next()
+        .unwrap()
+        .synthetic_tab_path();
     app.document_state.tabs.push(row_tab);
 
     app.document_state.autosave.set_dir(Some(recovery.clone()));
@@ -112,13 +121,24 @@ fn setup() -> Fx {
         "dirty.snxfpt",
         "clean.snxfpt",
         "p.snxprj",
+        "row",
     ];
     Fx {
         app,
         dir,
         recovery,
         names,
+        row_path,
         _holds: (Box::new(save), Box::new(in_flight)),
+    }
+}
+
+impl Fx {
+    fn path_of(&self, name: &str) -> PathBuf {
+        match name {
+            "row" => self.row_path.clone(),
+            _ => self.dir.path().join(name),
+        }
     }
 }
 
@@ -129,12 +149,12 @@ fn copies_after_tick(f: &mut Fx) -> Vec<&'static str> {
     f.names
         .iter()
         .copied()
-        .filter(|n| sidecar::sidecar_path(&f.recovery, &f.dir.path().join(n)).exists())
+        .filter(|n| sidecar::sidecar_path(&f.recovery, &f.path_of(n)).exists())
         .collect()
 }
 
 #[test]
-fn a_tick_writes_a_copy_for_each_dirty_sheet_pcb_and_draft_and_nothing_else() {
+fn a_tick_writes_a_copy_for_each_dirty_document_and_nothing_else() {
     let mut f = setup();
     assert_eq!(
         copies_after_tick(&mut f),
@@ -145,6 +165,8 @@ fn a_tick_writes_a_copy_for_each_dirty_sheet_pcb_and_draft_and_nothing_else() {
             "saving.snxpcb",
             "dirty.snxsym",
             "dirty.snxfpt",
+            "p.snxprj",
+            "row",
         ]
     );
 }
@@ -169,14 +191,14 @@ fn a_second_tick_rewrites_nothing_and_a_save_clears_the_copy() {
 }
 
 #[test]
-fn a_path_holds_recoverable_edits_only_while_its_sheet_pcb_or_draft_is_dirty() {
+fn a_path_holds_recoverable_edits_only_while_its_document_is_dirty() {
     let f = setup();
     let holds: Vec<&str> = f
         .names
         .iter()
         .copied()
         .chain(["unknown.snxsch"])
-        .filter(|n| f.app.holds_recoverable_edits(&f.dir.path().join(n)))
+        .filter(|n| f.app.holds_recoverable_edits(&f.path_of(n)))
         .collect();
     assert_eq!(
         holds,
@@ -189,6 +211,32 @@ fn a_path_holds_recoverable_edits_only_while_its_sheet_pcb_or_draft_is_dirty() {
             "saving.snxpcb",
             "dirty.snxsym",
             "dirty.snxfpt",
+            "p.snxprj",
+            "row",
         ]
     );
+}
+
+/// The sidecar sweep keeps the copy of every document that still holds
+/// edits, a project and a Component row included, and removes it once the
+/// document is clean.
+#[test]
+fn the_sweep_keeps_a_dirty_projects_and_rows_copy_and_removes_it_when_clean() {
+    let mut f = setup();
+    let first = copies_after_tick(&mut f);
+    assert!(
+        first.contains(&"p.snxprj") && first.contains(&"row"),
+        "{first:?}"
+    );
+    let project = f.path_of("p.snxprj");
+    f.app.document_state.clear_document_dirty(&project);
+    for editor in f.app.library.editors.values_mut() {
+        editor.dirty = false;
+    }
+    let after = copies_after_tick(&mut f);
+    assert!(
+        !after.contains(&"p.snxprj") && !after.contains(&"row"),
+        "{after:?}"
+    );
+    assert!(after.contains(&"tab.snxsch"), "{after:?}");
 }

@@ -62,10 +62,11 @@ impl Signex {
         kinds
             .into_iter()
             .any(|key| self.key_holds_recoverable_edits(&key(path.to_path_buf())))
+            || self.is_dirty_project(path)
+            || self.is_dirty_row(path)
     }
 
     /// Does the document `key` names hold edits a recovery copy protects?
-    /// Component rows and projects are not autosaved (#2141).
     fn key_holds_recoverable_edits(&self, key: &DocumentKey) -> bool {
         match key {
             DocumentKey::Schematic(path) => self.is_dirty_schematic(path),
@@ -73,12 +74,16 @@ impl Signex {
             DocumentKey::Symbol(path) | DocumentKey::Footprint(path) => {
                 self.is_dirty_primitive_editor(path)
             }
-            DocumentKey::Row(_) | DocumentKey::Project(_) => false,
+            DocumentKey::Project(id) => self
+                .document_state
+                .project_by_id(*id)
+                .is_some_and(|project| self.is_dirty_project(&project.path)),
+            DocumentKey::Row(address) => self.is_dirty_row(&address.synthetic_tab_path()),
         }
     }
 
-    /// The documents a tick writes a copy for: dirty sheets, PCBs and
-    /// symbol and footprint drafts, in that order.
+    /// The documents a tick writes a copy for: dirty sheets, PCBs, symbol
+    /// and footprint drafts, projects and Component rows, in that order.
     fn autosave_candidates(&self) -> Vec<DocumentKey> {
         let docs = &self.document_state;
         let sheets = docs
@@ -94,7 +99,23 @@ impl Signex {
                 false => DocumentKey::Footprint(path),
             }
         });
-        sheets.chain(pcbs).chain(drafts).collect()
+        let projects = docs
+            .projects
+            .iter()
+            .filter(|project| self.is_dirty_project(&project.path))
+            .map(|project| DocumentKey::Project(project.id));
+        let rows = self
+            .library
+            .editors
+            .iter()
+            .filter(|(_, editor)| editor.dirty || editor.saving_row.is_some())
+            .map(|(address, _)| DocumentKey::Row(address.clone()));
+        sheets
+            .chain(pcbs)
+            .chain(drafts)
+            .chain(projects)
+            .chain(rows)
+            .collect()
     }
 
     /// The write of `key`'s recovery copy, by the kind of document.
@@ -105,7 +126,16 @@ impl Signex {
             DocumentKey::Symbol(path) | DocumentKey::Footprint(path) => {
                 self.autosave_primitive_snapshot_task(dir, path)
             }
-            DocumentKey::Row(_) | DocumentKey::Project(_) => None,
+            DocumentKey::Project(id) => {
+                let path = self.document_state.project_by_id(*id)?.path.clone();
+                let bytes = self.project_autosave_bytes(&path)?;
+                self.autosave_bytes_task(dir, &path, bytes)
+            }
+            DocumentKey::Row(address) => {
+                let path = address.synthetic_tab_path();
+                let bytes = self.row_autosave_bytes(&path)?;
+                self.autosave_bytes_task(dir, &path, bytes)
+            }
         }
     }
 
