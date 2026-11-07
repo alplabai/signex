@@ -4,7 +4,7 @@ One question, one owner: "does this document hold edits that are not on
 disk?" is answered by `DocumentState::is_document_dirty(path)`
 (`crates/signex-app/src/app/state/dirty.rs`). Epic #661, ADR-0003 gap G8.
 
-The tab dot and the Component row collector ask `Document` (`app/document`, a `DocumentKey` derived from the tab, resolved by `Signex::document`); quit, Close Project and the title count still read the path set until slice 5c of #661.
+The tab dot and the Component row collector ask `Document` (`app/document`, a `DocumentKey` derived from the tab, resolved by `Signex::document`); quit, Close Project and the title count read `unsaved_set()` (below).
 
 ## What is stored
 
@@ -19,7 +19,7 @@ title-bar "N unsaved", the quit and close-project gates, Save All, the
 History panel and the project tree all read the one query (or
 `dirty_document_paths()`, the union of the stored set and the dirty drafts).
 
-`Signex::unsaved_set()` (`app/document/unsaved.rs`) lists them once: each unsaved file's path, and the dirty rows apart. The title count (files only), Save All enablement (files and rows) and `has_dirty_documents` read it.
+`Signex::unsaved_set()` (`app/document/unsaved.rs`) lists them once: each unsaved file's path, and the dirty rows apart. The title count (files only), Save All enablement (files and rows) and `has_dirty_documents` read it. The Close Project scan, the Close Library list and the quit prompt place its files and draft subset (`unsaved_drafts`), and Save All routes each path by `document_key_for_path` (engine, then symbol or footprint editor, then project file; a PCB or manifest has no key and fails as before).
 
 ## The writers
 

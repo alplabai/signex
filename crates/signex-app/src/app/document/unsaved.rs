@@ -8,6 +8,7 @@
 
 use std::path::PathBuf;
 
+use super::DocumentKey;
 use crate::app::Signex;
 use crate::app::state::DocumentState;
 use crate::library::state::EditorAddress;
@@ -26,6 +27,19 @@ impl DocumentState {
         paths.extend(self.dirty_primitive_paths());
         paths.sort();
         paths.dedup();
+        paths
+    }
+
+    /// The unsaved files that are symbol or footprint drafts: what the Close
+    /// Project and Close Library prompts place by their owning library.
+    pub(crate) fn unsaved_drafts(&self) -> Vec<PathBuf> {
+        let mut paths = self.unsaved_files();
+        paths.retain(|path| {
+            matches!(
+                self.document_key_for_path(path),
+                Some(DocumentKey::Symbol(_) | DocumentKey::Footprint(_))
+            )
+        });
         paths
     }
 }

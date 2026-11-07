@@ -292,7 +292,8 @@ impl Signex {
         &self,
     ) -> std::collections::HashMap<std::path::PathBuf, crate::app::state::CaseFold> {
         self.document_state
-            .dirty_primitive_paths()
+            .unsaved_drafts()
+            .into_iter()
             .map(|path| {
                 let fold = self.draft_fold(&path);
                 (path, fold)
@@ -321,7 +322,8 @@ impl Signex {
         roots.dedup();
         let mut paths: Vec<std::path::PathBuf> = self
             .document_state
-            .dirty_primitive_paths()
+            .unsaved_drafts()
+            .into_iter()
             .filter(|path| {
                 // Libraries sharing a folder all list its drafts.
                 let fold = self.draft_fold(path);
