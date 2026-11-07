@@ -7,7 +7,7 @@
 //! is judged against ([`Signex::row_baseline_bytes`]). Half-typed parameter
 //! text and PDFs staged for a pinned datasheet are not in the snapshot.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use signex_library::ComponentRow;
 
@@ -37,15 +37,6 @@ impl Signex {
     pub(super) fn is_dirty_row(&self, path: &Path) -> bool {
         self.row_editor_at(path)
             .is_some_and(|editor| editor.dirty || editor.saving_row.is_some())
-    }
-
-    pub(super) fn dirty_row_paths(&self) -> Vec<PathBuf> {
-        self.library
-            .editors
-            .iter()
-            .filter(|(_, editor)| editor.dirty || editor.saving_row.is_some())
-            .map(|(address, _)| address.synthetic_tab_path())
-            .collect()
     }
 
     /// The snapshot of the row editor at `path`. `None` when none is open.

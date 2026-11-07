@@ -59,11 +59,18 @@ impl Signex {
             DocumentKey::Symbol,
             DocumentKey::Footprint,
         ];
+        let project = (self.document_state.projects.iter())
+            .find(|project| project.path == path)
+            .map(|project| DocumentKey::Project(project.id));
+        let row = (self.library.editors.keys())
+            .find(|address| address.synthetic_tab_path() == path)
+            .map(|address| DocumentKey::Row(address.clone()));
         kinds
             .into_iter()
-            .any(|key| self.key_holds_recoverable_edits(&key(path.to_path_buf())))
-            || self.is_dirty_project(path)
-            || self.is_dirty_row(path)
+            .map(|key| key(path.to_path_buf()))
+            .chain(project)
+            .chain(row)
+            .any(|key| self.key_holds_recoverable_edits(&key))
     }
 
     /// Does the document `key` names hold edits a recovery copy protects?
@@ -282,14 +289,6 @@ impl Signex {
             if let Some(task) = self.autosave_snapshot_for(&dir, &key) {
                 tasks.push(task);
             }
-        }
-        for path in self.dirty_project_paths() {
-            let bytes = self.project_autosave_bytes(&path);
-            tasks.extend(bytes.and_then(|b| self.autosave_bytes_task(&dir, &path, b)));
-        }
-        for path in self.dirty_row_paths() {
-            let bytes = self.row_autosave_bytes(&path);
-            tasks.extend(bytes.and_then(|b| self.autosave_bytes_task(&dir, &path, b)));
         }
         Task::batch(tasks)
     }
