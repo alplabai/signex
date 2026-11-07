@@ -8,7 +8,7 @@
 //! Libraries still pending creation are not in the bytes; they are written
 //! by a save and are lost with a crash.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use signex_types::project::{ProjectData, encode_project};
 
@@ -26,15 +26,6 @@ impl Signex {
         let document = &self.document_state;
         self.is_loaded_project(path)
             && (document.is_document_dirty(path) || document.document_saves.is_saving(path))
-    }
-
-    pub(super) fn dirty_project_paths(&self) -> Vec<PathBuf> {
-        self.document_state
-            .projects
-            .iter()
-            .filter(|p| self.is_dirty_project(&p.path))
-            .map(|p| p.path.clone())
-            .collect()
     }
 
     /// The bytes a save of the project at `path` would write. `None` when
