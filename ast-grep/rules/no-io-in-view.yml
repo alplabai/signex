@@ -2,6 +2,13 @@ id: no-io-in-view
 language: rust
 severity: error
 message: "view() is pure: no filesystem, process or network IO. Do it in update() and return a Task."
+note: |
+  view() runs on every frame, so IO here stalls drawing and shows a
+  different answer each frame. Read the value in update() (or in a Task it
+  returns), store the result in state, and let view() read the state. See
+  docs/architecture/adr-0001-app-structure-and-boundaries.md, section A1.
+  A real false positive (e.g. `.exists()` on an in-memory type) takes
+  `// ast-grep-ignore: no-io-in-view` with the reason on the line above.
 files:
   - crates/signex-app/src/**/view/**/*.rs
   - crates/signex-app/src/**/views/**/*.rs
