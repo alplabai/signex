@@ -321,7 +321,8 @@ impl Signex {
             if clear_selection {
                 slot.selected.clear();
             }
-            // The drawn geometry rebuilds only on a clear or a camera move.
+            // The retained layers rebuild on a clear, a zoom, a non-whole-pixel
+            // pan or a new scene; a whole-pixel pan only moves them.
             slot.clear_content_cache();
         }
     }

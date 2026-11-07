@@ -252,6 +252,11 @@ device pixels), at the camera offset of the build. It is reused while:
 
 The move-drag layers do not use it.
 
+The GPU mount's static rotated-text layer (`canvas::gpu_text_layer`) uses the
+same retained geometry and the same rules for its idle frames, on a surface of
+its own (`gpu_text_surface`), so the CPU content layer and the GPU text layer
+are never reused as each other (#2128).
+
 Two things follow from the widget drawing in its own clip layer:
 
 - A sibling drawn over the canvas area after it, outside a `Stack`, would

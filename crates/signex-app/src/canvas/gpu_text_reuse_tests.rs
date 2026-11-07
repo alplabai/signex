@@ -88,8 +88,34 @@ fn a_panned_gpu_text_layer_matches_a_fresh_one() {
     );
 }
 
+/// A pan after the text colours changed must not slide the old geometry: the
+/// scene behind it is another generation, so the layer rebuilds.
 #[test]
-fn a_document_change_rebuilds_the_gpu_text_layer() {
+fn a_pan_after_a_theme_change_rebuilds_the_gpu_text_layer() {
+    let slot = slot_with(&fixture());
+    let renderer = crate::layout_probe::headless_renderer();
+    let (overrides, filters) = (Default::default(), Default::default());
+    let prefs = test_prefs(&overrides, &filters);
+    SchematicCanvas::new(&slot, prefs)
+        .gpu_overlay()
+        .static_text_layer(&renderer, bounds());
+    let mut themed = prefs;
+    themed.canvas_colors =
+        signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    pan(&slot, 3.0, 2.0);
+    let layer = SchematicCanvas::new(&slot, themed)
+        .gpu_overlay()
+        .static_text_layer(&renderer, bounds());
+    assert_eq!(
+        slot.gpu_text_surface.borrow().rebuilds(),
+        2,
+        "the old colours slid along"
+    );
+    assert_eq!(layer.shift, Vector::ZERO);
+}
+
+#[test]
+fn clear_content_cache_drops_the_gpu_text_layer() {
     let mut slot = slot_with(&fixture());
     let renderer = crate::layout_probe::headless_renderer();
     let (overrides, filters) = (Default::default(), Default::default());
