@@ -141,7 +141,7 @@ impl Signex {
         // created is on disk, so the project must list it and drop it from
         // the pending set, or the next save would fail on "already exists".
         let (mounts, failed) = self.apply_created_libraries(project_id, &path, libraries);
-        self.settle_project_write(project_id, &path, sequence, bytes, result);
+        let cleanup = self.settle_project_write(project_id, &path, sequence, bytes, result);
         if !failed.is_empty() {
             let error = unmaterialised_error(&path, &failed);
             // Save All names this reason for the file it kept unsaved.
@@ -151,7 +151,7 @@ impl Signex {
             self.report_save_failure("Failed to save project file", &error);
         }
         self.refresh_panel_ctx();
-        mounts
+        Task::batch([mounts, cleanup])
     }
 
     /// Register and mount each library the worker created, if the project is
@@ -250,9 +250,9 @@ impl Signex {
         sequence: u64,
         bytes: Vec<u8>,
         result: Result<SaveOutcome, String>,
-    ) {
+    ) -> Task<Message> {
         if !self.note_project_write_result(path, sequence, result) {
-            return;
+            return Task::none();
         }
         let newest = self
             .document_state
@@ -274,6 +274,8 @@ impl Signex {
                 sequence,
             };
             self.finish_clean_project_save(path, saved);
+            // The file holds what the copy held: the copy goes (#2141).
+            return self.autosave_after_save(path);
         } else {
             // The file now holds `bytes`: undoing back to them is clean unless
             // a non-history edit is pending.
@@ -286,6 +288,7 @@ impl Signex {
                 ));
             }
         }
+        Task::none()
     }
 
     /// Record the write's outcome. True when the file was written, so the

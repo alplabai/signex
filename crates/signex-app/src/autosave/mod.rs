@@ -125,6 +125,10 @@ pub enum RestoredDocument {
     Symbol(Box<signex_library::SymbolFile>),
     Footprint(Box<signex_library::FootprintFile>),
     Pcb(Box<signex_types::pcb::PcbBoard>),
+    /// A `.snxprj` as it would have been saved.
+    Project(Box<signex_types::project::ProjectData>),
+    /// A Component Preview row, from its JSON snapshot.
+    Row(Box<signex_library::ComponentRow>),
 }
 
 /// Result of reading the sidecar a Restore chose.

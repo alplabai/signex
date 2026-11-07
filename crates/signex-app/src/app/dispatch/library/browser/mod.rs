@@ -626,6 +626,12 @@ impl Signex {
         {
             let preview = ComponentPreviewState::from_row(library_path.clone(), table.clone(), row);
             self.library.editors.insert(address.clone(), preview);
+            // An earlier run's recovery copy of this row (#2141): hold
+            // autosave back and let `update` start the check.
+            self.document_state.autosave.begin_check(&synthetic_path);
+            self.document_state
+                .recovery_check_due
+                .push(synthetic_path.clone());
         }
         self.park_active_schematic_session();
         self.document_state.tabs.push(crate::app::TabInfo {
