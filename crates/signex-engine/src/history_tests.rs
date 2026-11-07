@@ -143,6 +143,27 @@ mod field_edit_runs {
     }
 
     #[test]
+    fn an_unrelated_edit_between_two_keystrokes_ends_the_run() {
+        let (mut engine, id) = engine_with_symbol();
+        set(&mut engine, id, "MPN", "A");
+        engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: true,
+            })
+            .unwrap();
+        set(&mut engine, id, "MPN", "AB");
+
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine).as_deref(), Some("A"), "the second is a step");
+        engine.undo().unwrap();
+        assert!(!engine.document().symbols[0].dnp);
+        assert_eq!(mpn(&engine).as_deref(), Some("A"));
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine), None);
+    }
+
+    #[test]
     fn an_edit_after_undo_does_not_fold_into_the_undone_step() {
         let (mut engine, id) = engine_with_symbol();
         set(&mut engine, id, "MPN", "A");
