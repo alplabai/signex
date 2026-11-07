@@ -26,7 +26,8 @@ impl fmt::Display for LanguageOption {
 }
 
 /// The active locale. Built once per language change and shared by `Arc`;
-/// replaced, never edited.
+/// replaced, never edited. `pref` is what the user chose, kept even when this
+/// build has no such locale: only the rendering falls back.
 pub struct I18n {
     pref: LanguagePref,
     dropped: Option<String>,
@@ -34,8 +35,19 @@ pub struct I18n {
     primary: Bundle,
     fallback: Bundle,
     options: Vec<LanguageOption>,
-    // Ids already reported as falling back, so the log gets each once.
-    reported: Mutex<HashSet<&'static str>>,
+    // What was already logged, so a message rendered every frame is
+    // reported once.
+    reported: Mutex<HashSet<(Problem, &'static str)>>,
+    #[cfg(test)]
+    emitted: std::sync::atomic::AtomicUsize,
+}
+
+/// The kinds of catalog trouble worth one log line each.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Problem {
+    FellBack,
+    Missing,
+    BadFormat,
 }
 
 impl fmt::Debug for I18n {
@@ -52,16 +64,15 @@ static EN_US_SHARED: LazyLock<std::sync::Arc<I18n>> =
 
 impl I18n {
     /// The locale `pref` resolves to. An explicit locale this build does not
-    /// have becomes `System` and is kept in [`Self::dropped_locale`] for the
-    /// caller to report.
+    /// have renders in the best fallback and is named by
+    /// [`Self::dropped_locale`] for the caller to report; `pref` stays as
+    /// chosen, so saving Preferences does not erase it.
     pub fn new(pref: &LanguagePref) -> Self {
-        let (pref, dropped) = match pref {
-            LanguagePref::Locale(tag) if !locale::is_available(tag) => {
-                (LanguagePref::System, Some(tag.clone()))
-            }
-            other => (other.clone(), None),
+        let dropped = match pref {
+            LanguagePref::Locale(tag) if !locale::is_available(tag) => Some(tag.clone()),
+            _ => None,
         };
-        let requested = locale::requested(&pref);
+        let requested = locale::requested(pref);
         let tag = locale::negotiate(&requested);
         if let Some(first) = requested.first().filter(|l| l.to_string() != tag) {
             log::debug!("No {first} messages; using {tag}");
@@ -70,13 +81,15 @@ impl I18n {
         let fallback = bundle::build(EN_US);
         let options = language_options(&primary, &fallback);
         Self {
-            pref,
+            pref: pref.clone(),
             dropped,
             locale: tag,
             primary,
             fallback,
             options,
             reported: Mutex::default(),
+            #[cfg(test)]
+            emitted: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -105,48 +118,81 @@ impl I18n {
         &self.options
     }
 
-    /// The list row of `pref`.
-    pub fn option_for(&self, pref: &LanguagePref) -> Option<LanguageOption> {
-        self.options.iter().find(|o| &o.pref == pref).cloned()
+    /// The list row of `pref`. A saved tag the list does not show (the
+    /// pseudolocale in a release build, a language this build lacks) still
+    /// gets a row, so the picker shows the setting rather than a blank.
+    pub fn option_for(&self, pref: &LanguagePref) -> LanguageOption {
+        let listed = self.options.iter().find(|o| &o.pref == pref);
+        listed.cloned().unwrap_or_else(|| LanguageOption {
+            pref: pref.clone(),
+            label: pref.saved_tag().map_or_else(String::new, |tag| {
+                bundle::render(&self.fallback, &language_name_id(tag), &[])
+                    .map_or_else(|| tag.to_owned(), |r| r.text)
+            }),
+        })
     }
 
     /// Render `id`. A message the locale lacks falls back to `en-US`; one
     /// `en-US` lacks too shows its id and is logged.
     pub fn message(&self, id: MessageId, args: &[(&str, Arg)]) -> Localized {
-        if let Some(text) = bundle::render(&self.primary, id.as_str(), args) {
-            return Localized::new(text);
+        if let Some(done) = bundle::render(&self.primary, id.as_str(), args) {
+            return self.finish(id, done);
         }
         if self.locale != EN_US {
-            self.report_fallback_once(id);
-            if let Some(text) = bundle::render(&self.fallback, id.as_str(), args) {
-                return Localized::new(text);
+            self.report_once(Problem::FellBack, id, || {
+                log::debug!("No {} message {}; using en-US", self.locale, id.as_str());
+            });
+            if let Some(done) = bundle::render(&self.fallback, id.as_str(), args) {
+                return self.finish(id, done);
             }
         }
-        log::warn!("Message {} is missing from the catalog", id.as_str());
+        self.report_once(Problem::Missing, id, || {
+            log::warn!("Message {} is missing from the catalog", id.as_str());
+        });
         Localized::new(id.as_str().to_owned())
     }
 
-    fn report_fallback_once(&self, id: MessageId) {
+    fn finish(&self, id: MessageId, done: bundle::Rendered) -> Localized {
+        if let Some(problems) = &done.problems {
+            self.report_once(Problem::BadFormat, id, || {
+                log::warn!("Message {} did not format cleanly: {problems}", id.as_str());
+            });
+        }
+        Localized::new(done.text)
+    }
+
+    /// Run `log` the first time `problem` is seen for `id`; a view calls
+    /// `message` every frame and the Messages panel does not dedupe.
+    fn report_once(&self, problem: Problem, id: MessageId, log: impl FnOnce()) {
         let mut reported = self.reported.lock().unwrap_or_else(PoisonError::into_inner);
-        if reported.insert(id.as_str()) {
-            log::debug!("No {} message {}; using en-US", self.locale, id.as_str());
+        if reported.insert((problem, id.as_str())) {
+            log();
+            #[cfg(test)]
+            self.emitted
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
+
+    /// How many log lines this instance has emitted (tests).
+    #[cfg(test)]
+    pub(crate) fn emitted_for_test(&self) -> usize {
+        self.emitted.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+fn language_name_id(tag: &str) -> String {
+    format!("language-name-{}", tag.to_lowercase())
 }
 
 fn language_options(current: &Bundle, fallback: &Bundle) -> Vec<LanguageOption> {
     let system_id = ids::LANGUAGE_SYSTEM_DEFAULT.as_str();
     let system = bundle::render(current, system_id, &[])
         .or_else(|| bundle::render(fallback, system_id, &[]))
-        .unwrap_or_else(|| system_id.to_owned());
+        .map_or_else(|| system_id.to_owned(), |r| r.text);
     let named = catalog::listed().into_iter().map(|tag| LanguageOption {
         pref: LanguagePref::Locale(tag.to_owned()),
-        label: bundle::render(
-            fallback,
-            &format!("language-name-{}", tag.to_lowercase()),
-            &[],
-        )
-        .unwrap_or_else(|| tag.to_owned()),
+        label: bundle::render(fallback, &language_name_id(tag), &[])
+            .map_or_else(|| tag.to_owned(), |r| r.text),
     });
     std::iter::once(LanguageOption {
         pref: LanguagePref::System,

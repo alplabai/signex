@@ -1,13 +1,11 @@
 //! #2055: the Language setting changes the File menu title, in the in-window
 //! menu model and in the native macOS spec, without a restart.
 
-use std::sync::Arc;
-
 use signex_i18n::LanguagePref;
 
 use super::*;
 use crate::app::PreferencesMsg;
-use crate::menu_bar::native::{MenuInputs, build};
+use crate::menu_bar::native::{build, build_for};
 use crate::preferences::PrefMsg;
 
 const EN_US_FILE: &str = "File";
@@ -69,18 +67,29 @@ fn a_language_change_makes_the_native_menu_rebuild() {
     let (mut app, _task) = Signex::new();
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
     pick_and_save(&mut app, "en-US");
-    let inputs = |app: &Signex| {
-        MenuInputs::new(
-            app.command_context(None),
-            app.ui_state.recent_projects.entries(),
-            false,
-            Vec::new(),
-        )
-        .with_i18n(Arc::clone(&app.ui_state.i18n))
-    };
+    let inputs = |app: &Signex| app.native_menu_inputs();
     let before = inputs(&app);
     assert_eq!(before, inputs(&app), "the same locale is the same input");
 
     pick_and_save(&mut app, "en-XA");
     assert_ne!(before, inputs(&app));
+}
+
+/// The path the macOS sync takes: Model -> `native_menu_inputs` -> `build_for`.
+#[test]
+fn a_switched_language_reaches_the_native_spec_through_the_sync_path() {
+    let (mut app, _task) = Signex::new();
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    pick_and_save(&mut app, "en-US");
+    assert_eq!(
+        build_for(&app.native_menu_inputs()).spec.menus[1].title,
+        EN_US_FILE
+    );
+
+    pick_and_save(&mut app, "en-XA");
+    let title = build_for(&app.native_menu_inputs()).spec.menus[1]
+        .title
+        .clone();
+    assert_ne!(title, EN_US_FILE);
+    assert_eq!(title, in_window_title(&app));
 }

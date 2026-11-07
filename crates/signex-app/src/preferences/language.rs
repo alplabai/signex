@@ -14,7 +14,7 @@ pub(super) fn language_section<'a>(draft: &LanguagePref, i18n: &I18n) -> Vec<Ele
     let label = t!(i18n, ids::SETTINGS_LANGUAGE).into_string();
     let help = t!(i18n, ids::SETTINGS_LANGUAGE_HELP).into_string();
     let picker = iced::widget::pick_list(
-        i18n.option_for(draft),
+        Some(i18n.option_for(draft)),
         i18n.language_options().to_vec(),
         |option: &signex_i18n::LanguageOption| option.to_string(),
     )

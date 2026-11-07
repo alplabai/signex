@@ -8,6 +8,10 @@ use crate::menu_bar::MenuContext;
 use crate::menu_bar::golden_tests::variants;
 use crate::menu_bar::model::menu_bar_model;
 
+fn en() -> std::sync::Arc<signex_i18n::I18n> {
+    signex_i18n::I18n::en_us()
+}
+
 fn recent_paths() -> Vec<PathBuf> {
     ["/a/one/p.snxprj", "/b/two/p.snxprj", "/c/three/q.snxprj"]
         .into_iter()
@@ -316,34 +320,40 @@ fn refresh_plan_follows_what_changed() {
 #[test]
 fn inputs_compare_by_what_the_menu_reads() {
     let recent = recent_paths();
-    let a = MenuInputs::new(CommandContext::default(), &recent, false, Vec::new());
+    let a = MenuInputs::new(CommandContext::default(), &recent, false, Vec::new(), en());
     assert_eq!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent, false, Vec::new())
+        MenuInputs::new(CommandContext::default(), &recent, false, Vec::new(), en())
     );
     assert_ne!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent, true, Vec::new())
+        MenuInputs::new(CommandContext::default(), &recent, true, Vec::new(), en())
     );
     assert_ne!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent[1..], false, Vec::new())
+        MenuInputs::new(
+            CommandContext::default(),
+            &recent[1..],
+            false,
+            Vec::new(),
+            en()
+        )
     );
     let dirty = CommandContext {
         project_dirty: true,
         ..CommandContext::default()
     };
-    assert_ne!(a, MenuInputs::new(dirty, &recent, false, Vec::new()));
+    assert_ne!(a, MenuInputs::new(dirty, &recent, false, Vec::new(), en()));
     let panels = vec![crate::panels::PanelKind::Properties];
     assert_ne!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent, false, panels)
+        MenuInputs::new(CommandContext::default(), &recent, false, panels, en())
     );
 }
 
 #[test]
 fn nothing_syncs_before_the_main_window_opens() {
-    let inputs = MenuInputs::new(CommandContext::default(), &[], false, Vec::new());
+    let inputs = MenuInputs::new(CommandContext::default(), &[], false, Vec::new(), en());
     let mut state = NativeMenuState::default();
     assert!(!state.needs_sync(&inputs));
     state.arm();
@@ -453,7 +463,7 @@ fn the_menu_inputs_follow_the_active_keymap() {
             .unwrap()
             .compile_active(),
     );
-    let base = || MenuInputs::new(CommandContext::default(), &[], false, Vec::new());
+    let base = || MenuInputs::new(CommandContext::default(), &[], false, Vec::new(), en());
     assert_eq!(
         base().with_keymap(first.clone()),
         base().with_keymap(first.clone())

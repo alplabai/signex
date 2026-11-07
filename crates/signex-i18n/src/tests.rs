@@ -31,12 +31,39 @@ fn negotiation_prefers_an_exact_match_then_the_language() {
 }
 
 #[test]
-fn an_unknown_saved_locale_resolves_to_system_and_is_reported() {
+fn an_unknown_saved_locale_keeps_its_pref_and_renders_in_en_us() {
     let lost = i18n("tr-TR");
     assert_eq!(lost.dropped_locale(), Some("tr-TR"));
-    assert_eq!(lost.pref(), &LanguagePref::System);
+    assert_eq!(lost.pref(), &LanguagePref::Locale("tr-TR".into()));
+    assert_eq!(lost.locale(), EN_US);
     assert_eq!(t!(lost, ids::MENU_FILE).to_string(), "File");
     assert_eq!(i18n("en-US").dropped_locale(), None);
+}
+
+#[test]
+fn the_picker_shows_a_saved_tag_the_list_does_not_have() {
+    let lost = i18n("tr-TR");
+    let row = lost.option_for(&lost.pref().clone());
+    assert_eq!(row.pref, LanguagePref::Locale("tr-TR".into()));
+    assert_eq!(row.label, "tr-TR");
+    let system = lost.option_for(&LanguagePref::System);
+    assert_eq!(system.label, "System default");
+}
+
+#[test]
+fn a_problem_is_logged_once_however_often_the_message_is_rendered() {
+    let en = i18n("en-US");
+    let missing = MessageId::new("no-such-message");
+    for _ in 0..3 {
+        let _ = t!(en, missing);
+    }
+    assert_eq!(en.emitted_for_test(), 1);
+    let xa = i18n("en-XA");
+    for _ in 0..3 {
+        let _ = t!(xa, missing);
+    }
+    // One fall-back line and one missing line, not six.
+    assert_eq!(xa.emitted_for_test(), 2);
 }
 
 #[test]
@@ -60,8 +87,12 @@ fn the_pseudolocale_transforms_text_and_en_us_is_untouched() {
 fn numbers_follow_the_locale_through_icu() {
     let source = "count = { $n } items\n";
     let arg = [("n", Arg::from(1_234_567.5_f64))];
-    let us = render(&build_from("en-US", &[source]), "count", &arg).unwrap();
-    let de = render(&build_from("de", &[source]), "count", &arg).unwrap();
+    let us = render(&build_from("en-US", &[source]), "count", &arg)
+        .unwrap()
+        .text;
+    let de = render(&build_from("de", &[source]), "count", &arg)
+        .unwrap()
+        .text;
     assert!(us.contains("1,234,567.5"), "{us}");
     assert!(de.contains("1.234.567,5"), "{de}");
 }
@@ -70,8 +101,10 @@ fn numbers_follow_the_locale_through_icu() {
 fn isolation_marks_wrap_only_placeables() {
     let sources = ["plain = Plain text\nhello = Hello { $name }\n"];
     let bundle = build_from("en-US", &sources);
-    let plain = render(&bundle, "plain", &[]).unwrap();
-    let hello = render(&bundle, "hello", &[("name", Arg::from("R1"))]).unwrap();
+    let plain = render(&bundle, "plain", &[]).unwrap().text;
+    let hello = render(&bundle, "hello", &[("name", Arg::from("R1"))])
+        .unwrap()
+        .text;
     assert!(!plain.contains(FSI) && !plain.contains(PDI), "{plain:?}");
     assert_eq!(hello, format!("Hello {FSI}R1{PDI}"));
 }
@@ -98,7 +131,7 @@ fn the_language_list_starts_with_system_and_is_ordered_by_code() {
     assert_eq!(options[1].label, "English (United States)");
     assert_eq!(
         en.option_for(&LanguagePref::Locale(EN_US.into())),
-        Some(options[1].clone())
+        options[1].clone()
     );
 }
 

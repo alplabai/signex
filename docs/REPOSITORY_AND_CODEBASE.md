@@ -134,6 +134,7 @@ signex/
 │   ├── signex-renderer/            # domain types → render primitives (+ signex-gfx)
 │   ├── signex-library/             # .snxlib library model (+ signex-library-server)
 │   ├── signex-widgets/             # reusable iced widgets
+│   ├── signex-i18n/                # UI message catalogs and locale-aware formatting
 │   └── signex-3d-model-importer/   # STEP / WRL importer
 └── docs/
 ```
@@ -219,6 +220,19 @@ Responsibilities:
 
 This crate exists to keep `signex-app` from collapsing into a monolith of local
 widget implementations.
+
+### 5.4a. `signex-i18n`
+
+UI message catalogs and locale-aware formatting (epic #2053).
+
+Responsibilities:
+
+- Fluent catalogs embedded from `crates/signex-i18n/locales/`, with `en-US` as the source language
+- locale negotiation with an `en-US` fallback, and the `en-XA` pseudolocale
+- number formatting through ICU4X
+
+It is a UI-layer crate and the only one that imports Fluent or ICU4X; domain
+crates cannot depend on it (`scripts/check_arch_guard.sh`).
 
 ### 5.5. Native `.snx*` codec (`signex-types`)
 

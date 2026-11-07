@@ -148,7 +148,7 @@ impl Signex {
         ));
         if let Some(lost) = i18n.dropped_locale() {
             crate::diagnostics::log_warning(format!(
-                "Language: the saved language \"{lost}\" is not available, so Signex follows the system language."
+                "Language: the saved language \"{lost}\" is not available in this version, so Signex shows English. Your choice is kept."
             ));
         }
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);

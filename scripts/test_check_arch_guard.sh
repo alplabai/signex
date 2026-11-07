@@ -101,6 +101,11 @@ run_case domain_crate_on_widgets fail \
   "[{\"name\": \"signex-widgets\", \"dependencies\": []}, {\"name\": \"signex-library\", \"dependencies\": [$(dep signex-widgets)]}]" \
   "domain crate 'signex-library' depends on 'signex-widgets'"
 
+run_case domain_crate_on_i18n fail \
+  'signex-library -> signex-i18n' \
+  "[{\"name\": \"signex-i18n\", \"dependencies\": []}, {\"name\": \"signex-library\", \"dependencies\": [$(dep signex-i18n)]}]" \
+  "domain crate 'signex-library' depends on 'signex-i18n'"
+
 run_case domain_crate_on_wgpu_subcrate fail \
   'signex-net -> signex-types' \
   "[$TYPES, {\"name\": \"signex-net\", \"dependencies\": [$(dep signex-types), $(dep wgpu-types)]}]" \

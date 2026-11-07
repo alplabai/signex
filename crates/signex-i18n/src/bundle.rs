@@ -43,8 +43,14 @@ pub(crate) fn build_from(tag: &str, sources: &[&str]) -> Bundle {
     bundle
 }
 
+/// A rendered message and, when Fluent hit errors on the way, what they were.
+pub(crate) struct Rendered {
+    pub text: String,
+    pub problems: Option<String>,
+}
+
 /// `id` rendered in `bundle`, or `None` when the bundle has no such message.
-pub(crate) fn render(bundle: &Bundle, id: &str, args: &[(&str, Arg)]) -> Option<String> {
+pub(crate) fn render(bundle: &Bundle, id: &str, args: &[(&str, Arg)]) -> Option<Rendered> {
     let pattern = bundle.get_message(id)?.value()?;
     let mut fluent_args = FluentArgs::new();
     for (key, arg) in args {
@@ -56,8 +62,9 @@ pub(crate) fn render(bundle: &Bundle, id: &str, args: &[(&str, Arg)]) -> Option<
     }
     let mut errors = Vec::new();
     let text = bundle.format_pattern(pattern, Some(&fluent_args), &mut errors);
-    if !errors.is_empty() {
-        log::warn!("Message {id} did not format cleanly: {errors:?}");
-    }
-    Some(text.into_owned())
+    let problems = (!errors.is_empty()).then(|| format!("{errors:?}"));
+    Some(Rendered {
+        text: text.into_owned(),
+        problems,
+    })
 }

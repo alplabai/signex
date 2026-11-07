@@ -71,4 +71,15 @@ mod tests {
         assert_eq!(json["theme"], "nord");
         assert_eq!(read(&path), LanguagePref::System);
     }
+
+    #[test]
+    fn an_unavailable_saved_language_survives_a_save() {
+        let (_dir, path) = temp_prefs(r#"{"language": "tr-TR", "theme": "nord"}"#);
+        let i18n = signex_i18n::I18n::new(&read(&path));
+        // What Save writes: the pref of the instance in force.
+        write_language_pref_at(&path, i18n.pref());
+        let json = read_prefs_json(&path).unwrap();
+        assert_eq!(json["language"], "tr-TR");
+        assert_eq!(json["theme"], "nord");
+    }
 }

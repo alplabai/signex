@@ -89,7 +89,8 @@ fn same_node(a: &NativeNode, b: &NativeNode, changes: &mut Vec<ItemChange>) -> b
 
 /// Everything the native spec is built from: the enablement facts of the
 /// focused window, the recent projects, and whether a confirm dialog locks
-/// the model rows, and the keymap the shortcut text comes from. The keymap
+/// the model rows, the keymap the shortcut text comes from, and the locale
+/// the titles render in. The keymap
 /// is replaced, never edited, so pointer identity says whether it changed.
 #[derive(Debug, Clone)]
 pub(crate) struct MenuInputs {
@@ -98,7 +99,7 @@ pub(crate) struct MenuInputs {
     locked: bool,
     open_panels: Vec<PanelKind>,
     keymap: Option<Arc<CompiledKeymap>>,
-    i18n: Option<Arc<signex_i18n::I18n>>,
+    i18n: Arc<signex_i18n::I18n>,
 }
 
 impl PartialEq for MenuInputs {
@@ -112,11 +113,7 @@ impl PartialEq for MenuInputs {
                 (None, None) => true,
                 _ => false,
             }
-            && match (&self.i18n, &other.i18n) {
-                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
-                (None, None) => true,
-                _ => false,
-            }
+            && Arc::ptr_eq(&self.i18n, &other.i18n)
     }
 }
 
@@ -129,6 +126,7 @@ impl MenuInputs {
         recent: &[PathBuf],
         locked: bool,
         open_panels: Vec<PanelKind>,
+        i18n: Arc<signex_i18n::I18n>,
     ) -> Self {
         Self {
             commands,
@@ -136,16 +134,8 @@ impl MenuInputs {
             locked,
             open_panels,
             keymap: None,
-            i18n: None,
+            i18n,
         }
-    }
-
-    /// The locale the titles render in. Replaced, never edited, so pointer
-    /// identity says whether a language change happened.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
-    pub(crate) fn with_i18n(mut self, i18n: Arc<signex_i18n::I18n>) -> Self {
-        self.i18n = Some(i18n);
-        self
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
@@ -160,8 +150,8 @@ impl MenuInputs {
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn i18n(&self) -> Option<Arc<signex_i18n::I18n>> {
-        self.i18n.clone()
+    pub(crate) fn i18n(&self) -> Arc<signex_i18n::I18n> {
+        Arc::clone(&self.i18n)
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -235,6 +225,7 @@ impl NativeMenuState {
             &[],
             false,
             Vec::new(),
+            signex_i18n::I18n::en_us(),
         ));
     }
 
