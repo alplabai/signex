@@ -426,9 +426,11 @@ jobs:
       - name: ast-grep rules
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         continue-on-error: true
+        # --error: the third-party rules ship as `warning`, which alone
+        # would never fail the step.
         run: |
           ast-grep test --skip-snapshot-tests
-          ast-grep scan
+          ast-grep scan --error
 
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its
