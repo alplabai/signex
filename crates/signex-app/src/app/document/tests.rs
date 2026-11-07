@@ -10,6 +10,8 @@ use crate::app::state::LoadedProject;
 use crate::app::{ComponentEditorTab, Signex, TabInfo, TabKind};
 use crate::library::state::{ComponentPreviewState, EditorAddress};
 
+mod dirty_readers;
+
 #[derive(Debug, Clone, Copy)]
 enum Kind {
     Schematic,

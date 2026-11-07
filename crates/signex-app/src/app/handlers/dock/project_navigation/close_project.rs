@@ -760,19 +760,13 @@ impl Signex {
                 .detached_window_of(crate::app::state::ModalId::AppQuitConfirm)
                 .map_or_else(Task::none, iced::window::gain_focus);
         }
-        let dirty_rows = self.library.dirty_editors();
-        if !self.document_state.has_dirty_documents() && dirty_rows.is_empty() {
+        let unsaved = self.unsaved_set();
+        if unsaved.is_empty() {
             return self.close_main_window_now();
         }
-        let mut dirty: Vec<std::path::PathBuf> = self
-            .document_state
-            .dirty_document_paths()
-            .into_iter()
-            .collect();
-        dirty.sort();
         self.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
-            dirty_paths: dirty,
-            dirty_rows,
+            dirty_paths: unsaved.paths(),
+            dirty_rows: unsaved.rows,
         });
         self.ui_state.quit_confirm_refreshed = false;
         Task::none()
@@ -783,13 +777,16 @@ impl Signex {
     /// nothing is left (#1833). Entries are only ever removed here: an edit
     /// made behind the prompt is caught by the Discard All re-check instead.
     pub(crate) fn prune_settled_quit_confirm(&mut self) {
+        if self.ui_state.app_quit_confirm.is_none() {
+            return;
+        }
+        let live = self.unsaved_set();
+        let live_paths = live.paths();
         let Some(confirm) = self.ui_state.app_quit_confirm.as_mut() else {
             return;
         };
-        let live = self.document_state.dirty_document_paths();
-        let live_rows = self.library.dirty_editors();
-        confirm.dirty_paths.retain(|p| live.contains(p));
-        confirm.dirty_rows.retain(|r| live_rows.contains(r));
+        confirm.dirty_paths.retain(|p| live_paths.contains(p));
+        confirm.dirty_rows.retain(|r| live.rows.contains(r));
         if confirm.dirty_paths.is_empty() && confirm.dirty_rows.is_empty() {
             self.ui_state.app_quit_confirm = None;
             self.ui_state.quit_confirm_refreshed = false;
@@ -858,13 +855,8 @@ impl Signex {
                 // (a window that was not locked, a route nobody thought of)
                 // is NOT in the list: refresh the confirm, keep it open, and
                 // leave every recovery copy alone.
-                let mut live: Vec<std::path::PathBuf> = self
-                    .document_state
-                    .dirty_document_paths()
-                    .into_iter()
-                    .collect();
-                live.sort();
-                let live_rows = self.library.dirty_editors();
+                let unsaved = self.unsaved_set();
+                let (live, live_rows) = (unsaved.paths(), unsaved.rows);
                 let unseen = live.iter().any(|p| !state.dirty_paths.contains(p))
                     || live_rows.iter().any(|r| !state.dirty_rows.contains(r));
                 if unseen {
