@@ -19,6 +19,7 @@ mod gpu_drag;
 pub(crate) mod gpu_mount;
 mod graphite;
 pub mod grid;
+pub mod zoom_pill;
 mod input;
 mod move_pick;
 mod net_highlight;
