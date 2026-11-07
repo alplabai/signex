@@ -34,6 +34,7 @@ mod price;
 mod sidebar;
 mod size_sensor;
 mod sort;
+mod tree;
 mod uncommitted;
 mod view_cache;
 mod window;
@@ -261,6 +262,7 @@ pub fn view<'a>(
         });
     let table_sidebar = match footer {
         Some(footer) => column![
+            tree::view_libraries_tree(library_path, library_state, tokens),
             container(table_sidebar).height(Length::Fill).boxed(),
             container(footer)
                 .padding(SP.m)
