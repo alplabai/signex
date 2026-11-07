@@ -7,9 +7,11 @@ pub mod active_bar;
 pub mod history_pane;
 pub mod icon_button;
 pub mod passive_calculator;
+pub mod segmented;
 pub mod status_bar;
 pub mod tab_pill;
 pub mod theme_ext;
+pub mod toggle_switch;
 pub mod tree_view;
 
 // The dropdown widget now lives at `active_bar::dropdown`; keep the
@@ -18,7 +20,10 @@ pub mod tree_view;
 pub use active_bar::dropdown as active_bar_dropdown;
 
 pub use history_pane::{HistoryEntry, history_pane};
+pub use segmented::{SegmentedStyle, segmented};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
+pub use toggle_switch::{ToggleSwitchStyle, toggle_switch};
+pub use tree_view::TreeStyle;
 
 // ─── Extension Traits (Ludusavi pattern) ─────────────────────
 

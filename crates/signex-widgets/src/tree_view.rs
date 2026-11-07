@@ -36,6 +36,9 @@ fn chevron_down_handle() -> svg::Handle {
 
 use crate::theme_ext;
 
+mod style;
+pub use style::TreeStyle;
+
 // ─── Data Model ───────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -371,6 +374,8 @@ struct Metrics {
     chevron: f32,
     icon: f32,
     pad_v: f32,
+    /// Opt-in themed row look; `None` keeps the compact legacy rows.
+    style: Option<TreeStyle>,
 }
 
 impl Metrics {
@@ -384,6 +389,7 @@ impl Metrics {
             chevron: CHEVRON_W * k,
             icon: ICON_SZ * k,
             pad_v: f32::from(PAD_V) * k,
+            style: None,
         }
     }
 }
@@ -403,6 +409,7 @@ pub struct TreeView<'a> {
     selected: Option<&'a [String]>,
     tokens: &'a ThemeTokens,
     text_size: f32,
+    style: Option<TreeStyle>,
 }
 
 impl<'a> TreeView<'a> {
@@ -412,7 +419,14 @@ impl<'a> TreeView<'a> {
             selected: None,
             tokens,
             text_size: FONT_SZ,
+            style: None,
         }
+    }
+
+    /// Opt in to the themed row look (fixed height, rounded selection, inset).
+    pub fn style(mut self, style: TreeStyle) -> Self {
+        self.style = Some(style);
+        self
     }
 
     /// Row label size in px; badge, "(empty)", indent, icon and padding scale with it.
@@ -428,7 +442,10 @@ impl<'a> TreeView<'a> {
 
     /// Build the tree into a scrollable Element.
     pub fn view(self) -> Element<'static, TreeMsg> {
-        let metrics = Metrics::for_text_size(self.text_size);
+        let metrics = Metrics {
+            style: self.style,
+            ..Metrics::for_text_size(self.text_size)
+        };
         let mut col: Column<Element<'static, TreeMsg>> =
             Column::new().spacing(0.0).width(Length::Fill);
         for node in self.roots {
@@ -447,7 +464,16 @@ impl<'a> TreeView<'a> {
         // the background context menu (Expand all / Collapse all / Refresh).
         // Row right-clicks are captured earlier by per-row mouse_areas and
         // take priority — they never propagate to this outer handler.
-        mouse_area(scrollable(col).width(Length::Fill))
+        let inset = self.style.map_or(0.0, |s| s.inset);
+        let body: Element<'static, TreeMsg> = if inset > 0.0 {
+            container(col)
+                .padding([0.0, inset])
+                .width(Length::Fill)
+                .into()
+        } else {
+            col.into()
+        };
+        mouse_area(scrollable(body).width(Length::Fill))
             .on_right_press(TreeMsg::BackgroundContextMenu)
             .boxed()
     }
@@ -473,8 +499,16 @@ fn render_node(
     // they read cleanly next to the full-colour SVG icons. Older
     // builds used `text_secondary` back when icons were muted
     // Unicode glyphs.
+    let sel_ink = m.style.map_or(FG_ON_SELECTION, |s| s.selected_ink);
+    // Themed rows sit on a light or dark panel, so unselected chrome uses
+    // the secondary text colour instead of the legacy literal white.
+    let chrome_c = match (is_sel, m.style) {
+        (true, _) => sel_ink,
+        (false, Some(_)) => theme_ext::text_secondary(tokens),
+        (false, None) => FG_ON_SELECTION,
+    };
     let txt_c = if is_sel {
-        FG_ON_SELECTION
+        sel_ink
     } else {
         theme_ext::text_primary(tokens)
     };
@@ -485,7 +519,9 @@ fn render_node(
         let base = theme_ext::text_secondary(tokens);
         Color::from_rgba(base.r, base.g, base.b, 0.5)
     };
-    let sel_bg = theme_ext::selection_color(tokens);
+    let sel_bg = m
+        .style
+        .map_or_else(|| theme_ext::selection_color(tokens), |s| s.selected_fill);
     let hov_bg = theme_ext::hover_color(tokens);
 
     // --- Assemble row ---
@@ -494,6 +530,10 @@ fn render_node(
     let mut r: Row<Element<'static, TreeMsg>> = Row::new()
         .spacing(ELEM_GAP)
         .align_y(iced::Alignment::Center);
+    if m.style.is_some() {
+        // Fill the fixed-height button so the content centres in it.
+        r = r.height(Length::Fill);
+    }
 
     // Left indent
     if pad_left > 0.0 {
@@ -511,8 +551,8 @@ fn render_node(
             svg(handle)
                 .width(m.chevron)
                 .height(m.chevron)
-                .style(|_: &Theme, _| svg::Style {
-                    color: Some(FG_ON_SELECTION),
+                .style(move |_: &Theme, _| svg::Style {
+                    color: Some(chrome_c),
                 })
                 .boxed(),
         );
@@ -597,7 +637,7 @@ fn render_node(
             // accent is reserved for the active-project marker so
             // mixing accent colour into the open indicator made the
             // tree feel noisy at a glance.
-            FG_ON_SELECTION
+            chrome_c
         };
         let sz = if node.is_dirty {
             DIRTY_DOT_SZ
@@ -636,14 +676,18 @@ fn render_node(
         let s = sel_bg;
         Color::from_rgba(s.r, s.g, s.b, 0.45)
     };
+    let row_radius = m.style.map_or(2.0, |s| s.radius);
     let row_btn = button(r)
-        .padding(iced::Padding {
-            top: m.pad_v,
-            right: f32::from(PAD_R),
-            bottom: m.pad_v,
-            left: f32::from(PAD_R),
-        })
+        .padding(style::row_padding(
+            m.style.as_ref(),
+            m.pad_v,
+            f32::from(PAD_R),
+        ))
         .width(Length::Fill)
+        .height(
+            m.style
+                .map_or(Length::Shrink, |s| Length::Fixed(s.row_height)),
+        )
         .on_press(msg)
         .style(move |_theme: &Theme, status: button::Status| {
             let bg = match (is_sel, is_active, status) {
@@ -658,7 +702,7 @@ fn render_node(
                 background: bg,
                 text_color: txt_c,
                 border: Border {
-                    radius: 2.0.into(),
+                    radius: row_radius.into(),
                     ..Border::default()
                 },
                 ..button::Style::default()
