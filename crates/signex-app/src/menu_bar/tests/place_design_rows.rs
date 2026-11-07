@@ -117,7 +117,7 @@ fn unnumbered(refs: &[&str]) -> Signex {
 fn annotate_opens_its_dialog_and_reset_asks_to_confirm() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let _ = click(&mut app, "Project/Annotation/Annotate Schematics...");
+    let _ = click(&mut app, "Tools/Annotation/Annotate Schematics...");
     assert_eq!(
         probe(&app),
         Probe {
@@ -129,7 +129,7 @@ fn annotate_opens_its_dialog_and_reset_asks_to_confirm() {
     let mut app = one_symbol_selected();
     let _ = click(
         &mut app,
-        "Project/Annotation/Reset Schematic Designators...",
+        "Tools/Annotation/Reset Schematic Designators...",
     );
     assert_eq!(
         probe(&app),
@@ -144,7 +144,7 @@ fn annotate_opens_its_dialog_and_reset_asks_to_confirm() {
 fn annotate_quietly_numbers_the_unnumbered_symbols_without_a_dialog() {
     let mut app = unnumbered(&["R?", "R?"]);
     let before = probe(&app);
-    let task = click(&mut app, "Project/Annotation/Annotate Schematics Quietly");
+    let task = click(&mut app, "Tools/Annotation/Annotate Schematics Quietly");
     settle_task(&mut app, task);
     let after = probe(&app);
     assert_eq!(after.refs, ["R1", "R2"]);
@@ -164,7 +164,7 @@ fn annotate_quietly_numbers_the_unnumbered_symbols_without_a_dialog() {
 fn force_annotate_renumbers_every_symbol_from_one() {
     let mut app = unnumbered(&["R5", "R9"]);
     let before = probe(&app);
-    let task = click(&mut app, "Project/Annotation/Force Annotate All Schematics");
+    let task = click(&mut app, "Tools/Annotation/Force Annotate All Schematics");
     settle_task(&mut app, task);
     let after = probe(&app);
     assert_eq!(after.refs, ["R1", "R2"]);
@@ -184,7 +184,7 @@ fn reset_duplicates_resets_only_the_repeated_designators() {
     let mut app = unnumbered(&["R1", "R1", "C7"]);
     let task = click(
         &mut app,
-        "Project/Annotation/Reset Duplicate Schematic Designators...",
+        "Tools/Annotation/Reset Duplicate Schematic Designators...",
     );
     settle_task(&mut app, task);
     assert_eq!(probe(&app).refs, ["R?", "R?", "C7"]);
@@ -222,11 +222,11 @@ fn parameter_manager_opens_its_table() {
 fn design_rows_without_a_schematic_are_greyed() {
     let app = bare_app();
     for path in [
-        "Project/Annotation/Annotate Schematics...",
-        "Project/Annotation/Reset Schematic Designators...",
-        "Project/Annotation/Reset Duplicate Schematic Designators...",
-        "Project/Annotation/Annotate Schematics Quietly",
-        "Project/Annotation/Force Annotate All Schematics",
+        "Tools/Annotation/Annotate Schematics...",
+        "Tools/Annotation/Reset Schematic Designators...",
+        "Tools/Annotation/Reset Duplicate Schematic Designators...",
+        "Tools/Annotation/Annotate Schematics Quietly",
+        "Tools/Annotation/Force Annotate All Schematics",
         "Project/Electrical Rules Check",
         "Design/Parameter Manager...",
         "Reports/Bill of Materials…",
@@ -242,8 +242,8 @@ fn quiet_annotate_rows_are_greyed_with_a_project_but_no_sheet() {
     let mut app = bare_app();
     open_project(&mut app, "P.snxprj");
     for path in [
-        "Project/Annotation/Annotate Schematics Quietly",
-        "Project/Annotation/Force Annotate All Schematics",
+        "Tools/Annotation/Annotate Schematics Quietly",
+        "Tools/Annotation/Force Annotate All Schematics",
     ] {
         assert!(!row_is_live(&app, path), "{path}");
     }
@@ -251,7 +251,7 @@ fn quiet_annotate_rows_are_greyed_with_a_project_but_no_sheet() {
     assert!(row_is_live(&app, "Project/Electrical Rules Check"));
     assert!(row_is_live(
         &one_symbol_selected(),
-        "Project/Annotation/Annotate Schematics Quietly"
+        "Tools/Annotation/Annotate Schematics Quietly"
     ));
 }
 

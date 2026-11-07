@@ -51,12 +51,14 @@ enablement; no command left the app.
 **Project** (project-wide actions):
 
 - Electrical Rules Check (`open_erc_dialog`; F8 `run_erc` runs at once)
-- Annotation ▸ Annotate Schematics..., Reset Schematic Designators..., Reset
-  Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
-  Force Annotate All Schematics (Shift+Alt+A), and the planned Back Annotate
-  Schematics... and Number Schematic Sheets...
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
+
+**Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
+Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
+Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
+Force Annotate All Schematics (Shift+Alt+A), and the planned Back Annotate
+Schematics... and Number Schematic Sheets....
 
 **Reports** (outputs of the open schematic, all greyed without one):
 

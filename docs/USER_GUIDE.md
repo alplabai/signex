@@ -384,10 +384,10 @@ Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
 It acts on placed symbols, so with none on the sheet there is nothing to
 annotate (section 5).
 
-- **Project ▸ Annotation ▸ Annotate Schematics…** opens the annotation dialog.
+- **Tools ▸ Annotation ▸ Annotate Schematics…** opens the annotation dialog.
   Its right side lists the proposed changes (current and proposed designator
   for each symbol). Press **Accept Changes** to apply them, then **Close**.
-- **Project ▸ Annotation ▸ Annotate Schematics Quietly** (`Alt+A`) applies the
+- **Tools ▸ Annotation ▸ Annotate Schematics Quietly** (`Alt+A`) applies the
   changes without opening the dialog.
 - **Reset & Renumber** in the dialog, or **Force Annotate All Schematics**
   (`Shift+Alt+A`), renumbers everything from scratch.
@@ -692,9 +692,9 @@ the default Altium profile; the menu path always works.
 5. **Name the net.** Choose **Place ▸ Net Label** (or press `P` then `N`),
    click the wire, press `Esc`, double-click the label, type the name, and press
    `Enter` (section 7).
-6. **Annotate.** Press `Alt+A` (**Project ▸ Annotation ▸ Annotate Schematics
+6. **Annotate.** Press `Alt+A` (**Tools ▸ Annotation ▸ Annotate Schematics
    Quietly**) to give every part a unique reference designator (section 8).
-   **Project ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
+   **Tools ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
    first.
 7. **Run ERC.** Press `F8`, read the **ERC** panel, and click a row to jump to
    the item (section 9). Fix what it reports, then run it again.

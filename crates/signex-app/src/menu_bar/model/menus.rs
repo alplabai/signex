@@ -236,8 +236,6 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
         // F8 (`run_erc`) runs ERC at once; this row opens the dialog.
         cmd_item_gated(ctx, cmd("open_erc_dialog", "Electrical Rules Check", "")),
         SEP,
-        submenu("Annotation", annotation(ctx)),
-        SEP,
         // Gated like Close Project: with no project there is no tab to open.
         item_if(
             "Project Options...",
@@ -268,7 +266,7 @@ pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-/// Project ▸ Annotation. The first three rows need an open schematic:
+/// Tools ▸ Annotation. The first three rows need an open schematic:
 /// annotating without one is meaningless.
 fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
@@ -313,6 +311,8 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
+        submenu("Annotation", annotation(ctx)),
+        SEP,
         stub("Assign Footprints"),
         stub("Library Editor"),
         SEP,

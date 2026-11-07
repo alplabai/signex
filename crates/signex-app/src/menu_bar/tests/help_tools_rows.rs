@@ -223,8 +223,8 @@ fn stub_rows_are_not_live() {
         "Window/Tile Horizontally",
         "Window/Tile Vertically",
         "Window/Close All Documents",
-        "Project/Annotation/Back Annotate Schematics...",
-        "Project/Annotation/Number Schematic Sheets...",
+        "Tools/Annotation/Back Annotate Schematics...",
+        "Tools/Annotation/Number Schematic Sheets...",
     ] {
         assert!(!row_is_live(&app, path), "{path}");
     }

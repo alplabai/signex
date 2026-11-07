@@ -61,17 +61,6 @@ View/Signal	item	Signal	-	-	OpenSignalPanel	11111111	always
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/---	separator	-	-	-	-	-	-
-Project/Annotation	submenu	Annotation	-	-	-	-	-
-Project/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotate	01000000	sch
-Project/Annotation/Reset Schematic Designators...	item	Reset Schematic Designators...	-	-	AnnotateReset	01000000	sch
-Project/Annotation/Reset Duplicate Schematic Designators...	item	Reset Duplicate Schematic Designators...	-	-	AnnotateResetDuplicates	01000000	sch
-Project/Annotation/---	separator	-	-	-	-	-	-
-Project/Annotation/Annotate Schematics Quietly	item	Annotate Schematics Quietly	annotate_schematic_quietly	Alt+A	AnnotateQuietly	01000000	cmd:annotate_schematic_quietly
-Project/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematics	force_annotate_all_schematics	Shift+Alt+A	AnnotateForceAll	01000000	cmd:force_annotate_all_schematics
-Project/Annotation/---	separator	-	-	-	-	-	-
-Project/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
-Project/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
-Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
 Project/---	separator	-	-	-	-	-	-
 Project/Close Project	item	Close Project	-	-	CloseProject	01001001	project
@@ -90,6 +79,17 @@ Place/Sheet Entry	stub	Sheet Entry	-	-	-	00000000	never
 Design	menu	Design	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Tools	menu	Tools	-	-	-	-	-
+Tools/Annotation	submenu	Annotation	-	-	-	-	-
+Tools/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotate	01000000	sch
+Tools/Annotation/Reset Schematic Designators...	item	Reset Schematic Designators...	-	-	AnnotateReset	01000000	sch
+Tools/Annotation/Reset Duplicate Schematic Designators...	item	Reset Duplicate Schematic Designators...	-	-	AnnotateResetDuplicates	01000000	sch
+Tools/Annotation/---	separator	-	-	-	-	-	-
+Tools/Annotation/Annotate Schematics Quietly	item	Annotate Schematics Quietly	annotate_schematic_quietly	Alt+A	AnnotateQuietly	01000000	cmd:annotate_schematic_quietly
+Tools/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematics	force_annotate_all_schematics	Shift+Alt+A	AnnotateForceAll	01000000	cmd:force_annotate_all_schematics
+Tools/Annotation/---	separator	-	-	-	-	-	-
+Tools/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
+Tools/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
+Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
 Tools/Library Editor	stub	Library Editor	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
