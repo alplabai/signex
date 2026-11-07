@@ -188,6 +188,9 @@ fn view_symbol_toolbar<'a>(
     let tokens = &panel_ctx.tokens;
     let text_c = theme_ext::text_primary(tokens);
     let path = editor.path.clone();
+    if crate::styles::is_graphite(tokens) {
+        return graphite_toolbar(editor, &path, tokens);
+    }
 
     // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
     let btn = |label: &'static str, msg: PrimitiveEdit| {
@@ -228,6 +231,132 @@ fn view_symbol_toolbar<'a>(
             ),
             Space::new().width(SP.m),
             btn(save_label, PrimitiveEdit::Save),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([SP.m, SP.l])
+    .style(crate::styles::tab_bar_strip(tokens))
+    .boxed()
+}
+
+/// Graphite header strip: ghost buttons, a segmented Normal / Alternate
+/// control and an accent Save. Same messages as the legacy strip.
+fn graphite_toolbar<'a>(
+    editor: &SymbolDocument,
+    path: &std::path::Path,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    use crate::styles::tokens::resolve;
+    use iced::widget::button::Status;
+    use signex_types::schematic::BodyStyle;
+    let r = resolve(tokens);
+    let ink = theme_ext::text_primary(tokens);
+    let (ink3, raised, sunken, line, hover) =
+        (r.ink3, r.raised, r.sunken, r.line_strong, r.accent_soft);
+    let send = |msg: PrimitiveEdit| LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg,
+    };
+    let sym = |m: SymbolEditorMsg| send(PrimitiveEdit::Symbol(m));
+    let ghost_style = move |_: &Theme, status: Status| iced::widget::button::Style {
+        background: matches!(status, Status::Hovered | Status::Pressed)
+            .then_some(iced::Background::Color(hover)),
+        text_color: ink,
+        border: Border {
+            width: crate::styles::HAIRLINE,
+            radius: 7.0.into(),
+            color: line,
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    };
+    let ghost = |label: &'static str, msg: LibraryMessage| {
+        button(text(label).size(TS.body))
+            .padding([SP.s, SP.l])
+            .on_press(msg)
+            .style(ghost_style)
+    };
+    let cell = |label: &'static str, active: bool, msg: LibraryMessage| {
+        button(text(label).size(TS.body))
+            .padding([SP.xs, SP.l])
+            .on_press(msg)
+            .style(
+                move |_: &Theme, status: Status| iced::widget::button::Style {
+                    background: if active {
+                        Some(iced::Background::Color(raised))
+                    } else if matches!(status, Status::Hovered) {
+                        Some(iced::Background::Color(hover))
+                    } else {
+                        None
+                    },
+                    text_color: if active { ink } else { ink3 },
+                    border: Border {
+                        radius: 6.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            )
+    };
+    let view = editor.view();
+    let segmented = container(
+        row![
+            cell(
+                "Normal",
+                view.body == BodyStyle::Normal,
+                sym(SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal)),
+            ),
+            cell(
+                "Alternate",
+                view.body == BodyStyle::Alternate,
+                sym(SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate)),
+            ),
+        ]
+        .spacing(2),
+    )
+    .padding(2)
+    .style(move |_: &Theme| iced::widget::container::Style {
+        background: Some(iced::Background::Color(sunken)),
+        border: Border {
+            radius: 8.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::container::Style::default()
+    });
+    let max_part = sym_state::max_part_number(editor.primitive());
+    let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
+    let save = button(text(save_label).size(TS.body))
+        .padding([SP.s, SP.l])
+        .on_press(send(PrimitiveEdit::Save))
+        .style(crate::styles::primary_button(tokens));
+
+    container(
+        row![
+            ghost("Fit", sym(SymbolEditorMsg::Fit)),
+            Space::new().width(Length::Fill),
+            text("Body").size(TS.body).color(ink3),
+            segmented,
+            ghost(
+                "Both bodies",
+                sym(SymbolEditorMsg::SelectionBodyAssigned(
+                    signex_library::BODY_COMMON
+                )),
+            ),
+            ghost(
+                "This body only",
+                sym(SymbolEditorMsg::SelectionBodyAssigned(view.body_tag())),
+            ),
+            Space::new().width(SP.l),
+            ghost("\u{2190}", sym(SymbolEditorMsg::PrevPart)),
+            text(format!("Part {} / {max_part}", editor.active_part))
+                .size(TS.body)
+                .color(ink),
+            ghost("\u{2192}", sym(SymbolEditorMsg::NextPart)),
+            ghost("+", sym(SymbolEditorMsg::NewPart)),
+            ghost("\u{2212}", sym(SymbolEditorMsg::RemovePart)),
+            Space::new().width(SP.m),
+            save,
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center),
