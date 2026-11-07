@@ -7,6 +7,10 @@ pub(crate) mod footprint_canvas;
 pub mod load;
 pub(crate) mod symbol_canvas;
 
+#[cfg(test)]
+#[path = "pan_app_tests.rs"]
+mod pan_app_tests;
+
 use iced::widget::{Column, Space, column, container, pick_list, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
