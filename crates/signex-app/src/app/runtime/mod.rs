@@ -40,6 +40,21 @@ impl Signex {
             canvas.set_grid(visible, visible_grid_mm);
         }
         self.sync_zoom_step();
+        self.sync_fp_layer_palette();
+    }
+
+    /// Give every footprint editor the layer colour set of the active
+    /// theme, and redraw an editor whose set changed.
+    fn sync_fp_layer_palette(&mut self) {
+        let palette = crate::library::editor::footprint::layers::LayerPalette::for_tokens(
+            &self.document_state.panel_ctx.tokens,
+        );
+        for editor in self.document_state.footprint_editors.values_mut() {
+            if editor.state.layer_palette != palette {
+                editor.state.layer_palette = palette;
+                editor.canvas_cache.clear();
+            }
+        }
     }
 
     /// Push the effective "Zoom speed" into the canvases that hold their

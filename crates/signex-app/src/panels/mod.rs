@@ -163,6 +163,12 @@ pub enum PanelKind {
     /// new tab (same `Open ▸ Footprint` flow). Visible whenever a
     /// Footprint editor tab is focused.
     FootprintLibrary,
+    /// Footprint editor layers grouped by board side, with eye toggles.
+    /// Visible whenever a Footprint editor tab is focused.
+    FootprintLayers,
+    /// Symbol editor pin table (number, name, type, part, visibility).
+    /// Visible whenever a Symbol editor tab is focused.
+    SymbolPins,
     /// VSCode-style per-file Git history. Right-dock surface that
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
@@ -194,6 +200,8 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Wiki,
     PanelKind::SchLibrary,
     PanelKind::FootprintLibrary,
+    PanelKind::FootprintLayers,
+    PanelKind::SymbolPins,
     PanelKind::History,
 ];
 
@@ -247,6 +255,8 @@ impl PanelKind {
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
+            PanelKind::FootprintLayers => "Layers",
+            PanelKind::SymbolPins => "Pins",
             PanelKind::History => "History",
         }
     }
@@ -296,6 +306,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),
         PanelKind::FootprintLibrary => view_footprint_library(ctx),
+        PanelKind::FootprintLayers => crate::library::editor::footprint::layers_panel::view(ctx),
+        PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
         PanelKind::History => return history::view_history(ctx),
     };
 

@@ -20,6 +20,49 @@ use signex_widgets::theme_ext;
 /// Brightens the accent colour without changing its alpha.
 const TAG_HOVER_BRIGHTEN: f32 = 1.3;
 
+/// Ink and soft fill of one DOF chip state. `fill` is `None` on legacy
+/// themes, which draw the state as coloured text.
+#[derive(Debug, Clone, Copy)]
+pub struct DofLook {
+    pub ink: Color,
+    pub fill: Option<Color>,
+}
+
+/// The DOF chip looks per solver state: under-constrained is `info`, fully
+/// constrained `ok`, over-constrained `err`.
+#[derive(Debug, Clone, Copy)]
+pub struct DofLooks {
+    pub under: DofLook,
+    pub full: DofLook,
+    pub over: DofLook,
+}
+
+impl DofLooks {
+    pub fn for_tokens(tokens: &ThemeTokens) -> Self {
+        use crate::styles::{PillTone, is_graphite, pill_colors};
+        if is_graphite(tokens) {
+            let look = |tone| {
+                let (fill, ink) = pill_colors(tokens, tone);
+                DofLook {
+                    ink,
+                    fill: Some(fill),
+                }
+            };
+            return Self {
+                under: look(PillTone::Info),
+                full: look(PillTone::Ok),
+                over: look(PillTone::Err),
+            };
+        }
+        let plain = |ink| DofLook { ink, fill: None };
+        Self {
+            under: plain(Color::from_rgba(0.20, 0.40, 1.00, 1.00)),
+            full: plain(Color::from_rgba(0.20, 0.85, 0.30, 1.00)),
+            over: plain(Color::from_rgba(1.00, 0.20, 0.20, 1.00)),
+        }
+    }
+}
+
 /// Every theme colour the Properties panel and its sub-forms render with.
 ///
 /// Built once per frame by `panels::properties::view_properties` and
@@ -48,6 +91,8 @@ pub struct PanelPalette {
     /// Surface the panel is drawn on; text placed directly on it picks
     /// its colour against this, not against the iced palette.
     pub panel_bg: Color,
+    /// DOF chip looks of the sketch entity row.
+    pub dof: DofLooks,
 }
 
 impl PanelPalette {
@@ -72,6 +117,7 @@ impl PanelPalette {
             },
             seg_hover: crate::styles::ti(tokens.hover),
             panel_bg: crate::styles::ti(tokens.panel_bg),
+            dof: DofLooks::for_tokens(tokens),
         }
     }
 }

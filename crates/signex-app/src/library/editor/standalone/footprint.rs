@@ -286,7 +286,7 @@ fn view_footprint_layers_strip<'a>(
 
     for layer in FpLayer::ORDER {
         let on = layers.get(*layer);
-        let swatch = layer.color();
+        let swatch = layer.color_in(editor.state.layer_palette);
         let label_color = if on { text_c } else { muted };
         let toggle_path = editor.path.clone();
         let layer_standard = layer.standard_name().to_string();

@@ -15,6 +15,7 @@ pub mod canvas;
 pub mod context_menu;
 pub mod filter_presets;
 pub mod layers;
+pub mod layers_panel;
 pub(crate) mod legacy_silk;
 pub mod move_by_modal;
 pub mod pad_stack_check;

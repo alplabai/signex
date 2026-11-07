@@ -1,5 +1,5 @@
 use iced::widget::{Column, container, pick_list, row, text};
-use iced::{Color, Element, Length, Widget as _};
+use iced::{Element, Length, Widget as _};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -137,26 +137,32 @@ pub(super) fn view_selection<'a>(
                 // no DOF colour (non-Point entities or pre-solve state).
                 if let Some(dof) = ent.dof_state {
                     use signex_sketch::solver::dof::DofColor;
-                    let (label, c) = match dof {
-                        DofColor::Under => (
-                            "Under-constrained",
-                            Color::from_rgba(0.20, 0.40, 1.00, 1.00),
-                        ),
-                        DofColor::Full => (
-                            "Fully constrained",
-                            Color::from_rgba(0.20, 0.85, 0.30, 1.00),
-                        ),
-                        DofColor::Over => {
-                            ("Over-constrained", Color::from_rgba(1.00, 0.20, 0.20, 1.00))
-                        }
+                    let (label, look) = match dof {
+                        DofColor::Under => ("Under-constrained", palette.dof.under),
+                        DofColor::Full => ("Fully constrained", palette.dof.full),
+                        DofColor::Over => ("Over-constrained", palette.dof.over),
+                    };
+                    let c = look.ink;
+                    let chip: Element<'a, PanelMsg> = match look.fill {
+                        Some(fill) => container(text(label).size(TS.caption).color(c))
+                            .padding([2.0, SP.m])
+                            .style(move |_: &iced::Theme| iced::widget::container::Style {
+                                background: Some(iced::Background::Color(fill)),
+                                border: iced::Border {
+                                    radius: crate::styles::Radii::GRAPHITE.pill.into(),
+                                    ..iced::Border::default()
+                                },
+                                ..iced::widget::container::Style::default()
+                            })
+                            .boxed(),
+                        None => text(label).size(TS.caption).color(c).boxed(),
                     };
                     col = col.push(
                         container(
                             row![
                                 container(text("DOF").size(TS.caption).color(muted))
                                     .width(Length::FillPortion(1)),
-                                container(text(label).size(TS.caption).color(c))
-                                    .width(Length::FillPortion(2)),
+                                container(chip).width(Length::FillPortion(2)),
                             ]
                             .align_y(iced::Alignment::Center),
                         )
