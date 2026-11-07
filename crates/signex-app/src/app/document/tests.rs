@@ -191,16 +191,10 @@ fn a_dirty_document_reads_dirty_on_the_dot_the_quit_guard_and_close_project() {
     for kind in ALL {
         let dir = tempfile::tempdir().unwrap();
         let (mut app, t) = fixture(dir.path(), kind, true);
-        // A half-typed value is unsaved input only: the dot shows it, the
-        // gates read the dirty flag (#2132).
-        let gates_see_it = !matches!(kind, Kind::HalfTypedRow);
+        // A half-typed value counts at every gate, as on the dot (#2132).
         assert!(dot(&app, &t), "{kind:?} dot");
-        assert_eq!(
-            close_scan_lists_something(&app),
-            gates_see_it,
-            "{kind:?} close scan"
-        );
-        assert_eq!(quit_prompts(&mut app), gates_see_it, "{kind:?} quit guard");
+        assert!(close_scan_lists_something(&app), "{kind:?} close scan");
+        assert!(quit_prompts(&mut app), "{kind:?} quit guard");
     }
 }
 

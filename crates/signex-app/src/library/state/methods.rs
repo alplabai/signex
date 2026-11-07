@@ -600,7 +600,8 @@ impl LibraryState {
         self.where_used.where_used(row_id)
     }
 
-    /// Editor addresses currently pointing at `root` that have unsaved edits.
+    /// Editor addresses currently pointing at `root` that have unsaved work,
+    /// a half-typed parameter value included (#2132).
     pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
         self.collect_dirty_editors(|key| key.library_path == root)
     }
@@ -624,7 +625,7 @@ impl LibraryState {
         let mut keys: Vec<EditorAddress> = self
             .editors
             .iter()
-            .filter(|(key, st)| Document::is_dirty(*st) && include(key))
+            .filter(|(key, st)| Document::has_unsaved_input(*st) && include(key))
             .map(|(key, _)| key.clone())
             .collect();
         keys.sort_by(|a, b| {

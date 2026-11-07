@@ -216,7 +216,11 @@ impl Signex {
             project_dirty: self.active_project_is_dirty(),
             document_has_file: own.has_file,
             has_dirty_documents: document.has_dirty_documents()
-                || self.library.editors.values().any(|editor| editor.dirty),
+                || self
+                    .library
+                    .editors
+                    .values()
+                    .any(|editor| editor.has_unsaved_edits()),
             has_document: !document.tabs.is_empty(),
             has_open_project: document.active_project.is_some(),
             has_parent_sheet: self.active_sheet_has_parent(),

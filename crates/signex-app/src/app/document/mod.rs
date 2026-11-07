@@ -9,6 +9,8 @@ mod key;
 #[cfg(test)]
 mod tests;
 mod undo_target;
+#[cfg(test)]
+mod unsaved_input_tests;
 
 pub(crate) use key::DocumentKey;
 pub(crate) use undo_target::UndoTarget;
@@ -27,8 +29,8 @@ pub(crate) trait Document {
 
     /// Unsaved work including input not yet applied to the document. Differs
     /// from [`Self::is_dirty`] only for a Component row, whose half-typed
-    /// parameter buffer counts here (#2132 decides whether it should count
-    /// at the gates too).
+    /// parameter buffer counts here. Every gate that prompts, parks or
+    /// enables Save All asks this one (#2132).
     fn has_unsaved_input(&self) -> bool {
         self.is_dirty()
     }
