@@ -327,11 +327,23 @@ impl LibraryState {
     /// The open library a draft at `path` is written, committed and cascaded
     /// through: the deepest one holding it (a nested library owns its own
     /// files), so the outer library of a nested pair is never picked. When
-    /// several libraries share the deepest folder, the one whose `.snxlib`
-    /// file name sorts first by raw bytes: the order `enclosing_library_file`
-    /// (the write lock's pick) uses, so both name one library.
+    /// several libraries share the deepest folder, the ones whose folder is a
+    /// raw prefix of `path` are preferred (a case variant of the folder on a
+    /// case-sensitive volume is another folder, which is where the worker
+    /// writes), then the one whose `.snxlib` file name sorts first by raw
+    /// bytes (`Path` order within one folder): the pick
+    /// `enclosing_library_file` makes for the write lock, so both name one
+    /// library. A nested library that is not open is invisible here; the
+    /// worker settles it from disk (`SaveLibrary::resolve`, #1972).
     pub fn write_target_library(&self, path: &Path, fold: CaseFold) -> Option<&OpenLibrary> {
-        self.deepest_libraries(path, fold)
+        let tied = self.deepest_libraries(path, fold);
+        let spelled = |lib: &&OpenLibrary| lib.root_dir().is_some_and(|dir| path.starts_with(dir));
+        let candidates: Vec<&OpenLibrary> = if tied.iter().any(spelled) {
+            tied.into_iter().filter(spelled).collect()
+        } else {
+            tied
+        };
+        candidates
             .into_iter()
             .min_by(|a, b| a.root.file_name().cmp(&b.root.file_name()))
     }

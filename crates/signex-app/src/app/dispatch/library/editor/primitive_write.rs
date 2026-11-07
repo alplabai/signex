@@ -2,7 +2,7 @@
 //! merge into the file on disk, the library commit and the version
 //! cascade. Runs on a worker, never on the UI thread.
 
-use super::cascade::{self, OtherLibrary, SaveLibrary, SavedKind};
+use super::cascade::{self, OtherLibrary, SaveLibrary, SavedKind, same_library_file};
 use super::container_save::{self, ContainerWrite, SaveOptions};
 use crate::persist::{PrimitiveWritten, WrittenContainer};
 use signex_library::{FootprintFile, LibraryError, SymbolFile};
@@ -48,6 +48,8 @@ pub(super) struct PrimitiveWrite {
 /// What both container kinds' writes share.
 struct WriteContext<'a> {
     library: &'a SaveLibrary,
+    /// The `.snxlib` `library` is, reported back as where the write went.
+    through: Option<std::path::PathBuf>,
     path: &'a std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
     options: SaveOptions,
@@ -120,17 +122,43 @@ impl PrimitiveWrite {
     ) -> Result<PrimitiveWritten, String> {
         let (path, mounted) = self.route();
         let library = SaveLibrary::resolve(&path, mounted.as_deref());
+        let through = library.root();
+        // Every place in a write order this save holds. The library the
+        // write goes through may not be the one the UI thread picked (a
+        // nested library that is not mounted, or an alias the worker
+        // rejected): its own ledger is the one the cascade records in, and
+        // the one picked becomes an other library for the cascade (#1972).
+        let mut held: Vec<(std::path::PathBuf, crate::library::writes::Turn)> = self
+            .mounted_library
+            .into_iter()
+            .zip(self.turn)
+            .chain(self.others)
+            .collect();
+        let own_turn = through.as_deref().and_then(|root| {
+            let at = held
+                .iter()
+                .position(|(held_root, _)| same_library_file(held_root, root))?;
+            Some(held.remove(at).1)
+        });
+        if let Some(turn) = &own_turn
+            && !wait(turn)
+        {
+            return Err(format!(
+                "{}: the library is still busy reading; the save was not made, try again",
+                path.display()
+            ));
+        }
         let context = WriteContext {
             library: &library,
+            through: through.clone(),
             path: &path,
             now: self.now,
             options: SaveOptions {
                 mode: self.mode,
                 bump_versions: library.bumps_versions(self.mode),
             },
-            own: self.turn.as_ref().map(|turn| turn.own_revisions()),
-            others: self
-                .others
+            own: own_turn.as_ref().map(|turn| turn.own_revisions()),
+            others: held
                 .iter()
                 .map(|(root, turn)| OtherLibrary {
                     root,
@@ -200,6 +228,7 @@ fn write_symbol(
         file: WrittenContainer::Symbol(file),
         versions: save.versions,
         commit_message: format!("Save symbol {name}"),
+        library: context.through.clone(),
         cascaded_rows: outcome.bumped,
         cascade_owed: outcome.owed,
         cascaded_elsewhere: outcome.bumped_elsewhere,
@@ -248,6 +277,7 @@ fn write_footprint(
         file: WrittenContainer::Footprint(file),
         versions: save.versions,
         commit_message: format!("Save footprint {name}"),
+        library: context.through.clone(),
         cascaded_rows: outcome.bumped,
         cascade_owed: outcome.owed,
         cascaded_elsewhere: outcome.bumped_elsewhere,

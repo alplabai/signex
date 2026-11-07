@@ -417,17 +417,38 @@ impl Signex {
         // the cascade moved changed under their open previews: clean ones
         // reload, dirty ones keep their draft and are refused as stale on
         // save (#1072).
+        // The refresh follows the library the worker wrote through, which
+        // is not always the one the UI thread picked (#1972): an open one
+        // is refreshed as the cascade's own, an unmounted one has no cache.
+        let elsewhere = self.written_elsewhere(path, written.library.as_deref());
         match refresh {
             PostSaveRefresh::Background(tasks) => {
-                tasks.push(self.refresh_primitive_cache_for(path));
-                tasks.push(self.refresh_editors_after_cascade(path, &written.cascaded_rows));
+                match &elsewhere {
+                    None => {
+                        tasks.push(self.refresh_primitive_cache_for(path));
+                        tasks
+                            .push(self.refresh_editors_after_cascade(path, &written.cascaded_rows));
+                    }
+                    Some(root) if self.library.library_at(root).is_some() => {
+                        tasks.push(self.refresh_cascaded_library(root, &written.cascaded_rows));
+                    }
+                    Some(_) => {}
+                }
                 for (root, rows) in &written.cascaded_elsewhere {
                     tasks.push(self.refresh_cascaded_library(root, rows));
                 }
             }
             PostSaveRefresh::Inline => {
-                self.refresh_primitive_cache_blocking(path);
-                self.refresh_editors_after_cascade_blocking(path, &written.cascaded_rows);
+                match &elsewhere {
+                    None => {
+                        self.refresh_primitive_cache_blocking(path);
+                        self.refresh_editors_after_cascade_blocking(path, &written.cascaded_rows);
+                    }
+                    Some(root) if self.library.library_at(root).is_some() => {
+                        self.refresh_cascaded_library_blocking(root, &written.cascaded_rows);
+                    }
+                    Some(_) => {}
+                }
                 for (root, rows) in &written.cascaded_elsewhere {
                     self.refresh_cascaded_library_blocking(root, rows);
                 }
@@ -470,6 +491,18 @@ impl Signex {
         if was_save_as {
             self.attach_library_for_path(path);
         }
+    }
+
+    /// The library a write went through when it is not the one this app
+    /// would pick for `path` (`LibraryState::write_target_library`).
+    fn written_elsewhere(
+        &self,
+        path: &std::path::Path,
+        through: Option<&std::path::Path>,
+    ) -> Option<std::path::PathBuf> {
+        let through = through?;
+        let picked = self.library_root_containing(path);
+        (picked.as_deref() != Some(through)).then(|| through.to_path_buf())
     }
 
     /// The editor the snapshot came from takes the written baseline and
