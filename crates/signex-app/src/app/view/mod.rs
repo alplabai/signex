@@ -397,6 +397,9 @@ impl Signex {
                         dirty_paths: &dirty_paths,
                         read_only_paths: &read_only_paths,
                         tooltips_enabled: interaction.tab_context_menu.is_none(),
+                        project_name: document
+                            .active_document_project()
+                            .map(|p| p.data.name.as_str()),
                     },
                     &document.panel_ctx.tokens,
                 )
