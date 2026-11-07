@@ -93,6 +93,9 @@ pub(super) fn order_preview(
     theme_tokens: &ThemeTokens,
 ) -> Element<'static, Message> {
     let graphite = is_graphite(theme_tokens);
+    if graphite {
+        return ga::order_diagram(theme_tokens, order);
+    }
     // Pick labels for each of the four slots (top-left, top-right, bottom-left,
     // bottom-right) matching the selected order.
     // Slot layout:

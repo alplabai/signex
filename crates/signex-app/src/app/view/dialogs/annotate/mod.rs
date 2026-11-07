@@ -21,6 +21,7 @@ mod controls;
 mod reprefix_confirm;
 
 use super::graphite as gr;
+use super::graphite_annotate as ga;
 use controls::{bordered_style, check_pip, lock_style, order_preview, order_radio, scroll_style};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -341,36 +342,59 @@ impl Signex {
             );
         }
 
+        // Graphite: the mock's sheet card (checkbox, mono name, Start, Add
+        // Suffix) over the same open sheets; other themes keep the table.
+        let sheets_view: Element<'_, Message> = if graphite {
+            let rows = self
+                .document_state
+                .tabs
+                .iter()
+                .map(|tab| ga::SheetRow {
+                    name: tab.title.clone(),
+                    on: Some(&tab.title) == active_title.as_ref(),
+                })
+                .collect();
+            ga::sheet_table(tokens, rows, "No schematic tab open.")
+        } else {
+            column![
+                row![
+                    text("Schematic Sheet")
+                        .size(TS.caption)
+                        .color(text_muted)
+                        .width(Length::FillPortion(6)),
+                    text("Scope")
+                        .size(TS.caption)
+                        .color(text_muted)
+                        .width(Length::FillPortion(1)),
+                    text("Ord...")
+                        .size(TS.caption)
+                        .color(text_muted)
+                        .width(Length::FillPortion(1)),
+                    text("Start")
+                        .size(TS.caption)
+                        .color(text_muted)
+                        .width(Length::FillPortion(1)),
+                    text("Add Suffix")
+                        .size(TS.caption)
+                        .color(text_muted)
+                        .width(Length::FillPortion(2)),
+                ]
+                .padding([SP.xs, SP.m]),
+                container(
+                    scrollable(sheet_rows)
+                        .height(180)
+                        .style(scroll_style(tokens))
+                )
+                .style(bordered_style(border_c, tokens)),
+            ]
+            .spacing(SP.s)
+            .boxed()
+        };
+
         let sheets_table = column![
             text("Schematic Sheets To Annotate").size(TS.label).color(text_c),
             Space::new().height(4),
-            row![
-                text("Schematic Sheet")
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(6)),
-                text("Scope")
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(1)),
-                text("Ord...")
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(1)),
-                text("Start")
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(1)),
-                text("Add Suffix")
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(2)),
-            ]
-            .padding([SP.xs, SP.m]),
-            container(scrollable(sheet_rows)
-                .height(180)
-                .style(scroll_style(tokens)))
-                .style(bordered_style(border_c, tokens)),
+            sheets_view,
             Space::new().height(4),
             text("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic.")
                 .size(TS.caption)
@@ -460,17 +484,26 @@ impl Signex {
                 };
                 let lock_tick = if is_locked { "\u{2713}" } else { "" };
                 let uuid = entry.uuid;
-                let lock_btn: Element<'_, Message> = button(
-                    container(text(lock_tick.to_string()).size(TS.body).color(text_c))
-                        .width(22)
-                        .height(16)
-                        .align_x(iced::alignment::Horizontal::Center)
-                        .align_y(iced::alignment::Vertical::Center),
-                )
-                .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
-                .padding(0.0)
-                .style(lock_style(tokens, is_locked, border_c, text_c))
-                .boxed();
+                // Graphite: the lock is a checkbox; other themes keep the pill.
+                let lock_btn: Element<'_, Message> = if graphite {
+                    button(ga::checkbox_pip(tokens, is_locked))
+                        .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
+                        .padding(0.0)
+                        .style(ga::bare_button_style)
+                        .boxed()
+                } else {
+                    button(
+                        container(text(lock_tick.to_string()).size(TS.body).color(text_c))
+                            .width(22)
+                            .height(16)
+                            .align_x(iced::alignment::Horizontal::Center)
+                            .align_y(iced::alignment::Vertical::Center),
+                    )
+                    .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
+                    .padding(0.0)
+                    .style(lock_style(tokens, is_locked, border_c, text_c))
+                    .boxed()
+                };
                 // Graphite: designators in mono; a changing row is tinted and
                 // its proposed designator takes the accent ink.
                 let (cur_text, new_text) = (
