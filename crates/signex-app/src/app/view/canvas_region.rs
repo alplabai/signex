@@ -168,7 +168,7 @@ mod tests {
         let b = bounds();
         assert_eq!(b.x, 245.0);
         assert_eq!(b.width, 1400.0 - 245.0 - 225.0);
-        let top = 36.0 + 1.0 + crate::tab_bar::TAB_STRIP_HEIGHT;
+        let top = crate::menu_bar::MENU_BAR_HEIGHT + 1.0 + crate::tab_bar::TAB_STRIP_HEIGHT;
         assert_eq!(b.y, top);
         assert_eq!(b.height, 900.0 - top - STATUS_BAR);
     }
@@ -226,8 +226,8 @@ mod tests {
     #[test]
     fn a_label_maps_to_its_window_point_under_the_default_dock_layout() {
         // Default docks: 240 px left + 5 px handle, so the canvas starts at
-        // x = 245; menu 36 + separator 1 + the tab strip put it at y below.
-        let top = 36.0 + 1.0 + crate::tab_bar::TAB_STRIP_HEIGHT;
+        // x = 245; menu bar + separator 1 + the tab strip put it at y below.
+        let top = crate::menu_bar::MENU_BAR_HEIGHT + 1.0 + crate::tab_bar::TAB_STRIP_HEIGHT;
         let at = world_to_window((10.0, 20.0), (5.0, 7.0, 3.0), bounds());
         assert_eq!(at, (245.0 + 35.0, top + 67.0));
     }

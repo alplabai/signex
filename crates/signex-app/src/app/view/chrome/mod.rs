@@ -13,10 +13,12 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 mod buttons;
+mod graphite;
 
 impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
-    /// title bar with a 36 px strip:
+    /// title bar with a strip (`MENU_BAR_HEIGHT`; Graphite themes use
+    /// `view_graphite_window_chrome`):
     ///
     /// `[leading controls] [wordmark + menus] [drag] [drag] [trailing controls]`
     ///
@@ -39,6 +41,9 @@ impl Signex {
         use iced::widget::{Space, container, mouse_area, row, svg};
         use iced::{Alignment, Background, Border, Color, Length};
 
+        if crate::styles::is_graphite(tokens) {
+            return self.view_graphite_window_chrome(menu_row, tokens);
+        }
         let theme_id = self.ui_state.effective_theme_id();
         let h_search = crate::icons::icon_chrome_search(theme_id);
 
@@ -53,6 +58,7 @@ impl Signex {
             text: text_c,
             hover: crate::styles::ti(tokens.hover),
             close_hover: Color::from_rgba(0.78, 0.22, 0.22, 1.0),
+            graphite: false,
         };
         let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
         let layout = self.window_controls_layout();
@@ -205,12 +211,22 @@ impl Signex {
     /// control layout; the palette dropdown anchors to the same `x`.
     pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
-        let (leading_w, trailing_w) = buttons::extents(&self.window_controls_layout(), fullscreen);
-        let menu_w = if self.native_menu.hides_in_window_menu() {
-            0.0
-        } else {
-            crate::menu_bar::approx_menu_bar_width()
+        let graphite = crate::styles::is_graphite(&self.document_state.panel_ctx.tokens);
+        let (leading_w, trailing_w) =
+            buttons::extents_for(&self.window_controls_layout(), fullscreen, graphite);
+        let menu_w = match (self.native_menu.hides_in_window_menu(), graphite) {
+            (true, _) => 0.0,
+            (false, true) => crate::menu_bar::approx_graphite_menu_bar_width(),
+            (false, false) => crate::menu_bar::approx_menu_bar_width(),
         };
+        if graphite {
+            return graphite::search_geometry(
+                self.ui_state.window_size.0,
+                leading_w,
+                trailing_w,
+                menu_w,
+            );
+        }
         crate::app::view::chrome_search_bar_geometry(
             self.ui_state.window_size.0,
             leading_w,

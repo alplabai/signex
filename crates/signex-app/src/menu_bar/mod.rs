@@ -305,7 +305,8 @@ impl Default for MenuContext<'_> {
 
 // ─── Constants ────────────────────────────────────────────────
 
-pub const MENU_BAR_HEIGHT: f32 = 36.0;
+/// Height of the title and menu bar (the Graphite chrome band).
+pub const MENU_BAR_HEIGHT: f32 = crate::styles::ChromeMetrics::DEFAULT.menu;
 const DROPDOWN_WIDTH: f32 = 240.0;
 
 /// Menu typography scale. Labels are the baseline; shortcuts ride a step
@@ -351,10 +352,14 @@ struct MenuColors {
     panel_bg: Color,
     border: Color,
     hover: Color,
+    /// Graphite theme: flat roots, radius-10 dropdown, themed shadow.
+    graphite: bool,
+    shadow: iced::Shadow,
 }
 
 impl MenuColors {
     fn from_tokens(tokens: &ThemeTokens) -> Self {
+        let graphite = styles::is_graphite(tokens);
         Self {
             text: styles::ti(tokens.text),
             text_muted: styles::ti(tokens.text_secondary),
@@ -363,13 +368,27 @@ impl MenuColors {
                 Color { a: t.a * 0.6, ..t }
             },
             toolbar_bg: styles::ti(tokens.toolbar_bg),
-            panel_bg: styles::ti(tokens.paper),
+            panel_bg: if graphite {
+                styles::tokens::resolve(tokens).raised
+            } else {
+                styles::ti(tokens.paper)
+            },
             border: styles::ti(tokens.border),
             hover: styles::ti(tokens.hover),
+            graphite,
+            shadow: styles::floating_shadow(
+                tokens,
+                iced::Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                    offset: iced::Vector::new(2.0, 4.0),
+                    blur_radius: 8.0,
+                },
+            ),
         }
     }
 }
 
+mod graphite;
 pub mod model;
 pub(crate) mod native;
 mod view;
@@ -382,6 +401,7 @@ mod parameter_manager_tests;
 #[cfg(test)]
 mod planned_tests;
 
+pub use graphite::approx_menu_bar_width as approx_graphite_menu_bar_width;
 pub use view::view;
 
 /// Menu-display label for `command_id`, sourced from the command table's
@@ -455,6 +475,9 @@ fn is_dark_surface(c: signex_types::theme::Color) -> bool {
 /// the pointer case; `Pressed` is the "menu is open" state (iced_aw holds
 /// the root in Pressed while its submenu is visible).
 fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
+    if mc.graphite {
+        return graphite::root_btn(label, mc);
+    }
     let label = label.to_owned();
     let hover_bg = mc.hover;
     let border = mc.border;
@@ -588,6 +611,7 @@ fn menu_item_btn(
     }
 
     let hover_bg = mc.hover;
+    let graphite_rows = mc.graphite;
     let btn = button(r).padding([SP.s, SP.l]).width(Length::Fill).style(
         move |_: &Theme, status: button::Status| {
             let bg = if enabled {
@@ -604,7 +628,12 @@ fn menu_item_btn(
                 background: bg,
                 text_color: text_c,
                 border: Border {
-                    radius: 2.0.into(),
+                    radius: if graphite_rows {
+                        graphite::ITEM_RADIUS
+                    } else {
+                        2.0
+                    }
+                    .into(),
                     ..Border::default()
                 },
                 ..button::Style::default()

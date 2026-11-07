@@ -26,6 +26,13 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, Menu
     // is Linear so fractional in-between scales (e.g. 1.5×) downsample
     // cleanly from the 2× asset rather than hard-pixelating.
     let dark = is_dark_surface(tokens.toolbar_bg);
+    if mc.graphite {
+        return iced::advanced::Widget::_boxed(
+            row![graphite::mark(dark), mb]
+                .spacing(graphite::MARK_GAP)
+                .align_y(iced::Alignment::Center),
+        );
+    }
     let handle = match (dark, wordmark_tier(ctx.scale_factor)) {
         (true, 1) => (*BRAND_WORDMARK_WHITE_1X).clone(),
         (true, 2) => (*BRAND_WORDMARK_WHITE_2X).clone(),
@@ -70,7 +77,13 @@ fn render_menu_bar(
     // Altium. `FakeHovering` (the default) only affects items inside the
     // dropdown and leaves the root dark.
     .draw_path(DrawPath::Backdrop)
-    .style(move |_theme: &Theme, _status| bar_style(mc))
+    .style(move |_theme: &Theme, _status| {
+        if mc.graphite {
+            graphite::bar_style(mc)
+        } else {
+            bar_style(mc)
+        }
+    })
 }
 
 fn bar_style(mc: MenuColors) -> menu_style::Style {
