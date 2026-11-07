@@ -13,9 +13,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
-use super::modal_chrome::{
-    danger_btn, footer_strip, header, header_title_only, primary_btn, secondary_btn,
-};
+use super::modal_chrome::{cancel_btn, danger_btn, footer_strip, header, header_title_only, primary_btn, secondary_btn};
 use super::state::{DeleteConfirmState, EditRowModalState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -328,7 +326,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         vec![reload],
         vec![
-            secondary_btn("Cancel", send.clone()(BrowserEditMsg::Cancel), tokens),
+            cancel_btn("Cancel", send.clone()(BrowserEditMsg::Cancel), tokens),
             primary_btn("Save", send(BrowserEditMsg::Save), tokens),
         ],
         tokens,
@@ -372,7 +370,7 @@ pub fn view_delete_confirm<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::BrowserDeleteRowCancel {
                     library_path: library_path.to_path_buf(),

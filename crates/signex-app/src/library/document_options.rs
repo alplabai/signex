@@ -17,7 +17,7 @@ use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{footer_strip, header_with_note, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn};
 use super::state::DocumentOptionsModalState;
 use crate::panels::SheetColor;
 
@@ -98,7 +98,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn("Cancel", LibraryMessage::DocumentOptionsCancel, tokens),
+            cancel_btn("Cancel", LibraryMessage::DocumentOptionsCancel, tokens),
             primary_btn("Apply", LibraryMessage::DocumentOptionsApply, tokens),
         ],
         tokens,

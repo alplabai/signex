@@ -20,7 +20,7 @@ use crate::styles::{Spacing, TypeScale, dialog_body, dialog_list, dialog_message
 use signex_widgets::theme_ext;
 
 use super::messages::{CloseLibraryChoice, LibraryMessage};
-use super::modal_chrome::{danger_btn, footer_strip, header, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, danger_btn, footer_strip, header, primary_btn};
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
 /// How a confirm modal names an unsaved file: relative to its library's
@@ -107,7 +107,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::Cancel),
                 tokens,

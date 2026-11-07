@@ -8,7 +8,7 @@ use signex_widgets::theme_ext;
 
 use super::{StockCopyMsg, StockCopyState};
 use crate::library::messages::LibraryMessage;
-use crate::library::modal_chrome::{header, primary_btn, secondary_btn};
+use crate::library::modal_chrome::{cancel_btn, header, primary_btn, secondary_btn};
 use crate::library::state::LibraryState;
 use crate::styles::{Spacing, TypeScale, dialog_footer_split};
 
@@ -86,7 +86,7 @@ pub fn view<'a>(
             LibraryMessage::StockCopy(StockCopyMsg::NewLibraryRequested),
             tokens,
         )],
-        vec![secondary_btn("Cancel", cancel, tokens)],
+        vec![cancel_btn("Cancel", cancel, tokens)],
     ))
     .style(crate::styles::modal_footer_strip(tokens));
 

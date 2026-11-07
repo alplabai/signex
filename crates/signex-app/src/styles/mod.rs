@@ -10,6 +10,7 @@ use signex_types::theme::ThemeTokens;
 
 mod buttons;
 mod dialog_kit;
+mod dialog_shell;
 mod graphite;
 mod graphite_buttons;
 pub mod metrics;
@@ -33,6 +34,7 @@ pub use dialog_kit::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_height,
     dialog_footer_split, dialog_hint, dialog_list, dialog_message, dialog_section,
 };
+pub use dialog_shell::{DIALOG_ICON_TILE, DialogIcon, dialog_icon_tile, dialog_intro};
 pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
 
 /// Corner radius, in px, of buttons, badges and cards.

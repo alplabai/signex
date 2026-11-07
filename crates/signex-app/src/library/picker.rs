@@ -23,7 +23,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
-use super::modal_chrome::{footer_strip, header, primary_btn_if, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header, primary_btn_if};
 use super::placed_part::{change_preview_view, datasheet_choice_view};
 use super::range_filter::range_filter_bar;
 use super::state::{PickerMode, PickerState};
@@ -163,7 +163,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens),
+            cancel_btn("Cancel", LibraryMessage::ClosePicker, tokens),
             primary_btn_if(
                 if changing { "Next" } else { "Place" },
                 if changing {

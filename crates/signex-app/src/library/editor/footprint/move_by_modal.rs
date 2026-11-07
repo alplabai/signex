@@ -122,7 +122,7 @@ pub fn view_move_by_modal<'a>(
     let footer = modal_chrome::footer_strip(
         Vec::new(),
         vec![
-            modal_chrome::secondary_btn(
+            modal_chrome::cancel_btn(
                 "Cancel",
                 LibraryMessage::PrimitiveEditorEvent {
                     path: path.clone(),

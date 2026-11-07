@@ -20,7 +20,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{footer_strip, header_with_note, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn};
 use super::state::LibraryCreateOptionsState;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -126,7 +126,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn("Cancel", LibraryMessage::LibraryCreateOptionsCancel, tokens),
+            cancel_btn("Cancel", LibraryMessage::LibraryCreateOptionsCancel, tokens),
             primary_btn(
                 "Create Library",
                 LibraryMessage::LibraryCreateOptionsConfirm,

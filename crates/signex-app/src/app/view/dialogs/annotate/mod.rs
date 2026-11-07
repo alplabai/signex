@@ -78,7 +78,7 @@ impl Signex {
         let graphite = crate::styles::is_graphite(tokens);
         let header_content: Element<'_, Message> = gr::titled_header(
             "Annotate",
-            Some("Schematic Annotation Configuration".to_string()),
+            self.detached_modal_subtitle(crate::app::state::ModalId::AnnotateDialog),
             Message::Annotate(AnnotateMsg::CloseDialog),
             tokens,
         );
@@ -731,7 +731,7 @@ This cannot be undone through Ctrl+Z alone — consider saving first.",
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
                         tokens,
                     ),

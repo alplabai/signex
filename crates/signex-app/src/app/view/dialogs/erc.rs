@@ -44,13 +44,9 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let subtitle = self
-            .document_state
-            .active_document_project()
-            .map_or_else(|| "Machine rules".to_string(), |p| p.data.name.clone());
         let header_content: Element<'_, Message> = super::graphite::titled_header(
             "Electrical Rules Check",
-            Some(subtitle),
+            self.detached_modal_subtitle(crate::app::state::ModalId::ErcDialog),
             Message::Erc(ErcMsg::CloseDialog),
             tokens,
         );
@@ -261,7 +257,7 @@ impl Signex {
             ),
             dialog_button(
                 "Cancel",
-                DialogButtonKind::Secondary,
+                DialogButtonKind::Cancel,
                 Some(Message::Erc(ErcMsg::ProfileUpdateCancelled)),
                 tokens,
             ),
@@ -374,7 +370,7 @@ impl Signex {
                     ),
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
                         tokens,
                     ),

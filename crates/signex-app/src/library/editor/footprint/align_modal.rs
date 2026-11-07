@@ -119,7 +119,7 @@ pub fn view_align_modal<'a>(
     let footer = modal_chrome::footer_strip(
         Vec::new(),
         vec![
-            modal_chrome::secondary_btn("Cancel", cancel_msg(&path), tokens),
+            modal_chrome::cancel_btn("Cancel", cancel_msg(&path), tokens),
             modal_chrome::primary_btn(
                 "OK",
                 LibraryMessage::PrimitiveEditorEvent {

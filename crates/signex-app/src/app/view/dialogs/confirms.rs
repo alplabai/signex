@@ -228,7 +228,7 @@ impl Signex {
                 dialog_body(column![prompt, remove_options].spacing(SP.m)),
                 dialog_footer(vec![dialog_button(
                     "Cancel",
-                    DialogButtonKind::Secondary,
+                    DialogButtonKind::Cancel,
                     Some(Message::Remove(RemoveMsg::Close)),
                     tokens,
                 )]),
@@ -255,7 +255,7 @@ impl Signex {
         // Discard is withheld when another open project shares the target.
         let mut buttons = vec![dialog_button(
             "Cancel",
-            DialogButtonKind::Secondary,
+            DialogButtonKind::Cancel,
             Some(Message::Remove(RemoveMsg::Close)),
             tokens,
         )];
@@ -357,7 +357,7 @@ impl Signex {
 
         let mut buttons = vec![dialog_button(
             "Cancel",
-            DialogButtonKind::Secondary,
+            DialogButtonKind::Cancel,
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::Cancel,
             ))),
@@ -492,7 +492,7 @@ impl Signex {
         let buttons = vec![
             dialog_button(
                 "Cancel",
-                DialogButtonKind::Secondary,
+                DialogButtonKind::Cancel,
                 Some(choose(ProjectCloseChoice::Cancel)),
                 tokens,
             ),

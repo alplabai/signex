@@ -22,6 +22,8 @@ mod header;
 mod project;
 mod rule_editor;
 mod sizes;
+mod title_bar;
+pub(crate) use title_bar::DIALOG_TITLE_BAR_H;
 pub(crate) use rule_editor::{RuleEditor, rule_editor};
 mod widgets;
 

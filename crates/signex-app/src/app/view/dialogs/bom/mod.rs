@@ -54,7 +54,7 @@ impl Signex {
 
         let header_content: Element<'_, Message> = super::graphite::titled_header(
             "Bill of Materials",
-            Some("BOM preview".to_string()),
+            self.detached_modal_subtitle(crate::app::state::ModalId::BomPreview),
             Message::BomPreview(BomPreviewMsg::Close),
             tokens,
         );

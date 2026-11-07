@@ -186,7 +186,7 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
         note,
         dialog_button(
             "Cancel",
-            DialogButtonKind::Secondary,
+            DialogButtonKind::Cancel,
             Some(PrefMsg::DiscardAndClose),
             t
         ),

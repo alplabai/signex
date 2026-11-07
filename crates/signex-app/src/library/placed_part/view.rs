@@ -10,7 +10,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{LibraryMessage, PlacedPartMsg};
-use crate::library::modal_chrome::{footer_strip, header, primary_btn, secondary_btn};
+use crate::library::modal_chrome::{cancel_btn, footer_strip, header, primary_btn, secondary_btn};
 use crate::library::state::{ChangePreview, DatasheetChoice};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -190,7 +190,7 @@ pub fn change_preview_view<'a>(
             LibraryMessage::PlacedPart(PlacedPartMsg::ChangePreviewBackedOut),
             tokens,
         ),
-        secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens),
+        cancel_btn("Cancel", LibraryMessage::ClosePicker, tokens),
         primary_btn(
             confirm_label(&change.preview),
             LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed),
@@ -229,7 +229,7 @@ pub fn datasheet_choice_view<'a>(
             LibraryMessage::PlacedPart(PlacedPartMsg::DatasheetPicked(index)),
         ));
     }
-    let buttons = vec![secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens)];
+    let buttons = vec![cancel_btn("Cancel", LibraryMessage::ClosePicker, tokens)];
     card(
         crate::library::picker::TITLE_OPEN_DATASHEET,
         scrollable(list).width(Length::Fill).boxed(),

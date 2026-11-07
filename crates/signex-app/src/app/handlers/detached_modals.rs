@@ -138,6 +138,7 @@ impl Signex {
             }
         }
         tasks.extend(self.sync_browser_modals());
+        self.forget_closed_dialog_windows();
         tasks.extend(self.resize_content_sized_modals());
         // A text field that had keyboard focus keeps taking typing under the
         // lock, so release it once when a confirm dialog locks the windows.
@@ -230,14 +231,10 @@ impl Signex {
     }
 
     fn detach_browser_modal(&mut self, modal: ModalId, path: std::path::PathBuf) -> Task<Message> {
-        let size = self.modal_window_size(modal);
-        let mut settings = crate::app::handlers::erc::modal_window_settings(modal, size);
-        settings.position = self.new_window_position(
-            size,
-            crate::app::handlers::window_placement::Anchor::MonitorCenter,
-            settings.position,
-        );
+        let (settings, borderless) = self.dialog_window_settings(modal);
+        let size = settings.size;
         let (id, open_task) = iced::window::open(settings);
+        self.note_dialog_window(id, borderless);
         self.ui_state
             .modal_window_sizes
             .insert(id, (size.width, size.height));

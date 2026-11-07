@@ -11,6 +11,7 @@ mod detached_confirm_tests;
 #[cfg(test)]
 mod detached_library_tests;
 pub mod detached_modals;
+mod dialog_window;
 pub mod dock;
 pub mod document_files;
 mod document_identity;

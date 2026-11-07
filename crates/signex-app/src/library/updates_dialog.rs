@@ -46,7 +46,7 @@ use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{footer_strip, header_with_note, primary_btn_if, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn_if, secondary_btn};
 use super::part_sync::{Choice, Choices, ConflictView};
 use crate::styles::{dialog_body, dialog_list, dialog_message};
 
@@ -328,7 +328,7 @@ pub fn view<'a>(
             tokens,
         )],
         vec![
-            secondary_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens),
+            cancel_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens),
             primary_btn_if(
                 &update_label,
                 LibraryMessage::LibraryUpdatesApply,

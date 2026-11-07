@@ -135,6 +135,16 @@ pub(crate) fn secondary_btn<'a>(
     dialog_button(label, DialogButtonKind::Secondary, Some(message), tokens)
 }
 
+/// The dismissing footer action (Cancel): Ghost on Graphite, bordered
+/// elsewhere. It goes first in the right-aligned button row.
+pub(crate) fn cancel_btn<'a>(
+    label: &str,
+    message: LibraryMessage,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    dialog_button(label, DialogButtonKind::Cancel, Some(message), tokens)
+}
+
 /// Accent-filled primary footer action.
 pub(crate) fn primary_btn<'a>(
     label: &str,
@@ -198,7 +208,8 @@ mod tests {
                 let _ = header_with_note("Title", "note".into(), windowed, &tokens);
                 let _ = header_title_only("Title", windowed, &tokens);
             }
-            let _ = secondary_btn("Cancel", LibraryMessage::ClosePicker, &tokens);
+            let _ = secondary_btn("Skip", LibraryMessage::ClosePicker, &tokens);
+            let _ = cancel_btn("Cancel", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn("OK", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn_if("OK", LibraryMessage::ClosePicker, false, &tokens);
             let _ = danger_btn("Delete", LibraryMessage::ClosePicker, &tokens);

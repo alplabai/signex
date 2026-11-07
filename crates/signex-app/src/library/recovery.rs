@@ -49,7 +49,7 @@ use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{danger_btn, footer_strip, header, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, danger_btn, footer_strip, header, primary_btn, secondary_btn};
 use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_hint, dialog_message};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -193,7 +193,7 @@ fn library_missing_view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
                 tokens,
@@ -292,7 +292,7 @@ fn git_missing_view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
                 tokens,
@@ -365,7 +365,7 @@ fn broken_binding_view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
                 tokens,

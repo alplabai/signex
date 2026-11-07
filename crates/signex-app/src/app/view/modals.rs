@@ -60,7 +60,7 @@ impl Signex {
         let footer = dialog_footer(vec![
             dialog_button(
                 "Cancel",
-                DialogButtonKind::Secondary,
+                DialogButtonKind::Cancel,
                 Some(Message::MoveSelection(MoveSelectionMsg::Close)),
                 tokens,
             ),
@@ -484,7 +484,7 @@ impl Signex {
         let footer = dialog_footer(vec![
             dialog_button(
                 "Cancel",
-                DialogButtonKind::Secondary,
+                DialogButtonKind::Cancel,
                 Some(Message::NetColor(NetColorMsg::CustomShow(false))),
                 &self.document_state.panel_ctx.tokens,
             ),

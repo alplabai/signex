@@ -350,14 +350,9 @@ impl Signex {
             return Task::none();
         }
 
-        let size = self.modal_window_size(modal);
-        let mut settings = modal_window_settings(modal, size);
-        settings.position = self.new_window_position(
-            size,
-            crate::app::handlers::window_placement::Anchor::MonitorCenter,
-            settings.position,
-        );
+        let (settings, borderless) = self.dialog_window_settings(modal);
         let (id, open_task) = iced::window::open(settings);
+        self.note_dialog_window(id, borderless);
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.

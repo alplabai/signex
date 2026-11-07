@@ -82,7 +82,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
                         tokens,
                     ),

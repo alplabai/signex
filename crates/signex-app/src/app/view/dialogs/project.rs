@@ -102,7 +102,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Rename(RenameMsg::Close)),
                         tokens
                     ),
@@ -251,7 +251,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::EnableVersionControl(
                             EnableVersionControlMsg::Close
                         )),
@@ -395,7 +395,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::GridProperties(GridPropertiesMsg::Close)),
                         tokens
                     ),
@@ -510,7 +510,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom)),
                         tokens
                     ),

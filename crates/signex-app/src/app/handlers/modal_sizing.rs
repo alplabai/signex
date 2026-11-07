@@ -116,7 +116,7 @@ impl Signex {
             .collect();
         let mut tasks = Vec::new();
         for (id, modal) in windows {
-            let want = self.modal_window_size(modal);
+            let want = self.dialog_window_size(modal, self.dialog_window_is_borderless(id));
             let have = self.ui_state.modal_window_sizes.get(&id).copied();
             if have != Some((want.width, want.height)) {
                 self.ui_state

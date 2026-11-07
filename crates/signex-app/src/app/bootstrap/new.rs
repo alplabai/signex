@@ -356,6 +356,7 @@ impl Signex {
                 edit_row_window_vanished: Default::default(),
                 recovery_window_vanished: 0,
                 library_modal_owners: Default::default(),
+                borderless_dialog_windows: Default::default(),
                 main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,
