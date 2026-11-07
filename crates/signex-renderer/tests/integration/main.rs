@@ -1,4 +1,6 @@
 mod no_literal_colors;
+mod pcb_10k_track_benchmark;
+mod pcb_10k_track_fixture;
 mod pcb3d_benchmark_smoke;
 mod pcb3d_runtime_glb_ingest;
 mod pcb3d_runtime_model_bridge;
