@@ -8,6 +8,8 @@ use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 use crate::app::{Document, DocumentKey, TabInfo};
 use crate::styles::{self, Spacing, TypeScale};
+
+mod graphite;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -79,6 +81,60 @@ pub struct TabMarks<'p> {
     pub dirty_paths: &'p std::collections::HashSet<std::path::PathBuf>,
     pub read_only_paths: &'p std::collections::HashSet<std::path::PathBuf>,
     pub tooltips_enabled: bool,
+    /// Name of the active document's project, shown at the right end of a
+    /// Graphite strip.
+    pub project_name: Option<&'p str>,
+}
+
+/// Title and close-glyph inks of a legacy tab.
+struct TabInk {
+    text: iced::Color,
+    muted: iced::Color,
+}
+
+/// The inside of a legacy tab: optional dirty dot, read-only note, title,
+/// close ×.
+fn legacy_tab_inner(
+    index: usize,
+    label: String,
+    ink: TabInk,
+    is_dirty: bool,
+    is_read_only: bool,
+    tokens: &ThemeTokens,
+) -> Element<'static, TabMessage> {
+    let mut content = row![]
+        .spacing(TAB_FONT_SIZE * 0.5)
+        .align_y(iced::Alignment::Center);
+    if is_dirty {
+        content = content.push(dirty_dot(tokens));
+    }
+    if is_read_only {
+        content = content.push(
+            text(READ_ONLY_LABEL)
+                .size(TAB_FONT_SIZE)
+                .color(styles::ti(tokens.text_secondary))
+                .boxed(),
+        );
+    }
+    let close_x = button(
+        container(text(CLOSE_GLYPH).size(CLOSE_GLYPH_SIZE).line_height(
+            iced::widget::text::LineHeight::Absolute(CLOSE_HIT_SIZE.into()),
+        ))
+        .width(CLOSE_HIT_SIZE)
+        .height(CLOSE_HIT_SIZE)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(0)
+    .style(styles::close_x_button(tokens, ink.muted))
+    .on_press(TabMessage::CloseClicked(index));
+    container(
+        content
+            .push(text(label).size(TAB_FONT_SIZE).color(ink.text).boxed())
+            .push(close_x.boxed()),
+    )
+    .padding([SP.s, 10.0])
+    .into()
 }
 
 pub fn view<'a>(
@@ -93,7 +149,9 @@ pub fn view<'a>(
         dirty_paths,
         read_only_paths,
         tooltips_enabled,
+        project_name,
     } = *marks;
+    let graphite = styles::is_graphite(tokens);
     // Tabs sit flush against each other — Altium parity. The active
     // pill's accent underline distinguishes it from neighbours; no
     // gap or vertical divider needed.
@@ -134,7 +192,8 @@ pub fn view<'a>(
         // 2 px accent strip below. Iced's stock Border can't do "top
         // and sides only", and a stacked-bg fake leaked accent through
         // the rounded corners (visible on dark themes).
-        let pill_style = TabPillStyle {
+        let is_read_only = read_only_paths.contains(&tab.path);
+        let legacy_pill_style = TabPillStyle {
             fill: pill_fill(tokens, is_active, is_dragging),
             // Theme border colour — reads as a subtle divider on
             // each theme's chrome surface. Tried pure black; it
@@ -147,39 +206,36 @@ pub fn view<'a>(
             // rounded top corners + accent stripe at the bottom.
             accent_position: AccentPosition::Bottom,
         };
-        let mut content = row![]
-            .spacing(TAB_FONT_SIZE * 0.5)
-            .align_y(iced::Alignment::Center);
-        if tab_is_dirty(tab, dirty_paths) {
-            content = content.push(dirty_dot(tokens));
-        }
-        let is_read_only = read_only_paths.contains(&tab.path);
-        if is_read_only {
-            content = content.push(
-                text(READ_ONLY_LABEL)
-                    .size(TAB_FONT_SIZE)
-                    .color(styles::ti(tokens.text_secondary))
-                    .boxed(),
-            );
-        }
-        let close_x = button(
-            container(text(CLOSE_GLYPH).size(CLOSE_GLYPH_SIZE).line_height(
-                iced::widget::text::LineHeight::Absolute(CLOSE_HIT_SIZE.into()),
-            ))
-            .width(CLOSE_HIT_SIZE)
-            .height(CLOSE_HIT_SIZE)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center),
-        )
-        .padding(0)
-        .style(styles::close_x_button(tokens, text_muted))
-        .on_press(TabMessage::CloseClicked(i));
-        let inner = container(
-            content
-                .push(text(label).size(TAB_FONT_SIZE).color(text_c).boxed())
-                .push(close_x.boxed()),
-        )
-        .padding([SP.s, 10.0]);
+        let pill_style = if graphite {
+            graphite::pill_style(tokens, is_active, is_dragging, is_last)
+        } else {
+            legacy_pill_style
+        };
+        let inner: Element<'_, TabMessage> = if graphite {
+            graphite::tab_inner(
+                graphite::TabFace {
+                    index: i,
+                    kind: &tab.kind,
+                    title: label,
+                    is_active,
+                    is_dirty: tab_is_dirty(tab, dirty_paths),
+                    read_only: is_read_only,
+                },
+                tokens,
+            )
+        } else {
+            legacy_tab_inner(
+                i,
+                label,
+                TabInk {
+                    text: text_c,
+                    muted: text_muted,
+                },
+                tab_is_dirty(tab, dirty_paths),
+                is_read_only,
+                tokens,
+            )
+        };
         // Cursor: default Pointer on hover so the bar reads as
         // "clickable tabs", switching to Grabbing only while a tab
         // is in flight so the drag-to-reorder / drag-to-undock
@@ -190,12 +246,13 @@ pub fn view<'a>(
         } else {
             iced::mouse::Interaction::Pointer
         };
-        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner.boxed(), pill_style))
-            .on_press(TabMessage::StartDrag(i))
-            .on_release(TabMessage::Select(i))
-            .on_right_press(TabMessage::ContextMenu(i))
-            .interaction(cursor)
-            .boxed();
+        let tab_el: Element<'_, TabMessage> =
+            mouse_area(TabPill::new(inner, pill_style).square(graphite))
+                .on_press(TabMessage::StartDrag(i))
+                .on_release(TabMessage::Select(i))
+                .on_right_press(TabMessage::ContextMenu(i))
+                .interaction(cursor)
+                .boxed();
         // The pill shows an ellipsized title; hovering names the full path.
         let tab_el: Element<'_, TabMessage> =
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
@@ -209,6 +266,16 @@ pub fn view<'a>(
                 None => tab_el,
             };
         bar = bar.push(tab_el);
+    }
+
+    if graphite {
+        let tabs = scrollable(bar)
+            .id(TAB_STRIP_ID)
+            .direction(Direction::Horizontal(
+                Scrollbar::new().width(3).scroller_width(3),
+            ))
+            .width(Length::Fill);
+        return graphite::strip(tabs.into(), project_name, tokens);
     }
 
     // Strip baseline — 1 px theme-border line at the bottom of the
@@ -264,6 +331,16 @@ pub fn view<'a>(
 pub const TAB_STRIP_HEIGHT: f32 =
     (CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT).round();
 
+/// Height of the strip under `tokens`: Graphite is the 34 px band from
+/// [`styles::ChromeMetrics`]; any other theme keeps [`TAB_STRIP_HEIGHT`].
+pub fn tab_strip_height(tokens: &ThemeTokens) -> f32 {
+    if styles::is_graphite(tokens) {
+        graphite::strip_height()
+    } else {
+        TAB_STRIP_HEIGHT
+    }
+}
+
 /// Padding above the pills, and the baseline line below them.
 const STRIP_TOP_PAD: f32 = 2.0;
 const BASELINE_HEIGHT: f32 = 1.0;
@@ -271,6 +348,17 @@ const BASELINE_HEIGHT: f32 = 1.0;
 /// The strip drawn with no document open: same height and background as the
 /// tab strip, nothing in it.
 pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+    if styles::is_graphite(tokens) {
+        let bg = styles::ti(tokens.bg);
+        return container(iced::widget::Space::new())
+            .width(Length::Fill)
+            .height(tab_strip_height(tokens))
+            .style(move |_: &iced::Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(bg)),
+                ..iced::widget::container::Style::default()
+            })
+            .boxed();
+    }
     container(iced::widget::Space::new())
         .width(Length::Fill)
         .height(TAB_STRIP_HEIGHT)
@@ -426,9 +514,33 @@ mod tests {
             dirty_paths: &none,
             read_only_paths: &none,
             tooltips_enabled: true,
+            project_name: None,
         };
         let strip = super::view(&[], 0, None, &none, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);
+    }
+
+    /// A Graphite theme draws the 34 px strip, in the strip and in the
+    /// placeholder alike; other themes keep `TAB_STRIP_HEIGHT`.
+    #[test]
+    fn graphite_strip_and_placeholder_are_the_graphite_height() {
+        use iced::Length;
+        use iced::advanced::Widget as _;
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        assert_eq!(super::tab_strip_height(&tokens), 34.0);
+        let fixed = Length::Fixed(34.0);
+        assert_eq!(super::placeholder::<()>(&tokens).size().height, fixed);
+        let none = HashSet::new();
+        let marks = super::TabMarks {
+            dirty_paths: &none,
+            read_only_paths: &none,
+            tooltips_enabled: true,
+            project_name: Some("Sensor node rev B"),
+        };
+        let strip = super::view(&[], 0, None, &none, &marks, &tokens);
+        assert_eq!(strip.size().height, fixed);
+        let legacy = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        assert_eq!(super::tab_strip_height(&legacy), TAB_STRIP_HEIGHT);
     }
 
     fn tab(path: &str) -> TabInfo {

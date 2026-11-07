@@ -50,6 +50,7 @@ impl Signex {
             extent(Left, ui.left_width),
             extent(Right, ui.right_width),
             extent(Bottom, ui.bottom_height),
+            &self.document_state.panel_ctx.tokens,
         )
     }
 
@@ -419,7 +420,7 @@ impl Signex {
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
         // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
         // plus a small gap so the dropdown visually touches.
-        let ab_y: f32 = canvas_region::CHROME_TOP
+        let ab_y: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens)
             + crate::active_bar::BAR_TOP_MARGIN_PX
             + crate::active_bar::BAR_HEIGHT_PX
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;

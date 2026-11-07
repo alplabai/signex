@@ -20,6 +20,38 @@ pub const STATUS_BAR_HORIZONTAL_PADDING: f32 = SP.m;
 /// probe in `canvas_region` ties it to the laid-out bar.
 pub const STATUS_BAR_HEIGHT: f32 = TS.body * crate::styles::LINE_HEIGHT + 2.0 + 2.0 * SP.xs;
 
+mod graphite;
+pub use graphite::{
+    POPUP_GAP, POPUP_PADDING, POPUP_RIGHT_MARGIN, POPUP_WIDTH, check_ink, panels_button, popup,
+    popup_height, popup_row, popup_row_height,
+};
+
+/// Height of the status bar under `tokens`: Graphite is a fixed band from
+/// [`styles::ChromeMetrics`], any other theme fits its content.
+pub fn status_bar_height(tokens: &ThemeTokens) -> f32 {
+    if styles::is_graphite(tokens) {
+        styles::ChromeMetrics::DEFAULT.status
+    } else {
+        STATUS_BAR_HEIGHT
+    }
+}
+
+/// Everything the status bar shows, for the Graphite layout.
+pub(crate) struct Readout<'r> {
+    pub x: f64,
+    pub y: f64,
+    pub grid_visible: bool,
+    pub snap_enabled: bool,
+    pub zoom: f64,
+    pub unit: Unit,
+    pub tool: String,
+    pub grid_size_mm: f32,
+    pub selection: Option<String>,
+    pub pending_git_commits: usize,
+    pub altium_import: Option<&'r str>,
+    pub activity: Option<&'r str>,
+}
+
 /// Format a one-line breakdown of the active canvas selection.
 /// Returns `None` when the selection is empty (status bar omits the segment).
 fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
@@ -78,6 +110,25 @@ pub fn view<'a>(
     altium_import: Option<&str>,
     activity: Option<&str>,
 ) -> Element<'a, StatusBarRequest> {
+    if styles::is_graphite(tokens) {
+        return graphite::view(
+            &Readout {
+                x,
+                y,
+                grid_visible,
+                snap_enabled,
+                zoom,
+                unit,
+                tool: format!("{tool}"),
+                grid_size_mm,
+                selection: selection_summary(selected),
+                pending_git_commits,
+                altium_import,
+                activity,
+            },
+            tokens,
+        );
+    }
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
         Unit::Mil => format!("X:{:.1} Y:{:.1}", x / 0.0254, y / 0.0254),

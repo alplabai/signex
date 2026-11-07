@@ -3,15 +3,15 @@
 //! renderer.
 
 use iced::Rectangle;
+use signex_types::theme::ThemeTokens;
 
 /// Menu row, 1 px separator and tab strip above the canvas. The tab strip is
-/// reserved even with no tab open (`view` pushes a placeholder).
-pub(super) const CHROME_TOP: f32 =
-    crate::menu_bar::MENU_BAR_HEIGHT + CHROME_SEPARATOR + crate::tab_bar::TAB_STRIP_HEIGHT;
+/// reserved even with no tab open (`view` pushes a placeholder). Its height
+/// follows the theme: Graphite is taller.
+pub(super) fn chrome_top(tokens: &ThemeTokens) -> f32 {
+    crate::menu_bar::MENU_BAR_HEIGHT + CHROME_SEPARATOR + crate::tab_bar::tab_strip_height(tokens)
+}
 const CHROME_SEPARATOR: f32 = 1.0;
-/// Room taken by the status bar under the docks; its height follows its
-/// content; a probe test ties it to the laid-out bar.
-const STATUS_BAR: f32 = crate::status_bar::STATUS_BAR_HEIGHT;
 /// Resize handle drawn beside an open dock.
 const HANDLE: f32 = 5.0;
 /// A collapsed dock keeps this strip.
@@ -44,13 +44,16 @@ pub(in crate::app) fn canvas_bounds(
     left: DockExtent,
     right: DockExtent,
     bottom: DockExtent,
+    tokens: &ThemeTokens,
 ) -> Rectangle {
+    let top = chrome_top(tokens);
+    let status = crate::status_bar::status_bar_height(tokens);
     let x = left.footprint();
     let width = (window.0 - x - right.footprint()).max(0.0);
-    let height = (window.1 - CHROME_TOP - STATUS_BAR - bottom.footprint()).max(0.0);
+    let height = (window.1 - top - status - bottom.footprint()).max(0.0);
     Rectangle {
         x,
-        y: CHROME_TOP,
+        y: top,
         width,
         height,
     }
@@ -119,7 +122,19 @@ mod tests {
     /// into it) nor overshoot it by a visible gap.
     #[test]
     fn status_bar_reservation_matches_the_laid_out_bar() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        use signex_types::theme::ThemeId;
+        for id in [ThemeId::Signex, ThemeId::GraphiteLight] {
+            status_bar_reservation_matches(id);
+        }
+    }
+
+    fn legacy() -> ThemeTokens {
+        signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex)
+    }
+
+    fn status_bar_reservation_matches(id: signex_types::theme::ThemeId) {
+        let tokens = signex_types::theme::theme_tokens(id);
+        let reserved = crate::status_bar::status_bar_height(&tokens);
         let bar = crate::status_bar::view(
             0.0,
             0.0,
@@ -141,8 +156,8 @@ mod tests {
         )
         .height;
         assert!(
-            (STATUS_BAR - real).abs() < 0.5,
-            "reserved {STATUS_BAR} px but the status bar lays out {real} px"
+            (reserved - real).abs() < 0.5,
+            "{id:?}: reserved {reserved} px but the status bar lays out {real} px"
         );
     }
 
@@ -160,7 +175,7 @@ mod tests {
     };
 
     fn bounds() -> Rectangle {
-        canvas_bounds((1400.0, 900.0), dock(240.0), dock(220.0), NONE)
+        canvas_bounds((1400.0, 900.0), dock(240.0), dock(220.0), NONE, &legacy())
     }
 
     #[test]
@@ -170,7 +185,17 @@ mod tests {
         assert_eq!(b.width, 1400.0 - 245.0 - 225.0);
         let top = 36.0 + 1.0 + crate::tab_bar::TAB_STRIP_HEIGHT;
         assert_eq!(b.y, top);
-        assert_eq!(b.height, 900.0 - top - STATUS_BAR);
+        assert_eq!(b.height, 900.0 - top - crate::status_bar::STATUS_BAR_HEIGHT);
+    }
+
+    /// A Graphite theme reserves the taller 34 px strip and 26 px footer.
+    #[test]
+    fn graphite_bounds_use_the_graphite_strip_and_footer() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let b = canvas_bounds((1400.0, 900.0), dock(240.0), dock(220.0), NONE, &tokens);
+        let m = crate::styles::ChromeMetrics::DEFAULT;
+        assert_eq!(b.y, crate::menu_bar::MENU_BAR_HEIGHT + 1.0 + m.tab_strip);
+        assert_eq!(b.height, 900.0 - b.y - m.status);
     }
 
     #[test]
@@ -199,7 +224,7 @@ mod tests {
 
     #[test]
     fn a_card_wider_than_the_canvas_is_clamped_to_its_left_edge() {
-        let b = canvas_bounds((500.0, 400.0), dock(240.0), dock(220.0), NONE);
+        let b = canvas_bounds((500.0, 400.0), dock(240.0), dock(220.0), NONE, &legacy());
         let (x, _) = place_card((b.x + 10.0, 200.0), (260.0, 50.0), b);
         assert_eq!(x, b.x);
     }
