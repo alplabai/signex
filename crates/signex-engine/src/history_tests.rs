@@ -35,7 +35,7 @@ fn long_edit_sequence_round_trips_through_undo_and_redo() {
     let mut engine = Engine::new(test_sheet()).unwrap();
     let mut states = vec![state(&engine)];
     // More edits than the history cap, mixing two collections.
-    let edits = crate::history::MAX_HISTORY_ENTRIES + 20;
+    let edits = signex_history::DEFAULT_UNDO_DEPTH + 20;
     for i in 0..edits {
         let command = if i % 3 == 2 {
             Command::PlaceJunction {
@@ -48,7 +48,7 @@ fn long_edit_sequence_round_trips_through_undo_and_redo() {
         states.push(state(&engine));
     }
 
-    let depth = crate::history::MAX_HISTORY_ENTRIES;
+    let depth = signex_history::DEFAULT_UNDO_DEPTH;
     for step in 1..=depth {
         engine.undo().unwrap();
         assert_eq!(state(&engine), states[edits - step]);
@@ -75,8 +75,8 @@ fn consecutive_entries_share_collections_the_step_did_not_touch() {
         })
         .unwrap();
 
-    let last = &engine.history[3].snapshot;
-    let before = &engine.history[2].snapshot;
+    let last = &engine.history.undo_steps()[3].snapshot;
+    let before = &engine.history.undo_steps()[2].snapshot;
     let shared = last.shared_with(before);
     assert!(!shared.contains(&"wires"), "wires differ between the steps");
     for untouched in ["symbols", "junctions", "labels", "drawings", "buses"] {
@@ -140,6 +140,27 @@ mod field_edit_runs {
         assert_eq!(mpn(&engine).as_deref(), Some("AB"));
         engine.undo().unwrap();
         assert_eq!(mpn(&engine).as_deref(), Some("A"));
+    }
+
+    #[test]
+    fn an_unrelated_edit_between_two_keystrokes_ends_the_run() {
+        let (mut engine, id) = engine_with_symbol();
+        set(&mut engine, id, "MPN", "A");
+        engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: true,
+            })
+            .unwrap();
+        set(&mut engine, id, "MPN", "AB");
+
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine).as_deref(), Some("A"), "the second is a step");
+        engine.undo().unwrap();
+        assert!(!engine.document().symbols[0].dnp);
+        assert_eq!(mpn(&engine).as_deref(), Some("A"));
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine), None);
     }
 
     #[test]

@@ -1,0 +1,22 @@
+id: ssl-verify-none-rust
+valid:
+  - |
+    use openssl::ssl::SSL_VERIFY_NONE;
+    connector.builder_mut().set_verify(SSL_VERIFY_PEER);
+invalid:
+  - |
+    use openssl;
+    connector.builder_mut().set_verify(openssl::ssl::SSL_VERIFY_NONE);
+  - |
+    use openssl::ssl;
+    connector.builder_mut().set_verify(ssl::SSL_VERIFY_NONE);
+  - |
+    use openssl::ssl::{SslMethod, SslConnectorBuilder, SSL_VERIFY_NONE};
+    connector.builder_mut().set_verify(SSL_VERIFY_NONE);
+  - |
+    use openssl::ssl::{
+      SslMethod, 
+      SslConnectorBuilder, 
+      SSL_VERIFY_NONE
+    };
+    connector.builder_mut().set_verify(SSL_VERIFY_NONE);

@@ -9,6 +9,7 @@ signex-app -> signex-engine
 signex-app -> signex-erc
 signex-app -> signex-erc-dsl
 signex-app -> signex-gfx
+signex-app -> signex-history
 signex-app -> signex-library
 signex-app -> signex-net
 signex-app -> signex-output
@@ -20,6 +21,7 @@ signex-bake -> signex-library
 signex-bake -> signex-sketch
 signex-bake -> signex-types
 signex-bom -> signex-types
+signex-engine -> signex-history
 signex-engine -> signex-net
 signex-engine -> signex-types
 signex-erc -> signex-net

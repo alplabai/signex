@@ -1,0 +1,13 @@
+id: reqwest-accept-invalid-rust
+valid:
+  - |
+    reqwest::Client::builder().user_agent("USER AGENT")
+invalid:
+  - |
+    reqwest::Client::builder().danger_accept_invalid_hostnames(true)
+  - |
+    reqwest::Client::builder().danger_accept_invalid_certs(true)
+  - |
+    reqwest::Client::builder().user_agent("USER AGENT").cookie_store(true).danger_accept_invalid_hostnames(true)
+  - |
+    reqwest::Client::builder().user_agent("USER AGENT").cookie_store(true).danger_accept_invalid_certs(true)      

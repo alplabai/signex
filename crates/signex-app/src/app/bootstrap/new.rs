@@ -137,6 +137,8 @@ impl Signex {
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
         let ui_scale =
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
+        let undo_depth =
+            crate::undo_depth::read_undo_depth_pref_from(prefs, &crate::fonts::prefs_file_path());
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
@@ -484,6 +486,7 @@ impl Signex {
                 recovery_check_due: Vec::new(),
                 sheet_edit_epoch: 0,
                 symbol_editors_opened: 0,
+                undo_depth,
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
                 project_tabs: std::collections::HashMap::new(),

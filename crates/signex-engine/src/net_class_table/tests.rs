@@ -339,3 +339,69 @@ fn assign_net_round_trips_through_json() {
         command
     );
 }
+
+#[test]
+fn step_ids_are_never_reused_across_eviction_undo_and_redo() {
+    let mut classes = Vec::new();
+    let mut history = NetClassHistory::default();
+    let mut seen = std::collections::HashSet::new();
+    for i in 0..(HISTORY_LIMIT + 20) {
+        history.apply(&mut classes, add(&format!("C{i}"))).unwrap();
+        let id = history.top_undo_id().unwrap();
+        assert!(seen.insert(id), "id {id} was minted twice");
+    }
+    // The oldest 20 steps were evicted, their ids stay spent.
+    assert!(history.undo(&mut classes));
+    let redo_id = history.top_redo_id().unwrap();
+    assert!(history.redo(&mut classes));
+    assert_eq!(
+        history.top_undo_id(),
+        Some(redo_id),
+        "an id travels with its step"
+    );
+    history.apply(&mut classes, add("Fresh")).unwrap();
+    assert!(
+        seen.insert(history.top_undo_id().unwrap()),
+        "a new step is a new id"
+    );
+    // Undoing everything leaves the oldest kept step's id below the newest.
+    while history.undo(&mut classes) {}
+    assert!(history.top_redo_id().is_some());
+    assert!(!history.can_undo());
+}
+
+#[test]
+fn the_depth_is_a_parameter_and_lowering_it_trims_the_oldest() {
+    let mut classes = Vec::new();
+    let mut history = NetClassHistory::with_depth(3);
+    for i in 0..5 {
+        history.apply(&mut classes, add(&format!("C{i}"))).unwrap();
+    }
+    let mut steps = 0;
+    while history.undo(&mut classes) {
+        steps += 1;
+    }
+    assert_eq!((steps, classes.len()), (3, 2), "depth 3 keeps three steps");
+    while history.redo(&mut classes) {}
+
+    history.set_undo_depth(1);
+    assert!(history.undo(&mut classes));
+    assert!(!history.undo(&mut classes), "one step left after lowering");
+    assert_eq!(classes.len(), 4);
+}
+
+#[test]
+fn depth_one_and_a_thousand_are_honoured() {
+    for depth in [1, 1000] {
+        let mut classes = Vec::new();
+        let mut history = NetClassHistory::with_depth(depth);
+        for i in 0..depth + 2 {
+            history.apply(&mut classes, add(&format!("C{i}"))).unwrap();
+        }
+        let mut steps = 0;
+        while history.undo(&mut classes) {
+            steps += 1;
+        }
+        assert_eq!(steps, depth);
+    }
+}

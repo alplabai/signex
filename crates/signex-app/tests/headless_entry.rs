@@ -53,6 +53,9 @@ fn probe() {
     match scenario.as_str() {
         "run" => run(),
         "no_override" => no_override(),
+        "undo_round_trip" => undo_round_trip(),
+        "undo_depth" => undo_depth(),
+        "undo_depth_dispatch" => undo_depth_dispatch(),
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -206,4 +209,159 @@ fn snapshot(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
         }
     }
     out
+}
+
+#[test]
+fn a_headless_undo_and_redo_of_a_sheet_edit_move_the_dirty_state() {
+    run_probe("undo_round_trip");
+}
+
+/// Edit, undo, redo through command ids only, no window: the sheet and its
+/// dirty state follow the history.
+fn undo_round_trip() {
+    use signex_types::schematic::{Point, SchematicSheet, Wire};
+
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, boot).expect("boot settled");
+
+    let path = isolated.path().join("round-trip.snxsch");
+    let wire = Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        ..Default::default()
+    };
+    let mut seed = signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("engine");
+    seed.save().expect("seed file");
+    app.headless_answers()
+        .expect("headless answers")
+        .replace_all([("path".to_string(), path.display().to_string())]);
+    let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::Ran);
+    driver.settle(&mut app, task).expect("open settled");
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(path.as_path())
+    );
+
+    let wires = |app: &Signex| app.document_state.engines[&path].document().wires.len();
+    let mut run = |app: &mut Signex, name: &str| {
+        let (outcome, task) = app.dispatch_command_headless(&id(name), CommandArgs::none());
+        assert_eq!(outcome, CommandOutcome::Ran, "{name}");
+        driver.settle(app, task).expect("command settled");
+    };
+    assert!(!app.document_state.is_document_dirty(&path));
+
+    run(&mut app, "select_all");
+    run(&mut app, "delete_selection");
+    assert_eq!(wires(&app), 0, "the delete ran");
+    assert!(
+        app.document_state.is_document_dirty(&path),
+        "an edit is dirty"
+    );
+
+    run(&mut app, "undo");
+    assert_eq!(wires(&app), 1, "undo brought the wire back");
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "undo back to the saved state is clean"
+    );
+
+    run(&mut app, "redo");
+    assert_eq!(wires(&app), 0);
+    assert!(app.document_state.is_document_dirty(&path));
+}
+
+#[test]
+fn the_undo_depth_comes_from_prefs_or_the_option_and_a_bad_value_is_reported() {
+    run_probe("undo_depth");
+}
+
+/// `prefs.json` first, then the boot option over it: 1000 is taken as is,
+/// 1001 is clamped, zero and text give the default, and each of the last
+/// three is a warning naming the value.
+fn undo_depth() {
+    signex_app::diagnostics::init_logging().expect("logger");
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let prefs = isolated.path().join("prefs.json");
+
+    let cases: [(&str, usize, bool); 5] = [
+        ("1000", 1000, false),
+        ("1001", 1000, true),
+        ("0", 100, true),
+        ("\"many\"", 100, true),
+        ("1", 1, false),
+    ];
+    for (stored, want, warned) in cases {
+        std::fs::write(&prefs, format!(r#"{{"undo_depth":{stored}}}"#)).expect("prefs");
+        let before = signex_app::diagnostics::newest_entry_id();
+        let (app, _boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+        assert_eq!(app.document_state.undo_depth, want, "prefs {stored}");
+        let logged = signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("undo_depth") && e.message.contains("prefs.json"));
+        assert_eq!(logged, warned, "prefs {stored}");
+    }
+
+    std::fs::write(&prefs, br#"{"undo_depth":7}"#).expect("prefs");
+    let cases: [(&str, usize, bool); 5] = [
+        ("1000", 1000, false),
+        ("1001", 1000, true),
+        ("0", 100, true),
+        ("many", 100, true),
+        ("3", 3, false),
+    ];
+    for (typed, want, warned) in cases {
+        let before = signex_app::diagnostics::newest_entry_id();
+        let (app, _boot) =
+            Signex::boot_headless_with_undo_depth(Vec::new(), &rules(), typed).expect("boot");
+        assert_eq!(app.document_state.undo_depth, want, "option {typed}");
+        let logged = signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("the undo depth option") && e.message.contains(typed));
+        assert_eq!(logged, warned, "option {typed}");
+    }
+    let (app, _boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    assert_eq!(
+        app.document_state.undo_depth, 7,
+        "no option: prefs.json wins"
+    );
+}
+
+#[test]
+fn a_headless_command_applies_the_undo_depth_without_an_update() {
+    run_probe("undo_depth_dispatch");
+}
+
+/// `dispatch_command_headless` never calls `update`: an engine that exists
+/// when a command returns still gets the configured depth.
+fn undo_depth_dispatch() {
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, _boot) =
+        Signex::boot_headless_with_undo_depth(Vec::new(), &rules(), "3").expect("boot");
+    let path = isolated.path().join("depth.snxsch");
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    assert_eq!(engine.undo_depth(), 100);
+    app.document_state.engines.insert(path.clone(), engine);
+    let (outcome, _task) =
+        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::Ran);
+    assert_eq!(app.document_state.engines[&path].undo_depth(), 3);
 }

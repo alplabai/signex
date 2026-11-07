@@ -1,0 +1,13 @@
+[package]
+name = "signex-history"
+description = "Snapshot undo/redo history with a save point, shared by every Signex document"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# Leaf crate: no dependencies, UI-free.
+[dependencies]
+
+[lints]
+workspace = true

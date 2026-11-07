@@ -12,10 +12,12 @@
 //! inverse commands.
 
 use serde::{Deserialize, Serialize};
+use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::net_class::{NetClass, NetClassStyle};
 
-/// How many undo steps are kept.
-pub const HISTORY_LIMIT: usize = 100;
+/// How many undo steps are kept unless the `undo_depth` setting says
+/// otherwise.
+pub const HISTORY_LIMIT: usize = DEFAULT_UNDO_DEPTH;
 
 /// One edit to the net-class table. Classes are addressed by name, which is
 /// unique within the table.
@@ -193,14 +195,38 @@ struct Step {
 }
 
 /// Undo/redo for one project's net-class table.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct NetClassHistory {
-    undo: Vec<Step>,
-    redo: Vec<Step>,
+    history: History<Step>,
     next_id: StepId,
 }
 
+impl Default for NetClassHistory {
+    fn default() -> Self {
+        Self::with_depth(HISTORY_LIMIT)
+    }
+}
+
 impl NetClassHistory {
+    /// An empty history that keeps `depth` undo steps (the `undo_depth`
+    /// setting).
+    pub fn with_depth(depth: usize) -> Self {
+        Self {
+            history: History::unknown(depth),
+            next_id: 0,
+        }
+    }
+
+    /// Keep `depth` undo steps from now on; lowering it drops the oldest.
+    pub fn set_undo_depth(&mut self, depth: usize) {
+        self.history.set_cap(depth);
+    }
+
+    /// How many undo steps are kept.
+    pub fn undo_depth(&self) -> usize {
+        self.history.cap()
+    }
+
     /// Apply `command` as one undo step. A refused command, or one that
     /// changes nothing, leaves the history untouched.
     pub fn apply(
@@ -216,59 +242,49 @@ impl NetClassHistory {
         let before = std::mem::replace(classes, next);
         let id = self.next_id;
         self.next_id += 1;
-        self.undo.push(Step {
+        self.history.record(Step {
             id,
             classes: before,
         });
-        if self.undo.len() > HISTORY_LIMIT {
-            self.undo.remove(0);
-        }
-        self.redo.clear();
         Ok(())
     }
 
     /// Step back. `false` when there is nothing to undo.
     pub fn undo(&mut self, classes: &mut Vec<NetClass>) -> bool {
-        match self.undo.pop() {
-            Some(step) => {
-                let id = step.id;
-                let classes = std::mem::replace(classes, step.classes);
-                self.redo.push(Step { id, classes });
-                true
-            }
-            None => false,
-        }
+        self.step(classes, true)
     }
 
     /// Step forward. `false` when there is nothing to redo.
     pub fn redo(&mut self, classes: &mut Vec<NetClass>) -> bool {
-        match self.redo.pop() {
-            Some(step) => {
-                let id = step.id;
-                let classes = std::mem::replace(classes, step.classes);
-                self.undo.push(Step { id, classes });
-                true
-            }
-            None => false,
-        }
+        self.step(classes, false)
+    }
+
+    fn step(&mut self, classes: &mut Vec<NetClass>, undo: bool) -> bool {
+        let Some(step) = self.history.begin_step(undo) else {
+            return false;
+        };
+        let id = step.id;
+        let classes = std::mem::replace(classes, step.classes);
+        self.history.finish_step(Step { id, classes }, undo);
+        true
     }
 
     /// The step an undo would revert.
     pub fn top_undo_id(&self) -> Option<StepId> {
-        self.undo.last().map(|step| step.id)
+        self.history.undo_steps().last().map(|step| step.id)
     }
 
     /// The step a redo would re-apply.
     pub fn top_redo_id(&self) -> Option<StepId> {
-        self.redo.last().map(|step| step.id)
+        self.history.redo_steps().last().map(|step| step.id)
     }
 
     pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
+        self.history.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
+        self.history.can_redo()
     }
 }
 

@@ -6,8 +6,6 @@ use crate::patch::{DocumentPatch, PatchPair};
 use super::Engine;
 use super::history_snapshot::SheetSnapshot;
 
-pub(crate) const MAX_HISTORY_ENTRIES: usize = 100;
-
 #[derive(Debug)]
 pub(super) struct HistoryEntry {
     pub snapshot: SheetSnapshot,
@@ -56,16 +54,14 @@ impl Engine {
             self.record_history(before, patch_pair);
             return;
         }
-        let continues = self.redo_stack.is_empty()
+        let continues = !self.history.can_redo()
             && self.field_edit_run.as_ref().is_some_and(|run| {
                 run.symbol_id == symbol_id && run.key == key && run.position == self.undo_position()
             });
         if continues {
             // The run rewrites the entry the history already ends in, so a
             // save taken at this position no longer matches the document.
-            if self.saved_point == Some(self.undo_position()) {
-                self.saved_point = None;
-            }
+            self.history.forget_if_current();
         } else {
             self.record_history(before, patch_pair);
             self.field_edit_run = Some(FieldEditRun {
@@ -85,44 +81,65 @@ impl Engine {
     /// The document now matches the file just written: remember this point
     /// of the history, so undoing or redoing back to it is clean again.
     pub fn mark_saved(&mut self) {
-        self.saved_point = Some(self.undo_position());
+        self.history.mark_saved();
     }
 
     /// The file holds something no step of this history reproduces (a save
     /// whose snapshot the document has moved past): nothing is clean until
     /// the next [`Engine::mark_saved`].
     pub fn forget_save_point(&mut self) {
-        self.saved_point = None;
+        self.history.forget();
     }
 
     /// Does the document equal the last saved or loaded state, judged by
     /// the history alone? Undo and redo move this both ways; an edit made
     /// below the save point makes it unreachable until the next save.
     pub fn is_at_save_point(&self) -> bool {
-        self.saved_point == Some(self.undo_position())
+        !self.history.is_dirty()
     }
 
     pub fn can_undo(&self) -> bool {
-        !self.history.is_empty()
+        self.history.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        !self.redo_stack.is_empty()
+        self.history.can_redo()
+    }
+
+    /// How many undo steps this sheet keeps; see [`Engine::set_undo_depth`].
+    pub fn undo_depth(&self) -> usize {
+        self.history.cap()
+    }
+
+    /// Keep `depth` undo steps from now on (the `undo_depth` setting).
+    /// Lowering it drops the oldest steps at once; a save point that falls
+    /// off the bottom is gone, so the sheet stays dirty until the next save.
+    pub fn set_undo_depth(&mut self, depth: usize) {
+        self.history.set_cap(depth);
     }
 
     /// Whether any undo entry still belongs to `group`.
     pub fn has_undo_group(&self, group: UndoGroupId) -> bool {
-        self.history.iter().any(|entry| entry.group == Some(group))
+        self.history
+            .undo_steps()
+            .iter()
+            .any(|entry| entry.group == Some(group))
     }
 
     /// Group of the entry the next [`Engine::undo`] would revert, if any.
     pub fn next_undo_group(&self) -> Option<UndoGroupId> {
-        self.history.back().and_then(|entry| entry.group)
+        self.history
+            .undo_steps()
+            .last()
+            .and_then(|entry| entry.group)
     }
 
     /// Group of the entry the next [`Engine::redo`] would restore, if any.
     pub fn next_redo_group(&self) -> Option<UndoGroupId> {
-        self.redo_stack.last().and_then(|entry| entry.group)
+        self.history
+            .redo_steps()
+            .last()
+            .and_then(|entry| entry.group)
     }
 
     /// Monotonic position in the edit timeline: how many recorded edits
@@ -131,7 +148,7 @@ impl Engine {
     /// the redo branch. App-level state that interleaves with engine
     /// history (net colours) stamps itself with this to order undo.
     pub fn undo_position(&self) -> usize {
-        self.history_evicted + self.history.len()
+        self.history.position()
     }
 
     /// An undo or redo swaps in a snapshot; connectivity moves with it when
@@ -145,7 +162,7 @@ impl Engine {
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
         // An empty stack changes nothing, so it moves no revision.
-        let Some(entry) = self.history.pop_back() else {
+        let Some(entry) = self.history.begin_step(true) else {
             return Ok(None);
         };
         self.bump_revision();
@@ -154,13 +171,18 @@ impl Engine {
         self.note_history_step(patch_pair);
         let group = entry.group;
         let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
-        let redo_snapshot =
-            SheetSnapshot::capture(redo_snapshot, self.redo_stack.last().map(|e| &e.snapshot));
-        self.redo_stack.push(HistoryEntry {
-            snapshot: redo_snapshot,
-            patch_pair,
-            group,
-        });
+        let redo_snapshot = SheetSnapshot::capture(
+            redo_snapshot,
+            self.history.redo_steps().last().map(|e| &e.snapshot),
+        );
+        self.history.finish_step(
+            HistoryEntry {
+                snapshot: redo_snapshot,
+                patch_pair,
+                group,
+            },
+            true,
+        );
         Ok(Some(patch_pair))
     }
 
@@ -175,19 +197,15 @@ impl Engine {
         if self.next_undo_group() != Some(group) {
             return Ok(None);
         }
-        let position = self.undo_position();
         let patch_pair = self.undo()?;
-        self.redo_stack.pop();
-        if self.saved_point == Some(position) {
-            self.saved_point = None;
-        }
+        self.history.discard_top();
         Ok(patch_pair)
     }
 
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
         // An empty stack changes nothing, so it moves no revision.
-        let Some(entry) = self.redo_stack.pop() else {
+        let Some(entry) = self.history.begin_step(false) else {
             return Ok(None);
         };
         self.bump_revision();
@@ -196,13 +214,18 @@ impl Engine {
         self.note_history_step(patch_pair);
         let group = entry.group;
         let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
-        let undo_snapshot =
-            SheetSnapshot::capture(undo_snapshot, self.history.back().map(|e| &e.snapshot));
-        self.history.push_back(HistoryEntry {
-            snapshot: undo_snapshot,
-            patch_pair,
-            group,
-        });
+        let undo_snapshot = SheetSnapshot::capture(
+            undo_snapshot,
+            self.history.undo_steps().last().map(|e| &e.snapshot),
+        );
+        self.history.finish_step(
+            HistoryEntry {
+                snapshot: undo_snapshot,
+                patch_pair,
+                group,
+            },
+            false,
+        );
         Ok(Some(patch_pair))
     }
 
@@ -218,35 +241,27 @@ impl Engine {
     ) {
         // Inside `execute_batch` the individual commands must not each land
         // an entry: the batch pushes one coalesced entry of its own once the
-        // loop is done. Skipping the `redo_stack.clear()` below along with
-        // the push is deliberate — a batch that turns out to have changed
-        // nothing records nothing, so it must not consume a redoable step
-        // either. See `exec/batch.rs` for why this is suppressed up front
-        // rather than truncated away afterwards.
+        // loop is done. Skipping the redo clear below along with the push is
+        // deliberate — a batch that turns out to have changed nothing records
+        // nothing, so it must not consume a redoable step either. See
+        // `exec/batch.rs` for why this is suppressed up front rather than
+        // truncated away afterwards.
         if self.history_suppressed {
             return;
         }
 
         // Share every collection the step left unchanged with the entry
         // before it, so a long history holds one copy of each.
-        let snapshot = SheetSnapshot::capture(snapshot, self.history.back().map(|e| &e.snapshot));
-        // The new entry drops the redo branch; a save point inside it can
-        // never be reached again.
-        if self
-            .saved_point
-            .is_some_and(|saved| saved > self.undo_position())
-        {
-            self.saved_point = None;
-        }
-        if self.history.len() >= MAX_HISTORY_ENTRIES {
-            self.history.pop_front();
-            self.history_evicted += 1;
-        }
-        self.history.push_back(HistoryEntry {
+        let snapshot = SheetSnapshot::capture(
+            snapshot,
+            self.history.undo_steps().last().map(|e| &e.snapshot),
+        );
+        // The new entry drops the redo branch (and a save point inside it)
+        // and evicts the oldest entry past the cap.
+        self.history.record(HistoryEntry {
             snapshot,
             patch_pair,
             group,
         });
-        self.redo_stack.clear();
     }
 }

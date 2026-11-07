@@ -5332,6 +5332,7 @@ dependencies = [
  "signex-erc",
  "signex-erc-dsl",
  "signex-gfx",
+ "signex-history",
  "signex-library",
  "signex-net",
  "signex-output",
@@ -5383,6 +5384,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signex-erc",
+ "signex-history",
  "signex-net",
  "signex-types",
  "tempfile",
@@ -5434,6 +5436,10 @@ dependencies = [
  "ttf-parser",
  "wgpu",
 ]
+
+[[package]]
+name = "signex-history"
+version = "26.11.0-rc.1"
 
 [[package]]
 name = "signex-library"
