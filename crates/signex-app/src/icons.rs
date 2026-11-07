@@ -163,6 +163,11 @@ bar_icon!(
 );
 bar_icon!(icon_port, "port.svg", "active_bar/graphite/port.svg");
 bar_icon!(icon_power, "power.svg", "active_bar/graphite/power.svg");
+bar_icon!(
+    icon_power_rail,
+    "dropdown/vcc.svg",
+    "active_bar/graphite/power_rail.svg"
+);
 bar_icon!(icon_select, "select.svg", "active_bar/graphite/select.svg");
 canonical_icon!(icon_shape_arc, "shape_arc.svg");
 canonical_icon!(icon_shape_circle, "shape_circle.svg");

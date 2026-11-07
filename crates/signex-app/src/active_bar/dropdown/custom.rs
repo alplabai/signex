@@ -1,10 +1,11 @@
 //! The two irregular dropdowns that ride the widget's `Custom` escape
 //! hatch: the NetColor swatches and the Selection Filter chip grid.
+//! Graphite themes paint both through `super::graphite`.
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::active_bar_dropdown::DropdownEntry;
+use signex_widgets::active_bar_dropdown::{DropdownEntry, RowPaint};
 
 use crate::active_bar::{
     AbColors, ActiveBarAction, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
@@ -12,7 +13,7 @@ use crate::active_bar::{
 use crate::icons as ic;
 use crate::styles;
 
-use super::{dd_btn_style_f, dd_item};
+use super::{dd_btn_style_f, dd_item, graphite};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -29,24 +30,35 @@ pub(super) fn net_color_entries(
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let ac = AbColors::from_tokens(tokens);
     let swatch_border = ac.sep;
+    let is_graphite = styles::is_graphite(tokens);
+    // The row hovers like the widget's own item rows (Graphite: ink wash,
+    // rounded; legacy: the theme hover on a square row).
+    let row_paint = RowPaint::of(tokens);
     let color_item =
         |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
-            // The 14×14 swatch sits inside a 20×20 slot so the label column
+            // The swatch sits inside a 20×20 slot so the label column
             // lines up with the SVG-icon rows below (the shared dropdown
             // widget uses a 20-px icon column).
-            let swatch = container(Space::new())
-                .width(14)
-                .height(14)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(color)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: swatch_border,
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                });
+            let swatch = if is_graphite {
+                container(Space::new())
+                    .width(graphite::SWATCH_SIZE)
+                    .height(graphite::SWATCH_SIZE)
+                    .style(graphite::swatch_style(tokens, color))
+            } else {
+                container(Space::new())
+                    .width(14)
+                    .height(14)
+                    .style(move |_: &Theme| container::Style {
+                        background: Some(Background::Color(color)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: swatch_border,
+                            ..Border::default()
+                        },
+                        ..container::Style::default()
+                    })
+            };
             let swatch_slot = container(swatch)
                 .width(20)
                 .height(20)
@@ -66,7 +78,7 @@ pub(super) fn net_color_entries(
             .width(iced::Length::Fill)
             .padding([5.0, SP.l])
             .on_press(ActiveBarMsg::Action(action))
-            .style(dd_btn_style_f(ac.text, ac.hover))
+            .style(dd_btn_style_f(ac.text, row_paint))
             .boxed()
         };
     vec![
@@ -136,6 +148,72 @@ pub(super) fn net_color_entries(
 /// expressed as a vertical `Item` list, so it rides the widget's
 /// `Custom` escape hatch as a single owned `Element<'static>`.
 pub(super) fn filter_entry(
+    tokens: &ThemeTokens,
+    filters: &std::collections::HashSet<SelectionFilter>,
+    custom_presets: &[CustomFilterPreset],
+) -> DropdownEntry<ActiveBarMsg> {
+    if styles::is_graphite(tokens) {
+        graphite_filter_entry(tokens, filters, custom_presets)
+    } else {
+        legacy_filter_entry(tokens, filters, custom_presets)
+    }
+}
+
+/// The preset's button label: its name, or "Filter N" when unnamed.
+fn preset_label(idx: usize, preset: &CustomFilterPreset) -> String {
+    if preset.name.trim().is_empty() {
+        format!("Filter {}", idx + 1)
+    } else {
+        preset.name.clone()
+    }
+}
+
+/// Graphite Selection Filter: an All / None segmented control and the
+/// presets on top, then the categories as toggle chips, six per row.
+fn graphite_filter_entry(
+    tokens: &ThemeTokens,
+    filters: &std::collections::HashSet<SelectionFilter>,
+    custom_presets: &[CustomFilterPreset],
+) -> DropdownEntry<ActiveBarMsg> {
+    let scope = graphite::FilterScope::of(filters.len(), SelectionFilter::ALL.len());
+    let mut top_row = iced::widget::Row::<Element<'static, ActiveBarMsg>>::new()
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .push(graphite::all_none(tokens, scope));
+    for (idx, preset) in custom_presets.iter().enumerate() {
+        top_row = top_row.push(graphite::chip(
+            tokens,
+            preset_label(idx, preset),
+            false,
+            ActiveBarMsg::ApplyCustomFilter(idx),
+        ));
+    }
+    let mut chips = iced::widget::Column::<Element<'static, ActiveBarMsg>>::new().spacing(SP.s);
+    for categories in SelectionFilter::ALL.chunks(6) {
+        let mut line = iced::widget::Row::<Element<'static, ActiveBarMsg>>::new().spacing(SP.s);
+        for &filter in categories {
+            line = line.push(graphite::chip(
+                tokens,
+                filter.label().to_string(),
+                filters.contains(&filter),
+                ActiveBarMsg::ToggleFilter(filter),
+            ));
+        }
+        chips = chips.push(line);
+    }
+    DropdownEntry::Custom(
+        column![
+            container(top_row).padding([SP.s, SP.m]),
+            container(chips).padding([SP.s, SP.m]),
+        ]
+        .spacing(SP.xs)
+        .boxed(),
+    )
+}
+
+/// The legacy-theme Selection Filter: square accent-edged chips and the
+/// "All - On / Off" toggle.
+fn legacy_filter_entry(
     tokens: &ThemeTokens,
     filters: &std::collections::HashSet<SelectionFilter>,
     custom_presets: &[CustomFilterPreset],
@@ -230,11 +308,7 @@ pub(super) fn filter_entry(
         .align_y(iced::Alignment::Center)
         .push(all_toggle.boxed());
     for (idx, preset) in custom_presets_owned.iter().enumerate() {
-        let label = if preset.name.trim().is_empty() {
-            format!("Filter {}", idx + 1)
-        } else {
-            preset.name.clone()
-        };
+        let label = preset_label(idx, preset);
         let preset_btn = button(text(label).size(TS.body).color(text_primary))
             .padding([SP.s, 10.0])
             .on_press(ActiveBarMsg::ApplyCustomFilter(idx))

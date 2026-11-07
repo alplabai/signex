@@ -257,6 +257,26 @@ where
         .min(max_w)
 }
 
+/// Hover wash and corner radius of a menu row. Public so a `Custom` row
+/// built by the app (the net-colour swatches) hovers like an item row.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RowPaint {
+    pub hover: Color,
+    pub radius: f32,
+}
+
+impl RowPaint {
+    /// Graphite: the bar's ink wash and button radius. Legacy: the theme's
+    /// hover colour on a square row.
+    pub fn of(tokens: &ThemeTokens) -> Self {
+        let skin = super::skin::Skin::of(tokens);
+        Self {
+            hover: skin.map_or_else(|| theme_ext::to_color(&tokens.hover), |s| s.hover),
+            radius: skin.map_or(0.0, |s| s.button_radius),
+        }
+    }
+}
+
 /// Render the dropdown panel as an `Element<M>`. `width_hint`
 /// specifies a fixed panel width in px (e.g. 220) when the menu is
 /// list-style; `None` lets the panel auto-size (used for the Filter
@@ -275,13 +295,14 @@ where
     let border_c = theme_ext::border_color(tokens);
     let primary = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let hover_c = crate::theme_ext::to_color(&tokens.hover);
     let accent = theme_ext::to_color(&tokens.accent);
     // Graphite: the panel matches the bar (raised fill, 10 px radius,
     // themed shadow, token hover wash). Legacy themes keep the 4 px panel.
     let skin = super::skin::Skin::of(tokens);
-    let hover_c = skin.map_or(hover_c, |s| s.hover);
-    let row_radius = skin.map_or(0.0, |s| s.button_radius);
+    let RowPaint {
+        hover: hover_c,
+        radius: row_radius,
+    } = RowPaint::of(tokens);
 
     // Fill children inside a Shrink column lay out at zero width in the
     // fork, so a fixed-width panel gets a Fill column (buttons stay clickable)

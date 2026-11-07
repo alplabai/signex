@@ -9,7 +9,7 @@
 use iced::widget::{button, svg};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
+use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, RowPaint};
 
 use super::{
     ActiveBarAction, ActiveBarMenu, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
@@ -22,6 +22,7 @@ use tables::{
 };
 
 mod custom;
+mod graphite;
 mod tables;
 #[cfg(test)]
 mod tests;
@@ -167,18 +168,22 @@ pub fn dropdown_x_offset(menu: ActiveBarMenu, m: &signex_widgets::active_bar::Me
     super::layout::trigger_left(menu, m)
 }
 
+/// A `Custom` row's button: hovers with the widget's own row paint.
 fn dd_btn_style_f(
     text_c: Color,
-    hover_c: Color,
+    paint: RowPaint,
 ) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_: &Theme, status: button::Status| {
         let bg = match status {
-            button::Status::Hovered => Some(Background::Color(hover_c)),
+            button::Status::Hovered => Some(Background::Color(paint.hover)),
             _ => None,
         };
         button::Style {
             background: bg,
-            border: Border::default(),
+            border: Border {
+                radius: paint.radius.into(),
+                ..Border::default()
+            },
             text_color: text_c,
             ..button::Style::default()
         }
