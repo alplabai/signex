@@ -1,7 +1,7 @@
 use super::*;
 use crate::{Command, Engine};
 use signex_types::schematic::{
-    InstancePath, Label, LabelType, Point, SchematicSheet, Symbol, SymbolInstance,
+    InstancePath, Label, LabelType, Point, SchematicSheet, SelectedKind, Symbol, SymbolInstance,
 };
 use uuid::Uuid;
 
@@ -145,4 +145,11 @@ fn a_power_ports_hidden_designator_is_not_found_but_its_net_name_is() {
     let hits = scan_sheet(&sheet, "+5V", &scope);
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].kind, FindKind::Value);
+    // The text is fixed to the port, so the hit selects the port
+    // (docs/DECISIONS.md, 2026-11-07); the replace still edits the value.
+    assert_eq!(hits[0].item.kind, SelectedKind::Symbol);
+    assert_eq!(
+        hits[0].target,
+        TextTarget::SymbolValue(sheet.symbols[0].uuid)
+    );
 }

@@ -51,9 +51,35 @@ pub(super) fn symbol_geometry_of(
     }
 }
 
-/// Hit-test / selection box of `symbol`.
+/// Hit-test / selection box of `symbol`. A power port's net name is part of
+/// the port (`docs/DECISIONS.md`, 2026-11-07), so its drawn text is inside
+/// the box.
 pub(crate) fn symbol_bounds(snapshot: &SchematicRenderSnapshot, symbol: &Symbol) -> Aabb {
-    symbol_geometry(snapshot, symbol, &SchematicDefaults::BUILT_IN).1
+    let body = symbol_geometry(snapshot, symbol, &SchematicDefaults::BUILT_IN).1;
+    match power_port_text_bounds(snapshot, symbol) {
+        Some(text) => body.union(&text),
+        None => body,
+    }
+}
+
+/// Box of a power port's drawn net name; `None` for any other symbol and
+/// for a port whose text is empty or hidden, which draws none.
+fn power_port_text_bounds(snapshot: &SchematicRenderSnapshot, symbol: &Symbol) -> Option<Aabb> {
+    if !symbol.is_power || symbol.value.is_empty() {
+        return None;
+    }
+    let text = snapshot.drawn_value_text(symbol)?;
+    if text.hidden {
+        return None;
+    }
+    Some(text_prop_aabb_with(
+        Some(WidthSources::of(snapshot)),
+        TextField::SymbolValue,
+        &symbol.value,
+        &text,
+        symbol,
+        snapshot.font_family.as_deref(),
+    ))
 }
 
 fn fallback_box(symbol: &Symbol) -> Aabb {

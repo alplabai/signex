@@ -506,6 +506,39 @@ fn flag_text_runs_away_from_the_connection_point() {
     }
 }
 
+/// A sheet or hierarchical port is selected with its text: the hit and halo
+/// box holds every drawn glyph, at any size and turn (2026-11-07 decision).
+#[test]
+fn a_flag_box_holds_its_drawn_text() {
+    for label_type in [LabelType::Global, LabelType::Hierarchical] {
+        for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
+            for font_size in [1.27, 2.54, 5.0] {
+                let label = Label {
+                    font_size,
+                    ..anchored_label(label_type, rotation)
+                };
+                let (anchor, text_rotation, h_align) = label::flag_text(&label, None);
+                let text = drawn_text_aabb(
+                    None,
+                    &label.text,
+                    None,
+                    label.font_size,
+                    anchor,
+                    text_rotation,
+                    h_align,
+                    VAlign::Center,
+                );
+                let bbox = label_aabb(&label, None);
+                assert_eq!(
+                    bbox.union(&text),
+                    bbox,
+                    "{label_type:?} @ {rotation}, {font_size} mm: {text:?} outside {bbox:?}"
+                );
+            }
+        }
+    }
+}
+
 /// Unit vector along which `h_align` text at `rotation_deg` runs from its
 /// anchor: forward for left-aligned text, backward for right-aligned.
 fn text_run(rotation_deg: f64, h_align: HAlign) -> (f64, f64) {
