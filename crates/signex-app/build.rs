@@ -38,8 +38,7 @@ fn main() {
         "assets/icons/chrome/search.svg",
         "assets/icons/chrome/theme_moon.svg",
         "assets/icons/chrome/theme_sun.svg",
-        "assets/icons/chrome/signex_mark_on_light.svg",
-        "assets/icons/chrome/signex_mark_on_dark.svg",
+        "assets/icons/chrome/signex_mark.svg",
     ] {
         println!("cargo:rerun-if-changed={svg}");
     }

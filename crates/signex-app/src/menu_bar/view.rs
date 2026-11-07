@@ -28,7 +28,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, Menu
     let dark = is_dark_surface(tokens.toolbar_bg);
     if mc.graphite {
         return iced::advanced::Widget::_boxed(
-            row![graphite::mark(dark), mb]
+            row![graphite::mark(), mb]
                 .spacing(graphite::MARK_GAP)
                 .align_y(iced::Alignment::Center),
         );

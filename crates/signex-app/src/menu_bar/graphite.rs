@@ -1,4 +1,4 @@
-//! Graphite look of the menu bar: the SVG mark in place of the wordmark,
+//! Graphite look of the menu bar: the Signex mark in place of the wordmark,
 //! flat root buttons and the dropdown frame. Legacy themes never reach it.
 
 use std::sync::LazyLock;
@@ -10,16 +10,10 @@ use iced_aw::style::menu_bar as menu_style;
 use super::{MenuColors, MenuMessage, model};
 use crate::styles::TypeScale;
 
-/// Mark on a light bar (dark tile) and on a dark bar (light tile).
-static MARK_ON_LIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(
-        include_bytes!("../../assets/icons/chrome/signex_mark_on_light.svg").as_slice(),
-    )
-});
-static MARK_ON_DARK: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(
-        include_bytes!("../../assets/icons/chrome/signex_mark_on_dark.svg").as_slice(),
-    )
+/// The Signex mark from `assets/brand/signex-logo.svg`, without the wordmark.
+/// Its cyan gradient reads on both the light and the dark bar.
+static MARK: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!("../../assets/icons/chrome/signex_mark.svg").as_slice())
 });
 
 /// Side of the square mark, in px.
@@ -37,14 +31,9 @@ const ROOT_PAD_Y: f32 = 5.0;
 /// Left padding of the bar, before the mark.
 const BAR_LEFT_PAD: f32 = 10.0;
 
-/// The mark, inverted on a dark bar.
-pub(super) fn mark<'a, M: 'a>(dark_bar: bool) -> Element<'a, M> {
-    let handle = if dark_bar {
-        MARK_ON_DARK.clone()
-    } else {
-        MARK_ON_LIGHT.clone()
-    };
-    svg(handle).width(MARK_SIZE).height(MARK_SIZE).into()
+/// The mark.
+pub(super) fn mark<'a, M: 'a>() -> Element<'a, M> {
+    svg(MARK.clone()).width(MARK_SIZE).height(MARK_SIZE).into()
 }
 
 /// Flat root button: radius 6, no border, padding 0 8; lit while hovered or
