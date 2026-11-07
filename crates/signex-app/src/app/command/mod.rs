@@ -14,6 +14,8 @@ pub(crate) mod bridge;
 pub(crate) mod enablement;
 mod needs;
 mod outcome;
+#[cfg(test)]
+mod undo_agreement_tests;
 mod window_document;
 
 pub use args::CommandArgs;
