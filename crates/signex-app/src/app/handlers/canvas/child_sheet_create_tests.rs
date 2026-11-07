@@ -322,7 +322,7 @@ fn a_project_closed_during_the_write_is_logged() {
 #[test]
 fn the_sheet_entry_tool_places_an_entry_on_the_edge_and_undo_removes_it() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    let (mut app, _top, _) = parent_with_symbol(dir.path());
     let pins = |app: &Signex| {
         app.document_state
             .active_engine()
@@ -357,7 +357,6 @@ fn the_sheet_entry_tool_places_an_entry_on_the_edge_and_undo_removes_it() {
         .expect("undo")
         .expect("one step");
     assert_eq!(pins(&app).len(), 2);
-    let _ = id;
 }
 
 /// A second sheet that carries a copy of the same symbol, made active.

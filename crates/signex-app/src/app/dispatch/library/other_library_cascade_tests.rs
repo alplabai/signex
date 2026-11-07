@@ -157,7 +157,6 @@ fn saving_a_symbol_moves_the_rows_of_another_mounted_library() {
         "the other library's row follows"
     );
     assert_ne!(after.version, before.version, "and its own version moved");
-    let _ = &t.far;
 }
 
 fn symbol_uuid(t: &Two) -> Uuid {
