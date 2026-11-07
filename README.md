@@ -1,5 +1,10 @@
 <p align="center">
-  <img src="assets/screenshots/hero.png" alt="Signex — schematic editor" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/graphite/schematic-dark.webp">
+    <img src="assets/screenshots/graphite/schematic-light.webp" alt="Signex schematic editor in the Graphite interface, with the Signal AI panel" width="900">
+  </picture>
+  <br>
+  <em>Design preview: Graphite, the next Signex interface, coming in the next release. <a href="#graphite-the-next-interface-design-preview">More previews</a> &middot; <a href="#screenshots">the app today</a></em>
 </p>
 
 <h1 align="center">Signex</h1>
@@ -187,8 +192,8 @@ board.
 The next Signex interface, Graphite, in its light and dark themes. These are
 design previews: Graphite, the Signal AI panel (Assistant and Generator) and
 PCB layout are in development for the AI Design gate
-([roadmap](docs/ROADMAP.md)); the screenshots above show the app as it ships
-today.
+([roadmap](docs/ROADMAP.md)); the screenshots above this section show the
+app as it ships today, apart from the design preview at the top of this page.
 
 <p align="center">
   <img src="assets/screenshots/graphite/schematic-light.webp" alt="Schematic editor with the Signal AI panel, Graphite Light" width="400">
