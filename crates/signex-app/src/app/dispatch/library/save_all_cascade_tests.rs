@@ -157,7 +157,6 @@ fn save_all_saves_the_symbol_and_the_row_with_its_edit_on_the_bumped_pin() {
         "the bumped pin is kept"
     );
     assert!(!f.app.library.editors[&f.address].dirty);
-    let _ = &f.snxlib;
 }
 
 #[test]

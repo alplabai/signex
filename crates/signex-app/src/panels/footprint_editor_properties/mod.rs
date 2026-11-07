@@ -230,8 +230,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
     .boxed()
 }
 
-/// v0.20 — common Settings + Hint footer. Always renders the
-/// Auto-fit Courtyard toggle and a mode-specific hint string.
+/// v0.20 — common Settings + Hint footer: the Settings header and a
+/// mode-specific hint string.
 fn render_fp_settings_and_hint<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
@@ -250,13 +250,6 @@ fn render_fp_settings_and_hint<'a>(
         )
         .boxed(),
     );
-    if !is_section_collapsed("fp_settings", collapsed_sections) {
-        // v0.26-I — auto-courtyard toggle removed. The courtyard is
-        // an authored shape (silk / sketch entity), not an auto-
-        // derived bbox. Section header kept (other settings can
-        // land here later).
-        let _ = fp.auto_fit_courtyard;
-    }
 
     col = col.push(
         collapsible_section_header("fp_hint", "Hint", collapsed_sections, primary, border_c)

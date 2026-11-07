@@ -877,9 +877,6 @@ mod tests {
         );
         // Still only one mount because the key was the same.
         assert_eq!(set.len(), 1);
-
-        // Suppress unused warning while keeping the symbol around for clarity.
-        let _ = first.name;
     }
 
     /// #1894: replacing the mount at one path with a library that carries

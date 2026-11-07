@@ -257,7 +257,7 @@ fn component_window(stage: Stage) -> (Signex, Window) {
 /// A sheet in its own window, with the main window on a footprint editor
 /// that has a step of its own (it must never be touched).
 fn undocked(stage: Stage) -> (Signex, Window) {
-    let (mut app, window) = footprint(Stage::HasUndo);
+    let (mut app, _) = footprint(Stage::HasUndo);
     let path = PathBuf::from("undocked.snxsch");
     let main_tab = app.document_state.active_tab;
     app.document_state.tabs.insert(
@@ -286,7 +286,6 @@ fn undocked(stage: Stage) -> (Signex, Window) {
     app.interaction_state
         .canvases
         .insert(id, crate::canvas::CanvasSlot::new());
-    let _ = window;
     settle(&mut app, Some(id), stage, |app| {
         app.document_state
             .engines

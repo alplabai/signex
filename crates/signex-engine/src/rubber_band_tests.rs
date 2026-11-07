@@ -1731,7 +1731,7 @@ fn a_selected_wire_overlapping_a_follower_is_merged() {
         true,
     );
     assert_no_overlaps(&e);
-    let _ = before;
+    assert_eq!(net_shape(e.document()), before, "netlist changed");
 }
 
 #[test]
