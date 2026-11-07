@@ -674,3 +674,48 @@ fn a_pick_that_evicts_the_save_point_marks_the_sheet_dirty_at_once() {
         "the saved step is gone: unsaved until a save"
     );
 }
+
+/// A dead marker passed by a project-wide undo is dead for good: the class
+/// edit the panel undid is not replayed by a later Ctrl+Y on that sheet.
+#[test]
+fn a_dead_marker_passed_by_a_group_undo_does_not_revive() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _symbol) = app_with_sheet();
+    let a = app.document_state.active_path.clone().unwrap();
+    let b = open_second_sheet(&mut app);
+    let group = app.mint_undo_group();
+    for path in [&a, &b] {
+        let wire = signex_types::schematic::Wire {
+            uuid: uuid::Uuid::now_v7(),
+            ..Default::default()
+        };
+        app.document_state
+            .engines
+            .get_mut(path)
+            .unwrap()
+            .execute_batch_grouped(
+                [signex_engine::Command::PlaceWireSegment { wire }],
+                Some(group),
+            )
+            .unwrap();
+    }
+    app.set_undo_group_sheets(
+        group,
+        crate::app::UndoGroupSheets {
+            live: vec![a.clone(), b.clone()],
+            ..Default::default()
+        },
+    );
+    pick(&mut app, "GND", Some("Power")); // on B
+    panel(&mut app, NetClassMsg::Undo); // dead
+    activate(&mut app, &a);
+    assert!(
+        app.undo_active_sheet(),
+        "the group goes, passing B's dead pick"
+    );
+
+    activate(&mut app, &b);
+    assert!(app.redo_active_sheet(), "the group comes back");
+    app.redo_active_sheet();
+    assert!(nets(&app).is_empty(), "the panel's undo is not replayed");
+}
