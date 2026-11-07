@@ -34,6 +34,10 @@ pub(super) fn view_action_row<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
+    let control_bg = super::look::control_fill(tokens);
+    let inert_bg = super::look::inert_fill(tokens);
+    let radius = super::look::control_radius(tokens);
+    let graphite = crate::styles::is_graphite(tokens);
     // Hoisted owned path — see comment in `view_table_sidebar`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
@@ -75,13 +79,11 @@ pub(super) fn view_action_row<'a>(
                 .padding([SP.xs, SP.m])
                 .on_press(open_edit)
                 .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
+                    background: Some(iced::Background::Color(control_bg)),
                     text_color: text_c,
                     border: Border {
                         width: 1.0,
-                        radius: 3.0.into(),
+                        radius: radius.into(),
                         color: border,
                         ..Border::default()
                     },
@@ -92,12 +94,10 @@ pub(super) fn view_action_row<'a>(
             container(text("Edit Details").size(BROWSER_HEADER_SIZE).color(muted))
                 .padding([SP.xs, SP.m])
                 .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    ))),
+                    background: Some(iced::Background::Color(inert_bg)),
                     border: Border {
                         width: 1.0,
-                        radius: 3.0.into(),
+                        radius: radius.into(),
                         color: border,
                         ..Border::default()
                     },
@@ -123,13 +123,11 @@ pub(super) fn view_action_row<'a>(
             row_id,
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
+            background: Some(iced::Background::Color(control_bg)),
             text_color: text_c,
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: radius.into(),
                 color: border,
                 ..Border::default()
             },
@@ -145,12 +143,10 @@ pub(super) fn view_action_row<'a>(
         )
         .padding([SP.xs, SP.m])
         .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.02,
-            ))),
+            background: Some(iced::Background::Color(inert_bg)),
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: radius.into(),
                 color: border,
                 ..Border::default()
             },
@@ -159,13 +155,18 @@ pub(super) fn view_action_row<'a>(
         .boxed()
     };
 
-    let mut actions = row![
-        add_btn,
-        Space::new().width(SP.s),
-        edit_btn,
-        Space::new().width(SP.s),
-        delete_btn
-    ]
+    // Graphite: Add Component is the header's primary button.
+    let mut actions = if graphite {
+        row![edit_btn, Space::new().width(SP.s), delete_btn]
+    } else {
+        row![
+            add_btn,
+            Space::new().width(SP.s),
+            edit_btn,
+            Space::new().width(SP.s),
+            delete_btn
+        ]
+    }
     .spacing(0)
     .align_y(iced::Alignment::Center);
     if read_only {

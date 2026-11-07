@@ -369,6 +369,26 @@ fn pin_lines<'p>(
     .collect()
 }
 
+/// Graphite Match cell: how the pin's pad was found.
+fn match_pill<'a>(
+    state: &ComponentPreviewState,
+    line: &PinLine,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    use crate::styles::PillTone;
+    if line.is_override {
+        return kit::toned_pill("Override".to_string(), PillTone::Info, tokens);
+    }
+    let Some(footprint) = state.footprint.as_ref() else {
+        return text("\u{2014}").size(TS.body).boxed();
+    };
+    if footprint.pads.iter().any(|p| p.number == line.pad) {
+        kit::toned_pill("By number".to_string(), PillTone::Ok, tokens)
+    } else {
+        kit::toned_pill(format!("No pad '{}'", line.pad), PillTone::Warn, tokens)
+    }
+}
+
 fn pin_map_subsection<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
@@ -397,22 +417,38 @@ fn pin_map_subsection<'a>(
 
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
+    let graphite = crate::styles::is_graphite(tokens);
     let widths = [
         Length::FillPortion(1),
         Length::FillPortion(2),
         Length::FillPortion(2),
         Length::FillPortion(2),
     ];
-    let mut table: Column<Element<'a, LibraryMessage>> = column![kit::table_header(
-        &[
-            ("Symbol pin", widths[0]),
-            ("Symbol name", widths[1]),
-            ("Pad", widths[2]),
-            ("", widths[3]),
-        ],
-        tokens,
-    )]
-    .width(Length::Fill);
+    let header = if graphite {
+        kit::table_header(
+            &[
+                ("Pin", widths[0]),
+                ("Name", widths[1]),
+                ("Type", widths[1]),
+                ("Pad", widths[0]),
+                ("Match", widths[2]),
+                ("", widths[3]),
+            ],
+            tokens,
+        )
+    } else {
+        kit::table_header(
+            &[
+                ("Symbol pin", widths[0]),
+                ("Symbol name", widths[1]),
+                ("Pad", widths[2]),
+                ("", widths[3]),
+            ],
+            tokens,
+        )
+    };
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let mut table: Column<Element<'a, LibraryMessage>> = column![header].width(Length::Fill);
 
     for (index, line) in pin_lines(
         sym.pins
@@ -447,7 +483,46 @@ fn pin_map_subsection<'a>(
             )),
             tokens,
         );
-        table = table.push(kit::table_row(
+        let cells = if graphite {
+            let direction = sym
+                .pins
+                .iter()
+                .find(|p| p.number == line.number)
+                .map(|p| p.electrical.label())
+                .unwrap_or("");
+            vec![
+                (
+                    text(line.number.clone())
+                        .size(TS.body)
+                        .font(mono)
+                        .color(text_c)
+                        .boxed(),
+                    widths[0],
+                ),
+                (
+                    text(line.name.clone())
+                        .size(TS.body)
+                        .font(mono)
+                        .color(text_c)
+                        .boxed(),
+                    widths[1],
+                ),
+                (
+                    text(direction).size(TS.body).color(muted).boxed(),
+                    widths[1],
+                ),
+                (
+                    text(line.pad.clone())
+                        .size(TS.body)
+                        .font(mono)
+                        .color(text_c)
+                        .boxed(),
+                    widths[0],
+                ),
+                (match_pill(state, &line, tokens), widths[2]),
+                (action, widths[3]),
+            ]
+        } else {
             vec![
                 (
                     text(line.number.clone())
@@ -462,11 +537,9 @@ fn pin_map_subsection<'a>(
                 ),
                 (pad_cell, widths[2]),
                 (action, widths[3]),
-            ],
-            index,
-            None,
-            tokens,
-        ));
+            ]
+        };
+        table = table.push(kit::table_row(cells, index, None, tokens));
 
         // Inline override editor for the expanded row.
         if state.pin_map_state.expanded_row.as_deref() == Some(line.number.as_str()) {

@@ -6,6 +6,7 @@
 
 use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
 use super::keyed::keyed;
+use super::look;
 use super::size_sensor::sense_height;
 use super::window::{
     BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows,
@@ -51,6 +52,9 @@ pub(super) fn view_grid<'a>(
     // Hoisted owned path — see comment in `view_table_sidebar`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
+    let graphite = crate::styles::is_graphite(tokens);
+    let header_ink = look::header_ink(tokens);
+    let header_fill = look::header_fill(tokens);
     let header_row = {
         // 16-px gutter aligns with the per-row lifecycle dot below.
         let mut r = row![Space::new().width(Length::Fixed(LIFECYCLE_DOT_GUTTER))].spacing(0);
@@ -81,9 +85,9 @@ pub(super) fn view_grid<'a>(
                 library_path: library_for_sort,
                 column_key,
             })
-            .style(|_: &Theme, _| iced::widget::button::Style {
+            .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: None,
-                text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.65),
+                text_color: header_ink,
                 border: Border {
                     width: 0.0,
                     radius: 0.0.into(),
@@ -94,14 +98,26 @@ pub(super) fn view_grid<'a>(
             });
             r = r.push(container(header_btn).width(Length::Fixed(c.width)).boxed());
         }
+        if graphite {
+            // Lifecycle pills column: not sortable, so a plain label.
+            r = r.push(
+                container(
+                    text("Lifecycle")
+                        .size(BROWSER_HEADER_SIZE)
+                        .wrapping(iced::widget::text::Wrapping::None)
+                        .color(header_ink),
+                )
+                .padding([SP.s, 6.0])
+                .width(Length::Fixed(look::LIFECYCLE_PILL_W))
+                .boxed(),
+            );
+        }
         r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)).boxed());
         container(r)
             .padding([SP.xs, SP.s])
             .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
             .style(move |_: &Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
+                background: Some(iced::Background::Color(header_fill)),
                 border: Border {
                     width: 0.0,
                     radius: 2.0.into(),
@@ -148,18 +164,20 @@ pub(super) fn view_grid<'a>(
             // they're shown alongside released rows under the
             // `IncludeDeprecated` filter (plan §6).
             let lifecycle_tint = matches!(r.state, LifecycleState::Deprecated)
-                .then(|| iced::Background::Color(iced::Color::from_rgba(0.96, 0.80, 0.10, 0.10)));
+                .then(|| iced::Background::Color(look::deprecated_fill(tokens)));
             let bg_color = if is_selected {
-                Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.30, 0.55, 0.85, 0.25,
-                )))
+                Some(iced::Background::Color(look::selected_fill(tokens)))
             } else {
                 lifecycle_tint
             };
 
             // Lifecycle indicator dot — Stage 18. Sits in the
             // 16-px gutter mirrored on the header row.
-            let dot_color = lifecycle_dot_color(r.state);
+            let dot_color = if graphite {
+                crate::styles::pill_colors(tokens, look::lifecycle_tone(r.state)).1
+            } else {
+                lifecycle_dot_color(r.state)
+            };
             let lifecycle_dot = container(Space::new())
                 .width(Length::Fixed(LIFECYCLE_DOT_SIZE))
                 .height(Length::Fixed(LIFECYCLE_DOT_SIZE))
@@ -336,7 +354,7 @@ pub(super) fn view_grid<'a>(
                 // has both, instead of taking raw text.
                 if let Some(open) = c.kind.measurement_press(r, &lib_pb, table) {
                     let text_c = theme_ext::text_primary(tokens);
-                    let hover = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06);
+                    let hover = look::hover_fill(tokens);
                     let cell = iced::widget::button(
                         text(row_value)
                             .size(BROWSER_TEXT_SIZE)
@@ -390,6 +408,7 @@ pub(super) fn view_grid<'a>(
                         column: column_for_submit,
                     })
                     .padding([SP.xs, 6.0])
+                    .font(look::cell_font(&c.kind, tokens))
                     .size(BROWSER_TEXT_SIZE);
                 data_row = data_row.push(
                     container(input)
@@ -399,22 +418,31 @@ pub(super) fn view_grid<'a>(
                 );
             }
 
+            if graphite {
+                data_row = data_row.push(
+                    container(super::super::editor::kit::toned_pill(
+                        look::lifecycle_label(r.state).to_string(),
+                        look::lifecycle_tone(r.state),
+                        tokens,
+                    ))
+                    .width(Length::Fixed(look::LIFECYCLE_PILL_W))
+                    .padding([0.0, 6.0])
+                    .center_y(Length::Fill)
+                    .boxed(),
+                );
+            }
             data_row = data_row.push(row_delete_cell(&lib_pb, table, row_id, tokens, read_only));
 
             let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
+            let row_border = look::row_border(tokens);
             let row_container = container(data_row)
                 .padding([0, 0])
                 .width(Length::Fill)
                 .height(Length::Fixed(BROWSER_ROW_HEIGHT))
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: bg_color,
-                    border: Border {
-                        width: 0.0,
-                        radius: 0.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                        ..Default::default()
-                    },
+                    border: row_border,
                     ..Default::default()
                 });
 

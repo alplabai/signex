@@ -11,8 +11,8 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use crate::styles::tokens::{self, Overlay};
-use crate::styles::{self, HAIRLINE, RADIUS, Spacing, TypeScale};
+use crate::styles::tokens::{self, Overlay, resolve};
+use crate::styles::{self, HAIRLINE, RADIUS, Radii, Spacing, TypeScale, is_graphite};
 
 /// Type scale shared by every Component Preview tab.
 pub(crate) const TS: TypeScale = TypeScale::DEFAULT;
@@ -23,13 +23,24 @@ pub(crate) const SP: Spacing = Spacing::DEFAULT;
 
 /// Card surface: faint overlay over the panel, 1 px token border.
 pub(crate) fn card_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
-    let fill = tokens::overlay(tokens, Overlay::Faint);
+    // Graphite: raised fill, card radius (the `styles::card` look).
+    let graphite = is_graphite(tokens);
+    let fill = if graphite {
+        resolve(tokens).raised
+    } else {
+        tokens::overlay(tokens, Overlay::Faint)
+    };
+    let radius = if graphite {
+        Radii::GRAPHITE.card
+    } else {
+        RADIUS
+    };
     let border = theme_ext::border_color(tokens);
     move |_| container::Style {
         background: Some(Background::Color(fill)),
         border: Border {
             width: HAIRLINE,
-            radius: RADIUS.into(),
+            radius: radius.into(),
             color: border,
             ..Border::default()
         },
@@ -46,8 +57,31 @@ pub(crate) fn rule_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::
     }
 }
 
+/// 1 px soft rule between body rows (Graphite); legacy themes use zebra.
+pub(crate) fn row_separator_style(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let line = resolve(tokens).line_soft;
+    move |_| container::Style {
+        background: Some(Background::Color(line)),
+        ..container::Style::default()
+    }
+}
+
+/// Table header band: Graphite sunken fill, legacy none.
+pub(crate) fn header_band_style(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let fill = is_graphite(tokens).then(|| resolve(tokens).sunken);
+    move |_| container::Style {
+        background: fill.map(Background::Color),
+        ..container::Style::default()
+    }
+}
+
 /// Body-row fill: odd rows take the faint overlay (zebra); a hovered or
-/// pressed row takes the hover / pressed overlay on any stripe.
+/// pressed row takes the hover / pressed overlay on any stripe. Graphite
+/// themes have no zebra: rows are flat and split by [`row_separator_style`].
 pub(crate) fn row_background(
     tokens: &ThemeTokens,
     index: usize,
@@ -56,7 +90,7 @@ pub(crate) fn row_background(
     let color = match status {
         button::Status::Hovered => tokens::overlay(tokens, Overlay::Hover),
         button::Status::Pressed => tokens::overlay(tokens, Overlay::Pressed),
-        _ if index % 2 == 1 => tokens::overlay(tokens, Overlay::Faint),
+        _ if index % 2 == 1 && !is_graphite(tokens) => tokens::overlay(tokens, Overlay::Faint),
         _ => return None,
     };
     Some(Background::Color(color))
@@ -84,6 +118,11 @@ pub(crate) fn danger_button_style(
     let disabled = tokens::disabled_text(tokens);
     let hover = tokens::overlay(tokens, Overlay::Hover);
     let pressed = tokens::overlay(tokens, Overlay::Pressed);
+    let button_radius = if is_graphite(tokens) {
+        Radii::GRAPHITE.button
+    } else {
+        RADIUS
+    };
     move |_: &Theme, status| {
         let ink = if status == button::Status::Disabled {
             disabled
@@ -99,7 +138,7 @@ pub(crate) fn danger_button_style(
             text_color: ink,
             border: Border {
                 width: HAIRLINE,
-                radius: RADIUS.into(),
+                radius: button_radius.into(),
                 color: ink,
                 ..Border::default()
             },
@@ -125,14 +164,20 @@ pub(crate) fn section_header<'a, M: 'a>(
     trailing: Option<Element<'a, M>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let mut line: iced::widget::Row<Element<'a, M>> = row![
+    let heading = if is_graphite(tokens) {
+        // Uppercase muted section label (Graphite).
+        text(title.to_uppercase())
+            .size(TS.section)
+            .style(styles::section_label(tokens))
+            .boxed()
+    } else {
         text(title)
             .size(TS.title)
             .color(theme_ext::text_primary(tokens))
-            .boxed(),
-        Space::new().width(Length::Fill).boxed(),
-    ]
-    .align_y(iced::Alignment::Center);
+            .boxed()
+    };
+    let mut line: iced::widget::Row<Element<'a, M>> =
+        row![heading, Space::new().width(Length::Fill).boxed()].align_y(iced::Alignment::Center);
     if let Some(t) = trailing {
         line = line.push(t);
     }
@@ -156,21 +201,33 @@ pub(crate) fn table_header<'a, M: 'a>(
     columns: &[(&'a str, Length)],
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let muted = theme_ext::text_secondary(tokens);
+    let graphite = is_graphite(tokens);
+    let muted = if graphite {
+        resolve(tokens).ink3
+    } else {
+        theme_ext::text_secondary(tokens)
+    };
     let mut line: iced::widget::Row<Element<'a, M>> =
         row![].spacing(SP.m).align_y(iced::Alignment::Center);
     for (title, width) in columns {
-        line = line.push(
-            text(*title)
-                .size(TS.caption)
-                .color(muted)
-                .width(*width)
-                .boxed(),
-        );
+        let label = if graphite {
+            title.to_uppercase()
+        } else {
+            (*title).to_string()
+        };
+        let size = if graphite { TS.section } else { TS.caption };
+        line = line.push(text(label).size(size).color(muted).width(*width).boxed());
     }
-    column![container(line).padding([SP.s, SP.m]).boxed(), rule(tokens)]
-        .width(Length::Fill)
-        .boxed()
+    column![
+        container(line)
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .style(header_band_style(tokens))
+            .boxed(),
+        rule(tokens)
+    ]
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// Table body row. `index` drives zebra striping; with `on_press` the row
@@ -189,21 +246,34 @@ pub(crate) fn table_row<'a, M: Clone + 'a>(
     let body = container(line.boxed())
         .padding([SP.s, SP.m])
         .width(Length::Fill);
-    if on_press.is_none() {
+    let item: Element<'a, M> = if on_press.is_none() {
         let fill = row_background(tokens, index, button::Status::Active);
-        return body
-            .style(move |_: &Theme| container::Style {
-                background: fill,
-                ..container::Style::default()
-            })
-            .boxed();
-    }
-    button(body)
-        .padding(0)
-        .width(Length::Fill)
-        .on_press_maybe(on_press)
-        .style(row_style(tokens, index))
+        body.style(move |_: &Theme| container::Style {
+            background: fill,
+            ..container::Style::default()
+        })
         .boxed()
+    } else {
+        button(body)
+            .padding(0)
+            .width(Length::Fill)
+            .on_press_maybe(on_press)
+            .style(row_style(tokens, index))
+            .boxed()
+    };
+    if !is_graphite(tokens) {
+        return item;
+    }
+    column![
+        item,
+        container(Space::new())
+            .width(Length::Fill)
+            .height(HAIRLINE)
+            .style(row_separator_style(tokens))
+            .boxed()
+    ]
+    .width(Length::Fill)
+    .boxed()
 }
 
 // ─── Buttons ─────────────────────────────────────────────────
@@ -226,6 +296,9 @@ pub(crate) fn primary_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
+    if is_graphite(tokens) {
+        return labelled(label, on_press, styles::primary_button(tokens));
+    }
     labelled(label, on_press, styles::accent_button(tokens))
 }
 
@@ -235,7 +308,22 @@ pub(crate) fn secondary_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
+    if is_graphite(tokens) {
+        return labelled(label, on_press, graphite_outline(tokens));
+    }
     labelled(label, on_press, styles::outline_button(tokens))
+}
+
+/// Graphite secondary button: the outline look at the button radius.
+fn graphite_outline(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let base = styles::outline_button(tokens);
+    move |theme: &Theme, status| {
+        let mut style = base(theme, status);
+        style.border.radius = Radii::GRAPHITE.button.into();
+        style
+    }
 }
 
 /// Destructive action (error-coloured outline). `None` disables it.
@@ -250,12 +338,37 @@ pub(crate) fn danger_button<'a, M: Clone + 'a>(
 /// Small filled label (role / source badge, tab count): `fill` behind
 /// `ink` text, corners at [`RADIUS`].
 pub(crate) fn pill<'a, M: 'a>(label: String, fill: Color, ink: Color) -> Element<'a, M> {
+    pill_with_radius(label, fill, ink, RADIUS)
+}
+
+/// Status chip in a [`styles::PillTone`]: fully rounded on Graphite, the
+/// legacy badge radius elsewhere.
+pub(crate) fn toned_pill<'a, M: 'a>(
+    label: String,
+    tone: styles::PillTone,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let (fill, ink) = styles::pill_colors(tokens, tone);
+    let radius = if is_graphite(tokens) {
+        Radii::GRAPHITE.pill
+    } else {
+        RADIUS
+    };
+    pill_with_radius(label, fill, ink, radius)
+}
+
+fn pill_with_radius<'a, M: 'a>(
+    label: String,
+    fill: Color,
+    ink: Color,
+    radius: f32,
+) -> Element<'a, M> {
     container(text(label).size(TS.caption).color(ink).boxed())
         .padding([SP.xs, SP.s])
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),
             border: Border {
-                radius: RADIUS.into(),
+                radius: radius.into(),
                 ..Border::default()
             },
             ..container::Style::default()
@@ -279,6 +392,31 @@ pub(crate) fn reorder_remove<'a, M: Clone + 'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center)
     .boxed()
+}
+
+/// Display label of a lifecycle state, as shown on its pill.
+pub(crate) fn lifecycle_label(state: signex_library::LifecycleState) -> &'static str {
+    use signex_library::LifecycleState as L;
+    match state {
+        L::Draft => "Draft",
+        L::InReview => "In review",
+        L::Released => "Released",
+        L::Deprecated => "Deprecated",
+        L::Obsolete => "Obsolete",
+        _ => "Unknown",
+    }
+}
+
+/// Pill tone of a lifecycle state.
+pub(crate) fn lifecycle_tone(state: signex_library::LifecycleState) -> styles::PillTone {
+    use signex_library::LifecycleState as L;
+    match state {
+        L::Released => styles::PillTone::Ok,
+        L::InReview => styles::PillTone::Info,
+        L::Deprecated => styles::PillTone::Warn,
+        L::Obsolete => styles::PillTone::Err,
+        _ => styles::PillTone::Neutral,
+    }
 }
 
 // ─── Empty state ─────────────────────────────────────────────
@@ -319,9 +457,15 @@ mod tests {
     }
 
     #[test]
-    fn zebra_rows_differ_on_every_builtin() {
+    fn zebra_rows_differ_on_every_legacy_builtin() {
+        // Graphite themes have no zebra (flat rows with a soft separator).
         for &id in ThemeId::BUILTINS {
             let t = theme_tokens(id);
+            if is_graphite(&t) {
+                let flat = row_background(&t, 1, button::Status::Active);
+                assert!(flat.is_none(), "{id:?}");
+                continue;
+            }
             let even = bg(row_background(&t, 0, button::Status::Active));
             let odd = bg(row_background(&t, 1, button::Status::Active));
             assert_ne!(even, odd, "{id:?}");

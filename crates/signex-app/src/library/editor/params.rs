@@ -305,7 +305,7 @@ fn param_row<'a>(
     };
 
     let [scope_w, name_w, value_w, unit_w, status_w, action_w] = COLUMNS.map(|(_, w)| w);
-    kit::table_row(
+    let row = kit::table_row(
         vec![
             (scope_cell, scope_w),
             (name_cell, name_w),
@@ -317,7 +317,19 @@ fn param_row<'a>(
         index,
         None,
         tokens,
-    )
+    );
+    // Graphite: a row with a problem sits on an `err_soft` wash.
+    if problem.is_none() || !crate::styles::is_graphite(tokens) {
+        return row;
+    }
+    let wash = crate::styles::tokens::resolve(tokens).err_soft;
+    iced::widget::container(row)
+        .width(Length::Fill)
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(wash)),
+            ..iced::widget::container::Style::default()
+        })
+        .boxed()
 }
 
 fn custom_kind_and_unit(v: &ParamValue) -> (ParamKind, Option<String>) {
