@@ -30,6 +30,11 @@ impl RowHistory {
         self.0.set_cap(depth);
     }
 
+    /// How many undo steps are kept.
+    pub fn undo_depth(&self) -> usize {
+        self.0.cap()
+    }
+
     /// Is the row away from the state the library stores (or is that state
     /// unknown)?
     pub fn is_dirty(&self) -> bool {

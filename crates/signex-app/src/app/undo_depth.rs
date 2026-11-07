@@ -77,6 +77,17 @@ mod tests {
         docs.net_class_history.insert(project, Default::default());
         docs.rules_history.insert(project, Default::default());
         docs.project_tabs.insert(project, Default::default());
+        let address = crate::library::state::EditorAddress::new(
+            PathBuf::from("/p/t.snxlib"),
+            "t".into(),
+            signex_library::RowId::new(),
+        );
+        let row = crate::library::state::ComponentPreviewState::from_row(
+            PathBuf::from("/p/t.snxlib"),
+            "t".into(),
+            crate::library::component_preview::test_row(),
+        );
+        app.library.editors.insert(address, row);
         app
     }
 
@@ -93,6 +104,7 @@ mod tests {
                 .values()
                 .map(|t| t.general_history.undo_depth()),
         );
+        all.extend(app.library.editors.values().map(|p| p.history.undo_depth()));
         all
     }
 
@@ -101,11 +113,11 @@ mod tests {
         let mut app = app_with_every_history();
         assert!(depths(&app).iter().all(|d| *d == 100), "{:?}", depths(&app));
         assert!(app.set_undo_depth(7));
-        assert_eq!(depths(&app), vec![7; 6]);
+        assert_eq!(depths(&app), vec![7; 7]);
         for bad in [0, 1001] {
             assert!(!app.set_undo_depth(bad));
         }
-        assert_eq!(depths(&app), vec![7; 6], "a refused depth changes nothing");
+        assert_eq!(depths(&app), vec![7; 7], "a refused depth changes nothing");
     }
 
     #[test]
