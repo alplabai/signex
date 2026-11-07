@@ -229,6 +229,7 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
                     width: 1.0,
                     color: edge,
                     radius: Radii::GRAPHITE.card.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             })

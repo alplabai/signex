@@ -99,6 +99,9 @@ fn project_options_opens_the_project_tab_and_is_greyed_without_a_project() {
     assert!(!row_is_live(&bare_app(), "Project/Project Options..."));
     let mut app = one_symbol_selected();
     open_project(&mut app, "P.snxprj");
+    // The fixture sheet lives outside the project folder; with no active path
+    // the command falls back to the active project, as it does for a project tab.
+    app.document_state.active_path = None;
     let tabs = app.document_state.tabs.len();
     let _ = click(&mut app, "Project/Project Options...");
     assert_eq!(app.document_state.tabs.len(), tabs + 1, "no Project tab");

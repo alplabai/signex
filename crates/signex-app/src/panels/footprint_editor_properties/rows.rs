@@ -33,7 +33,7 @@ pub(super) fn edit_row<'a>(
     container(
         row![
             label(key, label_c),
-            text_input("", value)
+            text_input("", value.to_owned())
                 .on_input(on_input)
                 .size(TS.body)
                 .padding(SP.s)

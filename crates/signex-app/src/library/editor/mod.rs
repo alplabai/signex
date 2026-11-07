@@ -328,10 +328,10 @@ fn view_tabs<'a>(
             } else {
                 tab.label()
             })
-                .size(TS.label)
-                .color(text_c)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .boxed()
+            .size(TS.label)
+            .color(text_c)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed()
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
@@ -559,32 +559,25 @@ fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, Li
         TS.heading * CLOSE_GLYPH_SCALE
     };
     let tokens = *tokens;
-    button(
-        container(
-            text("\u{00D7}")
-                .size(glyph)
-                .color(text_c),
-        )
-        .padding([0.0, SP.m]),
-    )
-    .on_press(LibraryMessage::EditorEvent {
-        library_path: address.library_path,
-        table: address.table,
-        row_id: address.row_id,
-        msg: EditorMsg::CloseEditor,
-    })
-    .style(move |_: &Theme, status| button::Style {
-        background: close_background(&tokens, status),
-        border: Border {
-            width: crate::styles::HAIRLINE,
-            radius: crate::styles::RADIUS.into(),
-            color: border,
-            ..Border::default()
-        },
-        text_color: text_c,
-        ..button::Style::default()
-    })
-    .boxed()
+    button(container(text("\u{00D7}").size(glyph).color(text_c)).padding([0.0, SP.m]))
+        .on_press(LibraryMessage::EditorEvent {
+            library_path: address.library_path,
+            table: address.table,
+            row_id: address.row_id,
+            msg: EditorMsg::CloseEditor,
+        })
+        .style(move |_: &Theme, status| button::Style {
+            background: close_background(&tokens, status),
+            border: Border {
+                width: crate::styles::HAIRLINE,
+                radius: crate::styles::RADIUS.into(),
+                color: border,
+                ..Border::default()
+            },
+            text_color: text_c,
+            ..button::Style::default()
+        })
+        .boxed()
 }
 
 #[cfg(test)]

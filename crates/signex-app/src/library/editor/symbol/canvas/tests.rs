@@ -32,6 +32,13 @@ impl Rig {
         // A settled camera: the tests are about hit-testing, not the
         // queued first-view placement.
         editor.pending_view = None;
+        // `new` now fits a symbol that has content; these tests pin the
+        // un-fitted default camera (100%, origin at the viewport centre).
+        editor.camera = crate::canvas::Camera::default();
+        editor.camera.offset = Point::new(
+            SymbolDocument::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
+            SymbolDocument::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
+        );
         Self {
             editor,
             cstate: CanvasState::default(),

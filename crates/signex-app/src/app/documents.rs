@@ -407,8 +407,8 @@ impl SymbolDocument {
         crate::library::editor::symbol::state::PartView::new(self.active_part, self.active_body)
     }
 
-    const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
-    const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
+    pub(crate) const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
+    pub(crate) const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
 
     /// Build a fresh standalone editor state from a `SymbolFile`
     /// container loaded off disk. `path` is the `.snxsym` file the

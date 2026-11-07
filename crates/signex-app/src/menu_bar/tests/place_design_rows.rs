@@ -127,10 +127,7 @@ fn annotate_opens_its_dialog_and_reset_asks_to_confirm() {
     );
 
     let mut app = one_symbol_selected();
-    let _ = click(
-        &mut app,
-        "Tools/Annotation/Reset Schematic Designators...",
-    );
+    let _ = click(&mut app, "Tools/Annotation/Reset Schematic Designators...");
     assert_eq!(
         probe(&app),
         Probe {
