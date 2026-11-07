@@ -148,6 +148,10 @@ impl Signex {
                 Task::none(),
             );
         }
-        self.dispatch_command_reporting(command, args, None)
+        let result = self.dispatch_command_reporting(command, args, None);
+        // No `update` runs here, so a history the command created gets its
+        // depth now.
+        self.sync_undo_depth();
+        result
     }
 }

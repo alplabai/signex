@@ -14,7 +14,7 @@
 //! The obvious shape is to let each inner `execute` record its own entry
 //! and then truncate the batch's entries away and push one coalesced entry
 //! in their place. That silently erodes undo depth. `record_history` evicts
-//! from the *front* once `history` reaches `DEFAULT_UNDO_DEPTH`, so a batch
+//! from the *front* once `history` reaches its cap (`undo_depth`), so a batch
 //! of 10 run against a full history evicts 10 genuine pre-batch entries on
 //! the way in. Truncating the 10 transient entries afterwards cannot bring
 //! those back: the user is left at depth 91 after an action that should have

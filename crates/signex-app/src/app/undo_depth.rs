@@ -9,6 +9,9 @@ impl Signex {
     /// changed, when `depth` is outside `1..=MAX_UNDO_DEPTH`. Lowering it
     /// drops the oldest steps at once; a save point that falls off the bottom
     /// leaves that document dirty until its next save.
+    // A runtime change must not trim a footprint editor while a drag solve is
+    // pending: `UnsolvedEdits.history_len_before` / `evictions` (footprint
+    // `updates/sketch/solved.rs`) would go stale. Matters for a future Preferences row.
     pub fn set_undo_depth(&mut self, depth: usize) -> bool {
         if !undo_depth_in_range(depth) {
             return false;

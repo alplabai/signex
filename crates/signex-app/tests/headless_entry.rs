@@ -55,6 +55,7 @@ fn probe() {
         "no_override" => no_override(),
         "undo_round_trip" => undo_round_trip(),
         "undo_depth" => undo_depth(),
+        "undo_depth_dispatch" => undo_depth_dispatch(),
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -216,8 +217,7 @@ fn a_headless_undo_and_redo_of_a_sheet_edit_move_the_dirty_state() {
 }
 
 /// Edit, undo, redo through command ids only, no window: the sheet and its
-/// dirty state follow the history, and a save point trimmed away by the cap
-/// is not reachable by undo.
+/// dirty state follow the history.
 fn undo_round_trip() {
     use signex_types::schematic::{Point, SchematicSheet, Wire};
 
@@ -340,4 +340,28 @@ fn undo_depth() {
         app.document_state.undo_depth, 7,
         "no option: prefs.json wins"
     );
+}
+
+#[test]
+fn a_headless_command_applies_the_undo_depth_without_an_update() {
+    run_probe("undo_depth_dispatch");
+}
+
+/// `dispatch_command_headless` never calls `update`: an engine that exists
+/// when a command returns still gets the configured depth.
+fn undo_depth_dispatch() {
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, _boot) =
+        Signex::boot_headless_with_undo_depth(Vec::new(), &rules(), "3").expect("boot");
+    let path = isolated.path().join("depth.snxsch");
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    assert_eq!(engine.undo_depth(), 100);
+    app.document_state.engines.insert(path.clone(), engine);
+    let (outcome, _task) =
+        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::Ran);
+    assert_eq!(app.document_state.engines[&path].undo_depth(), 3);
 }
