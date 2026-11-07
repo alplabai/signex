@@ -9,7 +9,6 @@ mod layout_sync;
 mod measure;
 mod placement;
 mod state;
-mod summary;
 mod types;
 mod view;
 

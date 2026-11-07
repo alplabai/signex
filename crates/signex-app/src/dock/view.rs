@@ -114,6 +114,13 @@ impl DockArea {
         // adjacent tabs share their L/R borders and the rightmost
         // tab actually closes off with a right edge.
         let last_panel_idx = region.panels.len().saturating_sub(1);
+        // Graphite shrinks the tab padding so all labels of a side dock show.
+        let tab_pad = if graphite && position != PanelPosition::Bottom {
+            let labels: Vec<&str> = region.panels.iter().map(|p| p.label()).collect();
+            graphite::tab_padding(&labels, TS.body)
+        } else {
+            10.0
+        };
         for (i, panel) in region.panels.iter().enumerate().skip(offset) {
             let label = panel.label();
             let is_active = i == region.active;
@@ -191,7 +198,7 @@ impl DockArea {
                     .color(text_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             )
-            .padding([SP.s, 10.0]);
+            .padding([SP.s, tab_pad]);
             if graphite {
                 inner = inner.height(Length::Fill).align_y(iced::Alignment::Center);
             }
@@ -341,11 +348,17 @@ impl DockArea {
         // Altium parity: title + collapse/close on top, tabs on the
         // bottom. Content grows between them.
         if graphite {
-            // Left dock footer: ERC/DRC summary, only with real ERC counts.
-            let footer = (position == PanelPosition::Left)
-                .then(|| super::summary::erc_drc_card(ctx))
-                .flatten()
-                .map(|card| container(card).padding(SP.s).width(Length::Fill).boxed());
+            // Projects panel footer: the ERC / DRC / last-commit summary.
+            let footer = (position == PanelPosition::Left
+                && region.panels.get(region.active) == Some(&PanelKind::Projects))
+            .then(|| panels::graphite::summary_card(ctx))
+            .flatten()
+            .map(|card| {
+                container(card.map(DockMessage::Panel))
+                    .padding(SP.s)
+                    .width(Length::Fill)
+                    .boxed()
+            });
             let mut body = column![
                 container(title_bar)
                     .width(Length::Fill)

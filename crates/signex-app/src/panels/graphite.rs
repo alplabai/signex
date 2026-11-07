@@ -2,12 +2,16 @@
 //! panel buttons and list rows. Legacy themes
 //! never reach these; each caller branches on `is_graphite`.
 
-use iced::Color;
+use iced::widget::{column, container, row, text};
+use iced::{Border, Color, Element, Length, Widget as _};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tree_view::{BadgeTone, TreeIcon, TreeNode, TreeStyle};
 
+use super::{ErcSeverityLite, PanelContext, PanelMsg};
 use crate::styles::tokens::{relative_luminance, resolve};
-use crate::styles::{PillTone, pill_colors, ti};
+use crate::styles::{PillTone, Radii, TypeScale, pill_colors, ti};
+
+const TS: TypeScale = TypeScale::DEFAULT;
 
 /// Table row height of the Messages and ERC tables.
 pub const TABLE_ROW_HEIGHT: f32 = 28.0;
@@ -122,4 +126,112 @@ pub fn button_radius(tokens: &ThemeTokens) -> f32 {
     } else {
         3.0
     }
+}
+
+/// "2 h ago" style age of a commit.
+fn age(time: chrono::DateTime<chrono::Utc>) -> String {
+    let secs = (chrono::Utc::now() - time).num_seconds().max(0);
+    match secs {
+        0..=59 => "just now".to_string(),
+        60..=3599 => format!("{} min ago", secs / 60),
+        3600..=86399 => format!("{} h ago", secs / 3600),
+        _ => format!("{} d ago", secs / 86400),
+    }
+}
+
+/// One cell of the summary grid: a caption over a value.
+fn summary_cell<'a>(
+    tokens: &ThemeTokens,
+    caption: &'static str,
+    value: String,
+    color: Color,
+) -> Element<'a, PanelMsg> {
+    let r = resolve(tokens);
+    column![
+        text(caption).size(TS.caption).color(r.ink4).boxed(),
+        text(value)
+            .size(TS.caption)
+            .color(color)
+            .font(iced::Font {
+                weight: iced::font::Weight::Semibold,
+                ..iced::Font::DEFAULT
+            })
+            .boxed(),
+    ]
+    .spacing(2)
+    .width(Length::FillPortion(1))
+    .boxed()
+}
+
+/// The Projects panel footer card: ERC counts, DRC and "Last commit".
+/// ERC and DRC show a dash without data (no ERC findings recorded, no DRC
+/// engine). "Unrouted" is left out: no routing status exists to count.
+/// "Last commit" shows only when the active project has git and its history
+/// has loaded.
+pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMsg>> {
+    let tokens = &ctx.tokens;
+    let r = resolve(tokens);
+    let count = |severity| {
+        ctx.erc_diagnostics
+            .iter()
+            .filter(|d| d.severity == severity)
+            .count()
+    };
+    let (erc, erc_color) = if ctx.erc_diagnostics.is_empty() {
+        ("\u{2014}".to_string(), r.ink3)
+    } else {
+        let errors = count(ErcSeverityLite::Error);
+        let warnings = count(ErcSeverityLite::Warning);
+        let color = if errors > 0 {
+            ti(tokens.error)
+        } else if warnings > 0 {
+            ti(tokens.warning)
+        } else {
+            r.ink3
+        };
+        (format!("{errors} errors \u{b7} {warnings} warn"), color)
+    };
+    let mut cells = vec![
+        summary_cell(tokens, "ERC", erc, erc_color),
+        summary_cell(tokens, "DRC", "\u{2014}".to_string(), r.ink3),
+    ];
+    let has_git = ctx
+        .projects
+        .iter()
+        .any(|p| p.is_active && p.version_control);
+    if has_git
+        && ctx.history.mode == super::history::HistoryRenderMode::Ready
+        && let Some(last) = ctx.history.entries.first()
+    {
+        cells.push(summary_cell(tokens, "Last commit", age(last.time), r.ink3));
+    }
+    let mut grid: iced::widget::Column<Element<'a, PanelMsg>> =
+        iced::widget::Column::new().spacing(8).width(Length::Fill);
+    let mut cells = cells.into_iter();
+    while let Some(first) = cells.next() {
+        let second = cells.next().unwrap_or_else(|| {
+            iced::widget::space::horizontal()
+                .width(Length::FillPortion(1))
+                .boxed()
+        });
+        let line: iced::widget::Row<Element<'a, PanelMsg>> =
+            row![first, second].spacing(10).width(Length::Fill);
+        grid = grid.push(line.boxed());
+    }
+    let (fill, edge) = (ti(tokens.toolbar_bg), ti(tokens.border));
+    Some(
+        container(grid)
+            .padding(10)
+            .width(Length::Fill)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(iced::Background::Color(fill)),
+                border: Border {
+                    width: 1.0,
+                    color: edge,
+                    radius: Radii::GRAPHITE.card.into(),
+                },
+                ..container::Style::default()
+            })
+            .boxed(),
+    )
 }
