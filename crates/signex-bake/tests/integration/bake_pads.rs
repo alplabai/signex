@@ -743,7 +743,6 @@ fn bake_custom_sketch_profile_native_v0141() {
     // construction would also drop it from the topology, so leave it
     // as a Point-kind entity (Points aren't edges so they don't enter
     // the adjacency).
-    let _ = (l2, l3, l4);
 
     let _ = Plane {
         id: plane,

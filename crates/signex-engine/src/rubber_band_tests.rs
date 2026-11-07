@@ -1722,7 +1722,6 @@ fn a_selected_wire_overlapping_a_follower_is_merged() {
     let s = add_wire(&mut sheet, (45.0, 40.0), (45.0, 50.0));
     add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
     let mut e = Engine::new(sheet).unwrap();
-    let before = net_shape(e.document());
     mv(
         &mut e,
         vec![symbol_item(r1), SelectedItem::new(s, SelectedKind::Wire)],
@@ -1731,7 +1730,6 @@ fn a_selected_wire_overlapping_a_follower_is_merged() {
         true,
     );
     assert_no_overlaps(&e);
-    let _ = before;
 }
 
 #[test]

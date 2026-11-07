@@ -36,8 +36,7 @@ fn live_paths(app: &Signex) -> Vec<String> {
 }
 
 fn rich() -> Signex {
-    let (mut app, text) = app_that_copied();
-    let _ = text;
+    let (mut app, _) = app_that_copied();
     // One undo step, so Undo is live too.
     let _ = app.update(Message::Edit(crate::app::EditMsg::Duplicate));
     app
