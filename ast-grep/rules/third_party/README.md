@@ -3,8 +3,8 @@
 The Rust security rules in this folder, and their tests in
 `ast-grep/rule-tests/third_party/`, come from
 [coderabbitai/ast-grep-essentials](https://github.com/coderabbitai/ast-grep-essentials)
-at commit `73120109bf45`, under the Apache License 2.0
-(<https://www.apache.org/licenses/LICENSE-2.0>).
+at commit `73120109bf45`, under the Apache License 2.0: a copy of the
+licence is in [`LICENSE`](LICENSE) next to this file.
 
 Copied from that repository's `rules/rust/security/` and `tests/rust/`:
 
