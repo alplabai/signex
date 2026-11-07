@@ -140,7 +140,7 @@ pub(crate) fn add_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) 
         .push(Label::new(text, Point::new(at.0, at.1), LabelType::Net));
 }
 
-fn add_dot(sheet: &mut SchematicSheet, at: (f64, f64), minted: bool) {
+pub(crate) fn add_dot(sheet: &mut SchematicSheet, at: (f64, f64), minted: bool) {
     sheet.junctions.push(Junction {
         uuid: Uuid::now_v7(),
         position: Point::new(at.0, at.1),

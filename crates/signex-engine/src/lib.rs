@@ -190,6 +190,9 @@ pub struct Engine {
     /// The pre-move sheet's connectivity, to derive moved sheets from
     /// (drag previews).
     preset_base: Option<std::sync::Arc<signex_net::NetBase>>,
+    /// The pre-move sheet's minted dots and their verdicts, to revalidate only
+    /// the dots near changed wires (drag previews).
+    preset_dots: Option<std::sync::Arc<transform::DotVerdicts>>,
     /// Net colour of each wire the app has painted, by wire uuid. The engine
     /// never changes it; a merge reads it so two wires of different colours
     /// are not folded into one (see `transform::merge`).
@@ -202,14 +205,16 @@ pub(crate) fn next_revision() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// A sheet prepared for repeated drag previews: the pre-move nets and
-/// connectivity are derived once, not for every cursor step, and each step
-/// derives only what the move changed (`docs/INCREMENTAL_NETS.md`).
+/// A sheet prepared for repeated drag previews: the pre-move nets,
+/// connectivity and junction-dot verdicts are found once, not for every
+/// cursor step, and each step redoes only what the move changed
+/// (`docs/INCREMENTAL_NETS.md`).
 #[derive(Debug)]
 pub struct MovePreview {
     sheet: SchematicSheet,
     before: BeforeNets,
     base: Option<std::sync::Arc<signex_net::NetBase>>,
+    dots: Option<std::sync::Arc<transform::DotVerdicts>>,
 }
 
 impl MovePreview {
@@ -220,16 +225,18 @@ impl MovePreview {
             // The base derives the unchanged sheet from its own clusters.
             before: std::sync::Arc::new(base.derive(sheet)),
             base: Some(std::sync::Arc::new(base)),
+            dots: transform::DotVerdicts::new(sheet).map(std::sync::Arc::new),
             sheet: sheet.clone(),
         }
     }
 
-    /// A preview that derives every net from scratch, as before the
-    /// incremental derive: the reference for the timing bench.
+    /// A preview that derives every net and judges every dot from scratch, as
+    /// the commit does: the reference for the timing bench and the tests.
     #[cfg(test)]
     pub(crate) fn new_full_derive(sheet: &SchematicSheet) -> Self {
         Self {
             base: None,
+            dots: None,
             ..Self::new(sheet)
         }
     }
@@ -258,6 +265,7 @@ impl MovePreview {
         };
         engine.preset_before = Some(self.before.clone());
         engine.preset_base.clone_from(&self.base);
+        engine.preset_dots.clone_from(&self.dots);
         engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
@@ -306,6 +314,7 @@ impl Engine {
             unkept_pins: Vec::new(),
             preset_before: None,
             preset_base: None,
+            preset_dots: None,
             wire_colors: std::collections::HashMap::new(),
         })
     }
@@ -341,6 +350,7 @@ impl Engine {
             unkept_pins: Vec::new(),
             preset_before: None,
             preset_base: None,
+            preset_dots: None,
             wire_colors: std::collections::HashMap::new(),
         })
     }

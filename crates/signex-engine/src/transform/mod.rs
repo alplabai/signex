@@ -161,9 +161,27 @@ impl Engine {
             .cloned()
             .collect();
 
+        // A drag preview keeps the pre-move dots' verdicts, so only the dots
+        // near a changed wire are judged again (see `dot_verdicts`).
+        let verdicts = self.preset_dots.clone().filter(|v| !v.is_empty());
+        let areas = verdicts
+            .as_deref()
+            .and_then(|v| v.changed_areas(&self.document.wires));
+        let kept = |junction: &signex_types::schematic::Junction| match (&verdicts, &areas) {
+            (Some(verdicts), Some(areas)) => verdicts.kept(junction, areas),
+            _ => None,
+        };
+        let to_judge = (self.document.junctions.iter())
+            .filter(|j| j.minted && kept(j).is_none())
+            .count();
         // Wire geometry is fixed for this pass (only junctions change), so one
-        // index serves every query.
-        let index = WireIndex::new(&self.document.wires, crate::JUNCTION_TOLERANCE_MM);
+        // index serves every query. Minting for a wire takes about eight
+        // lookups, judging a dot three.
+        let index = WireIndex::for_lookups(
+            &self.document.wires,
+            crate::JUNCTION_TOLERANCE_MM,
+            8 * touched.len() + 3 * to_judge,
+        );
         let mut changed = false;
         for wire in touched {
             let minted = autoplace::junctions_for_wire(&wire, &self.document.junctions, &index);
@@ -181,7 +199,9 @@ impl Engine {
             .iter()
             .filter(|junction| junction.minted)
             .filter(|junction| {
-                !autoplace::wire_meeting_justifies_junction(junction.position, &index)
+                !kept(junction).unwrap_or_else(|| {
+                    autoplace::wire_meeting_justifies_junction(junction.position, &index)
+                })
             })
             .map(|junction| junction.uuid)
             .collect();
@@ -513,11 +533,13 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 mod about_centre;
 mod autoplace;
 mod bus_entry;
+mod dot_verdicts;
 mod merge;
 pub(crate) mod rubber_band;
 mod wire_index;
 use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
+pub(crate) use dot_verdicts::DotVerdicts;
 pub(crate) use merge::TouchingPairs;
 use wire_index::WireIndex;
 

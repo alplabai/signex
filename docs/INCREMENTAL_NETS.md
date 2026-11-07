@@ -57,18 +57,14 @@ them for all clusters.
 
 ## Queried points
 
-`derive_at` also answers where queried points sit. The full derive anchors a
-point flagged as on a wire's interior in the union-find that already holds the
-name joins, one point after the other, and then looks the net up by the root
-the nets were numbered with before those joins. Normally the point is a fresh
-node and nothing changes; but a point that is already a node of another net
-(a pin tip held by a no-connect, inside a wire with no dot) merges two whole
-classes, for the later queries too, and a net numbered by a root that the merge
-changed is not found. `NetBase::locate` replays exactly that over the class roots, on purpose: the
-full derive's anchoring of queried points is a known bug tracked separately,
-and `locate` mirrors it until that is fixed (then both change together).
-The region argument above is unaffected: every queried key is a dirty key, so
-the wires through it are in the region.
+`derive_at` also answers where queried points sit. A point flagged as on a
+wire's interior that lies inside a wire (not on an endpoint) takes the net of
+that wire's smaller endpoint; any other point takes its own node's net.
+Nothing is joined, so a point that is already a node of another net (a pin tip
+held by a no-connect, a power port's tip) never merges two nets, and no query
+changes another one's answer (#2144). `NetBase::locate` answers the same way
+through the region's own segment index: every queried key is a dirty key, so
+every wire through it is in the region.
 
 ## When it derives in full
 
@@ -90,17 +86,42 @@ The guard (`transform/rubber_band/guard.rs`) takes an optional `NetBase`
 throwaway engine. The commit path has no base and keeps the full derive, so the
 ghost-equals-commit tests compare the two derives end to end.
 
+## Junction dots
+
+Each round of the move pass also reconciles junction dots: it mints the dots
+the touched wires need and drops every minted dot no wire meeting justifies
+any more. Whether a dot is justified reads only the wires within the junction
+tolerance of its point. `MovePreview` therefore judges every minted dot of the
+pre-move sheet once (`transform/dot_verdicts.rs`); a step diffs the wires by
+id and judges again only the dots that moved, are new, or lie inside the
+bounding box, grown by twice the tolerance, of a wire that was added, removed
+or changed (old and new geometry). Every other dot keeps its pre-move verdict.
+A sheet with two wires of one id, or a changed wire with a non-finite
+coordinate, is judged in full.
+
+The wire index behind those checks grids every wire of the sheet. With only a
+few lookups to answer (a single dragged part, few dots to judge) it hands
+every wire to each lookup instead (`WireIndex::for_lookups`): the answers are
+the same, as every predicate still runs on its candidates, and the grid is
+not built. This also speeds up the commit.
+
 ## What it does not remove
 
-The guard still turns each derived list into sets to compare, and level two
-walks every cluster, so a step is not free of the sheet size; it is free of the
-geometry (the union-find, the segment index, the pin transforms, the terminal
-gate) outside the region. The junction reconcile is separate work.
+The guard still turns each derived list into sets to compare, level two walks
+every cluster, and the diffs read every element id, so a step is not free of
+the sheet size; it is free of the geometry (the union-find, the segment index,
+the pin transforms, the terminal gate, the junction checks) outside what the
+move touches. With the bench below, one step on 480 symbols and 960 wires
+takes about 4.8 ms, against 13.0 ms before the incremental derive (the
+from-scratch path the commit takes now runs in about 8.3 ms).
 
 ## Tests
 
 - `signex-net` `build::tests::incremental`: targeted edits and a random-edit
   property test against `net_signatures_at`, queried points included.
+- `signex-engine` `transform::dot_verdicts::tests`: every kept verdict equals
+  judging the dot again after random wire edits, and the scanning index
+  judges as the gridded one.
 - `signex-engine` `incremental_nets_tests`: every derive inside the guard is
   asserted equal to the full derive (`guard::derive_at`, tests only), ghost =
   commit = full-derive ghost over targeted moves and random cases, and an
