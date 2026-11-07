@@ -20,14 +20,31 @@ pub const IOSEVKA_BOLD_ITALIC: &[u8] = include_bytes!("../../assets/fonts/Iosevk
 pub const ROBOTO_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Roboto-Regular.ttf");
 pub const ROBOTO_BOLD: &[u8] = include_bytes!("../../assets/fonts/Roboto-Bold.ttf");
 
+/// Inter — the default UI chrome face (Graphite look). Static faces, unmodified.
+pub const INTER_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
+pub const INTER_MEDIUM: &[u8] = include_bytes!("../../assets/fonts/Inter-Medium.ttf");
+pub const INTER_SEMIBOLD: &[u8] = include_bytes!("../../assets/fonts/Inter-SemiBold.ttf");
+
+/// JetBrains Mono — chrome-only monospace (shortcuts, values, badges). Never
+/// canvas text: canvas extents depend on the Iosevka default.
+pub const JETBRAINS_MONO_REGULAR: &[u8] =
+    include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf");
+pub const JETBRAINS_MONO_MEDIUM: &[u8] =
+    include_bytes!("../../assets/fonts/JetBrainsMono-Medium.ttf");
+
 /// Every bundled face, in the order `main` registers them.
-pub const BUNDLED_FONTS: [&[u8]; 6] = [
+pub const BUNDLED_FONTS: [&[u8]; 11] = [
     IOSEVKA_REGULAR,
     IOSEVKA_BOLD,
     IOSEVKA_ITALIC,
     IOSEVKA_BOLD_ITALIC,
     ROBOTO_REGULAR,
     ROBOTO_BOLD,
+    INTER_REGULAR,
+    INTER_MEDIUM,
+    INTER_SEMIBOLD,
+    JETBRAINS_MONO_REGULAR,
+    JETBRAINS_MONO_MEDIUM,
 ];
 
 #[cfg(test)]

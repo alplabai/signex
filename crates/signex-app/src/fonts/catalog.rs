@@ -15,7 +15,12 @@ use signex_types::font::BUNDLED_DEFAULT_FAMILY;
 
 /// Families compiled into the binary and registered with iced at startup
 /// (`fonts::bundled`). Always installed, on every machine.
-pub const BUNDLED_FAMILIES: [&str; 2] = [BUNDLED_DEFAULT_FAMILY, "Roboto"];
+pub const BUNDLED_FAMILIES: [&str; 4] = [
+    BUNDLED_DEFAULT_FAMILY,
+    "Roboto",
+    "Inter",
+    crate::fonts::CHROME_MONO_FONT,
+];
 
 /// The set of installed family names.
 #[derive(Debug, Clone)]
@@ -215,6 +220,17 @@ mod tests {
     fn names_are_sorted_and_deduplicated() {
         let catalog = FontCatalog::from_families(["b", "a", "B", "a"]);
         let names: Vec<&str> = catalog.names().iter().map(String::as_str).collect();
-        assert_eq!(names, ["B", "Iosevka", "Roboto", "a", "b"]);
+        assert_eq!(
+            names,
+            [
+                "B",
+                "Inter",
+                "Iosevka",
+                "JetBrains Mono",
+                "Roboto",
+                "a",
+                "b"
+            ]
+        );
     }
 }
