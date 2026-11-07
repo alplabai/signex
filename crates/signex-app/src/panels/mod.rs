@@ -25,6 +25,8 @@ mod color_field;
 mod context;
 mod drafts;
 pub use drafts::PanelDrafts;
+mod empty_state;
+pub(crate) use empty_state::empty_state_card;
 mod erc_waivers;
 mod footprint_context;
 mod library;
@@ -36,6 +38,7 @@ mod numeric_draft;
 mod palette;
 mod paper;
 mod projects;
+pub mod signal;
 mod properties;
 mod status;
 mod symbol_context;
@@ -260,9 +263,15 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
+        PanelKind::Filter if crate::styles::is_graphite(&ctx.tokens) => {
+            empty_state_card(&ctx.tokens, "Selection Filter", "All object types enabled", None)
+        }
         PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
+        PanelKind::Signal if crate::styles::is_graphite(&ctx.tokens) => {
+            return signal::view(ctx);
+        }
         PanelKind::Signal => view_stub("Signal AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),

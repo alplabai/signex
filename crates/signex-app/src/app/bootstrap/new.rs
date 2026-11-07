@@ -535,6 +535,7 @@ impl Signex {
                     canvas_font_popup_open: false,
 
                     properties_tab: 0,
+                    signal_mode: Default::default(),
                     net_classes: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,
