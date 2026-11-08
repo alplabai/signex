@@ -227,3 +227,44 @@ fn resolving_twice_gives_the_same_version() {
     let b = resolve(&f, f.row_id).unwrap();
     assert_eq!(a.lib_symbol.body_ref(), b.lib_symbol.body_ref());
 }
+
+/// R1 on v1, a library edit, R2 placed on v2, R1 deleted: the v1 body no
+/// instance draws with is not judged, so nothing reads "out of date".
+#[test]
+fn a_version_no_instance_draws_with_any_more_is_not_drift() {
+    let (_f, mut app) = two_versions();
+    select_first(&mut app);
+    check_drift(&mut app);
+    assert!(is_drifted(&app), "R1 is behind while it exists");
+
+    let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
+    assert_eq!(doc(&app).symbols.len(), 1);
+    assert_eq!(
+        doc(&app).lib_symbols.len(),
+        2,
+        "the orphan body stays embedded"
+    );
+    check_drift(&mut app);
+    assert!(!is_drifted(&app), "an orphan body is not drift");
+}
+
+/// "Only this one" is offered for an instance that is behind, not for one
+/// that already draws with the current version.
+#[test]
+fn only_this_one_is_not_offered_for_an_instance_that_is_current() {
+    let (_f, mut app) = two_versions();
+    for (index, current) in [(0, false), (1, true)] {
+        let id = doc(&app).symbols[index].uuid;
+        app.interaction_state.active_canvas_mut().selected =
+            vec![signex_types::schematic::SelectedItem::new(
+                id,
+                signex_types::schematic::SelectedKind::Symbol,
+            )];
+        check_drift(&mut app);
+        assert_eq!(
+            crate::library_symbol_drift::info(&app, "Library This One Current").as_deref(),
+            current.then_some("Yes"),
+            "instance {index}"
+        );
+    }
+}

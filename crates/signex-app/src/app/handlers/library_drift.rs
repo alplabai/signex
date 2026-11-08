@@ -85,15 +85,7 @@ impl Signex {
             .document_state
             .engines
             .iter()
-            .map(|(path, engine)| {
-                let entries = engine
-                    .document()
-                    .lib_symbols
-                    .iter()
-                    .map(|(id, sym)| (id.clone(), sym.clone()))
-                    .collect();
-                (path.clone(), entries)
-            })
+            .map(|(path, engine)| (path.clone(), referenced_bodies(engine.document())))
             .collect();
         let parts = self
             .document_state
@@ -281,7 +273,7 @@ impl Signex {
             return Task::none();
         }
         let mut stamps = instance_stamps(engine.document(), &lib_id, &Default::default());
-        let only = only_this.then(|| part_units(engine.document(), uuid));
+        let only = only_this.then(|| signex_engine::placed_unit_ids(engine.document(), uuid));
         if let Some(units) = &only {
             stamps.retain(|s| units.contains(&s.symbol));
         }
@@ -298,21 +290,18 @@ impl Signex {
     }
 }
 
-/// The uuids of every unit of the part `symbol` belongs to.
-fn part_units(
+/// The embedded bodies some placed symbol draws with. A version nothing
+/// references (its last instance was deleted or moved) is not judged: it
+/// would read "out of date" for good, with nothing for Update to move.
+pub(crate) fn referenced_bodies(
     doc: &signex_types::schematic::SchematicSheet,
-    symbol: uuid::Uuid,
-) -> Vec<uuid::Uuid> {
-    let parts = signex_types::schematic::group_into_parts(
-        doc.symbols
-            .iter()
-            .map(signex_types::schematic::Symbol::part_key),
-    );
-    parts
-        .into_iter()
-        .find(|part| part.iter().any(|&i| doc.symbols[i].uuid == symbol))
-        .map(|part| part.into_iter().map(|i| doc.symbols[i].uuid).collect())
-        .unwrap_or_else(|| vec![symbol])
+) -> Vec<(String, signex_types::schematic::LibSymbol)> {
+    let used: std::collections::HashSet<&str> = doc.symbols.iter().map(|s| s.body_key()).collect();
+    doc.lib_symbols
+        .iter()
+        .filter(|(key, _)| used.contains(key.as_str()))
+        .map(|(key, body)| (key.clone(), body.clone()))
+        .collect()
 }
 
 /// An unreadable library says nothing about its rows: carry the previous
