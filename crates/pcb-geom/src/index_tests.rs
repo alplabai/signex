@@ -302,8 +302,16 @@ fn shapes_beyond_the_limit_are_refused() {
 #[test]
 fn extreme_query_inputs_do_not_overflow() {
     let index = BoardIndex::build(&sample());
-    assert!(index.hit_point(PointNm::new(i64::MIN, i64::MAX), 0).is_empty());
-    assert!(index.hit_point(PointNm::new(0, 0), i64::MAX).contains(&TRACK));
+    assert!(
+        index
+            .hit_point(PointNm::new(i64::MIN, i64::MAX), 0)
+            .is_empty()
+    );
+    assert!(
+        index
+            .hit_point(PointNm::new(0, 0), i64::MAX)
+            .contains(&TRACK)
+    );
     assert!(
         index
             .hit_point(PointNm::new(i64::MAX, i64::MAX), i64::MAX)
