@@ -10,11 +10,12 @@
 
 use std::path::Path;
 
-use iced::widget::{Space, Widget, button, column, container, row, text};
+use iced::widget::{Space, Widget, column, container, row};
 use iced::{Element, Length};
 use sha2::{Digest, Sha256};
 use signex_library::{Footprint, StepAttachment};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
@@ -36,7 +37,7 @@ pub fn view<'a>(
     let attach_addr = address.clone();
     let attach_btn = button(
         container(
-            text("Attach STEP…")
+            text(raw("Attach STEP…"))
                 .size(ts.body)
                 .color(crate::styles::tokens::on_accent(tokens)),
         )
@@ -54,7 +55,8 @@ pub fn view<'a>(
         Some(att) => {
             let remove_addr = address.clone();
             let remove_btn = button(
-                container(text("Remove").size(ts.caption).color(text_c)).padding([sp.xs, sp.m]),
+                container(text(raw("Remove")).size(ts.caption).color(text_c))
+                    .padding([sp.xs, sp.m]),
             )
             .on_press(LibraryMessage::EditorEvent {
                 library_path: remove_addr.library_path,
@@ -65,19 +67,19 @@ pub fn view<'a>(
             .style(crate::styles::outline_button(tokens));
             column![
                 row![
-                    text("STEP attachment").size(ts.title).color(text_c),
+                    text(raw("STEP attachment")).size(ts.title).color(text_c),
                     Space::new().width(Length::Fill),
                     remove_btn,
                 ]
                 .align_y(iced::Alignment::Center),
                 Space::new().height(sp.s),
-                text(format!("File: {}", att.filename))
+                text(raw(format!("File: {}", att.filename)))
                     .size(ts.body)
                     .color(text_c),
-                text(format!(
+                text(raw(format!(
                     "SHA-256: {}",
                     &att.content_hash[..16.min(att.content_hash.len())]
-                ))
+                )))
                 .size(ts.caption)
                 .color(muted),
             ]
@@ -86,15 +88,17 @@ pub fn view<'a>(
         }
         None => column![
             row![
-                text("STEP attachment").size(ts.title).color(text_c),
+                text(raw("STEP attachment")).size(ts.title).color(text_c),
                 Space::new().width(Length::Fill),
                 attach_btn,
             ]
             .align_y(iced::Alignment::Center),
             Space::new().height(sp.s),
-            text("Attach a .step / .stp mech-CAD file. Stored content-hashed in step/.")
-                .size(ts.caption)
-                .color(muted),
+            text(raw(
+                "Attach a .step / .stp mech-CAD file. Stored content-hashed in step/."
+            ))
+            .size(ts.caption)
+            .color(muted),
         ]
         .spacing(0)
         .boxed(),

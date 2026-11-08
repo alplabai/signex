@@ -1,8 +1,9 @@
 use iced::advanced::Widget;
-use iced::widget::{Column, Row, Space, column, container, text};
+use iced::widget::{Column, Row, Space, column, container};
 use iced::{Background, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
+use signex_widgets::{raw, text};
 
 use crate::catalog::Message;
 use crate::theme;
@@ -166,6 +167,7 @@ fn tab<'a>(
         accent_position,
     };
     let text_color = if is_active { text_primary } else { text_muted };
-    let content = container(text(label.to_string()).size(11).color(text_color)).padding([4, 10]);
+    let content =
+        container(text(raw(label.to_string())).size(11).color(text_color)).padding([4, 10]);
     TabPill::new(content._boxed(), pill_style)._boxed()
 }

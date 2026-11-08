@@ -248,9 +248,9 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         };
         return container(
             column![
-                text("Properties").size(TS.label).color(primary),
+                text(raw("Properties")).size(TS.label).color(primary),
                 Space::new().height(12.0),
-                text(hint).size(TS.body).color(muted),
+                text(raw(hint)).size(TS.body).color(muted),
             ]
             .spacing(SP.s)
             .padding(SP.m),
@@ -279,7 +279,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     col = col.push(
-        container(text("Document Options").size(TS.body).color(primary))
+        container(text(raw("Document Options")).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -339,7 +339,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(Space::new().height(8.0).boxed());
     col = col.push(thin_sep(border_c));
     col = col.push(
-        container(text("Nothing selected").size(TS.caption).color(muted))
+        container(text(raw("Nothing selected")).size(TS.caption).color(muted))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -382,9 +382,9 @@ fn view_pre_placement<'a>(
     col = col.push(
         container(
             row![
-                text(tool_name.clone()).size(TS.label).color(primary),
+                text(raw(tool_name.clone())).size(TS.label).color(primary),
                 Space::new().width(Length::Fill),
-                iced::widget::button(text("OK").size(TS.caption).color(Color::WHITE))
+                signex_widgets::button(text(raw("OK")).size(TS.caption).color(Color::WHITE))
                     .padding([SP.xs, 10.0])
                     .on_press(PanelMsg::ConfirmPrePlacement)
                     .style(iced::widget::button::primary),
@@ -576,7 +576,7 @@ fn view_pre_placement<'a>(
     } else {
         col = col.push(
             container(
-                text("Click to place. No per-instance options.")
+                text(raw("Click to place. No per-instance options."))
                     .size(TS.caption)
                     .color(muted),
             )

@@ -2,8 +2,9 @@
 //! restore paste and thermal relief on pre-#1052 sketch pads, and the
 //! standing warning listing SMD pads that have no paste opening.
 
-use iced::widget::{Column, button, container, row, text};
+use iced::widget::{Column, container, row};
 use iced::{Background, Color, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 use super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
 use crate::panels::{collapsible_section_header, is_section_collapsed};
@@ -45,12 +46,12 @@ pub(super) fn view_pad_stack_check<'a>(
     if let Some(n) = fp.legacy_pad_stack_offer {
         col = col.push(
             container(
-                text(format!(
+                text(raw(format!(
                     "All {n} sketch pad(s) have paste disabled and direct connect, the \
                      stack written by builds before #1052. They produce no paste stencil \
                      openings. Enable paste and thermal relief on them? Undo reverts it; \
                      nothing is saved until you save."
-                ))
+                )))
                 .size(TS.caption)
                 .color(warn),
             )
@@ -91,10 +92,10 @@ pub(super) fn view_pad_stack_check<'a>(
         }
         col = col.push(
             container(
-                text(format!(
+                text(raw(format!(
                     "Warning: {total} SMD pad(s) have paste disabled on their copper side \
                      and get no stencil opening: {listed}"
-                ))
+                )))
                 .size(TS.caption)
                 .color(warn),
             )
@@ -107,7 +108,7 @@ pub(super) fn view_pad_stack_check<'a>(
 }
 
 fn action_button<'a>(label: String, msg: PanelMsg) -> Element<'a, PanelMsg> {
-    button(text(label).size(TS.caption))
+    button(text(raw(label)).size(TS.caption))
         .padding([SP.xs, SP.m])
         .on_press(msg)
         .style(move |_t: &Theme, _| iced::widget::button::Style {

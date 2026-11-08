@@ -1,7 +1,8 @@
 //! Pour role sub-form. Split from `subforms.rs`.
 
-use iced::widget::{Column, Widget, container, pick_list, row, text, text_input};
+use iced::widget::{Column, Widget, container, pick_list, row};
 use iced::{Color, Element, Length};
+use signex_widgets::{raw, text, text_input};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -24,7 +25,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         return col;
     };
     col = col.push(
-        container(text("Pour properties").size(TS.caption).color(primary))
+        container(text(raw("Pour properties")).size(TS.caption).color(primary))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -35,11 +36,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
     col = col.push(
         container(
             row![
-                text("Net")
+                text(raw("Net"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text_input("(none)", net_buf)
+                text_input(raw("(none)"), net_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
                     .style(crate::panels::footprint_editor_properties::fp_field_style(
@@ -67,7 +68,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
     col = col.push(
         container(
             row![
-                text("Fill")
+                text(raw("Fill"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
@@ -85,11 +86,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
     col = col.push(
         container(
             row![
-                text("Priority")
+                text(raw("Priority"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text_input("0", pour.priority.to_string())
+                text_input(raw("0"), pour.priority.to_string())
                     .size(TS.caption)
                     .padding(SP.xs)
                     .style(crate::panels::footprint_editor_properties::fp_field_style(

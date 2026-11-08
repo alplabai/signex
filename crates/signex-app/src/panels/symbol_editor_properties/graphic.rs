@@ -1,7 +1,8 @@
 //! Graphic-selection Properties rows for the symbol editor.
 
-use iced::widget::{Column, Widget, container, row, text};
+use iced::widget::{Column, Widget, container, row};
 use iced::{Color, Element, Length};
+use signex_widgets::{raw, text};
 
 use super::super::{
     ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, NumericDraft,
@@ -29,7 +30,7 @@ pub(super) fn view_graphic_selection<'a>(
         |label: &'static str, field: GraphicFieldId, value: f64| -> Element<'a, PanelMsg> {
             container(
                 row![
-                    text(label.to_string())
+                    text(raw(label.to_string()))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
@@ -108,11 +109,11 @@ pub(super) fn view_graphic_selection<'a>(
             col = col.push(num_field("Size", GraphicFieldId::TextSize, *text_size));
             let content_row: Element<'a, PanelMsg> = container(
                 row![
-                    text("Content")
+                    text(raw("Content"))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    iced::widget::text_input("text", content.as_str())
+                    signex_widgets::text_input(signex_widgets::raw("text"), content.as_str())
                         .padding([SP.xs, SP.s])
                         .size(TS.body)
                         .on_input(move |s| PanelMsg::SymEditorSetGraphicText {
@@ -135,11 +136,11 @@ pub(super) fn view_graphic_selection<'a>(
             // drag handles cover editing.
             let vertices_row: Element<'a, PanelMsg> = container(
                 row![
-                    text("Vertices")
+                    text(raw("Vertices"))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    text(vertex_count.to_string())
+                    text(raw(vertex_count.to_string()))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(3)),

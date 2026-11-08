@@ -1,9 +1,10 @@
 //! The "read-only" badge drawn over the canvas of a sheet written by a newer
 //! Signex (#1402), so the state is visible before the user tries an edit.
 
-use iced::widget::{container, text};
+use iced::widget::container;
 use iced::{Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::app::Message;
 use crate::styles;
@@ -18,7 +19,7 @@ pub(in crate::app::view) fn read_only_badge<'a>(tokens: &ThemeTokens) -> Element
     let panel_bg = styles::ti(tokens.panel_bg);
     let border = styles::ti(tokens.border);
     let muted = styles::ti(tokens.text_secondary);
-    let chip = container(text(BADGE_TEXT).size(TS.body).color(muted))
+    let chip = container(text(raw(BADGE_TEXT)).size(TS.body).color(muted))
         .padding([3, 8])
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(panel_bg)),

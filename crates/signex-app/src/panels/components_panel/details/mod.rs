@@ -7,8 +7,9 @@ pub(crate) mod footprint_canvas;
 pub mod load;
 pub(crate) mod symbol_canvas;
 
-use iced::widget::{Column, Space, column, container, pick_list, row, scrollable, text};
+use iced::widget::{Column, Space, column, container, pick_list, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::{raw, text};
 
 use crate::library::editor::footprint::canvas::PreviewFootprint;
 use signex_library::primitive::PrimitiveRef;
@@ -195,7 +196,7 @@ pub(crate) fn view<'a>(
     let primary = theme_ext::text_primary(tokens);
 
     let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
-        container(text(message).size(HINT_TEXT_SIZE).color(color))
+        container(text(raw(message)).size(HINT_TEXT_SIZE).color(color))
             .padding([SP.l, SP.m])
             .width(Length::Fill)
             .boxed()
@@ -213,14 +214,14 @@ pub(crate) fn view<'a>(
     let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.s).width(Length::Fill);
     if let Some(why) = &panel.details.error {
         col = col.push(
-            text(why.as_str())
+            text(raw(why.as_str()))
                 .size(ROW_TEXT_SIZE)
                 .color(theme_ext::error_color(tokens))
                 .boxed(),
         );
     }
     col = col.push(
-        text(d.internal_pn.as_str())
+        text(raw(d.internal_pn.as_str()))
             .size(SECTION_HEADER_TEXT_SIZE)
             .color(primary)
             .boxed(),
@@ -228,7 +229,7 @@ pub(crate) fn view<'a>(
     let mut facts = vec![d.class.as_str(), d.lifecycle.as_str()];
     facts.retain(|f| !f.is_empty());
     col = col.push(
-        text(facts.join("  ·  "))
+        text(raw(facts.join("  ·  ")))
             .size(HINT_TEXT_SIZE)
             .color(muted)
             .boxed(),
@@ -240,11 +241,11 @@ pub(crate) fn view<'a>(
         (m, p) => format!("{m} — {p}"),
     };
     if !maker.is_empty() {
-        col = col.push(text(maker).size(ROW_TEXT_SIZE).color(primary).boxed());
+        col = col.push(text(raw(maker)).size(ROW_TEXT_SIZE).color(primary).boxed());
     }
     if !d.description.trim().is_empty() {
         col = col.push(
-            text(d.description.as_str())
+            text(raw(d.description.as_str()))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -292,7 +293,7 @@ pub(crate) fn view<'a>(
         );
     } else if let Some(fp) = &d.footprint {
         col = col.push(
-            text(fp.name.as_str())
+            text(raw(fp.name.as_str()))
                 .size(ROW_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -312,7 +313,7 @@ pub(crate) fn view<'a>(
     });
     for note in &d.notes {
         col = col.push(
-            text(note.as_str())
+            text(raw(note.as_str()))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -322,7 +323,7 @@ pub(crate) fn view<'a>(
     col = col.push(section_title("Parameters", primary));
     if d.parameters.is_empty() {
         col = col.push(
-            text("No parameters.")
+            text(raw("No parameters."))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -331,12 +332,12 @@ pub(crate) fn view<'a>(
     for (name, value) in &d.parameters {
         col = col.push(
             row![
-                text(name.as_str())
+                text(raw(name.as_str()))
                     .size(ROW_TEXT_SIZE)
                     .color(muted)
                     .width(Length::FillPortion(2))
                     .wrapping(iced::widget::text::Wrapping::None),
-                text(value.as_str())
+                text(raw(value.as_str()))
                     .size(ROW_TEXT_SIZE)
                     .color(primary)
                     .width(Length::FillPortion(3)),
@@ -354,7 +355,7 @@ pub(crate) fn view<'a>(
 }
 
 fn section_title<'a>(label: &'a str, color: Color) -> Element<'a, LibraryMessage> {
-    container(text(label).size(PANEL_TEXT_SIZE).color(color))
+    container(text(raw(label)).size(PANEL_TEXT_SIZE).color(color))
         .padding([SP.s, 0.0])
         .boxed()
 }

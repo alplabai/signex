@@ -2,13 +2,14 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{Column, Space, button, container, row, scrollable, svg, text};
+use iced::widget::{Column, Space, container, row, scrollable, svg};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
+use signex_widgets::{button, raw, text};
 use std::sync::OnceLock;
 
 pub mod components_panel;

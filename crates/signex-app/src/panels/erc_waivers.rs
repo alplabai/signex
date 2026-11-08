@@ -81,8 +81,8 @@ pub(super) fn waive_chip<'a>(
     };
     row![
         Space::new().width(6).height(Length::Shrink),
-        iced::widget::button(
-            text("Waive")
+        signex_widgets::button(
+            text(raw("Waive"))
                 .size(TS.caption)
                 .color(theme_ext::text_primary(tokens))
         )
@@ -108,7 +108,7 @@ pub(super) fn waive_editor<'a>(
     }
     let wrap = PanelMsg::ErcWaiver;
     let input = |hint: &'a str, value: &'a str, on: fn(String) -> ErcWaiverMsg| {
-        iced::widget::text_input(hint, value)
+        signex_widgets::text_input(signex_widgets::raw(hint), value)
             .on_input(move |s| wrap(on(s)))
             .on_submit(wrap(ErcWaiverMsg::Confirmed))
             .size(TS.body)
@@ -116,8 +116,8 @@ pub(super) fn waive_editor<'a>(
             .width(Length::Fill)
     };
     let button = |label: &'a str, msg: ErcWaiverMsg| {
-        iced::widget::button(
-            text(label)
+        signex_widgets::button(
+            text(raw(label))
                 .size(TS.caption)
                 .color(theme_ext::text_primary(&ctx.tokens)),
         )
@@ -147,7 +147,7 @@ pub(super) fn waive_editor<'a>(
     );
     if let Some(error) = &draft.error {
         col = col.push(
-            text(error.clone())
+            text(raw(error.clone()))
                 .size(TS.caption)
                 .color(theme_ext::error_color(&ctx.tokens))
                 .boxed(),
@@ -174,10 +174,10 @@ pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a
     }
     col = col.push(separator(&ctx.tokens).boxed());
     col = col.push(
-        text(format!(
+        text(raw(format!(
             "{} findings waived",
             ctx.erc_violation_waivers.len()
-        ))
+        )))
         .size(TS.caption)
         .color(muted)
         .boxed(),
@@ -202,12 +202,12 @@ pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a
         );
         col = col.push(
             row![
-                text(detail)
+                text(raw(detail))
                     .size(TS.caption)
                     .color(color)
                     .width(Length::Fill),
-                iced::widget::button(
-                    text("Restore")
+                signex_widgets::button(
+                    text(raw("Restore"))
                         .size(TS.caption)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )

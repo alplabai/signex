@@ -48,7 +48,7 @@ pub fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
 /// Section header: bold label + separator line.
 pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Element<'a, M> {
     column![
-        container(text(title.to_string()).size(TS.label).color(text_c))
+        container(text(raw(title.to_string())).size(TS.label).color(text_c))
             .padding([6.0, SP.m])
             .width(Length::Fill),
         thin_sep(border_c),
@@ -70,7 +70,7 @@ pub fn form_input_row<'a, M: 'a>(
             property_label(label.to_string(), label_c),
             container(
                 container(
-                    text(value.to_string())
+                    text(raw(value.to_string()))
                         .size(TS.body)
                         .color(text_on(input_bg))
                         .wrapping(iced::widget::text::Wrapping::None),
@@ -142,7 +142,7 @@ pub fn form_mm_edit_row<'a>(
     container(
         row![
             property_label(label.to_string(), label_c),
-            iced::widget::text_input("", text_value)
+            signex_widgets::text_input(signex_widgets::raw(""), text_value)
                 .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
                 .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
                 .size(TS.body)
@@ -210,11 +210,11 @@ pub fn form_check_row<'a>(
         row![
             property_label(label.to_string(), label_c),
             row![
-                iced::widget::checkbox(checked)
+                signex_widgets::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
                     .size(TS.heading)
                     .spacing(SP.s),
-                text(if checked { "On" } else { "Off" })
+                text(raw(if checked { "On" } else { "Off" }))
                     .size(TS.body)
                     .color(check_state_color(checked, label_c, surface)),
             ]
@@ -281,7 +281,7 @@ pub fn form_grid_row(
         // Snap Grid row: checkbox before pick_list
         row![
             label_widget,
-            iced::widget::checkbox(active)
+            signex_widgets::checkbox(active)
                 .on_toggle(move |_| on_toggle.clone())
                 .size(TS.label)
                 .spacing(SP.s),
@@ -318,18 +318,18 @@ pub fn form_check_row_shortcut<'a>(
     let shortcut_owned = shortcut.to_string();
     container(
         row![
-            text(label.to_string())
+            text(raw(label.to_string()))
                 .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
                 .wrapping(iced::widget::text::Wrapping::Word),
             row![
-                iced::widget::checkbox(value)
+                signex_widgets::checkbox(value)
                     .on_toggle(move |_| on_toggle.clone())
                     .size(TS.label)
                     .spacing(SP.s),
                 Space::new().width(Length::Fill),
-                text(shortcut_owned)
+                text(raw(shortcut_owned))
                     .size(TS.caption)
                     .color(label_c)
                     .wrapping(iced::widget::text::Wrapping::None),
@@ -359,8 +359,8 @@ pub fn form_font_link_row<'a>(
     container(
         row![
             property_label(label, label_c),
-            iced::widget::button(
-                text(summary)
+            signex_widgets::button(
+                text(raw(summary))
                     .size(TS.body)
                     .color(Color::from_rgb(0.35, 0.7, 1.0))
                     .width(Length::Fill),
@@ -419,49 +419,51 @@ pub fn canvas_font_popup<'a>(
     container(
         column![
             row![
-                text("Canvas Font Settings").size(TS.body).color(label_c),
+                text(raw("Canvas Font Settings"))
+                    .size(TS.body)
+                    .color(label_c),
                 Space::new().width(Length::Fill),
-                iced::widget::button(text("Close").size(TS.body))
+                signex_widgets::button(text(raw("Close")).size(TS.body))
                     .on_press(PanelMsg::CloseCanvasFontPopup)
                     .padding([SP.xs, 6.0])
             ]
             .align_y(iced::Alignment::Center),
             row![
-                text("Family").size(TS.body).color(label_c).width(56),
+                text(raw("Family")).size(TS.body).color(label_c).width(56),
                 family_pick,
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             row![
-                text("Size").size(TS.body).color(label_c).width(56),
+                text(raw("Size")).size(TS.body).color(label_c).width(56),
                 size_input,
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             row![
-                text("Style").size(TS.body).color(label_c).width(56),
+                text(raw("Style")).size(TS.body).color(label_c).width(56),
                 row![
-                    iced::widget::checkbox(bold)
+                    signex_widgets::checkbox(bold)
                         .on_toggle(PanelMsg::SetCanvasFontBold)
                         .size(TS.label)
                         .spacing(SP.s),
-                    text("Bold").size(TS.body).color(label_c),
+                    text(raw("Bold")).size(TS.body).color(label_c),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
                 row![
-                    iced::widget::checkbox(italic)
+                    signex_widgets::checkbox(italic)
                         .on_toggle(PanelMsg::SetCanvasFontItalic)
                         .size(TS.label)
                         .spacing(SP.s),
-                    text("Italic").size(TS.body).color(label_c),
+                    text(raw("Italic")).size(TS.body).color(label_c),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             ]
             .spacing(SP.l)
             .align_y(iced::Alignment::Center),
-            text("Applies immediately to canvas text rendering.")
+            text(raw("Applies immediately to canvas text rendering."))
                 .size(TS.caption)
                 .color(label_c),
         ]
@@ -492,7 +494,7 @@ pub fn form_edit_row<'a>(
     container(
         row![
             property_label(label.to_string(), label_c),
-            iced::widget::text_input("", value.to_string())
+            signex_widgets::text_input(signex_widgets::raw(""), value.to_string())
                 .on_input(on_input)
                 .size(TS.body)
                 .padding(SP.s)
@@ -508,7 +510,7 @@ pub fn form_edit_row<'a>(
 
 /// Standalone label row (no value, used before segmented controls).
 pub fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
-    container(text(label.to_string()).size(TS.body).color(label_c))
+    container(text(raw(label.to_string())).size(TS.body).color(label_c))
         .padding([SP.s, SP.m])
         .width(Length::Fill)
         .boxed()
@@ -522,8 +524,8 @@ pub fn font_style_row<'a>(
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let btn = |glyph: &'static str, style: iced::font::Weight| -> Element<'static, PanelMsg> {
-        iced::widget::button(
-            text(glyph.to_string())
+        signex_widgets::button(
+            text(raw(glyph.to_string()))
                 .size(TS.label)
                 .color(primary)
                 .font(iced::Font {

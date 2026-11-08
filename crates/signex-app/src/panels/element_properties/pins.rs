@@ -165,7 +165,7 @@ pub(super) fn push_pins_section<'a>(
                         pin.electrical_type,
                         pin.net.unwrap_or_default(),
                         if pin.hidden {
-                            "Yes".into()
+                            "Yes".to_owned()
                         } else {
                             String::new()
                         },
@@ -196,7 +196,7 @@ fn table_row<'a>(
             continue;
         }
         line = line.push(
-            text(cell)
+            text(raw(cell))
                 .size(TS.body)
                 .color(colour)
                 .width(Length::FillPortion(COLUMN_PORTIONS[index]))

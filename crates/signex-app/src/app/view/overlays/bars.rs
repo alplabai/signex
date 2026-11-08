@@ -155,18 +155,20 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let card = container(
             column![
-                iced::widget::text("⏸").size(TS.banner).color(accent_c),
-                iced::widget::text("Placement Paused")
+                signex_widgets::text(signex_widgets::raw("⏸"))
+                    .size(TS.banner)
+                    .color(accent_c),
+                signex_widgets::text(signex_widgets::raw("Placement Paused"))
                     .size(TS.heading)
                     .color(text_c),
-                iced::widget::text(
+                signex_widgets::text(signex_widgets::raw(
                     "Editing properties in the panel. Click Resume to keep placing."
-                )
+                ))
                 .size(TS.body)
                 .color(text_c),
                 iced::widget::Space::new().height(6.0),
-                iced::widget::button(
-                    iced::widget::text("Resume Placement")
+                signex_widgets::button(
+                    signex_widgets::text(signex_widgets::raw("Resume Placement"))
                         .size(TS.label)
                         .color(iced::Color::WHITE)
                 )
@@ -560,7 +562,7 @@ impl Signex {
                 row![
                     iced::widget::Space::new().width(abs_x.max(0.0)).boxed(),
                     container(
-                        iced::widget::text_input(placeholder, text)
+                        signex_widgets::text_input(signex_widgets::raw(placeholder), text)
                             .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))
@@ -617,15 +619,15 @@ impl Signex {
                 // already somewhere on screen. Clicking an open panel
                 // still fires OpenPanel — the dock brings it forward.
                 let check = if is_open(kind) { "\u{2713}" } else { "" };
-                iced::widget::button(
+                signex_widgets::button(
                     iced::widget::row![
                         iced::widget::container(
-                            iced::widget::text(check.to_string())
+                            signex_widgets::text(signex_widgets::raw(check.to_string()))
                                 .size(TS.body)
                                 .color(text_muted),
                         )
                         .width(Length::Fixed(16.0)),
-                        iced::widget::text(kind.label().to_string())
+                        signex_widgets::text(signex_widgets::raw(kind.label().to_string()))
                             .size(TS.body)
                             .color(text_c),
                     ]

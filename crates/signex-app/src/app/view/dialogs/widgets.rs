@@ -6,8 +6,9 @@
 //! code motion — no behaviour change.
 
 use super::*;
-use iced::widget::{Space, button, container, row, text};
+use iced::widget::{Space, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
+use signex_widgets::{button, raw, text};
 
 use super::{
     MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_HEADER_HEIGHT,
@@ -262,7 +263,7 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     container(
         row![
-            text(title)
+            text(raw(title))
                 .size(MODAL_HEADER_TITLE_SIZE)
                 .color(crate::styles::ti(tokens.text)),
             Space::new().width(Length::Fill),
@@ -282,9 +283,9 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
 pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> {
     container(
         row![
-            text("\u{25BE}").size(TS.caption).color(muted),
+            text(raw("\u{25BE}")).size(TS.caption).color(muted),
             Space::new().width(6),
-            text(title.to_string()).size(TS.body).color(muted),
+            text(raw(title.to_string())).size(TS.body).color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )

@@ -27,8 +27,9 @@ impl Signex {
     ) -> Element<'_, Message> {
         use crate::app::state::PdfPreviewTab;
         use iced::Widget;
-        use iced::widget::{Space, container, mouse_area, row, text};
+        use iced::widget::{Space, container, mouse_area, row};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
+        use signex_widgets::{raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -58,7 +59,7 @@ impl Signex {
                 is_last,
                 accent_position: AccentPosition::Bottom,
             };
-            let inner = container(text(label).size(TS.label).color(label_color))
+            let inner = container(text(raw(label)).size(TS.label).color(label_color))
                 .padding([6, 18])
                 .boxed();
             mouse_area(TabPill::new(inner, style))

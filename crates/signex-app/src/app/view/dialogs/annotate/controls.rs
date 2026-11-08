@@ -8,8 +8,9 @@
 //! reaches them.
 
 use super::super::*;
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Background, Border, Color, Element, Theme};
+use signex_widgets::{button, raw, text};
 
 use crate::app::state::AnnotateOrder;
 
@@ -21,9 +22,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// dialog's parameter list and sheet table.
 pub(super) fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
     let inner = if on {
-        text("✓").size(TS.caption).color(Color::WHITE)
+        text(raw("✓")).size(TS.caption).color(Color::WHITE)
     } else {
-        text(" ").size(TS.caption).color(Color::WHITE)
+        text(raw(" ")).size(TS.caption).color(Color::WHITE)
     };
     let bg = if on {
         Color::from_rgb(0.00, 0.47, 0.84)
@@ -82,7 +83,7 @@ pub(super) fn order_preview(
         AnnotateOrder::AcrossThenUp => ("R3", "R4", "R1", "R2"),
     };
     let cell = |label: &'static str| -> Element<'static, Message> {
-        container(text(label.to_string()).size(TS.caption).color(text_c))
+        container(text(raw(label.to_string())).size(TS.caption).color(text_c))
             .width(34)
             .height(20)
             .align_x(iced::alignment::Horizontal::Center)
@@ -107,13 +108,13 @@ pub(super) fn order_preview(
     };
     container(
         column![
-            text("Preview").size(TS.caption).color(text_muted),
+            text(raw("Preview")).size(TS.caption).color(text_muted),
             Space::new().height(2),
             row![cell(slots.0), Space::new().width(4), cell(slots.1),].spacing(0),
             Space::new().height(4),
             row![cell(slots.2), Space::new().width(4), cell(slots.3),].spacing(0),
             Space::new().height(2),
-            text(arrow).size(TS.body).color(text_muted),
+            text(raw(arrow)).size(TS.body).color(text_muted),
         ]
         .spacing(0)
         .align_x(iced::Alignment::Center),
@@ -150,7 +151,7 @@ pub(super) fn order_radio(
         Color::from_rgba(1.0, 1.0, 1.0, 0.04)
     };
     let fg = if selected { Color::WHITE } else { text_c };
-    button(container(text(label.to_string()).size(TS.body).color(fg)).padding([SP.s, 10.0]))
+    button(container(text(raw(label.to_string())).size(TS.body).color(fg)).padding([SP.s, 10.0]))
         .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(bg)),
