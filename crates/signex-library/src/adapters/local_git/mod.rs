@@ -763,4 +763,52 @@ mod tests {
         .unwrap_err();
         assert!(matches!(err, LibraryError::Backend(_)));
     }
+    /// A layer the board vocabulary cannot read fails the load with an error
+    /// that names the `.snxfpt` file, not just the layer (#2195).
+    #[test]
+    fn a_footprint_with_an_unreadable_layer_names_its_file() {
+        use signex_sketch::attr::SilkAttr;
+        use signex_sketch::entity::{Entity, EntityKind};
+        use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+        use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+
+        crate::git_identity::test_identity::install();
+        let dir = tempfile::tempdir().unwrap();
+        let adapter = LocalGitAdapter::init(
+            fixture_snxlib_path(&dir, "Test"),
+            fixture_snx_manifest("Test"),
+            LibraryInitOptions::default(),
+        )
+        .unwrap();
+        let plane = PlaneId::new();
+        let mut sketch = signex_sketch::SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            ..Default::default()
+        };
+        let mut e = Entity::new(
+            signex_sketch::id::SketchEntityId::new(),
+            plane,
+            EntityKind::Point { x: 0.0, y: 0.0 },
+        );
+        e.silk = Some(SilkAttr {
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
+        });
+        sketch.entities.push(e);
+        let mut fp = crate::primitive::Footprint::empty("Bad-Layer");
+        fp.sketch = Some(sketch);
+        let uuid = fp.uuid;
+        adapter.save_footprint(fp, "seed").unwrap();
+
+        let path = adapter.primitive_path(PrimitiveKind::Footprint, uuid);
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"TopSilkscreen\""));
+        fs::write(&path, text.replace("\"TopSilkscreen\"", "\"top_silk\"")).unwrap();
+
+        let err = adapter.get_footprint(uuid).unwrap_err().to_string();
+        assert!(err.contains(&format!("{uuid}.snxfpt")), "{err}");
+        assert!(err.contains("top_silk"), "{err}");
+    }
 }

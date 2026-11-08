@@ -40,7 +40,7 @@ use signex_sketch::SketchData;
 use signex_sketch::attr::{PadShape, PadSide, SilkAttr};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::plane::{Plane, PlaneKind};
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 use super::ids::{StockIds, StockKind};
 use super::{next_id, smd_pad, stock_timestamp};
@@ -193,7 +193,7 @@ pub fn build(ids: &StockIds, size: &ChipSize, polarised: bool) -> Footprint {
         let (start, end) = (point(-bar_x, -bar_hy), point(-bar_x, bar_hy));
         let mut bar = Entity::new(next_id(&mut eids), plane, EntityKind::Line { start, end });
         bar.silk = Some(SilkAttr {
-            layer: SignexLayer::TopSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         });
         sketch.entities.push(bar);
     }
