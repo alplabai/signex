@@ -20,8 +20,6 @@ use crate::theme_ext::{accent, border_color, text_primary, text_secondary, to_co
 pub const FIELD_RADIUS: f32 = 7.0;
 /// Corner radius of the open menu card.
 pub const MENU_RADIUS: f32 = 10.0;
-/// Family of the closed field's text: the bundled UI face.
-pub const FIELD_FONT_FAMILY: &str = "Inter";
 /// Text size of the closed field and its menu rows: the menu label token, so
 /// a dropdown reads like the menus.
 pub const FIELD_TEXT_SIZE: f32 = MENU_LABEL_SIZE;
@@ -156,16 +154,13 @@ pub fn pick_list_menu_style(theme: &Theme) -> menu::Style {
     }
 }
 
-/// The face of every dropdown field.
-#[must_use]
-pub fn field_font() -> iced::Font {
-    iced::Font::with_family(iced::font::Family::name(FIELD_FONT_FAMILY))
-}
-
 /// Gives a `pick_list` the shared look.
 pub trait GraphiteDropdown {
-    /// Field and menu styled by [`pick_list_style`] / [`pick_list_menu_style`],
-    /// set in [`field_font`] at [`FIELD_TEXT_SIZE`].
+    /// Field and menu styled by [`pick_list_style`] / [`pick_list_menu_style`]
+    /// at [`FIELD_TEXT_SIZE`]. No font is set: the dropdown renders in the
+    /// app's default font, which `main` sets from the user's UI-font
+    /// preference (Inter unless the user saved another), exactly as the
+    /// menus and form fields do.
     #[must_use]
     fn graphite(self) -> Self;
 }
@@ -180,7 +175,6 @@ where
     fn graphite(self) -> Self {
         self.style(pick_list_style)
             .menu_style(pick_list_menu_style)
-            .font(field_font())
             .text_size(FIELD_TEXT_SIZE)
     }
 }
@@ -209,16 +203,21 @@ mod tests {
     }
 
     #[test]
-    fn a_graphite_dropdown_reads_in_the_ui_face_at_the_menu_label_size() {
+    fn a_graphite_dropdown_reads_at_the_menu_label_size_in_the_users_ui_font() {
         assert_eq!(FIELD_TEXT_SIZE, MENU_LABEL_SIZE);
         assert_eq!(FIELD_TEXT_SIZE, 12.0);
-        assert_eq!(
-            field_font(),
-            iced::Font::with_family(iced::font::Family::name("Inter"))
-        );
-        // `.graphite()` applies both to the widget.
         let _: PickList<'_, u8, Vec<u8>, u8, (), Theme> =
             pick_list(Some(1u8), vec![1u8], |n: &u8| n.to_string()).graphite();
+        // iced exposes no getter for a built PickList's font, so pin the
+        // source instead: `.graphite()` must not pick a face, or dropdowns
+        // stop following the UI-font preference (the renderer default
+        // `main` sets from it). Only the code above the test module counts.
+        let source = include_str!("dropdown_style.rs");
+        let code = &source[..source.find("#[cfg(test)]").expect("test module")];
+        assert!(
+            !code.contains(".font("),
+            "graphite() must leave the font to the user's UI-font preference"
+        );
     }
 
     #[test]
