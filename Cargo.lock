@@ -5522,6 +5522,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-cli"
+version = "26.11.0-rc.1"
+dependencies = [
+ "dirs",
+ "serde",
+ "serde_json",
+ "signex-app",
+ "signex-engine",
+ "signex-types",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "signex-engine"
 version = "26.11.0-rc.1"
 dependencies = [
@@ -5593,6 +5607,7 @@ dependencies = [
  "fluent-bundle",
  "fluent-langneg",
  "fluent-pseudo",
+ "fluent-syntax",
  "icu_decimal",
  "icu_locale_core",
  "intl-memoizer",

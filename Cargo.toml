@@ -5,6 +5,7 @@ resolver = "2"
 exclude = ["fuzz", "vendor/iced_aw"]
 members = [
     "crates/signex-app",
+    "crates/signex-cli",
     "crates/signex-engine",
     "crates/signex-bom",
     "crates/signex-types",

@@ -8,7 +8,7 @@ use std::fmt;
 pub struct MessageId(&'static str);
 
 impl MessageId {
-    pub const fn new(id: &'static str) -> Self {
+    pub(crate) const fn new(id: &'static str) -> Self {
         Self(id)
     }
 
@@ -61,33 +61,63 @@ impl fmt::Display for UserText {
     }
 }
 
-/// A message argument: text, or a number formatted for the locale.
+/// A fractional number shown in the UI language (a percentage, a ratio).
+/// Wrapping a value in `LocalNumber` is an explicit opt-in that review
+/// guards, not the type system: a length wrapped in it compiles. Lengths,
+/// angles and component values stay `.` in every locale and are passed as
+/// text from Signex's own formatter.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalNumber(pub f64);
+
+/// A message argument: text, or a number formatted for the locale. The
+/// variants are private: the only ways in are the text and integer `From`
+/// impls and `From<LocalNumber>`, so a bare float cannot reach the locale
+/// number formatter.
+///
+/// ```compile_fail,E0277
+/// use signex_i18n::{I18n, ids, t};
+/// let i18n = I18n::en_us();
+/// let _ = t!(i18n, ids::MENU_FILE, "value" => 1.27_f64);
+/// ```
+///
+/// ```compile_fail,E0599
+/// let _ = signex_i18n::Arg::Number(1.27);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
-pub enum Arg {
+pub struct Arg(pub(crate) ArgKind);
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ArgKind {
     Text(String),
     Number(f64),
 }
 
 impl From<&str> for Arg {
     fn from(text: &str) -> Self {
-        Self::Text(text.to_owned())
+        Self(ArgKind::Text(text.to_owned()))
     }
 }
 
 impl From<String> for Arg {
     fn from(text: String) -> Self {
-        Self::Text(text)
+        Self(ArgKind::Text(text))
     }
 }
 
-impl From<f64> for Arg {
-    fn from(number: f64) -> Self {
-        Self::Number(number)
+impl From<LocalNumber> for Arg {
+    fn from(number: LocalNumber) -> Self {
+        Self(ArgKind::Number(number.0))
     }
 }
 
-impl From<i64> for Arg {
-    fn from(number: i64) -> Self {
-        Self::Number(number as f64)
-    }
+/// Integer counts are the one bare number a message takes.
+macro_rules! count_arg {
+    ($($int:ty),+) => {$(
+        impl From<$int> for Arg {
+            fn from(count: $int) -> Self {
+                Self(ArgKind::Number(count as f64))
+            }
+        }
+    )+};
 }
+count_arg!(i32, u32, i64, u64, usize);

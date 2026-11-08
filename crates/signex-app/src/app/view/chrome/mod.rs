@@ -209,7 +209,7 @@ impl Signex {
         let menu_w = if self.native_menu.hides_in_window_menu() {
             0.0
         } else {
-            crate::menu_bar::approx_menu_bar_width()
+            crate::menu_bar::approx_menu_bar_width(&self.ui_state.i18n)
         };
         crate::app::view::chrome_search_bar_geometry(
             self.ui_state.window_size.0,

@@ -88,6 +88,13 @@ impl Signex {
         let Some(project) = self.git_project_for(file_path) else {
             return;
         };
+        if self.ui_state.io.git == crate::io_ports::GitCommits::Skip {
+            crate::diagnostics::log_info(format!(
+                "[git] commit skipped in a headless run: {}",
+                super::save::file_label(file_path)
+            ));
+            return;
+        }
         // While the folder moves, `data.dir` still names the old folder and
         // opening a repository there could `git init` a fresh one. The
         // commit runs once the move has finished.

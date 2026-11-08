@@ -126,6 +126,8 @@ fn build<'a>(
 
         body = body.push(
             container(
+                // user-visible: migrate to the #2063 casemap
+                // ast-grep-ignore: no-case-in-view
                 text(title_case(category).to_uppercase())
                     .size(TS.caption)
                     .color(text_secondary),

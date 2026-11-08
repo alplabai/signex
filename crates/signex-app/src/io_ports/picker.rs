@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use super::native;
@@ -33,9 +34,16 @@ pub enum Picker {
 /// A path answer must be absolute but is not normalised (`..` stays): code
 /// that confines paths must resolve it, never prefix-match the raw text.
 #[derive(Debug, Clone, Default)]
-pub struct HeadlessAnswers(Arc<Mutex<BTreeMap<String, String>>>);
+pub struct HeadlessAnswers(Arc<Mutex<BTreeMap<String, String>>>, Arc<AtomicU64>);
 
 impl HeadlessAnswers {
+    /// How many dialogs have been refused (no usable answer) since these
+    /// answers were made. A caller that must not report such a command as
+    /// done compares it before and after.
+    pub fn refusals(&self) -> u64 {
+        self.1.load(Ordering::Relaxed)
+    }
+
     /// The answers of the command about to run (`path`, `paths`,
     /// `overwrite`); whatever an earlier command left is dropped. Call it
     /// before every command, with no answers when it has none.
@@ -181,6 +189,9 @@ impl FileDialog {
     }
 
     fn refuse<T>(&self, advice: &str) -> Option<T> {
+        if let Picker::Headless(answers) = &self.picker {
+            answers.1.fetch_add(1, Ordering::Relaxed);
+        }
         crate::diagnostics::log_warning(format!(
             "{}: refused in a headless run; {advice}",
             self.title_or_default()
