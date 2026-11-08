@@ -5,6 +5,10 @@
     clippy::disallowed_methods,
     reason = "the tests run the signex-cli binary as a child process"
 )]
+#![allow(
+    dead_code,
+    reason = "each test binary uses a different part of this shared module"
+)]
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -13,7 +17,9 @@ use std::process::{Command, Stdio};
 
 use serde_json::Value;
 use signex_types::net_class::NetClass;
-use signex_types::project::{ProjectData, SheetEntry, write_project};
+use signex_types::project::{
+    LibraryEntry, LibraryEntryKind, ProjectData, SheetEntry, write_project,
+};
 use signex_types::schematic::{
     Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet,
     Symbol, Wire,
@@ -92,7 +98,16 @@ pub fn fixture(root: &Path) -> Fixture {
         .expect("engine")
         .save()
         .expect("seed sheet");
-    let data = ProjectData {
+    write_project(&project, &project_data(&dir, Vec::new())).expect("seed project");
+    Fixture {
+        dir,
+        project,
+        sheet,
+    }
+}
+
+fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
+    ProjectData {
         description: None,
         name: "demo".into(),
         dir: dir.to_string_lossy().into_owned(),
@@ -108,7 +123,7 @@ pub fn fixture(root: &Path) -> Fixture {
         }],
         variant_definitions: Vec::new(),
         active_variant: None,
-        libraries: Vec::new(),
+        libraries,
         enable_git: false,
         net_classes: vec![NetClass::named("Power")],
         rules: None,
@@ -116,12 +131,56 @@ pub fn fixture(root: &Path) -> Fixture {
         schematic_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
-    };
-    write_project(&project, &data).expect("seed project");
-    Fixture {
-        dir,
-        project,
-        sheet,
+    }
+}
+
+/// Rewrite the fixture's project file listing `paths` as shared libraries.
+pub fn list_libraries(fx: &Fixture, paths: &[&Path]) {
+    let libraries = paths
+        .iter()
+        .map(|path| LibraryEntry {
+            path: path.to_path_buf(),
+            kind: LibraryEntryKind::Shared,
+            library_id: None,
+            unknown: Default::default(),
+        })
+        .collect();
+    write_project(&fx.project, &project_data(&fx.dir, libraries)).expect("rewrite project");
+}
+
+/// A running `signex-cli run`: send a line, read its result line, repeat.
+pub struct Live {
+    child: std::process::Child,
+    lines: std::io::BufReader<std::process::ChildStdout>,
+}
+
+impl Live {
+    pub fn start(args: &[&str]) -> Self {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_signex-cli"))
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn signex-cli");
+        let lines = std::io::BufReader::new(child.stdout.take().expect("stdout"));
+        Self { child, lines }
+    }
+
+    /// Send one command line and return its result line.
+    pub fn send(&mut self, command: &Value) -> Value {
+        use std::io::BufRead;
+        let stdin = self.child.stdin.as_mut().expect("stdin");
+        writeln!(stdin, "{command}").expect("write command");
+        stdin.flush().expect("flush");
+        let mut line = String::new();
+        self.lines.read_line(&mut line).expect("read result");
+        serde_json::from_str(&line).unwrap_or_else(|e| panic!("result line `{line}`: {e}"))
+    }
+
+    pub fn finish(mut self) {
+        drop(self.child.stdin.take());
+        self.child.wait().expect("signex-cli ends");
     }
 }
 

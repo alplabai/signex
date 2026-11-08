@@ -13,6 +13,7 @@ pub mod confine;
 pub mod input;
 pub mod policy;
 pub mod protocol;
+mod roots;
 mod run;
 mod session;
 

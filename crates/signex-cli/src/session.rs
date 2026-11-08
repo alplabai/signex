@@ -13,9 +13,10 @@ use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
-use crate::confine::resolve;
+use crate::confine::canonical;
 use crate::policy::{Approved, Policy};
 use crate::protocol::{MessageLine, Request, ResultLine, Status};
+use crate::roots::allowed_roots;
 
 /// How much of a command line the audit log keeps.
 const AUDIT_LINE_CHARS: usize = 400;
@@ -26,6 +27,8 @@ pub struct Session {
     policy: Policy,
     run_id: String,
     project_dir: PathBuf,
+    /// Fixed at the start: what the project file lists later never widens it.
+    roots: Vec<PathBuf>,
 }
 
 /// The state a command can change, per document: engine revision and unsaved
@@ -61,12 +64,28 @@ impl Session {
             rules.name,
             rules.version
         ));
+        let listed: Vec<PathBuf> = app
+            .document_state
+            .projects
+            .iter()
+            .flat_map(|loaded| &loaded.data.libraries)
+            .map(|entry| entry.path.clone())
+            .collect();
+        let mounted: Vec<PathBuf> = app
+            .library
+            .open_libraries
+            .iter()
+            .map(|library| library.root.clone())
+            .collect();
+        let home = dirs::home_dir().and_then(|dir| canonical(&dir).ok());
+        let roots = allowed_roots(&project_dir, &listed, &mounted, home.as_deref());
         Ok(Self {
             app,
             driver,
             policy,
             run_id,
             project_dir,
+            roots,
         })
     }
 
@@ -131,7 +150,7 @@ impl Session {
     fn run(&mut self, request: &Request) -> (Status, Option<String>, Option<Value>) {
         let approved = match self
             .policy
-            .authorize(request, &self.project_dir, &self.roots())
+            .authorize(request, &self.project_dir, &self.roots)
         {
             Ok(approved) => approved,
             Err(reason) => return (Status::Refused, Some(reason), None),
@@ -140,6 +159,10 @@ impl Session {
             Ok(split) => split,
             Err(reason) => return (Status::Refused, Some(reason), None),
         };
+        // The last check before the app gets the paths.
+        if let Err(reason) = self.policy.recheck(&approved, &self.roots) {
+            return (Status::Refused, Some(reason), None);
+        }
         let Some(dialogs) = self.app.headless_answers() else {
             return (Status::Failed, Some("the app is not headless".into()), None);
         };
@@ -155,21 +178,6 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
-    }
-
-    /// The folders a path operand may sit in: the project's and its mounted
-    /// libraries'.
-    fn roots(&self) -> Vec<PathBuf> {
-        let libraries = self
-            .app
-            .document_state
-            .projects
-            .iter()
-            .flat_map(|loaded| &loaded.data.libraries)
-            .filter_map(|entry| resolve(&self.project_dir.join(&entry.path)).ok());
-        std::iter::once(self.project_dir.clone())
-            .chain(libraries)
-            .collect()
     }
 
     fn snapshot(&self) -> Snapshot {

@@ -50,20 +50,17 @@ impl Policy {
         if !self.capabilities.contains(&needed) {
             return Err(needs_capability(command.as_str(), needed));
         }
-        let allowed: Vec<PathBuf> = roots.iter().chain(&self.allow_paths).cloned().collect();
+        let allowed = self.allowed(roots);
+        let writes = needed.writes_files();
         let operands = request
             .operands
             .iter()
             .map(|(name, text)| {
-                let is_path = meta
-                    .operands
-                    .iter()
-                    .any(|operand| operand.name == name && operand.kind == OperandKind::Path);
-                if !is_path {
+                if !is_path_operand(meta, name) {
                     return Ok((name.clone(), text.clone()));
                 }
                 let checked = self
-                    .check_path(base, text, &allowed)
+                    .check_path(base, text, &allowed, writes)
                     .map_err(|why| format!("operand `{name}`: {why}"))?;
                 Ok((name.clone(), checked))
             })
@@ -75,13 +72,54 @@ impl Policy {
         })
     }
 
-    fn check_path(&self, base: &Path, text: &str, allowed: &[PathBuf]) -> Result<String, String> {
+    /// The check again, right before the command is handed to the app: each
+    /// path operand must still resolve to the very path that was approved
+    /// (a link swapped in since then changes it) and a write target must
+    /// still not be a link. A same-user process racing symlinks between this
+    /// check and the app's own open or write is out of scope (docs/CLI.md).
+    pub fn recheck(&self, approved: &Approved, roots: &[PathBuf]) -> Result<(), String> {
+        let allowed = self.allowed(roots);
+        let writes = capability_of(approved.meta).writes_files();
+        for (name, text) in &approved.operands {
+            if !is_path_operand(approved.meta, name) {
+                continue;
+            }
+            let now = confine(Path::new(text), &allowed)
+                .map_err(|why| format!("operand `{name}`: {why}"))?;
+            if now != Path::new(text) {
+                return Err(format!(
+                    "operand `{name}`: {text} now resolves to {}; it changed while the command was prepared",
+                    now.display()
+                ));
+            }
+            if writes {
+                refuse_link(Path::new(text)).map_err(|why| format!("operand `{name}`: {why}"))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn allowed(&self, roots: &[PathBuf]) -> Vec<PathBuf> {
+        roots.iter().chain(&self.allow_paths).cloned().collect()
+    }
+
+    fn check_path(
+        &self,
+        base: &Path,
+        text: &str,
+        allowed: &[PathBuf],
+        writes: bool,
+    ) -> Result<String, String> {
         let given = Path::new(text);
-        let resolved = if given.is_absolute() {
-            confine(given, allowed)?
+        let joined = if given.is_absolute() {
+            given.to_path_buf()
         } else {
-            confine(&base.join(given), allowed)?
+            base.join(given)
         };
+        if writes {
+            refuse_link(&joined)?;
+        }
+        let resolved = confine(&joined, allowed)?;
         // A file that is not there yet is a write target; only a read is sized.
         if let Ok(meta) = fs::metadata(&resolved)
             && meta.is_file()
@@ -98,6 +136,24 @@ impl Policy {
             .to_str()
             .map(str::to_string)
             .ok_or_else(|| format!("{} is not valid UTF-8", resolved.display()))
+    }
+}
+
+fn is_path_operand(meta: &CommandMetadata, name: &str) -> bool {
+    meta.operands
+        .iter()
+        .any(|operand| operand.name == name && operand.kind == OperandKind::Path)
+}
+
+/// A write goes to a real file: through a link it could land anywhere the
+/// link is later pointed.
+fn refuse_link(path: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(format!(
+            "{} is a symbolic link; writing through a link is refused",
+            path.display()
+        )),
+        _ => Ok(()),
     }
 }
 
@@ -260,6 +316,80 @@ mod tests {
                 ("at".to_string(), "1,2".to_string()),
                 ("text".to_string(), "../../etc".to_string())
             ]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_out_of_the_project_is_refused_and_a_link_is_never_a_write_target() {
+        let fx = fixture();
+        let outside = fixture();
+        let all = policy(&Capability::ALL);
+        std::fs::write(outside.root.join("x.snxsch"), "x").unwrap();
+        std::fs::write(fx.root.join("real.snxsch"), "x").unwrap();
+        std::os::unix::fs::symlink(outside.root.join("x.snxsch"), fx.root.join("out.snxsch"))
+            .unwrap();
+        std::os::unix::fs::symlink(fx.root.join("real.snxsch"), fx.root.join("in.snxsch")).unwrap();
+
+        for id in ["open_document", "save_document_as"] {
+            let err = authorize(&all, &fx, &request(id, &["path=out.snxsch"])).unwrap_err();
+            assert!(
+                err.contains("outside the project") || err.contains("symbolic link"),
+                "{err}"
+            );
+        }
+        // A link that stays inside is read through, but never written through.
+        assert!(authorize(&all, &fx, &request("open_document", &["path=in.snxsch"])).is_ok());
+        let err =
+            authorize(&all, &fx, &request("save_document_as", &["path=in.snxsch"])).unwrap_err();
+        assert!(err.contains("writing through a link is refused"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_swapped_for_a_link_after_approval_is_caught_by_the_recheck() {
+        let fx = fixture();
+        let outside = fixture();
+        let all = policy(&Capability::ALL);
+        let roots = std::slice::from_ref(&fx.root);
+        let target = fx.root.join("a.snxsch");
+        std::fs::write(&target, "x").unwrap();
+        std::fs::write(outside.root.join("secret.snxsch"), "x").unwrap();
+
+        let read = authorize(&all, &fx, &request("open_document", &["path=a.snxsch"])).unwrap();
+        assert!(
+            all.recheck(&read, roots).is_ok(),
+            "unchanged: still approved"
+        );
+        let write = authorize(&all, &fx, &request("save_document_as", &["path=a.snxsch"])).unwrap();
+        assert!(all.recheck(&write, roots).is_ok());
+
+        // The file is replaced by a link to somewhere else.
+        std::fs::remove_file(&target).unwrap();
+        std::os::unix::fs::symlink(outside.root.join("secret.snxsch"), &target).unwrap();
+        let err = all.recheck(&read, roots).unwrap_err();
+        assert!(err.contains("outside the project"), "{err}");
+        assert!(all.recheck(&write, roots).is_err());
+
+        // A link that stays inside changes the resolved path, so it is caught too.
+        std::fs::remove_file(&target).unwrap();
+        std::fs::write(fx.root.join("b.snxsch"), "x").unwrap();
+        std::os::unix::fs::symlink(fx.root.join("b.snxsch"), &target).unwrap();
+        let err = all.recheck(&read, roots).unwrap_err();
+        assert!(
+            err.contains("changed while the command was prepared"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn the_recheck_passes_an_approval_with_no_path_operand() {
+        let fx = fixture();
+        let all = policy(&Capability::ALL);
+        let approved = authorize(&all, &fx, &request("undo", &[])).unwrap();
+        assert!(
+            all.recheck(&approved, std::slice::from_ref(&fx.root))
+                .is_ok()
         );
     }
 }

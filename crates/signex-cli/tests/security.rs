@@ -4,7 +4,7 @@
 mod support;
 
 use serde_json::{Value, json};
-use support::{fixture, jsonl, run_cli, snapshot, temp_root};
+use support::{Live, fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
 
 fn refusal(out: &support::Output, index: usize) -> &str {
     assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
@@ -263,4 +263,69 @@ fn allow_and_save_grant_exactly_the_capability_they_name() {
         snapshot(&root)[&fx.sheet],
         "the original is untouched"
     );
+}
+
+fn open(path: &std::path::Path) -> Value {
+    json!({"id": "open_document", "args": {"path": path}})
+}
+
+#[test]
+fn a_project_that_lists_broad_libraries_does_not_widen_the_confinement() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    std::fs::copy(&fx.sheet, root.join("sibling.snxsch")).unwrap();
+    std::fs::copy(&fx.sheet, other.join("outside.snxsch")).unwrap();
+    let mut listed = vec![
+        fx.dir.join(".."),
+        std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR),
+    ];
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&other, fx.dir.join("lib-link")).unwrap();
+        listed.push(fx.dir.join("lib-link"));
+    }
+    let refs: Vec<&std::path::Path> = listed.iter().map(|p| p.as_path()).collect();
+    list_libraries(&fx, &refs);
+    let project = fx.project.to_str().unwrap();
+
+    let mut attempts = vec![root.join("sibling.snxsch")];
+    #[cfg(unix)]
+    {
+        attempts.push(fx.dir.join("lib-link").join("outside.snxsch"));
+        attempts.push(other.join("outside.snxsch"));
+    }
+    for target in attempts {
+        let out = run_cli(&["run", project], &jsonl(&[open(&target)]));
+        assert!(
+            refusal(&out, 0).contains("outside the project")
+                || refusal(&out, 0).contains("symbolic"),
+            "{}: {}",
+            target.display(),
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn editing_the_project_library_list_during_the_run_does_not_widen_it() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    std::fs::copy(&fx.sheet, root.join("sibling.snxsch")).unwrap();
+    let sibling = root.join("sibling.snxsch");
+    let mut live = Live::start(&["run", fx.project.to_str().unwrap(), "--keep-going"]);
+
+    let before = live.send(&open(&sibling));
+    assert_eq!(before["status"], "refused", "{before}");
+    list_libraries(&fx, &[fx.dir.join("..").as_path()]);
+    let after = live.send(&open(&sibling));
+    assert_eq!(after["status"], "refused", "{after}");
+    assert!(
+        after["reason"]
+            .as_str()
+            .unwrap()
+            .contains("outside the project")
+    );
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
+    live.finish();
 }

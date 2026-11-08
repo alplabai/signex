@@ -48,6 +48,15 @@ impl Capability {
             Self::LibraryWrite => "library-write",
         }
     }
+
+    /// Whether a path operand of a command in this group is written to or
+    /// removed, rather than read.
+    pub const fn writes_files(self) -> bool {
+        matches!(
+            self,
+            Self::Save | Self::Export | Self::Delete | Self::LibraryWrite
+        )
+    }
 }
 
 impl fmt::Display for Capability {
@@ -102,6 +111,23 @@ mod tests {
 
     fn cap(id: &str) -> Capability {
         capability_of(metadata_for_str(id).expect("a catalog command"))
+    }
+
+    #[test]
+    fn only_the_file_writing_groups_write_files() {
+        let writers: Vec<_> = Capability::ALL
+            .into_iter()
+            .filter(|cap| cap.writes_files())
+            .collect();
+        assert_eq!(
+            writers,
+            [
+                Capability::Save,
+                Capability::Export,
+                Capability::Delete,
+                Capability::LibraryWrite
+            ]
+        );
     }
 
     #[test]

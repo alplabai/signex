@@ -20,6 +20,8 @@ signex-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
+# The home folder, which never becomes an allowed root.
+dirs = "5"
 # The throwaway config root every run works under.
 tempfile = "3"
 
