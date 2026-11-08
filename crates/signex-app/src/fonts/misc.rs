@@ -276,6 +276,24 @@ pub fn write_trackpad_pan_pref_at(path: &Path, enabled: bool) {
     })
 }
 
+/// Read "Mouse wheel" (zoom or scroll). Defaults to zoom when the key is
+/// missing or not a known value.
+pub fn read_wheel_mode_pref_from(json: Option<&serde_json::Value>) -> crate::canvas::WheelMode {
+    json.and_then(|json| json["mouse_wheel"].as_str())
+        .map(crate::canvas::WheelMode::from_pref)
+        .unwrap_or_default()
+}
+
+pub fn write_wheel_mode_pref(mode: crate::canvas::WheelMode) {
+    write_wheel_mode_pref_at(&prefs_path(), mode)
+}
+
+pub fn write_wheel_mode_pref_at(path: &Path, mode: crate::canvas::WheelMode) {
+    update_prefs_json(path, "mouse_wheel", |prefs| {
+        prefs.insert("mouse_wheel".to_string(), serde_json::json!(mode.as_pref()));
+    })
+}
+
 /// Read "Remember window size and position" (opt-in). Defaults to off when
 /// the key is missing or not a boolean.
 pub fn read_remember_window_geometry_pref_from(json: Option<&serde_json::Value>) -> bool {

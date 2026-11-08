@@ -425,6 +425,7 @@ fn deliver(
             auto_focus: false,
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: Default::default(),
             draw_mode: signex_app::app::DrawMode::Ortho90,
             current_tool: signex_app::app::Tool::Select,
             window_width: 1400.0,

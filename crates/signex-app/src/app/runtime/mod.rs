@@ -65,17 +65,21 @@ impl Signex {
     pub(in crate::app) fn sync_zoom_step(&mut self) {
         let zoom_step = self.ui_state.effective_zoom_step();
         let trackpad_pan = self.ui_state.trackpad_pan;
+        let wheel_mode = self.ui_state.wheel_mode;
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.zoom_step = zoom_step;
             canvas.trackpad_pan = trackpad_pan;
+            canvas.wheel_mode = wheel_mode;
         }
         for editor in self.document_state.symbol_editors.values_mut() {
             editor.zoom_step = zoom_step;
             editor.trackpad_pan = trackpad_pan;
+            editor.wheel_mode = wheel_mode;
         }
         for editor in self.document_state.footprint_editors.values_mut() {
             editor.zoom_step = zoom_step;
             editor.trackpad_pan = trackpad_pan;
+            editor.wheel_mode = wheel_mode;
         }
     }
 
@@ -528,6 +532,7 @@ impl Signex {
             auto_focus: self.ui_state.auto_focus,
             zoom_step: self.ui_state.effective_zoom_step(),
             trackpad_pan: self.ui_state.trackpad_pan,
+            wheel_mode: self.ui_state.wheel_mode,
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             current_tool: self.interaction_state.current_tool,

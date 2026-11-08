@@ -136,6 +136,8 @@ pub struct SymbolCanvas<'a> {
     pub device_px_per_logical_px: f32,
     /// "Two-finger scroll pans" preference. Set with [`Self::with_trackpad_pan`].
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -194,6 +196,7 @@ impl<'a> SymbolCanvas<'a> {
             axis_color: palette.axis,
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             trackpad_pan: false,
+            wheel_mode: Default::default(),
         }
     }
 
@@ -211,6 +214,12 @@ impl<'a> SymbolCanvas<'a> {
     /// Let a pixel-delta (trackpad) scroll pan instead of zoom.
     pub fn with_trackpad_pan(mut self, trackpad_pan: bool) -> Self {
         self.trackpad_pan = trackpad_pan;
+        self
+    }
+
+    /// Set the "Mouse wheel" preference (zoom or scroll the view).
+    pub fn with_wheel_mode(mut self, wheel_mode: crate::canvas::WheelMode) -> Self {
+        self.wheel_mode = wheel_mode;
         self
     }
 
@@ -445,6 +454,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             }
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 state.zoom_modifier = mods.command() || mods.control();
+                state.shift_held = mods.shift();
                 None
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
@@ -863,3 +873,5 @@ mod rotate_keys_tests;
 mod stroke_law_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wheel_mode_tests;

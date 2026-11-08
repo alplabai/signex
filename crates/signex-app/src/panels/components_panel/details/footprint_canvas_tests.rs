@@ -164,6 +164,7 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
         silk_b: &fp.silk_b,
         zoom_step: 1.1,
         trackpad_pan: false,
+        wheel_mode: Default::default(),
     };
     let camera = FootprintCanvasState::with_view(at.scale(), at.offset());
     let renderer = headless_renderer();

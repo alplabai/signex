@@ -157,6 +157,8 @@ pub enum PrefMsg {
     DraftNetHoverEnabled(bool),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
     DraftTrackpadPan(bool),
+    /// Choose "Mouse wheel": zoom or scroll the view. Persisted on Save.
+    DraftWheelMode(crate::canvas::WheelMode),
     /// Toggle "Remember window size and position". Persisted on Save.
     DraftRememberWindowGeometry(bool),
     /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
@@ -323,6 +325,7 @@ pub struct PrefsView<'a> {
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,
     pub draft_trackpad_pan: bool,
+    pub draft_wheel_mode: crate::canvas::WheelMode,
     pub draft_remember_window_geometry: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,

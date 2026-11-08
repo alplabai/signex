@@ -682,6 +682,7 @@ fn view_footprint_canvas<'a>(
         silk_b: editor.primitive().silk_b.as_slice(),
         zoom_step: editor.zoom_step,
         trackpad_pan: editor.trackpad_pan,
+        wheel_mode: editor.wheel_mode,
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)

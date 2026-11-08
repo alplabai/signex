@@ -807,7 +807,9 @@ impl Signex {
             // builders wrap their card in neither `wrap_modal` nor
             // `dismiss_layer` (Preferences renders its body directly), so
             // a guard placed in those two helpers alone missed them.
-            // Every overlay passes through this loop exactly once.
+            // Every overlay passes through this loop exactly once, except the
+            // three Active Bar ids, which guard their own bar inside their
+            // builders (`swallows_scroll` is false for them).
             //
             // `mouse_area` captures the wheel only where the cursor is
             // over the wrapped element, and only wheel events — clicks
@@ -817,9 +819,7 @@ impl Signex {
             if overlay_id::swallows_scroll(*id) {
                 for layer in &mut layers[first_new..] {
                     let inner = std::mem::replace(layer, iced::widget::Space::new().boxed());
-                    *layer = iced::widget::mouse_area(inner)
-                        .on_scroll(|_| Message::noop())
-                        .boxed();
+                    *layer = overlays::scroll_guard(inner);
                 }
             }
         }
@@ -832,6 +832,10 @@ impl Signex {
     }
 }
 
+#[cfg(test)]
+mod canvas_wheel_tests;
+#[cfg(test)]
+mod editor_bar_wheel_tests;
 #[cfg(test)]
 mod overlay_paint_tests;
 

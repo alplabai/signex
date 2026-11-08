@@ -6,7 +6,8 @@
 //! - content (`content_surface`): retained across pans and moved by a
 //!   translation; cleared when the document changes (see `draw::retained`);
 //! - autofocus dim: drawn over the content when autofocus is active;
-//! - selection overlay (`overlay_cache`): cached, cleared on input events;
+//! - selection overlay (`overlay_cache`): cached, cleared on input events and
+//!   whenever the camera differs from `overlay_cache_camera`;
 //! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
 //!   every frame.
 
@@ -31,6 +32,7 @@ mod special_strings;
 mod surface;
 #[cfg(test)]
 mod tool_click_tests;
+mod wheel;
 pub mod zoom_pill;
 
 use gpu_mount::ContentMode;
@@ -44,6 +46,7 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::{Camera, ScrollIntent};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
+pub use wheel::{WheelKeys, WheelMode, wheel_intent};
 mod move_connections;
 pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
 pub use move_pick::MovePick;
@@ -128,6 +131,12 @@ pub struct CanvasSlot {
     /// inputs, so `bg_cache` clears do not reach it.
     background_surface: std::cell::RefCell<draw::RetainedBackground>,
     pub overlay_cache: canvas::Cache,
+    /// Camera `overlay_cache` was last drawn at: the halo, ERC markers and lock
+    /// badges follow every zoom and pan, whichever message moved the camera.
+    pub overlay_cache_camera: std::cell::Cell<Option<(f32, f32, f32)>>,
+    /// Test-only: how often the selection layer was tessellated.
+    #[cfg(test)]
+    pub overlay_tessellations: std::cell::Cell<u32>,
     /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
     /// Camera and paper colour `bg_cache` was last built at; `draw_background`
@@ -300,6 +309,9 @@ impl CanvasSlot {
             content_surface: std::cell::RefCell::new(Default::default()),
             background_surface: std::cell::RefCell::new(Default::default()),
             overlay_cache: canvas::Cache::default(),
+            overlay_cache_camera: std::cell::Cell::new(None),
+            #[cfg(test)]
+            overlay_tessellations: std::cell::Cell::new(0),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             bg_cache_camera: std::cell::Cell::new(None),
             #[cfg(test)]
@@ -557,6 +569,8 @@ pub struct CanvasViewPrefs<'a> {
     pub zoom_step: f32,
     /// "Two-finger scroll pans": a pixel-delta scroll pans instead of zooming.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel": zoom (default) or scroll the view.
+    pub wheel_mode: WheelMode,
     /// Preview rubber-banded wires while a selection floats (mirrors the
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
@@ -923,6 +937,8 @@ mod gpu_mount_tests;
 #[cfg(test)]
 mod grid_order_tests;
 #[cfg(test)]
+pub(crate) mod overlay_camera_tests;
+#[cfg(test)]
 mod pan_bench_tests;
 #[cfg(test)]
 mod pan_reuse_pixel_tests;
@@ -981,6 +997,7 @@ mod tests {
             auto_focus: false,
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: WheelMode::Zoom,
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             current_tool: crate::app::Tool::Select,
