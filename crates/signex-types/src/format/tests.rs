@@ -51,7 +51,7 @@ pub(super) fn empty_board() -> PcbBoard {
 fn snxsch_round_trip_empty() {
     let snx = SnxSchematic::new(empty_sheet());
     let s = snx.write_string().expect("serialise");
-    assert!(s.contains("format = \"snxsch/1\""));
+    assert!(s.contains("format = \"snxsch/1.1\""));
     let back = SnxSchematic::parse(&s).expect("round-trip");
     assert_eq!(back.format, SNXSCH_FORMAT_V1);
     assert!(back.sheet.symbols.is_empty());

@@ -1,4 +1,4 @@
-format = "snxsch/1"
+format = "snxsch/1.1"
 schematic_id = "5a3c0000-0000-4000-8000-00000000002e"
 version = 1
 generator = "signex"

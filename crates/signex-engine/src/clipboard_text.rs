@@ -13,9 +13,9 @@ use crate::{CopiedSelection, EngineError};
 /// before the parser sees it.
 pub const MAX_CLIPBOARD_TEXT_BYTES: usize = 16 * 1024 * 1024;
 
-/// First line of every clipboard fragment; the trailing `/1` is the fragment
+/// First line of every clipboard fragment; the trailing `/2` is the fragment
 /// version.
-pub const CLIPBOARD_MARKER: &str = "signex-clipboard-fragment/1";
+pub const CLIPBOARD_MARKER: &str = "signex-clipboard-fragment/2";
 
 impl CopiedSelection {
     /// The copy as clipboard text: the marker line, then the fragment at its
@@ -102,7 +102,7 @@ mod tests {
     fn a_copy_round_trips_through_text_with_its_bodies() {
         let original = copied();
         let text = original.to_clipboard_text().unwrap();
-        assert!(text.starts_with("signex-clipboard-fragment/1\n"));
+        assert!(text.starts_with("signex-clipboard-fragment/2\n"));
 
         let back = CopiedSelection::from_clipboard_text(&text, 1.27)
             .unwrap()
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn text_without_the_marker_is_not_ours() {
-        for text in ["", "hello", "R1\nR2", "signex-clipboard-fragment/2\nx"] {
+        for text in ["", "hello", "R1\nR2", "signex-clipboard-fragment/3\nx"] {
             assert!(
                 CopiedSelection::from_clipboard_text(text, 1.27)
                     .unwrap()
