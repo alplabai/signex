@@ -522,13 +522,17 @@ fn a_net_with_routed_copper_stays_in_the_table_when_it_loses_its_pads() {
     copper_on(&mut pcb, 2, "N$2");
 
     let only_in = Netlist {
-        nets: vec![net(1, "IN", vec![terminal("R1", "1")])],
+        nets: vec![
+            net(1, "IN", vec![terminal("R1", "1")]),
+            net(3, "OUT", vec![terminal("R2", "2")]),
+        ],
     };
     assign_pad_nets(&only_in, &pcb, &ReferencePadKey)
         .edit
         .apply(&mut pcb);
     assert!(pcb.nets.iter().any(|n| n.number == 2), "{:?}", pcb.nets);
-    assert!(pcb.nets.iter().all(|n| n.number != 3), "unused net dropped");
+    assert_eq!(pad_net(&pcb, "R1", "2"), None, "its pads are cleared");
+    assert_eq!(pad_net(&pcb, "R2", "1"), None);
 }
 
 #[test]
@@ -563,6 +567,10 @@ fn a_keyless_pad_and_an_unknown_footprint_keep_their_nets_and_are_reported() {
         number: 9,
         name: "SHIELD".to_string(),
     };
+    pcb.nets.push(NetDef {
+        number: 9,
+        name: "SHIELD".to_string(),
+    });
     pcb.footprints[0].pads[2].net = Some(hand.clone());
     pcb.footprints[2].pads[0].net = Some(hand.clone());
     let hole = (pcb.footprints[0].uuid, pcb.footprints[0].pads[2].uuid);
