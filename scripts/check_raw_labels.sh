@@ -5,10 +5,22 @@
 # bans the iced functions they wrap. `raw` is the one escape hatch for text
 # that is not in the message catalog yet, so this script counts its call sites
 # in the UI crates (signex-app, signex-widgets, chrome-catalog) and compares
-# the count with the checked-in scripts/raw-labels-baseline.txt. The count may
-# only go down: a higher count fails, a lower one asks for the baseline to be
-# lowered (a note, not a failure, so two migration PRs landing in a row do not
-# fight over the number).
+# the count with the checked-in scripts/raw-labels-baseline.txt. The count must
+# equal the baseline: a higher count fails, and so does a lower one until the
+# same change lowers the baseline (`--generate`), so a migration cannot leave
+# headroom for new raw labels. Two migration PRs that both lower the number
+# conflict on the baseline file; the second regenerates it after its merge.
+#
+# A second check (scripts/raw_label_macro_literals.pl) fails on a bare string
+# literal that is an element of `row![…]`, `column![…]` or `stack![…]`: `&str`
+# is a widget in this iced fork, so such a literal skips `text(raw(…))`.
+# ast-grep rules cover the rest (no-raw-literal-widget, no-raw-alias).
+#
+# Known limits: the count is per call site, so a helper that wraps `raw` once
+# and is called many times counts once (crates/chrome-catalog/src/bom_modal.rs
+# does this); an alias or `raw` passed as a value is refused by the ast-grep
+# rule no-raw-alias, except `f(raw)` on a plain function; a raw string
+# `r#"…"#` inside a row!/column! element escapes the macro check.
 #
 # The count is textual, not an ast-grep query: iced's `row![…]`/`column![…]`
 # macros hold their arguments as unparsed token trees, which an AST search
@@ -54,6 +66,12 @@ hits() {
 
 count() { hits | grep -c . || true; }
 
+# `file:line` of every bare string literal element in row!/column!/stack!.
+macro_literals() {
+  list_files | { grep -vE '/(tests|[a-z_]*_tests)\.rs$' || true; } \
+    | xargs perl "$(cd "$(dirname "$0")" && pwd)/raw_label_macro_literals.pl" | tr -d '\r'
+}
+
 if [[ "${1:-}" == "--generate" ]]; then
   {
     echo "# Raw-label baseline (scripts/check_raw_labels.sh). The count may only go down."
@@ -63,6 +81,16 @@ if [[ "${1:-}" == "--generate" ]]; then
   mv "$BASELINE.tmp" "$BASELINE"
   echo "Wrote ${BASELINE#"$ROOT"/}"
   exit 0
+fi
+
+if [[ "${1:-}" != "--generate" ]]; then
+  bare="$(macro_literals)"
+  if [[ -n "$bare" ]]; then
+    echo "Raw-label check: a bare string literal is an element of row!/column!/stack!:"
+    echo "$bare" | sed 's/^/  /'
+    echo "  Write text(raw(\"…\")) or text(t!(i18n, ids::…)); a &str is a widget in this iced."
+    exit 1
+  fi
 fi
 
 if [[ ! -f "$BASELINE" ]]; then
@@ -84,7 +112,8 @@ if (( now > base )); then
   exit 1
 fi
 if (( now < base )); then
-  echo "NOTE  raw(…) call sites fell from $base to $now. Lock in the gain:"
-  echo "      bash scripts/check_raw_labels.sh --generate, then commit the baseline."
+  echo "Raw-label ratchet: count $now is below the baseline $base: run"
+  echo "  scripts/check_raw_labels.sh --generate and commit the baseline."
+  exit 1
 fi
 echo "Raw-label ratchet: OK — $now raw(…) call sites (baseline $base)."

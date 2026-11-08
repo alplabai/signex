@@ -84,9 +84,42 @@ t="$(new_tree baseline_matches 2)"
 put "$t" crates/signex-app/src/x.rs 'fn v() { text(raw("a")); text(raw("b")); }'
 expect baseline_matches pass "$t"
 
-t="$(new_tree shrank_is_a_note_not_a_failure 5)"
+t="$(new_tree shrank_below_baseline_fails 5)"
 put "$t" crates/signex-app/src/x.rs 'fn v() { text(raw("a")); }'
-expect shrank_is_a_note_not_a_failure pass "$t"
+expect shrank_below_baseline_fails fail "$t"
+
+# a drop is accepted once the baseline is lowered in the same change
+expect shrank_then_generate pass "$t" --generate
+expect shrank_after_generate pass "$t"
+
+# --- bare string literal in a layout macro --------------------------------
+
+t="$(new_tree column_with_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column!["Save"]; }'
+expect column_with_literal fail "$t"
+
+t="$(new_tree row_with_trailing_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { row![icon(), "Save"]; }'
+expect row_with_trailing_literal fail "$t"
+
+t="$(new_tree stack_with_literal_after_comment)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { stack![
+    base(),
+    // the label
+    "Save",
+]; }'
+expect stack_with_literal_after_comment fail "$t"
+
+t="$(new_tree nested_macro_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![row![a(), b("x, y"), "Save"]]; }'
+expect nested_macro_literal fail "$t"
+
+t="$(new_tree macro_elements_that_are_not_bare_literals 1)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![text(raw("a")), button("b").x(), c("],"), format!("{}", 1).into(), "a".len()]; row![]; vec!["x"]; }
+#[cfg(test)]
+mod tests { fn t() { column!["in a test module"]; } }'
+put "$t" crates/signex-app/src/y_tests.rs 'fn t() { column!["in a tests file"]; }'
+expect macro_elements_that_are_not_bare_literals pass "$t"
 
 # --generate rewrites the baseline so a grown tree passes again.
 t="$(new_tree generate_relocks)"
