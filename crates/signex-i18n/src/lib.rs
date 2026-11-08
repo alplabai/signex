@@ -23,7 +23,7 @@ pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 
 /// Every message id, defined together with the [`ids::ALL`] list so a new
 /// id cannot be left out of the consistency tests. This is the only place
-/// `MessageId::new` is called (`ast-grep/rules/message-id-only-in-i18n.yml`).
+/// `MessageId::new` is called (it is crate-private).
 macro_rules! define_ids {
     ($($name:ident = $id:literal;)+) => {
         /// The message ids; each lives in `locales/en-US/`.
