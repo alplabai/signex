@@ -297,13 +297,9 @@ fn a_parked_board_is_kept_by_the_close_scan_and_prompts_at_quit() {
         crate::app::handlers::document_files::save_async_tests::empty_board(),
     );
     let refs = app.document_state.sheet_ref_inputs().resolve(|_| true);
-    let scan = app.document_state.close_scan(
-        &refs,
-        0,
-        &app.library.dirty_editors(),
-        &[],
-        &HashMap::new(),
-    );
+    let scan =
+        app.document_state
+            .close_scan(&refs, 0, &app.library.dirty_editors(), &[], &HashMap::new());
     assert_eq!(scan.kept, vec![t.path.clone()]);
     assert!(scan.mine.is_empty());
     assert!(quit_prompts(&mut app));
