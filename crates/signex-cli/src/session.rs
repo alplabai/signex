@@ -13,6 +13,7 @@ use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
+use crate::capability::capability_of;
 use crate::confine::canonical;
 use crate::policy::{Approved, Policy};
 use crate::protocol::{MessageLine, Request, ResultLine, Status};
@@ -163,6 +164,14 @@ impl Session {
         if let Err(reason) = self.policy.recheck(&approved, &self.roots) {
             return (Status::Refused, Some(reason), None);
         }
+        // A command that writes also writes files no operand names.
+        if capability_of(approved.meta).writes_files()
+            && let Err(reason) = self
+                .policy
+                .check_write_targets(&self.implicit_write_targets(), &self.roots)
+        {
+            return (Status::Refused, Some(reason), None);
+        }
         let Some(dialogs) = self.app.headless_answers() else {
             return (Status::Failed, Some("the app is not headless".into()), None);
         };
@@ -178,6 +187,20 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
+    }
+
+    /// Where a save can land without an operand: the active document, every
+    /// document with unsaved changes, and each open project's file.
+    fn implicit_write_targets(&self) -> Vec<PathBuf> {
+        let state = &self.app.document_state;
+        let targets: BTreeSet<PathBuf> = state
+            .active_path
+            .iter()
+            .cloned()
+            .chain(state.dirty_document_paths())
+            .chain(state.projects.iter().map(|project| project.path.clone()))
+            .collect();
+        targets.into_iter().collect()
     }
 
     fn snapshot(&self) -> Snapshot {

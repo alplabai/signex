@@ -329,3 +329,77 @@ fn editing_the_project_library_list_during_the_run_does_not_widen_it() {
     assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
     live.finish();
 }
+
+/// Replace `path` by a link to a copy of it that lives in `elsewhere`.
+#[cfg(unix)]
+fn replace_with_link_to_outside(
+    path: &std::path::Path,
+    elsewhere: &std::path::Path,
+) -> std::path::PathBuf {
+    let copy = elsewhere.join(path.file_name().unwrap());
+    std::fs::copy(path, &copy).unwrap();
+    std::fs::remove_file(path).unwrap();
+    std::os::unix::fs::symlink(&copy, path).unwrap();
+    copy
+}
+
+#[cfg(unix)]
+#[test]
+fn a_save_refuses_a_document_that_became_a_link_to_outside_the_project() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
+    let paint = json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}});
+    assert_eq!(live.send(&paint)["status"], "ran");
+
+    let outside = replace_with_link_to_outside(&fx.sheet, &other);
+    let before = std::fs::read(&outside).unwrap();
+    let saved = live.send(&json!({"id": "save_document"}));
+
+    assert_eq!(saved["status"], "refused", "{saved}");
+    let reason = saved["reason"].as_str().unwrap();
+    assert!(
+        reason.contains("it would write") && reason.contains("symbolic link"),
+        "{reason}"
+    );
+    assert_eq!(
+        std::fs::read(&outside).unwrap(),
+        before,
+        "nothing was written through the link"
+    );
+    live.finish();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_save_refuses_a_project_file_that_became_a_link() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
+
+    let outside = replace_with_link_to_outside(&fx.project, &other);
+    let before = std::fs::read(&outside).unwrap();
+    let saved = live.send(&json!({"id": "save_document"}));
+
+    assert_eq!(saved["status"], "refused", "{saved}");
+    assert!(
+        saved["reason"].as_str().unwrap().contains("symbolic link"),
+        "{saved}"
+    );
+    assert_eq!(std::fs::read(&outside).unwrap(), before);
+    live.finish();
+}

@@ -95,6 +95,24 @@ impl Policy {
         Ok(())
     }
 
+    /// The files a write command will write without being told (the active
+    /// document, a dirty one, a project file): each must be a plain file or
+    /// a new file inside the allowed folders, never a link and never one that
+    /// resolves outside, exactly as for a path operand.
+    pub fn check_write_targets(
+        &self,
+        targets: &[PathBuf],
+        roots: &[PathBuf],
+    ) -> Result<(), String> {
+        let allowed = self.allowed(roots);
+        for target in targets {
+            refuse_link(target)
+                .and_then(|()| confine(target, &allowed).map(|_| ()))
+                .map_err(|why| format!("it would write {}: {why}", target.display()))?;
+        }
+        Ok(())
+    }
+
     fn allowed(&self, roots: &[PathBuf]) -> Vec<PathBuf> {
         roots.iter().chain(&self.allow_paths).cloned().collect()
     }
@@ -376,6 +394,46 @@ mod tests {
             err.contains("changed while the command was prepared"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn implicit_write_targets_inside_the_roots_pass_and_outside_ones_are_refused() {
+        let fx = fixture();
+        let outside = fixture();
+        let all = policy(&Capability::ALL);
+        let roots = std::slice::from_ref(&fx.root);
+        let inside = fx.root.join("a.snxsch");
+        std::fs::write(&inside, "x").unwrap();
+        let fresh = fx.root.join("new.snxsch");
+        assert!(all.check_write_targets(&[inside, fresh], roots).is_ok());
+        assert!(all.check_write_targets(&[], roots).is_ok());
+
+        let err = all
+            .check_write_targets(&[outside.root.join("b.snxsch")], roots)
+            .unwrap_err();
+        assert!(
+            err.starts_with("it would write") && err.contains("outside the project"),
+            "{err}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_implicit_write_target_that_is_a_link_is_refused_even_inside_the_roots() {
+        let fx = fixture();
+        let outside = fixture();
+        let all = policy(&Capability::ALL);
+        let roots = std::slice::from_ref(&fx.root);
+        std::fs::write(fx.root.join("real.snxsch"), "x").unwrap();
+        std::fs::write(outside.root.join("x.snxsch"), "x").unwrap();
+        let to_inside = fx.root.join("in.snxsch");
+        let to_outside = fx.root.join("out.snxsch");
+        std::os::unix::fs::symlink(fx.root.join("real.snxsch"), &to_inside).unwrap();
+        std::os::unix::fs::symlink(outside.root.join("x.snxsch"), &to_outside).unwrap();
+        for link in [to_inside, to_outside] {
+            let err = all.check_write_targets(&[link], roots).unwrap_err();
+            assert!(err.contains("writing through a link is refused"), "{err}");
+        }
     }
 
     #[test]

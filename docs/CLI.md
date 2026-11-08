@@ -71,7 +71,18 @@ is enforced before the app sees a command.
 - **Path confinement.** Every path argument is resolved first (symlinks
   followed, `..` removed) and must then sit inside the project folder or one of
   its mounted libraries, unless its folder is named with `--allow-path`. A
-  dangling link is refused. The resolved path is what the app receives.
+  dangling link is refused. The resolved path is what the app receives, and
+  it is resolved and checked again right before the command is handed over.
+  The allowed folders are fixed when the run starts: the project's folder, and
+  a library the app mounted from the project's library list, only if that
+  folder holds `library.toml` itself and is neither the home folder, a folder
+  above it, nor one that holds the project. What the project file lists later
+  never adds one. A write target is never a symbolic link, and a command that
+  writes (`save`, `export`, `library-write`) is checked for the files it
+  writes without being told (the active document, documents with unsaved
+  changes, the project file) before it runs. Residual risk: a process of the
+  same user that swaps symlinks inside the project folder in the instant
+  between that last check and the app's own open or write is out of scope.
 - **Capabilities.** Each catalog command needs exactly one group: `read`,
   `edit`, `save`, `export`, `delete` or `library-write`. A run holds
   `read,edit`; `--allow` adds groups. A refused command names the one it
