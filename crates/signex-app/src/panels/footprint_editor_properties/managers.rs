@@ -1,8 +1,9 @@
 //! Grid Manager + Other section + grid_manager_btn — the per-editor
 //! library Options surfaces below the Pad form.
 
-use iced::widget::{Column, Space, container, row, text};
+use iced::widget::{Column, Space, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
+use signex_widgets::{raw, text};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg, PanelPalette};
 use crate::styles::{Spacing, TypeScale};
@@ -28,23 +29,23 @@ pub(super) fn render_grid_manager<'a>(
     col = col.push(
         container(
             row![
-                text("Prior")
+                text(raw("Prior"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(40.0)),
-                text("Name")
+                text(raw("Name"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fill),
-                text("Color")
+                text(raw("Color"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(40.0)),
-                text("Origin")
+                text(raw("Origin"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(60.0)),
-                text("Enabled")
+                text(raw("Enabled"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(50.0)),
@@ -61,7 +62,7 @@ pub(super) fn render_grid_manager<'a>(
     let active_idx = fp.active_grid_idx;
     if fp.grids.is_empty() {
         col = col.push(
-            container(text("(no grids)").size(TS.caption).color(muted))
+            container(text(raw("(no grids)")).size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
                 .width(Length::Fill)
                 .boxed(),
@@ -90,23 +91,23 @@ pub(super) fn render_grid_manager<'a>(
                     ..Default::default()
                 });
             // Enabled column — checkbox toggling active grid.
-            let enabled_check = iced::widget::checkbox(is_active)
+            let enabled_check = signex_widgets::checkbox(is_active)
                 .on_toggle(move |_| PanelMsg::FpEditorGridSetActive(idx))
                 .size(TS.label)
                 .spacing(0);
             col = col.push(
                 container(
                     row![
-                        text(format!("{}", (idx + 1) * 10))
+                        text(raw(format!("{}", (idx + 1) * 10)))
                             .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fixed(40.0)),
-                        text(g.name.as_str())
+                        text(raw(g.name.as_str()))
                             .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fill),
                         container(swatch).width(Length::Fixed(40.0)).padding([0, 0]),
-                        text("0,0")
+                        text(raw("0,0"))
                             .size(TS.caption)
                             .color(muted)
                             .width(Length::Fixed(60.0)),
@@ -232,7 +233,7 @@ pub(super) fn grid_manager_btn<'a>(
     primary: Color,
     _border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let mut btn = iced::widget::button(text(label).size(TS.caption).color(primary))
+    let mut btn = signex_widgets::button(text(raw(label)).size(TS.caption).color(primary))
         .padding([SP.s, 10.0])
         .style(iced::widget::button::primary);
     if let Some(msg) = on_press {

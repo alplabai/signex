@@ -164,9 +164,10 @@ mod tests {
     use super::*;
     use iced::Widget as _;
     use iced::advanced::shell::{Bus, Waker};
-    use iced::widget::{Space, button};
+    use iced::widget::Space;
     use iced::window::Headless;
     use iced::{Point, Theme};
+    use signex_widgets::button;
 
     /// Click the middle of a button built by `wrap` and return the
     /// messages it produced. `()` is iced's headless renderer.

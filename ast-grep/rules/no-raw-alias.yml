@@ -1,0 +1,29 @@
+id: no-raw-alias
+language: rust
+severity: error
+message: "Call raw(…) by name: an alias or a function value hides it from scripts/check_raw_labels.sh."
+note: |
+  The raw-label ratchet counts `raw(` call sites by text (#2056). `use … raw as
+  r;`, `.map(raw)` and `let f = raw;` each make raw calls the count cannot see,
+  so a migration could leave room for new raw labels unnoticed.
+  Known limit: `apply(raw)` is not caught, because plenty of code names a
+  local variable `raw` and passes it to a plain function.
+files:
+  - crates/signex-app/src/**/*.rs
+  - crates/signex-widgets/src/**/*.rs
+  - crates/chrome-catalog/src/**/*.rs
+ignores:
+  - "**/*_tests.rs"
+  - "**/tests.rs"
+  - "**/tests/**"
+  - crates/signex-widgets/src/label.rs
+rule:
+  any:
+    - all:
+        - kind: use_as_clause
+        - has:
+            field: path
+            regex: '(^|::)raw$'
+    - pattern: $X.$M(raw)
+    - pattern: "let $P = raw;"
+    - pattern: "$P = raw"

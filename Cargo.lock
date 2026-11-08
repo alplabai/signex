@@ -5960,6 +5960,7 @@ dependencies = [
  "iced",
  "iced_aw",
  "iced_tiny_skia",
+ "signex-i18n",
  "signex-types",
  "tiny-skia 0.12.0",
 ]

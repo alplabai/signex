@@ -1,5 +1,6 @@
-use iced::widget::{Column, container, row, text, text_input};
+use iced::widget::{Column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::{raw, text, text_input};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -62,15 +63,15 @@ pub(super) fn view_sections<'a>(
         // (Altium PCB Library editor parity): each can be on
         // simultaneously. Replaces the previous mutex sub-tab.
         col = col.push(
-            container(text("Snap targets").size(TS.caption).color(muted))
+            container(text(raw("Snap targets")).size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
                 .width(Length::Fill)
                 .boxed(),
         );
         let snap_pill =
             |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
-                iced::widget::button(
-                    text(label)
+                signex_widgets::button(
+                    text(raw(label))
                         .size(TS.caption)
                         .color(if on { primary } else { muted })
                         .align_x(iced::alignment::Horizontal::Center),
@@ -125,17 +126,21 @@ pub(super) fn view_sections<'a>(
         // v0.13 — Altium-style "Objects for snapping" table. 12-row
         // checkbox list mapped to the snap_* fields on SnapOptions.
         col = col.push(
-            container(text("Objects for snapping").size(TS.caption).color(muted))
-                .padding([6.0, SP.m])
-                .width(Length::Fill)
-                .boxed(),
+            container(
+                text(raw("Objects for snapping"))
+                    .size(TS.caption)
+                    .color(muted),
+            )
+            .padding([6.0, SP.m])
+            .width(Length::Fill)
+            .boxed(),
         );
         let header = row![
-            text("On/Off")
+            text(raw("On/Off"))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(60.0)),
-            text("Objects")
+            text(raw("Objects"))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::Fill),
@@ -203,14 +208,14 @@ pub(super) fn view_sections<'a>(
             let label_owned: String = label.to_string();
             let row_w = row![
                 container(
-                    iced::widget::checkbox(on)
+                    signex_widgets::checkbox(on)
                         .on_toggle(move |_| PanelMsg::FpEditorToggleSnapOption(flag))
                         .size(TS.label)
                         .spacing(0),
                 )
                 .width(Length::Fixed(60.0))
                 .padding([0, 0]),
-                text(label_owned)
+                text(raw(label_owned))
                     .size(TS.caption)
                     .color(primary)
                     .width(Length::Fill),
@@ -232,11 +237,11 @@ pub(super) fn view_sections<'a>(
          -> Element<'static, PanelMsg> {
             container(
                 row![
-                    text(label.to_string())
+                    text(raw(label.to_string()))
                         .size(TS.caption)
                         .color(muted)
                         .width(Length::Fixed(110.0)),
-                    text_input("", format!("{value:.3}"))
+                    text_input(raw(""), format!("{value:.3}"))
                         .size(TS.caption)
                         .padding(SP.xs)
                         .style(crate::panels::footprint_editor_properties::fp_field_style(
@@ -320,7 +325,7 @@ pub(super) fn view_sections<'a>(
             if fp.sketch_parameters.is_empty() {
                 col = col.push(
                     container(
-                        text("(none — add via expression)")
+                        text(raw("(none — add via expression)"))
                             .size(TS.caption)
                             .color(muted),
                     )
@@ -332,11 +337,11 @@ pub(super) fn view_sections<'a>(
                 for (name, expr) in &fp.sketch_parameters {
                     let name_clone = name.clone();
                     let row = row![
-                        text(name)
+                        text(raw(name))
                             .size(TS.caption)
                             .color(primary)
                             .width(Length::Fixed(110.0)),
-                        text_input("expression…", expr)
+                        text_input(raw("expression…"), expr)
                             .size(TS.caption)
                             .padding(SP.xs)
                             .style(crate::panels::footprint_editor_properties::fp_field_style(
@@ -423,7 +428,7 @@ pub(super) fn view_sections<'a>(
                 col = super::redundant::push_redundant_rows(col, s, muted, input_bg, input_bdr);
             } else {
                 col = col.push(
-                    container(text("(no solve yet)").size(TS.caption).color(muted))
+                    container(text(raw("(no solve yet)")).size(TS.caption).color(muted))
                         .padding([SP.xs, SP.m])
                         .width(Length::Fill)
                         .boxed(),
@@ -441,7 +446,7 @@ pub(super) fn view_sections<'a>(
             if !conflicts.is_empty() {
                 col = col.push(
                     container(
-                        text("Conflicts (worst first)")
+                        text(raw("Conflicts (worst first)"))
                             .size(TS.caption)
                             .color(muted),
                     )
@@ -455,9 +460,12 @@ pub(super) fn view_sections<'a>(
                 if conflicts.len() > conflicts::MAX_ROWS {
                     col = col.push(
                         container(
-                            text(format!("… +{} more", conflicts.len() - conflicts::MAX_ROWS))
-                                .size(TS.caption)
-                                .color(muted),
+                            text(raw(format!(
+                                "… +{} more",
+                                conflicts.len() - conflicts::MAX_ROWS
+                            )))
+                            .size(TS.caption)
+                            .color(muted),
                         )
                         .padding([SP.xs, SP.m])
                         .width(Length::Fill)
@@ -481,7 +489,7 @@ pub(super) fn view_sections<'a>(
         if !is_section_collapsed("fp_solve_warnings", collapsed_sections) {
             if fp.solve_warnings.is_empty() {
                 col = col.push(
-                    container(text("(none)").size(TS.caption).color(muted))
+                    container(text(raw("(none)")).size(TS.caption).color(muted))
                         .padding([SP.xs, SP.m])
                         .width(Length::Fill)
                         .boxed(),
@@ -489,7 +497,7 @@ pub(super) fn view_sections<'a>(
             } else {
                 for w in fp.solve_warnings.iter().take(8) {
                     col = col.push(
-                        container(text(w).size(TS.caption).color(muted))
+                        container(text(raw(w)).size(TS.caption).color(muted))
                             .padding([SP.xs, SP.m])
                             .width(Length::Fill)
                             .boxed(),
@@ -498,7 +506,7 @@ pub(super) fn view_sections<'a>(
                 if fp.solve_warnings.len() > 8 {
                     col = col.push(
                         container(
-                            text(format!("… +{} more", fp.solve_warnings.len() - 8))
+                            text(raw(format!("… +{} more", fp.solve_warnings.len() - 8)))
                                 .size(TS.caption)
                                 .color(muted),
                         )

@@ -71,7 +71,7 @@ pub(super) fn view_grid<'a>(
             // toggles the sort. Stage 8 of `v0.9-snxlib-as-file-plan.md`.
             let library_for_sort = lib_pb.clone();
             let header_btn = button(
-                text(label_text)
+                text(raw(label_text))
                     .size(BROWSER_HEADER_SIZE)
                     .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
@@ -118,7 +118,7 @@ pub(super) fn view_grid<'a>(
     if rows.is_empty() {
         col = col.push(
             container(
-                text("No matching rows.")
+                text(raw("No matching rows."))
                     .size(BROWSER_TEXT_SIZE)
                     .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
@@ -203,7 +203,7 @@ pub(super) fn view_grid<'a>(
                     };
                     data_row = data_row.push(
                         container(
-                            text(label)
+                            text(raw(label))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
@@ -220,7 +220,7 @@ pub(super) fn view_grid<'a>(
                 if matches!(c.kind, ColumnKind::Price) {
                     data_row = data_row.push(
                         container(
-                            text(prices.text(r))
+                            text(raw(prices.text(r)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
@@ -239,7 +239,7 @@ pub(super) fn view_grid<'a>(
                 if matches!(c.kind, ColumnKind::Tags) {
                     data_row = data_row.push(
                         container(
-                            text(row_value)
+                            text(raw(row_value))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
@@ -299,7 +299,7 @@ pub(super) fn view_grid<'a>(
                     };
                     data_row = data_row.push(
                         container(
-                            text(row_value)
+                            text(raw(row_value))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
@@ -317,7 +317,7 @@ pub(super) fn view_grid<'a>(
                 if read_only {
                     data_row = data_row.push(
                         container(
-                            text(row_value)
+                            text(raw(row_value))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
@@ -337,8 +337,8 @@ pub(super) fn view_grid<'a>(
                 if let Some(open) = c.kind.measurement_press(r, &lib_pb, table) {
                     let text_c = theme_ext::text_primary(tokens);
                     let hover = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06);
-                    let cell = iced::widget::button(
-                        text(row_value)
+                    let cell = signex_widgets::button(
+                        text(raw(row_value))
                             .size(BROWSER_TEXT_SIZE)
                             .wrapping(iced::widget::text::Wrapping::None)
                             .color(text_c),
@@ -376,7 +376,7 @@ pub(super) fn view_grid<'a>(
                 let library_for_submit = lib_pb.clone();
                 let table_for_submit = table.to_string();
                 let column_for_submit = column_key.clone();
-                let input = text_input("", cell_value)
+                let input = text_input(raw(""), cell_value)
                     .on_input(move |s| LibraryMessage::BrowserCellEdit {
                         library_path: library_for_input.clone(),
                         row_id,
@@ -497,7 +497,7 @@ fn row_delete_cell<'a>(
     }
     let muted = theme_ext::text_secondary(tokens);
     let danger = theme_ext::error_color(tokens);
-    let btn = button(text("×").size(BROWSER_TEXT_SIZE))
+    let btn = button(text(raw("×")).size(BROWSER_TEXT_SIZE))
         .padding([0.0, SP.s])
         .on_press(LibraryMessage::BrowserDeleteRowRequest {
             library_path: library_path.to_path_buf(),
@@ -525,8 +525,8 @@ fn unbound_pick_button<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let warning = theme_ext::warning_color(tokens);
-    iced::widget::button(
-        text(label)
+    signex_widgets::button(
+        text(raw(label))
             .size(BROWSER_TEXT_SIZE)
             .wrapping(iced::widget::text::Wrapping::None)
             .color(warning),

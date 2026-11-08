@@ -3,12 +3,13 @@
 
 use std::collections::HashMap;
 
-use iced::widget::{column, container, pick_list, text, text_input};
+use iced::widget::{column, container, pick_list};
 use iced::{Element, Length, Widget};
 use signex_types::net_class::NetLineStyle;
 use signex_types::project::SchematicDefaultField;
 use signex_types::schematic::FillType;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text, text_input};
 
 use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
@@ -29,11 +30,11 @@ pub(in crate::app::project_tab) fn view<'a>(
     let overrides = &project.data.schematic_defaults;
     let resolved = overrides.resolve();
     let mut body = column![
-        text("Schematic defaults")
+        text(raw("Schematic defaults"))
             .size(ts.heading)
             .color(crate::styles::ti(tokens.text))
             .boxed(),
-        text("Unset widths and sizes on every sheet of this project follow these; leave a field empty for the built-in value.")
+        text(raw("Unset widths and sizes on every sheet of this project follow these; leave a field empty for the built-in value."))
             .size(ts.label)
             .color(crate::styles::ti(tokens.text_secondary))
             .boxed(),
@@ -43,7 +44,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     for field in SchematicDefaultField::ALL {
         let draft = drafts.and_then(|drafts| drafts.get(&field));
         let shown = super::shown_text(draft, overrides.get(field));
-        let input = text_input(format!("{}", field.resolved(&resolved)), shown)
+        let input = text_input(raw(format!("{}", field.resolved(&resolved))), shown)
             .on_input(move |text| {
                 tab_message(ProjectTabMsg::SchematicDefaultEdited {
                     project_id,
@@ -57,7 +58,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         body = body.push(labelled(field.label(), input, tokens));
         if let Some(note) = super::clamp_note(field, draft) {
             body = body.push(
-                text(note)
+                text(raw(note))
                     .size(ts.caption)
                     .color(crate::styles::ti(tokens.text_secondary))
                     .boxed(),
@@ -65,7 +66,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         }
     }
     let font = text_input(
-        overrides.font_family(),
+        raw(overrides.font_family()),
         overrides.font_family.as_deref().unwrap_or_default(),
     )
     .on_input(move |text| {

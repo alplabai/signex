@@ -2,7 +2,8 @@
 //! labelled read-out, and the theme colour conversion. Each tab passes the
 //! text sizes it draws at.
 
-use iced::widget::{column, text};
+use crate::{raw, text};
+use iced::widget::column;
 use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -25,7 +26,7 @@ pub(super) fn labeled<'a, M: 'a>(
     label: &'a str,
     control: impl Widget<M> + 'a,
 ) -> Element<'a, M> {
-    column![text(label).size(caption_size), control]
+    column![text(raw(label)).size(caption_size), control]
         .spacing(4)
         .boxed()
 }
@@ -38,10 +39,10 @@ pub(super) fn metric<'a, M: 'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, M> {
     column![
-        text(label)
+        text(raw(label))
             .size(sizes.label)
             .color(token_color(tokens.text_secondary)),
-        text(value)
+        text(raw(value))
             .size(sizes.value)
             .color(token_color(tokens.text)),
     ]

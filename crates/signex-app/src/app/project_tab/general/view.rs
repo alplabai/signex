@@ -2,9 +2,10 @@
 //! the read-only file facts. Pure: reads the project, emits `ProjectTabMsg`s.
 //! Sizes come from the shared type and spacing scales.
 
-use iced::widget::{Widget, button, column, container, row, text, text_input};
+use iced::widget::{Widget, column, container, row};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text, text_input};
 
 use super::ProjectGeneralFacts;
 use crate::app::project_tab::ProjectTabMsg;
@@ -29,7 +30,7 @@ pub(in crate::app::project_tab) fn labelled<'a>(
     let (ts, sp) = (TypeScale::default(), Spacing::default());
     row![
         container(
-            text(label)
+            text(raw(label))
                 .size(ts.body)
                 .color(crate::styles::ti(tokens.text_secondary))
         )
@@ -42,7 +43,7 @@ pub(in crate::app::project_tab) fn labelled<'a>(
 }
 
 fn read_only<'a>(label: &'a str, value: String, tokens: &ThemeTokens) -> Element<'a, Message> {
-    let value = text(value)
+    let value = text(raw(value))
         .size(TypeScale::default().label)
         .color(crate::styles::ti(tokens.text));
     labelled(label, value, tokens)
@@ -56,14 +57,14 @@ fn or_dash(value: Option<String>) -> String {
 /// runs the project-tree Rename flow.
 fn name_row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Element<'a, Message> {
     let (ts, sp) = (TypeScale::default(), Spacing::default());
-    let rename = button(text("Rename…").size(ts.body))
+    let rename = button(text(raw("Rename…")).size(ts.body))
         .padding([sp.xs, sp.m])
         .style(crate::styles::outline_button(tokens))
         .on_press(tab_message(ProjectTabMsg::RenameRequested {
             project_id: project.id,
         }));
     let name = row![
-        text(project.data.name.as_str())
+        text(raw(project.data.name.as_str()))
             .size(ts.label)
             .color(crate::styles::ti(tokens.text))
             .width(Length::Fill),
@@ -81,7 +82,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     let (ts, sp) = (TypeScale::default(), Spacing::default());
     let project_id = project.id;
     let description = text_input(
-        "Description",
+        raw("Description"),
         project.data.description.as_deref().unwrap_or(""),
     )
     .on_input(move |text| tab_message(ProjectTabMsg::DescriptionEdited { project_id, text }))
@@ -91,7 +92,7 @@ pub(in crate::app::project_tab) fn view<'a>(
 
     let facts = ProjectGeneralFacts::of(project);
     let body = column![
-        text("General")
+        text(raw("General"))
             .size(ts.heading)
             .color(crate::styles::ti(tokens.text)),
         name_row(project, tokens),

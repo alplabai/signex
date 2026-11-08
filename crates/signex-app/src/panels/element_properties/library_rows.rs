@@ -119,25 +119,31 @@ pub(super) fn push_library_rows<'a>(
     let LibraryStatus { drifted, missing } = status;
     if missing {
         c = c.push(
-            iced::widget::text("Library: symbol missing (sheet keeps its embedded copy)")
-                .size(TS.body)
-                .color(muted)
-                .boxed(),
+            signex_widgets::text(signex_widgets::raw(
+                "Library: symbol missing (sheet keeps its embedded copy)",
+            ))
+            .size(TS.body)
+            .color(muted)
+            .boxed(),
         );
     }
     if drifted {
-        let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
-            .padding([SP.xs, SP.m])
-            .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
+        let update = signex_widgets::button(
+            signex_widgets::text(signex_widgets::raw("Update from library")).size(TS.body),
+        )
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
         c = c.push(
             iced::widget::row![
-                iced::widget::text("Library: out of date")
+                signex_widgets::text(signex_widgets::raw("Library: out of date"))
                     .size(TS.body)
                     .color(muted),
-                iced::widget::tooltip(
+                signex_widgets::tooltip(
                     update,
-                    iced::widget::text("Updates every instance of this part on the sheet")
-                        .size(TS.body),
+                    signex_widgets::text(signex_widgets::raw(
+                        "Updates every instance of this part on the sheet"
+                    ))
+                    .size(TS.body),
                     iced::widget::tooltip::Position::Bottom,
                 ),
             ]
@@ -172,7 +178,7 @@ pub(super) fn push_part_actions<'a>(
     // next line instead of being clipped (#1747).
     let buttons = iced::widget::Row::with_children(part_action_buttons().into_iter().map(
         |(label, message)| -> Element<'a, PanelMsg> {
-            iced::widget::button(iced::widget::text(label).size(TS.body))
+            signex_widgets::button(signex_widgets::text(signex_widgets::raw(label)).size(TS.body))
                 .padding([SP.xs, SP.m])
                 .on_press(message)
                 .boxed()

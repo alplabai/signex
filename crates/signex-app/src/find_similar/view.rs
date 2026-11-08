@@ -1,7 +1,8 @@
 use super::{FindSimilarMsg, FindSimilarState, SimilarScope};
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::{Spacing, TypeScale};
 
@@ -35,11 +36,11 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
 
     let header = container(
         row![
-            text("Find Similar Objects")
+            text(raw("Find Similar Objects"))
                 .size(TS.heading)
                 .color(text_primary),
             Space::new().width(Length::Fill),
-            button(text("Close").size(TS.body).color(text_secondary))
+            button(text(raw("Close")).size(TS.body).color(text_secondary))
                 .on_press(FindSimilarMsg::Closed)
                 .style(crate::styles::menu_item(tokens)),
         ]
@@ -51,7 +52,7 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
 
     let choice = |label: &'static str, on: bool, msg: FindSimilarMsg| {
         button(
-            text(label)
+            text(raw(label))
                 .size(TS.body)
                 .color(if on { accent } else { text_secondary }),
         )
@@ -61,15 +62,15 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
 
     let mut table = column![
         row![
-            text("Property")
+            text(raw("Property"))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(130),
-            text("Seed value")
+            text(raw("Seed value"))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(Length::Fill),
-            text("Match")
+            text(raw("Match"))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(110),
@@ -81,11 +82,11 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
         let same = state.same.contains(&v.property);
         table = table.push(
             row![
-                text(v.property.label())
+                text(raw(v.property.label()))
                     .size(TS.body)
                     .color(text_primary)
                     .width(130),
-                text(shown(&v.value))
+                text(raw(shown(&v.value)))
                     .size(TS.body)
                     .color(text_secondary)
                     .width(Length::Fill),
@@ -102,7 +103,10 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     }
 
     let scope_row = row![
-        text("Scope").size(TS.body).color(text_secondary).width(130),
+        text(raw("Scope"))
+            .size(TS.body)
+            .color(text_secondary)
+            .width(130),
         choice(
             "Current sheet",
             state.scope == SimilarScope::Sheet,
@@ -118,22 +122,28 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     .spacing(10);
 
     let ok: Element<'a, FindSimilarMsg> = if state.running {
-        container(text("Searching...").size(TS.body).color(text_secondary))
-            .padding([6, 10])
-            .boxed()
+        container(
+            text(raw("Searching..."))
+                .size(TS.body)
+                .color(text_secondary),
+        )
+        .padding([6, 10])
+        .boxed()
     } else {
-        button(text("OK").size(TS.body).color(text_primary))
+        button(text(raw("OK")).size(TS.body).color(text_primary))
             .on_press(FindSimilarMsg::ApplyPressed)
             .style(crate::styles::menu_item(tokens))
             .boxed()
     };
     let footer = row![
-        text("Selects every match. Matches on other sheets are only counted.")
-            .size(TS.caption)
-            .color(text_secondary),
+        text(raw(
+            "Selects every match. Matches on other sheets are only counted."
+        ))
+        .size(TS.caption)
+        .color(text_secondary),
         Space::new().width(Length::Fill),
         ok,
-        button(text("Cancel").size(TS.body).color(text_secondary))
+        button(text(raw("Cancel")).size(TS.body).color(text_secondary))
             .on_press(FindSimilarMsg::Closed)
             .style(crate::styles::menu_item(tokens)),
     ]
@@ -144,7 +154,7 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
         column![
             header,
             container(
-                text(format!("Seed: {}", state.seed_label))
+                text(raw(format!("Seed: {}", state.seed_label)))
                     .size(TS.label)
                     .color(text_primary)
             )

@@ -9,13 +9,12 @@
 //!
 //! The mode is derived from the document's `DatasheetRef` variant.
 
-use iced::widget::{
-    Column, Row, Space, Widget, column, container, pick_list, row, scrollable, text, text_input,
-};
+use iced::widget::{Column, Row, Space, Widget, column, container, pick_list, row, scrollable};
 use iced::{Color, Element, Length};
 use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text, text_input};
 
 use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
@@ -84,7 +83,7 @@ pub fn view<'a>(
         ),
     );
     let header = kit::section_header("Datasheets", Some(add), tokens);
-    let intro = text(INTRO)
+    let intro = text(raw(INTRO))
         .size(TS.caption)
         .color(theme_ext::text_secondary(tokens))
         .boxed();
@@ -144,7 +143,7 @@ fn field_row<'a>(
 ) -> Element<'a, LibraryMessage> {
     row![
         container(
-            text(label)
+            text(raw(label))
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
         )
@@ -235,7 +234,7 @@ fn view_document<'a>(
         .boxed();
 
     let label_address = address.clone();
-    let label_input = text_input("Datasheet", doc.label.clone())
+    let label_input = text_input(raw("Datasheet"), doc.label.clone())
         .on_input(move |s| event(&label_address, DatasheetMsg::SetLabel(index, s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
@@ -304,7 +303,7 @@ fn view_document<'a>(
         column![header.boxed(), fields].spacing(SP.m);
     if let Some(reason) = error {
         body = body.push(
-            text(reason)
+            text(raw(reason))
                 .size(TS.body)
                 .color(theme_ext::error_color(tokens))
                 .boxed(),
@@ -338,7 +337,7 @@ fn view_url_input<'a>(
         DatasheetRef::Url { url } => url.clone(),
         _ => String::new(),
     };
-    text_input("https://example.com/datasheet.pdf", url_value)
+    text_input(raw("https://example.com/datasheet.pdf"), url_value)
         .on_input(move |s| event(&address, DatasheetMsg::SetUrl(index, s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
@@ -368,14 +367,17 @@ fn view_pinned_input<'a>(
                 hash.clone()
             };
             row![
-                text(filename.clone()).size(TS.body).color(text_c).boxed(),
+                text(raw(filename.clone()))
+                    .size(TS.body)
+                    .color(text_c)
+                    .boxed(),
                 Space::new().width(Length::Fill).boxed(),
-                text(short_hash).size(TS.caption).color(muted).boxed(),
+                text(raw(short_hash)).size(TS.caption).color(muted).boxed(),
             ]
             .align_y(iced::Alignment::Center)
             .boxed()
         }
-        _ => text("No PDF attached yet.")
+        _ => text(raw("No PDF attached yet."))
             .size(TS.body)
             .color(muted)
             .boxed(),

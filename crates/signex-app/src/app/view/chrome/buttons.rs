@@ -2,9 +2,10 @@
 //! per [`WindowControlsStyle`], plus the pure width bookkeeping the search
 //! bar geometry reads.
 
-use iced::widget::{Space, button, container, row, svg};
+use iced::widget::{Space, container, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget};
 use signex_types::theme::ThemeId;
+use signex_widgets::button;
 
 use crate::app::{Message, WindowMsg};
 use crate::chrome::controls::{WindowButton, WindowControlsLayout, WindowControlsStyle};
