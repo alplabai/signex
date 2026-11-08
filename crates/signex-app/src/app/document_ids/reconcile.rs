@@ -127,7 +127,6 @@ impl Signex {
                     let owner = self.waiver_owner_of(path);
                     self.follow_waivers(owner, old, id.as_uuid(), super::waivers::Follow::Copy);
                 }
-                return;
             }
             DocumentKey::Pcb(path) => {
                 for tab in docs.tabs.iter_mut().filter(|tab| &tab.path == path) {

@@ -126,7 +126,7 @@ impl Signex {
         let wanted: Vec<PathBuf> = docs
             .projects
             .iter()
-            .flat_map(|project| referenced_files(project))
+            .flat_map(referenced_files)
             .map(|(path, _)| path)
             .filter(|path| !docs.engines.contains_key(path))
             .filter(|path| docs.document_ids.header_wanted(path))
