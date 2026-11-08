@@ -519,15 +519,20 @@ fn replacing_after_the_library_symbol_changed_warns_and_keeps_the_sheet_copy() {
     );
 }
 
-/// Place `resolved` and report whether the drift warning was logged.
+/// Place `resolved` and report whether the drift warning for this fixture's
+/// part was logged by this placement. The ring is shared by the whole test
+/// binary and paste tests log a similar "keeps its existing copy" warning,
+/// so the needle names this part, and only entries newer than the placement
+/// count.
 fn warned(app: &mut Signex, f: &Fixture, resolved: Box<ResolvedPlacement>) -> bool {
     let _ = signex_app::diagnostics::init_logging();
     let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
     complete(app, f, "place-364.snxsch", Ok(resolved));
     signex_app::diagnostics::recent_entries().iter().any(|e| {
         e.id > before
+            && e.message
+                .contains("Library symbol for SNX-TWO changed since it was first placed")
             && e.message.contains("keeps its existing copy")
-            && e.message.contains("Update from library")
     })
 }
 
