@@ -842,6 +842,8 @@ pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
     power_port_value_field_for,
 };
+mod power_port_text;
+pub use power_port_text::power_port_value_text;
 mod pin_pick;
 pub use pin_pick::{
     PickedPin, PinLine, SCHEMATIC_PIN_PICK_TOLERANCE_MM, SCHEMATIC_PIN_PICK_TOLERANCE_PX,

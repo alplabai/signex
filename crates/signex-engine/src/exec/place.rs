@@ -53,6 +53,47 @@ fn without_fields_of_selected_symbols(
         .collect()
 }
 
+/// `moves` with a power port's field item acting on the port, each item
+/// once: the port's text is fixed to it and never moves on its own
+/// (maintainer decision 2026-11-07, `docs/DECISIONS.md`).
+fn fold_port_text_moves(
+    document: &SchematicSheet,
+    moves: Vec<(SelectedItem, f64, f64)>,
+) -> Vec<(SelectedItem, f64, f64)> {
+    use signex_types::schematic::SelectedKind;
+    let ports: std::collections::HashSet<uuid::Uuid> = if moves.iter().any(|(item, _, _)| {
+        matches!(
+            item.kind,
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+        )
+    }) {
+        document
+            .symbols
+            .iter()
+            .filter(|s| s.is_power)
+            .map(|s| s.uuid)
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+    let mut seen = std::collections::HashSet::with_capacity(moves.len());
+    moves
+        .into_iter()
+        .map(|(item, dx, dy)| {
+            let unit = match item.kind {
+                SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+                    if ports.contains(&item.uuid) =>
+                {
+                    SelectedItem::new(item.uuid, SelectedKind::Symbol)
+                }
+                _ => item,
+            };
+            (unit, dx, dy)
+        })
+        .filter(|(item, _, _)| seen.insert(*item))
+        .collect()
+}
+
 impl Engine {
     /// Reconcile junction dots after a command mutated wire geometry (move /
     /// rotate / mirror), removed wires (delete), or added one (place), and
@@ -174,9 +215,10 @@ impl Engine {
     fn exec_moves(
         &mut self,
         before: SchematicSheet,
-        mut moves: Vec<(SelectedItem, f64, f64)>,
+        moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     ) -> Result<CommandResult, EngineError> {
+        let mut moves = fold_port_text_moves(&self.document, moves);
         drop_fields_of_moved_symbols(&mut moves);
         // A dragged bus carries the entries sitting on it (and, with
         // `keep_wires`, the wire ends on their far side).
@@ -317,6 +359,7 @@ impl Engine {
                 angle_degrees,
                 keep_wires,
             } => {
+                let items = self.document.selection_units(&items);
                 let tips = self.pin_tips_if(keep_wires, &items);
                 let adjacent = self.touching_wire_pairs();
                 let mut changed = false;
@@ -338,6 +381,7 @@ impl Engine {
                 transform,
                 keep_wires,
             } => {
+                let items = self.document.selection_units(&items);
                 let tips = self.pin_tips_if(keep_wires, &items);
                 let adjacent = self.touching_wire_pairs();
                 let changed = self.transform_selection_about(&items, centre, transform)?;
@@ -352,6 +396,7 @@ impl Engine {
                 axis,
                 keep_wires,
             } => {
+                let items = self.document.selection_units(&items);
                 let tips = self.pin_tips_if(keep_wires, &items);
                 let adjacent = self.touching_wire_pairs();
                 let mut changed = false;

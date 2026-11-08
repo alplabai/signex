@@ -246,7 +246,7 @@ pub fn build_renderer_snapshot(
             && let Some(text) = field_text_input(
                 symbol,
                 &symbol.value,
-                symbol.val_text.as_ref(),
+                snapshot.drawn_value_text(symbol).as_deref(),
                 FieldSlot::Value,
                 to_rgba(value_color),
                 document_family,

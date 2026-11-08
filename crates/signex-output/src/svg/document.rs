@@ -415,11 +415,12 @@ impl SvgRenderContext {
                 });
             }
 
+            // A power port's text is fixed to the port (docs/DECISIONS.md).
             if !sym.value.is_empty()
-                && let Some(val_text) = &sym.val_text
+                && let Some(val_text) = sheet.schematic.drawn_value_text(sym)
                 && !val_text.hidden
             {
-                let val_style = field_effective_style(val_text, sym);
+                let val_style = field_effective_style(&val_text, sym);
                 elements.push(SvgElement::Text {
                     x: xform.x(val_text.position.x),
                     y: xform.px_y(val_text.position.y),

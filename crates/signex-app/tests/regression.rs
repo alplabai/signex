@@ -394,6 +394,9 @@ mod multi_selection_edit;
 // #1255, #1670 — in-place editing of a part's designator, value and footprint.
 #[path = "regression/inplace_field_edit.rs"]
 mod inplace_field_edit;
+// 2026-11-07 decision — a power port's net-name text is fixed to the port.
+#[path = "regression/power_port_text_fixed.rs"]
+mod power_port_text_fixed;
 // #1301, #1262, #1260 — Open Datasheet, Edit Symbol and Change Component
 // on a placed part.
 #[path = "regression/placed_part_actions.rs"]
