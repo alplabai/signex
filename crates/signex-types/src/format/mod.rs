@@ -72,6 +72,8 @@ mod object_lock_tests;
 #[cfg(test)]
 mod pcb_footprints_tests;
 #[cfg(test)]
+mod pcb_layer_tests;
+#[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
@@ -93,7 +95,9 @@ mod version_tests;
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
 pub use load_repair::{RepairedObject, SheetLoadRepair};
-pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
+pub use pcb_rows::{
+    PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow, parse_pcb_layer, pcb_layer_token,
+};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};

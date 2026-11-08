@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::format::{BoardUnknown, UnknownColumns, UnknownFields};
+use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
+use crate::pcb_layer::PcbLayer;
 use crate::property::PcbProperty;
 
 pub use crate::schematic::Point;
@@ -442,3 +443,44 @@ impl PcbBoard {
         std::mem::take(&mut self.unknown.load_repairs)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Typed layer accessors (#2173)
+// ---------------------------------------------------------------------------
+
+// Typed views of the layer strings. `None` is a name this build does not
+// know; the field keeps it as written, so a save re-emits it unchanged.
+macro_rules! impl_pcb_layer {
+    ($($ty:ty => $field:ident),+ $(,)?) => {
+        $(impl $ty {
+            /// The typed layer, or `None` for a name this build does not know.
+            pub fn pcb_layer(&self) -> Option<PcbLayer> {
+                parse_pcb_layer(&self.$field)
+            }
+        })+
+    };
+}
+
+macro_rules! impl_pcb_layers {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl $ty {
+            /// The typed layers in order; `None` for a name this build does
+            /// not know.
+            pub fn pcb_layers(&self) -> impl Iterator<Item = Option<PcbLayer>> + '_ {
+                self.layers.iter().map(|name| parse_pcb_layer(name))
+            }
+        })+
+    };
+}
+
+impl_pcb_layer!(
+    LayerDef => name,
+    FpGraphic => layer,
+    Footprint => layer,
+    Segment => layer,
+    Zone => layer,
+    BoardGraphic => layer,
+    BoardText => layer,
+);
+
+impl_pcb_layers!(Pad, Via);
