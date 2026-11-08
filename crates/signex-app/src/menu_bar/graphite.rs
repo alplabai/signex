@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(ROOT_LABEL_SIZE, MENU_LABEL_SIZE);
         assert_eq!(MenuMetrics::GRAPHITE.label_size, ROOT_LABEL_SIZE);
         assert_eq!(MenuMetrics::GRAPHITE.shortcut_size, MENU_SHORTCUT_SIZE);
-        assert!(MenuMetrics::GRAPHITE.mono_shortcut);
+        const { assert!(MenuMetrics::GRAPHITE.mono_shortcut) };
         assert_eq!(super::super::MENU_LABEL_SIZE, MENU_LABEL_SIZE);
         assert_eq!(super::super::MENU_SHORTCUT_SIZE, MENU_SHORTCUT_SIZE);
     }
