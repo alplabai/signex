@@ -4,7 +4,9 @@
 //! this crate alone. It is a UI-layer crate: the domain crates cannot depend
 //! on it (`scripts/check_arch_guard.sh`).
 //!
-//! An [`I18n`] is plain data held in the app state, never a global. [`t!`]
+//! An [`I18n`] is plain data held in the app state, not a mutable global; the
+//! one shared instance, [`I18n::en_us`], is a process-wide immutable fallback
+//! bundle with no app state. [`t!`]
 //! renders a message to [`Localized`], which is for display only; state and
 //! files keep a [`MessageId`] and its arguments.
 
@@ -17,14 +19,29 @@ mod types;
 
 pub use i18n::{I18n, LanguageOption};
 pub use locale::LanguagePref;
-pub use types::{Arg, Localized, MessageId, UserText};
+pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 
-/// Message ids this crate renders itself.
-pub mod ids {
-    use crate::MessageId;
+/// Every message id, defined together with the [`ids::ALL`] list so a new
+/// id cannot be left out of the consistency tests. This is the only place
+/// `MessageId::new` is called (`ast-grep/rules/message-id-only-in-i18n.yml`).
+macro_rules! define_ids {
+    ($($name:ident = $id:literal;)+) => {
+        /// The message ids; each lives in `locales/en-US/`.
+        pub mod ids {
+            use crate::MessageId;
 
-    pub const LANGUAGE_SYSTEM_DEFAULT: MessageId = MessageId::new("language-system-default");
-    pub const MENU_FILE: MessageId = MessageId::new("menu-file");
+            $(pub const $name: MessageId = MessageId::new($id);)+
+
+            /// Every id above.
+            #[cfg(test)]
+            pub(crate) const ALL: &[MessageId] = &[$($name),+];
+        }
+    };
+}
+
+define_ids! {
+    LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
+    MENU_FILE = "menu-file";
 }
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,
@@ -39,5 +56,7 @@ macro_rules! t {
     };
 }
 
+#[cfg(test)]
+mod consistency_tests;
 #[cfg(test)]
 mod tests;

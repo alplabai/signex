@@ -61,7 +61,20 @@ impl fmt::Display for UserText {
     }
 }
 
-/// A message argument: text, or a number formatted for the locale.
+/// A count, size or percentage shown in the UI language; never a length,
+/// angle or component value (those stay `.` in every locale and are passed
+/// as text from Signex's own formatter).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalNumber(pub f64);
+
+/// A message argument: text, or a number formatted for the locale. There is
+/// no `From<f64>`: a bare float cannot reach the locale number formatter.
+///
+/// ```compile_fail
+/// use signex_i18n::{I18n, MessageId, t};
+/// let i18n = I18n::en_us();
+/// let _ = t!(i18n, MessageId::new("some-id"), "value" => 1.27_f64);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Arg {
     Text(String),
@@ -80,14 +93,20 @@ impl From<String> for Arg {
     }
 }
 
-impl From<f64> for Arg {
-    fn from(number: f64) -> Self {
-        Self::Number(number)
+impl From<LocalNumber> for Arg {
+    fn from(number: LocalNumber) -> Self {
+        Self::Number(number.0)
     }
 }
 
-impl From<i64> for Arg {
-    fn from(number: i64) -> Self {
-        Self::Number(number as f64)
-    }
+/// Integer counts are the one bare number a message takes.
+macro_rules! count_arg {
+    ($($int:ty),+) => {$(
+        impl From<$int> for Arg {
+            fn from(count: $int) -> Self {
+                Self::Number(count as f64)
+            }
+        }
+    )+};
 }
+count_arg!(i32, u32, i64, u64, usize);

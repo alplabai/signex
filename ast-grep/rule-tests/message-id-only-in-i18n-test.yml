@@ -1,0 +1,7 @@
+id: message-id-only-in-i18n
+valid:
+  - "fn f(i18n: &I18n) { t!(i18n, ids::MENU_FILE); }"
+  - "fn f() { Other::new(\"menu-file\"); }"
+invalid:
+  - "fn f() { let id = MessageId::new(\"menu-file\"); }"
+  - "fn f() { let id = signex_i18n::MessageId::new(\"x\"); }"

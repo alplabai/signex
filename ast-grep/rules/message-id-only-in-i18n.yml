@@ -1,0 +1,17 @@
+id: message-id-only-in-i18n
+language: rust
+severity: error
+message: "MessageId::new is called only in signex-i18n; add the id to `define_ids!` in crates/signex-i18n/src/lib.rs and use `ids::NAME`."
+note: |
+  The `ids` registry is the one list of message ids, and the key-consistency
+  test checks it against the en-US catalog. An id built anywhere else is
+  invisible to that test and can drift from the catalog unnoticed.
+files:
+  - crates/**/*.rs
+ignores:
+  - "crates/signex-i18n/src/**"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "MessageId::new$"
