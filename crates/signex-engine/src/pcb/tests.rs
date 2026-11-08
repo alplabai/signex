@@ -301,11 +301,7 @@ fn random_edit_sequences_unwind_to_the_original_board() {
 /// bottom side, rotate counter-clockwise by the rotation, translate.
 fn world(fp: &signex_types::pcb::Footprint, local: Point) -> (f64, f64) {
     let bottom = parse_pcb_layer(&fp.layer).and_then(|l| l.side()) == Some(BoardSide::Bottom);
-    let x = if bottom {
-        -local.x
-    } else {
-        local.x
-    };
+    let x = if bottom { -local.x } else { local.x };
     let (s, c) = fp.rotation.to_radians().sin_cos();
     (
         c * x - s * local.y + fp.position.x,
