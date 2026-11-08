@@ -103,8 +103,10 @@ fn ellipse_hit_and_bounds() {
     assert!(!oval.contains(p(1_500_000, 900_000), 0));
     assert_eq!(oval.aabb(), r(-2 * MM, -MM, 2 * MM, MM));
     let turned = Shape::Ellipse {
+        center: p(0, 0),
+        half_w: 2 * MM,
+        half_h: MM,
         rotation_deg: 90.0,
-        ..oval
     };
     assert_eq!(turned.aabb(), r(-MM, -2 * MM, MM, 2 * MM));
     assert!(turned.contains(p(0, 2 * MM), 0));
