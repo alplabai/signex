@@ -306,8 +306,11 @@ fn no_expand_collapse_header_draws_a_text_chevron() {
         for glyph in [
             "\u{25B8}", "\u{25BE}", "\u{25B6}", "\u{25BC}", "\u{25BA}", "\u{2304}",
         ] {
+            // A whole string literal is a drawn arrow; a glyph inside a
+            // sentence (a menu path) is prose.
+            let literal = format!("\"{glyph}\"");
             assert!(
-                !code.contains(glyph),
+                !code.contains(&literal),
                 "{rel} draws the text chevron {glyph}"
             );
         }
