@@ -43,9 +43,5 @@ pub(super) fn new_project(app: &mut Signex, args: &CommandArgs) -> Ran {
         Ok(path) => path,
         Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
     };
-    let result = app.start_new_project(path);
-    if let Err(reason) = &result {
-        crate::diagnostics::log_warning(format!("New project was refused: {reason}"));
-    }
-    outcome(result)
+    outcome(app.start_new_project(path))
 }

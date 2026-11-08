@@ -499,7 +499,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
-        operands: operands::NEW_PROJECT_PATH,
+        operands: operands::SAVE_PATH,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

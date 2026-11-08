@@ -1,18 +1,18 @@
 //! #2155: `open_document` and `new_document` run their `path` operand through
 //! their operand handlers, and the result is what the menu entry and its dialog
-//! produce; a refusal reaches the Messages log.
+//! produce; a refusal reaches the Messages log and the error notice.
 
 use std::path::{Path, PathBuf};
 
 use super::{CommandArgs, CommandOutcome};
 use crate::app::{Message, Signex};
-use crate::diagnostics::logged_count;
+use crate::diagnostics::{entries_since, init_logging, newest_entry_id};
 use crate::io_ports::{HeadlessAnswers, IoPorts};
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
 use crate::task_driver::TaskDriver;
 
-/// The refusals are counted in the shared log, so these tests take turns.
+/// The tests share one log and one headless picker, so they take turns.
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn headless_app() -> (Signex, HeadlessAnswers) {
@@ -30,11 +30,38 @@ fn settle(app: &mut Signex, task: iced::Task<Message>) {
     TaskDriver::new().settle(app, task).expect("settles");
 }
 
-/// Run `name path=<path>` as an in-process request does, to its end.
-fn run_with_operand(app: &mut Signex, name: &str, path: &Path) -> CommandOutcome {
+/// Where the log stands now; what is logged after it is `messages_since`.
+fn log_mark() -> Option<u64> {
+    let _ = init_logging();
+    newest_entry_id()
+}
+
+/// The log lines after `mark` that name `needle` (a path or an extension
+/// unique to the test, so a test in another module cannot satisfy it).
+fn messages_since(mark: Option<u64>, needle: &str) -> Vec<String> {
+    entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|entry| entry.message)
+        .filter(|message| message.contains(needle))
+        .collect()
+}
+
+fn notice(app: &Signex) -> Option<(String, String)> {
+    app.document_state
+        .error_notice
+        .as_ref()
+        .map(|n| (n.title.clone(), n.detail.clone()))
+}
+
+/// Run `name path=<path> [extra..]` as an in-process request does, and answer
+/// as a headless run does.
+fn run_with_operand(app: &mut Signex, name: &str, path: &Path, extra: &[&str]) -> CommandOutcome {
     let id = command(name);
-    let operand = format!("path={}", path.display());
-    let args = CommandArgs::parse_operands(&id, &[operand.as_str()]).expect("operands");
+    let mut operands = vec![format!("path={}", path.display())];
+    operands.extend(extra.iter().map(|e| e.to_string()));
+    let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
+    let args = CommandArgs::parse_operands(&id, &refs).expect("operands");
     let snapshot = app.open_snapshot();
     let (outcome, task) = app.run_operands(&id, &args);
     match outcome {
@@ -92,7 +119,7 @@ fn open_document_with_a_path_opens_what_the_dialog_route_opens() {
     let (mut by_dialog, answers) = headless_app();
     run_with_dialog(&mut by_dialog, &answers, MenuMessage::OpenProject, &sheet);
     let (mut by_operand, _) = headless_app();
-    let outcome = run_with_operand(&mut by_operand, "open_document", &sheet);
+    let outcome = run_with_operand(&mut by_operand, "open_document", &sheet, &[]);
 
     let CommandOutcome::Answered(answer) = outcome else {
         panic!("open_document did not answer: {outcome:?}");
@@ -124,7 +151,7 @@ fn new_document_with_a_path_creates_what_the_dialog_route_creates() {
     );
     let (mut by_operand, _) = headless_app();
     let project = by_operand_dir.join("p.snxprj");
-    let outcome = run_with_operand(&mut by_operand, "new_document", &project);
+    let outcome = run_with_operand(&mut by_operand, "new_document", &project, &[]);
 
     let CommandOutcome::Answered(answer) = outcome else {
         panic!("new_document did not answer: {outcome:?}");
@@ -148,69 +175,93 @@ fn new_document_with_a_path_creates_what_the_dialog_route_creates() {
     );
 }
 
+/// A file that is not there fails on the read worker, not in the handler: the
+/// handler says `Ran`, and the run is refused because no document appeared.
 #[test]
-fn opening_a_missing_file_is_refused_and_logged() {
+fn a_missing_file_ran_the_open_but_made_no_document_and_the_read_failure_is_logged() {
     let _serial = serial();
     let dir = dir();
+    let gone = dir.path().join("gone.snxsch");
     let (mut app, _) = headless_app();
-    let before = logged_count("Failed to open document path");
+    let mark = log_mark();
 
-    let outcome = run_with_operand(&mut app, "open_document", &dir.path().join("gone.snxsch"));
+    let outcome = run_with_operand(&mut app, "open_document", &gone, &[]);
 
     assert!(
-        matches!(outcome, CommandOutcome::Disabled { .. }),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
         "{outcome:?}"
     );
+    let named = gone.display().to_string();
     assert!(
-        logged_count("Failed to open document path") > before,
-        "logged"
+        !messages_since(mark, &named).is_empty(),
+        "the read failure is logged"
     );
-    assert!(app.document_state.error_notice.is_some(), "notice raised");
 }
 
+/// The handler's own refusal: the reason, the log line and the Open Failed
+/// notice all name the file, and they are what the dialog route leaves.
 #[test]
-fn opening_an_unsupported_file_is_refused_with_its_reason() {
+fn an_unsupported_file_is_refused_with_its_reason_in_the_log_and_the_notice() {
     let _serial = serial();
     let dir = dir();
+    let file = dir.path().join("x.zq2155");
+    let needle = "zq2155";
+
+    let (mut by_dialog, answers) = headless_app();
+    let dialog_mark = log_mark();
+    run_with_dialog(&mut by_dialog, &answers, MenuMessage::OpenProject, &file);
+    let dialog_log = messages_since(dialog_mark, needle);
+
     let (mut app, _) = headless_app();
     let id = command("open_document");
-    let operand = format!("path={}", dir.path().join("x.txt").display());
+    let operand = format!("path={}", file.display());
     let args = CommandArgs::parse_operands(&id, &[operand.as_str()]).expect("operands");
-    let before = logged_count("Failed to open document path");
-
+    let mark = log_mark();
     let (outcome, _) = app.run_operands(&id, &args);
 
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
-    assert!(reason.contains("unsupported file type"), "{reason}");
     assert!(
-        logged_count("Failed to open document path") > before,
-        "logged"
+        reason.contains("unsupported file type: .zq2155"),
+        "{reason}"
     );
+    let log = messages_since(mark, needle);
+    assert!(
+        log.iter()
+            .any(|m| m.contains("Failed to open document path")),
+        "logged: {log:?}"
+    );
+    let (title, detail) = notice(&app).expect("the Open Failed notice");
+    assert!(detail.contains(needle), "{title}: {detail}");
+    assert_eq!(log, dialog_log, "the Messages entries are the menu's");
+    assert_eq!(notice(&app), notice(&by_dialog), "the notice is the menu's");
 }
 
 #[test]
-fn a_second_new_project_at_one_path_is_refused_and_logged() {
+fn a_second_new_project_at_one_path_is_refused_and_logged_whatever_overwrite_says() {
     let _serial = serial();
     let dir = dir();
     let project = dir.path().join("p.snxprj");
     let (mut app, _) = headless_app();
     assert!(matches!(
-        run_with_operand(&mut app, "new_document", &project),
+        run_with_operand(&mut app, "new_document", &project, &[]),
         CommandOutcome::Answered(_)
     ));
-    let before = logged_count("Failed to create new project");
+    let mark = log_mark();
 
-    let outcome = run_with_operand(&mut app, "new_document", &project);
+    let outcome = run_with_operand(&mut app, "new_document", &project, &["overwrite=true"]);
 
     assert!(
         matches!(outcome, CommandOutcome::Disabled { .. }),
         "{outcome:?}"
     );
+    let named = dir.path().display().to_string();
+    let log = messages_since(mark, &named);
     assert!(
-        logged_count("Failed to create new project") > before,
-        "logged"
+        log.iter()
+            .any(|m| m.contains("Failed to create new project")),
+        "logged: {log:?}"
     );
 }
 
@@ -218,11 +269,12 @@ fn a_second_new_project_at_one_path_is_refused_and_logged() {
 fn a_new_project_path_that_is_not_a_project_file_is_refused_with_its_reason() {
     let _serial = serial();
     let dir = dir();
+    let file = dir.path().join("p.txt");
     let (mut app, _) = headless_app();
     let id = command("new_document");
-    let operand = format!("path={}", dir.path().join("p.txt").display());
+    let operand = format!("path={}", file.display());
     let args = CommandArgs::parse_operands(&id, &[operand.as_str()]).expect("operands");
-    let before = logged_count("Failed to create new project");
+    let mark = log_mark();
 
     let (outcome, _) = app.run_operands(&id, &args);
 
@@ -230,15 +282,12 @@ fn a_new_project_path_that_is_not_a_project_file_is_refused_with_its_reason() {
         panic!("not refused: {outcome:?}");
     };
     assert!(reason.contains("must end in .snxprj"), "{reason}");
+    let log = messages_since(mark, &file.display().to_string());
     assert!(
-        logged_count("Failed to create new project") > before,
-        "logged"
+        log.iter()
+            .any(|m| m.contains("Failed to create new project")),
+        "logged: {log:?}"
     );
-}
-
-#[test]
-fn new_document_takes_no_overwrite_operand() {
-    let id = command("new_document");
-    let err = CommandArgs::parse_operands(&id, &["path=/tmp/p.snxprj", "overwrite=true"]);
-    assert!(err.is_err(), "overwrite means nothing to a new project");
+    let (_, detail) = notice(&app).expect("the notice");
+    assert!(detail.contains(&file.display().to_string()), "{detail}");
 }

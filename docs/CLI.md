@@ -68,7 +68,8 @@ new document's `{id, path, kind}`.
 
 `open_document` and `new_document` take a `path` (a new project's `.snxprj`)
 and do what the menu entry does after its dialog; a new project never replaces
-one, so it takes no `overwrite`. `save_document_as` takes `document`, `path` and
+one, so its `overwrite` is accepted and ignored. A new project over an existing
+one is `failed` (the check runs on the worker), not `refused`. `save_document_as` takes `document`, `path` and
 `overwrite`: an existing target without `overwrite: true` is `refused`. An open
 or new that makes nothing, with an error notice, is `failed` with that notice.
 A command with no operand that opens a dialog is `refused`, never `ran`, when

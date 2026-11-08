@@ -431,6 +431,43 @@ fn a_new_project_into_a_folder_that_is_a_link_to_outside_is_refused() {
     );
 }
 
+/// A new project over an existing one is refused by the app's worker, so the
+/// run reports it as `failed` with the app's reason, whatever `overwrite` says,
+/// and the first project is left as it was.
+#[test]
+fn a_new_project_over_an_existing_one_fails_and_leaves_it_alone() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_allowed_guard, allowed) = temp_root();
+    let project = allowed.join("p.snxprj");
+    let new =
+        |extra: Value| json!({"id": "new_document", "args": {"path": project, "overwrite": extra}});
+
+    let out = run_cli(
+        &[
+            "run",
+            fx.project.to_str().unwrap(),
+            "--save",
+            "--keep-going",
+            "--allow-path",
+            allowed.to_str().unwrap(),
+        ],
+        jsonl(&[new(json!(false)), new(json!(true))]),
+    );
+
+    assert_eq!(out.lines[0]["status"], "answered", "{}", out.stdout);
+    assert_eq!(out.lines[1]["status"], "failed", "{}", out.stdout);
+    assert!(
+        out.lines[1]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("already exists"),
+        "{}",
+        out.stdout
+    );
+    assert!(allowed.join("p/p.snxprj").is_file());
+}
+
 fn sheet_id(path: &std::path::Path) -> String {
     signex_types::format::document_id_in_header("snxsch", &std::fs::read(path).expect("sheet"))
         .expect("the sheet carries an id")
