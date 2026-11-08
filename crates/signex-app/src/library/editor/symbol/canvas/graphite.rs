@@ -36,22 +36,16 @@ const DARK: Ink = Ink {
 /// Alpha of the origin crosshair over the ground.
 const AXIS_ALPHA: f32 = 0.45;
 
-fn ink_for(tokens: &ThemeTokens) -> Option<Ink> {
-    if !crate::styles::is_graphite(tokens) {
-        return None;
-    }
+fn ink_for(tokens: &ThemeTokens) -> Ink {
     let paper = crate::styles::ti(tokens.paper);
     let luma = 0.299 * paper.r + 0.587 * paper.g + 0.114 * paper.b;
-    Some(if luma > 0.5 { LIGHT } else { DARK })
+    if luma > 0.5 { LIGHT } else { DARK }
 }
 
 impl SymbolCanvas<'_> {
-    /// Paint with the Graphite canvas colours when `tokens` is a Graphite
-    /// theme; any other theme keeps the sheet-colour look unchanged.
+    /// Paint with the Graphite canvas colours of `tokens`.
     pub fn with_graphite(mut self, tokens: &ThemeTokens) -> Self {
-        let Some(ink) = ink_for(tokens) else {
-            return self;
-        };
+        let ink = ink_for(tokens);
         self.bg_color = ink.ground;
         self.grid_color = ink.dot;
         self.body_color = ink.sym;
@@ -70,15 +64,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn legacy_tokens_have_no_graphite_ink() {
-        let tokens = crate::styles::legacy_tokens_fixture();
-        assert!(ink_for(&tokens).is_none());
-    }
-
-    #[test]
     fn graphite_light_and_dark_pick_their_own_ground() {
         use signex_types::theme::{ThemeId, theme_tokens};
-        assert_eq!(ink_for(&theme_tokens(ThemeId::GraphiteLight)), Some(LIGHT));
-        assert_eq!(ink_for(&theme_tokens(ThemeId::GraphiteDark)), Some(DARK));
+        assert_eq!(ink_for(&theme_tokens(ThemeId::GraphiteLight)), LIGHT);
+        assert_eq!(ink_for(&theme_tokens(ThemeId::GraphiteDark)), DARK);
     }
 }

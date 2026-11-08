@@ -62,15 +62,6 @@ pub(super) fn view_symbol_selection<'a>(
     border_c: Color,
     tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
-    let graphite = crate::styles::is_graphite(tokens);
-    let g = graphite.then_some(tokens);
-    let sep = |col: Column<Element<'a, PanelMsg>>| {
-        if graphite {
-            col
-        } else {
-            col.push(super::super::thin_sep(border_c))
-        }
-    };
     // The .snxsym editor is a SYMBOL editor — symbol-level
     // visual / geometric properties only. Component metadata
     // (Designator / Comment / Description / Type / Parameters)
@@ -106,8 +97,7 @@ pub(super) fn view_symbol_selection<'a>(
     };
 
     // ── ▾ Symbol ──
-    col = sep(col);
-    col = col.push(super::section_title("Symbol", primary, g));
+    col = col.push(super::section_title("Symbol", tokens));
     col = col.push(text_field(
         "Design Item ID",
         sym.symbol_name.as_str(),
@@ -147,8 +137,7 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(super::prop_row_static("Part", part_label, muted, primary));
 
     // ── ▾ Graphical ──
-    col = sep(col);
-    col = col.push(super::section_title("Graphical", primary, g));
+    col = col.push(super::section_title("Graphical", tokens));
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text("Mirrored")
@@ -169,8 +158,7 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(mirrored_row);
 
     // ── Local Colors (Fills / Lines / Pins) ──
-    col = sep(col);
-    col = col.push(super::section_title("Local Colors", primary, g));
+    col = col.push(super::section_title("Local Colors", tokens));
     col = col.push(local_color_field(
         "Fills",
         crate::app::LocalColorSlot::Fill,

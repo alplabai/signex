@@ -1,6 +1,5 @@
 //! Graphite looks of the panel contents: the project tree rows, the
-//! panel buttons and list rows. Legacy themes
-//! never reach these; each caller branches on `is_graphite`.
+//! panel buttons and list rows.
 
 use iced::widget::{column, container, row, text};
 use iced::{Border, Color, Element, Length, Widget as _};
@@ -98,34 +97,21 @@ pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
     roots.iter().map(|n| walk(n, 0)).collect()
 }
 
-/// Fill of the active / selected row in a library list: the selection
-/// colour, or the soft accent on Graphite.
+/// Fill of the active / selected row in a library list: the soft accent.
 pub fn active_fill(tokens: &ThemeTokens) -> Color {
-    if crate::styles::is_graphite(tokens) {
-        resolve(tokens).accent_soft
-    } else {
-        ti(tokens.selection)
-    }
+    resolve(tokens).accent_soft
 }
 
-/// Translucent state wash at `alpha`: white on legacy themes (their old
-/// look), the text colour on Graphite so it also works on the light theme.
+/// Translucent state wash at `alpha`: the text colour, so it also works on
+/// the light theme.
 pub fn wash_fn(tokens: &ThemeTokens) -> impl Fn(f32) -> Color + Copy + 'static {
-    let base = if crate::styles::is_graphite(tokens) {
-        ti(tokens.text)
-    } else {
-        Color::WHITE
-    };
+    let base = ti(tokens.text);
     move |alpha| Color { a: alpha, ..base }
 }
 
-/// Corner radius of a small panel button: 7 on Graphite, 3 elsewhere.
-pub fn button_radius(tokens: &ThemeTokens) -> f32 {
-    if crate::styles::is_graphite(tokens) {
-        PROPERTY_FIELD_RADIUS
-    } else {
-        3.0
-    }
+/// Corner radius of a small panel button.
+pub fn button_radius(_tokens: &ThemeTokens) -> f32 {
+    PROPERTY_FIELD_RADIUS
 }
 
 /// "2 h ago" style age of a commit.

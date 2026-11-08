@@ -33,8 +33,8 @@ pub mod supply;
 pub mod symbol;
 pub mod text_extent;
 
-use iced::widget::{Space, Widget, button, column, container, row, text};
-use iced::{Border, Color, Element, Length, Theme};
+use iced::widget::{Space, Widget, column, container, row, text};
+use iced::{Color, Element, Length};
 use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
@@ -44,13 +44,9 @@ use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 use self::kit::{SP, TS};
 use super::messages::{EditorMsg, LibraryMessage};
 use super::state::{ComponentPreviewState, EditorAddress, LibraryState, PreviewTab};
-use crate::styles::tokens::{self, Overlay};
 
 /// Fade over a read-only tab: the panel colour, so it dims on any theme.
 const READ_ONLY_VEIL_ALPHA: f32 = 0.55;
-/// The close glyph is drawn this many times the heading size.
-const CLOSE_GLYPH_SCALE: f32 = 1.6;
-
 /// Render a Component Preview surface — five tabs (Preview / Parameters
 /// / Supply / Datasheet / Simulation), all read-only for Symbol+
 /// Footprint. The active tab body fills the panel; the header strip
@@ -85,55 +81,13 @@ pub(crate) fn view<'a>(
         .boxed()
 }
 
-/// The row's identity, shown once in the shell header: part number, then
-/// class and lifecycle state when present.
-fn identity_line(pn: &str, class: &str, state: &str) -> String {
-    let pn = if pn.trim().is_empty() {
-        "(no part number)"
-    } else {
-        pn
-    };
-    let mut line = pn.to_string();
-    if !class.trim().is_empty() {
-        line.push_str(&format!("  \u{2014}  {class}"));
-    }
-    if !state.trim().is_empty() {
-        line.push_str(&format!("  \u{2014}  {state}"));
-    }
-    line
-}
-
 fn view_header<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    // The row id is an internal key; the internal PN is the name a user
-    // knows the part by.
-    let identity = identity_line(
-        state.row.internal_pn.as_str(),
-        state.row.class.as_str(),
-        &format!("{:?}", state.row.state),
-    );
-    if crate::styles::is_graphite(tokens) {
-        return graphite_header(state, tokens, address, read_only);
-    }
-    container(
-        row![
-            text("Component Preview").size(TS.heading).color(muted),
-            Space::new().width(SP.m),
-            text(identity).size(TS.heading).color(text_c),
-            Space::new().width(Length::Fill),
-            close_btn(address, tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([SP.m, SP.l])
-    .style(crate::styles::modal_header_strip(tokens))
-    .boxed()
+    graphite_header(state, tokens, address, read_only)
 }
 
 /// Graphite document header: the internal PN in mono, then the lifecycle
@@ -297,25 +251,12 @@ fn view_tabs<'a>(
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     // The shared `TabPill`, so these tabs read like the document and dock
-    // tabs: bordered pills, the active one filled with an accent line.
-    // Graphite tabs are flat: no pill fill or outline, only the accent
+    // tabs. The tabs are flat: no pill fill or outline, only the accent
     // underline on the active one.
-    let (active_fill, resting_fill, border) = if crate::styles::is_graphite(tokens) {
-        (Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT)
-    } else {
-        (
-            crate::styles::ti(tokens.hover),
-            tokens::overlay(tokens, Overlay::Faint),
-            crate::styles::ti(tokens.border),
-        )
-    };
+    let (active_fill, resting_fill, border) =
+        (Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT);
     let accent = crate::styles::ti(tokens.accent);
-    let graphite = crate::styles::is_graphite(tokens);
-    let order = if graphite {
-        PreviewTab::GRAPHITE_ORDER
-    } else {
-        PreviewTab::ORDER
-    };
+    let order = PreviewTab::GRAPHITE_ORDER;
     let last = order.len().saturating_sub(1);
     let mut row_widget: iced::widget::Row<Element<'_, LibraryMessage>> = iced::widget::Row::new()
         .spacing(0)
@@ -328,29 +269,16 @@ fn view_tabs<'a>(
             (resting_fill, theme_ext::text_secondary(tokens))
         };
         let mut content: iced::widget::Row<Element<'_, LibraryMessage>> = row![
-            text(if graphite {
-                tab.graphite_label()
-            } else {
-                tab.label()
-            })
-            .size(TS.label)
-            .color(text_c)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .boxed()
+            text(tab.graphite_label())
+                .size(TS.label)
+                .color(text_c)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed()
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
-        if graphite {
-            if let Some((label, tone)) = graphite_badge(*tab, state, library_state) {
-                content = content.push(kit::toned_pill(label, tone, tokens));
-            }
-        } else if let Some(count) = tab_badge(*tab, state, library_state) {
-            let fill = tokens::danger(tokens);
-            content = content.push(kit::pill(
-                count.to_string(),
-                fill,
-                tokens::readable_on(fill),
-            ));
+        if let Some((label, tone)) = graphite_badge(*tab, state, library_state) {
+            content = content.push(kit::toned_pill(label, tone, tokens));
         }
         let label = container(content.boxed()).padding([SP.s, SP.l]);
         let style = signex_widgets::tab_pill::TabPillStyle {
@@ -471,10 +399,9 @@ fn view_footer<'a>(
         .boxed();
     }
 
-    // Graphite has no bottom bar: Save / Save & Close live in the header.
+    // There is no bottom bar: Save / Save & Close live in the header.
     // The bar only returns for the stale-row reload prompt.
-    let graphite = crate::styles::is_graphite(tokens);
-    if graphite && !state.stale_base {
+    if !state.stale_base {
         return Space::new().height(0.0).boxed();
     }
 
@@ -521,19 +448,8 @@ fn view_footer<'a>(
         .boxed()
     };
 
-    // Graphite carries Save in the document header.
-    let save: Element<'_, LibraryMessage> = if graphite {
-        Space::new().width(0.0).boxed()
-    } else {
-        row![
-            kit::secondary_button("Save", event(EditorMsg::SaveDraft), tokens),
-            Space::new().width(SP.m),
-            kit::primary_button("Save & Close", event(EditorMsg::Commit), tokens),
-        ]
-        .boxed()
-    };
     container(
-        row![save, reload, Space::new().width(Length::Fill), dirty_marker,]
+        row![reload, Space::new().width(Length::Fill), dirty_marker,]
             .align_y(iced::Alignment::Center),
     )
     .padding([SP.m, SP.l])
@@ -541,45 +457,10 @@ fn view_footer<'a>(
     .boxed()
 }
 
-/// Fill of the close button: none at rest, token overlays on hover/press.
-fn close_background(tokens: &ThemeTokens, status: button::Status) -> Option<iced::Background> {
-    let step = match status {
-        button::Status::Hovered => Overlay::Hover,
-        button::Status::Pressed => Overlay::Pressed,
-        _ => return None,
-    };
-    Some(tokens::overlay(tokens, step).into())
-}
-
-fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-    let glyph = TS.heading * CLOSE_GLYPH_SCALE;
-    let tokens = *tokens;
-    button(container(text("\u{00D7}").size(glyph).color(text_c)).padding([0.0, SP.m]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: address.library_path,
-            table: address.table,
-            row_id: address.row_id,
-            msg: EditorMsg::CloseEditor,
-        })
-        .style(move |_: &Theme, status| button::Style {
-            background: close_background(&tokens, status),
-            border: Border {
-                width: crate::styles::HAIRLINE,
-                radius: crate::styles::RADIUS.into(),
-                color: border,
-                ..Border::default()
-            },
-            text_color: text_c,
-            ..button::Style::default()
-        })
-        .boxed()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::styles::tokens::{self, Overlay};
     use signex_types::theme::{ThemeId, theme_tokens};
 
     #[test]
@@ -614,22 +495,6 @@ mod tests {
     }
 
     #[test]
-    fn identity_is_shown_once_with_class_and_state() {
-        assert_eq!(
-            identity_line("RES-0001", "resistor", "Draft"),
-            "RES-0001  \u{2014}  resistor  \u{2014}  Draft"
-        );
-    }
-
-    #[test]
-    fn identity_falls_back_when_pn_and_class_are_empty() {
-        assert_eq!(
-            identity_line(" ", "", "Draft"),
-            "(no part number)  \u{2014}  Draft"
-        );
-    }
-
-    #[test]
     fn read_only_veil_follows_the_panel_colour() {
         for &id in ThemeId::BUILTINS {
             let t = theme_tokens(id);
@@ -643,15 +508,5 @@ mod tests {
                 }
             );
         }
-    }
-
-    #[test]
-    fn close_button_fills_only_on_hover_and_press() {
-        let t = theme_tokens(ThemeId::BUILTINS[0]);
-        assert!(close_background(&t, button::Status::Active).is_none());
-        let hover = close_background(&t, button::Status::Hovered);
-        let pressed = close_background(&t, button::Status::Pressed);
-        assert!(hover.is_some() && pressed.is_some());
-        assert_ne!(hover, pressed);
     }
 }

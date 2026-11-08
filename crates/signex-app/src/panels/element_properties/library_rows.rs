@@ -211,17 +211,13 @@ pub(super) fn push_library_rows<'a>(
         );
     }
     if drifted {
-        c = c.push(out_of_date_row(id, ink.color, tokens));
+        c = c.push(out_of_date_row(id, tokens));
     }
     c
 }
 
 /// The out-of-date status and its Update button.
-fn out_of_date_row<'a>(
-    id: uuid::Uuid,
-    muted: Color,
-    tokens: &ThemeTokens,
-) -> Element<'a, PanelMsg> {
+fn out_of_date_row<'a>(id: uuid::Uuid, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
     let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id))
@@ -229,17 +225,10 @@ fn out_of_date_row<'a>(
             super::super::form_look::ghost_button(theme, status)
                 .unwrap_or_else(|| iced::widget::button::primary(theme, status))
         });
-    let status: Element<'a, PanelMsg> = if crate::styles::is_graphite(tokens) {
-        container(iced::widget::text(OUT_OF_DATE).size(TS.caption))
-            .padding([2.0, 8.0])
-            .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
-            .boxed()
-    } else {
-        iced::widget::text(OUT_OF_DATE)
-            .size(TS.body)
-            .color(muted)
-            .boxed()
-    };
+    let status: Element<'a, PanelMsg> = container(iced::widget::text(OUT_OF_DATE).size(TS.caption))
+        .padding([2.0, 8.0])
+        .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
+        .boxed();
     iced::widget::row![
         status,
         iced::widget::tooltip(

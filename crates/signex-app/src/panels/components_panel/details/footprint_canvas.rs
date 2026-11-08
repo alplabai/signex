@@ -25,8 +25,8 @@ pub struct FootprintPreview<'a> {
     model: &'a PreviewFootprint,
     /// Per-wheel-notch zoom factor.
     zoom_step: f32,
-    /// Graphite ground colour and layer palette; `None` keeps the legacy
-    /// black board.
+    /// Graphite ground colour and layer palette; `None` until
+    /// [`Self::with_theme_tokens`] sets them, which paints the black board.
     graphite: Option<(iced::Color, LayerPalette)>,
 }
 
@@ -40,14 +40,14 @@ impl<'a> FootprintPreview<'a> {
     }
 
     /// Paint with the Graphite paper / charcoal canvas look and the preview
-    /// palette (crisp pads, neutral courtyard) when `tokens` is a Graphite
-    /// theme; any other theme keeps the legacy board.
+    /// palette (crisp pads, neutral courtyard).
     pub fn with_theme_tokens(mut self, tokens: &signex_types::theme::ThemeTokens) -> Self {
-        self.graphite = graphite_look_for(tokens).map(|l| (l.bg, l.palette().for_preview()));
+        let look = graphite_look_for(tokens);
+        self.graphite = Some((look.bg, look.palette().for_preview()));
         self
     }
 
-    /// The Graphite ground colour, `None` on a legacy theme.
+    /// The Graphite ground colour, `None` before the theme is applied.
     #[cfg(test)]
     pub(crate) fn ground(&self) -> Option<Color> {
         self.graphite.map(|(bg, _)| bg)
