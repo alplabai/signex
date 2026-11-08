@@ -3,6 +3,8 @@ use std::cmp::Ordering;
 use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone, Utc};
 
 use crate::format::wall_clock;
+use crate::locale::format_locale;
+use crate::text::{fold_in, upper_in};
 use crate::{DateLength, I18n, LanguagePref, ListKind, LocalNumber};
 
 fn i18n(tag: &str) -> I18n {
@@ -168,7 +170,7 @@ fn extensions_change_the_calendar_digits_and_clock() {
 
 #[test]
 fn a_language_without_icu_data_formats_as_the_message_locale() {
-    for tag in ["und", "xx-YY", "tlh"] {
+    for tag in ["und", "xx-YY", "tlh", "az-Cyrl"] {
         let unknown = i18n(tag);
         assert_eq!(unknown.format_locale().to_string(), "en-US", "{tag}");
         assert_eq!(unknown.number(LocalNumber(1234.5)), "1,234.5", "{tag}");
@@ -186,6 +188,25 @@ fn a_language_without_icu_data_formats_as_the_message_locale() {
 }
 
 #[test]
+fn a_language_whose_list_patterns_equal_the_root_still_has_icu_data() {
+    let ml = i18n("ml-IN");
+    assert_eq!(ml.format_locale().to_string(), "ml-IN");
+    assert_eq!(ml.count(1_234_567), "12,34,567");
+    let at = wall(2025, 1, 15, 16, 9, 35);
+    let shown = ml.show(at, DateLength::Long, false);
+    assert!(shown.contains("ജനുവരി"), "{shown}");
+    assert_eq!(i18n("mn-MN").format_locale().to_string(), "mn-MN");
+}
+
+#[test]
+fn the_next_os_language_is_tried_when_the_first_has_no_data() {
+    let tags = ["xx-YY".to_owned(), "en-GB".to_owned()];
+    assert_eq!(format_locale(&tags, "en-US").to_string(), "en-GB");
+    let none = ["xx-YY".to_owned(), "tlh".to_owned()];
+    assert_eq!(format_locale(&none, "en-US").to_string(), "en-US");
+}
+
+#[test]
 fn counts_are_exact_for_every_i64() {
     let en = i18n("en-US");
     assert_eq!(en.count(i64::MAX), "9,223,372,036,854,775,807");
@@ -195,12 +216,21 @@ fn counts_are_exact_for_every_i64() {
 
 #[test]
 fn fold_matches_turkish_dotted_and_dotless_i() {
+    // No tr catalog exists, so the Turkic rules are tested by language tag.
+    assert_eq!(fold_in("tr-TR", "İstanbul"), "istanbul");
+    assert_eq!(fold_in("az", "ISPARTA"), "ısparta");
+    assert_eq!(fold_in("tr", "ılık"), "ılık");
+    let query = fold_in("tr", "istanbul");
+    assert!(fold_in("tr", "İSTANBUL").contains(&query));
+}
+
+#[test]
+fn case_operations_follow_the_message_language_not_the_formatting_one() {
     let tr = i18n("tr-TR");
-    assert_eq!(tr.fold_for_search("İstanbul"), "istanbul");
-    assert_eq!(tr.fold_for_search("ISPARTA"), "ısparta");
-    assert_eq!(tr.fold_for_search("ılık"), "ılık");
-    let query = tr.fold_for_search("istanbul");
-    assert!(tr.fold_for_search("İSTANBUL").contains(&query));
+    assert_eq!(tr.locale(), "en-US");
+    assert_eq!(tr.format_locale().to_string(), "tr-TR");
+    assert!(tr.fold_for_search("Input Pin").contains("input"));
+    assert_eq!(tr.upper_for_display("file"), "FILE");
 }
 
 #[test]
@@ -222,10 +252,7 @@ fn a_full_fold_changes_length_and_en_does_not_match_dotted_capital_i() {
 
 #[test]
 fn upper_for_display_follows_the_language() {
-    assert_eq!(
-        i18n("tr-TR").upper_for_display("istanbul ılık"),
-        "İSTANBUL ILIK"
-    );
+    assert_eq!(upper_in("tr-TR", "istanbul ılık"), "İSTANBUL ILIK");
     assert_eq!(i18n("en-US").upper_for_display("istanbul"), "ISTANBUL");
 }
 

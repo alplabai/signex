@@ -1,9 +1,13 @@
 //! The Language setting and RFC 4647 lookup negotiation.
 
 use fluent_langneg::{NegotiationStrategy, negotiate_languages};
+use icu_datetime::provider::semantic_skeletons::DatetimePatternsDateGregorianV1;
+use icu_decimal::provider::DecimalSymbolsV1;
 use icu_list::provider::{ListAndV1, ListFormatterPatterns};
 use icu_locale_core::{DataLocale, Locale};
-use icu_provider::{DataIdentifierBorrowed, DataProvider, DataRequest};
+use icu_provider::{
+    DataIdentifierBorrowed, DataMarker, DataMarkerAttributes, DataProvider, DataRequest,
+};
 use unic_langid::LanguageIdentifier;
 
 use crate::catalog::{AVAILABLE, EN_US};
@@ -65,35 +69,59 @@ pub(crate) fn requested_tags(pref: &LanguagePref) -> Vec<String> {
     }
 }
 
-/// The locale numbers, dates and lists follow: the first requested tag with
-/// its `-u-` extensions (`th-TH-u-ca-buddhist`), or `message_tag` when it
-/// does not parse or ICU has no data for its language.
+/// The locale numbers, dates and lists follow: the first requested tag that
+/// parses and has ICU data, with its `-u-` extensions
+/// (`th-TH-u-ca-buddhist`), or `message_tag` when none does. Under System
+/// default that walks the whole OS language list.
 pub(crate) fn format_locale(tags: &[String], message_tag: &str) -> Locale {
-    tags.first()
-        .and_then(|tag| tag.parse::<Locale>().ok())
-        .filter(has_icu_data)
+    tags.iter()
+        .filter_map(|tag| tag.parse::<Locale>().ok())
+        .find(has_icu_data)
         .or_else(|| message_tag.parse().ok())
         .unwrap_or(icu_locale_core::locale!("en-US"))
 }
 
 /// Whether the compiled ICU data holds `locale`'s language. Compiled data
 /// falls back inside `load` and reports the locale it found; `und` means
-/// only the root answered. The probe is the list patterns, which every
-/// shipped language has: decimal and date data are stored only where they
-/// differ from the root, so `en` and `th` would look unknown there. It is
-/// the provider's own lookup, so it cannot disagree with the formatters.
+/// only the root answered. A language whose data equals the root's is stored
+/// as `und` for that marker, so one probe is not enough: the language counts
+/// as known when its list patterns, Gregorian date patterns or decimal
+/// symbols resolve to anything but `und`. It is the provider's own lookup,
+/// so it cannot disagree with the formatters.
 fn has_icu_data(locale: &Locale) -> bool {
     let asked = DataLocale::from(locale);
+    let lists = resolves::<ListAndV1>(
+        &icu_list::provider::Baked,
+        ListFormatterPatterns::WIDE,
+        &asked,
+    );
+    let dates = resolves::<DatetimePatternsDateGregorianV1>(
+        &icu_datetime::provider::Baked,
+        DataMarkerAttributes::from_str_or_panic("ym0d"),
+        &asked,
+    );
+    let numbers = resolves::<DecimalSymbolsV1>(
+        &icu_decimal::provider::Baked,
+        DataMarkerAttributes::empty(),
+        &asked,
+    );
+    lists || dates || numbers
+}
+
+/// Whether `provider` answers `asked` for marker `M` with something other
+/// than the root.
+fn resolves<M: DataMarker>(
+    provider: &impl DataProvider<M>,
+    attributes: &DataMarkerAttributes,
+    asked: &DataLocale,
+) -> bool {
     let request = DataRequest {
-        id: DataIdentifierBorrowed::for_marker_attributes_and_locale(
-            ListFormatterPatterns::WIDE,
-            &asked,
-        ),
+        id: DataIdentifierBorrowed::for_marker_attributes_and_locale(attributes, asked),
         ..Default::default()
     };
-    DataProvider::<ListAndV1>::load(&icu_list::provider::Baked, request).is_ok_and(|found| {
+    provider.load(request).is_ok_and(|found| {
         // No resolved locale means the asked one matched exactly.
-        !found.metadata.locale.unwrap_or(asked).is_unknown()
+        !found.metadata.locale.unwrap_or(*asked).is_unknown()
     })
 }
 

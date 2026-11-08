@@ -41,7 +41,7 @@ pub struct I18n {
     // What was already logged, so a message rendered every frame is
     // reported once.
     reported: Mutex<HashSet<(Problem, &'static str)>>,
-    // Where numbers, dates, lists, case and order follow: the language asked
+    // Where numbers, dates, lists and order follow: the language asked
     // for, which stays itself when the messages fall back to en-US.
     format_locale: Locale,
     // Formatter failures already logged (see `warn_format_once`).
@@ -126,7 +126,8 @@ impl I18n {
         self.locale
     }
 
-    /// The locale numbers, dates, lists, case and order follow: the first
+    /// The locale numbers, dates, lists and order follow (case operations
+    /// follow [`Self::locale`] instead): the first
     /// language requested (the OS list under System default) with its `-u-`
     /// extensions (`th-TH-u-ca-buddhist`, `en-US-u-hc-h23`), even when this
     /// build has no messages in it. A tag that does not parse, or a language

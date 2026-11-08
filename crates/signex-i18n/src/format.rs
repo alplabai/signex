@@ -96,11 +96,16 @@ impl I18n {
     }
 
     /// `utc` as a date and time on the operating system's local clock.
+    ///
+    /// Display only: the text (including the ISO 8601 wall-clock fallback,
+    /// which carries no offset) must never be persisted or exported.
     pub fn date_time(&self, utc: DateTime<Utc>, length: DateLength) -> String {
         self.show(wall_clock(utc, &Local), length, true)
     }
 
     /// `utc` as a date on the operating system's local clock.
+    ///
+    /// Display only, like [`Self::date_time`]: never persist or export it.
     pub fn date(&self, utc: DateTime<Utc>, length: DateLength) -> String {
         self.show(wall_clock(utc, &Local), length, false)
     }
