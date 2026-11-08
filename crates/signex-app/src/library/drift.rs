@@ -76,7 +76,8 @@ pub struct DriftReport {
     pub generation: u64,
 }
 
-/// One sheet's embedded entries: `(sheet path, [(lib_id, embedded copy)])`.
+/// One sheet's embedded entries: `(sheet path, [(body_ref, embedded copy)])`,
+/// only the bodies some symbol on the sheet draws with.
 /// The copies are cloned on the UI thread and hashed in the worker.
 pub type SheetEntries = (PathBuf, Vec<(String, LibSymbol)>);
 
