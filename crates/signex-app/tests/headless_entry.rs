@@ -271,6 +271,12 @@ fn run() {
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::NotHeadless);
     app.ui_state.io.opener = signex_app::io_ports::Opener::Refuse;
+    // Headless dialogs and launches but native git commits: not headless either.
+    app.ui_state.io.git = signex_app::io_ports::GitCommits::Native;
+    let (outcome, _task) =
+        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::NotHeadless);
+    app.ui_state.io.git = signex_app::io_ports::GitCommits::Skip;
 
     let grid_before = app.ui_state.grid_visible;
     let (outcome, task) =
