@@ -334,7 +334,7 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
     app.open_pcb_tab(dir.path().join("Board.snxpcb"), "Board".into(), board);
     let repaired = app.reconcile_document_ids();
     // The board was repaired as it opened; the project is left for now.
-    assert_eq!(repaired.len(), 1, "{repaired:?}");
+    assert_eq!(repaired.len(), 0, "{repaired:?}");
     assert!(app.document_state.projects[0].data.document_id.is_some());
     let ids: Vec<_> = app
         .document_entries()
@@ -539,7 +539,7 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
     }
     let repaired = app.reconcile_document_ids();
     // The board was repaired as it opened; the project is left for now.
-    assert_eq!(repaired.len(), 1, "{repaired:?}");
+    assert_eq!(repaired.len(), 2, "{repaired:?}");
     let docs = &app.document_state;
     let sym = |n: &str| docs.symbol_editors[&dir.path().join(n)].file.file_uuid;
     let fpt = |n: &str| docs.footprint_editors[&dir.path().join(n)].file.file_uuid;

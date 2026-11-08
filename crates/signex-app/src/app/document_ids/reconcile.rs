@@ -13,6 +13,7 @@ use signex_types::document_id::DocumentId;
 
 use super::entries::DocumentEntry;
 use crate::app::document::DocumentKey;
+use crate::app::state::scope::path_key_with;
 use crate::app::{Signex, TabDocument};
 
 impl Signex {
@@ -46,8 +47,9 @@ impl Signex {
                 .as_ref()
                 .map_or(u64::MAX, |key| ids.seen_order(key))
         });
-        let mut first: HashMap<DocumentId, String> = HashMap::new();
+        let mut first: HashMap<DocumentId, (String, Option<std::path::PathBuf>)> = HashMap::new();
         let mut repaired = Vec::new();
+        let mut minted: Vec<(std::path::PathBuf, DocumentId)> = Vec::new();
         for entry in held {
             let Some(key) = entry.key.clone() else {
                 continue;
@@ -59,19 +61,50 @@ impl Signex {
                 .map_or_else(|| entry.name.clone(), |n| n.to_string_lossy().into_owned());
             match entry.id {
                 Some(id) if !first.contains_key(&id) => {
-                    first.insert(id, label);
+                    first.insert(id, (label, entry.path.clone()));
                 }
                 Some(id) => {
-                    let owner = first.get(&id).cloned().unwrap_or_default();
+                    let (owner, owner_path) = first.get(&id).cloned().unwrap_or_default();
+                    // The same file held under another spelling of its path
+                    // (a case variant) is one document, not a copy.
+                    let same_file = entry
+                        .path
+                        .as_deref()
+                        .zip(owner_path.as_deref())
+                        .is_some_and(|(a, b)| {
+                            let fold = self.identity_fold_for(a);
+                            path_key_with(a, fold) == path_key_with(b, fold)
+                        });
+                    if same_file {
+                        continue;
+                    }
                     crate::diagnostics::log_warning(format!(
                         "{label} has the same document id as {owner}; it was given a new id, \
                          which its next save writes"
                     ));
-                    self.give_new_id(&key);
+                    self.give_new_id(&key, DocumentId::new());
                     repaired.push(key);
                 }
                 None => {
-                    self.give_new_id(&key);
+                    // Two spellings of one file are one document: they get
+                    // the one id, so both encode alike.
+                    let same_file = |path: &std::path::Path, other: &std::path::Path| {
+                        let fold = self.identity_fold_for(path);
+                        path_key_with(path, fold) == path_key_with(other, fold)
+                    };
+                    let shared = entry.path.as_deref().and_then(|path| {
+                        let held = first.iter().filter_map(|(id, (_, other))| {
+                            other.as_deref().map(|other| (other, *id))
+                        });
+                        held.chain(minted.iter().map(|(other, id)| (other.as_path(), *id)))
+                            .find(|(other, _)| same_file(path, other))
+                            .map(|(_, id)| id)
+                    });
+                    let id = shared.unwrap_or_else(DocumentId::new);
+                    if let Some(path) = &entry.path {
+                        minted.push((path.clone(), id));
+                    }
+                    self.give_new_id(&key, id);
                     repaired.push(key);
                 }
             }
@@ -79,9 +112,8 @@ impl Signex {
         repaired
     }
 
-    /// Store a fresh id in the document `key` holds.
-    fn give_new_id(&mut self, key: &DocumentKey) {
-        let id = DocumentId::new();
+    /// Store `id` in the document `key` holds.
+    fn give_new_id(&mut self, key: &DocumentKey, id: DocumentId) {
         let docs = &mut self.document_state;
         match key {
             DocumentKey::Schematic(path) => {
