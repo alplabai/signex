@@ -23,16 +23,21 @@ pub enum Capability {
     Delete,
     /// Change a library.
     LibraryWrite,
+    /// Commit to the project's git repository. No command names it: a save
+    /// on a project with git enabled needs it on top of `save`, and `--save`
+    /// does not grant it.
+    Vcs,
 }
 
 impl Capability {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Read,
         Self::Edit,
         Self::Save,
         Self::Export,
         Self::Delete,
         Self::LibraryWrite,
+        Self::Vcs,
     ];
 
     /// What a run holds when it names nothing.
@@ -46,6 +51,7 @@ impl Capability {
             Self::Export => "export",
             Self::Delete => "delete",
             Self::LibraryWrite => "library-write",
+            Self::Vcs => "vcs",
         }
     }
 
@@ -141,6 +147,13 @@ mod tests {
             assert_eq!(parse_list(found.name()).unwrap(), BTreeSet::from([*found]));
         }
         assert!(seen.contains(&Capability::Read) && seen.contains(&Capability::Edit));
+        // `vcs` is held by a run, never needed by a command on its own.
+        assert!(!seen.contains(&Capability::Vcs));
+        assert!(!Capability::DEFAULT.contains(&Capability::Vcs));
+        assert_eq!(
+            parse_list("vcs").unwrap(),
+            BTreeSet::from([Capability::Vcs])
+        );
     }
 
     #[test]

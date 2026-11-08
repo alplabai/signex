@@ -13,11 +13,12 @@ use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
-use crate::capability::capability_of;
+use crate::capability::{Capability, capability_of};
 use crate::confine::canonical;
 use crate::policy::{Approved, Policy};
 use crate::protocol::{MessageLine, Request, ResultLine, Status};
-use crate::roots::allowed_roots;
+use crate::roots::project_root;
+use crate::vcs::check_repo;
 
 /// How much of a command line the audit log keeps.
 const AUDIT_LINE_CHARS: usize = 400;
@@ -28,7 +29,8 @@ pub struct Session {
     policy: Policy,
     run_id: String,
     project_dir: PathBuf,
-    /// Fixed at the start: what the project file lists later never widens it.
+    /// The project's folder, fixed at the start: nothing the project file
+    /// lists later widens it.
     roots: Vec<PathBuf>,
 }
 
@@ -44,6 +46,8 @@ impl Session {
             .parent()
             .map(Path::to_path_buf)
             .ok_or_else(|| format!("{} has no folder", project.display()))?;
+        let home = dirs::home_dir().and_then(|dir| canonical(&dir).ok());
+        let roots = project_root(&project_dir, home.as_deref())?;
         let rules = RuleProfile::new("Signex headless default", "1", ErcRules::default());
         let (mut app, boot) = Signex::boot_headless(vec![project.clone()], &rules)
             .map_err(|error| error.to_string())?;
@@ -65,21 +69,6 @@ impl Session {
             rules.name,
             rules.version
         ));
-        let listed: Vec<PathBuf> = app
-            .document_state
-            .projects
-            .iter()
-            .flat_map(|loaded| &loaded.data.libraries)
-            .map(|entry| entry.path.clone())
-            .collect();
-        let mounted: Vec<PathBuf> = app
-            .library
-            .open_libraries
-            .iter()
-            .map(|library| library.root.clone())
-            .collect();
-        let home = dirs::home_dir().and_then(|dir| canonical(&dir).ok());
-        let roots = allowed_roots(&project_dir, &listed, &mounted, home.as_deref());
         Ok(Self {
             app,
             driver,
@@ -113,11 +102,19 @@ impl Session {
                 message: entry.message,
             })
             .collect();
-        // A dialog the answers could not satisfy still reports `Ran`; its
+        // A command whose only effect was a window the driver dropped, or a
+        // dialog the answers could not satisfy, still reports `Ran`; the
         // refusal is only in the log.
-        let (status, reason) = match (status, dialog_refusal(&messages)) {
-            (Status::Ran, Some(why)) => (Status::Refused, Some(why)),
-            (status, _) => (status, reason),
+        let (status, reason) = match (status, needs_window(&messages), dialog_refusal(&messages)) {
+            (Status::Ran, true, _) => (
+                Status::Refused,
+                Some(format!(
+                    "`{}` needs a window, which a headless run does not have",
+                    request.id
+                )),
+            ),
+            (Status::Ran, false, Some(why)) => (Status::Refused, Some(why)),
+            (status, _, _) => (status, reason),
         };
         let changed = changed_between(&before, &self.snapshot());
         self.audit(seq, raw, status, reason.as_deref());
@@ -172,6 +169,11 @@ impl Session {
         {
             return (Status::Refused, Some(reason), None);
         }
+        if capability_of(approved.meta) == Capability::Save
+            && let Err(reason) = self.check_git(approved.command.as_str())
+        {
+            return (Status::Refused, Some(reason), None);
+        }
         let Some(dialogs) = self.app.headless_answers() else {
             return (Status::Failed, Some("the app is not headless".into()), None);
         };
@@ -187,6 +189,34 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
+    }
+
+    /// A save on a project with git enabled commits. That needs the `vcs`
+    /// capability and a repository that is a real folder of the project, and
+    /// the repository folder is a write target like any other.
+    fn check_git(&self, command: &str) -> Result<(), String> {
+        let mut repos = Vec::new();
+        for project in self
+            .app
+            .document_state
+            .projects
+            .iter()
+            .filter(|project| project.data.enable_git)
+        {
+            if !self.policy.capabilities.contains(&Capability::Vcs) {
+                return Err(format!(
+                    "`{command}` would commit to the git repository of {} (git is enabled for the project); \
+                     pass --allow vcs",
+                    project.path.display()
+                ));
+            }
+            let dir = project
+                .path
+                .parent()
+                .ok_or_else(|| format!("{} has no folder", project.path.display()))?;
+            repos.push(check_repo(dir, &self.roots)?);
+        }
+        self.policy.check_write_targets(&repos, &self.roots)
     }
 
     /// Where a save can land without an operand: the active document, every
@@ -326,6 +356,19 @@ fn dialog_refusal(messages: &[MessageLine]) -> Option<String> {
         .map(|line| line.message.clone())
 }
 
+/// What the task driver logs for a window action it cannot perform
+/// (`task_driver::dropped`). Pinned by the end-to-end test.
+const DROPPED_ACTION: &str = "dropped an iced action";
+const WINDOW_KIND: &str = "kind=\"window\"";
+
+/// Whether the command asked for a window that was dropped: its effect was
+/// only that window.
+fn needs_window(messages: &[MessageLine]) -> bool {
+    messages
+        .iter()
+        .any(|line| line.message.contains(DROPPED_ACTION) && line.message.contains(WINDOW_KIND))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +396,23 @@ mod tests {
         ]);
         assert_eq!(changed_between(&before, &after), ["a", "b", "d", "e"]);
         assert!(changed_between(&before, &before).is_empty());
+    }
+
+    #[test]
+    fn a_dropped_window_action_is_found_and_a_dropped_widget_operation_is_not() {
+        let line = |message: &str| MessageLine {
+            level: "WARN",
+            message: message.to_string(),
+        };
+        let widget = line(
+            "dropped an iced action a headless run does not perform kind=\"widget operation\"",
+        );
+        let window = line("dropped an iced action a headless run does not perform kind=\"window\"");
+        assert!(!needs_window(std::slice::from_ref(&widget)));
+        assert!(!needs_window(&[line(
+            "kind=\"window\" but nothing was dropped"
+        )]));
+        assert!(needs_window(&[widget, window]));
     }
 
     #[test]

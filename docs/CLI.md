@@ -69,26 +69,47 @@ is enforced before the app sees a command.
   Nothing is saved at exit. A run without it is a dry run: the result lines
   and the end-of-run log say what would change; no project file is written.
 - **Path confinement.** Every path argument is resolved first (symlinks
-  followed, `..` removed) and must then sit inside the project folder or one of
-  its mounted libraries, unless its folder is named with `--allow-path`. A
-  dangling link is refused. The resolved path is what the app receives, and
-  it is resolved and checked again right before the command is handed over.
-  The allowed folders are fixed when the run starts: the project's folder, and
-  a library the app mounted from the project's library list, only if that
-  folder holds `library.toml` itself and is neither the home folder, a folder
-  above it, nor one that holds the project. What the project file lists later
-  never adds one. A write target is never a symbolic link, and a command that
-  writes (`save`, `export`, `library-write`) is checked for the files it
-  writes without being told (the active document, documents with unsaved
-  changes, the project file) before it runs. Residual risk: a process of the
-  same user that swaps symlinks inside the project folder in the instant
-  between that last check and the app's own open or write is out of scope.
+  followed, `..` removed) and must then sit inside the project folder, unless
+  its folder is named with `--allow-path`. The folder is the one that holds
+  the project file, fixed when the run starts; it may not be the home folder
+  or one above it (`run ~/x.snxsch` is refused). What the project file lists
+  (libraries, sheets) never adds a folder. A dangling link is refused. The
+  resolved path is what the app receives, and it is resolved and compared
+  again right before the command is handed over. A write target is never a
+  symbolic link, and a command that writes (`save`, `export`,
+  `library-write`) is checked for the files it writes without being told (the
+  active document, documents with unsaved changes, the project file) before
+  it runs.
+- **What is not confined.** Only the paths a command names are checked and
+  size-limited. Files the project itself refers to are read by the app's own
+  loader without any check or size limit: a sheet entry with `../` or an
+  absolute path, hierarchical child sheets, library files. Reading them is
+  possible; writing to one that is outside the project folder or is a link is
+  refused (the implicit write-target check above).
+- **Residual race.** The checks run before the command and again just before
+  it is handed to the app, but the app then opens or writes the path itself,
+  and a save is asynchronous: the window is the whole time the save takes, and
+  a path that did not exist at the check can be created as a link before the
+  write. A process of the same user racing symlinks inside the project folder
+  is out of scope.
+- **Git.** A save on a project with git enabled makes the app commit. That
+  needs the `vcs` capability (`--allow vcs`; `--save` does not grant it), and
+  `<project>/.git` must be a real folder inside the project: a `gitdir:` file,
+  a link, a `commondir` or an `objects/info/alternates` file is refused, and a
+  missing one is refused too (the app would run `git init`). The `.git` folder
+  is a write target like any other.
 - **Capabilities.** Each catalog command needs exactly one group: `read`,
-  `edit`, `save`, `export`, `delete` or `library-write`. A run holds
-  `read,edit`; `--allow` adds groups. A refused command names the one it
-  needs. `edit` is any command the catalog marks `mutates_doc`; the writers
-  and exporters are pinned by a test. `delete` has no command yet: it exists
-  so the first file-removing command cannot run unnamed.
+  `edit`, `save`, `export`, `delete` or `library-write`; `vcs` is held by a
+  run and no command needs it on its own. A run holds `read,edit`; `--allow`
+  adds groups. A refused command names the one it needs. `edit` is any command
+  the catalog marks `mutates_doc`; the writers and exporters are pinned by a
+  test. `delete` has no command yet: it exists so the first file-removing
+  command cannot run unnamed.
+- **Honest results.** A command whose only effect was a window the headless
+  driver dropped (`report_manager_bom`, `annotate_schematic`) is `refused`
+  ("needs a window"), and so is a dialog that could not be answered. Closing a
+  document with unsaved changes closes its tab and parks the edits in memory,
+  as in the GUI; the end-of-run log lists the sheet as unsaved.
 - **No code execution, no network.** The run uses a throwaway config root,
   never the user's. Launching a browser, viewer or file manager is refused by
   the app's headless ports, and no command that reaches a library server is
@@ -103,6 +124,3 @@ is enforced before the app sees a command.
   text that is not UTF-8 is a refused line, never a panic.
 - **Audit.** Every command line, its status and its reason go to the Messages
   log and to standard error, tagged with the run id.
-
-The limits apply to what a command names; files a project refers to (sheets,
-libraries) are read by the app's own loader.

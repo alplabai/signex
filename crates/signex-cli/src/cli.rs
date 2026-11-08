@@ -24,7 +24,8 @@ OPTIONS (run):
     --keep-going            run the rest after a refused or failed command
     --save                  allow commands that write files (capability `save`)
     --allow <caps>          also allow capabilities: read, edit, save, export,
-                            delete, library-write (default: read,edit)
+                            delete, library-write, vcs (default: read,edit);
+                            a save on a git-enabled project needs vcs
     --allow-path <dir>      also allow paths inside <dir> (repeatable)
     --max-line-bytes <n>    longest command line (default 65536)
     --max-commands <n>      most commands per run (default 10000)

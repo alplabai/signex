@@ -270,15 +270,21 @@ fn open(path: &std::path::Path) -> Value {
 }
 
 #[test]
-fn a_project_that_lists_broad_libraries_does_not_widen_the_confinement() {
+fn a_projects_library_list_never_widens_the_roots() {
     let (_guard, root) = temp_root();
     let fx = fixture(&root);
     let (_other_guard, other) = temp_root();
     std::fs::copy(&fx.sheet, root.join("sibling.snxsch")).unwrap();
     std::fs::copy(&fx.sheet, other.join("outside.snxsch")).unwrap();
+    // A folder that looks like a library, next to the project.
+    let library = root.join("parts.snxlib");
+    std::fs::create_dir_all(&library).unwrap();
+    std::fs::write(library.join("library.toml"), "x").unwrap();
+    std::fs::copy(&fx.sheet, library.join("in-library.snxsch")).unwrap();
     let mut listed = vec![
         fx.dir.join(".."),
         std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR),
+        library.clone(),
     ];
     #[cfg(unix)]
     {
@@ -289,7 +295,10 @@ fn a_project_that_lists_broad_libraries_does_not_widen_the_confinement() {
     list_libraries(&fx, &refs);
     let project = fx.project.to_str().unwrap();
 
-    let mut attempts = vec![root.join("sibling.snxsch")];
+    let mut attempts = vec![
+        root.join("sibling.snxsch"),
+        library.join("in-library.snxsch"),
+    ];
     #[cfg(unix)]
     {
         attempts.push(fx.dir.join("lib-link").join("outside.snxsch"));
@@ -305,29 +314,6 @@ fn a_project_that_lists_broad_libraries_does_not_widen_the_confinement() {
             out.stdout
         );
     }
-}
-
-#[test]
-fn editing_the_project_library_list_during_the_run_does_not_widen_it() {
-    let (_guard, root) = temp_root();
-    let fx = fixture(&root);
-    std::fs::copy(&fx.sheet, root.join("sibling.snxsch")).unwrap();
-    let sibling = root.join("sibling.snxsch");
-    let mut live = Live::start(&["run", fx.project.to_str().unwrap(), "--keep-going"]);
-
-    let before = live.send(&open(&sibling));
-    assert_eq!(before["status"], "refused", "{before}");
-    list_libraries(&fx, &[fx.dir.join("..").as_path()]);
-    let after = live.send(&open(&sibling));
-    assert_eq!(after["status"], "refused", "{after}");
-    assert!(
-        after["reason"]
-            .as_str()
-            .unwrap()
-            .contains("outside the project")
-    );
-    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
-    live.finish();
 }
 
 /// Replace `path` by a link to a copy of it that lives in `elsewhere`.

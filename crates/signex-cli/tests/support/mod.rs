@@ -134,6 +134,15 @@ fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
     }
 }
 
+/// Rewrite the fixture's project file with git versioning enabled.
+pub fn enable_git(fx: &Fixture) {
+    let data = ProjectData {
+        enable_git: true,
+        ..project_data(&fx.dir, Vec::new())
+    };
+    write_project(&fx.project, &data).expect("rewrite project");
+}
+
 /// Rewrite the fixture's project file listing `paths` as shared libraries.
 pub fn list_libraries(fx: &Fixture, paths: &[&Path]) {
     let libraries = paths
@@ -210,8 +219,14 @@ pub struct Output {
 
 /// Run `signex-cli <args>` with `stdin` and parse every output line as JSON.
 pub fn run_cli(args: &[&str], stdin: impl AsRef<[u8]>) -> Output {
+    run_cli_env(args, stdin, &[])
+}
+
+/// [`run_cli`] with environment variables set for the child.
+pub fn run_cli_env(args: &[&str], stdin: impl AsRef<[u8]>, env: &[(&str, &Path)]) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_signex-cli"))
         .args(args)
+        .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

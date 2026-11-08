@@ -28,6 +28,8 @@ tempfile = "3"
 [dev-dependencies]
 # Seeds fixture projects on disk for the end-to-end tests.
 signex-engine.workspace = true
+# A real repository for the commit-on-save test.
+git2 = { workspace = true }
 
 [lints]
 workspace = true
