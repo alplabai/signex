@@ -362,7 +362,10 @@ impl Signex {
         }
         // A dirty engine parked without a tab holds unsaved edits: reattach
         // it rather than replace it with the on-disk sheet (#1135).
-        if self.path_is_owned_by_open_document(path) {
+        // Only an engine: a parked board is no sheet to attach.
+        if self.document_state.engines.contains_key(path)
+            && self.document_state.is_document_dirty(path)
+        {
             let title = path
                 .file_stem()
                 .map(|stem| stem.to_string_lossy().to_string())

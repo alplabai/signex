@@ -361,3 +361,18 @@ fn quit_save_all_writes_a_parked_board() {
     assert!(!is_dirty(&next, &f.doc));
     assert!(next.document_state.error_notice.is_none());
 }
+
+#[test]
+fn quit_discard_all_drops_a_parked_board_and_its_recovery_copy() {
+    let (f, mut next, on_disk) = restored_then_closed();
+    assert!(sidecar_of(&f).exists());
+    let _ = next.update(Message::Window(WindowMsg::CloseMainWindow));
+    assert!(next.ui_state.app_quit_confirm.is_some());
+    send(
+        &mut next,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::DiscardAll)),
+    );
+    assert!(!sidecar_of(&f).exists(), "the discard removes the copy");
+    assert!(!is_dirty(&next, &f.doc));
+    assert_eq!(std::fs::read(&f.doc).unwrap(), on_disk, "nothing written");
+}

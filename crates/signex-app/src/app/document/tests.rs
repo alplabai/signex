@@ -284,3 +284,43 @@ fn a_tab_without_a_document_owner_keeps_the_path_set_dot() {
     app.document_state.projects.clear();
     assert!(dot(&app, &project), "project tab after its project closed");
 }
+
+/// #2149 — a board parked without a tab is listed as `kept` by the Close
+/// Project scan (it asks, but does not own the board) and prompts at quit.
+#[test]
+fn a_parked_board_is_kept_by_the_close_scan_and_prompts_at_quit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, t) = fixture(dir.path(), Kind::Pcb, true);
+    app.document_state.tabs.clear();
+    app.document_state.park_pcb_board(
+        t.path.clone(),
+        signex_types::pcb::PcbBoard {
+            unknown: Default::default(),
+            uuid: uuid::Uuid::nil(),
+            version: 1,
+            generator: "signex-test".into(),
+            thickness: 1.6,
+            outline: vec![],
+            layers: vec![],
+            setup: None,
+            nets: vec![],
+            footprints: vec![],
+            segments: vec![],
+            vias: vec![],
+            zones: vec![],
+            graphics: vec![],
+            texts: vec![],
+        },
+    );
+    let refs = app.document_state.sheet_ref_inputs().resolve(|_| true);
+    let scan = app.document_state.close_scan(
+        &refs,
+        0,
+        &app.library.dirty_editors(),
+        &[],
+        &HashMap::new(),
+    );
+    assert_eq!(scan.kept, vec![t.path.clone()]);
+    assert!(scan.mine.is_empty());
+    assert!(quit_prompts(&mut app));
+}
