@@ -197,9 +197,9 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         panel_item(
             ctx,
-            "Signal",
-            PanelKind::Signal,
-            MenuMessage::OpenSignalPanel,
+            "Signex AI",
+            PanelKind::SignexAi,
+            MenuMessage::OpenSignexAiPanel,
         ),
     ]
 }

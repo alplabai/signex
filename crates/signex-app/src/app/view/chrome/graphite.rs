@@ -1,5 +1,5 @@
 //! Graphite title and menu bar: 38 px strip with the mark and menus, a
-//! centred search field, the Signal AI button, a light/dark toggle and the
+//! centred search field, the Signex AI button, a light/dark toggle and the
 //! window controls. Legacy themes keep `view_main_window_chrome`.
 
 use std::sync::LazyLock;
@@ -15,8 +15,8 @@ use crate::app::{CommandPaletteMsg, Message, Signex, UiMsg, WindowMsg};
 use crate::menu_bar::MenuMessage;
 use crate::styles::{self, ChromeMetrics, Radii, ti, tokens::resolve};
 
-/// Width of the Signal AI button, in px.
-const SIGNAL_W: f32 = 92.0;
+/// Width of the Signex AI button, in px.
+const SIGNAL_W: f32 = 96.0;
 /// Side of the square theme toggle.
 const THEME_W: f32 = 28.0;
 /// Gap between the two buttons and padding after them.
@@ -27,7 +27,7 @@ const SEARCH_MAX_W: f32 = 380.0;
 /// Height of the "Ctrl K" key cap.
 const KEY_CAP_H: f32 = 18.0;
 
-/// Room the Signal AI and theme buttons take left of the window controls.
+/// Room the Signex AI and theme buttons take left of the window controls.
 pub(super) const RIGHT_CLUSTER_W: f32 = SIGNAL_W + CLUSTER_GAP + THEME_W + CLUSTER_PAD;
 
 static MOON: LazyLock<svg::Handle> = LazyLock::new(|| {
@@ -211,7 +211,7 @@ impl Signex {
     }
 }
 
-/// "Signal AI": copper dot and label; opens the Signal panel like View ▸ Signal.
+/// "Signex AI": copper dot and label; opens the Signex AI panel like View ▸ Signex AI.
 fn signal_button(
     tokens: &signex_types::theme::ThemeTokens,
     ink: Color,
@@ -231,14 +231,14 @@ fn signal_button(
             ..container::Style::default()
         });
     button(
-        row![dot, text("Signal AI").size(TS.dense)]
+        row![dot, text("Signex AI").size(TS.dense)]
             .spacing(SP.l)
             .align_y(Alignment::Center),
     )
     .width(SIGNAL_W)
     .height(ChromeMetrics::DEFAULT.field)
     .padding([0.0, 10.0])
-    .on_press(Message::Menu(MenuMessage::OpenSignalPanel))
+    .on_press(Message::Menu(MenuMessage::OpenSignexAiPanel))
     .style(move |_: &iced::Theme, status| button::Style {
         background: Some(Background::Color(
             if matches!(status, button::Status::Hovered | button::Status::Pressed) {

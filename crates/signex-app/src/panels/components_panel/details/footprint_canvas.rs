@@ -7,7 +7,7 @@
 //! panel around it).
 
 use iced::widget::canvas::{self, Action, Cache, Geometry};
-use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
+use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, mouse};
 
 use crate::canvas::Camera;
 use crate::library::editor::footprint::canvas::{
@@ -46,6 +46,12 @@ impl<'a> FootprintPreview<'a> {
         self.graphite = graphite_look_for(tokens).map(|l| (l.bg, l.palette().for_preview()));
         self
     }
+
+    /// The Graphite ground colour, `None` on a legacy theme.
+    #[cfg(test)]
+    pub(crate) fn ground(&self) -> Option<Color> {
+        self.graphite.map(|(bg, _)| bg)
+    }
 }
 
 /// Zoom `camera` about `anchor` for one pinch event, with the shared pinch
@@ -75,6 +81,9 @@ pub struct PreviewState {
     /// Ctrl state from the last modifiers event; the wheel zooms with it.
     ctrl_held: bool,
     cache: Cache,
+    /// Ground colour the cached drawing was built with; another colour
+    /// (a theme switch) drops the cache.
+    shown_bg: std::cell::Cell<Option<Color>>,
 }
 
 impl PreviewState {
@@ -214,10 +223,14 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()))
         };
         let snap = SnapOptions::default();
+        let bg = self.graphite.map_or(BACKDROP_BG, |(bg, _)| bg);
+        if state.shown_bg.replace(Some(bg)) != Some(bg) {
+            state.cache.clear();
+        }
         let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
             let area = Rectangle::new(Point::ORIGIN, bounds.size());
             let look = BackdropLook {
-                bg: self.graphite.map_or(BACKDROP_BG, |(bg, _)| bg),
+                bg,
                 grid: BACKDROP_GRID,
                 sketch: false,
                 snap: &snap,

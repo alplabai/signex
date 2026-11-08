@@ -1,4 +1,4 @@
-//! Signal panel layout on Graphite themes: Assistant / Generator switch, an
+//! Signex AI panel layout on Graphite themes: Assistant / Generator switch, an
 //! empty-state card and a disabled ask field. No sample chat or results.
 
 use iced::widget::{button, column, container, row, text, text_input, tooltip};
@@ -53,7 +53,7 @@ fn empty_state<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let (title, body) = match ctx.signal_mode {
         SignalMode::Assistant => (
-            "Signal is not available yet",
+            "Signex AI is not available yet",
             "Ask about this sheet and review proposed changes before anything is applied.",
         ),
         SignalMode::Generator => (
@@ -118,7 +118,7 @@ fn ask_footer<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
         .boxed()
 }
 
-/// The Signal panel on a Graphite theme.
+/// The Signex AI panel on a Graphite theme.
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     column![mode_switch(ctx), empty_state(ctx), ask_footer(ctx)]
         .width(Length::Fill)

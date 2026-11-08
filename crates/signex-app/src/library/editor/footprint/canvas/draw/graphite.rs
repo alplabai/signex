@@ -1,5 +1,5 @@
-//! Graphite look of the footprint canvas: paper (light) or charcoal (dark)
-//! ground, a dot grid like the schematic's, and the canvas layer palette.
+//! Graphite look of the footprint canvas: the dark board ground (the same
+//! in Graphite Light and Dark), a dot grid like the schematic's, and the canvas layer palette.
 //! The look travels as the canvas background colour, so the shared
 //! backdrop and layer renderers need no extra field and every other theme
 //! keeps the black Altium-style board.
@@ -12,56 +12,43 @@ use super::super::super::layers::LayerPalette;
 /// Spacing the dot grid aims for on screen, in px.
 const DOT_STEP_PX: f32 = 16.0;
 
-/// Colours of one Graphite canvas.
+/// Colours of the Graphite board canvas.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct GraphiteLook {
     pub bg: Color,
     pub dot: Color,
     pub origin: Color,
-    pub dark: bool,
 }
 
 const fn rgb(r: u8, g: u8, b: u8) -> Color {
     Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
 }
 
-const LIGHT: GraphiteLook = GraphiteLook {
-    bg: rgb(0xFD, 0xFC, 0xFA),
-    dot: rgb(0xE2, 0xDF, 0xD8),
-    origin: rgb(0xB5, 0x47, 0x8A),
-    dark: false,
-};
-
-const DARK: GraphiteLook = GraphiteLook {
-    bg: rgb(0x14, 0x16, 0x1A),
-    dot: rgb(0x2A, 0x2D, 0x33),
-    origin: rgb(0xD1, 0x6B, 0xA5),
-    dark: true,
-};
-
-/// The Graphite canvas look for `tokens`; `None` on every other theme.
-pub(crate) fn look_for(tokens: &ThemeTokens) -> Option<GraphiteLook> {
-    if !crate::styles::is_graphite(tokens) {
-        return None;
+/// The board look every Graphite theme paints a footprint with: the dark
+/// board palette ([`crate::styles::board_canvas_colors`]), light or dark app.
+pub(crate) fn board_look() -> GraphiteLook {
+    let board = crate::styles::board_canvas_colors();
+    GraphiteLook {
+        bg: crate::render_config::to_iced(&board.background),
+        dot: crate::render_config::to_iced(&board.grid),
+        origin: rgb(0xD1, 0x6B, 0xA5),
     }
-    let paper = crate::styles::ti(tokens.paper);
-    let luma = 0.299 * paper.r + 0.587 * paper.g + 0.114 * paper.b;
-    Some(if luma > 0.5 { LIGHT } else { DARK })
+}
+
+/// The board look for `tokens`; `None` on a theme that is not Graphite.
+pub(crate) fn look_for(tokens: &ThemeTokens) -> Option<GraphiteLook> {
+    crate::styles::is_graphite(tokens).then(board_look)
 }
 
 /// The look whose ground is exactly `bg`, if any.
 pub(crate) fn look_from_bg(bg: Color) -> Option<GraphiteLook> {
-    [LIGHT, DARK].into_iter().find(|l| l.bg == bg)
+    Some(board_look()).filter(|l| l.bg == bg)
 }
 
 impl GraphiteLook {
-    /// Layer colours that read on this ground.
+    /// Layer colours that read on the dark board ground.
     pub(crate) fn palette(self) -> LayerPalette {
-        if self.dark {
-            LayerPalette::CanvasDark
-        } else {
-            LayerPalette::CanvasLight
-        }
+        LayerPalette::CanvasDark
     }
 }
 
@@ -84,8 +71,7 @@ mod tests {
 
     #[test]
     fn look_round_trips_through_the_background() {
-        assert_eq!(look_from_bg(LIGHT.bg), Some(LIGHT));
-        assert_eq!(look_from_bg(DARK.bg), Some(DARK));
+        assert_eq!(look_from_bg(board_look().bg), Some(board_look()));
         assert_eq!(look_from_bg(Color::BLACK), None);
     }
 

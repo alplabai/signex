@@ -1,6 +1,6 @@
-//! View-only state of the Signal panel.
+//! View-only state of the Signex AI panel.
 
-/// Which Signal surface the segmented control shows. It changes the copy of
+/// Which Signex AI surface the segmented control shows. It changes the copy of
 /// the empty state only; no AI backend exists yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SignalMode {
@@ -23,7 +23,7 @@ impl SignalMode {
     }
 }
 
-/// Events the Signal panel emits.
+/// Events the Signex AI panel emits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignalMsg {
     ModeSelected(SignalMode),

@@ -105,8 +105,7 @@ impl Default for PcbCanvas {
 
 impl PcbCanvas {
     pub fn new() -> Self {
-        let colors =
-            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
+        let colors = crate::styles::board_canvas_colors();
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
