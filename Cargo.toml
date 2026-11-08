@@ -108,7 +108,6 @@ signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-net = { path = "crates/signex-net" }
-pcb-geom = { path = "crates/pcb-geom" }
 signex-history = { path = "crates/signex-history" }
 signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
