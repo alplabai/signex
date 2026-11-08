@@ -5,7 +5,6 @@
 use super::super::*;
 use crate::library::LibraryMessage;
 use crate::panels::{FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView};
-use signex_library::LibraryAdapter as _;
 use signex_library::primitive::PrimitiveRef;
 use std::sync::Arc;
 
