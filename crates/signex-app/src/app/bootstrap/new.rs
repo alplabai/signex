@@ -491,7 +491,6 @@ impl Signex {
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
                 project_tabs: std::collections::HashMap::new(),
-                net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 documents_epoch: 0,

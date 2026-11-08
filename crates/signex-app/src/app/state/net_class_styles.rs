@@ -260,6 +260,14 @@ impl NetClassStyleCache {
             .map(String::as_str)
     }
 
+    /// `true` when the resolved netlist of `project` names a net `name`.
+    #[must_use]
+    pub fn knows_net(&self, project: ProjectId, name: &str) -> bool {
+        self.projects
+            .get(&project)
+            .is_some_and(|resolved| resolved.nets.values().any(|net| net == name))
+    }
+
     /// [`Self::net_of`] in the sheet placement the canvas shows: the net of
     /// that placement, so a picker names the net net navigation names. With no
     /// known placement, the flat answer.

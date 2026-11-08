@@ -161,6 +161,14 @@ impl<S> History<S> {
         self.push_undo(before)
     }
 
+    /// A step that changes nothing in the state (a marker): one new undo
+    /// step with the redo branch kept, so an edit undone before it is still
+    /// redone after it. Returns the step pushed off a full stack.
+    pub fn record_inert(&mut self, step: S) -> Option<S> {
+        self.point.inserted_below(self.undo.len());
+        self.push_undo(step)
+    }
+
     /// First half of an Undo or Redo: take the state to show. The caller
     /// captures the current state, then hands it to [`Self::finish_step`].
     pub fn begin_step(&mut self, undo: bool) -> Option<S> {
@@ -194,6 +202,24 @@ impl<S> History<S> {
     /// Is the state away from the saved position (or is that unknown)?
     pub fn is_dirty(&self) -> bool {
         !self.point.is_at(self.undo.len())
+    }
+
+    /// [`Self::is_dirty`], where the steps between the state and the saved
+    /// position that `inert` holds for do not count (a marker that changes
+    /// nothing in the state).
+    pub fn is_dirty_past(&self, inert: impl Fn(&S) -> bool) -> bool {
+        let Some(to_saved) = self.point.steps_to(self.undo.len()) else {
+            return true;
+        };
+        let count = to_saved.unsigned_abs() as usize;
+        let (stack, from) = if to_saved <= 0 {
+            // The file is behind: the newest undo steps lie between.
+            (&self.undo, self.undo.len().checked_sub(count))
+        } else {
+            // The file is ahead: the next redo steps lie between.
+            (&self.redo, self.redo.len().checked_sub(count))
+        };
+        from.is_none_or(|from| !stack[from..].iter().all(inert))
     }
 
     /// The current state is what a save is writing.
@@ -246,6 +272,90 @@ mod tests {
 
     fn history() -> History<u32> {
         History::at_start(CAP)
+    }
+
+    /// Odd steps are inert (markers); even ones change the state.
+    fn inert(step: &u32) -> bool {
+        step % 2 == 1
+    }
+
+    #[test]
+    fn inert_steps_between_the_state_and_the_save_do_not_dirty_it() {
+        let mut h = history();
+        h.record(1);
+        assert!(
+            h.is_dirty() && !h.is_dirty_past(inert),
+            "behind by one marker"
+        );
+        h.record(2);
+        assert!(h.is_dirty_past(inert), "a real step lies between");
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert!(!h.is_dirty_past(inert), "only the marker is left between");
+    }
+
+    #[test]
+    fn an_inert_gap_ahead_and_an_unknown_point() {
+        let mut h = history();
+        h.record(1);
+        h.mark_saved();
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert!(!h.is_dirty_past(inert), "the file is one marker ahead");
+        h.forget();
+        assert!(h.is_dirty_past(inert), "unknown is always dirty");
+    }
+
+    #[test]
+    fn record_inert_keeps_the_redo_branch_and_shifts_a_point_on_it() {
+        let mut h = history();
+        h.record(2);
+        h.mark_saved(); // saved after the real step
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert_eq!(h.redo_len(), 1);
+
+        h.record_inert(1);
+
+        assert_eq!((h.undo_len(), h.redo_len()), (1, 1), "redo kept");
+        assert!(h.is_dirty_past(inert), "the real step is still ahead");
+        let s = h.begin_step(false).unwrap();
+        h.finish_step(s, false);
+        assert!(!h.is_dirty(), "redo lands exactly on the saved position");
+    }
+
+    #[test]
+    fn record_inert_past_the_cap_evicts_the_oldest_and_keeps_counting() {
+        let mut h = history();
+        for step in [2, 4, 6] {
+            h.record(step);
+        }
+        assert_eq!(h.record_inert(1), Some(2));
+        assert_eq!(h.position(), 4);
+        assert_eq!(h.undo_len(), CAP);
+    }
+
+    /// A save at the current state stays below an inert step recorded now: a
+    /// later real step, after the inert one is undone, can still be undone
+    /// back to the saved position.
+    #[test]
+    fn record_inert_leaves_a_save_at_the_current_state_below_the_new_step() {
+        let mut h = history();
+        h.record(2);
+        h.mark_saved();
+        h.record_inert(1);
+        assert!(
+            !h.is_dirty_past(inert),
+            "only the inert step above the save"
+        );
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+
+        h.record(4); // cuts the inert step; the saved position is the state under it
+        assert!(h.is_dirty_past(inert));
+        let s = h.begin_step(true).unwrap();
+        h.finish_step(s, true);
+        assert!(!h.is_dirty(), "undoing the real step is back at the save");
     }
 
     #[test]

@@ -29,6 +29,7 @@ pub(crate) type OperandHandler = fn(&mut Signex, &CommandArgs) -> Ran;
 const HANDLERS: &[(&str, OperandHandler)] = &[
     ("color_net", color_net),
     ("clear_all_net_colors", clear_all_net_colors),
+    ("assign_net_class", assign_net_class),
     ("place_net_label", place::net_label),
     ("place_local_net_label", place::net_label),
     ("place_global_label", place::global_label),
@@ -54,6 +55,25 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
         .iter()
         .find(|(id, _)| *id == command.as_str())
         .map(|(_, handler)| *handler)
+}
+
+/// Why `command` does nothing without operands on a surface that gives it
+/// none (palette, key binding, menu): its GUI surface is another widget, and
+/// a command never opens, closes or focuses one as a side effect.
+pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static str> {
+    match command.as_str() {
+        "assign_net_class" => Some(
+            "`assign_net_class` needs the operand `net_name` — \
+             use the Net Class row in Properties",
+        ),
+        _ => None,
+    }
+}
+
+/// Whether a headless caller must name the document (`path`) the command
+/// acts on: it never falls back to the active one.
+pub(crate) fn headless_needs_path(command: &AppCommandId) -> bool {
+    command.as_str() == "assign_net_class"
 }
 
 /// The ids that run their operands.
@@ -136,5 +156,25 @@ fn clear_all_net_colors(app: &mut Signex, args: &CommandArgs) -> Ran {
         refused("the sheet is read-only: its net colours were kept")
     } else {
         refused("there are no net colours to clear")
+    }
+}
+
+/// `assign_net_class net_name=N [class=C] [path=..]`: put the net in the
+/// class (or take it out of its listed one), as the label picker does.
+fn assign_net_class(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let Some(OperandValue::Text(net)) = args.operand("net_name") else {
+        return refused("`assign_net_class` needs the operand `net_name`");
+    };
+    let sheet = match args.operand("path") {
+        Some(OperandValue::Path(path)) => Some(std::path::PathBuf::from(path)),
+        _ => None,
+    };
+    let class = match args.operand("class") {
+        Some(OperandValue::Text(class)) => Some(class.as_str()),
+        _ => None,
+    };
+    match app.assign_net_to_class(sheet.as_deref(), net, class) {
+        Ok(()) => ran(),
+        Err(reason) => refused(reason),
     }
 }

@@ -149,6 +149,20 @@ impl Signex {
                 },
                 Task::none(),
             )
+        } else if crate::app::command::headless_needs_path(command)
+            && args.operand("path").is_none()
+        {
+            // A headless caller names its document; the active one is a GUI
+            // notion and never the fallback.
+            (
+                CommandOutcome::Disabled {
+                    reason: format!(
+                        "`{}` needs the operand `path` when run headless",
+                        command.as_str()
+                    ),
+                },
+                Task::none(),
+            )
         } else if args.has_operands() {
             self.run_operands(command, &args)
         } else {
