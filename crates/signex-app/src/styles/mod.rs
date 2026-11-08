@@ -546,3 +546,11 @@ pub fn menu_item(
         }
     }
 }
+
+/// Colours of every board view (PCB canvas, footprint editor, footprint
+/// previews): the Graphite Dark canvas in both Graphite themes. The one
+/// derivation of the board palette; only the chrome around a board view
+/// follows the light/dark choice.
+pub fn board_canvas_colors() -> signex_types::theme::CanvasColors {
+    signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark)
+}

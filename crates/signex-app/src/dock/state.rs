@@ -497,7 +497,10 @@ mod tests {
         dock.update(DockMessage::ClosePanel(PanelPosition::Left, 0));
 
         assert_eq!(dock.active_tab(PanelPosition::Left), 0);
-        assert_eq!(dock.panel_kinds(PanelPosition::Left)[0], PanelKind::SignexAi);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left)[0],
+            PanelKind::SignexAi
+        );
     }
 
     #[test]
@@ -508,7 +511,10 @@ mod tests {
         dock.update(DockMessage::UndockPanel(PanelPosition::Left, 0));
 
         assert_eq!(dock.active_tab(PanelPosition::Left), 0);
-        assert_eq!(dock.panel_kinds(PanelPosition::Left)[0], PanelKind::SignexAi);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left)[0],
+            PanelKind::SignexAi
+        );
     }
 
     #[test]
@@ -576,7 +582,10 @@ mod tests {
 
         dock.show_panel_at(PanelPosition::Bottom, PanelKind::SignexAi);
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Bottom), [PanelKind::SignexAi]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::SignexAi]
+        );
         assert!(dock.panel_kinds(PanelPosition::Left).is_empty());
     }
 
@@ -588,7 +597,10 @@ mod tests {
         dock.show_panel(PanelKind::SignexAi);
         dock.add_panel(PanelPosition::Bottom, PanelKind::SignexAi);
 
-        assert_eq!(dock.locate(PanelKind::SignexAi), Some(PanelSite::Floating(0)));
+        assert_eq!(
+            dock.locate(PanelKind::SignexAi),
+            Some(PanelSite::Floating(0))
+        );
         assert!(dock.panel_kinds(PanelPosition::Left).is_empty());
         assert!(dock.panel_kinds(PanelPosition::Bottom).is_empty());
         assert_eq!(dock.floating.len(), 1);
@@ -640,7 +652,10 @@ mod tests {
 
         dock.update(DockMessage::DockFloatingTo(0, PanelPosition::Bottom));
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Bottom), [PanelKind::SignexAi]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::SignexAi]
+        );
         assert_eq!(dock.active_tab(PanelPosition::Bottom), 0);
         assert!(dock.floating.is_empty());
     }

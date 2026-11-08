@@ -110,39 +110,29 @@ pub enum LayerPalette {
     #[default]
     Legacy,
     Graphite,
-    /// Graphite colours tuned for the paper canvas (dark ink on light).
-    CanvasLight,
     /// Graphite colours tuned for the charcoal canvas.
     CanvasDark,
-    /// Read-only previews on the paper canvas: opaque pad gold with a darker
-    /// edge, fab ink apart from the copper and a neutral courtyard.
-    PreviewLight,
-    /// [`Self::PreviewLight`] on the charcoal canvas.
+    /// Read-only previews on the charcoal canvas: opaque pad gold with a
+    /// darker edge, fab ink apart from the copper and a neutral courtyard.
     PreviewDark,
 }
 
 impl LayerPalette {
     /// Outline colour of a selected pad or silk graphic.
     pub fn selection_ink(self) -> Color {
-        match self {
-            LayerPalette::CanvasLight | LayerPalette::PreviewLight => {
-                Color::from_rgb8(0x15, 0x17, 0x1A)
-            }
-            _ => Color::WHITE,
-        }
+        Color::WHITE
     }
 
     /// The preview variant of a canvas palette; any other palette as is.
     pub fn for_preview(self) -> Self {
         match self {
-            LayerPalette::CanvasLight => LayerPalette::PreviewLight,
             LayerPalette::CanvasDark => LayerPalette::PreviewDark,
             other => other,
         }
     }
 
     fn is_preview(self) -> bool {
-        matches!(self, LayerPalette::PreviewLight | LayerPalette::PreviewDark)
+        self == LayerPalette::PreviewDark
     }
 
     /// Whether the courtyard is drawn dashed (the Graphite canvases).
@@ -218,23 +208,10 @@ impl FpLayer {
     pub fn color_in(self, palette: LayerPalette) -> Color {
         match palette {
             LayerPalette::Legacy => self.color(),
-            LayerPalette::PreviewLight => match self {
-                FpLayer::FFab => Color::from_rgb8(0x5B, 0x5E, 0x66),
-                FpLayer::EdgeCuts => Color::from_rgb8(0xA3, 0xA5, 0xAB),
-                _ => self.color_in(LayerPalette::CanvasLight),
-            },
             LayerPalette::PreviewDark => match self {
                 FpLayer::FFab => Color::from_rgb8(0xA3, 0xA5, 0xAB),
                 FpLayer::EdgeCuts => Color::from_rgb8(0x5B, 0x5E, 0x66),
                 _ => self.color_in(LayerPalette::CanvasDark),
-            },
-            LayerPalette::CanvasLight => match self {
-                FpLayer::FSilks => Color::from_rgb8(0x2B, 0x2D, 0x33),
-                FpLayer::BSilks => Color::from_rgb8(0x7A, 0x75, 0x68),
-                FpLayer::FFab => Color::from_rgb8(0x2F, 0x7F, 0x90),
-                FpLayer::BFab => Color::from_rgb8(0x3D, 0x7F, 0x8D),
-                FpLayer::EdgeCuts => Color::from_rgb8(0xB5, 0x47, 0x8A),
-                _ => self.color_in(LayerPalette::Graphite),
             },
             LayerPalette::CanvasDark => match self {
                 FpLayer::FFab => Color::from_rgb8(0x4F, 0xA6, 0xB8),

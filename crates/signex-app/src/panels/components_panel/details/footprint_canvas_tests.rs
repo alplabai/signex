@@ -573,7 +573,7 @@ fn graphite_previews_paint_crisp_gold_pads_and_a_neutral_courtyard() {
     use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
     let gold = iced::Color::from_rgb8(0xD8, 0xB4, 0x6A);
     let spread = |c: iced::Color| c.r.max(c.g).max(c.b) - c.r.min(c.g).min(c.b);
-    for canvas in [LayerPalette::CanvasLight, LayerPalette::CanvasDark] {
+    for canvas in [LayerPalette::CanvasDark] {
         let preview = canvas.for_preview();
         assert_ne!(preview, canvas, "{canvas:?} has a preview variant");
         let copper = FpLayer::FCu.color_in(preview);
@@ -617,9 +617,10 @@ fn theme_tokens_pick_the_preview_palette_only_on_graphite() {
             .graphite
             .map(|(_, p)| p)
     };
+    // The board is dark in Graphite Light too.
     assert_eq!(
         palette(ThemeId::GraphiteLight),
-        Some(LayerPalette::PreviewLight)
+        Some(LayerPalette::PreviewDark)
     );
     assert_eq!(
         palette(ThemeId::GraphiteDark),
