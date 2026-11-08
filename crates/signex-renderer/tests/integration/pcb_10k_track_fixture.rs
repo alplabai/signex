@@ -154,6 +154,7 @@ pub fn board_10k_tracks() -> PcbBoard {
                 id: id as u8,
                 name: (*name).to_string(),
                 layer_type: "signal".to_string(),
+                display_name: String::new(),
             })
             .collect(),
         setup: None,
@@ -221,6 +222,7 @@ fn two_pad_part(
                 name: net_name(net),
             }),
             roundrect_ratio: 0.0,
+            net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         })

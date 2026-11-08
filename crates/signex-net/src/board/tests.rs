@@ -93,6 +93,7 @@ fn pad(number: &str) -> Pad {
         layers: Vec::new(),
         net: None,
         roundrect_ratio: 0.0,
+        net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -720,3 +721,5 @@ fn a_renamed_net_renames_kept_pads_and_zones_and_undoes() {
     assert_eq!(pad_net(&pcb, "U1", "SH"), Some(&old));
     assert_eq!(pcb.zones[0].net_name, "OLD");
 }
+
+mod lock_tests;

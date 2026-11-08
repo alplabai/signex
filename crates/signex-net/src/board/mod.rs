@@ -1,18 +1,22 @@
 //! Schematic netlist → board nets: fills `PcbBoard.nets` and each pad's
 //! `PadNet` from the authoritative [`Netlist`] (ADR-0002 D7.3).
 //!
-//! The schematic is the source of truth for pads it links to. Pads it cannot
-//! speak for (no link key, or a footprint it does not have) and ambiguous
-//! pads are left as they are and reported. Existing board net numbers are
+//! The schematic is the source of truth for pads it links to, except a pad
+//! whose net is locked: that pad is never changed and is reported. Pads the
+//! schematic cannot speak for (no link key, a footprint it does not have, a
+//! key no symbol pin matches) keep their net and become locked, so the lock
+//! persists; ambiguous pads are left as they are and reported. Existing board net numbers are
 //! kept, so tracks, vias and zones keep their net. Assignment is pure; it
 //! returns a [`BoardNetEdit`] whose `apply` hands back the inverse edit.
 
+mod assign;
 mod edit;
 mod key;
 mod numbering;
 #[cfg(test)]
 mod tests;
 
+pub use assign::assign_pad_net;
 pub use edit::{BoardNetEdit, PadNetChange, ZoneNetName};
 pub use key::{PadLinkKey, ReferencePad, ReferencePadKey};
 
@@ -53,6 +57,9 @@ pub enum PadNetIssue {
     /// No pad holds this board net any more, but tracks, vias or zones still
     /// use it; they stay on a net with no pads.
     NetKeptForCopper { number: u32 },
+    /// The pad's net is locked: the sync leaves it alone, even when a
+    /// schematic pin matches it. Informational.
+    PadNetLocked { footprint: Uuid, pad: Uuid },
 }
 
 /// The edit that brings the board in line with the netlist, and what could
@@ -83,20 +90,32 @@ pub fn assign_pad_nets<K: PadLinkKey>(
     let (order, keyed) = key_terminals(netlist, key, &mut issues);
 
     let mut pads_of: HashMap<K::Key, Vec<PadRef>> = HashMap::new();
+    let mut locked_keys: HashSet<K::Key> = HashSet::new();
+    let mut kept: HashSet<PadRef> = HashSet::new();
     for fp in &board.footprints {
         for pad in &fp.pads {
-            if let Some(k) = key.pad_key(fp, pad) {
+            let pad_key = key.pad_key(fp, pad);
+            if pad.net_locked {
+                kept.insert((fp.uuid, pad.uuid));
+                issues.push(PadNetIssue::PadNetLocked {
+                    footprint: fp.uuid,
+                    pad: pad.uuid,
+                });
+                locked_keys.extend(pad_key);
+            } else if let Some(k) = pad_key {
                 pads_of.entry(k).or_default().push((fp.uuid, pad.uuid));
             }
         }
     }
 
     let mut assigned: HashMap<PadRef, NetId> = HashMap::new();
-    let mut kept: HashSet<PadRef> = HashSet::new();
     for k in &order {
         let group = &keyed[k];
         let (net, terminal) = group.first;
         let Some(pads) = pads_of.get(k) else {
+            if locked_keys.contains(k) {
+                continue;
+            }
             issues.push(PadNetIssue::TerminalWithoutPad {
                 net,
                 terminal: terminal.clone(),
@@ -130,7 +149,7 @@ pub fn assign_pad_nets<K: PadLinkKey>(
             assigned.insert(pad, net);
         }
     }
-    leave_unlinked_pads(board, key, &keyed, &mut kept, &mut issues);
+    let unspoken = leave_unlinked_pads(board, key, &keyed, &mut kept, &mut issues);
 
     let numbered = number_nets(netlist, board, &assigned, &kept);
     let mut orphaned = numbered.copper_only.clone();
@@ -154,7 +173,7 @@ pub fn assign_pad_nets<K: PadLinkKey>(
     BoardNetAssignment {
         edit: BoardNetEdit {
             nets: numbered.table,
-            pads: pad_changes(board, &target, &kept, &numbered.renamed),
+            pads: pad_changes(board, &target, &kept, &unspoken, &numbered.renamed),
             zones: zone_renames(board, &numbered.renamed),
         },
         issues,
@@ -164,13 +183,16 @@ pub fn assign_pad_nets<K: PadLinkKey>(
 /// Pads the schematic cannot speak for stay as they are, with an issue:
 /// pads with no link key, keyed pads on a linked footprint that match no
 /// terminal, and every pad of a footprint none of whose keys is a terminal.
+/// Returns those pads: the edit locks the ones that hold a net. A pad whose
+/// net is already locked is reported once, by the caller.
 fn leave_unlinked_pads<K: PadLinkKey>(
     board: &PcbBoard,
     key: &K,
     keyed: &HashMap<K::Key, KeyedTerminals<'_>>,
     kept: &mut HashSet<PadRef>,
     issues: &mut Vec<PadNetIssue>,
-) {
+) -> HashSet<PadRef> {
+    let mut unspoken = HashSet::new();
     for fp in &board.footprints {
         let keys: Vec<Option<K::Key>> = fp.pads.iter().map(|p| key.pad_key(fp, p)).collect();
         let linked = keys.iter().flatten().any(|k| keyed.contains_key(k));
@@ -179,6 +201,9 @@ fn leave_unlinked_pads<K: PadLinkKey>(
             issues.push(PadNetIssue::FootprintNotInSchematic { footprint: fp.uuid });
         }
         for (pad, k) in fp.pads.iter().zip(&keys) {
+            if pad.net_locked {
+                continue;
+            }
             if k.is_none() {
                 issues.push(PadNetIssue::PadWithoutTerminal {
                     footprint: fp.uuid,
@@ -194,9 +219,11 @@ fn leave_unlinked_pads<K: PadLinkKey>(
             }
             if !linked || k.is_none() || off_symbol {
                 kept.insert((fp.uuid, pad.uuid));
+                unspoken.insert((fp.uuid, pad.uuid));
             }
         }
     }
+    unspoken
 }
 
 /// Group terminals by link key, keeping the first-seen key order so the
@@ -254,39 +281,47 @@ fn zone_renames(board: &PcbBoard, renamed: &HashMap<u32, String>) -> Vec<ZoneNet
         .collect()
 }
 
-/// Every pad outside `kept` whose net differs from `target` (absent = no
-/// net), in board order. A kept pad on a renamed net only takes the new name.
+/// Every pad whose net or lock changes, in board order. A kept pad only
+/// takes a renamed net's new name; a pad the schematic cannot speak for
+/// (`unspoken`) that holds a net also becomes locked. A locked pad keeps its
+/// lock and net, bar the rename that keeps it in step with the net table.
 fn pad_changes(
     board: &PcbBoard,
     target: &HashMap<PadRef, PadNet>,
     kept: &HashSet<PadRef>,
+    unspoken: &HashSet<PadRef>,
     renamed: &HashMap<u32, String>,
 ) -> Vec<PadNetChange> {
     let mut changes = Vec::new();
     for fp in &board.footprints {
         for pad in &fp.pads {
-            if kept.contains(&(fp.uuid, pad.uuid)) {
-                if let Some(net) = &pad.net
-                    && let Some(name) = renamed.get(&net.number)
-                    && net.name != *name
-                {
+            let at = (fp.uuid, pad.uuid);
+            if kept.contains(&at) {
+                let net = pad.net.as_ref().map(|net| match renamed.get(&net.number) {
+                    Some(name) if net.name != *name => PadNet {
+                        number: net.number,
+                        name: name.clone(),
+                    },
+                    _ => net.clone(),
+                });
+                let locked = pad.net_locked || (unspoken.contains(&at) && pad.net.is_some());
+                if net != pad.net || locked != pad.net_locked {
                     changes.push(PadNetChange {
                         footprint: fp.uuid,
                         pad: pad.uuid,
-                        net: Some(PadNet {
-                            number: net.number,
-                            name: name.clone(),
-                        }),
+                        net,
+                        locked,
                     });
                 }
                 continue;
             }
-            let wanted = target.get(&(fp.uuid, pad.uuid));
+            let wanted = target.get(&at);
             if pad.net.as_ref() != wanted {
                 changes.push(PadNetChange {
                     footprint: fp.uuid,
                     pad: pad.uuid,
                     net: wanted.cloned(),
+                    locked: false,
                 });
             }
         }

@@ -78,3 +78,14 @@ fn existing_fixture_layers_are_all_typed() {
         }
     }
 }
+
+#[test]
+fn locked_pad_fixture_reads_the_lock_and_writes_it_back() {
+    let (text, pcb) = load("pad-net-locked.snxpcb");
+    let pads = &pcb.board.footprints[0].pads;
+    assert_eq!(
+        pads.iter().map(|p| p.net_locked).collect::<Vec<_>>(),
+        vec![false, true]
+    );
+    assert_eq!(pcb.write_string().expect("fixture writes"), text);
+}

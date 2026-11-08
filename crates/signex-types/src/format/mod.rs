@@ -74,6 +74,8 @@ mod pcb_footprints_tests;
 #[cfg(test)]
 mod pcb_layer_tests;
 #[cfg(test)]
+mod pcb_lock_name_tests;
+#[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
@@ -165,6 +167,8 @@ pub enum FormatError {
     },
     #[error("stackup lists {types} layer_types for {layers} layers")]
     LayerTypesExceedLayers { layers: usize, types: usize },
+    #[error("stackup lists {names} layer_display_names for {layers} layers")]
+    LayerDisplayNamesExceedLayers { layers: usize, names: usize },
     #[error("stackup lists {ids} layer_ids for {layers} layers")]
     LayerIdsLengthMismatch { layers: usize, ids: usize },
     #[error("stackup layer_ids repeat id {id}; each layer needs a distinct id")]
@@ -769,6 +773,9 @@ impl SnxPcb {
                 /// Parallel to `layers`; omitted when every id equals its index.
                 #[serde(skip_serializing_if = "Vec::is_empty")]
                 layer_ids: Vec<u8>,
+                /// Parallel to `layers`; omitted when every display name is empty.
+                #[serde(skip_serializing_if = "Vec::is_empty")]
+                layer_display_names: Vec<String>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 setup: Option<&'a crate::pcb::PcbSetup>,
                 #[serde(flatten)]
@@ -800,6 +807,16 @@ impl SnxPcb {
                     .any(|(i, l)| usize::from(l.id) != i)
                 {
                     self.board.layers.iter().map(|l| l.id).collect()
+                } else {
+                    Vec::new()
+                },
+                layer_display_names: if self.board.layers.iter().any(|l| !l.display_name.is_empty())
+                {
+                    self.board
+                        .layers
+                        .iter()
+                        .map(|l| l.display_name.clone())
+                        .collect()
                 } else {
                     Vec::new()
                 },
@@ -947,6 +964,12 @@ impl SnxPcb {
                 // An absent list means positional ids; a present one must
                 // match the layer count and be duplicate-free, or the ids
                 // would be silently dropped on the next save.
+                if s.layer_display_names.len() > n_layers {
+                    return Err(FormatError::LayerDisplayNamesExceedLayers {
+                        layers: n_layers,
+                        names: s.layer_display_names.len(),
+                    });
+                }
                 if !s.layer_ids.is_empty() {
                     if s.layer_ids.len() != n_layers {
                         return Err(FormatError::LayerIdsLengthMismatch {
@@ -968,6 +991,7 @@ impl SnxPcb {
                         id: s.layer_ids.get(i).copied().unwrap_or(i as u8),
                         name,
                         layer_type: s.layer_types.get(i).cloned().unwrap_or_default(),
+                        display_name: s.layer_display_names.get(i).cloned().unwrap_or_default(),
                     })
                     .collect();
                 (layers, s.setup, s.unknown)
@@ -1072,6 +1096,9 @@ struct StackRaw {
     /// Parallel to `layers`; absent when every id equals its index.
     #[serde(default)]
     layer_ids: Vec<u8>,
+    /// Parallel to `layers`; absent in files that predate display names.
+    #[serde(default)]
+    layer_display_names: Vec<String>,
     #[serde(default)]
     setup: Option<crate::pcb::PcbSetup>,
     /// Foreign keys inside `[stackup]`.

@@ -17,7 +17,7 @@ use super::*;
 use crate::pcb::{
     DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, Via, ViaType,
 };
-use crate::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer, UserLayer};
+use crate::pcb_layer::{CopperLayer, InnerCopper, MechanicalLayer, PcbLayer, TechnicalLayer};
 use uuid::Uuid;
 
 /// Bulk row for one [`Footprint`] in the `[footprints]` block.
@@ -348,14 +348,14 @@ crate::token_enum! {
 }
 
 /// The on-disk name of `layer`: `TopCopper`, `Inner<n>Copper`,
-/// `BottomCopper`, a technical name such as `TopSilkscreen`, or `User.<n>`.
+/// `BottomCopper`, a technical name such as `TopSilkscreen`, or `Mechanical<n>`.
 pub fn pcb_layer_token(layer: PcbLayer) -> String {
     match layer {
         PcbLayer::Copper(CopperLayer::Top) => "TopCopper".to_string(),
         PcbLayer::Copper(CopperLayer::Inner(n)) => format!("Inner{}Copper", n.index()),
         PcbLayer::Copper(CopperLayer::Bottom) => "BottomCopper".to_string(),
         PcbLayer::Technical(t) => technical_layer_str(t).to_string(),
-        PcbLayer::User(n) => format!("User.{}", n.index()),
+        PcbLayer::Mechanical(n) => format!("Mechanical{}", n.index()),
     }
 }
 
@@ -376,10 +376,10 @@ pub fn parse_pcb_layer(token: &str) -> Option<PcbLayer> {
             .and_then(InnerCopper::new)
             .map(|n| PcbLayer::Copper(CopperLayer::Inner(n)));
     }
-    if let Some(n) = token.strip_prefix("User.") {
+    if let Some(n) = token.strip_prefix("Mechanical") {
         return canonical_index(n)
-            .and_then(UserLayer::new)
-            .map(PcbLayer::User);
+            .and_then(MechanicalLayer::new)
+            .map(PcbLayer::Mechanical);
     }
     let technical = parse_technical_layer_or_margin(token);
     (technical_layer_str(technical) == token).then_some(PcbLayer::Technical(technical))
@@ -458,6 +458,38 @@ pub(in crate::format) fn row_to_footprint(
     }
 }
 
+/// Header of the optional `net_locked` pad column. Like the schematic's
+/// `locked` column it is not a known column: it rides the foreign-column
+/// path, so a board with no locked pad has no such header and re-saves
+/// byte-identical, and a build that predates the lock keeps it.
+pub(in crate::format) const NET_LOCKED_COLUMN: &str = "net_locked";
+
+/// The cell a locked pad writes; every other pad of the block writes empty.
+const NET_LOCKED_CELL: &str = "true";
+
+fn with_net_locked_cell(mut columns: UnknownColumns, locked: bool) -> UnknownColumns {
+    if locked {
+        columns.set(NET_LOCKED_COLUMN, NET_LOCKED_CELL.to_string());
+    }
+    columns
+}
+
+/// `true` locks and an empty cell is an unlocked pad; any other value is not
+/// ours to read, so it stays a foreign cell and round-trips untouched.
+fn take_net_locked_cell(columns: &mut UnknownColumns) -> bool {
+    match columns.get(NET_LOCKED_COLUMN) {
+        Some(NET_LOCKED_CELL) => {
+            columns.take(NET_LOCKED_COLUMN);
+            true
+        }
+        Some("") => {
+            columns.take(NET_LOCKED_COLUMN);
+            false
+        }
+        _ => false,
+    }
+}
+
 pub(in crate::format) fn pad_to_row(
     pad: &Pad,
     footprint_ref: &str,
@@ -488,11 +520,12 @@ pub(in crate::format) fn pad_to_row(
         net_number,
         net_name,
         roundrect_ratio: pad.roundrect_ratio,
-        unknown_columns: pad.unknown_columns.clone(),
+        unknown_columns: with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
     })
 }
 
-pub(in crate::format) fn row_to_pad(row: PcbPadRow, extras: PadExtras) -> Pad {
+pub(in crate::format) fn row_to_pad(mut row: PcbPadRow, extras: PadExtras) -> Pad {
+    let net_locked = take_net_locked_cell(&mut row.unknown_columns);
     let drill = if row.drill > 0 {
         Some(DrillDef {
             diameter: nm_to_mm(row.drill),
@@ -526,6 +559,7 @@ pub(in crate::format) fn row_to_pad(row: PcbPadRow, extras: PadExtras) -> Pad {
         layers: split_layers(&row.layers),
         net,
         roundrect_ratio: row.roundrect_ratio,
+        net_locked,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
     }

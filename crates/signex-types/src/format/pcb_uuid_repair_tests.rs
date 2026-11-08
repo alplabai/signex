@@ -85,6 +85,7 @@ fn pad(n: u128, number: &str) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        net_locked: false,
     }
 }
 

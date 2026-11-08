@@ -3,7 +3,7 @@
 //! Board objects keep their layer as the on-disk string, so a name this
 //! build does not know survives a save unchanged. [`PcbLayer`] is the
 //! typed view of a known name: 32 copper layers, the technical and
-//! documentation layers, and six user layers. The string mapping lives in
+//! documentation layers, and 32 mechanical layers. The string mapping lives in
 //! `format/pcb_rows.rs` ([`crate::format::parse_pcb_layer`] and
 //! [`crate::format::pcb_layer_token`]).
 
@@ -199,12 +199,13 @@ impl TechnicalLayer {
     }
 }
 
-/// 1-based index of a user layer, `1..=UserLayer::MAX`.
+/// 1-based index of a mechanical layer, `1..=MechanicalLayer::MAX`. The
+/// layer's display name is user data, kept in the board layer table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct UserLayer(u8);
+pub struct MechanicalLayer(u8);
 
-impl UserLayer {
-    pub const MAX: u8 = 6;
+impl MechanicalLayer {
+    pub const MAX: u8 = 32;
 
     /// `None` when `index` is outside `1..=MAX`.
     pub fn new(index: u8) -> Option<Self> {
@@ -221,20 +222,20 @@ impl UserLayer {
 pub enum PcbLayer {
     Copper(CopperLayer),
     Technical(TechnicalLayer),
-    User(UserLayer),
+    Mechanical(MechanicalLayer),
 }
 
 impl PcbLayer {
     /// Total layers the type can name.
     pub const COUNT: usize =
-        CopperLayer::COUNT + TechnicalLayer::ALL.len() + UserLayer::MAX as usize;
+        CopperLayer::COUNT + TechnicalLayer::ALL.len() + MechanicalLayer::MAX as usize;
 
-    /// Every layer: copper top to bottom, technical, then user.
+    /// Every layer: copper top to bottom, technical, then mechanical.
     pub fn all() -> impl Iterator<Item = PcbLayer> {
         CopperLayer::all()
             .map(Self::Copper)
             .chain(TechnicalLayer::ALL.into_iter().map(Self::Technical))
-            .chain((1..=UserLayer::MAX).map(|n| Self::User(UserLayer(n))))
+            .chain((1..=MechanicalLayer::MAX).map(|n| Self::Mechanical(MechanicalLayer(n))))
     }
 
     pub fn is_copper(self) -> bool {
@@ -249,7 +250,7 @@ impl PcbLayer {
     }
 
     /// The same layer on the opposite face: top and bottom copper swap,
-    /// sided technical layers swap, inner copper and user layers stay.
+    /// sided technical layers swap, inner copper and mechanical layers (board-wide) stay.
     pub fn flipped(self) -> Self {
         match self {
             Self::Copper(CopperLayer::Top) => Self::Copper(CopperLayer::Bottom),
@@ -259,12 +260,12 @@ impl PcbLayer {
         }
     }
 
-    /// `None` for inner copper, board-wide and user layers.
+    /// `None` for inner copper, board-wide and mechanical layers.
     pub fn side(self) -> Option<BoardSide> {
         match self {
             Self::Copper(c) => c.side(),
             Self::Technical(t) => t.side(),
-            Self::User(_) => None,
+            Self::Mechanical(_) => None,
         }
     }
 }
@@ -280,16 +281,19 @@ mod tests {
         assert_eq!(InnerCopper::new(1).map(InnerCopper::index), Some(1));
         assert_eq!(InnerCopper::new(30).map(InnerCopper::index), Some(30));
         assert_eq!(InnerCopper::new(31), None);
-        assert_eq!(UserLayer::new(0), None);
-        assert_eq!(UserLayer::new(6).map(UserLayer::index), Some(6));
-        assert_eq!(UserLayer::new(7), None);
+        assert_eq!(MechanicalLayer::new(0), None);
+        assert_eq!(
+            MechanicalLayer::new(32).map(MechanicalLayer::index),
+            Some(32)
+        );
+        assert_eq!(MechanicalLayer::new(33), None);
     }
 
     #[test]
     fn all_names_every_layer_once() {
         let all: Vec<_> = PcbLayer::all().collect();
         assert_eq!(all.len(), PcbLayer::COUNT);
-        assert_eq!(PcbLayer::COUNT, 32 + 29 + 6);
+        assert_eq!(PcbLayer::COUNT, 32 + 29 + 32);
         assert_eq!(all.iter().collect::<HashSet<_>>().len(), all.len());
         assert_eq!(all.iter().filter(|l| l.is_copper()).count(), 32);
     }

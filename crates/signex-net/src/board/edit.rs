@@ -5,12 +5,13 @@ use std::collections::HashMap;
 use signex_types::pcb::{NetDef, PadNet, PcbBoard};
 use uuid::Uuid;
 
-/// One pad's net after the edit (`None` = no net).
+/// One pad's net and net lock after the edit (`None` = no net).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PadNetChange {
     pub footprint: Uuid,
     pub pad: Uuid,
     pub net: Option<PadNet>,
+    pub locked: bool,
 }
 
 /// One zone's net name after the edit; its net number never changes.
@@ -54,10 +55,12 @@ impl BoardNetEdit {
                 continue;
             };
             let old = std::mem::replace(&mut pad.net, change.net);
+            let old_locked = std::mem::replace(&mut pad.net_locked, change.locked);
             undo.push(PadNetChange {
                 footprint: change.footprint,
                 pad: change.pad,
                 net: old,
+                locked: old_locked,
             });
         }
         let mut undo_zones = Vec::with_capacity(self.zones.len());

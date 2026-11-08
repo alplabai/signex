@@ -19,6 +19,7 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

@@ -103,6 +103,21 @@ pub struct LayerDef {
     pub id: u8,
     pub name: String,
     pub layer_type: String,
+    /// User-editable name shown for a mechanical layer; empty when unset.
+    /// Saved in the optional `[stackup] layer_display_names` list.
+    #[serde(default)]
+    pub display_name: String,
+}
+
+impl LayerDef {
+    /// The name to show: the display name when set, else the layer name.
+    pub fn display_label(&self) -> &str {
+        if self.display_name.is_empty() {
+            &self.name
+        } else {
+            &self.display_name
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +194,10 @@ pub struct Pad {
     pub net: Option<PadNet>,
     #[serde(default)]
     pub roundrect_ratio: f64,
+    /// The net was set by hand and the schematic never changes it.
+    /// Saved in the optional `net_locked` pad column.
+    #[serde(default)]
+    pub net_locked: bool,
     /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
     /// does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]

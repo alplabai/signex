@@ -181,6 +181,7 @@ mod tests {
             layers: Vec::new(),
             net: None,
             roundrect_ratio: 0.0,
+            net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         }
