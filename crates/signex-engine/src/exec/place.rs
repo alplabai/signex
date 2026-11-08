@@ -60,10 +60,36 @@ fn fold_port_text_moves(
     document: &SchematicSheet,
     moves: Vec<(SelectedItem, f64, f64)>,
 ) -> Vec<(SelectedItem, f64, f64)> {
+    use signex_types::schematic::SelectedKind;
+    let ports: std::collections::HashSet<uuid::Uuid> = if moves.iter().any(|(item, _, _)| {
+        matches!(
+            item.kind,
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+        )
+    }) {
+        document
+            .symbols
+            .iter()
+            .filter(|s| s.is_power)
+            .map(|s| s.uuid)
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
     let mut seen = std::collections::HashSet::with_capacity(moves.len());
     moves
         .into_iter()
-        .map(|(item, dx, dy)| (document.selection_unit(item), dx, dy))
+        .map(|(item, dx, dy)| {
+            let unit = match item.kind {
+                SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+                    if ports.contains(&item.uuid) =>
+                {
+                    SelectedItem::new(item.uuid, SelectedKind::Symbol)
+                }
+                _ => item,
+            };
+            (unit, dx, dy)
+        })
         .filter(|(item, _, _)| seen.insert(*item))
         .collect()
 }

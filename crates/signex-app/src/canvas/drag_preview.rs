@@ -184,6 +184,19 @@ fn primary_anchor_world(
     item: &signex_types::schematic::SelectedItem,
 ) -> Option<(f64, f64)> {
     use signex_types::schematic::SelectedKind;
+    // A power port's text is part of the port (maintainer decision
+    // 2026-11-07): a stale field item anchors at the port.
+    let item = match item.kind {
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+            if snap
+                .symbols
+                .iter()
+                .any(|s| s.uuid == item.uuid && s.is_power) =>
+        {
+            signex_types::schematic::SelectedItem::new(item.uuid, SelectedKind::Symbol)
+        }
+        _ => *item,
+    };
     match item.kind {
         SelectedKind::Label => snap
             .labels

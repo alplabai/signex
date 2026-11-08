@@ -8,7 +8,7 @@ const AT: (f64, f64) = (50.8, 25.4);
 fn port(lib_id: &str, rotation: f64, mirror_x: bool, mirror_y: bool) -> Symbol {
     let at = Point::new(AT.0, AT.1);
     Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: lib_id.to_owned(),
         value: "VCC".to_owned(),
         position: at,
@@ -132,7 +132,7 @@ fn a_power_port_field_selects_the_port() {
     let mut sheet = SchematicSheet::default();
     let power = port("power:VCC", 0.0, false, false);
     let mut part = power.clone();
-    part.uuid = uuid::Uuid::new_v4();
+    part.uuid = uuid::Uuid::now_v7();
     part.is_power = false;
     sheet.symbols = vec![power.clone(), part.clone()];
     let item = |uuid, kind| SelectedItem::new(uuid, kind);
