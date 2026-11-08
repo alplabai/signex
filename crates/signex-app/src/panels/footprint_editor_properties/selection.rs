@@ -1,5 +1,6 @@
-use iced::widget::{Column, container, pick_list, row, text};
+use iced::widget::{Column, container, pick_list, row};
 use iced::{Color, Element, Length, Widget as _};
+use signex_widgets::{raw, text};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -153,9 +154,9 @@ pub(super) fn view_selection<'a>(
                     col = col.push(
                         container(
                             row![
-                                container(text("DOF").size(TS.caption).color(muted))
+                                container(text(raw("DOF")).size(TS.caption).color(muted))
                                     .width(Length::FillPortion(1)),
-                                container(text(label).size(TS.caption).color(c))
+                                container(text(raw(label)).size(TS.caption).color(c))
                                     .width(Length::FillPortion(2)),
                             ]
                             .align_y(iced::Alignment::Center),
@@ -181,8 +182,10 @@ pub(super) fn view_selection<'a>(
             {
                 col = col.push(
                     container(
-                        iced::widget::button(
-                            text("Unlink corner radius").size(TS.caption).color(primary),
+                        signex_widgets::button(
+                            text(raw("Unlink corner radius"))
+                                .size(TS.caption)
+                                .color(primary),
                         )
                         .padding([SP.s, 10.0])
                         .on_press(PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id: id })
@@ -226,7 +229,7 @@ pub(super) fn view_selection<'a>(
                 if !fp.selected_sketch_is_point {
                     col = col.push(
                         container(
-                            text("Pad role applies to Points only")
+                            text(raw("Pad role applies to Points only"))
                                 .size(TS.caption)
                                 .color(muted),
                         )
@@ -294,7 +297,7 @@ pub(super) fn view_selection<'a>(
                         // shows it but does not edit it.
                         col = col.push(
                             container(
-                                text("From sketch: edit in Sketch mode")
+                                text(raw("From sketch: edit in Sketch mode"))
                                     .size(TS.caption)
                                     .color(muted),
                             )

@@ -1,5 +1,6 @@
-use iced::widget::{canvas, column, container, row, shader, stack, text_input};
+use iced::widget::{canvas, column, container, row, shader, stack};
 use iced::{Element, Length, Widget as _};
+use signex_widgets::{raw, text_input};
 
 /// Detached-modal native window title text.
 pub(crate) mod detached_title;
@@ -177,8 +178,9 @@ impl Signex {
     /// so it reads as "the tab itself is moving". The ghost is
     /// non-interactive; it just shows what the user is carrying.
     fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
-        use iced::widget::{container, row, text};
+        use iced::widget::{container, row};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
+        use signex_widgets::{raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let active_bg = crate::styles::ti(tokens.hover);
@@ -199,9 +201,11 @@ impl Signex {
             is_last: true,
             accent_position: AccentPosition::Bottom,
         };
-        let inner = container(row![text(title.to_string()).size(TS.body).color(text_c)])
-            .padding([SP.s, 10.0])
-            .boxed();
+        let inner = container(row![
+            text(raw(title.to_string())).size(TS.body).color(text_c)
+        ])
+        .padding([SP.s, 10.0])
+        .boxed();
         let pill = TabPill::new(inner, pill_style).boxed();
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
@@ -482,9 +486,11 @@ impl Signex {
     fn locked_window_layer(&self) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let hint = iced::widget::container(
-            iced::widget::text("A dialog is open: click to show it, Esc to cancel")
-                .size(TS.label)
-                .color(crate::styles::ti(tokens.text_secondary)),
+            signex_widgets::text(signex_widgets::raw(
+                "A dialog is open: click to show it, Esc to cancel",
+            ))
+            .size(TS.label)
+            .color(crate::styles::ti(tokens.text_secondary)),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -540,9 +546,11 @@ impl Signex {
             } else {
                 container(
                     column![
-                        iced::widget::text("Component Editor — state not yet loaded")
-                            .size(TS.title)
-                            .color(crate::styles::ti(tokens.text_secondary)),
+                        signex_widgets::text(signex_widgets::raw(
+                            "Component Editor — state not yet loaded"
+                        ))
+                        .size(TS.title)
+                        .color(crate::styles::ti(tokens.text_secondary)),
                     ]
                     .spacing(SP.s)
                     .align_x(iced::Alignment::Center),
@@ -611,9 +619,11 @@ impl Signex {
                     // out of sync with the tabs vector. Keeps the tab
                     // renderable rather than crashing.
                     return container(
-                        iced::widget::text("Library Browser — state not yet loaded")
-                            .size(TS.title)
-                            .color(crate::styles::ti(tokens.text_secondary)),
+                        signex_widgets::text(signex_widgets::raw(
+                            "Library Browser — state not yet loaded",
+                        ))
+                        .size(TS.title)
+                        .color(crate::styles::ti(tokens.text_secondary)),
                     )
                     .center(Length::Fill)
                     .style(crate::styles::panel_region(tokens))

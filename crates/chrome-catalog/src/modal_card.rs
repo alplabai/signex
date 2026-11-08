@@ -1,6 +1,7 @@
-use iced::widget::{Space, column, container, row, svg, text};
+use iced::widget::{Space, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::catalog::Message;
 use crate::icon::x_handle;
@@ -25,7 +26,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         });
     let header = container(
         row![
-            text("Modal title").size(13).color(text_color),
+            text(raw("Modal title")).size(13).color(text_color),
             Space::new().width(Length::Fill),
             container(icon)
                 .width(CLOSE_WIDTH)
@@ -63,11 +64,15 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
     let body = container(
         column![
-            text("Body content goes here.").size(11).color(text_color),
-            Space::new().height(8),
-            text("Use this card style for every modal — same 8 px corners.")
+            text(raw("Body content goes here."))
                 .size(11)
                 .color(text_color),
+            Space::new().height(8),
+            text(raw(
+                "Use this card style for every modal — same 8 px corners."
+            ))
+            .size(11)
+            .color(text_color),
         ]
         .padding(BODY_PADDING),
     );

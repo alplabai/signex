@@ -41,8 +41,9 @@
 //! - The toggle state (each editor's state owns it).
 //! - The click-outside backstop layer (each editor mounts its own).
 
+use crate::{button, raw, text};
 use iced::widget::svg;
-use iced::widget::{Column, Row, Space, button, container, text};
+use iced::widget::{Column, Row, Space, container};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -296,7 +297,7 @@ where
         match entry {
             DropdownEntry::Header(label) => {
                 col = col.push(
-                    container(text(label).size(HEADER_SIZE).color(muted))
+                    container(text(raw(label)).size(HEADER_SIZE).color(muted))
                         .padding([4.0, ROW_PAD_X])
                         .width(Length::Fill)
                         .boxed(),
@@ -354,7 +355,7 @@ where
                 // Label. Menu rows never wrap — a too-narrow width_hint
                 // clips rather than reflowing a label onto two lines.
                 row_w = row_w.push(
-                    text(label)
+                    text(raw(label))
                         .size(LABEL_SIZE)
                         .color(row_text_c)
                         .wrapping(text::Wrapping::None)
@@ -366,10 +367,11 @@ where
                     .align_y(iced::Alignment::Center)
                     .width(Length::Fit);
                 if let Some(s) = shortcut {
-                    right = right.push(text(s).size(SHORTCUT_SIZE).color(muted).boxed());
+                    right = right.push(text(raw(s)).size(SHORTCUT_SIZE).color(muted).boxed());
                 }
                 if checked {
-                    right = right.push(text("\u{2713}").size(CHECK_SIZE).color(accent).boxed());
+                    right =
+                        right.push(text(raw("\u{2713}")).size(CHECK_SIZE).color(accent).boxed());
                 }
                 row_w = row_w
                     .push(Space::new().width(Length::Fixed(CLUSTER_GAP)).boxed())
@@ -400,9 +402,9 @@ where
                 match tooltip_text {
                     Some(hint) => {
                         col = col.push(
-                            iced::widget::tooltip(
+                            crate::tooltip(
                                 btn,
-                                container(text(hint).size(11).color(primary))
+                                container(text(raw(hint)).size(11).color(primary))
                                     .padding([3, 8])
                                     .style(tooltip_style(panel_bg, border_c)),
                                 iced::widget::tooltip::Position::Right,
@@ -470,7 +472,7 @@ where
     let text_on = Color::WHITE;
     let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     button(
-        text(label.into())
+        text(raw(label.into()))
             .size(11)
             .color(if enabled { text_on } else { text_off }),
     )

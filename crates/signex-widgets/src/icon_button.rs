@@ -3,7 +3,8 @@
 //! Themed icon buttons with tooltip, active/inactive state, separators,
 //! and grouping — all built on stock Iced 0.15 primitives.
 
-use iced::widget::{Row, button, container, text, tooltip};
+use crate::{button, raw, text, tooltip};
+use iced::widget::{Row, container};
 use iced::{Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -33,7 +34,7 @@ pub fn icon_button<'a, M: Clone + 'a>(
         theme_ext::text_secondary(tokens)
     };
 
-    let label = text(icon.to_owned()).size(13).color(text_color);
+    let label = text(raw(icon.to_owned())).size(13).color(text_color);
     let btn = button(label).padding([3, 7]).on_press(on_press);
 
     let styled_btn: Element<'a, M> = if active {
@@ -58,7 +59,7 @@ pub fn icon_button<'a, M: Clone + 'a>(
     let tip_text = tooltip_text.to_owned();
     tooltip(
         styled_btn,
-        text(tip_text).size(11),
+        text(raw(tip_text)).size(11),
         tooltip::Position::Bottom,
     )
     .gap(4)
@@ -73,7 +74,7 @@ pub fn icon_button<'a, M: Clone + 'a>(
 pub fn toolbar_separator<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
     let border = theme_ext::border_color(tokens);
     container(
-        container(text("").size(1))
+        container(text(raw("")).size(1))
             .width(1)
             .height(Length::Fixed(18.0))
             .style(move |_theme: &iced::Theme| container::Style {

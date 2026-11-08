@@ -1,6 +1,7 @@
-use iced::widget::{Space, column, container, text};
+use iced::widget::{Space, column, container};
 use iced::{Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::catalog::Message;
 use crate::theme;
@@ -15,7 +16,7 @@ pub(crate) fn view<'a>(
     let border = theme::color(tokens.border);
     let panel = theme::color(tokens.panel_bg);
     container(column![
-        text(title).size(13).color(text_color),
+        text(raw(title)).size(13).color(text_color),
         Space::new().height(8),
         container(body)
             .padding(16)

@@ -5,8 +5,9 @@
 //! byte-for-byte, so the rendered table is pixel-identical.
 
 use super::super::*;
-use iced::widget::{Row, Space, column, container, row, scrollable, text};
+use iced::widget::{Row, Space, column, container, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
+use signex_widgets::{raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -189,7 +190,7 @@ impl Signex {
         const NUM_COL_WIDTH: f32 = 36.0;
         const HEADER_ROW_H: f32 = 24.0;
         const DATA_ROW_H: f32 = 22.0;
-        let num_header: Element<'_, Message> = container(text(""))
+        let num_header: Element<'_, Message> = container(text(raw("")))
             .width(Length::Fixed(NUM_COL_WIDTH))
             .height(HEADER_ROW_H)
             .boxed();
@@ -240,9 +241,11 @@ impl Signex {
             // to the right via Space::Fill. Spreadsheet convention.
             let arrow = sort_arrow(idx).trim();
             let cell_content = row![
-                text(c.header().to_string()).size(TS.body).color(text_c),
+                text(raw(c.header().to_string()))
+                    .size(TS.body)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
-                text(arrow.to_string()).size(TS.body).color(text_c),
+                text(raw(arrow.to_string())).size(TS.body).color(text_c),
             ]
             .align_y(iced::Alignment::Center);
             // All headers use Fixed widths — needed for the
@@ -337,7 +340,7 @@ impl Signex {
             const CELL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
             let cell = |s: String, width: Length, _truncate_at: f32| -> Element<'_, Message> {
                 container(
-                    text(s)
+                    text(raw(s))
                         .size(CELL_TEXT_SIZE)
                         .color(text_c)
                         .wrapping(iced::widget::text::Wrapping::None),
@@ -351,7 +354,7 @@ impl Signex {
             };
             // Leftmost row-number gutter cell — muted text, right-aligned.
             let num_cell: Element<'_, Message> = container(
-                text((visible_idx + 1).to_string())
+                text(raw((visible_idx + 1).to_string()))
                     .size(CELL_TEXT_SIZE)
                     .color(text_muted),
             )

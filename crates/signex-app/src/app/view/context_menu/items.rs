@@ -222,7 +222,7 @@ pub(super) fn submenu_launcher(
     }
     row = row
         .push(
-            iced::widget::text(label.to_string())
+            signex_widgets::text(signex_widgets::raw(label.to_string()))
                 .size(TS.title)
                 .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(
                     arrow_line,
@@ -233,7 +233,7 @@ pub(super) fn submenu_launcher(
         )
         .push(iced::widget::Space::new().width(Length::Fill).boxed())
         .push(
-            iced::widget::text(SUBMENU_ARROW.to_string())
+            signex_widgets::text(signex_widgets::raw(SUBMENU_ARROW.to_string()))
                 .size(SUBMENU_ARROW_SIZE)
                 .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(
                     arrow_line,
@@ -242,7 +242,7 @@ pub(super) fn submenu_launcher(
                 .boxed(),
         );
 
-    let btn = iced::widget::button(
+    let btn = signex_widgets::button(
         iced::widget::container(row)
             .padding([ROW_PAD_Y, SP.l])
             .width(Length::Fill),

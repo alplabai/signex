@@ -24,11 +24,11 @@ pub(super) fn view_uncommitted_banner<'a>(
     );
     let warn = theme_ext::text_primary(tokens);
     let commit_now = button(
-        text(if committing {
+        text(raw(if committing {
             "Committing…"
         } else {
             "Commit now"
-        })
+        }))
         .size(BROWSER_TEXT_SIZE)
         .color(warn),
     )
@@ -38,7 +38,7 @@ pub(super) fn view_uncommitted_banner<'a>(
     }));
     container(
         row![
-            text(summary).size(BROWSER_TEXT_SIZE).color(warn),
+            text(raw(summary)).size(BROWSER_TEXT_SIZE).color(warn),
             Space::new().width(Length::Fill),
             commit_now,
         ]

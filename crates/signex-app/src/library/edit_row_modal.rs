@@ -3,14 +3,13 @@
 //!
 //! `view_delete_confirm` lives in this module too.
 
-use iced::widget::{
-    Space, Widget, column, container, pick_list, row, scrollable, text, text_input,
-};
+use iced::widget::{Space, Widget, column, container, pick_list, row, scrollable};
 use iced::{Element, Length};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
 use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text, text_input};
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::{
@@ -84,7 +83,7 @@ pub fn view<'a>(
         msg: m,
     };
 
-    let pn_input = text_input("Internal PN", edit.draft.internal_pn.as_str())
+    let pn_input = text_input(raw("Internal PN"), edit.draft.internal_pn.as_str())
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetInternalPn(s))
@@ -132,7 +131,7 @@ pub fn view<'a>(
     // Only a URL ref is editable here. A pinned PDF is shown read-only so a
     // keystroke can never replace it (and its hash) with a bare URL.
     let datasheet_field: Element<'a, LibraryMessage> = match &edit.draft.datasheet {
-        DatasheetRef::Url { url } => text_input("https://example.com/datasheet.pdf", url)
+        DatasheetRef::Url { url } => text_input(raw("https://example.com/datasheet.pdf"), url)
             .on_input({
                 let send = send.clone();
                 move |s| send(BrowserEditMsg::SetDatasheetUrl(s))
@@ -140,13 +139,13 @@ pub fn view<'a>(
             .padding(6)
             .size(TS.label)
             .boxed(),
-        DatasheetRef::HashPinned { filename, .. } => text(format!("Pinned PDF: {filename}"))
+        DatasheetRef::HashPinned { filename, .. } => text(raw(format!("Pinned PDF: {filename}")))
             .size(TS.label)
             .color(muted)
             .boxed(),
     };
 
-    let mfr_input = text_input("Manufacturer", &edit.draft.primary_mpn.manufacturer)
+    let mfr_input = text_input(raw("Manufacturer"), &edit.draft.primary_mpn.manufacturer)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetManufacturer(s))
@@ -154,7 +153,7 @@ pub fn view<'a>(
         .padding(6)
         .size(TS.label);
 
-    let mpn_input = text_input("MPN", &edit.draft.primary_mpn.mpn)
+    let mpn_input = text_input(raw("MPN"), &edit.draft.primary_mpn.mpn)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetMpn(s))
@@ -162,7 +161,7 @@ pub fn view<'a>(
         .padding(6)
         .size(TS.label);
 
-    let description_input = text_input("e.g. 100 nF 50 V X7R 0603", &edit.draft.description)
+    let description_input = text_input(raw("e.g. 100 nF 50 V X7R 0603"), &edit.draft.description)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetDescription(s))
@@ -173,7 +172,7 @@ pub fn view<'a>(
     // Tags row (Stage 18) — comma-separated free-form tokens.
     // The buffer flushes to `parameters["tags"]` on Save (see
     // `handle_browser_edit_msg`); empty buffer drops the entry.
-    let tags_input = text_input("e.g. low-noise, RoHS, qualified", &edit.tags_buf)
+    let tags_input = text_input(raw("e.g. low-noise, RoHS, qualified"), &edit.tags_buf)
         .on_input({
             let send = send.clone();
             move |s| send(BrowserEditMsg::SetTags(s))
@@ -207,7 +206,7 @@ pub fn view<'a>(
     let labelled =
         |lbl: &'a str, body: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
             column![
-                text(lbl).size(TS.caption).color(muted),
+                text(raw(lbl)).size(TS.caption).color(muted),
                 container(body).padding([SP.xs, 0.0])
             ]
             .spacing(SP.xs)
@@ -231,7 +230,7 @@ pub fn view<'a>(
     .spacing(0);
 
     let symbol_row = row![
-        text(symbol_label)
+        text(raw(symbol_label))
             .size(TS.body)
             .color(text_c)
             .width(Length::Fill),
@@ -241,7 +240,7 @@ pub fn view<'a>(
     .padding([SP.s, 0.0]);
 
     let footprint_row = row![
-        text(footprint_label)
+        text(raw(footprint_label))
             .size(TS.body)
             .color(text_c)
             .width(Length::Fill),
@@ -264,10 +263,10 @@ pub fn view<'a>(
         Space::new().height(8),
         labelled("Tags (comma-separated)", tags_input.boxed()),
         Space::new().height(12),
-        text("Symbol ref").size(TS.caption).color(muted),
+        text(raw("Symbol ref")).size(TS.caption).color(muted),
         symbol_row,
         Space::new().height(6),
-        text("Footprint ref").size(TS.caption).color(muted),
+        text(raw("Footprint ref")).size(TS.caption).color(muted),
         footprint_row,
         Space::new().height(12),
         params_section,
@@ -285,14 +284,14 @@ pub fn view<'a>(
 
     let error_row: Element<'_, LibraryMessage> = if let Some(err) = edit.error.as_ref() {
         container(
-            text(err.clone())
+            text(raw(err.clone()))
                 .size(TS.body)
                 .color(crate::styles::tokens::danger(tokens)),
         )
         .padding([SP.s, SP.xl])
         .boxed()
     } else if let Some(note) = edit.note.as_ref() {
-        container(text(note.clone()).size(TS.body).color(muted))
+        container(text(raw(note.clone())).size(TS.body).color(muted))
             .padding([SP.s, SP.xl])
             .boxed()
     } else {
@@ -307,7 +306,7 @@ pub fn view<'a>(
         Space::new().width(0).boxed()
     } else if edit.reload_confirming {
         row![
-            text("Discard your edits and reload?")
+            text(raw("Discard your edits and reload?"))
                 .size(TS.body)
                 .color(text_c),
             crate::styles::dialog_button(
@@ -362,7 +361,7 @@ pub fn view_delete_confirm<'a>(
     );
 
     let body = container(
-        column![text(msg_label).size(TS.body).color(text_c)]
+        column![text(raw(msg_label)).size(TS.body).color(text_c)]
             .padding([14.0, SP.xl])
             .width(Length::Fill),
     )

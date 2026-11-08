@@ -51,7 +51,7 @@ pub fn view_custom_selection_filters_section<'a>(
                 if presets.is_empty() {
                     c = c.push(
                         container(
-                            text("No presets yet. Click + to define one.")
+                            text(raw("No presets yet. Click + to define one."))
                                 .size(TS.body)
                                 .color(muted_c),
                         )
@@ -60,7 +60,7 @@ pub fn view_custom_selection_filters_section<'a>(
                     );
                     c = c.push(
                         container(
-                            iced::widget::button(text("+ Add Filter").size(TS.body))
+                            signex_widgets::button(text(raw("+ Add Filter")).size(TS.body))
                                 .padding([SP.s, 10.0])
                                 .on_press(PanelMsg::AddCustomFilterPreset)
                                 .style(move |theme: &Theme, status| {
@@ -91,7 +91,7 @@ pub fn view_custom_selection_filters_section<'a>(
                 }
                 if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
                     tabs = tabs.push(
-                        iced::widget::button(text("+").size(TS.label).color(primary_c))
+                        signex_widgets::button(text(raw("+")).size(TS.label).color(primary_c))
                             .padding([3, 10])
                             .on_press(PanelMsg::AddCustomFilterPreset)
                             .boxed(),
@@ -102,13 +102,16 @@ pub fn view_custom_selection_filters_section<'a>(
                 let included: std::collections::HashSet<SelectionFilter> =
                     preset.filters.iter().copied().collect();
                 let header = row![
-                    iced::widget::text_input("Preset name", preset.name.clone())
-                        .size(TS.body)
-                        .padding([3, 6])
-                        .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
-                        .width(Length::Fill)
-                        .boxed(),
-                    iced::widget::button(text("Delete").size(TS.body).color(primary_c))
+                    signex_widgets::text_input(
+                        signex_widgets::raw("Preset name"),
+                        preset.name.clone()
+                    )
+                    .size(TS.body)
+                    .padding([3, 6])
+                    .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
+                    .width(Length::Fill)
+                    .boxed(),
+                    signex_widgets::button(text(raw("Delete")).size(TS.body).color(primary_c))
                         .padding([3.0, SP.m])
                         .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
                         .boxed(),
@@ -375,7 +378,7 @@ pub fn view_properties_general<'a>(
                             if matches!(format_mode, PageFormatMode::Template) {
                                 c = c.push(
                                     container(
-                                        text("Template: using A-series defaults")
+                                        text(raw("Template: using A-series defaults"))
                                             .size(TS.caption)
                                             .color(muted),
                                     )
@@ -428,7 +431,7 @@ pub fn view_properties_general<'a>(
                     let (w, h) = paper_dimensions(&paper_size);
                     let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
                     c = c.push(
-                        container(text(dims).size(TS.caption).color(muted))
+                        container(text(raw(dims)).size(TS.caption).color(muted))
                             .padding([3.0, SP.m])
                             .boxed(),
                     );
@@ -558,12 +561,12 @@ pub fn view_properties_parameters<'a>(
     col = col.push(
         container(
             row![
-                text("Name")
+                text(raw("Name"))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(3))
                     .boxed(),
-                text("Value")
+                text(raw("Value"))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(2))
@@ -618,13 +621,13 @@ pub fn param_table_row<'a, M: 'a>(
     column![
         container(
             row![
-                text(name.to_string())
+                text(raw(name.to_string()))
                     .size(TS.body)
                     .color(name_c)
                     .width(Length::FillPortion(3))
                     .wrapping(iced::widget::text::Wrapping::None)
                     .boxed(),
-                text(value.to_string())
+                text(raw(value.to_string()))
                     .size(TS.body)
                     .color(val_c)
                     .width(Length::FillPortion(2))
@@ -652,7 +655,7 @@ pub fn props_tab_btn(
     border_c: Color,
 ) -> Element<'static, PanelMsg> {
     let text_c = if active { text_active } else { text_inactive };
-    iced::widget::button(text(label.to_string()).size(TS.body).color(text_c))
+    signex_widgets::button(text(raw(label.to_string())).size(TS.body).color(text_c))
         .padding([SP.s, SP.l])
         .on_press(msg)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -689,11 +692,11 @@ pub fn custom_filter_tab(
     let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
     let text_on = Color::WHITE;
     let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
-    iced::widget::button(
-        text(label)
-            .size(TS.body)
-            .color(if active { text_on } else { text_off }),
-    )
+    signex_widgets::button(text(raw(label)).size(TS.body).color(if active {
+        text_on
+    } else {
+        text_off
+    }))
     .padding([3, 10])
     .on_press(PanelMsg::SelectCustomFilterTab(idx))
     .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -732,8 +735,8 @@ pub fn preset_chip(
     let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
     let text_on = Color::WHITE;
     let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-    iced::widget::button(
-        text(label.to_string())
+    signex_widgets::button(
+        text(raw(label.to_string()))
             .size(TS.body)
             .color(if enabled { text_on } else { text_off })
             .align_x(iced::alignment::Horizontal::Center),
@@ -834,8 +837,8 @@ pub fn seg_btn<'a>(
         Color::TRANSPARENT
     };
     let text_c = seg_text(active, text_active, text_inactive, active_bg);
-    iced::widget::button(
-        text(label.to_string())
+    signex_widgets::button(
+        text(raw(label.to_string()))
             .size(TS.body)
             .color(text_c)
             .align_x(iced::alignment::Horizontal::Center),

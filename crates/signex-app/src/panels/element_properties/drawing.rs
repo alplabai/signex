@@ -67,7 +67,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
             row![
                 iced::widget::svg(icon).width(16).height(16),
-                text(elem_type.clone())
+                text(raw(elem_type.clone()))
                     .size(TS.body)
                     .color(Color::from_rgb(0.90, 0.90, 0.92)),
             ]
@@ -75,7 +75,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             .align_y(iced::Alignment::Center)
             .boxed()
         } else {
-            text(elem_type.clone())
+            text(raw(elem_type.clone()))
                 .size(TS.body)
                 .color(Color::from_rgb(0.90, 0.90, 0.92))
                 .boxed()
@@ -421,17 +421,18 @@ fn drawing_num_row<'a>(
     buf: &std::collections::HashMap<DrawingFieldId, String>,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
-    use iced::widget::{row, text, text_input};
+    use iced::widget::row;
+    use signex_widgets::{raw, text, text_input};
     let display = buf
         .get(&field)
         .cloned()
         .unwrap_or_else(|| format!("{stored_value:.3}"));
     row![
-        text(label)
+        text(raw(label))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
-        text_input("", display)
+        text_input(raw(""), display)
             .size(TS.body)
             .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
             .width(Length::FillPortion(3)),
@@ -451,15 +452,16 @@ fn drawing_stroke_color_row<'a>(
     muted: Color,
 ) -> Element<'a, PanelMsg> {
     use crate::app::contracts::DrawingFieldEdit as E;
-    use iced::widget::{button, row, text};
+    use iced::widget::row;
     use signex_types::schematic::StrokeColor;
+    use signex_widgets::{button, raw, text};
     let rgb = |r: u8, g: u8, b: u8| -> StrokeColor { StrokeColor { r, g, b, a: 255 } };
     let tile = |label: &'static str,
                 stored: Option<StrokeColor>,
                 active: bool,
                 fill_color: Color|
      -> Element<'a, PanelMsg> {
-        button(text(label).size(TS.body))
+        button(text(raw(label)).size(TS.body))
             .padding([3, 6])
             .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -488,7 +490,7 @@ fn drawing_stroke_color_row<'a>(
     };
     let theme_active = current.is_none();
     row![
-        text("Color")
+        text(raw("Color"))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
@@ -549,7 +551,7 @@ fn drawing_placement_row<'a>(
     use signex_types::schematic::DrawingPlacement;
     let tile = |label: &'static str, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
         let active = current == placement;
-        iced::widget::button(text(label).size(TS.body))
+        signex_widgets::button(text(raw(label)).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Placement(placement)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -574,7 +576,7 @@ fn drawing_placement_row<'a>(
             .boxed()
     };
     row![
-        text("Placement")
+        text(raw("Placement"))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
@@ -599,7 +601,7 @@ fn drawing_fill_row<'a>(
     use crate::app::contracts::DrawingFieldEdit as E;
     use signex_types::schematic::FillType;
     let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        iced::widget::button(text(label).size(TS.body))
+        signex_widgets::button(text(raw(label)).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -624,7 +626,7 @@ fn drawing_fill_row<'a>(
             .boxed()
     };
     row![
-        text("Fill")
+        text(raw("Fill"))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),

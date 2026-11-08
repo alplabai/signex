@@ -25,8 +25,9 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Column, Space, button, column, container, row, svg, text, text_input};
+use iced::widget::{Column, Space, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text, text_input};
 
 use signex_library::ComponentRow;
 use signex_types::theme::ThemeTokens;
@@ -87,7 +88,7 @@ pub(crate) fn view<'a>(
     let border_c = theme_ext::border_color(tokens);
 
     // ── Header: filter input ─────────────────────────────────────
-    let filter = text_input("Filter components…", &state.components_panel.filter)
+    let filter = text_input(raw("Filter components…"), &state.components_panel.filter)
         .on_input(LibraryMessage::ComponentsPanelSetFilter)
         .padding(SP.s)
         .size(PANEL_TEXT_SIZE);
@@ -148,9 +149,11 @@ pub(crate) fn view<'a>(
     if state.open_libraries.is_empty() {
         col = col.push(
             container(
-                text("No libraries mounted. Use \"+ Add Library…\" or open a project.")
-                    .size(PANEL_TEXT_SIZE)
-                    .color(muted),
+                text(raw(
+                    "No libraries mounted. Use \"+ Add Library…\" or open a project.",
+                ))
+                .size(PANEL_TEXT_SIZE)
+                .color(muted),
             )
             .padding([10.0, SP.m])
             .boxed(),
@@ -198,13 +201,13 @@ fn id_clash_notices<'a>(
     let mut notices: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.xs);
     for notice in &state.id_clash_notices {
         notices = notices.push(
-            text(notice.message())
+            text(raw(notice.message()))
                 .size(ROW_TEXT_SIZE)
                 .color(text_c)
                 .boxed(),
         );
     }
-    let dismiss = button(text("Dismiss").size(ROW_TEXT_SIZE).color(text_c))
+    let dismiss = button(text(raw("Dismiss")).size(ROW_TEXT_SIZE).color(text_c))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::IdClashNoticesDismissed)
         .style(crate::styles::menu_item(tokens));
@@ -247,7 +250,7 @@ fn view_section<'a>(
         row![
             chev,
             Space::new().width(6),
-            text(header_label)
+            text(raw(header_label))
                 .size(SECTION_HEADER_TEXT_SIZE)
                 .color(text_c),
         ]
@@ -275,10 +278,14 @@ fn view_section<'a>(
         src,
         ComponentsMountSource::Installed | ComponentsMountSource::Global
     ) {
-        let add_btn = button(text("+ Add Library…").size(ROW_TEXT_SIZE).color(text_c))
-            .padding([SP.xs, SP.m])
-            .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
-            .style(crate::styles::menu_item(tokens));
+        let add_btn = button(
+            text(raw("+ Add Library…"))
+                .size(ROW_TEXT_SIZE)
+                .color(text_c),
+        )
+        .padding([SP.xs, SP.m])
+        .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
+        .style(crate::styles::menu_item(tokens));
         header_row = header_row.push(container(add_btn).padding([0, 6]).boxed());
     }
 
@@ -289,7 +296,7 @@ fn view_section<'a>(
         if libs_for_source.is_empty() {
             let empty_msg = empty_section_text(src, project_libs);
             section_col = section_col.push(
-                container(text(empty_msg).size(HINT_TEXT_SIZE).color(muted))
+                container(text(raw(empty_msg)).size(HINT_TEXT_SIZE).color(muted))
                     .padding([6.0, SP.xl])
                     .boxed(),
             );
@@ -388,11 +395,11 @@ fn view_library_block<'a>(
     col = col.push(
         container(
             row![
-                text(lib.display_name.clone())
+                text(raw(lib.display_name.clone()))
                     .size(PANEL_TEXT_SIZE)
                     .color(text_c)
                     .width(Length::Fill),
-                text(format!("({})", lib.total_rows()))
+                text(raw(format!("({})", lib.total_rows())))
                     .size(HINT_TEXT_SIZE)
                     .color(muted),
             ]
@@ -431,10 +438,10 @@ fn view_library_block<'a>(
     if matched > MAX_ROWS_PER_LIBRARY {
         col = col.push(
             container(
-                text(format!(
+                text(raw(format!(
                     "{} more — refine search",
                     matched - MAX_ROWS_PER_LIBRARY
-                ))
+                )))
                 .size(HINT_TEXT_SIZE)
                 .color(muted),
             )
@@ -446,7 +453,7 @@ fn view_library_block<'a>(
     if matched == 0 && !needle.is_empty() {
         col = col.push(
             container(
-                text("(no matches in this library)")
+                text(raw("(no matches in this library)"))
                     .size(HINT_TEXT_SIZE)
                     .color(muted),
             )
@@ -490,12 +497,12 @@ fn view_row_button<'a>(
 
     let content = container(
         row![
-            text(label_left)
+            text(raw(label_left))
                 .size(ROW_TEXT_SIZE)
                 .color(text_c)
                 .width(Length::FillPortion(3))
                 .wrapping(iced::widget::text::Wrapping::None),
-            text(label_right)
+            text(raw(label_right))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .width(Length::FillPortion(2))

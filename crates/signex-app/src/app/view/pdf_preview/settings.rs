@@ -41,12 +41,13 @@ impl Signex {
         &self,
         label: &'static str,
     ) -> Element<'_, Message> {
-        use iced::widget::{container, text};
+        use iced::widget::container;
+        use signex_widgets::{raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let panel_bg = crate::styles::ti(tokens.panel_bg);
         let border_c = crate::styles::ti(tokens.border);
-        container(text(label).size(TS.label).color(text_c))
+        container(text(raw(label)).size(TS.label).color(text_c))
             .padding([6, 10])
             .width(Length::Fill)
             .style(move |_: &iced::Theme| container::Style {
@@ -67,7 +68,8 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text};
+        use iced::widget::{Space, column, container, row, scrollable};
+        use signex_widgets::{button, checkbox, raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -83,7 +85,7 @@ impl Signex {
             column![].spacing(SP.xs).padding([SP.m, SP.l]);
         if sheet_files.is_empty() {
             file_list = file_list.push(
-                text("No sheets to export — open a schematic first.")
+                text(raw("No sheets to export — open a schematic first."))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
@@ -98,8 +100,8 @@ impl Signex {
                         move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(page.clone()))
                     }),
                     column![
-                        text(name.clone()).size(TS.body).color(text_c),
-                        text(path_str).size(TS.caption).color(text_muted),
+                        text(raw(name.clone())).size(TS.body).color(text_c),
+                        text(raw(path_str)).size(TS.caption).color(text_muted),
                     ]
                     .spacing(1),
                 ]
@@ -120,11 +122,11 @@ impl Signex {
             ..iced::widget::button::Style::default()
         };
         let file_actions = row![
-            button(text("Select All").size(TS.body).color(text_c))
+            button(text(raw("Select All")).size(TS.body).color(text_c))
                 .padding([3.0, SP.m])
                 .on_press(Message::PrintPreview(PrintPreviewMsg::SelectAllFiles))
                 .style(secondary_btn_style),
-            button(text("Clear").size(TS.body).color(text_c))
+            button(text(raw("Clear")).size(TS.body).color(text_c))
                 .padding([3.0, SP.m])
                 .on_press(Message::PrintPreview(PrintPreviewMsg::ClearAllFiles))
                 .style(secondary_btn_style),
@@ -135,7 +137,7 @@ impl Signex {
             self.pdf_section_title("Choose Project Files"),
             container(
                 column![
-                    text("Select the files in the project to export from the list. Multiple files can be selected.")
+                    text(raw("Select the files in the project to export from the list. Multiple files can be selected."))
                         .size(TS.body)
                         .color(text_muted),
                     Space::new().height(6),
@@ -165,7 +167,8 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{Space, checkbox, column, container, row, text};
+        use iced::widget::{Space, column, container, row};
+        use signex_widgets::{checkbox, raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -192,7 +195,7 @@ impl Signex {
                               on: fn(bool) -> Message|
          -> iced::widget::Row<Element<'_, Message>> {
             row![
-                text(label).size(TS.body).color(text_muted).width(150),
+                text(raw(label)).size(TS.body).color(text_muted).width(150),
                 checkbox(value).on_toggle(on),
             ]
             .spacing(SP.m)
@@ -203,20 +206,20 @@ impl Signex {
             self.pdf_section_title("Structure Settings"),
             container(
                 column![
-                    text("If checked, exported sheets are expanded from logical to physical sheets. Choose a variant and which expanded names appear.")
+                    text(raw("If checked, exported sheets are expanded from logical to physical sheets. Choose a variant and which expanded names appear."))
                         .size(TS.body)
                         .color(text_muted),
                     Space::new().height(8),
                     row![
                         checkbox(opts.use_physical_structure)
                             .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetUsePhysicalStructure(v))),
-                        text("Use Physical Structure").size(TS.body).color(text_c),
+                        text(raw("Use Physical Structure")).size(TS.body).color(text_c),
                     ]
                     .spacing(6)
                     .align_y(iced::Alignment::Center),
                     Space::new().height(6),
                     row![
-                        text("Variant").size(TS.body).color(text_muted).width(150),
+                        text(raw("Variant")).size(TS.body).color(text_muted).width(150),
                         variant_picker,
                     ]
                     .spacing(SP.m)
@@ -242,7 +245,8 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use crate::app::state::PdfQuality;
-        use iced::widget::{Space, checkbox, column, container, row, text};
+        use iced::widget::{Space, column, container, row};
+        use signex_widgets::{checkbox, raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -251,7 +255,7 @@ impl Signex {
         let lbl_check = move |label: &'static str, value: bool, on: fn(bool) -> Message| {
             row![
                 checkbox(value).on_toggle(on),
-                text(label).size(TS.body).color(text_c),
+                text(raw(label)).size(TS.body).color(text_c),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center)
@@ -263,15 +267,15 @@ impl Signex {
         .step(0.05_f32)
         .width(180);
         let zoom_col = column![
-            text("Zoom").size(TS.body).color(text_c),
-            text("Slider controls the zoom level in the PDF reader when jumping to components or nets.")
+            text(raw("Zoom")).size(TS.body).color(text_c),
+            text(raw("Slider controls the zoom level in the PDF reader when jumping to components or nets."))
                 .size(TS.caption)
                 .color(text_muted),
             Space::new().height(6),
             row![
-                text("Far").size(TS.caption).color(text_muted),
+                text(raw("Far")).size(TS.caption).color(text_muted),
                 zoom_slider,
-                text("Close").size(TS.caption).color(text_muted),
+                text(raw("Close")).size(TS.caption).color(text_muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
@@ -279,15 +283,19 @@ impl Signex {
         .spacing(SP.xs);
 
         let info_col = column![
-            text("Additional Information").size(TS.body).color(text_c),
+            text(raw("Additional Information"))
+                .size(TS.body)
+                .color(text_c),
             Space::new().height(4),
             lbl_check("Generate nets information", opts.generate_nets_info, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetGenerateNetsInfo(v))
             },),
             Space::new().height(4),
-            text("The following bookmarks can be created in the PDF for nets:")
-                .size(TS.caption)
-                .color(text_muted),
+            text(raw(
+                "The following bookmarks can be created in the PDF for nets:"
+            ))
+            .size(TS.caption)
+            .color(text_muted),
             row![
                 Space::new().width(14),
                 column![
@@ -318,7 +326,7 @@ impl Signex {
         .spacing(SP.xs);
 
         let schematics_include_col = column![
-            text("Schematics include").size(TS.body).color(text_c),
+            text(raw("Schematics include")).size(TS.body).color(text_c),
             Space::new().height(4),
             lbl_check("No-ERC Markers", opts.include_no_erc_markers, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeNoErcMarkers(v))
@@ -347,7 +355,7 @@ impl Signex {
                 }),
             ],
             Space::new().height(8),
-            text("Quality").size(TS.body).color(text_c),
+            text(raw("Quality")).size(TS.body).color(text_c),
             iced::widget::pick_list(
                 Some(preview.quality),
                 vec![
@@ -373,7 +381,9 @@ impl Signex {
         };
 
         let sch_color_col = column![
-            text("Schematics Color Mode").size(TS.body).color(text_c),
+            text(raw("Schematics Color Mode"))
+                .size(TS.body)
+                .color(text_c),
             Space::new().height(4),
             radio(
                 "Color",
@@ -394,7 +404,7 @@ impl Signex {
                 |v| Message::PrintPreview(PrintPreviewMsg::SetColourMode(v))
             ),
             Space::new().height(8),
-            text("PCB Color Mode").size(TS.body).color(text_c),
+            text(raw("PCB Color Mode")).size(TS.body).color(text_c),
             Space::new().height(4),
             radio(
                 "Color",

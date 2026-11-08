@@ -7,10 +7,11 @@
 //! one definition built on [`crate::styles`] tokens, so a theme change
 //! reaches all of them.
 
-use iced::widget::{Space, button, container, row, text};
+use iced::widget::{Space, container, row};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text};
 
 use super::messages::LibraryMessage;
 use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split};
@@ -33,7 +34,12 @@ pub(crate) fn close_x<'a>(
     let sp = Spacing::default();
     let text_c = theme_ext::text_secondary(tokens);
     button(
-        container(text("\u{00D7}".to_string()).size(ts.heading).color(text_c)).padding([0.0, sp.s]),
+        container(
+            text(raw("\u{00D7}".to_string()))
+                .size(ts.heading)
+                .color(text_c),
+        )
+        .padding([0.0, sp.s]),
     )
     .on_press(message)
     .style(crate::styles::outline_button(tokens))
@@ -61,7 +67,7 @@ fn header_strip<'a>(
         // native title, so it stays, as a muted line above the body.
         return match end {
             HeaderEnd::Note(note) => container(
-                text(note)
+                text(raw(note))
                     .size(ts.body)
                     .color(theme_ext::text_secondary(tokens)),
             )
@@ -71,7 +77,7 @@ fn header_strip<'a>(
         };
     }
     let mut line = row![
-        text(title.to_string())
+        text(raw(title.to_string()))
             .size(ts.heading)
             .color(theme_ext::text_primary(tokens)),
         Space::new().width(Length::Fill),
@@ -82,7 +88,7 @@ fn header_strip<'a>(
         HeaderEnd::Close(message) => line = line.push(close_x(message, tokens)),
         HeaderEnd::Note(note) => {
             line = line.push(
-                text(note)
+                text(raw(note))
                     .size(ts.body)
                     .color(theme_ext::text_secondary(tokens))
                     .boxed(),

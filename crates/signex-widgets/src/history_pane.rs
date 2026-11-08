@@ -22,8 +22,9 @@
 //! boundary. Same reason `tab_pill::TabPillStyle` exists separate
 //! from any "real" tab type.
 
+use crate::{raw, text};
 use chrono::{DateTime, Duration, Utc};
-use iced::widget::{Column, Space, Widget, column, container, text};
+use iced::widget::{Column, Space, Widget, column, container};
 use iced::{Border, Element, Length};
 use signex_types::theme::ThemeTokens;
 
@@ -90,16 +91,18 @@ where
 
     for entry in entries {
         let header = iced::widget::row![
-            text(entry.author_name.clone()).size(12).color(primary),
+            text(raw(entry.author_name.clone())).size(12).color(primary),
             Space::new().width(Length::Fill),
-            text(format_relative(entry.time, now)).size(11).color(muted),
+            text(raw(format_relative(entry.time, now)))
+                .size(11)
+                .color(muted),
         ]
         .spacing(8);
 
         let card_inner = column![
             header,
-            text(entry.subject.clone()).size(13).color(primary),
-            text(short_sha(&entry.sha)).size(11).color(muted),
+            text(raw(entry.subject.clone())).size(13).color(primary),
+            text(raw(short_sha(&entry.sha))).size(11).color(muted),
         ]
         .spacing(2);
 
@@ -126,7 +129,7 @@ where
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
     let bg = theme_ext::panel_bg(tokens).background;
-    container(text("No history yet.").size(12).color(muted))
+    container(text(raw("No history yet.")).size(12).color(muted))
         .padding([6, 8])
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {

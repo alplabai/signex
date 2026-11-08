@@ -37,12 +37,13 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, checkbox, column, container, radio, row, text};
+use iced::widget::{Space, column, container, radio, row};
 use iced::{Element, Length, Widget};
 use signex_library::RowId;
 use signex_types::schematic::StampField;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{checkbox, raw, text};
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
@@ -383,24 +384,24 @@ fn render_entry_row<'a>(
             cb,
             Space::new().width(8),
             container(
-                text(format!("{}{}", prefix, entry.ref_des))
+                text(raw(format!("{}{}", prefix, entry.ref_des)))
                     .size(TS.label)
                     .color(text_c)
             )
             .width(Length::Fixed(96.0)),
-            container(text(&entry.library_name).size(TS.body).color(muted))
+            container(text(raw(&entry.library_name)).size(TS.body).color(muted))
                 .width(Length::Fixed(160.0)),
             container(
-                text(format!(
+                text(raw(format!(
                     "{} \u{2192} {}",
                     entry.current_version, entry.latest_version
-                ))
+                )))
                 .size(TS.body)
                 .color(text_c),
             )
             .width(Length::Fill),
             container(
-                text(entry.bump_kind.label())
+                text(raw(entry.bump_kind.label()))
                     .size(TS.caption)
                     .color(badge_color)
             )
@@ -427,12 +428,12 @@ fn render_conflict<'a>(
     };
     container(
         row![
-            text(format!(
+            text(raw(format!(
                 "{}: yours {:?}, library now {:?}",
                 field.label(),
                 conflict.mine,
                 conflict.library
-            ))
+            )))
             .size(TS.body)
             .color(muted)
             .width(Length::Fill),

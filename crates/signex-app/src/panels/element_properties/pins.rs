@@ -196,7 +196,7 @@ fn table_row<'a>(
             continue;
         }
         line = line.push(
-            text(cell)
+            text(raw(cell))
                 .size(TS.body)
                 .color(colour)
                 .width(Length::FillPortion(COLUMN_PORTIONS[index]))

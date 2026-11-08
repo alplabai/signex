@@ -4,12 +4,13 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use iced::widget::{Widget, button, column, container, pick_list, row, text, text_input};
+use iced::widget::{Widget, column, container, pick_list, row};
 use iced::{Element, Length};
 use signex_library::RangeOp;
 use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text, text_input};
 
 use super::draft::{BoundDraft, RangeFilterDraft, RangeFilters};
 use crate::library::messages::{RangeBound, RangeFilterMsg};
@@ -110,7 +111,7 @@ fn filter_row<'a, M: Clone + 'a>(
     };
 
     let mut line = row![
-        text(label.to_string()).size(TS.body).color(text_c),
+        text(raw(label.to_string())).size(TS.body).color(text_c),
         op,
         bound(key, RangeBound::Low, &draft.low, &draft.unit, tokens, wrap),
     ]
@@ -118,7 +119,7 @@ fn filter_row<'a, M: Clone + 'a>(
     .align_y(iced::Alignment::Center);
     if draft.op.is_between() {
         line = line
-            .push(text("and").size(TS.body).color(muted).boxed())
+            .push(text(raw("and")).size(TS.body).color(muted).boxed())
             .push(bound(
                 key,
                 RangeBound::High,
@@ -130,7 +131,7 @@ fn filter_row<'a, M: Clone + 'a>(
     }
     let clear = {
         let (w, key) = (Rc::clone(wrap), key.to_string());
-        button(text("✕").size(TS.body).color(muted))
+        button(text(raw("✕")).size(TS.body).color(muted))
             .padding([2, 6])
             .style(button::text)
             .on_press(w(RangeFilterMsg::Cleared { key }))
@@ -154,7 +155,7 @@ fn filter_row<'a, M: Clone + 'a>(
         });
     let mut out = column![line].spacing(2);
     if let Some((msg, color)) = status {
-        out = out.push(text(msg).size(TS.caption).color(color).boxed());
+        out = out.push(text(raw(msg)).size(TS.caption).color(color).boxed());
     }
     container(out).width(Length::Shrink).boxed()
 }
@@ -171,7 +172,7 @@ fn bound<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let number = {
         let (w, key) = (Rc::clone(wrap), key.to_string());
-        text_input("number", &b.text)
+        text_input(raw("number"), &b.text)
             .on_input(move |text| {
                 w(RangeFilterMsg::NumberEdited {
                     key: key.clone(),
@@ -193,7 +194,7 @@ fn bound<'a, M: Clone + 'a>(
             })
         })
         .unwrap_or_else(|| {
-            text(unit.glyph().to_string())
+            text(raw(unit.glyph().to_string()))
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
                 .boxed()

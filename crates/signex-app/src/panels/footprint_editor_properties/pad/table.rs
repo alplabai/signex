@@ -4,8 +4,9 @@
 //! rows, individual data cells) — used by `pad_form::render_pad_form_pad_stack`
 //! to compose the COPPER / HOLE / PASTE / SOLDER rows.
 
-use iced::widget::{Widget, container, pick_list, text, text_input};
+use iced::widget::{Widget, container, pick_list};
 use iced::{Color, Length, Theme};
+use signex_widgets::{raw, text, text_input};
 
 use super::super::super::{PanelMsg, PanelPalette};
 use super::form::{
@@ -35,7 +36,7 @@ pub(super) fn pad_table_header<'a>(
     for (i, label) in cols.iter().enumerate() {
         let portion = portions.get(i).copied().unwrap_or(1);
         row = row.push(
-            text(label.to_string())
+            text(raw(label.to_string()))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(portion))
@@ -75,7 +76,7 @@ pub(super) fn pad_table_row<'a>(
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
     row = row.push(
-        text(label.to_string())
+        text(raw(label.to_string()))
             .size(TS.caption)
             .color(primary)
             .width(Length::FillPortion(label_portion))
@@ -101,7 +102,7 @@ pub(super) fn pad_table_input_cell<'a>(
     primary: Color,
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    text_input(placeholder, value)
+    text_input(raw(placeholder), value)
         .size(TS.caption)
         .padding(SP.xs)
         .style(crate::panels::footprint_editor_properties::fp_field_style(
@@ -134,7 +135,7 @@ pub(super) fn pad_table_check_cell<'a>(
     on_toggle: impl Fn(bool) -> PanelMsg + 'a,
 ) -> iced::Element<'a, PanelMsg> {
     container(
-        iced::widget::checkbox(on)
+        signex_widgets::checkbox(on)
             .on_toggle(on_toggle)
             .size(TS.label)
             .spacing(0),
@@ -152,7 +153,7 @@ pub(super) fn pad_table_disabled_cell<'a>(
     muted: Color,
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    container(text(value.into()).size(TS.caption).color(muted))
+    container(text(raw(value.into())).size(TS.caption).color(muted))
         .padding([3, 6])
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -177,7 +178,7 @@ pub(super) fn pad_table_static_cell<'a>(
     value: impl Into<String>,
     muted: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    container(text(value.into()).size(TS.caption).color(muted))
+    container(text(raw(value.into())).size(TS.caption).color(muted))
         .padding([3, 6])
         .width(Length::Fill)
         .boxed()

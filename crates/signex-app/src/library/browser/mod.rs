@@ -9,14 +9,12 @@
 
 use std::collections::BTreeMap;
 
-use iced::widget::{
-    Column, Space, button, column, container, mouse_area, pick_list, row, scrollable, text,
-    text_input,
-};
+use iced::widget::{Column, Space, column, container, mouse_area, pick_list, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{ComponentRow, LifecycleState, RowId};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text, text_input};
 
 use super::messages::LibraryMessage;
 use super::range_filter::range_filter_bar;
@@ -82,16 +80,16 @@ pub fn view<'a>(
         None => {
             return container(
                 column![
-                    text(format!(
+                    text(raw(format!(
                         "Library not mounted: {}",
                         library_path.display()
-                    ))
+                    )))
                     .size(TS.title)
                     .color(text_c),
                     Space::new().height(6),
-                    text(
+                    text(raw(
                         "Re-open the library through File ▸ Library ▸ Open Library… or via the project tree.",
-                    )
+                    ))
                     .size(TS.body)
                     .color(muted),
                 ]
