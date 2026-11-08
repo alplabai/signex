@@ -4,9 +4,7 @@
 mod support;
 
 use serde_json::{Value, json};
-#[cfg(unix)]
-use support::Live;
-use support::{fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
+use support::{Live, fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
 
 fn refusal(out: &support::Output, index: usize) -> &str {
     assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
@@ -749,7 +747,12 @@ fn a_changed_head_is_read_again_by_the_next_listing() {
             .as_array()
             .unwrap()
             .iter()
-            .find(|d| d["path"] == extra.display().to_string())
+            // By file name: a listed path may carry a verbatim prefix on Windows.
+            .find(|d| {
+                d["path"]
+                    .as_str()
+                    .is_some_and(|p| p.ends_with("Extra.snxsch"))
+            })
             .map(|d| d["id"].clone())
             .expect("listed")
     };
