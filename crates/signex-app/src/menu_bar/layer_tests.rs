@@ -111,7 +111,7 @@ fn an_open_dropdown_hides_the_text_drawn_under_it() {
     let texts = crate::layout_probe::lay_out_texts(scene(&tokens), WINDOW);
     let file = crate::layout_probe::find(&texts, "File").bounds;
     // A patch inside the File dropdown's rows, under its first few rows.
-    let bar = super::menu_bar_height(&tokens);
+    let bar = super::MENU_BAR_HEIGHT;
     let inside = iced::Rectangle::new(
         Point::new(file.x + 20.0, bar + 30.0),
         Size::new(120.0, 60.0),

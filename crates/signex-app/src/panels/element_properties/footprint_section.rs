@@ -51,8 +51,6 @@ pub(super) fn card_lines(card: &FootprintCardView) -> Vec<String> {
 pub(super) fn push_footprint_section<'a>(
     col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
-    muted: Color,
-    border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(card) = ctx.footprint_card.as_ref() else {
         return col;
@@ -62,8 +60,6 @@ pub(super) fn push_footprint_section<'a>(
             FOOTPRINT_SECTION_KEY,
             "Footprint",
             &ctx.collapsed_sections,
-            muted,
-            border_c,
             move || {
                 Column::new()
                     .width(Length::Fill)

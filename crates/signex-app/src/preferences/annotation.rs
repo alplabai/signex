@@ -24,8 +24,7 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
         pick_list(Some(draft), AnnotateUndo::ALL, |v: &AnnotateUndo| v
             .to_string())
         .graphite()
-        .on_select(PrefMsg::DraftAnnotateUndo)
-        .text_size(12),
+        .on_select(PrefMsg::DraftAnnotateUndo),
     ]
     .align_y(iced::Alignment::Center);
 

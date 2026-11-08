@@ -88,7 +88,6 @@ pub(in crate::app::project_tab) fn view<'a>(
             line: choice.0,
         })
     })
-    .text_size(ts.label)
     .width(Length::Fill);
     body = body.push(labelled("Wire line style", line, tokens));
     let fill = pick_list(
@@ -103,7 +102,6 @@ pub(in crate::app::project_tab) fn view<'a>(
             fill: choice.0,
         })
     })
-    .text_size(ts.label)
     .width(Length::Fill);
     body = body.push(labelled("New shape fill", fill, tokens));
     container(body).padding([sp.xl, sp.xl]).boxed()

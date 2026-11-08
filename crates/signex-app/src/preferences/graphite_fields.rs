@@ -63,25 +63,19 @@ pub(super) fn font_pick_list<'a>(
     pick_list(Some(current), families, |s: &String| s.clone())
         .graphite()
         .on_select(PrefMsg::DraftFont)
-        .text_size(TS.label)
         .padding([SP.s, SP.m])
         .width(200)
         .boxed()
 }
 
-/// `scrollable` style of the Preferences panes: a thin neutral scroller on
-/// Graphite, the stock style on legacy themes.
+/// `scrollable` style of the Preferences panes: a thin neutral scroller.
 pub(super) fn scroll_style(
     t: &ThemeTokens,
 ) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style + 'static {
-    let graphite = styles::is_graphite(t);
     let r = tokens::resolve(t);
     let (thumb, thumb_hot) = (r.line_strong, r.ink4);
     move |theme: &Theme, status: scrollable::Status| {
         let mut style = scrollable::default(theme, status);
-        if !graphite {
-            return style;
-        }
         let idle = matches!(status, scrollable::Status::Active { .. });
         for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
             rail.background = None;

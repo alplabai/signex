@@ -112,8 +112,7 @@ pub fn view<'a>(
             move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
         })
         .placeholder("Select class…")
-        .padding(6)
-        .text_size(12);
+        .padding(6);
 
     let selected_state = LIFECYCLE_OPTIONS
         .iter()
@@ -130,8 +129,7 @@ pub fn view<'a>(
         move |pick: LifecyclePick| send(BrowserEditMsg::SetState(pick.0))
     })
     .placeholder("Select lifecycle…")
-    .padding(6)
-    .text_size(12);
+    .padding(6);
 
     // Only a URL ref is editable here. A pinned PDF is shown read-only so a
     // keystroke can never replace it (and its hash) with a bare URL.

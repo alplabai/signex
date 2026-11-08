@@ -632,7 +632,7 @@ mod tests {
         let model = PreviewFootprint::build(&signex_library::primitive::Footprint::empty("FX"));
         let board = crate::styles::board_canvas_colors();
         let board_bg = crate::render_config::to_iced(&board.background);
-        let mut toggle = |app: &mut Signex, id: ThemeId| {
+        let toggle = |app: &mut Signex, id: ThemeId| {
             let _ = app.update(Message::Ui(UiMsg::ThemeChanged(id)));
             // Schematic canvas: the theme's own colours.
             let want = canvas_colors(id);

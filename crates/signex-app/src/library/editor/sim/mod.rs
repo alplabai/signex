@@ -172,7 +172,6 @@ pub fn view<'a>(
     )
     .graphite()
     .on_select(move |SimKindPick(k)| event(&kind_address, EditorMsg::SimSetKind(k)))
-    .text_size(TS.body)
     .padding([SP.s, SP.m])
     .boxed();
 

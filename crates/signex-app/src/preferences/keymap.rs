@@ -123,7 +123,6 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         )
         .graphite()
         .on_select(|profile: KeymapProfileOption| PrefMsg::KeymapProfileSelected(profile.id))
-        .text_size(12)
         .width(180),
         button(container(text("Create").size(TS.body)).padding([5.0, SP.l]))
             .on_press(PrefMsg::KeymapCreateCustomProfile)
@@ -351,15 +350,14 @@ enum ChipTone {
     Warning,
 }
 
-/// A table row's trigger: key caps on Graphite for a plain neutral stroke,
-/// the chip otherwise (warnings, sequences, gestures, legacy themes).
+/// A table row's trigger: key caps for a plain neutral stroke, the
+/// chip otherwise (warnings, sequences, gestures).
 fn trigger_display<'a>(
     label: &str,
     tone: ChipTone,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     if matches!(tone, ChipTone::Neutral)
-        && crate::styles::is_graphite(tokens)
         && let Some(caps) = keycaps::key_caps(label, tokens)
     {
         return caps;

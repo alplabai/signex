@@ -140,7 +140,7 @@ impl Signex {
             .push(centered_search.boxed());
         container(inner)
             .width(Length::Fill)
-            .height(crate::menu_bar::GRAPHITE_MENU_BAR_HEIGHT)
+            .height(crate::menu_bar::MENU_BAR_HEIGHT)
             .style(styles::toolbar_strip(tokens))
             .boxed()
     }

@@ -182,7 +182,6 @@ where
             iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
                 .graphite()
                 .on_select(on_change)
-                .text_size(11)
                 .padding([SP.xs, 6.0])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
@@ -267,7 +266,6 @@ pub fn form_grid_row(
                 .unwrap_or(2.54);
             on_size(mm)
         })
-        .text_size(11)
         .width(Length::Fill);
 
     let label_widget = property_label(label.to_string(), label_c);
@@ -385,7 +383,6 @@ pub fn canvas_font_popup<'a>(
     )
     .graphite()
     .on_select(PanelMsg::SetCanvasFont)
-    .text_size(11)
     .width(Length::Fill);
 
     let size_input = NumberInput::new(&current_size_px, 6.0..=36.0, PanelMsg::SetCanvasFontSize)

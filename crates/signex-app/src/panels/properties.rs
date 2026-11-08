@@ -333,17 +333,14 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── Tab content ──
     if tab == 0 {
-        col = col.push(view_properties_general(ctx, muted, primary, border_c).boxed());
+        col = col.push(view_properties_general(ctx, primary).boxed());
     } else {
         col = col.push(
             view_properties_parameters(
                 &ctx.tokens,
                 muted,
                 primary,
-                border_c,
                 crate::styles::ti(ctx.tokens.selection),
-                crate::styles::ti(ctx.tokens.accent),
-                crate::styles::ti(ctx.tokens.hover),
             )
             .boxed(),
         );
@@ -433,8 +430,6 @@ fn view_pre_placement<'a>(
             "preplace_location",
             "Location",
             &ctx.collapsed_sections,
-            primary,
-            border_c,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
                 c = c.push(form_input_row(
@@ -495,8 +490,6 @@ fn view_pre_placement<'a>(
                 "preplace_props",
                 "Properties",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     if show_text_field {
@@ -574,8 +567,6 @@ fn view_pre_placement<'a>(
                 "preplace_shape",
                 "Properties",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     c = c.push(form_edit_row_f64(

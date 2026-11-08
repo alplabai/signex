@@ -124,7 +124,6 @@ where
     pick_list(Some(selected), options, |t: &T| t.to_string())
         .graphite()
         .on_select(on_change)
-        .text_size(10)
         .padding([SP.xs, 6.0])
         .width(Length::Fill)
         .boxed()

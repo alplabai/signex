@@ -77,7 +77,6 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
                 })
                 .placeholder("Add range filter…")
                 .padding(SP.s)
-                .text_size(TS.body)
                 .boxed(),
         );
     }
@@ -109,7 +108,6 @@ fn filter_row<'a, M: Clone + 'a>(
             })
         })
         .padding([3, 6])
-        .text_size(TS.body)
     };
 
     let mut line = row![
@@ -187,20 +185,19 @@ fn bound<'a, M: Clone + 'a>(
             .width(Length::Fixed(NUMBER_W))
     };
     let (w, pick_key) = (Rc::clone(wrap), key.to_string());
-    let unit_part: Element<'a, M> =
-        prefix_picker(unit, b.prefix, TS.body, move |prefix: SiPrefix| {
-            w(RangeFilterMsg::PrefixPicked {
-                key: pick_key.clone(),
-                bound: which,
-                prefix,
-            })
+    let unit_part: Element<'a, M> = prefix_picker(unit, b.prefix, move |prefix: SiPrefix| {
+        w(RangeFilterMsg::PrefixPicked {
+            key: pick_key.clone(),
+            bound: which,
+            prefix,
         })
-        .unwrap_or_else(|| {
-            text(unit.glyph().to_string())
-                .size(TS.body)
-                .color(theme_ext::text_secondary(tokens))
-                .boxed()
-        });
+    })
+    .unwrap_or_else(|| {
+        text(unit.glyph().to_string())
+            .size(TS.body)
+            .color(theme_ext::text_secondary(tokens))
+            .boxed()
+    });
     row![number, unit_part]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)

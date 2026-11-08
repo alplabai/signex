@@ -120,8 +120,7 @@ pub(super) fn content_editing<'a>(
             ToString::to_string,
         )
         .graphite()
-        .on_select(PrefMsg::DraftPasteDesignators)
-        .text_size(12),
+        .on_select(PrefMsg::DraftPasteDesignators),
     ]
     .align_y(iced::Alignment::Center);
 

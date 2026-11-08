@@ -103,7 +103,7 @@ pub(super) fn view<'a>(
     let (pick_address, pick_name, pick_unit) =
         (address.clone(), name.to_string(), unit_token.clone());
     let picker = known.and_then(|u| {
-        prefix_picker(&u, state.measurement_prefix(name), TS.body, move |prefix| {
+        prefix_picker(&u, state.measurement_prefix(name), move |prefix| {
             super::params::editor_event(
                 &pick_address,
                 EditorMsg::ParamPrefixPicked {

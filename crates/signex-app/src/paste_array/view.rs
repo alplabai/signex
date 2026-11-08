@@ -83,8 +83,7 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
             |mode: &PasteDesignators| mode.to_string(),
         )
         .graphite()
-        .on_select(PasteArrayMsg::DesignatorsChosen)
-        .text_size(12),
+        .on_select(PasteArrayMsg::DesignatorsChosen),
     ]
     .align_y(iced::Alignment::Center)
     .spacing(SP.m);

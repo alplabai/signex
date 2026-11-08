@@ -54,8 +54,7 @@ impl Signex {
             Message::PrintPreview(PrintPreviewMsg::SetPageSize(
                 kind.select(current_size, orientation),
             ))
-        })
-        .text_size(FIELD_TEXT);
+        });
         // A Custom page is exactly the width and height entered, so its
         // orientation is derived from them and shown, not picked.
         let orientation_control: Element<'static, Message> =
@@ -75,7 +74,6 @@ impl Signex {
                 )
                 .graphite()
                 .on_select(|o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)))
-                .text_size(FIELD_TEXT)
                 .boxed()
             };
 
@@ -105,8 +103,7 @@ impl Signex {
             |m: &PdfScaleMode| m.to_string(),
         )
         .graphite()
-        .on_select(|m| Message::PrintPreview(PrintPreviewMsg::SetScaleMode(m)))
-        .text_size(FIELD_TEXT);
+        .on_select(|m| Message::PrintPreview(PrintPreviewMsg::SetScaleMode(m)));
         controls = controls.push(text("Scale").size(FIELD_TEXT).color(text_muted).boxed());
         controls = controls.push(scale_picker.boxed());
         if matches!(options.scale, PdfScale::Percent(_)) {

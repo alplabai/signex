@@ -60,8 +60,6 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
             "sel_child_sheet_props",
             "Properties",
             &ctx.collapsed_sections,
-            muted,
-            border_c,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
@@ -95,8 +93,6 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
             "sel_child_sheet_style",
             "Style",
             &ctx.collapsed_sections,
-            muted,
-            border_c,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);

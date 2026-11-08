@@ -65,7 +65,6 @@ pub fn view<'a>(
     .graphite()
     .on_select(LibraryMessage::DocumentOptionsSetSheetColor)
     .padding([sp.xs, sp.s])
-    .text_size(ts.body)
     .boxed();
 
     let grid_check: Element<'a, LibraryMessage> = iced::widget::checkbox(state.draft.grid_visible)

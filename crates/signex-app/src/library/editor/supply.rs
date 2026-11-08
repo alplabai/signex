@@ -169,7 +169,6 @@ fn status_picker<'a>(
     pick_list(Some(current), STATUS_OPTS, status_label)
         .graphite()
         .on_select(move |s| editor_event(&address, make(s)))
-        .text_size(TS.label)
         .padding([SP.s, SP.m])
         .width(Length::Fill)
         .boxed()
@@ -377,7 +376,6 @@ fn listing_row<'a>(
             EditorMsg::SupplyListingSetDistributor { idx, value },
         )
     })
-    .text_size(TS.label)
     .padding([SP.s, SP.m])
     .width(Length::Fill);
 

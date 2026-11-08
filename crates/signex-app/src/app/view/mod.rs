@@ -204,7 +204,6 @@ impl Signex {
         let menu_ctx = crate::menu_bar::MenuContext {
             commands: self.command_context(Some(window_id)),
             has_project: document.active_project.is_some(),
-            scale_factor: ui.device_px_per_logical_px(window_id),
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries(),
             open_panels: self.open_panels(),

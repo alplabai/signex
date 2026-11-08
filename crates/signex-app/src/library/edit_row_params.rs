@@ -215,7 +215,7 @@ fn param_row<'a>(
         let selected = edit.param_prefix.get(key).copied().unwrap_or(SiPrefix::One);
         let send_p = send.clone();
         let key_p = key_owned.clone();
-        prefix_picker(&u, selected, TS.body, move |prefix| {
+        prefix_picker(&u, selected, move |prefix| {
             send_p(BrowserEditMsg::ParamPrefixPicked {
                 key: key_p.clone(),
                 prefix,
@@ -254,7 +254,7 @@ fn param_row<'a>(
         (None, Ok(selected)) => {
             let send_u = send.clone();
             let key_for_u = key_owned.clone();
-            unit_picker(selected, true, TS.body, move |unit| {
+            unit_picker(selected, true, move |unit| {
                 send_u(BrowserEditMsg::SetParamUnit {
                     key: key_for_u.clone(),
                     unit,

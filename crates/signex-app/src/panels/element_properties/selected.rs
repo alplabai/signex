@@ -91,8 +91,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 "sel_location",
                 "Location",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     c = c.push(form_input_row(
@@ -129,8 +127,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 "sel_props",
                 "Properties",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     c = c.push(form_edit_row("Name", &name_val, muted, move |s| {
@@ -188,8 +184,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 "sel_props_font",
                 "Font",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     let font_opts: Vec<String> = vec![
@@ -234,8 +228,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 "sel_net",
                 "General (Net)",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     c = c.push(form_input_row(
@@ -284,8 +276,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 "sel_net_params",
                 "Parameters (Net)",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     c = c.push(net_params_tabs(primary, input_bg, input_bdr));
@@ -352,9 +342,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 })
                 .collect();
 
-            col = super::pins::push_focused_pin_section(col, ctx, muted, border_c);
+            col = super::pins::push_focused_pin_section(col, ctx, muted);
             // Fixed label column on Graphite, so no label is clipped.
-            let lbl = LabelInk::for_tokens(muted, &ctx.tokens);
+            let lbl = LabelInk::graphite(muted);
             if let Some(id) = uuid {
                 // General section — editable
                 col = col.push(
@@ -362,8 +352,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_general",
                         "General",
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_edit_row("Designator", &reference, lbl, move |s| {
@@ -436,8 +424,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_location",
                         "Location",
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_input_row(
@@ -458,8 +444,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_graphical",
                         "Graphical",
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_check_row(
@@ -510,8 +494,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_parameters",
                         &header_label,
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             if section_params.is_empty() {
@@ -537,7 +519,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     .boxed(),
                 );
 
-                col = super::footprint_section::push_footprint_section(col, ctx, muted, border_c);
+                col = super::footprint_section::push_footprint_section(col, ctx);
                 col = super::pins::push_pins_section(col, ctx, muted, primary, border_c);
             }
         }
@@ -563,8 +545,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_basic",
                         "Basic Properties",
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_input_row(
@@ -602,8 +582,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_text",
                         "Text Properties",
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_input_row(
@@ -675,8 +653,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_location",
                         "Location",
                         &ctx.collapsed_sections,
-                        primary,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_input_row(
@@ -723,8 +699,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_props",
                         "Properties",
                         &ctx.collapsed_sections,
-                        primary,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
@@ -809,8 +783,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_basic",
                         "Basic Properties",
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_edit_row("Text", &note_text, muted, move |s| {
@@ -827,8 +799,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         "sel_text",
                         "Text Properties",
                         &ctx.collapsed_sections,
-                        muted,
-                        border_c,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
                             c = c.push(form_input_row(
@@ -892,20 +862,13 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 .cloned()
                 .collect();
             col = col.push(
-                ctx.collapsible(
-                    "sel_general",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        for (key, value) in &info {
-                            c = c.push(prop_kv_row(key, value, muted, primary));
-                        }
-                        c
-                    },
-                )
+                ctx.collapsible("sel_general", "Properties", &ctx.collapsed_sections, || {
+                    let mut c = Column::new().spacing(0).width(Length::Fill);
+                    for (key, value) in &info {
+                        c = c.push(prop_kv_row(key, value, muted, primary));
+                    }
+                    c
+                })
                 .boxed(),
             );
         }
@@ -924,25 +887,18 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let locked = get("Locked") == "Yes";
         let item = signex_types::schematic::SelectedItem::new(id, kind);
         col = col.push(
-            ctx.collapsible(
-                "sel_state",
-                "State",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    Column::new()
-                        .spacing(0)
-                        .width(Length::Fill)
-                        .push(form_check_row(
-                            "Locked",
-                            locked,
-                            PanelMsg::ToggleItemLocked(item),
-                            muted,
-                            panel_bg,
-                        ))
-                },
-            )
+            ctx.collapsible("sel_state", "State", &ctx.collapsed_sections, move || {
+                Column::new()
+                    .spacing(0)
+                    .width(Length::Fill)
+                    .push(form_check_row(
+                        "Locked",
+                        locked,
+                        PanelMsg::ToggleItemLocked(item),
+                        muted,
+                        panel_bg,
+                    ))
+            })
             .boxed(),
         );
     }

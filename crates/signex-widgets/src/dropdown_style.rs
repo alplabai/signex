@@ -1,7 +1,8 @@
 //! The one Graphite look of every `pick_list` and its menu.
 //!
 //! Call sites add [`GraphiteDropdown::graphite`] right after `pick_list(..)`;
-//! none keeps its own colours. The look is found from the theme's name (the
+//! none keeps its own colours, font or size: the closed field reads in the UI
+//! face at the menu label size, the same as every menu row. The look is found from the theme's name (the
 //! Graphite themes only), so the style closures need no tokens. On any other
 //! theme the stock iced style applies.
 
@@ -12,12 +13,18 @@ use iced::widget::{PickList, pick_list};
 use iced::{Background, Border, Color, Shadow, Theme, Vector};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 
+use crate::active_bar::dropdown::MENU_LABEL_SIZE;
 use crate::theme_ext::{accent, border_color, text_primary, text_secondary, to_color};
 
 /// Corner radius of the closed field.
 pub const FIELD_RADIUS: f32 = 7.0;
 /// Corner radius of the open menu card.
 pub const MENU_RADIUS: f32 = 10.0;
+/// Family of the closed field's text: the bundled UI face.
+pub const FIELD_FONT_FAMILY: &str = "Inter";
+/// Text size of the closed field and its menu rows: the menu label token, so
+/// a dropdown reads like the menus.
+pub const FIELD_TEXT_SIZE: f32 = MENU_LABEL_SIZE;
 /// Alpha of the row hover wash: the ink colour over the card.
 const HOVER_ALPHA: f32 = 0.08;
 /// Shadow strength when the theme sets none.
@@ -149,9 +156,16 @@ pub fn pick_list_menu_style(theme: &Theme) -> menu::Style {
     }
 }
 
+/// The face of every dropdown field.
+#[must_use]
+pub fn field_font() -> iced::Font {
+    iced::Font::with_family(iced::font::Family::name(FIELD_FONT_FAMILY))
+}
+
 /// Gives a `pick_list` the shared look.
 pub trait GraphiteDropdown {
-    /// Field and menu styled by [`pick_list_style`] / [`pick_list_menu_style`].
+    /// Field and menu styled by [`pick_list_style`] / [`pick_list_menu_style`],
+    /// set in [`field_font`] at [`FIELD_TEXT_SIZE`].
     #[must_use]
     fn graphite(self) -> Self;
 }
@@ -164,7 +178,10 @@ where
     M: Clone,
 {
     fn graphite(self) -> Self {
-        self.style(pick_list_style).menu_style(pick_list_menu_style)
+        self.style(pick_list_style)
+            .menu_style(pick_list_menu_style)
+            .font(field_font())
+            .text_size(FIELD_TEXT_SIZE)
     }
 }
 
@@ -189,6 +206,19 @@ mod tests {
                 warning: Color::WHITE,
             },
         )
+    }
+
+    #[test]
+    fn a_graphite_dropdown_reads_in_the_ui_face_at_the_menu_label_size() {
+        assert_eq!(FIELD_TEXT_SIZE, MENU_LABEL_SIZE);
+        assert_eq!(FIELD_TEXT_SIZE, 12.0);
+        assert_eq!(
+            field_font(),
+            iced::Font::with_family(iced::font::Family::name("Inter"))
+        );
+        // `.graphite()` applies both to the widget.
+        let _: PickList<'_, u8, Vec<u8>, u8, (), Theme> =
+            pick_list(Some(1u8), vec![1u8], |n: &u8| n.to_string()).graphite();
     }
 
     #[test]

@@ -172,15 +172,7 @@ pub fn net_class_choices(classes: &[NetClass]) -> Vec<NetClassChoice> {
         .collect()
 }
 
-pub fn view_net_classes_section<'a>(
-    ctx: &'a PanelContext,
-    palette: PanelPalette,
-) -> Column<Element<'a, PanelMsg>> {
-    let PanelPalette {
-        primary,
-        border: border_c,
-        ..
-    } = palette;
+pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a, PanelMsg>> {
     let panel = &ctx.net_classes;
     let tokens = &ctx.tokens;
     let theme_id = ctx.theme_id;
@@ -189,11 +181,9 @@ pub fn view_net_classes_section<'a>(
         "prop_net_classes",
         "Net Classes",
         &ctx.collapsed_sections,
-        primary,
-        border_c,
         move || {
             let muted = hint_ink;
-            let label = LabelInk::for_tokens(muted, tokens);
+            let label = LabelInk::graphite(muted);
             let mut c = Column::new().spacing(SP.s).width(Length::Fill);
             if !panel.available {
                 return c.push(

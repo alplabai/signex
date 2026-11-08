@@ -113,7 +113,6 @@ where
             iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
                 .graphite()
                 .on_select(on_change)
-                .text_size(TS.body)
                 .padding(SP.s)
                 .width(Length::FillPortion(VALUE_PORTION))
                 .boxed(),

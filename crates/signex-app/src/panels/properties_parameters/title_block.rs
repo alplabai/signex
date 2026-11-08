@@ -79,19 +79,12 @@ pub struct TitleBlockDraft {
 }
 
 /// The Title Block collapsible section for the active sheet.
-pub fn view_title_block_section<'a>(
-    ctx: &'a PanelContext,
-    _muted: Color,
-    primary: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
+pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
     ctx.collapsible(
         "prop_title_block",
         "Title Block",
         &ctx.collapsed_sections,
-        primary,
-        border_c,
         move || {
             let mut c = Column::new().spacing(0).width(Length::Fill);
             for field in TitleBlockField::ALL {
@@ -123,7 +116,7 @@ pub fn view_title_block_section<'a>(
                 c = c.push(
                     container(
                         row![
-                            property_label(label, LabelInk::for_tokens(muted, &ctx.tokens)),
+                            property_label(label, LabelInk::graphite(muted)),
                             iced::widget::text_input(
                                 project_value.clone().unwrap_or_default(),
                                 value.clone()

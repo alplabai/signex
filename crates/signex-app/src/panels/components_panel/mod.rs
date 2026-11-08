@@ -38,8 +38,6 @@ mod look;
 pub mod split;
 pub mod stock;
 
-const PANEL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
-const SECTION_HEADER_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.label;
 const ROW_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 /// Hints, counts, manufacturer and empty-state subtext; also the layout unit
 /// for the pointer-travel and list-height constants.

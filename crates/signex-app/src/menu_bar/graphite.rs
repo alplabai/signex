@@ -293,8 +293,7 @@ mod tests {
     }
 
     /// One token per menu text: the bar roots, the dropdown and context-menu
-    /// rows (both `MenuMetrics::GRAPHITE`) and the legacy-path constants all
-    /// read the same label size, and every shortcut hint the same mono size.
+    /// rows (both `MenuMetrics::GRAPHITE`) all read the same label size, and every shortcut hint the same mono size.
     #[test]
     fn every_menu_surface_shares_one_label_and_shortcut_size() {
         use signex_widgets::active_bar_dropdown::{
@@ -304,7 +303,5 @@ mod tests {
         assert_eq!(MenuMetrics::GRAPHITE.label_size, ROOT_LABEL_SIZE);
         assert_eq!(MenuMetrics::GRAPHITE.shortcut_size, MENU_SHORTCUT_SIZE);
         const { assert!(MenuMetrics::GRAPHITE.mono_shortcut) };
-        assert_eq!(super::super::MENU_LABEL_SIZE, MENU_LABEL_SIZE);
-        assert_eq!(super::super::MENU_SHORTCUT_SIZE, MENU_SHORTCUT_SIZE);
     }
 }

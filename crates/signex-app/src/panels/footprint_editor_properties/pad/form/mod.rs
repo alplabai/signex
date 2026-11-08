@@ -288,7 +288,6 @@ where
             pick_list(Some(selected), options, |t: &T| t.to_string())
                 .graphite()
                 .on_select(on_change)
-                .text_size(10)
                 .padding([3.0, SP.m])
                 .width(fw.1),
         ]

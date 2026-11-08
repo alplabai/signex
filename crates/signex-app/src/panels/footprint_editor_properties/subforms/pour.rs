@@ -64,7 +64,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
     )
     .graphite()
     .on_select(move |v| PanelMsg::FpEditorSetPourFillType { id, value: v })
-    .text_size(10)
     .padding([3.0, SP.m]);
     col = col.push(
         container(
