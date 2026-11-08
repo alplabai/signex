@@ -130,7 +130,7 @@ mod tests {
         let (_guard, root) = root();
         let (_other_guard, other) = self::root();
         std::os::unix::fs::symlink(other.join("gone"), root.join("dangling")).unwrap();
-        let err = confine(&root.join("dangling"), &[root.clone()]).unwrap_err();
+        let err = confine(&root.join("dangling"), std::slice::from_ref(&root)).unwrap_err();
         assert!(err.contains("cannot be resolved"), "{err}");
     }
 }

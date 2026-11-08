@@ -121,7 +121,7 @@ mod tests {
             }
         }
         let roots = allowed_roots(&project, &broad, &broad, Some(&home));
-        assert_eq!(roots, [project.clone()], "{roots:?}");
+        assert_eq!(roots, std::slice::from_ref(&project), "{roots:?}");
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
         // Not mounted: the link does not widen the roots.
         assert_eq!(
             allowed_roots(&project, &listed, &[], None),
-            [project.clone()]
+            std::slice::from_ref(&project)
         );
         // Mounted under its resolved path, it is a library like any other.
         let roots = allowed_roots(&project, &listed, std::slice::from_ref(&other), None);

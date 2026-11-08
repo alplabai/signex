@@ -31,7 +31,7 @@ fn a_command_outside_the_default_capabilities_names_the_one_it_needs() {
         "`save_document_as` needs the `save` capability; pass --save"
     );
 
-    let bom = run_cli(&["run", project], &one(json!({"id": "report_manager_bom"})));
+    let bom = run_cli(&["run", project], one(json!({"id": "report_manager_bom"})));
     assert_eq!(
         refusal(&bom, 0),
         "`report_manager_bom` needs the `export` capability; pass --allow export"
@@ -57,7 +57,7 @@ fn a_path_outside_the_project_is_refused_and_allow_path_opens_that_folder_only()
     );
     let climbing = run_cli(
         &["run", project],
-        &one(json!({"id": "open_document", "args": {"path": "../../etc/passwd"}})),
+        one(json!({"id": "open_document", "args": {"path": "../../etc/passwd"}})),
     );
     assert_eq!(
         climbing.lines[0]["status"], "refused",
@@ -96,7 +96,7 @@ fn a_symlink_in_the_project_that_leaves_it_is_refused() {
     std::os::unix::fs::symlink(&other, fx.dir.join("link")).unwrap();
     let out = run_cli(
         &["run", fx.project.to_str().unwrap()],
-        &one(json!({"id": "open_document", "args": {"path": "link/secret.snxsch"}})),
+        one(json!({"id": "open_document", "args": {"path": "link/secret.snxsch"}})),
     );
     assert!(
         refusal(&out, 0).contains("outside the project"),
@@ -111,7 +111,7 @@ fn a_gui_only_command_is_refused_with_the_catalogs_reason() {
     let fx = fixture(&root);
     let out = run_cli(
         &["run", fx.project.to_str().unwrap()],
-        &one(json!({"id": "toggle_properties_panel"})),
+        one(json!({"id": "toggle_properties_panel"})),
     );
     assert_eq!(
         refusal(&out, 0),
@@ -211,7 +211,7 @@ fn a_line_over_the_limit_and_a_run_over_the_command_limit_are_refused() {
     assert!(std::fs::metadata(&fx.project).unwrap().len() < limit as u64);
     let big = run_cli(
         &["run", project, "--max-file-bytes", &limit.to_string()],
-        &one(json!({"id": "open_document", "args": {"path": "main.snxsch"}})),
+        one(json!({"id": "open_document", "args": {"path": "main.snxsch"}})),
     );
     assert!(
         refusal(&big, 0).contains("over the limit"),
@@ -296,7 +296,7 @@ fn a_project_that_lists_broad_libraries_does_not_widen_the_confinement() {
         attempts.push(other.join("outside.snxsch"));
     }
     for target in attempts {
-        let out = run_cli(&["run", project], &jsonl(&[open(&target)]));
+        let out = run_cli(&["run", project], jsonl(&[open(&target)]));
         assert!(
             refusal(&out, 0).contains("outside the project")
                 || refusal(&out, 0).contains("symbolic"),

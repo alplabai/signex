@@ -34,7 +34,7 @@ fn a_run_without_save_reports_what_would_change_and_writes_nothing() {
     let before = snapshot(&root);
     let project = fx.project.to_str().unwrap();
 
-    let out = run_cli(&["run", project, "--keep-going"], &jsonl(&edit_session()));
+    let out = run_cli(&["run", project, "--keep-going"], jsonl(&edit_session()));
 
     assert_eq!(
         statuses(&out.lines),
@@ -72,7 +72,7 @@ fn a_run_with_save_writes_the_saved_sheet_and_every_line_carries_the_run_id() {
     let before = snapshot(&root);
     let project = fx.project.to_str().unwrap();
 
-    let out = run_cli(&["run", project, "--save"], &jsonl(&edit_session()));
+    let out = run_cli(&["run", project, "--save"], jsonl(&edit_session()));
 
     assert_eq!(
         statuses(&out.lines),
