@@ -553,10 +553,13 @@ fn the_previews_pan_one_to_one_in_a_scrolled_details_pane() {
                 ],
             );
             let (_, scroll) = details(&mut live);
-            assert!(
-                scroll.y > 40.0,
-                "{theme:?}: the details pane scrolled by {scroll:?} in {pane:?}"
-            );
+            if scroll.y <= 40.0 {
+                let all = scrollables(&mut live);
+                let seen = drive(&mut live, &[moved(over)]);
+                panic!(
+                    "{theme:?}: the details pane scrolled by {scroll:?} in {pane:?}                      (wheel at {over:?}, hover {seen:?}); scrollables: {all:?}"
+                );
+            }
             let label = label_in(&mut live, title, right);
             let at = preview_point(&mut live, label);
             assert_drag_pans(&mut live, at, &format!("{theme:?} scrolled {title}"));
