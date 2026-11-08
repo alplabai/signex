@@ -18,7 +18,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, Menu
     let mb = render_menu_bar(&menu_bar_model(&ctx), mc);
 
     // Wordmark — white on dark themes, near-black on light themes. Picked
-    // by toolbar background luminance so custom themes also resolve
+    // by toolbar background luminance so both Graphite themes resolve
     // correctly. The asset is a PNG pre-rasterised at 1×/2×/3× the
     // on-screen 96×31 logical size; `wordmark_tier` picks the one that
     // matches the window's scale factor so text edges stay crisp at

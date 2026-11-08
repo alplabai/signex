@@ -236,7 +236,7 @@ fn prefs_writes_dont_clobber_neighboring_keys() {
     let (_tmp, path) = temp_prefs_path();
 
     // Seed multiple keys.
-    signex_app::fonts::write_theme_pref_at(&path, ThemeId::GraphiteLight);
+    signex_app::fonts::write_theme_pref_at(&path, ThemeId::GraphiteDark);
     signex_app::fonts::write_unit_pref_at(&path, Unit::Mil);
     signex_app::fonts::write_grid_visible_pref_at(&path, false);
 
@@ -245,7 +245,7 @@ fn prefs_writes_dont_clobber_neighboring_keys() {
 
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::GraphiteLight
+        ThemeId::GraphiteDark
     );
     assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);
     assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
@@ -450,7 +450,7 @@ fn prefs_cross_pref_independence() {
 
     // Write each pref in a different "session" (sequential writes,
     // each through update_prefs_json which does read-modify-write).
-    signex_app::fonts::write_theme_pref_at(&path, ThemeId::GraphiteLight);
+    signex_app::fonts::write_theme_pref_at(&path, ThemeId::GraphiteDark);
     signex_app::fonts::write_grid_size_mm_pref_at(&path, 2.54);
     signex_app::fonts::write_unit_pref_at(&path, Unit::Mil);
     signex_app::fonts::write_grid_visible_pref_at(&path, false);
@@ -459,7 +459,7 @@ fn prefs_cross_pref_independence() {
     // Read everything back — none should have been clobbered.
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::GraphiteLight
+        ThemeId::GraphiteDark
     );
     assert!((signex_app::fonts::read_grid_size_mm_pref_at(&path).unwrap() - 2.54).abs() < 1e-5);
     assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);

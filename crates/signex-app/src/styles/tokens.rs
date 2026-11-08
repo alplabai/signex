@@ -3,7 +3,7 @@
 //! These replace hard-coded literals that only read on dark themes
 //! (`Color::from_rgba(1, 1, 1, 0.04)` and friends). Every colour is
 //! derived from existing [`ThemeTokens`] — no new token fields, no
-//! theme-file change — so custom themes get the right behaviour for free.
+//! theme-file change — so both Graphite themes get the right behaviour for free.
 //!
 //! The key trick is that translucent "state" fills are tinted with
 //! `tokens.text`: text is light on dark themes and dark on light themes,

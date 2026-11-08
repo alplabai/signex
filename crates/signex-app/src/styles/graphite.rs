@@ -20,8 +20,8 @@ pub fn is_graphite(tokens: &ThemeTokens) -> bool {
 /// Tokens with no extended set: no theme produces them any more, but they
 /// still drive the non-Graphite branches, so tests pin those branches with
 /// this fixture until the branches are removed.
-#[doc(hidden)]
-pub fn legacy_tokens_fixture() -> ThemeTokens {
+#[cfg(test)]
+pub(crate) fn legacy_tokens_fixture() -> ThemeTokens {
     ThemeTokens {
         extended: signex_types::theme::ExtendedTokens::NONE,
         ..signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark)

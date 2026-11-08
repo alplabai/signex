@@ -702,8 +702,8 @@ fn dialog_windows_are_titled_without_an_application_suffix_and_drawn_flat() {
 }
 
 /// Every dialog window is covered edge to edge by its body, and the
-/// window's own background is the active theme's dialog surface, in a dark
-/// theme and in Solarized Light and after switching between them.
+/// window's own background is the active theme's dialog surface, in Graphite
+/// Dark and in Graphite Light and after switching between them.
 #[test]
 fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
     use signex_types::theme::ThemeId;
