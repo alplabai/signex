@@ -509,4 +509,87 @@ mod tests {
             );
         }
     }
+
+    fn preview_with(pn: &str, class: &str) -> ComponentPreviewState {
+        use signex_library::{
+            ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState,
+            ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef,
+        };
+        let row = ComponentRow {
+            alternate_symbols: Vec::new(),
+            row_id: uuid::Uuid::now_v7(),
+            internal_pn: InternalPn::new(pn),
+            class: ComponentClass::new(class),
+            datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(uuid::Uuid::now_v7(), uuid::Uuid::now_v7()),
+            footprint_ref: None,
+            alternate_footprints: Vec::new(),
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+            content_hash: [0u8; 32],
+            server_revision: None,
+        };
+        ComponentPreviewState::from_row(
+            std::path::PathBuf::from("/tmp/test.snxlib"),
+            "t".into(),
+            row,
+        )
+    }
+
+    fn header_texts(state: &ComponentPreviewState) -> Vec<String> {
+        let tokens = theme_tokens(ThemeId::GraphiteDark);
+        let address = EditorAddress::new(
+            std::path::PathBuf::from("/tmp/test.snxlib"),
+            "t".into(),
+            signex_library::RowId::from(state.row.row_id),
+        );
+        crate::layout_probe::lay_out_texts(
+            view_header(state, &tokens, address, false),
+            iced::Size::new(1400.0, 200.0),
+        )
+        .into_iter()
+        .map(|t| t.text)
+        .collect()
+    }
+
+    /// The header shows the row's identity once: part number, lifecycle
+    /// state and class.
+    #[test]
+    fn identity_is_shown_once_with_class_and_state() {
+        let texts = header_texts(&preview_with("RES-0001", "resistor"));
+        for want in ["RES-0001", "Draft", "resistor"] {
+            assert_eq!(
+                texts.iter().filter(|t| t.as_str() == want).count(),
+                1,
+                "{want:?} in {texts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn identity_falls_back_when_pn_and_class_are_empty() {
+        let texts = header_texts(&preview_with(" ", ""));
+        assert!(texts.iter().any(|t| t == "(no part number)"), "{texts:?}");
+        assert!(texts.iter().any(|t| t == "Draft"), "{texts:?}");
+        assert!(
+            texts.iter().all(|t| !t.trim().is_empty()),
+            "an empty class leaves a blank pill: {texts:?}"
+        );
+    }
 }

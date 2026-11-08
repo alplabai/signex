@@ -115,6 +115,18 @@ fn dropdown_anchor_matches_drawn_button_with_pill() {
     }
 }
 
+/// The right-click zone is the Graphite bar's 10 px top margin, its 36 px
+/// height and the slack below it.
+#[test]
+fn graphite_active_bar_zone_height_is_unchanged() {
+    let m = Metrics::GRAPHITE;
+    assert_eq!(
+        bar_zone_height_for(&m),
+        10.0 + 36.0 + layout::BAR_ZONE_SLACK_PX
+    );
+    assert_eq!(bar_zone_height_for(&m), 58.0);
+}
+
 /// Graphite floats the bar 10 px down.
 #[test]
 fn graphite_bar_top_margin_is_ten() {

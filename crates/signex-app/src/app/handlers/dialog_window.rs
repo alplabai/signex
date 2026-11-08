@@ -126,6 +126,17 @@ mod tests {
         );
     }
 
+    /// A dialog keeps the native frame exactly when the main window does.
+    #[test]
+    fn a_dialog_window_has_the_native_frame_when_the_main_window_has_it() {
+        let app = graphite_app();
+        let native = app.window_controls_layout().is_native();
+        assert_eq!(app.dialog_windows_borderless(), !native);
+        let (settings, borderless) = app.dialog_window_settings(ModalId::About);
+        assert_eq!(settings.decorations, native);
+        assert_eq!(borderless, !native);
+    }
+
     #[test]
     fn a_closed_dialog_window_is_forgotten() {
         let mut app = graphite_app();
