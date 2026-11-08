@@ -159,14 +159,25 @@ fn label_in(app: &Signex, title: &str, area: Rectangle) -> Rectangle {
         .bounds
 }
 
+fn drive(app: &mut Signex, events: &[(Event, Point)]) -> Vec<mouse::Interaction> {
+    drive_with(app, events, false).0
+}
+
 /// Feed `events` one per frame, the way the runtime does: the view is rebuilt
 /// from the app after each one and every published message goes through
-/// `update`. Returns the mouse interaction after each event.
-fn drive(app: &mut Signex, events: &[(Event, Point)]) -> Vec<mouse::Interaction> {
+/// `update`. Returns the mouse interaction after each event and, with
+/// `snap`, the window's pixels after each event.
+fn drive_with(
+    app: &mut Signex,
+    events: &[(Event, Point)],
+    snap: bool,
+) -> (Vec<mouse::Interaction>, Vec<Vec<u8>>) {
+    use iced::advanced::renderer::Headless as _;
     let window = app.ui_state.main_window_id.expect("main window");
     let mut renderer = crate::layout_probe::headless_renderer();
     let mut cache = Cache::default();
     let mut out = Vec::new();
+    let mut frames = Vec::new();
     for (event, at) in events {
         let cursor = mouse::Cursor::Available(*at);
         let mut published = Bus::new();
@@ -195,15 +206,44 @@ fn drive(app: &mut Signex, events: &[(Event, Point)]) -> Vec<mouse::Interaction>
             &mut renderer,
             &mut Bus::new(),
         );
-        cache = ui.into_cache();
         out.push(match state {
             State::Updated {
                 mouse_interaction, ..
             } => mouse_interaction,
             State::Outdated => mouse::Interaction::None,
         });
+        if snap {
+            let theme = app.theme(window).expect("theme");
+            ui.draw(
+                &mut renderer,
+                &theme,
+                &iced::advanced::renderer::Style {
+                    text_color: iced::Color::WHITE,
+                },
+                cursor,
+            );
+            let iced::Renderer::Secondary(software) = &mut renderer else {
+                panic!("the probe renderer is the software one");
+            };
+            frames.push(software.screenshot(
+                Size::new(WINDOW.width as u32, WINDOW.height as u32),
+                1.0,
+                iced::Color::BLACK,
+            ));
+        }
+        cache = ui.into_cache();
     }
-    out
+    (out, frames)
+}
+
+/// Pixels of `frame` that differ from `before` inside `area`.
+fn changed_pixels(before: &[u8], frame: &[u8], area: Rectangle) -> usize {
+    let width = WINDOW.width as usize;
+    let rows = (area.y.max(0.0) as usize)..((area.y + area.height).min(WINDOW.height) as usize);
+    let cols = (area.x.max(0.0) as usize)..((area.x + area.width).min(WINDOW.width) as usize);
+    rows.flat_map(|y| cols.clone().map(move |x| (y * width + x) * 4))
+        .filter(|&i| before[i..i + 3] != frame[i..i + 3])
+        .count()
 }
 
 fn moved(to: Point) -> (Event, Point) {
@@ -232,11 +272,12 @@ fn preview_point(app: &mut Signex, label: Rectangle) -> Point {
 }
 
 /// Hover, press, two moves, release at `from`: the hover grabs, the drag
-/// holds the grab, the release lets go.
+/// holds the grab, the release lets go, and the drawn preview has moved.
 fn assert_drag_pans(app: &mut Signex, from: Point, what: &str) {
-    let to = Point::new(from.x + 30.0, from.y + 12.0);
-    let further = Point::new(from.x + 45.0, from.y + 20.0);
-    let seen = drive(
+    // Off any grid multiple, so the moved grid cannot land on itself.
+    let to = Point::new(from.x + 25.0, from.y + 15.0);
+    let further = Point::new(from.x + 37.0, from.y + 23.0);
+    let (seen, frames) = drive_with(
         app,
         &[
             moved(from),
@@ -251,12 +292,23 @@ fn assert_drag_pans(app: &mut Signex, from: Point, what: &str) {
                 further,
             ),
         ],
+        true,
     );
     use mouse::Interaction::{Grab, Grabbing};
     assert_eq!(
         seen,
         vec![Grab, Grabbing, Grabbing, Grabbing, Grab],
         "{what} at {from:?}"
+    );
+    // Inside the preview: from the first grab row down, beside the press.
+    let area = Rectangle::new(
+        Point::new(from.x - 35.0, from.y - 30.0),
+        Size::new(200.0, 110.0),
+    );
+    let moved_px = changed_pixels(&frames[0], &frames[3], area);
+    assert!(
+        moved_px > 200,
+        "{what}: the drawn preview did not move ({moved_px} pixels changed in {area:?})"
     );
 }
 
