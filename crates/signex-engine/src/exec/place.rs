@@ -405,15 +405,10 @@ impl Engine {
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::RegisterLibSymbol { lib_symbol } => {
-                let key = lib_symbol.body_ref();
-                if let Some(existing) = self.document.lib_symbols.get(&key) {
-                    // The same version is a no-op; another body under this
-                    // ref is a collision, never a silent merge.
-                    if *existing != lib_symbol {
-                        return Err(
-                            signex_types::schematic::BodyRefCollision { body_ref: key }.into()
-                        );
-                    }
+                // The same version is a no-op; another body under this ref
+                // is a collision, never a silent merge.
+                let key = self.document.check_body(&lib_symbol)?;
+                if self.document.lib_symbols.contains_key(&key) {
                     return Ok(CommandResult::unchanged());
                 }
                 self.document.lib_symbols.insert(key, lib_symbol);

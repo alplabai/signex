@@ -523,16 +523,6 @@ impl LibSymbol {
             PIN_NAME_OFFSET_MM
         }
     }
-
-    /// Whether `other` is the same body: every stored field equal. The one
-    /// comparison behind "the sheet's copy differs from the library's" for
-    /// both a library placement and a paste.
-    pub fn same_body(&self, other: &Self) -> bool {
-        matches!(
-            (serde_json::to_string(self), serde_json::to_string(other)),
-            (Ok(a), Ok(b)) if a == b
-        )
-    }
 }
 
 fn default_true() -> bool {
@@ -818,6 +808,8 @@ mod parts;
 pub use parts::*;
 #[cfg(test)]
 mod item_anchor_tests;
+#[cfg(test)]
+mod lib_symbol_version_tests;
 mod row_stamp;
 #[cfg(test)]
 mod row_stamp_tests;

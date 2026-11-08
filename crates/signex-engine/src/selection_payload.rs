@@ -180,7 +180,8 @@ mod tests {
     fn a_copy_carries_the_body_and_is_anchored_on_the_grid() {
         let (engine, items) = sheet_with_part_and_wire();
         let copied = engine.copy_selection(&items, 1.27).unwrap().unwrap();
-        assert!(copied.payload.fragment().lib_symbols.contains_key("lib:r"));
+        let fragment = copied.payload.fragment();
+        assert!(fragment.body_of(&fragment.symbols[0]).is_some());
         assert_eq!(copied.payload.item_count(), 2);
         let k = copied.origin.x / 1.27;
         assert!((k - k.round()).abs() < 1e-9, "origin on the grid");
@@ -194,6 +195,24 @@ mod tests {
             })
             .unwrap();
         assert!((moved.x - 25.4).abs() < 1e-9 && (moved.y - 25.4).abs() < 1e-9);
+    }
+
+    /// A body stored under its bare lib id (no `body_ref`), or under a key
+    /// that is not its hash, is re-keyed in the payload, so the pasted symbol
+    /// names the key `RegisterLibSymbol` embeds the body under (#2209).
+    #[test]
+    fn a_pasted_symbol_names_the_key_its_body_is_registered_under() {
+        let (engine, items) = sheet_with_part_and_wire();
+        let copied = engine.copy_selection(&items, 1.27).unwrap().unwrap();
+        let mut target = Engine::new(test_sheet()).unwrap();
+        target
+            .execute_batch(copied.payload.place_commands(copied.origin).unwrap())
+            .unwrap();
+        let doc = target.document();
+        let placed = &doc.symbols[0];
+        let body = doc.body_of(placed).expect("the pasted part keeps its body");
+        assert_eq!(placed.body_ref, body.body_ref());
+        assert_eq!(doc.lib_symbols.len(), 1);
     }
 
     #[test]

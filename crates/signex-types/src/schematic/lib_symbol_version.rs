@@ -72,13 +72,26 @@ fn canonical(value: &serde_json::Value, out: &mut String) {
 }
 
 impl LibSymbol {
-    /// The 8 hex digits that tell this body from other versions of the same
-    /// library symbol. See the module doc for the spec.
-    pub fn content_hash(&self) -> String {
+    /// The canonical text the hash is taken over (see the module doc). Two
+    /// bodies are the same version exactly when this text is equal; unlike
+    /// `==`, a float difference below the ninth decimal and a NaN do not
+    /// make a body differ from itself.
+    pub fn canonical_text(&self) -> String {
         let value = serde_json::to_value(self).unwrap_or(serde_json::Value::Null);
         let mut text = String::new();
         canonical(&value, &mut text);
-        format!("{:08x}", fnv1a32(text.as_bytes()))
+        text
+    }
+
+    /// Whether `other` is the same version of the body: equal canonical text.
+    pub fn same_version(&self, other: &Self) -> bool {
+        self.canonical_text() == other.canonical_text()
+    }
+
+    /// The 8 hex digits that tell this body from other versions of the same
+    /// library symbol. See the module doc for the spec.
+    pub fn content_hash(&self) -> String {
+        format!("{:08x}", fnv1a32(self.canonical_text().as_bytes()))
     }
 
     /// The key this body is embedded under: `"<lib_id>#<hash>"`.
@@ -87,11 +100,16 @@ impl LibSymbol {
     }
 }
 
-/// The library symbol id a body ref (or a plain lib id) belongs to.
+/// The library symbol id a body ref (or a plain lib id) belongs to. Only a
+/// suffix of exactly 8 hex digits after the last `#` is a hash; any other
+/// `#` belongs to the id.
 pub fn lib_id_of_body_ref(body_ref: &str) -> &str {
-    body_ref
-        .rsplit_once('#')
-        .map_or(body_ref, |(lib_id, _)| lib_id)
+    match body_ref.rsplit_once('#') {
+        Some((lib_id, hash)) if hash.len() == 8 && hash.bytes().all(|b| b.is_ascii_hexdigit()) => {
+            lib_id
+        }
+        _ => body_ref,
+    }
 }
 
 /// Two different bodies were registered under one body ref.
@@ -130,46 +148,82 @@ impl SchematicSheet {
         self.lib_symbols.get(symbol.body_key())
     }
 
+    /// The ref `body` would be embedded under, or a [`BodyRefCollision`] when
+    /// a different body already holds it. Changes nothing, so a caller can
+    /// refuse before it rewrites anything.
+    pub fn check_body(&self, body: &LibSymbol) -> Result<String, BodyRefCollision> {
+        let key = body.body_ref();
+        match self.lib_symbols.get(&key) {
+            Some(existing) if !existing.same_version(body) => {
+                Err(BodyRefCollision { body_ref: key })
+            }
+            _ => Ok(key),
+        }
+    }
+
     /// Embed `body` under its own body ref and return the ref. An identical
     /// body already there is reused; a different one under the same ref is a
     /// [`BodyRefCollision`].
     pub fn embed_body(&mut self, body: LibSymbol) -> Result<String, BodyRefCollision> {
-        let key = body.body_ref();
-        match self.lib_symbols.get(&key) {
-            Some(existing) if *existing == body => {}
-            Some(_) => return Err(BodyRefCollision { body_ref: key }),
-            None => {
-                self.lib_symbols.insert(key.clone(), body);
-            }
-        }
+        let key = self.check_body(&body)?;
+        self.lib_symbols.entry(key.clone()).or_insert(body);
         Ok(key)
     }
 
-    /// One-time upgrade of a sheet saved before versioned bodies (#2209): a
-    /// body keyed by plain `lib_id` is re-keyed to its body ref and the
-    /// instances that drew with it name that ref.
+    /// The designators of the parts whose units draw with different body
+    /// versions, in sheet order. Such a part reads its pins and reference
+    /// letters per unit; Update from library brings the units together.
+    pub fn mixed_version_parts(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for part in super::group_into_parts(self.symbols.iter().map(Symbol::part_key)) {
+            let mut keys = part.iter().map(|&i| self.symbols[i].body_key());
+            let Some(first) = keys.next() else { continue };
+            if keys.any(|k| k != first) {
+                let reference = self.symbols[part[0]].reference.clone();
+                if !out.contains(&reference) {
+                    out.push(reference);
+                }
+            }
+        }
+        out
+    }
+
+    /// Put every embedded body under the key its content gives (its body
+    /// ref) and point the instances that drew with the old key at the new
+    /// one (#2209).
     ///
-    /// This is the single explicit exception to the no-legacy rule. It is
-    /// removable: delete this function and its call in the sheet decoder once
-    /// no old-form file is expected, and files without `body_ref` then draw
-    /// by `lib_id` like a symbol built in code.
+    /// Two jobs in one pass. It is the one-time upgrade of a sheet saved
+    /// before versioned bodies, where a body is keyed by plain `lib_id` and
+    /// the instances name no ref -- the single explicit exception to the
+    /// no-legacy rule, removable once no such file is expected. And it heals
+    /// a stored key that no longer matches its body, which a later change to
+    /// the serde shape of `LibSymbol` would otherwise leave dangling.
+    ///
+    /// A body whose proper key is taken by a *different* body keeps its old
+    /// key; nothing is overwritten.
     pub fn upgrade_unversioned_bodies(&mut self) {
-        let old: Vec<String> = self
+        let stale: Vec<String> = self
             .lib_symbols
             .iter()
-            .filter(|(key, body)| **key == body.id)
+            .filter(|(key, body)| **key != body.body_ref())
             .map(|(key, _)| key.clone())
             .collect();
-        for key in old {
-            let Some(body) = self.lib_symbols.remove(&key) else {
+        for key in stale {
+            let Some(body) = self.lib_symbols.get(&key) else {
                 continue;
             };
             let new_key = body.body_ref();
-            self.lib_symbols.insert(new_key.clone(), body);
-            for sym in self.symbols.iter_mut().filter(|s| s.body_ref.is_empty()) {
-                if sym.lib_id == key {
-                    sym.body_ref = new_key.clone();
-                }
+            if let Some(taken) = self.lib_symbols.get(&new_key)
+                && !taken.same_version(body)
+            {
+                continue;
+            }
+            let Some(body) = self.lib_symbols.remove(&key) else {
+                continue;
+            };
+            self.lib_symbols.entry(new_key.clone()).or_insert(body);
+            for sym in self.symbols.iter_mut().filter(|s| s.body_key() == key) {
+                sym.body_ref = new_key.clone();
             }
         }
     }

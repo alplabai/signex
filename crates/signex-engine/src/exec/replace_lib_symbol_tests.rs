@@ -700,3 +700,88 @@ fn update_refuses_when_a_connected_pin_would_be_lost_and_changes_nothing() {
     assert_eq!(drawn(&engine), "old");
     assert!(!engine.can_undo());
 }
+
+#[test]
+fn update_refuses_a_ref_collision_before_it_rewrites_anything() {
+    // The fresh body's ref is held by a body with other content.
+    let fresh = lib_symbol("fresh", vec![]);
+    let squatter = lib_symbol("squatter", vec![]);
+    let mut doc = engine_with_bare_symbol().document().clone();
+    doc.lib_symbols.insert(fresh.body_ref(), squatter);
+    let mut engine = Engine::new(doc).unwrap();
+    let before = engine.document().clone();
+    let err = engine
+        .execute(Command::ReplaceLibSymbol {
+            only: None,
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
+        .expect_err("collision");
+    assert!(
+        matches!(err, EngineError::LibSymbolBodyCollision(_)),
+        "{err}"
+    );
+    assert_eq!(
+        engine.document().symbols,
+        before.symbols,
+        "no body_ref moved"
+    );
+    assert!(
+        engine
+            .document()
+            .lib_symbols
+            .shares_storage_with(&before.lib_symbols)
+    );
+}
+
+/// Two unannotated `U?` units of one library symbol, units 1 and 2.
+fn two_unannotated_units() -> (Engine, uuid::Uuid, uuid::Uuid) {
+    let two_units = |description: &str| {
+        let mut second = lib_pin("3", 2.54);
+        second.unit = 2;
+        lib_symbol(
+            description,
+            vec![lib_pin("1", -2.54), lib_pin("2", 2.54), second],
+        )
+    };
+    let mut sheet = test_sheet();
+    let old_ref = sheet.embed_body(two_units("old")).unwrap();
+    let mut ids = Vec::new();
+    for (unit, x) in [(1, 10.0), (2, 40.0)] {
+        let uuid = uuid::Uuid::now_v7();
+        ids.push(uuid);
+        sheet.symbols.push(Symbol {
+            uuid,
+            lib_id: ID.into(),
+            body_ref: old_ref.clone(),
+            reference: "U?".into(),
+            position: Point::new(x, 10.0),
+            unit,
+            ..Default::default()
+        });
+    }
+    (Engine::new(sheet).unwrap(), ids[0], ids[1])
+}
+
+#[test]
+fn only_this_one_does_not_drag_along_another_unannotated_unit() {
+    let (mut engine, first, second) = two_unannotated_units();
+    let mut fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    let mut p3 = lib_pin("3", 2.54);
+    p3.unit = 2;
+    fresh.pins.push(p3);
+    engine
+        .execute(Command::ReplaceLibSymbol {
+            only: Some(vec![first]),
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
+        .unwrap();
+    let doc = engine.document();
+    let description = |id| {
+        let sym = doc.symbols.iter().find(|s| s.uuid == id).unwrap();
+        doc.body_of(sym).unwrap().description.clone()
+    };
+    assert_eq!(description(first), "new");
+    assert_eq!(description(second), "old", "a U? unit is a part of its own");
+}

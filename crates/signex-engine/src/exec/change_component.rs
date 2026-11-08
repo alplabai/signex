@@ -305,7 +305,9 @@ impl Engine {
         replacement: ComponentReplacement,
     ) -> Result<CommandResult, EngineError> {
         let new_id = replacement.lib_symbol.id.clone();
-        let new_ref = replacement.lib_symbol.body_ref();
+        // Refuse a body-ref collision first, even when the body is already
+        // embedded: a different body under the ref is never drawn silently.
+        let new_ref = self.document.check_body(&replacement.lib_symbol)?;
         let doc = &self.document;
         let units: Vec<Uuid> = placed_units(doc, symbol_id)
             .iter()

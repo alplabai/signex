@@ -2,6 +2,7 @@
 //! library's current version of their symbol, refusing when that would drop
 //! connectivity.
 
+use super::change_component::placed_unit_ids;
 use super::pin_changes::{instance_pin_changes, shown_pins, unit_missing};
 use crate::*;
 use signex_net::connected_points;
@@ -18,16 +19,12 @@ fn targets(doc: &SchematicSheet, fresh: &LibSymbol, only: Option<&[Uuid]>) -> Ve
             .filter(|&i| of_symbol(&doc.symbols[i]))
             .collect();
     };
-    let parts = signex_types::schematic::group_into_parts(
-        doc.symbols
-            .iter()
-            .map(signex_types::schematic::Symbol::part_key),
-    );
-    parts
-        .into_iter()
-        .filter(|part| part.iter().any(|&i| only.contains(&doc.symbols[i].uuid)))
-        .flatten()
-        .filter(|&i| of_symbol(&doc.symbols[i]))
+    let mut wanted: HashSet<Uuid> = HashSet::new();
+    for &id in only {
+        wanted.extend(placed_unit_ids(doc, id));
+    }
+    (0..doc.symbols.len())
+        .filter(|&i| wanted.contains(&doc.symbols[i].uuid) && of_symbol(&doc.symbols[i]))
         .collect()
 }
 
@@ -73,6 +70,8 @@ impl Engine {
         library_versions: Vec<(Uuid, LinkStamp)>,
         only: Option<Vec<Uuid>>,
     ) -> Result<CommandResult, EngineError> {
+        // Before anything is rewritten: a refusal changes nothing.
+        let new_ref = self.document.check_body(&lib_symbol)?;
         let moved = targets(&self.document, &lib_symbol, only.as_deref());
         let gone = removed_units(&self.document, &lib_symbol, &moved);
         if !gone.is_empty() {
@@ -88,7 +87,6 @@ impl Engine {
                 pins: lost,
             });
         }
-        let new_ref = lib_symbol.body_ref();
         let mut changed = false;
         let mut left: HashSet<String> = HashSet::new();
         for &i in &moved {
@@ -96,9 +94,7 @@ impl Engine {
             if let Some((_, link)) = library_versions.iter().find(|(u, _)| *u == sym.uuid) {
                 changed |= sym.apply_link_stamp(link);
             }
-            let draws_fresh = sym.body_key() == new_ref
-                || self.document.lib_symbols.get(sym.body_key()) == Some(&lib_symbol);
-            if !draws_fresh {
+            if sym.body_key() != new_ref {
                 left.insert(sym.body_key().to_owned());
                 sym.body_ref = new_ref.clone();
                 changed = true;
@@ -107,10 +103,7 @@ impl Engine {
         if !changed {
             return Ok(CommandResult::unchanged());
         }
-        self.document
-            .lib_symbols
-            .entry(new_ref)
-            .or_insert(lib_symbol);
+        self.document.embed_body(lib_symbol)?;
         // A version nothing draws with any more is dropped; undo restores it
         // from the history snapshot.
         for key in left {
