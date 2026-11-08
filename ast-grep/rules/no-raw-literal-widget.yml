@@ -31,14 +31,29 @@ constraints:
 rule:
   all:
     - any:
-        - pattern: container($S)
-        - pattern: scrollable($S)
-        - pattern: mouse_area($S)
-        - pattern: button($S)
-        - pattern: tooltip($A, $S, $$$)
-        - pattern: Element::from($S)
-        - pattern: Text::from($S)
-        - pattern: UserText::new($S)
+        # A call, bare or path-qualified (iced::widget::container(..)), whose
+        # first argument is a string literal.
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)(container|scrollable|mouse_area|button)$|(^|::)(Element|Text)::from$|(^|::)UserText::new$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 1
+                  kind: string_literal
+        # The tip of a tooltip is its second argument.
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)tooltip$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 2
+                  kind: string_literal
         - pattern: $S.boxed()
         - pattern: "let $P: $T = $S.into();"
         - all:

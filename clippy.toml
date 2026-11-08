@@ -13,7 +13,10 @@
 # labels are a `Localized`, a `UserText` or `raw("…")`, so no literal skips the
 # message catalog unnoticed. Only `signex-widgets/src/house.rs` calls the iced
 # functions, under an `allow` with a reason; scripts/check_raw_labels.sh counts
-# the `raw` call sites and the count may only go down.
+# the `raw` call sites and the count may only go down. Clippy cannot ban a
+# trait impl (`Text::from("X")`, `"X".into()`) or a `&str` used as a widget:
+# the ast-grep rule no-raw-literal-widget and the macro check in that script
+# cover those.
 disallowed-methods = [
     { path = "iced::widget::text", reason = "use signex_widgets::text, which takes a Localized, a UserText or raw(\"…\") (#2056)" },
     { path = "iced::widget::button", reason = "use signex_widgets::button, whose content is a widget built from signex_widgets::text (#2056)" },
@@ -37,7 +40,6 @@ disallowed-methods = [
     { path = "iced::widget::ComboBox::new", reason = "use signex_widgets::combo_box (#2056)" },
     { path = "iced::widget::TextEditor::placeholder", reason = "use signex_widgets::TextEditorPlaceholder::placeholder_label (#2056)" },
     { path = "iced::widget::Radio::new", reason = "use signex_widgets::radio (#2056)" },
-    { path = "<iced::widget::Text as core::convert::From<&str>>::from", reason = "use signex_widgets::text (#2056)" },
     { path = "uuid::Uuid::new_v4", reason = "ids are UUID v7: use Uuid::now_v7 (CONTRIBUTING.md, \"Object ids\")", allow-invalid = true },
     { path = "std::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931); a needed tool spawn carries an allow with its reason" },
     { path = "tokio::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931)", allow-invalid = true },

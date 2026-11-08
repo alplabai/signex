@@ -12,7 +12,14 @@ valid:
     mod tests {
         fn t() { container("X"); }
     }
+  - 'fn v() { iced::widget::container(text(raw("X"))); }'
+  - 'fn v() { iced::widget::tooltip(a, text(raw("X")), Position::Top); }'
 invalid:
+  - 'fn v() { iced::widget::container("X"); }'
+  - 'fn v() { iced::widget::scrollable("X"); }'
+  - 'fn v() { iced::widget::tooltip(a, "X", Position::Top); }'
+  - 'fn v() { signex_i18n::UserText::new("X"); }'
+  - 'fn v() { iced::widget::Text::from("X"); }'
   - 'fn v() { container("X"); }'
   - 'fn v() { scrollable("X"); }'
   - 'fn v() { mouse_area("X"); }'
