@@ -8,7 +8,24 @@
 # `io_ports/native.rs` and a few named tool spawns carry an `allow` with a
 # reason. `allow-invalid` where a path may not resolve in every build.
 # scripts/check_io_ports.sh is the second layer.
+#
+# UI text goes through the house widgets in `signex_widgets` (#2056): their
+# labels are a `Localized`, a `UserText` or `raw("…")`, so no literal skips the
+# message catalog unnoticed. Only `signex-widgets/src/house.rs` calls the iced
+# functions, under an `allow` with a reason; scripts/check_raw_labels.sh counts
+# the `raw` call sites and the count may only go down.
 disallowed-methods = [
+    { path = "iced::widget::text", reason = "use signex_widgets::text, which takes a Localized, a UserText or raw(\"…\") (#2056)" },
+    { path = "iced::widget::button", reason = "use signex_widgets::button, whose content is a widget built from signex_widgets::text (#2056)" },
+    { path = "iced::widget::text_input", reason = "use signex_widgets::text_input, which takes a Localized, a UserText or raw(\"…\") placeholder (#2056)" },
+    { path = "iced::widget::checkbox", reason = "use signex_widgets::checkbox and CheckboxLabel::labelled (#2056)" },
+    { path = "iced::widget::tooltip", reason = "use signex_widgets::tooltip, whose tip is a widget built from signex_widgets::text (#2056)" },
+    { path = "iced::widget::Text::new", reason = "use signex_widgets::text (#2056)" },
+    { path = "iced::widget::Button::new", reason = "use signex_widgets::button (#2056)" },
+    { path = "iced::widget::TextInput::new", reason = "use signex_widgets::text_input (#2056)" },
+    { path = "iced::widget::Checkbox::new", reason = "use signex_widgets::checkbox (#2056)" },
+    { path = "iced::widget::Checkbox::label", reason = "use signex_widgets::CheckboxLabel::labelled (#2056)" },
+    { path = "iced::widget::Tooltip::new", reason = "use signex_widgets::tooltip (#2056)" },
     { path = "uuid::Uuid::new_v4", reason = "ids are UUID v7: use Uuid::now_v7 (CONTRIBUTING.md, \"Object ids\")", allow-invalid = true },
     { path = "std::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931); a needed tool spawn carries an allow with its reason" },
     { path = "tokio::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931)", allow-invalid = true },
