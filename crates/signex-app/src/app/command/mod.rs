@@ -11,6 +11,8 @@
 pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod document_operand_tests;
 mod document_operands;
 pub(crate) mod enablement;
 #[cfg(test)]

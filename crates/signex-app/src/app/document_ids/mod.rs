@@ -11,13 +11,15 @@ mod entries;
 mod headers;
 mod reconcile;
 mod target;
+#[cfg(test)]
+mod tests;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use signex_types::document_id::DocumentId;
 
-pub(crate) use entries::{DocumentEntry, DocumentKind, ProjectRef};
+pub(crate) use entries::{DocumentEntry, DocumentKind};
 pub use headers::HeaderRead;
 pub use target::DocumentTarget;
 
@@ -60,11 +62,5 @@ impl DocumentIds {
         self.next_seen += 1;
         self.seen.insert(key.clone(), self.next_seen);
         self.next_seen
-    }
-
-    /// A document closed for good: drop its order, so a reopened copy counts
-    /// as newly seen.
-    pub(crate) fn forget_seen(&mut self, key: &DocumentKey) {
-        self.seen.remove(key);
     }
 }

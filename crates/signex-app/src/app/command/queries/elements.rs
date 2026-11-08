@@ -110,10 +110,8 @@ impl Signex {
                     .tabs
                     .iter()
                     .find(|tab| &tab.path == path)
-                    .and_then(|tab| match &tab.cached_document {
-                        Some(TabDocument::Pcb(board)) => Some(pcb_elements(board)),
-                        None => None,
-                    }),
+                    .and_then(|tab| tab.cached_document.as_ref())
+                    .map(|TabDocument::Pcb(board)| pcb_elements(board)),
                 (None, DocumentKind::Schematic | DocumentKind::Pcb) => {
                     unloaded.push(entry);
                     continue;

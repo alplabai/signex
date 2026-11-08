@@ -112,4 +112,4 @@ fn missing_required(command: &AppCommandId, args: &CommandArgs) -> Option<&'stat
 }
 
 #[cfg(test)]
-mod tests;
+pub(in crate::app) mod tests;

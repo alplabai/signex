@@ -554,14 +554,20 @@ fn an_open_during_the_save_as_write_of_that_path_is_refused() {
     crate::settle_support::settle_task(&mut app, write);
 
     assert_eq!(tab_count(&app, &p), 1, "only the re-keyed tab");
+    // Save As is a new document (#2172): the re-keyed engine holds the new id
+    // the copy was written with, not the original's.
+    let rekeyed = app
+        .document_state
+        .engines
+        .get(&p)
+        .expect("re-keyed")
+        .document()
+        .uuid;
+    assert_ne!(rekeyed, a_uuid);
+    let written = std::fs::read(&p).expect("the copy");
     assert_eq!(
-        app.document_state
-            .engines
-            .get(&p)
-            .expect("re-keyed")
-            .document()
-            .uuid,
-        a_uuid
+        signex_types::format::document_id_in_header("snxsch", &written).map(|id| id.as_uuid()),
+        Some(rekeyed)
     );
 }
 

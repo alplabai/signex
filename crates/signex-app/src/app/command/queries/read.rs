@@ -219,10 +219,8 @@ impl Signex {
                     .tabs
                     .iter()
                     .find(|tab| &tab.path == path)
-                    .and_then(|tab| match &tab.cached_document {
-                        Some(TabDocument::Pcb(board)) => Some(board),
-                        None => None,
-                    })
+                    .and_then(|tab| tab.cached_document.as_ref())
+                    .map(|TabDocument::Pcb(board)| board)
                     .ok_or("the board is not loaded")?;
                 (
                     serde_json::to_value(board).map_err(|e| e.to_string())?,

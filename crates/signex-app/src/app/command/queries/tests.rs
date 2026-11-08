@@ -16,12 +16,12 @@ use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::editing_commands::net_color_driver as fixture;
 use crate::keymap::AppCommandId;
 
-pub(in crate::app::command) fn uid(n: u128) -> Uuid {
+pub(in crate::app) fn uid(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
 
-pub(in crate::app::command) const SHEET: u128 = 100;
-pub(in crate::app::command) const WIRE_A: u128 = 1;
+pub(in crate::app) const SHEET: u128 = 100;
+pub(in crate::app) const WIRE_A: u128 = 1;
 const WIRE_B: u128 = 2;
 const WIRE_FAR: u128 = 3;
 const JUNCTION: u128 = 4;
@@ -52,7 +52,7 @@ fn label(n: u128, text: &str, at: (f64, f64)) -> Label {
 /// A sheet with one of everything a person reads on it: two wires on the net
 /// GND (joined at a junction, named by a label), a far wire on VCC, a symbol
 /// U3 with a pin, a text note, a sheet entry and a power port.
-pub(in crate::app::command) fn sheet(id: u128) -> SchematicSheet {
+pub(in crate::app) fn sheet(id: u128) -> SchematicSheet {
     let mut u3 = Symbol {
         uuid: uid(U3),
         lib_id: "Amp:LM358".into(),
@@ -119,13 +119,13 @@ pub(in crate::app::command) fn sheet(id: u128) -> SchematicSheet {
 }
 
 /// A path in a real temp dir, so it is absolute on every host.
-pub(in crate::app::command) fn path(name: &str) -> PathBuf {
+pub(in crate::app) fn path(name: &str) -> PathBuf {
     std::env::temp_dir().join("snx-2172").join(name)
 }
 
 /// An app with one clean sheet open per `(file name, sheet id)`; the last one
 /// opened is the active one.
-pub(in crate::app::command) fn app_with(sheets: &[(&str, u128)]) -> Signex {
+pub(in crate::app) fn app_with(sheets: &[(&str, u128)]) -> Signex {
     let _ = crate::diagnostics::init_logging();
     let (mut app, _task) = Signex::new();
     for (name, id) in sheets {
@@ -152,7 +152,7 @@ fn run(app: &mut Signex, name: &str, args: &[&str]) -> CommandOutcome {
     outcome
 }
 
-pub(in crate::app::command) fn answer(app: &mut Signex, name: &str, args: &[&str]) -> Value {
+pub(in crate::app) fn answer(app: &mut Signex, name: &str, args: &[&str]) -> Value {
     match run(app, name, args) {
         CommandOutcome::Answered(value) => value,
         other => panic!("{name} {args:?} was not answered: {other:?}"),

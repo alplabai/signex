@@ -34,6 +34,8 @@ pub(crate) mod test_support;
 mod annotation_placements_tests;
 #[cfg(test)]
 mod annotation_tests;
+#[cfg(test)]
+mod document_id_tests;
 
 #[cfg(test)]
 mod field_follow_tests;
