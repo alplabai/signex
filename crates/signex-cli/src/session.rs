@@ -153,13 +153,23 @@ impl Session {
         if let Err(reason) = self.policy.recheck(&approved, &self.roots) {
             return (Status::Refused, Some(reason), None);
         }
-        // A command that writes also writes files no operand names.
-        if capability_of(approved.meta).writes_files()
-            && let Err(reason) = self
-                .policy
-                .check_write_targets(&self.implicit_write_targets(), &self.roots)
-        {
-            return (Status::Refused, Some(reason), None);
+        // An id names its file only through the app, so every `document`
+        // operand, id or path, is resolved and checked as the file it names.
+        let named = match self.named_document_paths(&approved) {
+            Ok(named) => named,
+            Err(reason) => return (Status::Refused, Some(reason), None),
+        };
+        // A command that writes also writes files no operand names. One that
+        // names its document writes that document, not whatever is active.
+        if capability_of(approved.meta).writes_files() {
+            let targets = if named.is_empty() {
+                self.implicit_write_targets()
+            } else {
+                named
+            };
+            if let Err(reason) = self.policy.check_write_targets(&targets, &self.roots) {
+                return (Status::Refused, Some(reason), None);
+            }
         }
         let Some(dialogs) = self.app.headless_answers() else {
             return (Status::Failed, Some("the app is not headless".into()), None);
@@ -176,6 +186,34 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
+    }
+
+    /// The files the `document` operands of `approved` name, resolved by the
+    /// app and each checked like a path operand (inside the allowed folders,
+    /// no link out, within the size cap). An operand that names no document
+    /// is refused with the app's reason.
+    fn named_document_paths(&mut self, approved: &Approved) -> Result<Vec<PathBuf>, String> {
+        let writes = capability_of(approved.meta).writes_files();
+        let mut paths = Vec::new();
+        for (name, text) in &approved.operands {
+            let is_document = approved
+                .meta
+                .operands
+                .iter()
+                .any(|operand| operand.name == *name && operand.kind == OperandKind::Document);
+            if !is_document {
+                continue;
+            }
+            let path = self
+                .app
+                .document_path(text)
+                .map_err(|why| format!("operand `{name}`: {why}"))?;
+            self.policy
+                .check_resolved(&path, &self.roots, writes)
+                .map_err(|why| format!("operand `{name}`: {why}"))?;
+            paths.push(path);
+        }
+        Ok(paths)
     }
 
     /// File dialogs refused so far in this session.

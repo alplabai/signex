@@ -84,6 +84,7 @@ impl Signex {
             .map(|(path, _)| path)
             .filter(|path| !docs.engines.contains_key(path))
             .filter(|path| docs.document_ids.header_wanted(path))
+            .filter(|path| self.may_read_referenced(project, path))
             .collect();
         spawn_reads(id, paths)
     }
@@ -126,10 +127,15 @@ impl Signex {
         let wanted: Vec<PathBuf> = docs
             .projects
             .iter()
-            .flat_map(referenced_files)
-            .map(|(path, _)| path)
-            .filter(|path| !docs.engines.contains_key(path))
-            .filter(|path| docs.document_ids.header_wanted(path))
+            .flat_map(|project| {
+                referenced_files(project)
+                    .into_iter()
+                    .map(move |(path, _)| (project, path))
+            })
+            .filter(|(_, path)| !docs.engines.contains_key(path))
+            .filter(|(_, path)| docs.document_ids.header_wanted(path))
+            .filter(|(project, path)| self.may_read_referenced(project, path))
+            .map(|(_, path)| path)
             .collect();
         for path in wanted {
             let id = read_header_id(&path);

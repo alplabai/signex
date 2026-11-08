@@ -388,7 +388,7 @@ fn a_save_refuses_a_project_file_that_became_a_link() {
 
     let outside = replace_with_link_to_outside(&fx.project, &other);
     let before = std::fs::read(&outside).unwrap();
-    let saved = live.send(&json!({"id": "save_document", "args": {"document": "main.snxsch"}}));
+    let saved = live.send(&json!({"id": "save_document", "args": {"document": "demo.snxprj"}}));
 
     assert_eq!(saved["status"], "refused", "{saved}");
     assert!(
@@ -431,4 +431,173 @@ fn a_new_project_into_a_folder_that_is_a_link_to_outside_is_refused() {
         0,
         "nothing was created through the link"
     );
+}
+
+fn sheet_id(path: &std::path::Path) -> String {
+    signex_types::format::document_id_in_header("snxsch", &std::fs::read(path).expect("sheet"))
+        .expect("the sheet carries an id")
+        .to_string()
+}
+
+/// #2172: a document named by id is confined as the file it names, not as a
+/// string: a sheet that became a link to outside is refused for a read and a
+/// write alike, and nothing is written through the link.
+#[cfg(unix)]
+#[test]
+fn a_document_id_whose_file_leads_outside_is_refused_for_read_and_write() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let outside = replace_with_link_to_outside(&fx.sheet, &other);
+    let before = std::fs::read(&outside).unwrap();
+
+    let read = live.send(&json!({"id": "read_document", "args": {"document": id}}));
+    assert_eq!(read["status"], "refused", "{read}");
+    assert!(
+        read["reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("operand `document`:"),
+        "{read}"
+    );
+    let write = live.send(&json!({"id": "save_document", "args": {"document": id}}));
+    assert_eq!(write["status"], "refused", "{write}");
+    assert!(
+        write["reason"].as_str().unwrap().contains("symbolic link"),
+        "{write}"
+    );
+    let paint = live.send(&json!({"id": "color_net",
+        "args": {"at": [5, 0], "color": "#336699", "document": id}}));
+    assert_eq!(paint["status"], "refused", "{paint}");
+    assert_eq!(
+        std::fs::read(&outside).unwrap(),
+        before,
+        "nothing was written through the link"
+    );
+    live.finish();
+}
+
+/// The same id of a document inside the roots still works, read and write.
+#[test]
+fn a_document_id_inside_the_project_reads_and_saves() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let id = sheet_id(&fx.sheet);
+    let out = run_cli(
+        &["run", fx.project.to_str().unwrap(), "--save"],
+        jsonl(&[
+            json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
+            json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": id}}),
+            json!({"id": "read_document", "args": {"document": id}}),
+            json!({"id": "save_document", "args": {"document": id}}),
+        ]),
+    );
+    assert_eq!(
+        out.lines
+            .iter()
+            .map(|l| l["status"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["answered", "ran", "answered", "ran"],
+        "{}\n{}",
+        out.stdout,
+        out.stderr
+    );
+}
+
+/// A project that names a sheet outside its folder: a headless run does not
+/// read it for a query, and no id of it can be used to reach it.
+#[test]
+fn a_project_sheet_reference_outside_the_folder_is_not_read_by_a_query() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let outside = other.join("outside.snxsch");
+    // Its own id, as a copy of a real sheet carries one.
+    let mut engine = signex_engine::Engine::open(&fx.sheet).expect("sheet");
+    engine.reassign_document_id(uuid::Uuid::now_v7());
+    std::fs::write(&outside, engine.serialize().expect("encode")).unwrap();
+    let outside_id = sheet_id(&outside);
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Outside".into(),
+        filename: outside.display().to_string(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+
+    let out = run_cli(
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
+        jsonl(&[
+            json!({"id": "list_documents"}),
+            json!({"id": "find_items", "args": {"designator": "R1"}}),
+            json!({"id": "read_document", "args": {"document": outside_id}}),
+            json!({"id": "read_document", "args": {"document": outside}}),
+        ]),
+    );
+
+    let listed = out.lines[0]["data"]["documents"].as_array().unwrap();
+    let entry = listed
+        .iter()
+        .find(|d| d["path"] == outside.display().to_string())
+        .expect("the reference is listed");
+    assert!(entry["id"].is_null(), "its head was not read: {entry}");
+    let found = out.lines[1]["data"]["elements"].as_array().unwrap();
+    assert!(
+        found
+            .iter()
+            .all(|e| e["document"]["path"] != outside.display().to_string()),
+        "the outside sheet was not searched: {}",
+        out.stdout
+    );
+    for index in [2, 3] {
+        assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
+    }
+    assert!(
+        out.lines[1]["messages"]
+            .to_string()
+            .contains("outside the project folder"),
+        "the refusal is in Messages: {}",
+        out.stdout
+    );
+}
+
+/// A save names its document and writes that document only: another file in
+/// the project that happens to be a link out is not a write target of it.
+#[cfg(unix)]
+#[test]
+fn a_save_by_id_checks_the_named_document_not_the_active_or_unrelated_files() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let outside = replace_with_link_to_outside(&fx.project, &other);
+    let before = std::fs::read(&outside).unwrap();
+
+    let saved = live.send(&json!({"id": "save_document", "args": {"document": id}}));
+
+    assert_eq!(saved["status"], "ran", "{saved}");
+    assert_eq!(
+        std::fs::read(&outside).unwrap(),
+        before,
+        "the project was not written"
+    );
+    live.finish();
 }

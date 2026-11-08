@@ -272,6 +272,17 @@ impl Signex {
             // no tab made and nothing kept; it has no revision.
             None if entry.kind == DocumentKind::Pcb => {
                 let path = entry.path.as_deref().ok_or("the board has no file")?;
+                if let Some(project) = entry
+                    .project
+                    .as_ref()
+                    .and_then(|named| docs.projects.iter().find(|p| p.path == named.path))
+                    && !self.may_read_referenced(project, path)
+                {
+                    return Err(format!(
+                        "{} is outside the project folder; a headless run does not read it",
+                        path.display()
+                    ));
+                }
                 let text = std::fs::read_to_string(path)
                     .map_err(|e| format!("{} could not be read: {e}", path.display()))?;
                 let board = signex_types::format::SnxPcb::parse(&text)

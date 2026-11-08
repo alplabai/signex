@@ -114,6 +114,20 @@ impl Signex {
         ))
     }
 
+    /// The file the document `text` names (an id or an absolute path) is
+    /// held as, for a runner that checks the file before it lets a command
+    /// act on it (#2172). Never the active document: an id or path that names
+    /// none, or a document with no file, is an `Err` with the reason.
+    pub fn document_path(&mut self, text: &str) -> Result<PathBuf, String> {
+        let target = DocumentTarget::parse(text)
+            .map_err(|expected| format!("`{text}` must be {expected}"))?;
+        self.reconcile_document_ids();
+        let entry = self.resolve_document_target(&target)?;
+        entry
+            .path
+            .ok_or_else(|| format!("{} has no file", entry.name))
+    }
+
     /// The dialog answers of an app from [`Self::boot_headless`]; `None`
     /// for an app with native dialogs.
     pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {

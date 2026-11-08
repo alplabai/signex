@@ -118,6 +118,24 @@ impl Policy {
         Ok(())
     }
 
+    /// The file a `document` operand resolved to (an id names its file only
+    /// through the app): inside the allowed folders, a plain file when the
+    /// command writes, and within the size cap. The check a path operand gets,
+    /// applied to the path the document is held at, whatever way it was named.
+    pub fn check_resolved(
+        &self,
+        path: &Path,
+        roots: &[PathBuf],
+        writes: bool,
+    ) -> Result<(), String> {
+        let allowed = self.allowed(roots);
+        let text = path
+            .to_str()
+            .ok_or_else(|| format!("{} is not valid UTF-8", path.display()))?;
+        self.check_path(Path::new(""), text, &allowed, writes)
+            .map(|_| ())
+    }
+
     fn allowed(&self, roots: &[PathBuf]) -> Vec<PathBuf> {
         roots.iter().chain(&self.allow_paths).cloned().collect()
     }

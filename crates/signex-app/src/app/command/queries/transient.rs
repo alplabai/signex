@@ -79,6 +79,16 @@ impl Signex {
         let mut installed = Vec::new();
         for entry in self.unloaded_sheets_wanted(command, args) {
             let Some(path) = entry.path else { continue };
+            // A sheet a project names outside its own folder is not read.
+            let owner = entry.project.as_ref().and_then(|named| {
+                self.document_state
+                    .projects
+                    .iter()
+                    .find(|project| project.path == named.path)
+            });
+            if owner.is_some_and(|project| !self.may_read_referenced(project, &path)) {
+                continue;
+            }
             let engine = read_sheet(&path).and_then(|sheet| {
                 signex_engine::Engine::new_with_path(sheet, Some(path.clone()))
                     .map_err(|error| error.to_string())

@@ -7,6 +7,7 @@
 //! ([`entries`]). Nothing here reads UI state: not the active tab, not a
 //! window, not a selection.
 
+mod confine;
 mod entries;
 mod headers;
 mod reconcile;
