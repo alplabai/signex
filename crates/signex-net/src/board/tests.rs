@@ -118,20 +118,28 @@ fn footprint(reference: &str, pads: &[&str]) -> Footprint {
     }
 }
 
-/// Link each footprint to the schematic symbol whose terminals carry its
-/// reference, as a placed board does; a footprint with no such symbol stays
-/// unlinked.
+/// Link each footprint to the part whose terminals carry its reference, as
+/// a placed board does: every unit of that reference on the first sheet it
+/// appears on. A footprint with no such part stays unlinked.
 fn link_footprints(pcb: &mut PcbBoard, netlist: &Netlist) {
     for fp in &mut pcb.footprints {
-        let terminal = netlist
+        let mut terminals = netlist
             .nets
             .iter()
             .flat_map(|n| &n.terminals)
-            .find(|t| t.reference == fp.reference);
-        fp.schematic_link = terminal.map(|t| signex_types::pcb::SymbolLink {
-            sheet: t.occurrence.clone(),
-            symbol: t.symbol,
-        });
+            .filter(|t| t.reference == fp.reference);
+        let Some(first) = terminals.next() else {
+            fp.schematic_link = None;
+            continue;
+        };
+        let sheet = first.occurrence.clone();
+        let mut units = vec![first.symbol];
+        units.extend(
+            terminals
+                .filter(|t| t.occurrence == sheet)
+                .map(|t| t.symbol),
+        );
+        fp.schematic_link = Some(signex_types::pcb::SymbolLink::new(sheet, units));
     }
 }
 
@@ -192,17 +200,24 @@ fn net_rows(board: &PcbBoard) -> Vec<(u32, String)> {
         .collect()
 }
 
-/// One symbol per designator, so every terminal of `R1` is on the same symbol.
-fn symbol_of(reference: &str) -> Uuid {
+/// One symbol per (designator, unit), so every terminal of unit 1 of `R1` is
+/// on the same symbol and unit 2 is another symbol under the same designator.
+fn symbol_of(reference: &str, unit: u32) -> Uuid {
     let hash = reference.bytes().fold(0x9e37_79b9_u128, |h, b| {
         (h ^ u128::from(b)).wrapping_mul(0x0100_0000_01b3)
     });
-    Uuid::from_u128(hash)
+    Uuid::from_u128(hash ^ (u128::from(unit) << 96))
 }
 
 fn terminal(reference: &str, pin: &str) -> Terminal {
+    terminal_unit(reference, pin, 1)
+}
+
+/// A terminal of unit `unit` of the part `reference`: one designator, one
+/// symbol uuid per unit.
+fn terminal_unit(reference: &str, pin: &str, unit: u32) -> Terminal {
     Terminal {
-        symbol: symbol_of(reference),
+        symbol: symbol_of(reference, unit),
         reference: reference.to_string(),
         pin: pin.to_string(),
         occurrence: InstancePath::root(),
@@ -230,7 +245,7 @@ fn every_pad_gets_the_net_of_its_schematic_pin() {
     ]);
     link_footprints(&mut pcb, &netlist);
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(assignment.issues.is_empty(), "{:?}", assignment.issues);
     assignment.edit.apply(&mut pcb);
 
@@ -267,7 +282,8 @@ fn the_inverse_edit_restores_the_board() {
     };
     pcb.footprints[1].pads[0].net = Some(old.clone());
 
-    let inverse = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+    link_footprints(&mut pcb, &netlist);
+    let inverse = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     assert_eq!(
@@ -291,11 +307,12 @@ fn an_assigned_board_needs_no_pad_change() {
         footprint("R1", &["1", "2"]),
         footprint("R2", &["1", "2"]),
     ]);
-    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+    link_footprints(&mut pcb, &netlist);
+    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
 
-    let again = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let again = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(again.edit.pads.is_empty(), "{:?}", again.edit.pads);
 }
 
@@ -305,7 +322,7 @@ fn a_terminal_with_no_footprint_is_reported() {
     let mut pcb = board(vec![footprint("R1", &["1", "2"])]);
     link_footprints(&mut pcb, &netlist);
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     let missing: Vec<(&str, &str)> = assignment
         .issues
         .iter()
@@ -329,7 +346,7 @@ fn a_missing_pad_number_is_reported() {
     let mut pcb = board(vec![footprint("R1", &["1"]), footprint("R2", &["1", "2"])]);
     link_footprints(&mut pcb, &netlist);
 
-    let issues = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist)).issues;
+    let issues = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb)).issues;
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert!(matches!(
         &issues[0],
@@ -348,7 +365,7 @@ fn a_reference_on_two_footprints_assigns_neither() {
     link_footprints(&mut pcb, &netlist);
     let twins = [pcb.footprints[0].uuid, pcb.footprints[1].uuid];
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert_eq!(assignment.issues.len(), 2, "{:?}", assignment.issues);
     for issue in &assignment.issues {
         let PadNetIssue::KeyOnSeveralFootprints { footprints, .. } = issue else {
@@ -378,7 +395,7 @@ fn a_pad_on_two_nets_is_left_unassigned() {
     link_footprints(&mut pcb, &netlist);
     let pad_one = pcb.footprints[0].pads[0].uuid;
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert_eq!(
         assignment.issues,
         vec![PadNetIssue::PadOnSeveralNets {
@@ -399,13 +416,12 @@ fn an_unannotated_terminal_never_links() {
     };
     let mut pcb = board(vec![footprint("R?", &["1"])]);
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(matches!(
         assignment.issues.as_slice(),
         [
             PadNetIssue::TerminalWithoutPad { net: NetId(1), .. },
-            PadNetIssue::FootprintNotLinked { .. },
-            PadNetIssue::PadWithoutTerminal { .. }
+            PadNetIssue::FootprintNotLinked { .. }
         ]
     ));
     assignment.edit.apply(&mut pcb);
@@ -522,7 +538,7 @@ fn copper_keeps_its_net_when_the_netlist_renumbers() {
         footprint("R2", &["1", "2"]),
     ]);
     link_footprints(&mut pcb, &before);
-    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_netlist(&before))
+    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     let mid = pad_net(&pcb, "R1", "2").cloned().expect("mid assigned");
@@ -530,7 +546,7 @@ fn copper_keeps_its_net_when_the_netlist_renumbers() {
     copper_on(&mut pcb, mid.number, &mid.name);
     let copper = (pcb.segments.clone(), pcb.vias.clone(), pcb.zones.clone());
 
-    let again = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_netlist(&after));
+    let again = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(again.issues.is_empty(), "{:?}", again.issues);
     again.edit.apply(&mut pcb);
 
@@ -557,12 +573,13 @@ fn a_net_with_routed_copper_stays_in_the_table_when_it_loses_its_pads() {
         footprint("R1", &["1", "2"]),
         footprint("R2", &["1", "2"]),
     ]);
-    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_netlist(&before))
+    link_footprints(&mut pcb, &before);
+    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     copper_on(&mut pcb, 1, "IN");
 
-    assign_pad_nets(&merged_in(), &pcb, &SymbolPadKey::for_netlist(&merged_in()))
+    assign_pad_nets(&merged_in(), &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     assert!(pcb.nets.iter().any(|n| n.number == 1), "{:?}", pcb.nets);
@@ -601,7 +618,8 @@ fn a_new_net_never_takes_a_number_copper_uses() {
         nets: vec![net(1, "NEW", vec![terminal("U1", "1")])],
     };
 
-    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+    link_footprints(&mut pcb, &netlist);
+    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     let pad = pad_net(&pcb, "U1", "1").expect("assigned");
@@ -630,7 +648,8 @@ fn a_keyless_pad_and_an_unknown_footprint_keep_their_nets_and_are_reported() {
     let hole = (pcb.footprints[0].uuid, pcb.footprints[0].pads[2].uuid);
     let h1 = pcb.footprints[2].uuid;
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    link_footprints(&mut pcb, &netlist);
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(
         assignment
             .issues
@@ -642,7 +661,7 @@ fn a_keyless_pad_and_an_unknown_footprint_keep_their_nets_and_are_reported() {
     assert!(
         assignment
             .issues
-            .contains(&PadNetIssue::FootprintNotInSchematic { footprint: h1 })
+            .contains(&PadNetIssue::FootprintNotLinked { footprint: h1 })
     );
     assignment.edit.apply(&mut pcb);
     assert_eq!(pcb.footprints[0].pads[2].net, Some(hand.clone()));
@@ -665,7 +684,8 @@ fn a_conflicting_pad_keeps_its_existing_net() {
         name: "KEEP".to_string(),
     };
     pcb.footprints[0].pads[0].net = Some(old.clone());
-    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+    link_footprints(&mut pcb, &netlist);
+    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     assert_eq!(pad_net(&pcb, "U1", "1"), Some(&old));
@@ -690,7 +710,7 @@ fn a_keyed_pad_off_the_symbol_keeps_its_net_and_is_reported() {
     pcb.footprints[0].pads[2].net = Some(shield.clone());
     let (fp, pad) = (pcb.footprints[0].uuid, pcb.footprints[0].pads[2].uuid);
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert_eq!(
         assignment.issues,
         vec![PadNetIssue::PadNotOnSymbol { footprint: fp, pad }]
@@ -708,11 +728,12 @@ fn retiring_a_net_that_still_has_copper_is_reported() {
         footprint("R1", &["1", "2"]),
         footprint("R2", &["1", "2"]),
     ]);
-    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_netlist(&before))
+    link_footprints(&mut pcb, &before);
+    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     copper_on(&mut pcb, 1, "IN");
-    let assignment = assign_pad_nets(&merged_in(), &pcb, &SymbolPadKey::for_netlist(&merged_in()));
+    let assignment = assign_pad_nets(&merged_in(), &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(
         assignment
             .issues
@@ -740,7 +761,8 @@ fn a_renamed_net_renames_kept_pads_and_zones_and_undoes() {
         nets: vec![net(1, "NEW", vec![terminal("U1", "1")])],
     };
 
-    let inverse = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+    link_footprints(&mut pcb, &netlist);
+    let inverse = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     let renamed = PadNet {

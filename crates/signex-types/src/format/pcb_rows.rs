@@ -464,16 +464,22 @@ pub(in crate::format) fn row_to_footprint(
 }
 
 /// Header of the optional `sch_link` footprint column: the footprint's
-/// schematic symbol as `<symbol uuid>@<sheet path>`, e.g.
-/// `0190...@/` for a root page or `0190...@/<sheet uuid>` for a child sheet
+/// schematic part as `<unit uuid>[+<unit uuid>...]@<sheet path>`, units in
+/// ascending order, e.g. `0190...@/` for a one-unit part on a root page or
+/// `0190...a+0190...b@/<sheet uuid>` for a two-unit part on a child sheet
 /// occurrence. A foreign column like `net_locked`: absent when no footprint
 /// is linked, an empty cell for an unlinked footprint of a block that has
 /// linked ones.
 pub(in crate::format) const SCH_LINK_COLUMN: &str = "sch_link";
 
+fn link_cell(link: &SymbolLink) -> String {
+    let units: Vec<String> = link.units.iter().map(Uuid::to_string).collect();
+    format!("{}@{}", units.join("+"), link.sheet)
+}
+
 fn with_link_cell(mut columns: UnknownColumns, link: Option<&SymbolLink>) -> UnknownColumns {
     if let Some(link) = link {
-        columns.set(SCH_LINK_COLUMN, format!("{}@{}", link.symbol, link.sheet));
+        columns.set(SCH_LINK_COLUMN, link_cell(link));
     }
     columns
 }
@@ -486,13 +492,14 @@ fn take_link_cell(columns: &mut UnknownColumns) -> Option<SymbolLink> {
         columns.take(SCH_LINK_COLUMN);
         return None;
     }
-    let (symbol, sheet) = cell.split_once('@')?;
-    let link = SymbolLink {
-        symbol: Uuid::parse_str(symbol).ok()?,
-        sheet: InstancePath::parse(sheet)?,
-    };
+    let (units, sheet) = cell.split_once('@')?;
+    let units = units
+        .split('+')
+        .map(|u| Uuid::parse_str(u).ok())
+        .collect::<Option<Vec<_>>>()?;
+    let link = SymbolLink::new(InstancePath::parse(sheet)?, units);
     // Only a cell that writes back identically is ours.
-    if format!("{}@{}", link.symbol, link.sheet) != cell {
+    if link_cell(&link) != cell {
         return None;
     }
     columns.take(SCH_LINK_COLUMN);

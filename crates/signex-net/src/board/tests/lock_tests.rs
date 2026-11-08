@@ -29,7 +29,8 @@ fn a_locked_matching_pad_is_untouched_across_a_renumbering_resync() {
         footprint("R1", &["1", "2"]),
         footprint("R2", &["1", "2"]),
     ]);
-    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_netlist(&before))
+    link_footprints(&mut pcb, &before);
+    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     let hand = PadNet {
@@ -41,7 +42,7 @@ fn a_locked_matching_pad_is_untouched_across_a_renumbering_resync() {
     assert!(locked_pad(&pcb, "R1", "2"));
     let mid = pad_net(&pcb, "R2", "1").cloned().expect("mid assigned");
 
-    let again = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_netlist(&after));
+    let again = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(
         again
             .issues
@@ -87,7 +88,8 @@ fn a_pad_the_schematic_cannot_speak_for_locks_itself_and_the_inverse_unlocks() {
     pcb.footprints[2].pads[0].net = Some(hand.clone()); // footprint not in schematic: kept, not locked
     let before = pcb.clone();
 
-    let inverse = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+    link_footprints(&mut pcb, &netlist);
+    let inverse = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     assert!(locked_pad(&pcb, "R1", "SH"));
@@ -100,7 +102,7 @@ fn a_pad_the_schematic_cannot_speak_for_locks_itself_and_the_inverse_unlocks() {
     assert!(!locked_pad(&pcb, "R1", "1"), "schematic-driven pad");
     assert_eq!(pad_net(&pcb, "R1", "SH"), Some(&hand));
 
-    let second = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    let second = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(second.edit.pads.is_empty(), "{:?}", second.edit.pads);
     let locked_issues = second
         .issues
@@ -224,7 +226,8 @@ fn unlocking_a_pad_keeps_its_net_lets_the_sync_set_it_and_undoes_exactly() {
         name: "HAND".to_string(),
     };
     assign_pad_net(&pcb, fp, pad, hand.clone()).apply(&mut pcb);
-    let key = SymbolPadKey::for_netlist(&netlist);
+    link_footprints(&mut pcb, &netlist);
+    let key = SymbolPadKey::for_board(&pcb);
     assign_pad_nets(&netlist, &pcb, &key).edit.apply(&mut pcb);
     assert_eq!(
         pad_net(&pcb, "R1", "1"),
@@ -265,7 +268,8 @@ fn locking_a_pad_by_hand_keeps_its_net_and_the_inverse_unlocks() {
         footprint("R1", &["1", "2"]),
         footprint("R2", &["1", "2"]),
     ]);
-    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+    link_footprints(&mut pcb, &netlist);
+    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     let (fp, pad) = ids(&pcb, "R1", "2");
@@ -295,7 +299,8 @@ fn a_locked_pad_keeps_its_number_but_follows_a_rename_of_it() {
         )],
     };
     let mut pcb = board(vec![footprint("R1", &["1"]), footprint("R2", &["1"])]);
-    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_netlist(&before))
+    link_footprints(&mut pcb, &before);
+    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     let (fp, pad) = ids(&pcb, "R1", "1");
@@ -306,7 +311,7 @@ fn a_locked_pad_keeps_its_number_but_follows_a_rename_of_it() {
     };
     assert_eq!(pad_net(&pcb, "R1", "1"), Some(&old));
 
-    let inverse = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_netlist(&after))
+    let inverse = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_board(&pcb))
         .edit
         .apply(&mut pcb);
     let new = PadNet {
@@ -338,7 +343,8 @@ fn a_locked_pad_still_counts_for_a_designator_shared_by_two_footprints() {
     let (fp, pad) = ids(&pcb, "R1", "1");
     set_pad_net_lock(&pcb, fp, pad, true).apply(&mut pcb);
 
-    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    link_footprints(&mut pcb, &netlist);
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_board(&pcb));
     assert!(
         assignment
             .issues

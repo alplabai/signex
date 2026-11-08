@@ -166,10 +166,10 @@ fn display_names_follow_their_layer_when_the_layer_list_is_reordered() {
 }
 
 fn link(symbol: u128, chain: &[u128]) -> SymbolLink {
-    SymbolLink {
-        sheet: InstancePath::from_chain(chain.iter().map(|c| Uuid::from_u128(*c)).collect()),
-        symbol: Uuid::from_u128(symbol),
-    }
+    SymbolLink::new(
+        InstancePath::from_chain(chain.iter().map(|c| Uuid::from_u128(*c)).collect()),
+        [Uuid::from_u128(symbol)],
+    )
 }
 
 fn two_footprints(first: Option<SymbolLink>, second: Option<SymbolLink>) -> PcbBoard {
@@ -244,4 +244,87 @@ fn an_unreadable_sch_link_cell_stays_a_foreign_cell() {
         Some(&*format!("{}@not-a-path", Uuid::from_u128(0xa1)))
     );
     assert_eq!(parsed.write_string().unwrap(), broken);
+}
+
+#[test]
+fn a_multi_unit_link_round_trips_with_its_units_in_ascending_order() {
+    let linked = SymbolLink::new(
+        InstancePath::root(),
+        [
+            Uuid::from_u128(0xa3),
+            Uuid::from_u128(0xa1),
+            Uuid::from_u128(0xa2),
+        ],
+    );
+    assert_eq!(linked.units[0], Uuid::from_u128(0xa1), "sorted by new");
+    let text = SnxPcb::new(two_footprints(Some(linked.clone()), None))
+        .write_string()
+        .unwrap();
+    assert!(
+        text.contains("00000000-0000-0000-0000-0000000000a1+"),
+        "{text}"
+    );
+    let parsed = SnxPcb::parse(&text).unwrap();
+    assert_eq!(parsed.board.footprints[0].schematic_link, Some(linked));
+    assert_eq!(parsed.write_string().unwrap(), text);
+}
+
+#[test]
+fn a_unit_list_out_of_order_stays_a_foreign_cell() {
+    let text = SnxPcb::new(two_footprints(Some(link(0xa1, &[])), None))
+        .write_string()
+        .unwrap();
+    let skewed = text.replace(
+        "00000000-0000-0000-0000-0000000000a1@/",
+        "00000000-0000-0000-0000-0000000000a2+00000000-0000-0000-0000-0000000000a1@/",
+    );
+    assert_ne!(skewed, text, "{text}");
+    let parsed = SnxPcb::parse(&skewed).unwrap();
+    assert_eq!(parsed.board.footprints[0].schematic_link, None);
+    assert_eq!(parsed.write_string().unwrap(), skewed);
+}
+
+fn stackup_board() -> PcbBoard {
+    let mut board = empty_board();
+    board.layers = vec![
+        layer(0, "TopCopper", ""),
+        layer(1, "Mechanical1", "Outline"),
+    ];
+    board
+}
+
+#[test]
+fn a_display_name_for_a_missing_layer_round_trips() {
+    let text = SnxPcb::new(stackup_board()).write_string().unwrap();
+    let with_orphan = text.replace(
+        "Mechanical1 = \"Outline\"",
+        "Mechanical1 = \"Outline\"
+Mechanical9 = \"Gone\"",
+    );
+    assert_ne!(with_orphan, text, "{text}");
+    let parsed = SnxPcb::parse(&with_orphan).unwrap();
+    assert_eq!(parsed.board.layers[1].display_name, "Outline");
+    assert!(!parsed.board.unknown.stackup_display_names.is_empty());
+    assert_eq!(parsed.write_string().unwrap(), with_orphan);
+}
+
+#[test]
+fn a_non_string_display_name_is_kept_instead_of_failing_the_load() {
+    let text = SnxPcb::new(stackup_board()).write_string().unwrap();
+    let odd = text.replace("Mechanical1 = \"Outline\"", "Mechanical1 = 7");
+    assert_ne!(odd, text, "{text}");
+    let parsed = SnxPcb::parse(&odd).unwrap();
+    assert_eq!(parsed.board.layers[1].display_name, "");
+    assert_eq!(parsed.write_string().unwrap(), odd);
+}
+
+#[test]
+fn a_layer_named_by_the_user_replaces_a_kept_entry_of_the_same_token() {
+    let text = SnxPcb::new(stackup_board()).write_string().unwrap();
+    let odd = text.replace("Mechanical1 = \"Outline\"", "Mechanical1 = 7");
+    let mut parsed = SnxPcb::parse(&odd).unwrap();
+    parsed.board.layers[1].display_name = "Fab".into();
+    let written = parsed.write_string().unwrap();
+    assert!(written.contains("Mechanical1 = \"Fab\""), "{written}");
+    assert!(!written.contains("Mechanical1 = 7"), "{written}");
 }

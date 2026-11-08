@@ -1,10 +1,10 @@
 //! How a schematic terminal finds its board pad.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
 
-use signex_types::net::{Netlist, Terminal};
-use signex_types::pcb::{Footprint, Pad, SymbolLink};
+use signex_types::net::Terminal;
+use signex_types::pcb::{Footprint, Pad, PcbBoard};
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
@@ -21,118 +21,98 @@ pub trait PadLinkKey {
     fn terminal_key(&self, terminal: &Terminal) -> Option<Self::Key>;
 
     /// The key of a pad on a footprint, or `None` when it cannot be linked
-    /// (an unnumbered mechanical pad, a footprint nothing identifies).
+    /// (an unnumbered mechanical pad, a footprint with no link).
     fn pad_key(&self, footprint: &Footprint, pad: &Pad) -> Option<Self::Key>;
 
-    /// Whether the footprint has no stored link to a schematic symbol; the
-    /// sync reports it. Defaults to `false` for keys that need no link.
+    /// Whether the footprint has no stored link to a schematic part. The
+    /// sync reports it and leaves the footprint completely untouched.
+    /// Defaults to `false` for keys that need no link.
     fn footprint_unlinked(&self, _footprint: &Footprint) -> bool {
         false
     }
 }
 
-/// One pin of one placed symbol: sheet occurrence, symbol UUID, pad number.
+/// One pin of one placed part: sheet occurrence, the part's anchor unit and
+/// the pad number.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SymbolPad {
     pub sheet: InstancePath,
-    pub symbol: Uuid,
+    /// The part's anchor: the smallest UUID among its units.
+    pub part: Uuid,
     pub pad: String,
 }
 
-/// What a pad is keyed by.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PadIdentity {
-    /// The pad's footprint is tied to a symbol (stored link, or the
-    /// designator fallback resolved to exactly one).
-    Linked(SymbolPad),
-    /// A footprint with no stored link whose designator names no single
-    /// symbol. No terminal has this key, so it matches nothing.
-    Unresolved { reference: String, pad: String },
-}
-
-/// Keys pads by (sheet path, symbol UUID, pad number), the identity a
-/// netlist terminal carries. It survives re-annotation, unlike a designator.
+/// Keys pads by (sheet path, part, pad number). The part is named by the
+/// footprint's stored link, which lists every unit of a multi-unit part, so a
+/// pin of any unit lands on its pad. Neither the sheet path nor a unit UUID
+/// changes when the schematic is re-annotated, unlike a designator, and no
+/// designator is read here.
 ///
-/// A footprint with no stored link (placed by hand, or on a board made
-/// before the link existed) is tied to the symbol whose designator equals the
-/// footprint reference, when exactly one does. That fallback is not stored.
+/// A footprint with no link has no key: the sync reports it and leaves it be.
+/// `link_footprints_by_designator` is the one place a designator links one.
 #[derive(Debug, Clone, Default)]
 pub struct SymbolPadKey {
-    by_reference: HashMap<String, SymbolLink>,
-    ambiguous: HashSet<String>,
+    /// Unit -> its part's anchor, for every unit some footprint links to.
+    /// A unit named by two different links belongs to the first.
+    anchor_of: HashMap<(InstancePath, Uuid), Uuid>,
 }
 
 impl SymbolPadKey {
-    /// The key for syncing against `netlist`; its terminals supply the
-    /// designator fallback.
-    pub fn for_netlist(netlist: &Netlist) -> Self {
-        let mut key = Self::default();
-        for terminal in netlist.nets.iter().flat_map(|n| &n.terminals) {
-            if terminal.symbol.is_nil() {
-                continue;
-            }
-            let Some(reference) = clean(&terminal.reference).filter(|r| !r.contains('?')) else {
+    /// The key for syncing `board`: its footprints' links say which units
+    /// make up each part.
+    pub fn for_board(board: &PcbBoard) -> Self {
+        let mut anchor_of = HashMap::new();
+        for link in board
+            .footprints
+            .iter()
+            .filter_map(|f| f.schematic_link.as_ref())
+        {
+            let Some(anchor) = link.units.iter().min().copied() else {
                 continue;
             };
-            let link = SymbolLink {
-                sheet: terminal.occurrence.clone(),
-                symbol: terminal.symbol,
-            };
-            match key.by_reference.get(reference) {
-                Some(seen) if *seen != link => {
-                    key.ambiguous.insert(reference.to_string());
-                }
-                Some(_) => {}
-                None => {
-                    key.by_reference.insert(reference.to_string(), link);
-                }
+            for unit in &link.units {
+                anchor_of
+                    .entry((link.sheet.clone(), *unit))
+                    .or_insert(anchor);
             }
         }
-        key
+        Self { anchor_of }
     }
 }
 
 impl PadLinkKey for SymbolPadKey {
-    type Key = PadIdentity;
+    type Key = SymbolPad;
 
-    fn terminal_key(&self, terminal: &Terminal) -> Option<PadIdentity> {
+    fn terminal_key(&self, terminal: &Terminal) -> Option<SymbolPad> {
         let pad = clean(&terminal.pin)?;
         if terminal.symbol.is_nil() {
             return None;
         }
-        Some(PadIdentity::Linked(SymbolPad {
+        let part = self
+            .anchor_of
+            .get(&(terminal.occurrence.clone(), terminal.symbol))
+            .copied()
+            .unwrap_or(terminal.symbol);
+        Some(SymbolPad {
             sheet: terminal.occurrence.clone(),
-            symbol: terminal.symbol,
+            part,
             pad: pad.to_string(),
-        }))
+        })
     }
 
-    fn pad_key(&self, footprint: &Footprint, pad: &Pad) -> Option<PadIdentity> {
+    fn pad_key(&self, footprint: &Footprint, pad: &Pad) -> Option<SymbolPad> {
         let number = clean(&pad.number)?;
-        if let Some(link) = &footprint.schematic_link {
-            return Some(linked(link, number));
-        }
-        let reference = clean(&footprint.reference).filter(|r| !r.contains('?'))?;
-        match self.by_reference.get(reference) {
-            Some(link) if !self.ambiguous.contains(reference) => Some(linked(link, number)),
-            _ => Some(PadIdentity::Unresolved {
-                reference: reference.to_string(),
-                pad: number.to_string(),
-            }),
-        }
+        let link = footprint.schematic_link.as_ref()?;
+        Some(SymbolPad {
+            sheet: link.sheet.clone(),
+            part: link.units.iter().min().copied()?,
+            pad: number.to_string(),
+        })
     }
 
     fn footprint_unlinked(&self, footprint: &Footprint) -> bool {
         footprint.schematic_link.is_none()
     }
-}
-
-fn linked(link: &SymbolLink, pad: &str) -> PadIdentity {
-    PadIdentity::Linked(SymbolPad {
-        sheet: link.sheet.clone(),
-        symbol: link.symbol,
-        pad: pad.to_string(),
-    })
 }
 
 /// `text` trimmed, or `None` when blank.

@@ -754,7 +754,8 @@ impl SnxPcb {
         // known members empty, so those keys are not lost.
         let keep_stackup = !self.board.layers.is_empty()
             || self.board.setup.is_some()
-            || !self.board.unknown.stackup.is_empty();
+            || !self.board.unknown.stackup.is_empty()
+            || !self.board.unknown.stackup_display_names.is_empty();
         let keep_nets = !self.board.nets.is_empty() || !self.board.unknown.nets.is_empty();
         if keep_stackup || keep_nets {
             #[derive(Serialize)]
@@ -900,8 +901,13 @@ impl SnxPcb {
         let zones = raw.zones.unwrap_or_default();
 
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
+        let mut stackup_display_names = UnknownFields::default();
         let (layers, setup, stackup_unknown) = match raw.stackup {
-            Some(s) => stackup::read(s)?,
+            Some(s) => {
+                let read = stackup::read(s)?;
+                stackup_display_names = read.display_names;
+                (read.layers, read.setup, read.unknown)
+            }
             None => (Vec::new(), None, UnknownFields::default()),
         };
 
@@ -928,6 +934,7 @@ impl SnxPcb {
             unknown: BoardUnknown {
                 manifest: raw.unknown,
                 stackup: stackup_unknown,
+                stackup_display_names,
                 nets: nets_unknown,
                 extras: board_extras.unknown,
                 extras_root: extras.unknown,

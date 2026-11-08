@@ -244,14 +244,26 @@ pub struct FpGraphic {
 // Footprint
 // ---------------------------------------------------------------------------
 
-/// The placed schematic symbol a footprint belongs to: the sheet occurrence it
-/// sits on plus the symbol's UUID. Unlike a designator, neither changes when
-/// the schematic is re-annotated. Saved in the optional `sch_link`
-/// footprint column.
+/// The placed schematic part a footprint belongs to: the sheet occurrence it
+/// sits on plus the UUIDs of every unit of the part (a multi-unit part is
+/// several symbol instances that share a designator). Unlike a designator,
+/// neither changes when the schematic is re-annotated. Saved in the optional
+/// `sch_link` footprint column. See ADR-0005 section 11.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SymbolLink {
     pub sheet: InstancePath,
-    pub symbol: Uuid,
+    /// Unit symbol UUIDs, sorted and without repeats; build with [`Self::new`].
+    pub units: Vec<Uuid>,
+}
+
+impl SymbolLink {
+    /// A link to the part made of `units` on `sheet`.
+    pub fn new(sheet: InstancePath, units: impl IntoIterator<Item = Uuid>) -> Self {
+        let mut units: Vec<Uuid> = units.into_iter().collect();
+        units.sort_unstable();
+        units.dedup();
+        Self { sheet, units }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
