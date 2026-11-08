@@ -1100,6 +1100,29 @@ fn saving_a_parked_board_by_its_id_writes_the_unsaved_edits() {
 }
 
 #[test]
+fn undoing_a_parked_board_by_its_id_is_refused_and_keeps_it() {
+    let dir = temp_dir();
+    let mut app = app_with_project(dir.path());
+    let board = dir.path().join("Board.snxpcb");
+    parked_board(&mut app, &board, uid(900));
+    let command = crate::keymap::AppCommandId::new("undo").unwrap();
+    let operand = format!("document={}", uid(900));
+    let args =
+        crate::app::command::CommandArgs::parse_operands(&command, &[operand.as_str()]).unwrap();
+
+    let (outcome, _task) = app.run_operands(&command, &args);
+
+    assert!(
+        matches!(
+            outcome,
+            crate::app::command::CommandOutcome::Disabled { .. }
+        ),
+        "{outcome:?}"
+    );
+    assert!(app.document_state.parked_pcb_boards.contains_key(&board));
+}
+
+#[test]
 fn a_parked_board_that_repeats_an_id_is_given_a_new_one() {
     let _ = crate::diagnostics::init_logging();
     let dir = temp_dir();
