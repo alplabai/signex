@@ -116,9 +116,9 @@ fn thumbnail<'a>(
     card: &'a FootprintCardView,
     tokens: &ThemeTokens,
 ) -> Option<Element<'a, PanelMsg>> {
-    use crate::library::editor::footprint::canvas::{BACKDROP_BG, graphite_look_for};
+    use crate::library::editor::footprint::canvas::graphite_look_for;
     // The ground the preview paints, so the box has no seam around it.
-    let ground = graphite_look_for(tokens).map_or(BACKDROP_BG, |look| look.bg);
+    let ground = graphite_look_for(tokens).bg;
     let inner: Element<'a, PanelMsg> = match &card.status {
         FootprintCardStatus::Ready(facts) => {
             iced::widget::canvas(FootprintPreview::new(&facts.preview).with_theme_tokens(tokens))

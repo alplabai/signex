@@ -9,7 +9,7 @@ use signex_types::theme::ThemeTokens;
 
 use super::layers::{FpLayer, FpSide, LayerPalette};
 use crate::panels::{PanelContext, PanelMsg};
-use crate::styles::{Radii, Spacing, TypeScale, is_graphite, ti, tokens::resolve};
+use crate::styles::{Radii, Spacing, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -18,8 +18,6 @@ const SP: Spacing = Spacing::DEFAULT;
 const SWATCH: f32 = TS.body;
 /// Width of the eye button.
 const EYE_WIDTH: f32 = TS.title * 1.6;
-/// Radius of a button on a legacy theme.
-const LEGACY_RADIUS: f32 = 3.0;
 
 /// Render the panel for the active footprint editor.
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
@@ -37,7 +35,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed();
     };
     let palette = LayerPalette::for_tokens(tokens);
-    let radius = control_radius(tokens);
+    let radius = Radii::GRAPHITE.control;
 
     let actions = row![
         action_button(
@@ -92,7 +90,7 @@ fn layer_row<'a>(
     let muted = resolve(tokens).ink3;
     let swatch_colour = layer.color_in(palette);
     let label_ink = if visible { ink } else { muted };
-    let radius = control_radius(tokens);
+    let radius = Radii::GRAPHITE.control;
 
     let eye = button(
         text(if visible { "\u{25C9}" } else { "\u{25CB}" })
@@ -192,12 +190,4 @@ fn action_button<'a>(
             ..button::Style::default()
         })
         .boxed()
-}
-
-fn control_radius(tokens: &ThemeTokens) -> f32 {
-    if is_graphite(tokens) {
-        Radii::GRAPHITE.control
-    } else {
-        LEGACY_RADIUS
-    }
 }

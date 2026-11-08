@@ -4,8 +4,6 @@
 use super::super::*;
 
 use crate::canvas::CanvasSlot;
-use crate::dock::{DockArea, PanelPosition};
-use crate::panels::PanelKind;
 
 impl Signex {
     /// [`Signex::new`] plus one `FileMsg::Opened` per command-line
@@ -80,43 +78,15 @@ impl Signex {
         let prefs_json = crate::fonts::load_prefs_json();
         let prefs = prefs_json.as_ref();
         let (first_run_tour_open, tour_boot) = first_run_tour_boot(prefs);
-        // Default panel layout — restored from disk if a previous
-        // session persisted one, otherwise seeded with the Altium-ish
-        // defaults: Projects + Components + Signex AI on the left,
-        // Properties + Messages on the right, ERC on the bottom
-        // (user's request — bottom is reserved for future log tails).
-        // A fresh Graphite layout opens with the short Messages dock; a saved
-        // layout is never replaced.
+        // Default panel layout — restored from disk if a previous session
+        // persisted one, otherwise the Graphite first-run layout: the short
+        // Messages dock. A saved layout is never replaced.
         let saved_dock = crate::fonts::read_dock_layout_from(prefs);
-        let graphite_first_run = saved_dock.is_none()
-            && crate::styles::is_graphite(&signex_types::theme::theme_tokens(
-                crate::fonts::read_theme_pref_from(prefs),
-            ));
-        let mut dock = match saved_dock {
+        let graphite_first_run = saved_dock.is_none();
+        let dock = match saved_dock {
             Some(saved) => saved,
-            None if graphite_first_run => crate::dock::graphite_first_run(),
-            None => {
-                // Which panels open, in tab order. *Where* each one
-                // goes is `PanelPosition::default_for`, so the boot
-                // layout and every later "open panel X" agree on one
-                // home per kind (#641).
-                let mut d = DockArea::new();
-                for kind in [
-                    PanelKind::Projects,
-                    PanelKind::Components,
-                    PanelKind::Library,
-                    PanelKind::SignexAi,
-                    PanelKind::Properties,
-                    PanelKind::Messages,
-                    PanelKind::Erc,
-                ] {
-                    d.add_panel(PanelPosition::default_for(kind), kind);
-                }
-                d
-            }
+            None => crate::dock::graphite_first_run(),
         };
-        // Silence unused-mut when read_dock_layout returns Some.
-        let _ = &mut dock;
         let dock_layout_sync = crate::dock::DockLayoutSync::new(
             std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
             crate::dock::DockLayoutSnapshot::capture(&dock),

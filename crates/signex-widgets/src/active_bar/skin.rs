@@ -1,8 +1,7 @@
 //! Graphite look of the Active Bar and its dropdown panel.
 //!
-//! A theme that sets any extended token is a Graphite theme (the same
-//! test as `signex-app`'s `is_graphite`); every other theme gets `None`
-//! and keeps the legacy paint. Paint only: the slot widths, padding and
+//! A theme that sets any extended token is a Graphite theme; a token set
+//! without extended tokens gets `None` and keeps the unskinned paint. Paint only: the slot widths, padding and
 //! spacing come from [`super::Metrics`], which the app's hit-test reads too.
 
 use iced::{Color, Shadow, Vector};

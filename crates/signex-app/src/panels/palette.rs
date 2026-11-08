@@ -20,12 +20,11 @@ use signex_widgets::theme_ext;
 /// Brightens the accent colour without changing its alpha.
 const TAG_HOVER_BRIGHTEN: f32 = 1.3;
 
-/// Ink and soft fill of one DOF chip state. `fill` is `None` on legacy
-/// themes, which draw the state as coloured text.
+/// Ink and soft fill of one DOF chip state.
 #[derive(Debug, Clone, Copy)]
 pub struct DofLook {
     pub ink: Color,
-    pub fill: Option<Color>,
+    pub fill: Color,
 }
 
 /// The DOF chip looks per solver state: under-constrained is `info`, fully
@@ -39,26 +38,15 @@ pub struct DofLooks {
 
 impl DofLooks {
     pub fn for_tokens(tokens: &ThemeTokens) -> Self {
-        use crate::styles::{PillTone, is_graphite, pill_colors};
-        if is_graphite(tokens) {
-            let look = |tone| {
-                let (fill, ink) = pill_colors(tokens, tone);
-                DofLook {
-                    ink,
-                    fill: Some(fill),
-                }
-            };
-            return Self {
-                under: look(PillTone::Info),
-                full: look(PillTone::Ok),
-                over: look(PillTone::Err),
-            };
-        }
-        let plain = |ink| DofLook { ink, fill: None };
+        use crate::styles::{PillTone, pill_colors};
+        let look = |tone| {
+            let (fill, ink) = pill_colors(tokens, tone);
+            DofLook { ink, fill }
+        };
         Self {
-            under: plain(Color::from_rgba(0.20, 0.40, 1.00, 1.00)),
-            full: plain(Color::from_rgba(0.20, 0.85, 0.30, 1.00)),
-            over: plain(Color::from_rgba(1.00, 0.20, 0.20, 1.00)),
+            under: look(PillTone::Info),
+            full: look(PillTone::Ok),
+            over: look(PillTone::Err),
         }
     }
 }
@@ -93,8 +81,6 @@ pub struct PanelPalette {
     pub panel_bg: Color,
     /// DOF chip looks of the sketch entity row.
     pub dof: DofLooks,
-    /// Whether the panel is drawn in a Graphite theme.
-    pub graphite: bool,
 }
 
 impl PanelPalette {
@@ -120,17 +106,12 @@ impl PanelPalette {
             seg_hover: crate::styles::ti(tokens.hover),
             panel_bg: crate::styles::ti(tokens.panel_bg),
             dof: DofLooks::for_tokens(tokens),
-            graphite: crate::styles::is_graphite(tokens),
         }
     }
 
-    /// `(label, value)` widths of a footprint Properties field row: the legacy
-    /// 110 px label, or the Graphite 4:5 split every other form row uses.
+    /// `(label, value)` widths of a footprint Properties field row: the 4:5
+    /// split every other form row uses.
     pub fn field_widths(&self) -> (iced::Length, iced::Length) {
-        if self.graphite {
-            (iced::Length::FillPortion(4), iced::Length::FillPortion(5))
-        } else {
-            (iced::Length::Fixed(110.0), iced::Length::Fill)
-        }
+        (iced::Length::FillPortion(4), iced::Length::FillPortion(5))
     }
 }

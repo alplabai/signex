@@ -28,8 +28,6 @@ pub(super) fn view_selection<'a>(
     fp: &'a FootprintEditorPanelContext,
     mode_label: &str,
     palette: PanelPalette,
-    custom_filter_presets: Option<Vec<crate::active_bar::CustomFilterPreset>>,
-    active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
@@ -145,8 +143,9 @@ pub(super) fn view_selection<'a>(
                         DofColor::Over => ("Over-constrained", palette.dof.over),
                     };
                     let c = look.ink;
-                    let chip: Element<'a, PanelMsg> = match look.fill {
-                        Some(fill) => container(text(label).size(TS.caption).color(c))
+                    let fill = look.fill;
+                    let chip: Element<'a, PanelMsg> =
+                        container(text(label).size(TS.caption).color(c))
                             .padding([2.0, SP.m])
                             .style(move |_: &iced::Theme| iced::widget::container::Style {
                                 background: Some(iced::Background::Color(fill)),
@@ -156,9 +155,7 @@ pub(super) fn view_selection<'a>(
                                 },
                                 ..iced::widget::container::Style::default()
                             })
-                            .boxed(),
-                        None => text(label).size(TS.caption).color(c).boxed(),
-                    };
+                            .boxed();
                     col = col.push(
                         container(
                             row![
@@ -359,21 +356,9 @@ pub(super) fn view_selection<'a>(
                 // a "Custom..." modal launcher for advanced presets.
                 // Pill styling matches the schematic Properties panel's
                 // `preset_chip` / `tag_btn` chrome.
-                // v0.13 — flat Selection Filter pill grid removed
-                // (redundant with Custom Selection Filters below + the
-                // active bar's Filter dropdown). The Custom presets
-                // section is the single Properties-panel surface.
-                if let Some(custom_filter_presets) = custom_filter_presets {
-                    col = col.push(
-                        super::super::view_custom_selection_filters_section(
-                            custom_filter_presets,
-                            active_custom_filter_tab,
-                            collapsed_sections,
-                            palette,
-                        )
-                        .boxed(),
-                    );
-                }
+                // The footprint sheet starts at the footprint itself (no
+                // presets block); they stay reachable from the Active Bar's
+                // Filter menu.
                 col = col.push(
                     collapsible_section_header(
                         "fp_footprint",

@@ -92,7 +92,14 @@ fn close_button(tokens: &ThemeTokens, index: usize, ink: Color) -> Element<'stat
             .align_y(iced::alignment::Vertical::Center),
     )
     .padding(0)
-    .style(move |_: &iced::Theme, status| button::Style {
+    .style(close_style(hover))
+    .on_press(TabMessage::CloseClicked(index))
+    .boxed()
+}
+
+/// The close button's fill: none at rest, `hover` while hovered or pressed.
+fn close_style(hover: Color) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
+    move |_, status| button::Style {
         background: match status {
             button::Status::Hovered | button::Status::Pressed => Some(Background::Color(hover)),
             _ => None,
@@ -102,9 +109,7 @@ fn close_button(tokens: &ThemeTokens, index: usize, ink: Color) -> Element<'stat
             ..Border::default()
         },
         ..button::Style::default()
-    })
-    .on_press(TabMessage::CloseClicked(index))
-    .boxed()
+    }
 }
 
 fn dirty_dot(tokens: &ThemeTokens) -> Element<'static, TabMessage> {
@@ -258,5 +263,42 @@ mod tests {
         let t = theme_tokens(ThemeId::GraphiteDark);
         let el = strip(space::horizontal().boxed(), Some("Sensor node rev B"), &t);
         assert_eq!(el.size().height, Length::Fixed(34.0));
+    }
+
+    /// The close cross fills only on hover and press, in every built-in
+    /// theme; Graphite gives hover and press the same fill.
+    #[test]
+    fn close_button_hover_and_pressed_differ_from_rest() {
+        use iced::widget::button::Status;
+        for &id in ThemeId::BUILTINS {
+            let tokens = theme_tokens(id);
+            let style = close_style(ti(tokens.hover));
+            let theme = iced::Theme::Dark;
+            let active = style(&theme, Status::Active);
+            let hovered = style(&theme, Status::Hovered);
+            let pressed = style(&theme, Status::Pressed);
+            assert!(active.background.is_none(), "{id:?}");
+            assert_eq!(
+                hovered.background,
+                Some(Background::Color(ti(tokens.hover))),
+                "{id:?}"
+            );
+            assert_ne!(hovered.background, active.background, "{id:?}");
+            assert_ne!(pressed.background, active.background, "{id:?}");
+        }
+    }
+
+    /// The dirty dot is smaller than the label it sits beside, the close
+    /// button and the label's line box fit the strip, and the strip is a
+    /// whole number of pixels so the chrome below starts on a pixel boundary.
+    #[test]
+    fn the_tab_parts_fit_the_strip_and_the_strip_is_whole_pixels() {
+        const {
+            assert!(DIRTY_DOT > 0.0 && DIRTY_DOT < TS.body);
+            assert!(CLOSE_CROSS <= CLOSE_SIZE);
+        }
+        assert!(CLOSE_SIZE <= strip_height());
+        assert!(TS.body * 1.3 <= strip_height());
+        assert_eq!(strip_height(), strip_height().round());
     }
 }

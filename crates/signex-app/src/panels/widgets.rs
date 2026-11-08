@@ -77,23 +77,6 @@ pub fn is_section_collapsed(key: &str, collapsed: &CollapsedSections) -> bool {
     collapsed.contains(key)
 }
 
-/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
-pub fn collapsible_section<'a>(
-    key: &str,
-    title: &str,
-    collapsed: &CollapsedSections,
-    header_color: Color,
-    border_c: Color,
-    content: impl FnOnce() -> Column<Element<'a, PanelMsg>>,
-) -> Column<Element<'a, PanelMsg>> {
-    let is_collapsed = collapsed.contains(key);
-    let mut col = collapsible_section_header(key, title, collapsed, header_color, border_c);
-    if !is_collapsed {
-        col = col.push(content().boxed());
-    }
-    col
-}
-
 /// Property key-value row (owned strings to avoid lifetime issues in closures).
 pub fn prop_kv_row<'a>(
     key: &str,

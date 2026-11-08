@@ -49,8 +49,6 @@ mod subforms;
 pub(super) fn view_footprint_editor_properties<'a>(
     fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,
-    custom_filter_presets: Option<Vec<crate::active_bar::CustomFilterPreset>>,
-    active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
 ) -> Element<'a, PanelMsg> {
@@ -210,15 +208,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // pick_list; otherwise → footprint summary. Sketch-mode-only
     // sections (Parameters / DOF / Warnings) follow regardless of
     // selection, so the user can monitor solve state while authoring.
-    col = selection::view_selection(
-        col,
-        fp,
-        mode_label,
-        palette,
-        custom_filter_presets,
-        active_custom_filter_tab,
-        collapsed_sections,
-    );
+    col = selection::view_selection(col, fp, mode_label, palette, collapsed_sections);
     col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);
     col = sections::view_sections(col, fp, palette, collapsed_sections, unit);
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);

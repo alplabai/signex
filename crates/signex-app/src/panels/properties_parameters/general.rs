@@ -17,29 +17,6 @@ use signex_types::schematic::{SheetOrientation, SheetSize};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Custom Selection Filters collapsible section — tabbed editor for up to
-/// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
-/// `view_properties_general` so the schematic Properties panel and the
-/// Footprint editor's Properties panel render the EXACT same widget.
-pub fn view_custom_selection_filters_section<'a>(
-    presets: Vec<crate::active_bar::CustomFilterPreset>,
-    active_custom_filter_tab: usize,
-    collapsed_sections: &'a CollapsedSections,
-    palette: PanelPalette,
-) -> Column<Element<'a, PanelMsg>> {
-    Column::new().spacing(0).width(Length::Fill).push(
-        collapsible_section(
-            "prop_sel_filter",
-            "Custom Selection Filters",
-            collapsed_sections,
-            palette.primary,
-            palette.border,
-            move || selection_filters_body(presets, active_custom_filter_tab, palette),
-        )
-        .boxed(),
-    )
-}
-
 /// The section on the Graphite section chrome.
 fn selection_filters_section_for<'a>(
     ctx: &'a PanelContext,

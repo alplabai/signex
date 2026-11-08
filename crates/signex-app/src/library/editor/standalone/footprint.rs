@@ -40,16 +40,9 @@ pub fn view_footprint<'a>(
     // change rounds out the Altium look on the canvas chrome itself.
     // Symbol (schematic) canvas stays theme-driven — Altium's
     // schematic editor uses a different (cream-ish) palette.
-    // Graphite themes paint the paper / charcoal ground instead.
+    // The paper / charcoal ground is painted instead.
     let graphite = crate::library::editor::footprint::canvas::graphite_look_for(tokens);
-    let bg = graphite.map_or(
-        crate::library::editor::footprint::canvas::BACKDROP_BG,
-        |g| g.bg,
-    );
-    let grid = graphite.map_or(
-        crate::library::editor::footprint::canvas::BACKDROP_GRID,
-        |g| g.dot,
-    );
+    let (bg, grid) = (graphite.bg, graphite.dot);
 
     let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
     let footer = view_footprint_footer(editor, tokens);

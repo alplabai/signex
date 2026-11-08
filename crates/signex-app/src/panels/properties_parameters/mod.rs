@@ -25,10 +25,7 @@ pub use form_rows::{
 };
 #[cfg(test)]
 pub(crate) use general::{add_filter_button_style, seg_text};
-pub use general::{
-    props_tab_btn, seg_btn, view_custom_selection_filters_section, view_properties_general,
-    view_properties_parameters,
-};
+pub use general::{props_tab_btn, seg_btn, view_properties_general, view_properties_parameters};
 pub use net_params::{
     empty_section_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
     net_params_tabs, preplacement_justification_grid,

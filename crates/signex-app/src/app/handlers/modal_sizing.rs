@@ -60,14 +60,10 @@ fn graphite_intro_extra(modal: ModalId) -> Option<f32> {
     })
 }
 
-/// See [`graphite_intro_extra`]; 0 off Graphite.
-fn graphite_extra(modal: ModalId, tokens: &signex_types::theme::ThemeTokens) -> f32 {
-    if !crate::styles::is_graphite(tokens) {
-        return 0.0;
-    }
+/// See [`graphite_intro_extra`].
+fn graphite_extra(modal: ModalId) -> f32 {
     graphite_intro_extra(modal).map_or(0.0, |intro| {
-        intro + crate::styles::dialog_footer_height_for(tokens)
-            - crate::styles::dialog_footer_height()
+        intro + crate::styles::dense_footer_height() - crate::styles::dialog_footer_height()
     })
 }
 
@@ -87,12 +83,7 @@ fn wrapped_lines(text: &str, chars: usize) -> usize {
 /// prompt and the stock copy (body padding `Spacing::l`) and the delete
 /// confirm (`Spacing::xl`). Each text pairs with the one its base height
 /// was measured with.
-fn library_intro_growth(
-    modal: ModalId,
-    width: f32,
-    tokens: &signex_types::theme::ThemeTokens,
-    texts: ((&str, &str), (&str, &str)),
-) -> f32 {
+fn library_intro_growth(modal: ModalId, width: f32, texts: ((&str, &str), (&str, &str))) -> f32 {
     let pad = match modal {
         ModalId::LibraryDeleteConfirm => crate::styles::Spacing::DEFAULT.xl,
         _ => crate::styles::Spacing::DEFAULT.l,
@@ -109,7 +100,6 @@ fn library_intro_growth(
             text: secondary,
             reference: ref_secondary,
         },
-        tokens,
     )
 }
 
@@ -129,7 +119,6 @@ impl Signex {
     ) -> Size {
         let fixed = crate::app::handlers::erc::modal_size(modal);
         let ui = &self.ui_state;
-        let tokens = &self.document_state.panel_ctx.tokens;
         let height = match modal {
             ModalId::AppQuitConfirm => ui.app_quit_confirm.as_ref().map(|c| {
                 LIST_DIALOG_BASE
@@ -178,7 +167,6 @@ impl Signex {
                 let mut wrapped = library_intro_growth(
                     modal,
                     fixed.width,
-                    tokens,
                     ((&title, &text), (&ref_title, &ref_text)),
                 );
                 if let Some(previous) = c.previous_unavailable.as_deref() {
@@ -199,7 +187,6 @@ impl Signex {
                     + library_intro_growth(
                         modal,
                         fixed.width,
-                        tokens,
                         ((title, &text), (ref_title, &ref_text)),
                     )
             }),
@@ -217,14 +204,13 @@ impl Signex {
                         + library_intro_growth(
                             modal,
                             fixed.width,
-                            tokens,
                             ((&title, &text), (&ref_title, &ref_text)),
                         )
                 }),
             _ => None,
         };
         let logical = height.map_or(fixed, |h| Size::new(fixed.width, h));
-        let extra = graphite_extra(modal, tokens);
+        let extra = graphite_extra(modal);
         let logical = Size::new(logical.width, (logical.height + extra).ceil());
         // Every window lays out at the interface scale, so it needs that much
         // more window for the same content.

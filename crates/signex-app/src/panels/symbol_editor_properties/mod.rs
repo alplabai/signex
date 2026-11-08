@@ -36,7 +36,6 @@ pub(super) fn view_symbol_editor_properties<'a>(
     border_c: Color,
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
-    let graphite = crate::styles::is_graphite(tokens);
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     let header_label = match &sym.selected {
@@ -53,13 +52,10 @@ pub(super) fn view_symbol_editor_properties<'a>(
             GraphicKindSummary::Polygon { .. } => "Graphic — Polygon",
         },
     };
-    // Graphite: the symbol-level form opens on its own "Symbol" section
-    // label, so the generic header would only repeat it.
-    if !graphite {
-        col = col.push(section_title(header_label, primary, None));
-        col = col.push(super::thin_sep(border_c));
-    } else if !matches!(sym.selected, SymbolEditorSelection::None) {
-        col = col.push(section_title(header_label, primary, Some(tokens)));
+    // The symbol-level form opens on its own "Symbol" section label, so the
+    // generic header would only repeat it.
+    if !matches!(sym.selected, SymbolEditorSelection::None) {
+        col = col.push(section_title(header_label, tokens));
     }
 
     match &sym.selected {
@@ -115,9 +111,6 @@ pub(super) fn view_symbol_editor_properties<'a>(
         }
     }
 
-    if !graphite {
-        col = col.push(super::thin_sep(border_c));
-    }
     col = col.push(
         container(
             text("Click on the canvas to select.")
@@ -160,18 +153,7 @@ fn prop_row_static<'a>(
     .boxed()
 }
 
-/// A section heading: the Graphite uppercase label when `graphite` carries
-/// the tokens, else the legacy plain heading.
-fn section_title<'a>(
-    title: &str,
-    primary: Color,
-    graphite: Option<&ThemeTokens>,
-) -> Element<'a, PanelMsg> {
-    match graphite {
-        Some(tokens) => form_look::section_label(title, tokens),
-        None => container(text(title.to_string()).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    }
+/// A section heading: the uppercase label.
+fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+    form_look::section_label(title, tokens)
 }

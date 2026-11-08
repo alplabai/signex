@@ -37,7 +37,6 @@ pub fn view_symbol<'a>(
     device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
-    let graphite = crate::styles::is_graphite(tokens);
     // Active bar moved to the app-view layer (view_main_for) so it
     // shares the schematic's window-absolute coordinate system — see
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
@@ -45,9 +44,9 @@ pub fn view_symbol<'a>(
     // which is also where the theme id for its icons is resolved.
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
 
-    let body: Element<'a, LibraryMessage> = if graphite {
-        // Graphite: no header strip. The canvas carries the body / part card
-        // at its bottom-left and the zoom pill at its bottom-right.
+    // No header strip. The canvas carries the body / part card at its
+    // bottom-left and the zoom pill at its bottom-right.
+    let body: Element<'a, LibraryMessage> = {
         let path = editor.path.clone();
         let card = container(graphite_toolbar(editor, &path, tokens))
             .padding(SP.l)
@@ -62,12 +61,6 @@ pub fn view_symbol<'a>(
             .align_x(iced::alignment::Horizontal::Right)
             .align_y(iced::alignment::Vertical::Bottom);
         iced::widget::stack![canvas_widget, card.boxed(), pill.boxed()]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed()
-    } else {
-        column![view_symbol_toolbar(editor, panel_ctx), canvas_widget]
-            .spacing(SP.s)
             .width(Length::Fill)
             .height(Length::Fill)
             .boxed()
@@ -204,65 +197,9 @@ fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
     }
 }
 
-fn view_symbol_toolbar<'a>(
-    editor: &'a SymbolDocument,
-    panel_ctx: &'a PanelContext,
-) -> Element<'a, LibraryMessage> {
-    let tokens = &panel_ctx.tokens;
-    let text_c = theme_ext::text_primary(tokens);
-    let path = editor.path.clone();
-
-    // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
-    let btn = |label: &'static str, msg: PrimitiveEdit| {
-        button(text(label).size(TS.body).color(text_c))
-            .padding([SP.s, SP.l])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg,
-            })
-            .style(symbol_tool_button_style(false, tokens))
-    };
-
-    let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
-    let active_part = editor.active_part;
-
-    let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
-    let body_controls = body_toolbar(editor, &path, text_c, tokens);
-
-    container(
-        row![
-            btn("Fit", PrimitiveEdit::Symbol(SymbolEditorMsg::Fit)),
-            Space::new().width(Length::Fill),
-            body_controls,
-            Space::new().width(SP.l),
-            btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
-            text(format!("Part {active_part} / {max_part}"))
-                .size(TS.body)
-                .color(text_c),
-            btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
-            Space::new().width(SP.s),
-            // Add-unit (+) / remove-unit (−), wired to NewPart /
-            // RemovePart, which add a part and call `delete_unit`
-            // (real delete, refusing to remove the only part).
-            btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
-            btn(
-                "\u{2212}",
-                PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)
-            ),
-            Space::new().width(SP.m),
-            btn(save_label, PrimitiveEdit::Save),
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([SP.m, SP.l])
-    .style(crate::styles::tab_bar_strip(tokens))
-    .boxed()
-}
-
 /// Graphite body / part card over the canvas: a segmented Normal / Alternate
 /// control, the body assignment buttons, the part stepper and an accent Save.
-/// Same messages as the legacy strip (Fit moved to the zoom pill).
+/// Fit lives on the zoom pill.
 fn graphite_toolbar<'a>(
     editor: &SymbolDocument,
     path: &std::path::Path,
@@ -426,54 +363,6 @@ fn graphite_zoom_pill<'a>(
 
 /// Scale factor of one zoom-pill click.
 const ZOOM_BUTTON_STEP: f32 = 1.25;
-
-/// The De Morgan body controls: which body to show (Normal / Alternate) and
-/// whether the selection belongs to both bodies or only the shown one.
-fn body_toolbar<'a>(
-    editor: &SymbolDocument,
-    path: &std::path::Path,
-    text_c: iced::Color,
-    tokens: &signex_types::theme::ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    use signex_types::schematic::BodyStyle;
-    let send = |msg: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
-        path: path.to_path_buf(),
-        msg: PrimitiveEdit::Symbol(msg),
-    };
-    let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
-        button(text(label).size(TS.body).color(text_c))
-            .padding([SP.s, SP.m])
-            .on_press(send(msg))
-            .style(symbol_tool_button_style(active, tokens))
-    };
-    let view = editor.view();
-    row![
-        text("Body").size(TS.body).color(text_c),
-        button_for(
-            "Normal",
-            view.body == BodyStyle::Normal,
-            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal),
-        ),
-        button_for(
-            "Alternate",
-            view.body == BodyStyle::Alternate,
-            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate),
-        ),
-        button_for(
-            "Both bodies",
-            false,
-            SymbolEditorMsg::SelectionBodyAssigned(signex_library::BODY_COMMON),
-        ),
-        button_for(
-            "This body only",
-            false,
-            SymbolEditorMsg::SelectionBodyAssigned(view.body_tag()),
-        ),
-    ]
-    .spacing(SP.s)
-    .align_y(iced::Alignment::Center)
-    .boxed()
-}
 
 fn symbol_tool_button_style(
     active: bool,
