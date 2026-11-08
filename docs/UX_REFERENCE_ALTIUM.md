@@ -261,7 +261,7 @@ Single layer mode cycles through four display states:
 Each press of `Shift+S` advances to the next mode in the cycle.
 
 **Layer pair toggling:** The `+` or `=` key toggles the active layer between
-`SignexLayer::TopCopper` and `SignexLayer::BottomCopper`. Flipping a component
+`PcbLayer::Copper(CopperLayer::Top)` and `PcbLayer::Copper(CopperLayer::Bottom)`. Flipping a component
 with `F` moves it between paired layers. Paired technical layers (Top Overlay
 ↔ Bottom Overlay, Top Solder ↔ Bottom Solder) follow automatically.
 
@@ -312,58 +312,58 @@ These are the default layer colors used by Signex's PCB editor. They match
 Altium Designer's defaults for familiarity. Users may customize per-project
 (after the PCB Viewer).
 
-Layer identifiers reference the canonical `signex_types::layer::SignexLayer`
+Layer identifiers reference the canonical `signex_types::pcb_layer::PcbLayer`
 enum (see `PCB_LAYERS_PLAN.md`).
 
 #### Copper Layers (32 maximum)
 
-| Layer                | `SignexLayer` Variant | Default Color | Hex       |
+| Layer                | `PcbLayer` Variant | Default Color | Hex       |
 |----------------------|-----------------------|---------------|-----------|
-| Top Layer            | `TopCopper`           | Red           | `#FF0000` |
-| Mid Layer 1          | `MidCopper(1)`        | Yellow        | `#FFFF00` |
-| Mid Layer 2          | `MidCopper(2)`        | Green         | `#00FF00` |
-| Mid Layer 3          | `MidCopper(3)`        | Cyan          | `#00FFFF` |
-| Mid Layer 4          | `MidCopper(4)`        | Magenta       | `#FF00FF` |
-| Mid Layer 5          | `MidCopper(5)`        | Olive         | `#808000` |
-| Mid Layer 6          | `MidCopper(6)`        | Teal          | `#008080` |
-| Mid Layer 7          | `MidCopper(7)`        | Purple        | `#800080` |
-| Mid Layer 8          | `MidCopper(8)`        | Orange        | `#FF8000` |
-| Mid Layer 9          | `MidCopper(9)`        | Azure         | `#0080FF` |
-| Mid Layer 10         | `MidCopper(10)`       | Chartreuse    | `#80FF00` |
-| Mid Layer 11         | `MidCopper(11)`       | Rose          | `#FF0080` |
-| Mid Layer 12         | `MidCopper(12)`       | Spring        | `#00FF80` |
-| Mid Layer 13         | `MidCopper(13)`       | Violet        | `#8000FF` |
-| Mid Layer 14         | `MidCopper(14)`       | Salmon        | `#FF8080` |
-| Mid Layer 15         | `MidCopper(15)`       | Light Green   | `#80FF80` |
-| Mid Layer 16         | `MidCopper(16)`       | Light Blue    | `#8080FF` |
-| Mid Layers 17–30     | `MidCopper(N)`        | Cycling from palette | — |
-| Bottom Layer         | `BottomCopper`        | Blue          | `#0000FF` |
+| Top Layer            | `Copper(Top)`           | Red           | `#FF0000` |
+| Mid Layer 1          | `Copper(Inner(1))`        | Yellow        | `#FFFF00` |
+| Mid Layer 2          | `Copper(Inner(2))`        | Green         | `#00FF00` |
+| Mid Layer 3          | `Copper(Inner(3))`        | Cyan          | `#00FFFF` |
+| Mid Layer 4          | `Copper(Inner(4))`        | Magenta       | `#FF00FF` |
+| Mid Layer 5          | `Copper(Inner(5))`        | Olive         | `#808000` |
+| Mid Layer 6          | `Copper(Inner(6))`        | Teal          | `#008080` |
+| Mid Layer 7          | `Copper(Inner(7))`        | Purple        | `#800080` |
+| Mid Layer 8          | `Copper(Inner(8))`        | Orange        | `#FF8000` |
+| Mid Layer 9          | `Copper(Inner(9))`        | Azure         | `#0080FF` |
+| Mid Layer 10         | `Copper(Inner(10))`       | Chartreuse    | `#80FF00` |
+| Mid Layer 11         | `Copper(Inner(11))`       | Rose          | `#FF0080` |
+| Mid Layer 12         | `Copper(Inner(12))`       | Spring        | `#00FF80` |
+| Mid Layer 13         | `Copper(Inner(13))`       | Violet        | `#8000FF` |
+| Mid Layer 14         | `Copper(Inner(14))`       | Salmon        | `#FF8080` |
+| Mid Layer 15         | `Copper(Inner(15))`       | Light Green   | `#80FF80` |
+| Mid Layer 16         | `Copper(Inner(16))`       | Light Blue    | `#8080FF` |
+| Mid Layers 17–30     | `Copper(Inner(N))`        | Cycling from palette | — |
+| Bottom Layer         | `Copper(Bottom)`        | Blue          | `#0000FF` |
 
 #### Technical Layers
 
-| Layer                | `SignexLayer` Variant | Default Color     | Hex       | Alpha |
+| Layer                | `PcbLayer` Variant | Default Color     | Hex       | Alpha |
 |----------------------|-----------------------|-------------------|-----------|:-----:|
-| Top Overlay          | `TopSilk`             | Yellow            | `#FFFF00` | 100%  |
-| Bottom Overlay       | `BottomSilk`          | Dark Blue-Gray    | `#404080` | 100%  |
-| Top Solder           | `TopSolderMask`       | Purple            | `#800080` | 40%   |
-| Bottom Solder        | `BottomSolderMask`    | Teal              | `#008080` | 40%   |
-| Top Paste            | `TopPaste`            | Gray              | `#808080` | 90%   |
-| Bottom Paste         | `BottomPaste`         | Dark Teal         | `#004040` | 90%   |
-| Top Assembly         | `TopAssembly`         | Light Gray        | `#AFAFAF` | 100%  |
-| Bottom Assembly      | `BottomAssembly`      | Slate             | `#585D84` | 100%  |
-| Top Courtyard        | `TopCourtyard`        | Pink              | `#FF26E2` | 100%  |
-| Bottom Courtyard     | `BottomCourtyard`     | Cyan              | `#26E9FF` | 100%  |
-| Keep-Out             | `BoardOutline`        | Magenta           | `#FF00FF` | 100%  |
-| Board Outline        | `BoardMargin`         | Yellow            | `#FFFF00` | 100%  |
+| Top Overlay          | `SilkscreenTop`             | Yellow            | `#FFFF00` | 100%  |
+| Bottom Overlay       | `SilkscreenBottom`          | Dark Blue-Gray    | `#404080` | 100%  |
+| Top Solder           | `SolderMaskTop`       | Purple            | `#800080` | 40%   |
+| Bottom Solder        | `SolderMaskBottom`    | Teal              | `#008080` | 40%   |
+| Top Paste            | `PasteTop`            | Gray              | `#808080` | 90%   |
+| Bottom Paste         | `PasteBottom`         | Dark Teal         | `#004040` | 90%   |
+| Top Assembly         | `AssemblyTop`         | Light Gray        | `#AFAFAF` | 100%  |
+| Bottom Assembly      | `AssemblyBottom`      | Slate             | `#585D84` | 100%  |
+| Top Courtyard        | `CourtyardTop`        | Pink              | `#FF26E2` | 100%  |
+| Bottom Courtyard     | `CourtyardBottom`     | Cyan              | `#26E9FF` | 100%  |
+| Keep-Out             | `EdgeCuts`        | Magenta           | `#FF00FF` | 100%  |
+| Board Outline        | `Margin`         | Yellow            | `#FFFF00` | 100%  |
 
 #### Mechanical Layers
 
-| Layer                | `SignexLayer` Variant | Default Color     | Hex       |
+| Layer                | `PcbLayer` Variant | Default Color     | Hex       |
 |----------------------|-----------------------|-------------------|-----------|
-| Mechanical 1         | `User(1)`             | Orange            | `#FF8000` |
-| Mechanical 2         | `User(2)`             | Steel Blue        | `#5994DC` |
-| Mechanical 3         | `User(3)`             | Mint              | `#B4DBD2` |
-| Mechanical 4         | `User(4)`             | Gold              | `#D8C852` |
+| Mechanical 1         | `Mechanical(1)`             | Orange            | `#FF8000` |
+| Mechanical 2         | `Mechanical(2)`             | Steel Blue        | `#5994DC` |
+| Mechanical 3         | `Mechanical(3)`             | Mint              | `#B4DBD2` |
+| Mechanical 4         | `Mechanical(4)`             | Gold              | `#D8C852` |
 
 #### Virtual / System Layers
 

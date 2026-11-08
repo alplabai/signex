@@ -23,7 +23,7 @@ impl LocalGitAdapter {
         self.root_dir.join(primitive_subdir(kind))
     }
 
-    fn primitive_path(&self, kind: PrimitiveKind, uuid: Uuid) -> PathBuf {
+    pub(super) fn primitive_path(&self, kind: PrimitiveKind, uuid: Uuid) -> PathBuf {
         self.primitive_dir(kind)
             .join(format!("{uuid}.{}", primitive_ext(kind)))
     }
@@ -51,8 +51,9 @@ impl LocalGitAdapter {
     /// just to hand the caller the value it already had (#534).
     pub(super) fn read_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
         let bytes = self.read_primitive_bytes(PrimitiveKind::Footprint, uuid)?;
+        let path = self.primitive_path(PrimitiveKind::Footprint, uuid);
         crate::primitive::FootprintFile::from_bytes(&bytes)
-            .map_err(|e| LibraryError::Backend(format!("read .snxfpt: {e}")))?
+            .map_err(|e| LibraryError::Backend(format!("read {}: {e}", path.display())))?
             .footprints
             .into_iter()
             .next()

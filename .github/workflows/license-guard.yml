@@ -110,12 +110,12 @@ jobs:
           set -e
           # KiCad's pre-7 `PCB_LAYER_ID` used numeric constants for
           # layer ids (F_CU=0, B_CU=31, …). signex-types replaced
-          # this with a semantic `SignexLayer` enum in v0.9.0; any
+          # this with a semantic layer enum in v0.9.0 (now `PcbLayer`); any
           # reintroduction of the numeric form is GPL-exposure.
           #
           # Pattern requires the `const`/`static` keyword immediately
           # before the name so doc comments mentioning the historical
-          # constants in backticks (e.g. layer.rs's "//! `F_CU = 0`
+          # constants in backticks (e.g. the old layer module's "//! `F_CU = 0`
           # … was replaced") don't false-positive.
           if git grep -nE '\b(?:pub\s+)?(?:const|static)\s+(F_CU|B_CU|F_SILKS|B_SILKS|F_MASK|B_MASK)\b' -- 'crates/**/*.rs'; then
             echo ""

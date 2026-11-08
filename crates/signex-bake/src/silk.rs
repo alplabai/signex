@@ -31,7 +31,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 /// Bake every SilkAttr-tagged non-construction entity into an
 /// `FpGraphic` on `silk_f` or `silk_b`, marked with the entity it came
@@ -57,8 +57,8 @@ pub fn bake_silk(
         };
 
         let target = match attr.layer {
-            SignexLayer::TopSilk => &mut *silk_f,
-            SignexLayer::BottomSilk => &mut *silk_b,
+            PcbLayer::Technical(TechnicalLayer::SilkscreenTop) => &mut *silk_f,
+            PcbLayer::Technical(TechnicalLayer::SilkscreenBottom) => &mut *silk_b,
             other => {
                 warnings.push(format!(
                     "entity {}: SilkAttr.layer = {:?} is not a silk layer; skipping bake (use TopSilk or BottomSilk)",
@@ -178,6 +178,7 @@ mod tests {
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_sketch::solver::Solver;
     use signex_sketch::solver::residual::ResolvedParams;
+    use signex_types::pcb_layer::CopperLayer;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -210,7 +211,7 @@ mod tests {
             EntityKind::Line { start: p1, end: p2 },
         );
         line.silk = Some(SilkAttr {
-            layer: SignexLayer::TopSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         });
         data.entities.push(line);
 
@@ -247,7 +248,7 @@ mod tests {
             },
         );
         circle.silk = Some(SilkAttr {
-            layer: SignexLayer::BottomSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenBottom),
         });
         data.entities.push(circle);
 
@@ -277,7 +278,7 @@ mod tests {
             EntityKind::Line { start: p1, end: p2 },
         );
         line.silk = Some(SilkAttr {
-            layer: SignexLayer::TopSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         });
         line.construction = true;
         data.entities.push(line);
@@ -308,7 +309,7 @@ mod tests {
         );
         // Wrong: SilkAttr on a copper layer.
         line.silk = Some(SilkAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
         });
         data.entities.push(line);
 
@@ -346,7 +347,7 @@ mod tests {
             },
         );
         arc.silk = Some(SilkAttr {
-            layer: SignexLayer::TopSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         });
         data.entities.push(arc);
         let solved = solve(&data);

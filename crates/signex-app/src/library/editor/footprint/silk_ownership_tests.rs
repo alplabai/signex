@@ -9,7 +9,7 @@ use signex_library::primitive::footprint::{Footprint, FpGraphic, FpGraphicKind};
 use signex_sketch::attr::SilkAttr;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 use super::sketch_bake_tests::{delete_all_entities, entity_mut, hand_text, rebuild, square};
 use super::sketch_dispatch::apply_sketch_edit;
@@ -33,7 +33,7 @@ fn bar_start() -> SketchEntityId {
 
 fn top_silk() -> Option<SilkAttr> {
     Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     })
 }
 
