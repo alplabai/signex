@@ -14,5 +14,5 @@ mod measure;
 mod overlay;
 mod previews;
 mod retained;
-pub(in crate::canvas) use retained::{RetainedBackground, RetainedContent};
+pub(in crate::canvas) use retained::{RetainedBackground, RetainedContent, RetainedLayer};
 mod scene;

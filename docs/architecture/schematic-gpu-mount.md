@@ -19,7 +19,10 @@ The mount is a `stack!` of five layers, bottom to top:
    leaves alone.
 3. **Static text layer** (`SchematicStaticTextLayer`) - the rotated texts of
    everything not moving, which the GPU glyph atlas cannot draw
-   (`TextItem::is_axis_aligned`).
+   (`TextItem::is_axis_aligned`). A widget (`canvas/gpu_text_layer.rs`), not a
+   `canvas`: when idle it draws a retained layer (`gpu_text_surface`) under a
+   translation, so a whole-pixel pan moves it instead of rebuilding it, by the
+   rules of sch-pan-reuse in `docs/RENDERING_RULES.md` (#2128).
 4. **Drag shader** (`SchematicDragShaderProgram`) - the moving items of a
    move-drag. It is a second primitive type (`SchematicDragSurface`) because
    iced prepares every primitive of one type before rendering any of them, so

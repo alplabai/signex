@@ -9,7 +9,8 @@ use iced::widget::{shader, stack};
 use iced::{Element, Length, Widget as _};
 use signex_gfx::scene::Scene;
 
-use super::gpu_drag::{SchematicDragShaderProgram, SchematicStaticTextLayer};
+use super::gpu_drag::SchematicDragShaderProgram;
+use super::gpu_text_layer::SchematicStaticTextLayer;
 use super::*;
 use crate::scene_shader::{ScenePrimitive, SchematicSurface};
 
@@ -32,9 +33,7 @@ pub(crate) fn view<'a>(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Elem
         shader(SchematicShaderProgram::new(slot, prefs))
             .width(Length::Fill)
             .height(Length::Fill),
-        canvas(SchematicStaticTextLayer::new(slot, prefs))
-            .width(Length::Fill)
-            .height(Length::Fill),
+        SchematicStaticTextLayer::new(slot, prefs).boxed(),
         shader(SchematicDragShaderProgram::new(slot, prefs))
             .width(Length::Fill)
             .height(Length::Fill),

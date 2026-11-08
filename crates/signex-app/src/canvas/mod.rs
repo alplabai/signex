@@ -17,6 +17,7 @@ mod draw;
 mod erc_marker;
 mod gpu_drag;
 pub(crate) mod gpu_mount;
+mod gpu_text_layer;
 pub mod grid;
 mod input;
 mod move_pick;
@@ -115,18 +116,20 @@ pub type BgCacheKey = ((f32, f32, f32), [u8; 4]);
 /// Holds references to app state needed for drawing (theme colors, etc).
 pub struct CanvasSlot {
     pub bg_cache: canvas::Cache,
-    /// The rotated-text layer of a GPU-mounted sheet (`gpu_drag`), with
-    /// `content_cache_camera` the camera it was drawn at. The CPU content layer
-    /// is `content_surface`.
+    /// The content drawn at the live camera with no pan reuse: the reference
+    /// the pixel tests compare the retained layers against. The CPU content
+    /// layer is `content_surface`, the GPU rotated-text layer `gpu_text_surface`.
     pub content_cache: canvas::Cache,
     /// The CPU content layer, retained across pans (#2078).
     content_surface: std::cell::RefCell<draw::RetainedContent>,
+    /// The rotated-text layer of a GPU-mounted sheet, retained across pans
+    /// the same way (#2128); apart from `content_surface`, which holds
+    /// everything else.
+    gpu_text_surface: std::cell::RefCell<draw::RetainedContent>,
     /// The sheet background, retained across pans (#2102); it checks its own
     /// inputs, so `bg_cache` clears do not reach it.
     background_surface: std::cell::RefCell<draw::RetainedBackground>,
     pub overlay_cache: canvas::Cache,
-    /// Camera `content_cache` was last drawn at; `gpu_drag` redraws it when the camera moves.
-    pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
     /// Camera and paper colour `bg_cache` was last built at; `draw_background`
     /// drops the cache when either differs, so the paper and grid follow every
     /// camera move and sheet-colour change whatever event announced it (#1993,
@@ -295,9 +298,9 @@ impl CanvasSlot {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             content_surface: std::cell::RefCell::new(Default::default()),
+            gpu_text_surface: std::cell::RefCell::new(Default::default()),
             background_surface: std::cell::RefCell::new(Default::default()),
             overlay_cache: canvas::Cache::default(),
-            content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             bg_cache_camera: std::cell::Cell::new(None),
             #[cfg(test)]
             bg_tessellations: std::cell::Cell::new(0),
@@ -373,6 +376,7 @@ impl CanvasSlot {
         }
         self.content_cache.clear();
         self.content_surface.get_mut().clear();
+        self.gpu_text_surface.get_mut().clear();
         self.content_scene.get_mut().invalidate();
         self.drag_layers.get_mut().clear();
     }
@@ -910,6 +914,8 @@ mod ghost_tests;
 mod gpu_mount_drag_tests;
 #[cfg(test)]
 mod gpu_mount_tests;
+#[cfg(test)]
+mod gpu_text_reuse_tests;
 #[cfg(test)]
 mod grid_order_tests;
 #[cfg(test)]
