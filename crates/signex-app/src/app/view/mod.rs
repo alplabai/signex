@@ -693,6 +693,10 @@ impl Signex {
                 })
                 .boxed()
             };
+            // Selection, hover and marquee paint above the board and take no input.
+            let highlight = canvas(pcb_canvas.highlight_layer())
+                .width(Length::Fill)
+                .height(Length::Fill);
             if pcb_canvas.gpu_render {
                 // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
                 // the opaque background + grid and owns pan/zoom/cursor/fit;
@@ -715,9 +719,9 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);
-                stack![base, content_shader].boxed()
+                stack![base, content_shader, highlight].boxed()
             } else {
-                base
+                stack![base, highlight].boxed()
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project

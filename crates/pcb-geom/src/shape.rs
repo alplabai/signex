@@ -131,6 +131,34 @@ impl Shape {
         }
     }
 
+    /// The outline of a rectangle (4 corners) or an ellipse (`steps`
+    /// points), counter-clockwise, for drawing; empty for a disc or a track.
+    pub fn outline(&self, steps: usize) -> Vec<PointNm> {
+        match *self {
+            Shape::Rect { .. } => self.box_corners().to_vec(),
+            Shape::Ellipse {
+                center,
+                half_w,
+                half_h,
+                rotation_deg,
+            } => {
+                let (sin, cos) = sin_cos_deg(rotation_deg);
+                let steps = steps.max(8);
+                (0..steps)
+                    .map(|i| {
+                        let t = std::f64::consts::TAU * i as f64 / steps as f64;
+                        let local = PointNm::new(
+                            (half_w as f64 * t.cos()).round() as i64,
+                            (half_h as f64 * t.sin()).round() as i64,
+                        );
+                        rotate(local, sin, cos).plus(center)
+                    })
+                    .collect()
+            }
+            Shape::Disc { .. } | Shape::Capsule { .. } => Vec::new(),
+        }
+    }
+
     /// The corners of a rectangle or of an ellipse's frame box,
     /// counter-clockwise; for other shapes, of the bounding box.
     fn box_corners(&self) -> [PointNm; 4] {

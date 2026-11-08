@@ -98,6 +98,7 @@ tiny-skia = "0.11"
 ttf-parser = "0.25"
 
 # Internal crates
+pcb-geom = { path = "crates/pcb-geom" }
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
 signex-bom = { path = "crates/signex-bom" }

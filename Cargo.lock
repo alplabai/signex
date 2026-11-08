@@ -5330,6 +5330,7 @@ dependencies = [
  "muda",
  "num-traits",
  "objc2",
+ "pcb-geom",
  "rfd",
  "same-file",
  "serde",

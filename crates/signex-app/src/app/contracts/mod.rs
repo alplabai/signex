@@ -124,6 +124,9 @@ pub enum Message {
     /// Parameter Manager dialog family (ADR-0001 D3). Bulk parameter
     /// editor. Routed to `dispatch_parameter_manager_message`.
     ParameterManager(ParameterManagerMsg),
+    /// PCB canvas pointer events: hover, click, box select (#2191).
+    /// Routed to `dispatch_pcb_canvas_message`.
+    PcbCanvas(crate::pcb_canvas::PcbCanvasMsg),
     /// Export subsystem message family — namespaced (ADR-0001 D3).
     /// PDF / netlist / BOM export lifecycle plus the export-error
     /// modal dismiss. Routed to `dispatch_export_message`.

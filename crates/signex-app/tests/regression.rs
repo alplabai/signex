@@ -119,6 +119,9 @@ mod diagnostics_routing;
 #[path = "regression/autosave.rs"]
 mod autosave;
 
+#[path = "regression/pcb_canvas_select.rs"]
+mod pcb_canvas_select;
+
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
 

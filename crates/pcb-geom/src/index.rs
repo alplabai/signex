@@ -151,16 +151,20 @@ impl BoardIndex {
     /// beyond which nothing on the board can be reached, so no input
     /// overflows.
     pub fn hit_point(&self, p: PointNm, tolerance: i64) -> Vec<ItemRef> {
+        sorted(self.items_at(p, tolerance).into_iter().map(|e| e.item))
+    }
+
+    /// The indexed items [`hit_point`](Self::hit_point) finds, with their
+    /// copper, in no fixed order.
+    pub fn items_at(&self, p: PointNm, tolerance: i64) -> Vec<&IndexedItem> {
         let tolerance = tolerance.min(MAX_ABS_NM);
         let far = 4 * MAX_ABS_NM;
         let p = PointNm::new(p.x.clamp(-far, far), p.y.clamp(-far, far));
         let query = envelope_of(&RectNm::point(p).inflate(tolerance));
-        sorted(
-            self.tree
-                .locate_in_envelope_intersecting(&query)
-                .filter(|entry| entry.shape.contains(p, tolerance))
-                .map(|entry| entry.item),
-        )
+        self.tree
+            .locate_in_envelope_intersecting(&query)
+            .filter(|entry| entry.shape.contains(p, tolerance))
+            .collect()
     }
 
     /// [`hit_point`](Self::hit_point) for a model point and tolerance in mm.

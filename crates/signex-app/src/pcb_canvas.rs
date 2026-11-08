@@ -1,6 +1,14 @@
 use std::sync::Arc;
 
 mod cull;
+mod gesture;
+mod highlight;
+mod msg;
+mod select;
+
+pub use highlight::{Highlight, HighlightLayer};
+pub use msg::PcbCanvasMsg;
+pub use select::PcbSelectionState;
 
 use crate::polygon_path::polygon_path_and_fill;
 use crate::renderer_scene_canvas::color_from_rgba;
@@ -28,6 +36,8 @@ pub struct PcbCanvasState {
     /// Ctrl/Cmd held, tracked from `ModifiersChanged` (mouse events carry no
     /// modifiers); keeps a modified scroll zooming under "Two-finger scroll pans".
     zoom_modifier: bool,
+    /// Left-button click / box gesture in flight.
+    gesture: gesture::Gesture,
 }
 
 pub struct PcbCanvas {
@@ -87,6 +97,14 @@ pub struct PcbCanvas {
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub renderer_snapshot: Option<PcbSnapshot>,
     pub visible_grid_mm: f64,
+    /// Selection and hover copper to paint, set by the app from
+    /// [`PcbSelectionState`] (#2191).
+    highlight: Highlight,
+    /// Box being dragged, in board mm; transient, read by the highlight layer.
+    marquee: std::cell::Cell<Option<(signex_types::pcb::Point, signex_types::pcb::Point)>>,
+    /// Whether this canvas reports clicks and hovers. Off for an undocked
+    /// window's canvas until selection is routed per window.
+    pub selectable: bool,
 }
 
 /// Narrowest on-screen grid pitch the PCB canvas draws; denser grids step up
@@ -121,7 +139,22 @@ impl PcbCanvas {
             canvas_colors: colors,
             renderer_snapshot: None,
             visible_grid_mm: 2.54,
+            highlight: Highlight::default(),
+            marquee: std::cell::Cell::new(None),
+            selectable: true,
         }
+    }
+
+    pub fn set_highlight(&mut self, highlight: Highlight) {
+        self.highlight = highlight;
+    }
+
+    pub fn highlight_layer(&self) -> HighlightLayer<'_> {
+        HighlightLayer(self)
+    }
+
+    fn camera_ref(&self) -> std::cell::Ref<'_, Camera> {
+        self.camera.borrow()
     }
 
     pub fn active_renderer_snapshot(&self) -> Option<&PcbSnapshot> {
@@ -555,6 +588,12 @@ impl canvas::Program<Message> for PcbCanvas {
             )));
         }
 
+        if self.selectable
+            && let Some(action) = state.gesture.handle(self, event, bounds, cursor)
+        {
+            return Some(action);
+        }
+
         match event {
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 state.zoom_modifier = mods.command() || mods.control();
@@ -617,13 +656,26 @@ impl canvas::Program<Message> for PcbCanvas {
                         );
                     }
 
-                    let (world, zoom_pct) = {
+                    let (world, zoom_pct, camera_scale) = {
                         let camera = self.camera.borrow();
                         (
                             camera.screen_to_world(cursor_pos, bounds),
                             camera.zoom_percent(),
+                            camera.scale,
                         )
                     };
+                    if self.selectable {
+                        return Some(canvas::Action::publish(Message::PcbCanvas(
+                            PcbCanvasMsg::PointerMoved {
+                                at: signex_types::pcb::Point::new(
+                                    f64::from(world.x),
+                                    f64::from(world.y),
+                                ),
+                                zoom_pct,
+                                tolerance_mm: gesture::hover_reach_mm(camera_scale),
+                            },
+                        )));
+                    }
                     return Some(canvas::Action::publish(Message::CanvasEvent(
                         CanvasEvent::CursorAt {
                             x: world.x,

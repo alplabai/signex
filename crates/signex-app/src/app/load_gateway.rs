@@ -417,6 +417,8 @@ impl Signex {
         canvas.set_theme_colors(main.theme_bg, main.theme_grid);
         canvas.canvas_colors = main.canvas_colors;
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
+        // Selection is routed for the main window's board only.
+        canvas.selectable = false;
         canvas.set_renderer_snapshot(Some(signex_renderer::pcb::PcbSnapshot::from_board(board)));
         canvas.fit_to_board();
         Some(canvas)
@@ -448,6 +450,7 @@ impl Signex {
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(renderer_snapshot);
+        self.note_pcb_board_changed();
     }
 
     pub(crate) fn open_schematic_tab(
@@ -667,6 +670,7 @@ impl Signex {
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(None);
+        self.note_pcb_board_changed();
         self.interaction_state.pcb_canvas.clear_bg_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
 
