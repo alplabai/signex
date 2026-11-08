@@ -163,7 +163,7 @@ struct WindowTexts {
 impl iced::advanced::widget::Operation for WindowTexts {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation)) {
         let saved = self.offset;
-        self.offset = self.offset + std::mem::take(&mut self.pending);
+        self.offset += std::mem::take(&mut self.pending);
         operate(self);
         self.offset = saved;
     }
