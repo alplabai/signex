@@ -271,5 +271,6 @@ mod net_color_undo_order_tests;
 mod net_colors;
 #[cfg(test)]
 mod rect_edit_tests;
+mod sheet_on;
 #[cfg(test)]
 mod undo_save_point_tests;

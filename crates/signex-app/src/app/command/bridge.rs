@@ -377,6 +377,7 @@ mod tests {
     fn resolvable_command_ids(src: &str) -> HashSet<String> {
         let mut ids: HashSet<String> = bridged_command_ids(src).into_iter().collect();
         ids.extend(crate::app::command::active_bar::command_ids().map(str::to_string));
+        ids.extend(crate::app::command::queries::query_command_ids().map(str::to_string));
         // A handler-only command (refused without operands, by design) has
         // no bridge arm; a handler id that does not say so is still caught.
         ids.extend(

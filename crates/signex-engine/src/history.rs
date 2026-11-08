@@ -289,6 +289,16 @@ impl Engine {
         }
     }
 
+    /// Install a history snapshot as the document and return the one it
+    /// replaced. The document id is the live one, not the snapshot's: a Save
+    /// As re-keyed it, and an undo past that must not bring the old id back
+    /// (#2172).
+    fn swap_in_snapshot(&mut self, snapshot: SheetSnapshot) -> SchematicSheet {
+        let mut restored = snapshot.into_sheet();
+        restored.uuid = self.document.uuid;
+        std::mem::replace(&mut self.document, restored)
+    }
+
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
         // An empty stack, or a marker the app has yet to step, changes
@@ -304,7 +314,7 @@ impl Engine {
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);
         let group = entry.group;
-        let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
+        let redo_snapshot = self.swap_in_snapshot(entry.snapshot);
         let redo_snapshot =
             SheetSnapshot::capture(redo_snapshot, last_snapshot(self.history.redo_steps()));
         self.history.finish_step(
@@ -348,7 +358,7 @@ impl Engine {
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);
         let group = entry.group;
-        let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
+        let undo_snapshot = self.swap_in_snapshot(entry.snapshot);
         let undo_snapshot =
             SheetSnapshot::capture(undo_snapshot, last_snapshot(self.history.undo_steps()));
         self.history.finish_step(

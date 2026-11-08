@@ -456,6 +456,7 @@ mod tests {
             id: project,
             path: path.clone(),
             data: signex_types::project::ProjectData {
+                document_id: None,
                 description: None,
                 name: "p".into(),
                 dir: String::new(),

@@ -270,6 +270,7 @@ fn quitting_right_after_save_waits_for_the_preference_writes() {
 
 fn blank_project() -> signex_types::project::ProjectData {
     signex_types::project::ProjectData {
+        document_id: None,
         description: None,
         name: "p".into(),
         dir: String::new(),

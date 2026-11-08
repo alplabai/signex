@@ -621,6 +621,12 @@ pub enum ProjectMsg {
         project_id: crate::app::ProjectId,
         outcome: crate::app::state::project_case::CaseProbeOutcome,
     },
+    /// The off-thread read of the ids at the head of the files a project
+    /// references finished (#2172). Dropped when the project closed meanwhile.
+    DocumentHeadersRead {
+        project_id: crate::app::ProjectId,
+        reads: Vec<crate::app::document_ids::HeaderRead>,
+    },
     /// The off-thread filesystem probe behind the project tree's
     /// `(missing)` marks and library listings finished (#111); `Err` is a
     /// worker that died, with the reason (#1091).

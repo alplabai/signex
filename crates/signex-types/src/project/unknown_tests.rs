@@ -155,3 +155,18 @@ fn retarget_reports_a_shared_disk_entry_without_writing() {
     assert_eq!(out, LibraryRetarget::ListedAsDifferentKind);
     assert_eq!(std::fs::read(&path).unwrap(), before);
 }
+
+/// #2172 guard: a project written without an id of its own stays without one
+/// on a load -> save cycle (no key appears, no key is lost).
+#[test]
+fn a_project_without_an_id_key_re_saves_without_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_raw(
+        dir.path(),
+        r#"{"name":"Proj","dir":"","schematic_root":null,"pcb_file":null}"#,
+    );
+    let data = parse_project(&path).unwrap();
+    write_project(&path, &data).unwrap();
+    let after = saved_json(&path);
+    assert!(!after.as_object().unwrap().contains_key("document_id"));
+}

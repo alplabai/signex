@@ -78,6 +78,7 @@ fn fixture() -> Fixture {
     write_sheet(&dir.join("Child.snxsch"), sheet("A4", &[]));
     write_sheet(&dir.join("Other.snxsch"), sheet("A4", &[]));
     let data = ProjectData {
+        document_id: None,
         description: None,
         name: "Proj".to_string(),
         dir: dir.to_string_lossy().into_owned(),

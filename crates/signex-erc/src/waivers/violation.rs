@@ -436,6 +436,9 @@ fn write_canonical(value: &serde_json::Value, out: &mut String) -> Option<()> {
     Some(())
 }
 
+mod rekey;
+pub use rekey::{copy_sheet_waivers, rekey_sheet};
+
 #[cfg(test)]
 mod identity_guard;
 #[cfg(test)]

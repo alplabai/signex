@@ -486,6 +486,7 @@ mod tests {
             id: ProjectId(id),
             path: PathBuf::from(dir).join("proj.snxprj"),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: "proj".to_string(),
                 dir: dir.to_string(),

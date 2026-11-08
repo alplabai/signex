@@ -15,6 +15,7 @@ fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
         id: ProjectId(id),
         path: Path::new(dir).join("p.snxprj"),
         data: signex_types::project::ProjectData {
+            document_id: None,
             description: None,
             name: format!("p{id}"),
             dir: dir.to_string(),

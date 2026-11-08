@@ -324,3 +324,44 @@ fn a_tick_during_an_in_flight_save_that_then_fails_keeps_the_sidecar() {
         assert!(sidecar_of(&f).exists(), "the recovery copy survives");
     });
 }
+
+fn file_id(app: &Signex, kind: Kind, doc: &Path) -> uuid::Uuid {
+    match kind {
+        Kind::Symbol => app.document_state.symbol_editors[doc].file.file_uuid,
+        Kind::Footprint => app.document_state.footprint_editors[doc].file.file_uuid,
+    }
+}
+
+fn set_file_id(app: &mut Signex, kind: Kind, doc: &Path, id: uuid::Uuid) {
+    match kind {
+        Kind::Symbol => {
+            app.document_state
+                .symbol_editors
+                .get_mut(doc)
+                .expect("editor")
+                .file
+                .file_uuid = id
+        }
+        Kind::Footprint => {
+            app.document_state
+                .footprint_editors
+                .get_mut(doc)
+                .expect("editor")
+                .file
+                .file_uuid = id
+        }
+    }
+}
+
+/// #2172: a restore brings back the copy's content, not its identity.
+#[test]
+fn restore_keeps_the_id_of_the_open_editor() {
+    each_kind(|kind| {
+        let (f, mut next, _) = next_run(kind);
+        let live = uuid::Uuid::now_v7();
+        set_file_id(&mut next, kind, &f.doc, live);
+        answer(&mut next, RecoveryChoice::Restore);
+        assert_eq!(name_in_editor(&next, kind, &f.doc), "Edited");
+        assert_eq!(file_id(&next, kind, &f.doc), live);
+    });
+}

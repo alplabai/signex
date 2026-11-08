@@ -65,6 +65,7 @@ fn fixture() -> Fixture {
     write_sheet(&dir.join("root.snxsch"), sheet_with_label("ROOT_NET"));
     write_sheet(&child, sheet_with_label("CHILD_NET"));
     let data = ProjectData {
+        document_id: None,
         description: None,
         name: "proj".to_string(),
         dir: dir.to_string_lossy().into_owned(),

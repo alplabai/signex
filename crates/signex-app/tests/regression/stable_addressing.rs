@@ -106,6 +106,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
             id,
             path: PathBuf::from(format!("{n}.snxprj")),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: n.into(),
                 dir: String::new(),

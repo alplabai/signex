@@ -77,6 +77,7 @@ pub(crate) fn fixture() -> Fixture {
         id,
         path: prj.clone(),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),

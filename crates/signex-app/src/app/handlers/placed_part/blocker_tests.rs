@@ -94,6 +94,7 @@ fn app_with_child_reference(reference: &str, fold: CaseFold) -> (Signex, PlacedP
         id,
         path: PathBuf::from("/p/p.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "p".into(),
             dir: "/p".into(),
