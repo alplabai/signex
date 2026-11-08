@@ -1,6 +1,6 @@
 //! Selection and hover of the board in view (#2191). Pure state: the
-//! geometry is `pcb_geom`'s, the index is built once per board and kept
-//! until the board changes.
+//! geometry is `pcb_geom`'s, the index is built once per board revision and
+//! kept until that revision changes.
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +16,10 @@ pub struct PcbSelectionState {
     index: Option<BoardIndex>,
     index_builds: u32,
     document: Option<PathBuf>,
+    /// The `DocumentState::pcb_revisions` stamp the index was built for.
+    revision: u64,
+    /// Lines for the Messages panel, drained by [`Self::take_report`].
+    report: Vec<String>,
 }
 
 impl PcbSelectionState {
@@ -32,15 +36,26 @@ impl PcbSelectionState {
         self.index_builds
     }
 
-    /// The board in view changed: the index is stale. Another document
-    /// drops the selection; the same one keeps what still exists.
-    pub fn board_changed(&mut self, document: Option<&Path>) {
-        self.index = None;
+    /// Align with the board in view: another document drops the selection
+    /// and hover; a new `revision` of the same one drops only the index and
+    /// keeps what still exists. Called before every probe, so a writer that
+    /// forgets to announce a board change cannot leave a stale index.
+    pub fn sync(&mut self, document: Option<&Path>, revision: u64) {
         if self.document.as_deref() != document {
             self.document = document.map(Path::to_path_buf);
             self.selection.clear();
             self.hover = None;
+            self.index = None;
         }
+        if self.revision != revision {
+            self.revision = revision;
+            self.index = None;
+        }
+    }
+
+    /// Items the last index build left out, once per build; empty after.
+    pub fn take_report(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.report)
     }
 
     /// Esc: drop selection and hover. Whether either held anything.
@@ -126,6 +141,9 @@ impl PcbSelectionState {
             return;
         }
         let index = BoardIndex::build(board);
+        if let Some(line) = rejected_line(&index) {
+            self.report.push(line);
+        }
         self.selection.retain_in(&index);
         if self
             .hover
@@ -135,6 +153,39 @@ impl PcbSelectionState {
         }
         self.index_builds += 1;
         self.index = Some(index);
+    }
+}
+
+/// One line naming the items the index could not take, if any.
+fn rejected_line(index: &BoardIndex) -> Option<String> {
+    const NAMED: usize = 3;
+    let rejected = index.rejected();
+    if rejected.is_empty() {
+        return None;
+    }
+    let named: Vec<String> = rejected
+        .iter()
+        .take(NAMED)
+        .map(|r| format!("{} ({})", describe(r.item), r.error))
+        .collect();
+    let more = rejected.len().saturating_sub(NAMED);
+    let tail = if more > 0 {
+        format!(" and {more} more")
+    } else {
+        String::new()
+    };
+    Some(format!(
+        "PCB: {} board item(s) cannot be hovered or selected: {}{tail}",
+        rejected.len(),
+        named.join("; ")
+    ))
+}
+
+fn describe(item: ItemRef) -> String {
+    match item {
+        ItemRef::Pad { footprint, pad } => format!("pad {pad} of footprint {footprint}"),
+        ItemRef::Track(id) => format!("track {id}"),
+        ItemRef::Via(id) => format!("via {id}"),
     }
 }
 
@@ -179,7 +230,7 @@ mod tests {
         let board = board();
         let mut state = PcbSelectionState::default();
         let doc = Path::new("a.snxpcb");
-        state.board_changed(Some(doc));
+        state.sync(Some(doc), 1);
         assert!(state.click(&board, Point::new(1.0, 1.0), 0.1, ClickMode::Replace));
         state.hover_at(&board, Point::new(5.0, 5.0), 0.1);
         state.box_select(
@@ -190,14 +241,14 @@ mod tests {
         );
         assert_eq!(state.index_builds(), 1);
 
-        // Same document: the index goes, the selection stays.
-        state.board_changed(Some(doc));
+        // Same document, new revision: the index goes, the selection stays.
+        state.sync(Some(doc), 2);
         assert_eq!(state.selection().len(), 1);
         state.hover_at(&board, Point::new(1.0, 1.0), 0.1);
         assert_eq!(state.index_builds(), 2);
 
         // Another document: the selection goes too.
-        state.board_changed(Some(Path::new("b.snxpcb")));
+        state.sync(Some(Path::new("b.snxpcb")), 3);
         assert!(state.selection().is_empty());
         assert_eq!(state.hover(), None);
     }
@@ -205,10 +256,11 @@ mod tests {
     #[test]
     fn a_selected_item_gone_from_the_board_is_dropped() {
         let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
         state.click(&board(), Point::new(1.0, 1.0), 0.1, ClickMode::Replace);
         let mut emptied = board();
         emptied.vias.clear();
-        state.board_changed(None);
+        state.sync(None, 2);
         state.hover_at(&emptied, Point::new(9.0, 9.0), 0.1);
         assert!(state.selection().is_empty());
     }
@@ -217,5 +269,44 @@ mod tests {
     fn a_non_finite_pointer_selects_nothing() {
         let mut state = PcbSelectionState::default();
         assert!(!state.click(&board(), Point::new(f64::NAN, 0.0), 0.1, ClickMode::Replace));
+    }
+
+    #[test]
+    fn a_board_edit_without_a_notice_still_drops_the_index() {
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        state.hover_at(&board(), Point::new(1.0, 1.0), 0.1);
+        state.sync(None, 1);
+        state.hover_at(&board(), Point::new(1.0, 1.0), 0.1);
+        assert_eq!(state.index_builds(), 1);
+        state.sync(None, 2);
+        state.hover_at(&board(), Point::new(1.0, 1.0), 0.1);
+        assert_eq!(state.index_builds(), 2);
+    }
+
+    #[test]
+    fn an_item_the_index_rejects_is_reported_once_per_build() {
+        let mut broken = board();
+        broken.vias[0].position = Point::new(f64::NAN, 0.0);
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        state.hover_at(&broken, Point::new(1.0, 1.0), 0.1);
+        state.hover_at(&broken, Point::new(2.0, 2.0), 0.1);
+        let report = state.take_report();
+        assert_eq!(report.len(), 1, "{report:?}");
+        assert!(report[0].contains("via"), "{report:?}");
+        assert!(state.take_report().is_empty());
+
+        state.sync(None, 2);
+        state.hover_at(&broken, Point::new(1.0, 1.0), 0.1);
+        assert_eq!(state.take_report().len(), 1);
+    }
+
+    #[test]
+    fn a_clean_board_reports_nothing() {
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        state.hover_at(&board(), Point::new(1.0, 1.0), 0.1);
+        assert!(state.take_report().is_empty());
     }
 }

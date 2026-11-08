@@ -21,6 +21,8 @@ const HIT_REACH_PX: f32 = 4.0;
 pub(super) struct Gesture {
     modifiers: Modifiers,
     press: Option<iced::Point>,
+    /// The press has passed the drag threshold and owns the canvas marquee.
+    dragging: bool,
 }
 
 impl Gesture {
@@ -39,25 +41,44 @@ impl Gesture {
                 None
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                // A release lost outside the window leaves a stale press.
+                self.drop_press(canvas);
                 let pos = cursor.position_in(bounds)?;
                 self.press = Some(pos);
                 Some(canvas::Action::capture())
             }
+            Event::Mouse(mouse::Event::CursorLeft) => {
+                self.press?;
+                self.drop_press(canvas);
+                Some(canvas::Action::request_redraw())
+            }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 let press = self.press?;
-                let pos = cursor.position_in(bounds)?;
-                if !past_threshold(press, pos) {
+                if self.dragging && canvas.marquee.get().is_none() {
+                    // Esc cleared the box: the gesture is over.
+                    self.drop_press(canvas);
                     return None;
                 }
+                let pos = cursor.position_in(bounds)?;
+                if !self.dragging && !past_threshold(press, pos) {
+                    return None;
+                }
+                self.dragging = true;
                 canvas.marquee.set(Some((
                     canvas.screen_to_world(press, bounds),
                     canvas.screen_to_world(pos, bounds),
                 )));
-                Some(canvas::Action::request_redraw().and_capture())
+                // The readout keeps following the pointer while the box grows.
+                let moved = pointer_moved(canvas, pos, bounds);
+                Some(canvas::Action::publish(Message::PcbCanvas(moved)).and_capture())
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                let press = self.press.take()?;
-                canvas.marquee.set(None);
+                let press = self.press?;
+                let cancelled = self.dragging && canvas.marquee.get().is_none();
+                self.drop_press(canvas);
+                if cancelled {
+                    return Some(canvas::Action::capture());
+                }
                 let pos = cursor
                     .position()
                     .map(|p| iced::Point::new(p.x - bounds.x, p.y - bounds.y))
@@ -80,6 +101,29 @@ impl Gesture {
             }
             _ => None,
         }
+    }
+
+    fn drop_press(&mut self, canvas: &PcbCanvas) {
+        self.press = None;
+        self.dragging = false;
+        canvas.marquee.set(None);
+    }
+}
+
+/// The pointer at `pos` (canvas pixels), as the app wants to hear it.
+pub(super) fn pointer_moved(
+    canvas: &PcbCanvas,
+    pos: iced::Point,
+    bounds: Rectangle,
+) -> PcbCanvasMsg {
+    let (zoom_pct, scale) = {
+        let camera = canvas.camera.borrow();
+        (camera.zoom_percent(), camera.scale)
+    };
+    PcbCanvasMsg::PointerMoved {
+        at: canvas.screen_to_world(pos, bounds),
+        zoom_pct,
+        tolerance_mm: hover_reach_mm(scale),
     }
 }
 
@@ -114,3 +158,7 @@ impl PcbCanvas {
         self.camera.borrow().scale
     }
 }
+
+#[cfg(test)]
+#[path = "gesture_tests.rs"]
+mod tests;

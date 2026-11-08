@@ -60,7 +60,8 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         }
         if let Some((from, to)) = canvas.marquee.get() {
             let at = |p: signex_types::pcb::Point| Point::new(p.x as f32, p.y as f32);
-            paint_marquee(&mut frame, &camera, at(from), at(to), accent);
+            let window = is_window(from, to);
+            paint_marquee(&mut frame, &camera, at(from), at(to), window, accent);
         }
         vec![frame.into_geometry()]
     }
@@ -134,12 +135,24 @@ fn paint(
     }
 }
 
+/// Whether the box selects as a window, by `pcb_geom`'s own rule.
+fn is_window(from: signex_types::pcb::Point, to: signex_types::pcb::Point) -> bool {
+    match (
+        pcb_geom::PointNm::from_mm(from, "marquee.from"),
+        pcb_geom::PointNm::from_mm(to, "marquee.to"),
+    ) {
+        (Ok(from), Ok(to)) => pcb_geom::marquee_mode(from, to) == pcb_geom::RectSelect::Inside,
+        _ => false,
+    }
+}
+
 /// A window (left to right) is outlined solid, a crossing dashed.
 fn paint_marquee(
     frame: &mut canvas::Frame,
     camera: &Camera,
     from: Point,
     to: Point,
+    window: bool,
     accent: Color,
 ) {
     let (a, b) = (
@@ -150,7 +163,6 @@ fn paint_marquee(
     let size = iced::Size::new((a.x - b.x).abs(), (a.y - b.y).abs());
     let path = Path::rectangle(top_left, size);
     frame.fill(&path, Color { a: 0.12, ..accent });
-    let window = to.x > from.x;
     let dash = [6.0_f32, 4.0];
     let stroke = Stroke {
         line_dash: if window {

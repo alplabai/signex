@@ -5,7 +5,7 @@
 use iced::Task;
 use signex_types::pcb::PcbBoard;
 
-use crate::app::{Message, Signex, TabDocument};
+use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
 use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{PcbCanvasMsg, PcbSelectionState};
 
@@ -39,7 +39,7 @@ impl Signex {
                 {
                     self.refresh_pcb_highlight();
                 }
-                Task::none()
+                self.close_context_menu_on_press()
             }
             PcbCanvasMsg::BoxSelected { from, to, mode } => {
                 if self.with_pcb_selection(|sel, board| sel.box_select(board, from, to, mode))
@@ -47,41 +47,52 @@ impl Signex {
                 {
                     self.refresh_pcb_highlight();
                 }
-                Task::none()
+                self.close_context_menu_on_press()
             }
         }
     }
 
-    /// Esc on a board: drop the selection and the hover.
+    /// The canvas captures the left press, so the app-wide listener that
+    /// closes an open context menu on it never sees one over the board.
+    fn close_context_menu_on_press(&mut self) -> Task<Message> {
+        self.update(Message::ContextMenu(ContextMenuMsg::Close))
+    }
+
+    /// Esc on a board: drop the selection, the hover and a box in progress.
     pub(crate) fn clear_pcb_selection(&mut self) {
+        self.interaction_state.pcb_canvas.cancel_marquee();
         if self.interaction_state.pcb_selection.clear() {
             self.refresh_pcb_highlight();
         }
     }
 
-    /// The board in view changed: forget the index, repaint the highlight.
+    /// The board in view changed: repaint the highlight. The index itself
+    /// is keyed on the board revision, so it does not depend on this call.
     pub(crate) fn note_pcb_board_changed(&mut self) {
-        let document = self
-            .active_pcb()
-            .and_then(|_| self.document_state.tabs.get(self.document_state.active_tab))
-            .map(|tab| tab.path.clone());
-        self.interaction_state
-            .pcb_selection
-            .board_changed(document.as_deref());
+        if self.active_pcb().is_none() {
+            self.interaction_state.pcb_selection.sync(None, 0);
+        }
         self.refresh_pcb_highlight();
     }
 
+    /// Run `f` on the selection state and the active board, after aligning
+    /// the state with that board's document and revision. What the index
+    /// build left out is reported to the Messages panel.
     fn with_pcb_selection<R>(
         &mut self,
         f: impl FnOnce(&mut PcbSelectionState, &PcbBoard) -> R,
     ) -> Option<R> {
-        let board = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .and_then(|tab| tab.cached_document.as_ref())
-            .and_then(TabDocument::as_pcb)?;
-        Some(f(&mut self.interaction_state.pcb_selection, board))
+        let docs = &self.document_state;
+        let tab = docs.tabs.get(docs.active_tab)?;
+        let board = tab.cached_document.as_ref().and_then(TabDocument::as_pcb)?;
+        let revision = docs.pcb_revisions.get(&tab.path).copied().unwrap_or(0);
+        let selection = &mut self.interaction_state.pcb_selection;
+        selection.sync(Some(tab.path.as_path()), revision);
+        let out = f(selection, board);
+        for line in selection.take_report() {
+            crate::diagnostics::log_warning(line);
+        }
+        Some(out)
     }
 
     /// Hand the canvas the copper to paint for the current selection.

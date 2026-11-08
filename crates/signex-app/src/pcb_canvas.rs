@@ -149,6 +149,11 @@ impl PcbCanvas {
         self.highlight = highlight;
     }
 
+    /// Drop a box being dragged (Esc); the gesture sees it gone and quits.
+    pub fn cancel_marquee(&self) {
+        self.marquee.set(None);
+    }
+
     pub fn highlight_layer(&self) -> HighlightLayer<'_> {
         HighlightLayer(self)
     }
@@ -656,26 +661,18 @@ impl canvas::Program<Message> for PcbCanvas {
                         );
                     }
 
-                    let (world, zoom_pct, camera_scale) = {
+                    if self.selectable {
+                        return Some(canvas::Action::publish(Message::PcbCanvas(
+                            gesture::pointer_moved(self, cursor_pos, bounds),
+                        )));
+                    }
+                    let (world, zoom_pct) = {
                         let camera = self.camera.borrow();
                         (
                             camera.screen_to_world(cursor_pos, bounds),
                             camera.zoom_percent(),
-                            camera.scale,
                         )
                     };
-                    if self.selectable {
-                        return Some(canvas::Action::publish(Message::PcbCanvas(
-                            PcbCanvasMsg::PointerMoved {
-                                at: signex_types::pcb::Point::new(
-                                    f64::from(world.x),
-                                    f64::from(world.y),
-                                ),
-                                zoom_pct,
-                                tolerance_mm: gesture::hover_reach_mm(camera_scale),
-                            },
-                        )));
-                    }
                     return Some(canvas::Action::publish(Message::CanvasEvent(
                         CanvasEvent::CursorAt {
                             x: world.x,
