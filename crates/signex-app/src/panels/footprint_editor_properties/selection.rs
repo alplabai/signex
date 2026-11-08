@@ -118,9 +118,9 @@ pub(super) fn view_selection<'a>(
                     input_bdr,
                     "Construction",
                     if ent.construction {
-                        "yes".into()
+                        "yes".to_owned()
                     } else {
-                        "no".into()
+                        "no".to_owned()
                     },
                 );
                 col = props_kv_row(

@@ -165,7 +165,7 @@ pub(super) fn push_pins_section<'a>(
                         pin.electrical_type,
                         pin.net.unwrap_or_default(),
                         if pin.hidden {
-                            "Yes".into()
+                            "Yes".to_owned()
                         } else {
                             String::new()
                         },

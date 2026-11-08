@@ -1,0 +1,27 @@
+id: no-raw-literal-widget
+valid:
+  - 'fn v() { container(text(raw("X"))); }'
+  - 'fn v() { button(text(raw("X"))); }'
+  - 'fn v() { tooltip(a, text(raw("X")), Position::Top); }'
+  - 'fn v() { UserText::new(name); }'
+  - 'fn v() { Text::from(label); }'
+  - 'fn v() -> Result<(), E> { Err("x".into()) }'
+  - 'fn v() { let s: String = "x".into(); }'
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn t() { container("X"); }
+    }
+invalid:
+  - 'fn v() { container("X"); }'
+  - 'fn v() { scrollable("X"); }'
+  - 'fn v() { mouse_area("X"); }'
+  - 'fn v() { button("X"); }'
+  - 'fn v() { button(container("X")); }'
+  - 'fn v() { tooltip(a, "X", Position::Top); }'
+  - 'fn v() { Element::from("X"); }'
+  - 'fn v() { Text::from("X"); }'
+  - 'fn v() { UserText::new("X"); }'
+  - 'fn v() { "X".boxed(); }'
+  - 'fn v() { let t: Text = "X".into(); }'
+  - "fn v() -> Element<M> { column.push(\"X\".into()).into() }"
