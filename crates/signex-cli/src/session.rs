@@ -153,13 +153,28 @@ impl Session {
         if let Err(reason) = self.policy.recheck(&approved, &self.roots) {
             return (Status::Refused, Some(reason), None);
         }
-        // A command that writes also writes files no operand names.
-        if capability_of(approved.meta).writes_files()
-            && let Err(reason) = self
-                .policy
-                .check_write_targets(&self.implicit_write_targets(), &self.roots)
-        {
-            return (Status::Refused, Some(reason), None);
+        // An id names its file only through the app, so every `document`
+        // operand, id or path, is resolved and checked as the file it names.
+        let named = match self.named_document_paths(&approved) {
+            Ok(named) => named,
+            Err(reason) => return (Status::Refused, Some(reason), None),
+        };
+        // A command that writes also writes files no operand names. One that
+        // names its document writes that document (not whatever is active)
+        // and what saving it writes besides: its project file, the sheets a
+        // Save As rewrites, the libraries a project save creates.
+        if capability_of(approved.meta).writes_files() {
+            let targets = if named.is_empty() {
+                self.implicit_write_targets()
+            } else {
+                if let Err(reason) = self.check_side_writes(approved.command.as_str(), &named) {
+                    return (Status::Refused, Some(reason), None);
+                }
+                named
+            };
+            if let Err(reason) = self.policy.check_write_targets(&targets, &self.roots) {
+                return (Status::Refused, Some(reason), None);
+            }
         }
         let Some(dialogs) = self.app.headless_answers() else {
             return (Status::Failed, Some("the app is not headless".into()), None);
@@ -176,6 +191,56 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
+    }
+
+    /// The files the `document` operands of `approved` name, resolved by the
+    /// app and each checked like a path operand (inside the allowed folders,
+    /// no link out, within the size cap). An operand that names no document
+    /// is refused with the app's reason.
+    fn named_document_paths(&mut self, approved: &Approved) -> Result<Vec<PathBuf>, String> {
+        let writes = capability_of(approved.meta).writes_files();
+        let mut paths = Vec::new();
+        for (name, text) in &approved.operands {
+            let is_document = approved
+                .meta
+                .operands
+                .iter()
+                .any(|operand| operand.name == *name && operand.kind == OperandKind::Document);
+            if !is_document {
+                continue;
+            }
+            let path = self
+                .app
+                .document_path(text)
+                .map_err(|why| format!("operand `{name}`: {why}"))?;
+            self.policy
+                .check_resolved(&path, &self.roots, writes)
+                .map_err(|why| format!("operand `{name}`: {why}"))?;
+            paths.push(path);
+        }
+        Ok(paths)
+    }
+
+    /// The files saving the `named` documents writes besides them, each
+    /// checked as a write target; a refusal names the file and its part.
+    fn check_side_writes(&self, command: &str, named: &[PathBuf]) -> Result<(), String> {
+        let as_copy = command == "save_document_as";
+        for side in named
+            .iter()
+            .flat_map(|path| self.app.save_side_writes(path, as_copy))
+        {
+            let part = match side.extension().and_then(|e| e.to_str()) {
+                Some("snxprj") => "project file",
+                Some("snxsch") => "project sheet",
+                _ => "library file",
+            };
+            self.policy
+                .check_write_targets(std::slice::from_ref(&side), &self.roots)
+                .map_err(|why| {
+                    format!("{command} also writes the {part} {}: {why}", side.display())
+                })?;
+        }
+        Ok(())
     }
 
     /// File dialogs refused so far in this session.
@@ -249,11 +314,19 @@ fn operands_for(approved: &Approved) -> Result<(CommandArgs, Vec<(String, String
         .collect();
     let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
     let args = CommandArgs::parse_operands(&approved.command, &refs).map_err(|e| e.to_string())?;
-    let is_dialog = approved
+    // A command that names its document takes its operands whole: `path` is
+    // then the target of `save_document_as`, not a dialog answer.
+    let names_document = approved
         .meta
         .operands
         .iter()
-        .any(|operand| operand.required && operand.kind == OperandKind::Path);
+        .any(|operand| operand.kind == OperandKind::Document);
+    let is_dialog = !names_document
+        && approved
+            .meta
+            .operands
+            .iter()
+            .any(|operand| operand.required && operand.kind == OperandKind::Path);
     if !is_dialog {
         return Ok((args, Vec::new()));
     }
@@ -291,7 +364,14 @@ fn verdict(
             )),
             None,
         ),
-        CommandOutcome::Disabled { reason } => (Status::Refused, Some(reason), None),
+        // A command that made nothing because the app said why in an error
+        // notice (an open of a missing file) failed; it was not refused.
+        CommandOutcome::Disabled { reason } => match notice {
+            Some(why) => (Status::Failed, Some(why), None),
+            None => (Status::Refused, Some(reason), None),
+        },
+        // A query ran: what it found is the result, never a bare `ran`.
+        CommandOutcome::Answered(value) => (Status::Answered, None, Some(value)),
         other => (
             Status::Failed,
             Some(format!("unexpected outcome {other:?}")),
@@ -428,6 +508,23 @@ mod tests {
             (disabled.0, disabled.1.as_deref()),
             (Status::Refused, Some("why"))
         );
+        // A refusal the app explained in an error notice (an open of a file
+        // that is not there) is a failure with that notice.
+        let noticed = verdict(
+            "x",
+            CommandOutcome::Disabled {
+                reason: "made no document".into(),
+            },
+            Some("Open failed: no file".into()),
+        );
+        assert_eq!(
+            (noticed.0, noticed.1.as_deref()),
+            (Status::Failed, Some("Open failed: no file"))
+        );
+        // A query's answer is the result: `answered` with `data`.
+        let answer = serde_json::json!({"count": 1});
+        let answered = verdict("x", CommandOutcome::Answered(answer.clone()), None);
+        assert_eq!(answered, (Status::Answered, None, Some(answer)));
         let not_headless = verdict("x", CommandOutcome::NotHeadless, None);
         assert_eq!(not_headless.0, Status::Failed);
     }

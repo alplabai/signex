@@ -55,8 +55,25 @@ impl Signex {
             .get(&source)
             .with_context(|| format!("no open schematic at {}", source.display()))?;
         let revision = engine.revision();
-        let bytes = engine
-            .serialize_with_extents(crate::schematic_runtime::text_width::live_extent_measure())
+        let measure = crate::schematic_runtime::text_width::live_extent_measure();
+        // A Save As makes a new document: the copy is written with an id of
+        // its own, and the document takes it when the write lands (#2172). A
+        // Save As onto another spelling of its own file (a case variant) is
+        // the same document: it keeps its id.
+        let new_document = save_as_from.as_ref().is_some_and(|from| {
+            let fold = self.identity_fold_for(from);
+            crate::app::state::scope::path_key_with(from, fold)
+                != crate::app::state::scope::path_key_with(&target, fold)
+        });
+        let encoded = if new_document {
+            engine.serialize_as_copy_with_extents(
+                signex_types::document_id::DocumentId::new().as_uuid(),
+                measure,
+            )
+        } else {
+            engine.serialize_with_extents(measure)
+        };
+        let bytes = encoded
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was
@@ -244,7 +261,15 @@ impl Signex {
                     .document_saves
                     .forget_disk_records(&from);
                 self.record_real_path_of(&path);
-                project_write = self.apply_saved_as(&from, path, revision);
+                let owner = self.waiver_owner_of(&from);
+                project_write = self.apply_saved_as(&from, path.clone(), revision);
+                // Only when the tab was re-keyed onto the copy; a Save As
+                // that bailed leaves the document, and the id, as they were.
+                let rekeyed = self.document_state.engines.contains_key(&path)
+                    && !self.document_state.engines.contains_key(&from);
+                if rekeyed {
+                    self.adopt_saved_copy_id(&path, &saved, owner);
+                }
             }
         }
         self.warn_unwritten_spellings(&outcome_path);
@@ -256,6 +281,34 @@ impl Signex {
             .collect();
         tasks.push(project_write);
         Task::batch(tasks)
+    }
+
+    /// A Save As landed and the engine now stands for the new file: it takes
+    /// the document id the written copy carries, so the document in memory is
+    /// the one on disk (#2172).
+    fn adopt_saved_copy_id(
+        &mut self,
+        path: &std::path::Path,
+        saved: &crate::app::state::CommitBytes,
+        owner: Option<crate::app::state::ProjectId>,
+    ) {
+        let Some(id) = signex_types::format::document_id_in_header("snxsch", &saved.bytes) else {
+            return;
+        };
+        let Some(engine) = self.document_state.engines.get_mut(path) else {
+            return;
+        };
+        let old = engine.document().uuid;
+        engine.reassign_document_id(id.as_uuid());
+        // The project follows the copy; its net waivers name the sheet by id.
+        if !old.is_nil() && old != id.as_uuid() {
+            self.follow_waivers(
+                owner,
+                old,
+                id.as_uuid(),
+                crate::app::document_ids::Follow::Move,
+            );
+        }
     }
 
     /// Once no write to the file `path` names (under any spelling) is still owed, warn about

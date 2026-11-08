@@ -11,8 +11,14 @@
 pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod document_operand_tests;
+mod document_operands;
 pub(crate) mod enablement;
+#[cfg(test)]
+pub(in crate::app) mod interaction_snapshot_tests;
 mod needs;
+mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
 mod operand_handlers;
@@ -21,6 +27,7 @@ mod outcome;
 #[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
+pub(crate) mod queries;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
@@ -30,7 +37,7 @@ pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
-pub(crate) use operand_handlers::headless_needs_path;
+pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;
@@ -121,6 +128,18 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
+        // A query answers an agent or the CLI with data; no GUI surface shows
+        // that answer, so a palette, key or menu call is refused rather than
+        // reported as run (#2172).
+        if queries::is_query(command) {
+            return (
+                CommandOutcome::disabled(format!(
+                    "`{}` is for agents and the CLI: it answers with data",
+                    command.as_str()
+                )),
+                Task::none(),
+            );
+        }
         // Undo / Redo typed in an undocked tab step that window's document
         // and are gated by its history, not the main window's active tab
         // (#1546).

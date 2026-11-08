@@ -151,6 +151,7 @@ mod tests {
             id,
             path: PathBuf::from(dir).join("P.snxprj"),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: "P".to_string(),
                 dir: dir.to_string(),

@@ -82,6 +82,7 @@ pub fn fixture(root: &Path) -> Fixture {
         pin_name_offset: 0.0,
     };
     let content = SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
         wires: vec![wire],
         labels: vec![Label::new("GND", origin, LabelType::Global)],
         symbols: vec![Symbol {
@@ -108,6 +109,7 @@ pub fn fixture(root: &Path) -> Fixture {
 
 fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
     ProjectData {
+        document_id: None,
         description: None,
         name: "demo".into(),
         dir: dir.to_string_lossy().into_owned(),
@@ -137,6 +139,7 @@ fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
 /// Rewrite the fixture's project file with git versioning enabled.
 pub fn enable_git(fx: &Fixture) {
     let data = ProjectData {
+        document_id: None,
         enable_git: true,
         ..project_data(&fx.dir, Vec::new())
     };

@@ -891,6 +891,7 @@ fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
         id,
         path: PathBuf::from("proj.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "proj".into(),
             dir: String::new(),

@@ -217,6 +217,33 @@ impl Signex {
         self.begin_project_save(project_id)
     }
 
+    /// Start the write of the document at `path`, by the kind that holds it
+    /// (a sheet, a symbol or footprint draft, a project file), without
+    /// asking which tab is active (#2172). Like Save All's per-file write,
+    /// but a sheet also keeps the case-variant guard of Ctrl+S.
+    pub(crate) fn begin_document_path_save(
+        &mut self,
+        path: &std::path::Path,
+    ) -> Result<iced::Task<Message>> {
+        self.refuse_save_while_path_op(path)?;
+        self.refuse_save_while_restoring(path)?;
+        match self.document_state.document_key_for_path(path) {
+            Some(DocumentKey::Schematic(_)) => match self.guard_spelling_save(path)? {
+                super::dir_case::SaveGuard::Clear => {
+                    self.begin_schematic_save(path.to_path_buf(), None)
+                }
+                super::dir_case::SaveGuard::Waiting(probe) => Ok(probe),
+            },
+            Some(DocumentKey::Symbol(_) | DocumentKey::Footprint(_)) => {
+                self.save_primitive_tab_at(path)
+            }
+            Some(DocumentKey::Project(_)) => self.save_project_at_path(path),
+            Some(DocumentKey::Pcb(_) | DocumentKey::Row(_)) | None => anyhow::bail!(
+                "no open editor, engine or project backs this file, so it cannot be saved"
+            ),
+        }
+    }
+
     /// Schematic Save As. `from_path` is the tab the dialog was opened
     /// for; the dialog is not modal, so refuse when the active tab is no
     /// longer that schematic instead of writing another document to
@@ -227,6 +254,17 @@ impl Signex {
         path: PathBuf,
     ) -> Result<iced::Task<Message>> {
         self.commit_title_block_drafts_where(|sheet| sheet == from_path);
+        self.save_sheet_as(from_path, path)
+    }
+
+    /// [`Self::save_active_document_as`] without taking the person's
+    /// title-block drafts into the sheet first: an agent's Save As writes the
+    /// document as it is (#2172).
+    pub(crate) fn save_sheet_as(
+        &mut self,
+        from_path: &std::path::Path,
+        path: PathBuf,
+    ) -> Result<iced::Task<Message>> {
         self.refuse_save_while_restoring(from_path)?;
         // A name typed without an extension gets `.snxsch`, like the
         // symbol / footprint Save As; if that file exists the user was never
@@ -276,6 +314,11 @@ impl Signex {
                  again once it finishes: {}",
                 file_label(&path)
             );
+        }
+        // Onto its own file it is a plain save: no new document, so the id
+        // stays (#2172).
+        if path == from_path {
+            return self.begin_schematic_save_unchecked(path);
         }
         // The tab keeps its old path and title until the write succeeds.
         self.begin_schematic_save(path, Some(from_path.to_path_buf()))

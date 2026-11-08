@@ -746,6 +746,7 @@ mod tests {
             id,
             path: PathBuf::from("snx-1383-tree/p.snxprj"),
             data: ProjectData {
+                document_id: None,
                 name: "p".to_string(),
                 description: None,
                 dir: "snx-1383-tree".to_string(),
@@ -792,6 +793,7 @@ mod tests {
             id,
             path: dir.join("P.snxprj"),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: "P".to_string(),
                 dir: dir.to_string_lossy().into_owned(),

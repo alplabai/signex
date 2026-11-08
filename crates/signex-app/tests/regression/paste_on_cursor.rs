@@ -507,6 +507,7 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
             id,
             path: PathBuf::from(format!("{name}.snxprj")),
             data: ProjectData {
+                document_id: None,
                 name: name.to_owned(),
                 description: None,
                 dir: String::new(),

@@ -193,3 +193,23 @@ fn snxsch_1_1_loads_and_the_old_token_upgrades_on_save() {
     assert!(version::is_newer_minor("snxsch/1.1", "snxsch/1"));
     assert!(version::refuse_save("snxsch/1.1", "snxsch/1").is_err());
 }
+
+/// #2172 guard: the sheet's and the board's own uuid is the first stored key
+/// after the token and comes back unchanged, so it can serve as the
+/// document's id.
+#[test]
+fn a_sheet_and_a_board_keep_their_uuid_across_write_and_parse() {
+    let sheet_id = uuid::Uuid::parse_str("0193a2f0-7b1c-7cde-8123-456789abcdef").unwrap();
+    let mut sheet = super::tests::empty_sheet();
+    sheet.uuid = sheet_id;
+    let text = SnxSchematic::new(sheet).write_string().unwrap();
+    assert!(text.contains(&format!("schematic_id = \"{sheet_id}\"")));
+    assert_eq!(SnxSchematic::parse(&text).unwrap().sheet.uuid, sheet_id);
+
+    let board_id = uuid::Uuid::parse_str("0193a2f0-7b1c-7cde-8123-456789abcd00").unwrap();
+    let mut board = super::tests::empty_board();
+    board.uuid = board_id;
+    let text = SnxPcb::new(board).write_string().unwrap();
+    assert!(text.contains(&format!("pcb_id = \"{board_id}\"")));
+    assert_eq!(SnxPcb::parse(&text).unwrap().board.uuid, board_id);
+}

@@ -121,6 +121,7 @@ pub(crate) fn push_project(app: &mut Signex, dir: &Path, name: &str) {
         id,
         path: prj,
         data: ProjectData {
+            document_id: None,
             description: None,
             name: name.into(),
             dir: dir.to_string_lossy().into_owned(),

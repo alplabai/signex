@@ -8,7 +8,7 @@ break_wire	modify	Break wire	-	General	-	-	Always	gui_only,mutates_doc,undoable	
 cancel_current_tool	interactive	Cancel current stage / exit placement mode	-	General	-	-	Always	gui_only	-
 center_on_cursor	view	Center on cursor	-	General	-	-	Always	gui_only	-
 center_view_at_cursor	view	Center/redraw view around cursor	-	General	-	-	Always	gui_only	-
-close_active_document	file	Close active document	Close Document	General	-	-	Always	-	-
+close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
 copy	edit	Copy	-	General	-	-	RequiresSelection	-	-
 copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 cut	edit	Cut	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -20,6 +20,7 @@ cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	-	Gene
 cycle_wire_bus_graphic_mode	interactive	Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees	-	General	-	-	Always	gui_only	-
 cycle_wiring_mode	interactive	Change wiring mode while dragging connected electrical objects	-	General	-	-	Always	gui_only	-
 delete_selection	edit	Delete selection	Delete	General	-	-	RequiresSelection	mutates_doc,undoable	-
+document_info	file	Document info	-	General	-	-	Always	-	document:document
 drag_keep_connections	modify	Drag while keeping connections	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 duplicate	edit	Duplicate	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 edit_footprint_field	edit	Edit footprint field	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
@@ -33,12 +34,14 @@ edit_value	edit	Edit value	-	General	-	-	RequiresSelection	gui_only,mutates_doc,
 fast_grid_1	view	Fast grid 1	-	General	-	-	Always	gui_only	-
 fast_grid_2	view	Fast grid 2	-	General	-	-	Always	gui_only	-
 find	search	Find	-	General	-	-	Always	gui_only	-
+find_items	search	Find documents or items	-	General	-	-	Always	-	document:document?,kind:text?,project:text?,name:text?,dirty:bool?,designator:text?,value:text?,net:text?,text:text?
 find_and_replace	search	Find and replace	Find and Replace	General	-	-	Always	gui_only	-
 find_next	search	Find next	-	General	-	-	Always	gui_only	-
 find_previous	search	Find previous	-	General	-	-	Always	gui_only	-
 find_similar_objects	select	Find Similar Objects	Find Similar Objects...	General	-	-	RequiresSelection	gui_only	-
 find_text	search	Find text	-	General	-	-	Always	gui_only	-
 import_graphics	library	Import graphics	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
+list_documents	file	List documents	-	General	-	-	Always	-	kind:text?,project:text?,name:text?,dirty:bool?
 measure_distance	view	Measure distance	-	General	-	-	Always	gui_only	-
 mirror_x	modify	Mirror along X-axis	Mirror X	General	-	-	RequiresSelection	mutates_doc,undoable	-
 mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -62,17 +65,19 @@ placement_properties	interactive	Edit properties of the object being placed or m
 previous_document_tab	window	Previous open document tab	-	General	-	-	Always	gui_only	-
 previous_grid	view	Previous grid	-	General	-	-	Always	gui_only	-
 print	file	Print	Print...	General	-	-	Always	gui_only	-
-redo	edit	Redo	-	General	-	-	Always	mutates_doc	-
+read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:text?,kinds:text?,region:text?,fields:text?,offset:text?,limit:text?
+redo	edit	Redo	-	General	-	-	Always	mutates_doc	document:document
 refresh_view	view	Refresh/redraw	-	General	-	-	Always	gui_only	-
 remove_last_vertex	interactive	Remove last placed vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 repeat_last_item	edit	Repeat last item	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 report_manager_bom	reports	Report Manager / BOM	-	General	-	-	Always	-	-
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
+resolve	file	Resolve id	-	General	-	-	Always	-	id:text
 rotate_clockwise	modify	Rotate clockwise by 90 degrees	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
-save_document	file	Save document	Save	General	-	-	Always	-	-
-save_document_as	file	Save as	Save As...	General	-	-	Always	-	path:path,overwrite:bool?
+save_document	file	Save document	Save	General	-	-	Always	-	document:document
+save_document_as	file	Save as	Save As...	General	-	-	Always	-	document:document,path:path,overwrite:bool?
 select_all	select	Select all	Select All	General	-	-	Always	-	-
 select_expand_connection	select	Select / expand connection	-	General	-	-	Always	gui_only	-
 select_node_or_connection_item	select	Select node / connection item under cursor	-	General	-	-	Always	gui_only	-
@@ -91,7 +96,7 @@ toggle_search_panel	search	Show/hide search panel	-	General	-	-	Always	gui_only	
 toggle_selection	select	Add/remove object from selection	Toggle Selection	General	-	-	Always	gui_only	-
 toggle_auto_focus	view	Toggle AutoFocus	AutoFocus (dim unselected)	General	-	-	Always	-	-
 toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	-	-
-undo	edit	Undo	-	General	-	-	Always	mutates_doc	-
+undo	edit	Undo	-	General	-	-	Always	mutates_doc	document:document
 undo_last_segment	interactive	Undo last segment while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 unselect_all	select	Unselect all	-	General	-	-	Always	-	-
 zoom_in_at_cursor	view	Zoom in at cursor	Zoom In	General	-	-	Always	gui_only	-
@@ -196,9 +201,9 @@ draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_graphic	place	Place graphic	Graphic...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocument(Schematic)	-	-
-color_net	view	Color net	Custom Color...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,color:color,path:path?
-clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path?
-assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	net_name:text,class:text?,path:path?
+color_net	view	Color net	Custom Color...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,color:color,document:document
+clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
+assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

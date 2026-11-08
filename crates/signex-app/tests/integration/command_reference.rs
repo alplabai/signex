@@ -91,7 +91,22 @@ fn render() -> String {
          A command listed here resolves in the keymap. Not all of them reach an\n\
          action yet — the ones that do not are pinned in\n\
          `crates/signex-app/src/app/command/bridge.rs`, and that set may only\n\
-         shrink.\n",
+         shrink.\n\
+         \n\
+         ## Running a command from a script or an agent\n\
+         \n\
+         A command run by id can take `key=value` operands in place of a click or a\n\
+         dialog answer. A command that acts on a document (`undo`, `redo`,\n\
+         `save_document`, `save_document_as`, `close_active_document`, `color_net`,\n\
+         `clear_all_net_colors`) names it with the required `document` operand, an\n\
+         id or an absolute path, and acts on that document alone: never the active\n\
+         one, and it changes no tab, focus, panel or selection. A person's palette or\n\
+         keybinding call has no operands and keeps the active document.\n\
+         \n\
+         `list_documents`, `document_info`, `resolve`, `find_items` and `read_document` are\n\
+         read-only queries that answer with data (`CommandOutcome::Answered`); `find` is\n\
+         still the Find dialog. Ids and where each file kind stores\n\
+         one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
     );
 
     for group in CommandGroup::ALL {

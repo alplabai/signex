@@ -535,3 +535,16 @@ fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
     );
     assert!(crate::diagnostics::logged_count(&needle) > before);
 }
+
+/// #2172: a runner checks what saving a document writes besides it. A project
+/// save creates its pending libraries, so they are named; a sheet save writes
+/// nothing else.
+#[test]
+fn a_project_save_names_its_pending_libraries_as_side_writes() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let f = fixture(tmp.path());
+    assert_eq!(f.app.save_side_writes(&f.prj, false), vec![f.lib.clone()]);
+    assert_eq!(f.app.save_side_writes(&f.prj, true), vec![f.lib.clone()]);
+    let sheet = tmp.path().join("Top.snxsch");
+    assert!(f.app.save_side_writes(&sheet, false).is_empty());
+}

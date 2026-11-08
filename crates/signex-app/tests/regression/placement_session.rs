@@ -570,6 +570,7 @@ fn closing_the_project_mid_session_drops_it() {
         id,
         path: prj,
         data: ProjectData {
+            document_id: None,
             name: "P".to_owned(),
             description: None,
             dir: dir.path().to_string_lossy().into_owned(),

@@ -234,6 +234,8 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
     }
     let stored = signex_types::project::parse_project(project_path).and_then(|mut data| {
         data.rules = Some(rules);
+        data.document_id
+            .get_or_insert_with(signex_types::document_id::DocumentId::new);
         signex_types::project::write_project(project_path, &data)
     });
     if let Err(e) = stored {

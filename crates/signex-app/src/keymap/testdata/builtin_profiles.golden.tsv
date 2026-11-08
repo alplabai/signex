@@ -99,6 +99,7 @@ altium	hint	-	G	cycle_snap_grid_forward
 altium	hint	-	-	cycle_wire_bus_graphic_mode
 altium	hint	-	Ctrl+SPACE	cycle_wiring_mode
 altium	hint	-	DEL	delete_selection
+altium	hint	-	-	document_info
 altium	hint	-	-	drag_keep_connections
 altium	hint	-	Ctrl+D	duplicate
 altium	hint	-	-	edit_footprint_field
@@ -112,12 +113,14 @@ altium	hint	-	-	edit_value
 altium	hint	-	-	fast_grid_1
 altium	hint	-	-	fast_grid_2
 altium	hint	-	Ctrl+F	find
+altium	hint	-	-	find_items
 altium	hint	-	Ctrl+H	find_and_replace
 altium	hint	-	F3	find_next
 altium	hint	-	Shift+F3	find_previous
 altium	hint	-	Shift+F	find_similar_objects
 altium	hint	-	-	find_text
 altium	hint	-	-	import_graphics
+altium	hint	-	-	list_documents
 altium	hint	-	Ctrl+M	measure_distance
 altium	hint	-	X	mirror_x
 altium	hint	-	Y	mirror_y
@@ -141,12 +144,14 @@ altium	hint	-	TAB	placement_properties
 altium	hint	-	Ctrl+Shift+TAB	previous_document_tab
 altium	hint	-	-	previous_grid
 altium	hint	-	Ctrl+P	print
+altium	hint	-	-	read_document
 altium	hint	-	Ctrl+Y	redo
 altium	hint	-	END	refresh_view
 altium	hint	-	BACKSPACE	remove_last_vertex
 altium	hint	-	-	repeat_last_item
 altium	hint	-	R I	report_manager_bom
 altium	hint	-	-	reset_local_coordinates
+altium	hint	-	-	resolve
 altium	hint	-	Shift+SPACE	rotate_clockwise
 altium	hint	-	SPACE	rotate_counterclockwise
 altium	hint	-	Ctrl+R	rubber_stamp_copy
@@ -394,6 +399,7 @@ classic	hint	-	-	cycle_snap_grid_forward
 classic	hint	-	Shift+SPACE	cycle_wire_bus_graphic_mode
 classic	hint	-	-	cycle_wiring_mode
 classic	hint	-	DEL	delete_selection
+classic	hint	-	-	document_info
 classic	hint	-	G	drag_keep_connections
 classic	hint	-	Ctrl+D	duplicate
 classic	hint	-	F	edit_footprint_field
@@ -407,12 +413,14 @@ classic	hint	-	V	edit_value
 classic	hint	-	Alt+1	fast_grid_1
 classic	hint	-	Alt+2	fast_grid_2
 classic	hint	-	Ctrl+F	find
+classic	hint	-	-	find_items
 classic	hint	-	-	find_and_replace
 classic	hint	-	F3	find_next
 classic	hint	-	Shift+F3	find_previous
 classic	hint	-	-	find_similar_objects
 classic	hint	-	-	find_text
 classic	hint	-	Ctrl+Shift+F	import_graphics
+classic	hint	-	-	list_documents
 classic	hint	-	-	measure_distance
 classic	hint	-	X	mirror_x
 classic	hint	-	Y	mirror_y
@@ -436,12 +444,14 @@ classic	hint	-	-	placement_properties
 classic	hint	-	-	previous_document_tab
 classic	hint	-	Shift+N	previous_grid
 classic	hint	-	Ctrl+P	print
+classic	hint	-	-	read_document
 classic	hint	-	Ctrl+Y	redo
 classic	hint	-	F5	refresh_view
 classic	hint	-	-	remove_last_vertex
 classic	hint	-	INS	repeat_last_item
 classic	hint	-	-	report_manager_bom
 classic	hint	-	SPACE	reset_local_coordinates
+classic	hint	-	-	resolve
 classic	hint	-	Shift+R	rotate_clockwise
 classic	hint	-	R	rotate_counterclockwise
 classic	hint	-	-	rubber_stamp_copy

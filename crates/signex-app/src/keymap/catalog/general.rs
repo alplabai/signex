@@ -103,6 +103,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -215,6 +216,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "document_info",
+        category: "file",
+        label: "Document info",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -348,6 +360,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "find_items",
+        category: "search",
+        label: "Find documents or items",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::FIND,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "find_and_replace",
         category: "search",
         label: "Find and replace",
@@ -405,6 +428,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "list_documents",
+        category: "file",
+        label: "List documents",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT_FILTERS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -640,6 +674,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "read_document",
+        category: "file",
+        label: "Read document",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::READ_DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "redo",
         category: "edit",
         label: "Redo",
@@ -647,6 +692,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -700,6 +746,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "resolve",
+        category: "file",
+        label: "Resolve id",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::RESOLVE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "rotate_clockwise",
         category: "modify",
         label: "Rotate clockwise by 90 degrees",
@@ -737,6 +794,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -747,7 +805,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
-        operands: operands::SAVE_PATH,
+        operands: operands::SAVE_DOCUMENT_AS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -938,6 +996,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

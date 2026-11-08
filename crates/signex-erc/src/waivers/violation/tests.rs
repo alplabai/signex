@@ -387,3 +387,80 @@ fn a_sheet_pin_finding_is_waivable() {
     assert!(out.kept.is_empty(), "the waiver hides the finding");
     assert_eq!(out.waived.len(), 1);
 }
+
+/// A Save As or a repaired duplicate gives the sheet a new document id; the
+/// waivers filed under the old one are moved, so the finding stays waived.
+#[test]
+fn a_waiver_follows_its_sheet_to_a_new_document_id() {
+    let (r1, c1) = (Uuid::now_v7(), Uuid::now_v7());
+    let sheet = |id: Uuid| SchematicSheet {
+        uuid: id,
+        symbols: vec![part(r1), part(c1)],
+        ..Default::default()
+    };
+    let (old, new) = (Uuid::now_v7(), Uuid::now_v7());
+    let v = net_finding(&[(r1, "R1"), (c1, "C1")]);
+    let mut waivers = vec![waive(&v, &sheet(old))];
+    assert_eq!(
+        split(
+            net_finding(&[(r1, "R1"), (c1, "C1")]),
+            &sheet(new),
+            &waivers
+        )
+        .waived
+        .len(),
+        0,
+        "under the new id the old waiver no longer matches"
+    );
+    assert_eq!(super::rekey_sheet(&mut waivers, old, new), 1);
+    let out = split(
+        net_finding(&[(r1, "R1"), (c1, "C1")]),
+        &sheet(new),
+        &waivers,
+    );
+    assert_eq!(out.waived.len(), 1, "still waived after the move");
+    assert!(out.kept.is_empty());
+    assert_eq!(
+        super::rekey_sheet(&mut waivers, old, new),
+        0,
+        "nothing left under old"
+    );
+}
+
+#[test]
+fn rekeying_leaves_other_sheets_and_object_waivers_alone() {
+    let (r1, c1) = (Uuid::now_v7(), Uuid::now_v7());
+    let sheet = |id: Uuid| SchematicSheet {
+        uuid: id,
+        symbols: vec![part(r1), part(c1)],
+        ..Default::default()
+    };
+    let (a, b, new) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    let v = net_finding(&[(r1, "R1"), (c1, "C1")]);
+    let mut waivers = vec![waive(&v, &sheet(a)), waive(&v, &sheet(b))];
+    let before_b = waivers[1].objects.clone();
+    assert_eq!(super::rekey_sheet(&mut waivers, a, new), 1);
+    assert_eq!(
+        waivers[1].objects, before_b,
+        "the other sheet's waiver stays"
+    );
+}
+
+#[test]
+fn a_repaired_duplicate_keeps_the_old_waivers_and_gains_copies_under_its_new_id() {
+    let (r1, c1) = (Uuid::now_v7(), Uuid::now_v7());
+    let sheet = |id: Uuid| SchematicSheet {
+        uuid: id,
+        symbols: vec![part(r1), part(c1)],
+        ..Default::default()
+    };
+    let (shared, new) = (Uuid::now_v7(), Uuid::now_v7());
+    let v = net_finding(&[(r1, "R1"), (c1, "C1")]);
+    let mut waivers = vec![waive(&v, &sheet(shared))];
+    assert_eq!(super::copy_sheet_waivers(&mut waivers, shared, new), 1);
+    assert_eq!(waivers.len(), 2);
+    for id in [shared, new] {
+        let out = split(net_finding(&[(r1, "R1"), (c1, "C1")]), &sheet(id), &waivers);
+        assert_eq!(out.waived.len(), 1, "waived on both sheets");
+    }
+}
