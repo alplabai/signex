@@ -1,5 +1,5 @@
 //! The loaded documents' elements, with the document each lives in: the
-//! rows behind `resolve` and `find`.
+//! rows behind `resolve` and `find_items`.
 
 use serde_json::{Value, json};
 use signex_types::pcb::PcbBoard;

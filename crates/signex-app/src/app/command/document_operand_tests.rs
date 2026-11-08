@@ -424,7 +424,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "close_active_document",
                     "document_info",
                     "read_document",
-                    "find",
+                    "find_items",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"
@@ -442,7 +442,7 @@ fn every_query_command_answers_with_data() {
         ("list_documents", vec![]),
         ("document_info", vec![doc.as_str()]),
         ("resolve", vec![wire.as_str()]),
-        ("find", vec!["kind=wire"]),
+        ("find_items", vec!["kind=wire"]),
         ("read_document", vec![doc.as_str()]),
     ] {
         let value = answer(&mut app, name, &operands);

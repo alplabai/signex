@@ -308,3 +308,151 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
         "nothing left to repair"
     );
 }
+
+/// A project whose two sheets are files on disk and in no tab, heads read.
+fn app_with_files(dir: &Path) -> Signex {
+    for (name, id) in [("Top", SHEET), ("Sub", SHEET + 1)] {
+        let file = dir.join(format!("{name}.snxsch"));
+        signex_engine::Engine::new_with_path(
+            crate::app::command::queries::tests::sheet(id),
+            Some(file),
+        )
+        .unwrap()
+        .save()
+        .unwrap();
+    }
+    let mut app = app_with_project(dir);
+    let project = app.document_state.projects[0].id;
+    let reads = ["Top.snxsch", "Sub.snxsch"]
+        .map(|n| HeaderRead {
+            path: dir.join(n),
+            id: read_header_id(&dir.join(n)),
+        })
+        .to_vec();
+    let _ = app.handle_document_headers_read(project, reads);
+    app
+}
+
+fn headless(app: &mut Signex, name: &str, operands: &[&str]) -> serde_json::Value {
+    let command = crate::keymap::AppCommandId::new(name).unwrap();
+    let args = crate::app::command::CommandArgs::parse_operands(&command, operands).unwrap();
+    match app.run_query_headless(&command, &args).expect("a query").0 {
+        crate::app::command::CommandOutcome::Answered(value) => value,
+        other => panic!("{name}: {other:?}"),
+    }
+}
+
+/// A sheet no tab holds is loaded for the answer and dropped: the query is
+/// answered, no tab is made and nothing of the person's moves.
+#[test]
+fn a_query_on_an_unloaded_sheet_loads_it_for_the_answer_and_drops_it() {
+    use crate::app::command::interaction_snapshot_tests::interaction_snapshot;
+    let dir = temp_dir();
+    let mut app = app_with_files(dir.path());
+    let before = interaction_snapshot(&app);
+    assert!(app.document_state.engines.is_empty() && app.document_state.tabs.is_empty());
+
+    let read = headless(
+        &mut app,
+        "read_document",
+        &[&format!("document={}", uid(SHEET + 1))],
+    );
+    assert_eq!(read["total"], 10);
+    assert_eq!(read["document"]["loaded"], false);
+    assert!(
+        read["revision"].is_null(),
+        "an unloaded sheet has no revision"
+    );
+
+    let found = headless(&mut app, "find_items", &["designator=U3", "kind=symbol"]);
+    assert_eq!(found["count"], 2, "both sheets are searched");
+    let element = headless(&mut app, "resolve", &[&format!("id={}", uid(7))]);
+    assert_eq!(element["found"], true);
+
+    assert!(app.document_state.engines.is_empty(), "nothing is kept");
+    assert!(app.document_state.tabs.is_empty(), "no tab was made");
+    assert!(
+        !app.document_state
+            .document_ids
+            .is_transient(&dir.path().join("Sub.snxsch"))
+    );
+    assert_eq!(interaction_snapshot(&app), before);
+    let listed = app.document_entries();
+    assert!(
+        listed
+            .iter()
+            .filter(|e| e.kind == DocumentKind::Schematic)
+            .all(|e| !e.loaded)
+    );
+}
+
+#[test]
+fn an_unreadable_sheet_is_named_and_the_read_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = temp_dir();
+    let mut app = app_with_files(dir.path());
+    std::fs::write(dir.path().join("Sub.snxsch"), "not a sheet").unwrap();
+    let command = crate::keymap::AppCommandId::new("read_document").unwrap();
+    let args = crate::app::command::CommandArgs::parse_operands(
+        &command,
+        &[&format!("document={}", uid(SHEET + 1))],
+    )
+    .unwrap();
+    let outcome = app.run_query_headless(&command, &args).unwrap().0;
+    assert!(
+        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("could not be read")),
+        "{outcome:?}"
+    );
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("Sub.snxsch") && e.message.contains("could not be read"))
+    );
+}
+
+#[test]
+fn an_unloaded_board_is_read_from_its_file() {
+    let dir = temp_dir();
+    let mut app = app_with_files(dir.path());
+    let board = signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: uid(77),
+        version: 1,
+        generator: "t".into(),
+        thickness: 1.6,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    };
+    let file = dir.path().join("Board.snxpcb");
+    std::fs::write(
+        &file,
+        signex_types::format::SnxPcb::new(board)
+            .write_string()
+            .unwrap(),
+    )
+    .unwrap();
+    let project = app.document_state.projects[0].id;
+    let _ = app.handle_document_headers_read(
+        project,
+        vec![HeaderRead {
+            path: file.clone(),
+            id: read_header_id(&file),
+        }],
+    );
+    let read = headless(
+        &mut app,
+        "read_document",
+        &[&format!("document={}", uid(77))],
+    );
+    assert_eq!(read["header"]["uuid"], uid(77).to_string());
+    assert!(read["revision"].is_null());
+    assert!(app.document_state.tabs.is_empty());
+}

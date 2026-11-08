@@ -63,6 +63,7 @@ fn probe() {
         "ids_persist" => ids_persist(),
         "by_document" => by_document(),
         "save_as_and_copies" => save_as_and_copies(),
+        "new_project" => new_project(),
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -111,12 +112,15 @@ impl Session {
     }
 
     /// Open a file through the Open dialog's answer.
-    fn open(&mut self, path: &Path) {
+    fn open(&mut self, path: &Path) -> Value {
         self.app
             .headless_answers()
             .expect("headless answers")
             .replace_all([("path".to_string(), path.display().to_string())]);
-        assert_eq!(self.run("open_document", &[]), CommandOutcome::Ran);
+        match self.run("open_document", &[]) {
+            CommandOutcome::Answered(value) => value,
+            other => panic!("open was not answered: {other:?}"),
+        }
     }
 
     /// The listed documents, by file name.
@@ -246,7 +250,10 @@ fn ids_persist() {
     let project_bytes = std::fs::read(&project).expect("project bytes");
 
     let mut session = Session::boot();
-    session.open(&project);
+    let opened = session.open(&project);
+    assert_eq!(opened["kind"], "project");
+    assert_eq!(opened["path"], project.display().to_string());
+    assert!(opened["id"].is_string());
 
     // Listed before any tab opens: ids read from the file heads.
     let top = session.entry("Top.snxsch");
@@ -270,8 +277,24 @@ fn ids_persist() {
     );
     assert!(listed_project["dirty"] == false);
 
+    // An unloaded sheet is read without a tab (#2172).
+    let read = session.answer("read_document", &[&format!("document={SUB}")]);
+    assert_eq!(read["document"]["loaded"], false);
+    assert!(read["total"].is_number() && read["revision"].is_null());
+    assert_eq!(
+        session.entry("Sub.snxsch")["loaded"],
+        false,
+        "nothing is kept"
+    );
+    assert!(
+        session.app.document_state.tabs.is_empty(),
+        "no tab was made"
+    );
+
     // A tab: loaded now, same id; closed, still listed with it; reopened, same.
-    session.open(&dir.join("Top.snxsch"));
+    let opened = session.open(&dir.join("Top.snxsch"));
+    assert_eq!(opened["id"], TOP);
+    assert_eq!(opened["kind"], "schematic");
     let open = session.entry("Top.snxsch");
     assert_eq!(
         (open["id"].as_str(), open["loaded"].as_bool()),
@@ -472,4 +495,40 @@ fn save_as_and_copies() {
     assert_eq!(first["id"], TOP);
     assert_ne!(second["id"], TOP, "the later copy gets a new id");
     assert!(second["id"].is_string());
+}
+
+#[test]
+fn new_document_answers_with_the_project_it_made() {
+    run_probe("new_project");
+}
+
+/// New Project runs to its end inside the dispatch and answers with the id,
+/// path and kind of the project it created.
+fn new_project() {
+    let root = isolated();
+    let mut session = Session::boot();
+    let chosen = root.path().join("Made.snxprj");
+    session
+        .app
+        .headless_answers()
+        .expect("headless answers")
+        .replace_all([("path".to_string(), chosen.display().to_string())]);
+    let answer = match session.run("new_document", &[]) {
+        CommandOutcome::Answered(value) => value,
+        other => panic!("new_document was not answered: {other:?}"),
+    };
+    assert_eq!(answer["kind"], "project");
+    let path = PathBuf::from(text(&answer["path"]));
+    assert!(
+        path.is_file(),
+        "the project file exists: {}",
+        path.display()
+    );
+    let written = signex_types::project::parse_project(&path).expect("project");
+    assert_eq!(
+        written.document_id.map(|id| id.to_string()).as_deref(),
+        answer["id"].as_str(),
+        "the id is the one stored in the new project"
+    );
+    assert_eq!(session.entry("Made.snxprj")["id"], answer["id"]);
 }

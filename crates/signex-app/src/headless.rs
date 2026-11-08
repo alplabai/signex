@@ -143,7 +143,9 @@ impl Signex {
         let missing = (!args.has_operands())
             .then(|| crate::app::command::missing_headless_operand(command))
             .flatten();
-        let result = if let Some(answered) = self.run_query(command, &args) {
+        let opening = crate::app::command::answers_with_the_new_document(command)
+            .then(|| self.open_snapshot());
+        let result = if let Some(answered) = self.run_query_headless(command, &args) {
             answered
         } else if let Some(name) = missing {
             (
@@ -156,6 +158,13 @@ impl Signex {
             self.run_operands(command, &args)
         } else {
             self.dispatch_command_reporting(command, args, None)
+        };
+        // Open and New answer with the document they made, once it exists.
+        let result = match (opening, result) {
+            (Some(snapshot), (CommandOutcome::Ran, task)) => {
+                self.settle_and_answer_new_document(command, snapshot, task)
+            }
+            (_, result) => result,
         };
         // No `update` runs here, so a history the command created gets its
         // depth now.

@@ -99,7 +99,10 @@ fn net_colors() {
         .expect("headless answers")
         .replace_all([("path".to_string(), path.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "open answers with the document: {outcome:?}"
+    );
     driver.settle(&mut app, task).expect("open settled");
 
     let doc = format!("document={}", path.display());
@@ -287,7 +290,10 @@ fn run() {
         .expect("headless answers")
         .replace_all([("path".to_string(), missing.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        "{outcome:?}"
+    );
     driver.settle(&mut app, task).expect("open settled");
     let notice = app
         .document_state
@@ -389,7 +395,10 @@ fn undo_round_trip() {
         .expect("headless answers")
         .replace_all([("path".to_string(), path.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "open answers with the document: {outcome:?}"
+    );
     driver.settle(&mut app, task).expect("open settled");
     assert_eq!(
         app.document_state.active_path.as_deref(),
@@ -643,7 +652,10 @@ fn net_class_assign() {
         app.headless_answers()
             .expect("headless answers")
             .replace_all([("path".to_string(), opened.display().to_string())]);
-        assert_eq!(run(&mut app, "open_document", &[]), CommandOutcome::Ran);
+        assert!(matches!(
+            run(&mut app, "open_document", &[]),
+            CommandOutcome::Answered(_)
+        ));
     }
     let classes = |app: &Signex| {
         app.document_state.projects[0].data.net_classes[0]

@@ -1,5 +1,5 @@
 //! The read-only query commands (#2172): `list_documents`, `document_info`,
-//! `resolve`, `find` and `read_document`. Each answers with data through
+//! `resolve`, `find_items` and `read_document`. Each answers with data through
 //! [`CommandOutcome::Answered`], never a bare `Ran`, and reads only the
 //! documents (engines, boards, editors, projects, the library): no active
 //! tab, window, selection or panel is looked at, and none is changed. What it
@@ -13,6 +13,7 @@ mod elements;
 mod find;
 mod read;
 mod sheet_view;
+mod transient;
 
 use iced::Task;
 use serde_json::Value;
@@ -21,13 +22,13 @@ use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
-/// The ids of the query commands. `find` answers only when it is given a
-/// filter: without one it is the Find dialog (Ctrl+F), as before.
+/// The ids of the query commands. `find` stays the Find dialog (Ctrl+F);
+/// `find_items` is the query.
 const QUERY_IDS: &[&str] = &[
     "list_documents",
     "document_info",
     "resolve",
-    "find",
+    "find_items",
     "read_document",
 ];
 
@@ -63,8 +64,8 @@ pub(super) fn bool_operand(args: &CommandArgs, name: &str) -> Option<bool> {
 }
 
 impl Signex {
-    /// Run `command` if it is a query. `None` when it is not one (or is
-    /// `find` with no filter, the Find dialog), so the caller runs it as it
+    /// Run `command` if it is a query. `None` when it is not one, so the
+    /// caller runs it as it
     /// always did. A query that is missing a required operand, or names a
     /// document that does not exist, is refused with the reason.
     pub(crate) fn run_query(
@@ -73,7 +74,7 @@ impl Signex {
         args: &CommandArgs,
     ) -> Option<(CommandOutcome, Task<Message>)> {
         let id = command.as_str();
-        if !query_command_ids().any(|query| query == id) || (id == "find" && !args.has_operands()) {
+        if !query_command_ids().any(|query| query == id) {
             return None;
         }
         if let Some(missing) = missing_required(command, args) {
@@ -85,7 +86,7 @@ impl Signex {
             "list_documents" => self.list_documents(args),
             "document_info" => self.document_info(args),
             "resolve" => self.resolve_id(args),
-            "find" => self.find(args),
+            "find_items" => self.find(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,

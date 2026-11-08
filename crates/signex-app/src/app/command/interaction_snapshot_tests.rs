@@ -8,7 +8,7 @@ use crate::app::Signex;
 
 /// Everything the principle says an agent must not move, as one comparable
 /// string. Read through `Debug`, so a field that grows a value shows up.
-pub(super) fn interaction_snapshot(app: &Signex) -> String {
+pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
     let docs = &app.document_state;
     let canvas = app.interaction_state.active_canvas();
     let tabs: Vec<String> = docs

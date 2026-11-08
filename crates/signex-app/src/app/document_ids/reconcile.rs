@@ -22,7 +22,7 @@ impl Signex {
         let mut held: Vec<DocumentEntry> = self
             .document_entries()
             .into_iter()
-            .filter(|entry| entry.key.is_some())
+            .filter(|entry| entry.key.is_some() && entry.loaded)
             .collect();
         // Documents are first seen in tab order, then whatever is held with
         // no tab (a parked draft, a project), so the order a copy was opened

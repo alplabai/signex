@@ -9,6 +9,7 @@ use serde_json::{Map, Value, json};
 use super::{Answer, text_operand};
 use crate::app::command::CommandArgs;
 use crate::app::document::DocumentKey;
+use crate::app::document_ids::DocumentKind;
 use crate::app::{Signex, TabDocument};
 
 /// Elements returned when the call names no `limit`.
@@ -211,7 +212,11 @@ impl Signex {
                 (
                     serde_json::to_value(engine.document()).map_err(|e| e.to_string())?,
                     SHEET_ARRAYS,
-                    json!(engine.revision()),
+                    if entry.loaded {
+                        json!(engine.revision())
+                    } else {
+                        Value::Null
+                    },
                 )
             }
             Some(DocumentKey::Pcb(path)) => {
@@ -263,9 +268,24 @@ impl Signex {
             Some(DocumentKey::Row(_)) => {
                 return Err("a component row has no document data to read yet".into());
             }
+            // A board a project names that is not open: read from its file,
+            // no tab made and nothing kept; it has no revision.
+            None if entry.kind == DocumentKind::Pcb => {
+                let path = entry.path.as_deref().ok_or("the board has no file")?;
+                let text = std::fs::read_to_string(path)
+                    .map_err(|e| format!("{} could not be read: {e}", path.display()))?;
+                let board = signex_types::format::SnxPcb::parse(&text)
+                    .map_err(|e| format!("{} could not be read: {e}", path.display()))?
+                    .board;
+                (
+                    serde_json::to_value(board).map_err(|e| e.to_string())?,
+                    BOARD_ARRAYS,
+                    Value::Null,
+                )
+            }
             None => {
                 return Err(format!(
-                    "{} is referenced by a project but not loaded; open it first",
+                    "{} is referenced by a project but could not be read",
                     entry
                         .path
                         .as_ref()

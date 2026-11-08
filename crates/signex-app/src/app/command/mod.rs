@@ -16,8 +16,9 @@ mod document_operand_tests;
 mod document_operands;
 pub(crate) mod enablement;
 #[cfg(test)]
-mod interaction_snapshot_tests;
+pub(in crate::app) mod interaction_snapshot_tests;
 mod needs;
+mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
 mod operand_handlers;
@@ -36,6 +37,7 @@ pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
+pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;

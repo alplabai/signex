@@ -134,6 +134,9 @@ impl Signex {
                 matches!(kind, crate::app::state::WindowKind::UndockedTab { path: shown, .. } if shown == p)
             })
         });
+        let loaded = !path
+            .as_deref()
+            .is_some_and(|p| docs.document_ids.is_transient(p));
         let project = match (&key, path.as_deref()) {
             (DocumentKey::Project(_), _) | (_, None) => None,
             (_, Some(path)) => self.project_ref_of(path),
@@ -146,7 +149,7 @@ impl Signex {
             path,
             name,
             project,
-            loaded: true,
+            loaded,
             read_only,
             saving,
             open_in_window,

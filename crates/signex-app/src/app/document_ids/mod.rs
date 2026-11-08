@@ -38,9 +38,24 @@ pub struct DocumentIds {
     headers: HashMap<PathBuf, Option<DocumentId>>,
     seen: HashMap<DocumentKey, u64>,
     next_seen: u64,
+    /// Sheets a headless query loaded only to answer and drops afterwards:
+    /// they are listed as not loaded and carry no revision.
+    transient: std::collections::HashSet<PathBuf>,
 }
 
 impl DocumentIds {
+    pub(crate) fn is_transient(&self, path: &std::path::Path) -> bool {
+        self.transient.contains(path)
+    }
+
+    pub(crate) fn begin_transient(&mut self, path: PathBuf) {
+        self.transient.insert(path);
+    }
+
+    pub(crate) fn end_transient(&mut self, path: &std::path::Path) {
+        self.transient.remove(path);
+    }
+
     pub(crate) fn header(&self, path: &std::path::Path) -> Option<Option<DocumentId>> {
         self.headers.get(path).copied()
     }

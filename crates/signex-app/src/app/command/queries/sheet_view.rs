@@ -1,5 +1,5 @@
 //! The objects of one sheet, as a person reads them: pure functions over a
-//! [`SchematicSheet`], so `resolve` and `find` need no app state. Every
+//! [`SchematicSheet`], so `resolve` and `find_items` need no app state. Every
 //! object that carries a uuid is one [`Element`] with a `kind` and the human
 //! fields that apply to it (designator, value, text, net, position).
 

@@ -356,6 +356,16 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "find_items",
+        category: "search",
+        label: "Find documents or items",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::FIND,
         ..CommandMetadata::DEFAULT

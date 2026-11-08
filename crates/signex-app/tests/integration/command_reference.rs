@@ -103,9 +103,9 @@ fn render() -> String {
          one, and it changes no tab, focus, panel or selection. A person's palette or\n\
          keybinding call has no operands and keeps the active document.\n\
          \n\
-         `list_documents`, `document_info`, `resolve`, `find` and `read_document` are\n\
-         read-only queries that answer with data (`CommandOutcome::Answered`); `find`\n\
-         with no filter is still the Find dialog. Ids and where each file kind stores\n\
+         `list_documents`, `document_info`, `resolve`, `find_items` and `read_document` are\n\
+         read-only queries that answer with data (`CommandOutcome::Answered`); `find` is\n\
+         still the Find dialog. Ids and where each file kind stores\n\
          one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
     );
 

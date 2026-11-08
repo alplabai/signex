@@ -1,4 +1,4 @@
-//! `resolve` and `find`: from a name a person knows to the uuid an agent acts
+//! `resolve` and `find_items`: from a name a person knows to the uuid an agent acts
 //! on, and back.
 
 use serde_json::{Value, json};
@@ -95,7 +95,7 @@ impl Signex {
         Ok(json!({ "found": true, "what": "element", "element": element }))
     }
 
-    /// `find`: documents by `kind`, `project`, `name`, `dirty`; elements by
+    /// `find_items`: documents by `kind`, `project`, `name`, `dirty`; elements by
     /// `kind`, `designator`, `value`, `net`, `text`, in `document` or in
     /// `project` or in every open document.
     pub(super) fn find(&self, args: &CommandArgs) -> Answer {

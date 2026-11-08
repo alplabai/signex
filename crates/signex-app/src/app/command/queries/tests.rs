@@ -358,38 +358,41 @@ fn element_ids(found: &Value) -> Vec<String> {
 #[test]
 fn find_by_designator_gives_the_uuid_an_agent_then_acts_on() {
     let mut app = app_with(&[("a.snxsch", SHEET)]);
-    let found = answer(&mut app, "find", &["designator=u3"]);
+    let found = answer(&mut app, "find_items", &["designator=u3"]);
     assert_eq!(found["count"], 1);
     assert_eq!(element_ids(&found), [uid(U3).to_string()]);
     assert_eq!(
         found["elements"][0]["document"]["id"],
         uid(SHEET).to_string()
     );
-    assert_eq!(answer(&mut app, "find", &["designator=U4"])["count"], 0);
+    assert_eq!(
+        answer(&mut app, "find_items", &["designator=U4"])["count"],
+        0
+    );
 }
 
 #[test]
 fn find_by_net_gives_the_wires_junction_and_label_on_it() {
     let mut app = app_with(&[("a.snxsch", SHEET)]);
-    let found = answer(&mut app, "find", &["net=gnd"]);
+    let found = answer(&mut app, "find_items", &["net=gnd"]);
     let mut want: Vec<String> = [WIRE_A, WIRE_B, JUNCTION, LABEL_GND]
         .iter()
         .map(|n| uid(*n).to_string())
         .collect();
     want.sort();
     assert_eq!(element_ids(&found), want);
-    let wires = answer(&mut app, "find", &["net=VCC", "kind=wire"]);
+    let wires = answer(&mut app, "find_items", &["net=VCC", "kind=wire"]);
     assert_eq!(element_ids(&wires), [uid(WIRE_FAR).to_string()]);
 }
 
 #[test]
 fn find_by_text_value_and_kind() {
     let mut app = app_with(&[("a.snxsch", SHEET)]);
-    let text = answer(&mut app, "find", &["text=BYPASS"]);
+    let text = answer(&mut app, "find_items", &["text=BYPASS"]);
     assert_eq!(element_ids(&text), [uid(NOTE).to_string()]);
-    let value = answer(&mut app, "find", &["value=lm3"]);
+    let value = answer(&mut app, "find_items", &["value=lm3"]);
     assert_eq!(element_ids(&value), [uid(U3).to_string()]);
-    let labels = answer(&mut app, "find", &["kind=label"]);
+    let labels = answer(&mut app, "find_items", &["kind=label"]);
     assert_eq!(labels["count"], 2);
 }
 
@@ -406,7 +409,7 @@ fn a_net_with_two_names_is_called_by_the_smallest() {
 #[test]
 fn find_without_an_element_filter_finds_documents() {
     let mut app = app_with(&[("a.snxsch", SHEET), ("power.snxsch", SHEET + 1)]);
-    let found = answer(&mut app, "find", &["name=power"]);
+    let found = answer(&mut app, "find_items", &["name=power"]);
     assert_eq!(documents(&found).len(), 1);
     assert_eq!(documents(&found)[0]["name"], "power");
 }
@@ -414,11 +417,11 @@ fn find_without_an_element_filter_finds_documents() {
 #[test]
 fn find_in_one_document_leaves_the_others_out() {
     let mut app = app_with(&[("a.snxsch", SHEET), ("b.snxsch", SHEET + 1)]);
-    let both = answer(&mut app, "find", &["designator=U3"]);
+    let both = answer(&mut app, "find_items", &["designator=U3"]);
     assert_eq!(both["count"], 2, "the same designator on two sheets");
     let one = answer(
         &mut app,
-        "find",
+        "find_items",
         &[
             "designator=U3",
             &format!("document={}", path("b.snxsch").display()),
@@ -432,10 +435,11 @@ fn find_in_one_document_leaves_the_others_out() {
 }
 
 #[test]
-fn a_find_with_no_filter_is_still_the_find_dialog() {
+fn find_is_still_the_find_dialog_and_no_query() {
     let (mut app, _task) = Signex::new();
     let command = command("find");
-    assert!(app.run_query(&command, &CommandArgs::none()).is_none());
+    let with_operands = CommandArgs::none();
+    assert!(app.run_query(&command, &with_operands).is_none());
 }
 
 #[test]
@@ -452,7 +456,7 @@ fn queries_leave_the_persons_interaction_state_as_it_was() {
     answer(&mut app, "list_documents", &[]);
     answer(&mut app, "document_info", &[&by_id]);
     answer(&mut app, "resolve", &[&format!("id={}", uid(U3))]);
-    answer(&mut app, "find", &["designator=U3"]);
+    answer(&mut app, "find_items", &["designator=U3"]);
     answer(&mut app, "read_document", &[&by_id]);
     assert_eq!(interaction_snapshot(&app), before);
     assert!(!app.document_state.is_document_dirty(&path("b.snxsch")));
