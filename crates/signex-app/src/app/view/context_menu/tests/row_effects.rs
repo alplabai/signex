@@ -318,6 +318,7 @@ fn mirror_rows_flip_the_axes_the_keys_flip() {
 #[test]
 fn find_similar_row_opens_at_the_point_the_menu_was_opened_over() {
     let over = Wire {
+        color: None,
         uuid: Uuid::from_u128(77),
         start: Point::new(0.0, 20.0),
         end: Point::new(10.0, 20.0),

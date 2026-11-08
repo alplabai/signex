@@ -824,6 +824,7 @@ fn the_moving_generation_holds_when_nothing_moved_and_changes_when_it_does() {
 /// 1.27 mm, so the 5.08 mm slide lands exactly on the second wire's end.
 fn fold_sheet() -> (SchematicSheet, uuid::Uuid) {
     let wire = |x0: f64, x1: f64| signex_types::schematic::Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: signex_types::schematic::Point::new(x0, 5.08),
         end: signex_types::schematic::Point::new(x1, 5.08),
@@ -887,6 +888,7 @@ fn release() -> Event {
 fn a_drag_held_by_a_lock_says_so_once_per_drag() {
     let _ = crate::diagnostics::init_logging();
     let wire = signex_types::schematic::Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: signex_types::schematic::Point::new(5.08, 6.35),
         end: signex_types::schematic::Point::new(10.08, 6.35),
@@ -942,6 +944,7 @@ fn a_drag_held_by_a_lock_says_so_once_per_drag() {
 /// `count` horizontal wires 2.54 mm apart, the first locked, all selected.
 fn locked_first_of(count: usize) -> (CanvasSlot, uuid::Uuid) {
     let wire = |i: usize| signex_types::schematic::Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: signex_types::schematic::Point::new(5.08, 5.08 + 2.54 * i as f64),
         end: signex_types::schematic::Point::new(10.08, 5.08 + 2.54 * i as f64),

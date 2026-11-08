@@ -736,6 +736,21 @@ pub enum PanelMsg {
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
+    /// Wire Tab form: the width of the wires routed from now on.
+    SetPrePlacementWireWidth(signex_types::schematic::WireWidthPreset),
+    /// Wire Tab form: the colour of the wires routed from now on (`None` =
+    /// the theme's wire colour).
+    SetPrePlacementWireColor(Option<signex_types::theme::Color>),
+    /// Properties of a selected wire: its width, as an undoable edit.
+    EditWireWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
+    /// Properties of a selected wire: its colour, as an undoable edit.
+    EditWireColor(uuid::Uuid, Option<signex_types::theme::Color>),
+    /// Open or close the wire colour palette.
+    ToggleWireColorPicker,
+    /// Switch the wire colour picker to the full HSV / RGB picker.
+    OpenWireColorAdvancedPicker,
+    /// Close the wire colour picker without a pick.
+    CancelWireColorPicker,
     /// A keystroke in a numeric box: the raw text is kept as a draft and,
     /// when it already parses, applied to the model.
     NumericFieldTyped(super::NumericFieldKey, String),

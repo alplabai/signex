@@ -191,6 +191,7 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
             size: (2.54, 2.54),
         }],
         wires: vec![Wire {
+            color: None,
             uuid: wire_id,
             start: Point::new(2.54, 12.54),
             end: Point::new(12.54, 12.54),

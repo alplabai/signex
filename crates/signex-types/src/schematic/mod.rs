@@ -827,11 +827,13 @@ pub use sheet_page::{PageOrigin, SheetPageSettings, paper_height_mm};
 mod defaults;
 mod sheet_size;
 mod stroke;
+mod wire_width;
 pub use defaults::{
     SCHEMATIC_DEFAULT_FONT, SCHEMATIC_DEFAULT_TEXT_SIZE_PT, SchematicDefaults, is_set_width,
 };
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 pub use stroke::*;
+pub use wire_width::WireWidthPreset;
 mod hotspot;
 pub use hotspot::{
     MoveHotspots, SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot,

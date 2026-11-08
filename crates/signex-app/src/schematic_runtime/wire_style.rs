@@ -2,9 +2,9 @@
 //!
 //! Precedence, per property:
 //!
-//! - **colour** - the per-net colour override (the Active Bar net-colour
-//!   palette) wins over the class colour, which wins over the theme's wire
-//!   colour;
+//! - **colour** - the wire's own colour wins over the per-net colour override
+//!   (the Active Bar net-colour palette), which wins over the class colour,
+//!   which wins over the theme's wire colour;
 //! - **width** - the wire's own `stroke_width`, else the class width, else
 //!   the project default, else the built-in (#2026);
 //! - **line style** - the class line style, else the project default, else
@@ -65,16 +65,19 @@ impl OwnedWireStyling {
     }
 }
 
-/// The colour a wire is drawn with, before focus dimming: the override, else
-/// the class colour, else `None` for the caller's theme default.
+/// The colour a wire is drawn with, before focus dimming: its own colour,
+/// else the net override, else the class colour, else `None` for the
+/// caller's theme default.
 #[must_use]
-pub fn wire_color(styling: Option<WireStyling<'_>>, wire: Uuid) -> Option<ThemeColor> {
-    let styling = styling?;
-    styling
-        .color_overrides
-        .get(&wire)
-        .copied()
-        .or_else(|| styling.class_styles.get(&wire).and_then(|s| s.color))
+pub fn wire_color(styling: Option<WireStyling<'_>>, wire: &Wire) -> Option<ThemeColor> {
+    wire.color.or_else(|| {
+        let styling = styling?;
+        styling
+            .color_overrides
+            .get(&wire.uuid)
+            .copied()
+            .or_else(|| styling.class_styles.get(&wire.uuid).and_then(|s| s.color))
+    })
 }
 
 /// The colour a junction dot is drawn with, before focus dimming, or `None`
@@ -141,6 +144,13 @@ mod tests {
 
     use super::*;
 
+    fn wire_of(uuid: Uuid) -> Wire {
+        Wire {
+            uuid,
+            ..Default::default()
+        }
+    }
+
     /// The width every stock symbol's graphics are stored at, which its pins
     /// draw at (`symbol_stroke_mm`).
     fn stock_pin_width_mm() -> f64 {
@@ -202,8 +212,8 @@ mod tests {
             class_styles: &classes,
             class_revision: 0,
         };
-        assert_eq!(wire_color(Some(only_class), id), Some(blue));
-        assert_eq!(wire_color(None, id), None);
+        assert_eq!(wire_color(Some(only_class), &wire_of(id)), Some(blue));
+        assert_eq!(wire_color(None, &wire_of(id)), None);
 
         overrides.insert(id, red);
         let both = WireStyling {
@@ -211,7 +221,17 @@ mod tests {
             class_styles: &classes,
             class_revision: 0,
         };
-        assert_eq!(wire_color(Some(both), id), Some(red));
+        assert_eq!(wire_color(Some(both), &wire_of(id)), Some(red));
+
+        let own = Wire {
+            color: Some(ThemeColor::new(0, 255, 0, 255)),
+            ..wire_of(id)
+        };
+        assert_eq!(
+            wire_color(Some(both), &own),
+            own.color,
+            "a wire's own colour beats the net override and the class"
+        );
     }
 
     #[test]
@@ -225,7 +245,7 @@ mod tests {
             class_styles: &classes,
             class_revision: 0,
         };
-        assert_eq!(wire_color(Some(styling), id), None);
+        assert_eq!(wire_color(Some(styling), &wire_of(id)), None);
     }
 
     /// #2026: explicit > net class > project > built-in.

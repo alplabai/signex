@@ -108,6 +108,13 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::TogglePrePlacementItalic
                 | P::TogglePrePlacementUnderline
                 | P::SetPrePlacementShapeWidth(_)
+                | P::SetPrePlacementWireWidth(_)
+                | P::SetPrePlacementWireColor(_)
+                | P::EditWireWidth(..)
+                | P::EditWireColor(..)
+                | P::ToggleWireColorPicker
+                | P::OpenWireColorAdvancedPicker
+                | P::CancelWireColorPicker
                 | P::SetPrePlacementShapeFill(_)
                 | P::ConfirmPrePlacement
         ),

@@ -44,6 +44,10 @@ pub struct PrePlacementData {
     pub shape_width_mm: f64,
     /// Fill style for shapes that support it (Rect / Circle / Polygon).
     pub shape_fill: signex_types::schematic::FillType,
+    /// Width of the wires the Wire tool routes (Tab form).
+    pub wire_width: signex_types::schematic::WireWidthPreset,
+    /// Colour of those wires; `None` = the theme's wire colour.
+    pub wire_color: Option<signex_types::theme::Color>,
 }
 
 /// The look of the text a pre-placement form configures; what Repeat last
@@ -84,6 +88,8 @@ impl PrePlacementData {
             cursor_y_mm,
             shape_width_mm: 0.0,
             shape_fill: signex_types::schematic::FillType::None,
+            wire_width: Default::default(),
+            wire_color: None,
         }
     }
 
@@ -404,10 +410,12 @@ fn view_pre_placement<'a>(
             row![
                 text(tool_name.clone()).size(TS.label).color(primary),
                 Space::new().width(Length::Fill),
-                iced::widget::button(text("OK").size(TS.caption).color(Color::WHITE))
-                    .padding([SP.xs, 10.0])
-                    .on_press(PanelMsg::ConfirmPrePlacement)
-                    .style(iced::widget::button::primary),
+                crate::styles::dialog_button(
+                    "OK",
+                    crate::styles::DialogButtonKind::Primary,
+                    Some(PanelMsg::ConfirmPrePlacement),
+                    &ctx.tokens,
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -589,6 +597,35 @@ fn view_pre_placement<'a>(
                         c = c.push(shape_fill_row(fill, muted, border_c));
                     }
                     c
+                },
+            )
+            .boxed(),
+        );
+    } else if kind == PrePlacementKind::Wire {
+        let (width, color, picker) = (pp.wire_width, pp.wire_color, ctx.wire_color_picker);
+        col = col.push(
+            ctx.collapsible(
+                "preplace_wire",
+                "Properties",
+                &ctx.collapsed_sections,
+                primary,
+                border_c,
+                move || {
+                    Column::new()
+                        .spacing(0)
+                        .width(Length::Fill)
+                        .push(super::wire_width_row(
+                            width,
+                            PanelMsg::SetPrePlacementWireWidth,
+                            muted,
+                        ))
+                        .push(super::wire_color_row(
+                            color,
+                            picker,
+                            std::rc::Rc::new(PanelMsg::SetPrePlacementWireColor),
+                            muted,
+                            border_c,
+                        ))
                 },
             )
             .boxed(),

@@ -366,7 +366,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 56] = [
+const ALL_KINDS: [CommandKind; 57] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -381,6 +381,7 @@ const ALL_KINDS: [CommandKind; 56] = [
     CommandKind::SetSymbolDnp,
     CommandKind::SetSymbolFlag,
     CommandKind::SetWireWidth,
+    CommandKind::SetWireColor,
     CommandKind::SetSymbolBodyStyle,
     CommandKind::UpdateSymbolTextSize,
     CommandKind::UpdateSymbolLibId,
@@ -444,6 +445,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSymbolDnp
         | CommandKind::SetSymbolFlag
         | CommandKind::SetWireWidth
+        | CommandKind::SetWireColor
         | CommandKind::SetSymbolBodyStyle
         | CommandKind::UpdateSymbolTextSize
         | CommandKind::UpdateSymbolLibId
@@ -714,6 +716,13 @@ fn samples() -> Vec<(String, Command)> {
             symbol_id: sym,
             flag: crate::SymbolFlag::OnBoard,
             value: false,
+        },
+    );
+    add(
+        "SetWireColor",
+        Command::SetWireColor {
+            wire_id: uid(WIRE, 1),
+            color: Some(signex_types::theme::Color::new(255, 0, 0, 255)),
         },
     );
     add(

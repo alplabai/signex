@@ -29,7 +29,7 @@ pub fn build_renderer_snapshot(
         let class = overrides
             .wire_styling
             .and_then(|styling| styling.class_styles.get(&wire.uuid));
-        let base_color = wire_color(overrides.wire_styling, wire.uuid)
+        let base_color = wire_color(overrides.wire_styling, wire)
             .as_ref()
             .map(to_iced)
             .unwrap_or_else(|| to_iced(&colors.wire));

@@ -89,6 +89,8 @@ mod unknown_tests;
 mod unknown_value_type_tests;
 #[cfg(test)]
 mod version_tests;
+#[cfg(test)]
+mod wire_color_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
@@ -516,7 +518,11 @@ impl SnxSchematic {
                 row_to_symbol(row, extra)
             })
             .collect();
-        let wires = wire_rows.into_iter().map(row_to_wire).collect();
+        let wires = wire_rows
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| row_to_wire(row, "sheets.wires", index))
+            .collect::<Result<Vec<_>, _>>()?;
         let junctions = junction_rows
             .into_iter()
             .map(|row| {

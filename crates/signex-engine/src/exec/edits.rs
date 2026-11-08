@@ -120,6 +120,33 @@ impl Engine {
         Ok(CommandResult::changed(patch_pair))
     }
 
+    fn set_wire_color(
+        &mut self,
+        before: SchematicSheet,
+        wire_id: uuid::Uuid,
+        color: Option<signex_types::theme::Color>,
+    ) -> Result<CommandResult, EngineError> {
+        let changed = self
+            .document
+            .wires
+            .iter_mut()
+            .find(|w| w.uuid == wire_id)
+            .is_some_and(|w| {
+                let differs = w.color != color;
+                w.color = color;
+                differs
+            });
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::StyleUpdated,
+            document: DocumentPatch::WIRES,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     pub(crate) fn exec_edits(
         &mut self,
         before: SchematicSheet,
@@ -321,6 +348,7 @@ impl Engine {
             Command::SetWireWidth { wire_id, width_mm } => {
                 self.set_wire_width(before, wire_id, width_mm)
             }
+            Command::SetWireColor { wire_id, color } => self.set_wire_color(before, wire_id, color),
             Command::SetSymbolBodyStyle {
                 symbol_id,
                 body_style,

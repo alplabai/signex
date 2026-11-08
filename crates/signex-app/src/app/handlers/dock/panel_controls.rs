@@ -366,6 +366,56 @@ impl Signex {
                     pp.shape_width_mm = (*w).max(0.0);
                 }
             }
+            crate::panels::PanelMsg::SetPrePlacementWireWidth(preset) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.wire_width = *preset;
+                }
+            }
+            crate::panels::PanelMsg::SetPrePlacementWireColor(color) => {
+                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                    pp.wire_color = *color;
+                }
+                self.document_state.panel_ctx.wire_color_picker =
+                    crate::panels::WireColorPicker::Closed;
+            }
+            crate::panels::PanelMsg::EditWireWidth(wire_id, preset) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetWireWidth {
+                        wire_id: *wire_id,
+                        width_mm: preset.stroke_mm(),
+                    },
+                    true,
+                    true,
+                );
+            }
+            crate::panels::PanelMsg::EditWireColor(wire_id, color) => {
+                self.document_state.panel_ctx.wire_color_picker =
+                    crate::panels::WireColorPicker::Closed;
+                self.apply_engine_command(
+                    signex_engine::Command::SetWireColor {
+                        wire_id: *wire_id,
+                        color: *color,
+                    },
+                    true,
+                    true,
+                );
+            }
+            crate::panels::PanelMsg::ToggleWireColorPicker => {
+                use crate::panels::WireColorPicker as Picker;
+                let ctx = &mut self.document_state.panel_ctx;
+                ctx.wire_color_picker = match ctx.wire_color_picker {
+                    Picker::Closed => Picker::Palette,
+                    Picker::Palette | Picker::Advanced => Picker::Closed,
+                };
+            }
+            crate::panels::PanelMsg::OpenWireColorAdvancedPicker => {
+                self.document_state.panel_ctx.wire_color_picker =
+                    crate::panels::WireColorPicker::Advanced;
+            }
+            crate::panels::PanelMsg::CancelWireColorPicker => {
+                self.document_state.panel_ctx.wire_color_picker =
+                    crate::panels::WireColorPicker::Closed;
+            }
             crate::panels::PanelMsg::NumericFieldTyped(key, text) => {
                 // Text that is mid-edit (`-`, `1.`, empty) or refused leaves
                 // the stored value alone; the draft keeps what was typed.

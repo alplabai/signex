@@ -16,6 +16,16 @@ use iced::widget::{column, container, row};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Pause glyph (two bars) of the Placement Paused card, tinted at draw time.
+static PAUSE_GLYPH: std::sync::LazyLock<iced::widget::svg::Handle> = std::sync::LazyLock::new(
+    || {
+        iced::widget::svg::Handle::from_memory(
+        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>"##
+            .as_slice(),
+    )
+    },
+);
+
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
     /// the error notice, the netlist-incomplete prompt, print preview, or
@@ -149,48 +159,48 @@ impl Signex {
             return None;
         }
         let tokens = &document.panel_ctx.tokens;
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let text_c = crate::styles::ti(tokens.text);
-        let accent_c = crate::styles::ti(tokens.accent);
-        let border_c = crate::styles::ti(tokens.border);
+        let ink = crate::styles::ti(tokens.text);
+        let muted = crate::styles::ti(tokens.text_secondary);
+        let title_font = iced::Font {
+            weight: iced::font::Weight::Semibold,
+            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+        };
+        let glyph = iced::widget::svg(PAUSE_GLYPH.clone())
+            .width(Length::Fixed(TS.title))
+            .height(Length::Fixed(TS.title))
+            .style(move |_: &iced::Theme, _| iced::widget::svg::Style { color: Some(muted) });
         let card = container(
             column![
-                iced::widget::text("⏸").size(TS.banner).color(accent_c),
-                iced::widget::text("Placement Paused")
-                    .size(TS.heading)
-                    .color(text_c),
+                row![
+                    glyph,
+                    iced::widget::text("Placement Paused")
+                        .size(TS.title)
+                        .font(title_font)
+                        .color(ink),
+                ]
+                .spacing(SP.s)
+                .align_y(iced::Alignment::Center),
                 iced::widget::text(
                     "Editing properties in the panel. Click Resume to keep placing."
                 )
                 .size(TS.body)
-                .color(text_c),
-                iced::widget::Space::new().height(6.0),
-                iced::widget::button(
-                    iced::widget::text("Resume Placement")
-                        .size(TS.label)
-                        .color(iced::Color::WHITE)
-                )
-                .padding([6, 18])
-                .on_press(Message::Tool(ToolMessage::ResumePlacement))
-                .style(iced::widget::button::primary),
+                .color(muted),
+                iced::widget::text("Esc cancels placement.")
+                    .size(TS.caption)
+                    .color(muted),
+                iced::widget::Space::new().height(SP.xs),
+                crate::styles::dialog_button(
+                    "Resume Placement",
+                    crate::styles::DialogButtonKind::Primary,
+                    Some(Message::Tool(ToolMessage::ResumePlacement)),
+                    tokens,
+                ),
             ]
-            .spacing(SP.m)
-            .align_x(iced::Alignment::Center),
+            .spacing(SP.s)
+            .align_x(iced::Alignment::Start),
         )
-        .padding(24)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(iced::Background::Color(iced::Color {
-                a: 0.92,
-                ..panel_bg
-            })),
-            border: iced::Border {
-                color: border_c,
-                width: 1.0,
-                radius: 8.0.into(),
-                ..iced::Border::default()
-            },
-            ..container::Style::default()
-        });
+        .padding(SP.l + SP.s)
+        .style(crate::styles::modal_card(tokens));
         Some(
             container(card)
                 .width(Length::Fill)

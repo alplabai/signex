@@ -13,6 +13,10 @@ pub struct Wire {
     /// Stroke width in mm. 0.0 = use schematic default (~0.15mm).
     #[serde(default)]
     pub stroke_width: f64,
+    /// Own colour; `None` draws in the theme's wire colour. It wins over a
+    /// per-net colour and a net class colour (docs/DECISIONS.md, "Wire colour").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<crate::theme::Color>,
     /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub locked: bool,
@@ -557,6 +561,7 @@ impl Default for Wire {
             start: Point::default(),
             end: Point::default(),
             stroke_width: 0.0,
+            color: None,
             locked: false,
             unknown_columns: UnknownColumns::default(),
         }

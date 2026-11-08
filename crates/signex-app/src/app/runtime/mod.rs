@@ -273,6 +273,7 @@ impl Signex {
         self.document_state.panel_ctx.selected_drawing = None;
         self.document_state.panel_ctx.selected_drawing_placement = Default::default();
         self.document_state.panel_ctx.selected_child_sheet = None;
+        self.document_state.panel_ctx.selected_wire_style = None;
         self.document_state.panel_ctx.multi_draft = None;
         self.document_state.panel_ctx.multi_groups = match self.document_state.active_engine() {
             Some(engine) if selected.len() > 1 => {
@@ -303,6 +304,21 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            if details.selected_kind == signex_types::schematic::SelectedKind::Wire {
+                self.document_state.panel_ctx.selected_wire_style = engine
+                    .document()
+                    .wires
+                    .iter()
+                    .find(|w| w.uuid == details.selected_uuid)
+                    .map(|w| {
+                        (
+                            signex_types::schematic::WireWidthPreset::from_stroke_mm(
+                                w.stroke_width,
+                            ),
+                            w.color,
+                        )
+                    });
+            }
             let pins = pin_focus::pin_keys(&self.document_state.panel_ctx.selection_info);
             let nets = self.pin_net_names(&path, details.selected_uuid, &pins);
             pin_focus::add_pin_rows(

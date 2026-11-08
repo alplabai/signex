@@ -189,6 +189,7 @@ fn sheet() -> SchematicSheet {
         ..Symbol::default()
     });
     sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::nil(),
         start: Point::new(100.0, 95.08),
         end: Point::new(115.0, 95.08),
@@ -356,6 +357,7 @@ fn readme_sheet() -> SchematicSheet {
     let tip = |reference: &str, pin: &str| tips[&(reference.to_string(), pin.to_string())];
     let mut wire = |a: (f64, f64), b: (f64, f64)| {
         sheet.wires.push(Wire {
+            color: None,
             uuid: uuid::Uuid::now_v7(),
             start: Point::new(a.0, a.1),
             end: Point::new(b.0, b.1),

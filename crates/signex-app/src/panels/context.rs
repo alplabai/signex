@@ -150,6 +150,13 @@ pub struct PanelContext {
     /// Whether the border-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_border_picker_open: bool,
+    /// State of the wire colour picker (Tab form or selected wire).
+    pub wire_color_picker: super::WireColorPicker,
+    /// Width preset and colour of the single selected wire, if one is.
+    pub selected_wire_style: Option<(
+        signex_types::schematic::WireWidthPreset,
+        Option<signex_types::theme::Color>,
+    )>,
     /// Whether the fill-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_fill_picker_open: bool,

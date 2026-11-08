@@ -199,6 +199,7 @@ impl Env {
             }
             for (a, b) in segs {
                 let mut wire = template.cloned().unwrap_or_else(|| Wire {
+                    color: None,
                     uuid: Uuid::nil(),
                     start: a,
                     end: b,

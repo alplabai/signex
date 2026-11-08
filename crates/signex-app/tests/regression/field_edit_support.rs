@@ -50,6 +50,7 @@ pub(crate) fn label(text: &str, at: (f64, f64)) -> Label {
 
 pub(crate) fn wire(a: (f64, f64), b: (f64, f64), width: f64) -> Wire {
     Wire {
+        color: None,
         unknown_columns: Default::default(),
         uuid: Uuid::now_v7(),
         start: Point::new(a.0, a.1),
