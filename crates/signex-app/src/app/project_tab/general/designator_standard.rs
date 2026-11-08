@@ -56,7 +56,6 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
             standard: choice.0,
         })
     })
-    .text_size(ts.label)
     .width(Length::Fill)
     .boxed();
     let field: Element<'a, Message> = if project.data.has_unreadable_annotation() {

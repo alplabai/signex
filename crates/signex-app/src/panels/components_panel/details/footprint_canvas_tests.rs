@@ -573,7 +573,8 @@ fn graphite_previews_paint_crisp_gold_pads_and_a_neutral_courtyard() {
     use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
     let gold = iced::Color::from_rgb8(0xD8, 0xB4, 0x6A);
     let spread = |c: iced::Color| c.r.max(c.g).max(c.b) - c.r.min(c.g).min(c.b);
-    for canvas in [LayerPalette::CanvasDark] {
+    {
+        let canvas = LayerPalette::CanvasDark;
         let preview = canvas.for_preview();
         assert_ne!(preview, canvas, "{canvas:?} has a preview variant");
         let copper = FpLayer::FCu.color_in(preview);

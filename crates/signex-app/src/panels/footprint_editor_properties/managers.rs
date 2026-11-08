@@ -180,8 +180,6 @@ pub(super) fn render_other_section<'a>(
         muted,
         primary,
         input_bg,
-        input_bdr,
-        seg_hover,
         ..
     } = palette;
     use signex_types::coord::Unit;
@@ -199,8 +197,6 @@ pub(super) fn render_other_section<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr,
                 ),
                 super::super::seg_btn(
                     "mils",
@@ -209,8 +205,6 @@ pub(super) fn render_other_section<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr,
                 ),
             ]
             .spacing(0.0)

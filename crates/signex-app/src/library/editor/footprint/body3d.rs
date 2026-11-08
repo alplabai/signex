@@ -65,7 +65,6 @@ pub fn view<'a>(
             row_id: shape_addr.row_id,
             msg: EditorMsg::SetBodyShape(s),
         })
-        .text_size(TS.body)
         .padding([SP.s, SP.m]);
 
     // Numeric inputs — height_mm / offset_z_mm.

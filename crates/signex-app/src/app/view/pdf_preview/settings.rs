@@ -186,7 +186,6 @@ impl Signex {
                         Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
                     }
                 })
-                .text_size(11)
                 .width(220);
 
         let labelled_check = |label: &'static str,
@@ -361,7 +360,6 @@ impl Signex {
             )
             .graphite()
             .on_select(|v: PdfQuality| Message::PrintPreview(PrintPreviewMsg::SetQuality(v)))
-            .text_size(11)
             .width(180),
         ]
         .spacing(SP.xs);

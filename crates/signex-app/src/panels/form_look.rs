@@ -8,7 +8,7 @@
 use super::graphite::PROPERTY_FIELD_RADIUS;
 use super::*;
 use crate::styles::tokens::resolve;
-use crate::styles::{TypeScale, is_graphite, ti};
+use crate::styles::{TypeScale, ti};
 use iced::Widget;
 use iced::widget::{button, checkbox, scrollable, text_input};
 use signex_types::theme::{ThemeId, theme_tokens};
@@ -19,6 +19,9 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SEGMENT_RADIUS: f32 = 6.0;
 /// Corner radius of the frame around a segmented control.
 const SEGMENT_FRAME_RADIUS: f32 = 8.0;
+/// Alpha of the ink wash under a hovered, inactive segment: a neutral grey,
+/// not the tinted accent pill.
+const SEGMENT_HOVER_ALPHA: f32 = 0.08;
 /// Corner radius of a checkbox box.
 const CHECKBOX_RADIUS: f32 = 4.0;
 /// Width of the themed scrollbar.
@@ -202,7 +205,10 @@ pub(in crate::panels) fn segment_cell(
     let fill = if active {
         Some(Background::Color(l.raised))
     } else if hovered {
-        Some(Background::Color(l.accent_soft))
+        Some(Background::Color(Color {
+            a: SEGMENT_HOVER_ALPHA,
+            ..l.ink
+        }))
     } else {
         None
     };
@@ -344,20 +350,14 @@ fn graphite_section_header<'a>(
 }
 
 impl PanelContext {
-    /// A collapsible form section: the stock section on legacy themes, the
-    /// Graphite uppercase-label section otherwise.
+    /// A collapsible form section on the Graphite uppercase-label chrome.
     pub(in crate::panels) fn collapsible<'a>(
         &self,
         key: &str,
         title: &str,
         collapsed: &CollapsedSections,
-        header_color: Color,
-        border_c: Color,
         content: impl FnOnce() -> Column<Element<'a, PanelMsg>>,
     ) -> Column<Element<'a, PanelMsg>> {
-        if !is_graphite(&self.tokens) {
-            return collapsible_section(key, title, collapsed, header_color, border_c, content);
-        }
         let is_collapsed = collapsed.contains(key);
         let mut col = graphite_section_header(key, title, is_collapsed, &self.tokens);
         if !is_collapsed {

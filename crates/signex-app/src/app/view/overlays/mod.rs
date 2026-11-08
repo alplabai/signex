@@ -416,7 +416,7 @@ impl Signex {
         let y = if in_window {
             16.0
         } else {
-            crate::menu_bar::menu_bar_height(&self.document_state.panel_ctx.tokens) + 4.0
+            crate::menu_bar::MENU_BAR_HEIGHT + 4.0
         };
         super::view::translate::Translate::new(card.boxed(), (card_x, y)).boxed()
     }

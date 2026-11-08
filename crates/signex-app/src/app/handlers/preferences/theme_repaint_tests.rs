@@ -132,10 +132,13 @@ fn reverting_drafts_repaints_the_undocked_canvases_with_the_saved_theme() {
         app.interaction_state.canvases[&undocked].bg_cache_clears,
         bg + 1
     );
-    let saved = signex_types::theme::canvas_colors(app.ui_state.theme_id);
     assert_eq!(app.ui_state.preferences_draft_theme, app.ui_state.theme_id);
+    // Board views keep the dark board palette in both Graphite themes
+    // (decision 2026-11-08), so the revert repaints them with it, not with
+    // the saved theme's schematic colours.
+    let board = crate::styles::board_canvas_colors();
     for canvas in app.interaction_state.all_pcb_canvases_mut() {
-        assert_eq!(canvas.canvas_colors, saved);
+        assert_eq!(canvas.canvas_colors, board);
     }
 }
 

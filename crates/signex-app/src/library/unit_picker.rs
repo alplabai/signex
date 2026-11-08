@@ -49,7 +49,6 @@ pub(crate) fn unit_of_token(token: &str) -> Result<Option<Unit>, &str> {
 pub(crate) fn unit_picker<'a, M: Clone + 'a>(
     selected: Option<Unit>,
     allow_none: bool,
-    text_size: f32,
     on_pick: impl Fn(String) -> M + 'a,
 ) -> Element<'a, M> {
     pick_list(
@@ -59,7 +58,6 @@ pub(crate) fn unit_picker<'a, M: Clone + 'a>(
     )
     .graphite()
     .on_select(move |c: UnitChoice| on_pick(c.0.map(|u| u.token().to_string()).unwrap_or_default()))
-    .text_size(text_size)
     .padding([3, 6])
     .boxed()
 }

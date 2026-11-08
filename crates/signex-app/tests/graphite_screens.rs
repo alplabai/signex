@@ -226,6 +226,10 @@ fn open_sample(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) {
 }
 
 fn select_signal(app: &mut Signex) {
+    select_panel(app, PanelKind::SignexAi);
+}
+
+fn select_panel(app: &mut Signex, kind: PanelKind) {
     for pos in [
         PanelPosition::Left,
         PanelPosition::Right,
@@ -236,13 +240,13 @@ fn select_signal(app: &mut Signex) {
             .dock
             .panel_kinds(pos)
             .iter()
-            .position(|k| *k == PanelKind::SignexAi)
+            .position(|k| *k == kind)
         {
             let _ = app.update(Message::Dock(DockMessage::SelectTab(pos, i)));
             return;
         }
     }
-    eprintln!("no Signal tab in any dock");
+    eprintln!("no {kind:?} tab in any dock");
 }
 
 type Build = fn(&mut Signex, &mut iced::Renderer, &Fixture) -> Result<(), String>;
@@ -272,6 +276,12 @@ fn screens() -> Vec<(&'static str, Build)> {
                 world_y: 101.6,
             }));
             let _ = draw(r, app);
+            Ok(())
+        }),
+        ("components", |app, r, fx| {
+            open_sample(app, r, fx);
+            mount_stock(app, fx);
+            select_panel(app, PanelKind::Components);
             Ok(())
         }),
         ("schematic-signal", |app, r, fx| {

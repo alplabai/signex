@@ -114,14 +114,9 @@ pub fn prop_kv_row<'a>(
 }
 
 pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
-    if crate::styles::is_graphite(tokens) {
-        return text(title.to_uppercase())
-            .size(TS.section)
-            .style(crate::styles::section_label(tokens));
-    }
     text(title.to_uppercase())
-        .size(TS.caption)
-        .color(theme_ext::text_secondary(tokens))
+        .size(TS.section)
+        .style(crate::styles::section_label(tokens))
 }
 
 pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
@@ -206,8 +201,8 @@ pub fn part_tree_row<'a>(
 pub const GRAPHITE_PROPERTY_LABEL_WIDTH: f32 = 92.0;
 
 /// Colour and column width of a property-row label. A bare [`Color`] keeps
-/// the legacy fill-portion column; [`LabelInk::for_tokens`] picks the
-/// Graphite column on a Graphite theme.
+/// the legacy fill-portion column; [`LabelInk::graphite`] picks the
+/// fixed Graphite column.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LabelInk {
     pub color: Color,
@@ -224,16 +219,11 @@ impl From<Color> for LabelInk {
 }
 
 impl LabelInk {
-    /// The label look of `tokens`: the fixed Graphite column, else the
-    /// legacy fill portion.
-    pub fn for_tokens(color: Color, tokens: &ThemeTokens) -> Self {
-        if crate::styles::is_graphite(tokens) {
-            Self {
-                color,
-                width: Length::Fixed(GRAPHITE_PROPERTY_LABEL_WIDTH),
-            }
-        } else {
-            Self::from(color)
+    /// The Graphite label look: the fixed column.
+    pub fn graphite(color: Color) -> Self {
+        Self {
+            color,
+            width: Length::Fixed(GRAPHITE_PROPERTY_LABEL_WIDTH),
         }
     }
 }
@@ -332,20 +322,10 @@ pub fn shape_fill_row<'a>(
 #[cfg(test)]
 mod label_tests {
     use super::*;
-    use signex_types::theme::{ThemeId, theme_tokens};
 
     #[test]
     fn graphite_labels_get_the_fixed_92_px_column() {
-        let ink = LabelInk::for_tokens(Color::BLACK, &theme_tokens(ThemeId::GraphiteLight));
+        let ink = LabelInk::graphite(Color::BLACK);
         assert_eq!(ink.width, Length::Fixed(92.0));
-        let ink = LabelInk::for_tokens(Color::BLACK, &theme_tokens(ThemeId::GraphiteDark));
-        assert_eq!(ink.width, Length::Fixed(92.0));
-    }
-
-    #[test]
-    fn legacy_labels_keep_the_fill_portion_column() {
-        let ink = LabelInk::for_tokens(Color::BLACK, &crate::styles::legacy_tokens_fixture());
-        assert_eq!(ink, LabelInk::from(Color::BLACK));
-        assert_eq!(ink.width, Length::FillPortion(PROPERTY_LABEL_PORTION));
     }
 }

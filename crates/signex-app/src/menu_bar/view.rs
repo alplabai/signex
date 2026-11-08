@@ -23,41 +23,9 @@ pub fn view(
     let mc = MenuColors::from_tokens(tokens);
     let mb = render_menu_bar(&menu_bar_model(&ctx), mc, ui_font);
 
-    // Wordmark — white on dark themes, near-black on light themes. Picked
-    // by toolbar background luminance so both Graphite themes resolve
-    // correctly. The asset is a PNG pre-rasterised at 1×/2×/3× the
-    // on-screen 96×31 logical size; `wordmark_tier` picks the one that
-    // matches the window's scale factor so text edges stay crisp at
-    // 100 %, 125 %, 150 %, 200 %, 300 % Windows scaling. Filter method
-    // is Linear so fractional in-between scales (e.g. 1.5×) downsample
-    // cleanly from the 2× asset rather than hard-pixelating.
-    let dark = is_dark_surface(tokens.toolbar_bg);
-    if mc.graphite {
-        return iced::advanced::Widget::_boxed(
-            row![graphite::mark(), mb]
-                .spacing(graphite::MARK_GAP)
-                .align_y(iced::Alignment::Center),
-        );
-    }
-    let handle = match (dark, wordmark_tier(ctx.scale_factor)) {
-        (true, 1) => (*BRAND_WORDMARK_WHITE_1X).clone(),
-        (true, 2) => (*BRAND_WORDMARK_WHITE_2X).clone(),
-        (true, _) => (*BRAND_WORDMARK_WHITE_3X).clone(),
-        (false, 1) => (*BRAND_WORDMARK_BLACK_1X).clone(),
-        (false, 2) => (*BRAND_WORDMARK_BLACK_2X).clone(),
-        (false, _) => (*BRAND_WORDMARK_BLACK_3X).clone(),
-    };
-    let wordmark = image(handle)
-        .width(WORDMARK_LOGICAL_W)
-        .height(WORDMARK_LOGICAL_H)
-        .filter_method(image::FilterMethod::Linear);
-
-    // Just the wordmark + menu roots. The caller decides how to wrap this
-    // (plain strip on secondary windows, draggable chrome with window
-    // controls on the borderless main window).
     iced::advanced::Widget::_boxed(
-        row![wordmark, mb]
-            .spacing(10)
+        row![graphite::mark(), mb]
+            .spacing(graphite::MARK_GAP)
             .align_y(iced::Alignment::Center),
     )
 }
@@ -84,55 +52,18 @@ fn render_menu_bar(
     // Altium. `FakeHovering` (the default) only affects items inside the
     // dropdown and leaves the root dark.
     .draw_path(DrawPath::Backdrop)
-    .style(move |_theme: &Theme, _status| {
-        if mc.graphite {
-            graphite::bar_style(mc)
-        } else {
-            bar_style(mc)
-        }
-    })
-}
-
-fn bar_style(mc: MenuColors) -> menu_style::Style {
-    menu_style::Style {
-        bar_background: Background::Color(mc.toolbar_bg),
-        bar_border: Border::default(),
-        bar_shadow: iced::Shadow::default(),
-        menu_background: Background::Color(mc.panel_bg),
-        menu_border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: mc.border,
-            ..Border::default()
-        },
-        menu_shadow: iced::Shadow {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-            offset: iced::Vector::new(2.0, 4.0),
-            blur_radius: 8.0,
-        },
-        path: Background::Color(mc.hover),
-        path_border: Border {
-            width: 1.0,
-            radius: 2.0.into(),
-            color: mc.border,
-            ..Border::default()
-        },
-    }
+    .style(move |_theme: &Theme, _status| graphite::bar_style(mc))
 }
 
 fn render_root(menu: &MenuModel, mc: MenuColors, ui_font: &str) -> MenuItemView {
     Item::with_menu(
-        root_btn(&menu.title, mc),
+        graphite::root_btn(&menu.title, mc),
         render_dropdown(menu, mc, ui_font),
     )
 }
 
 fn render_submenu(menu: &MenuModel, mc: MenuColors, ui_font: &str) -> MenuItemView {
-    let launcher = if mc.graphite {
-        graphite::submenu_btn(&menu.title, mc)
-    } else {
-        submenu_item_btn(&menu.title, mc)
-    };
+    let launcher = graphite::submenu_btn(&menu.title, mc);
     Item::with_menu(launcher, render_dropdown(menu, mc, ui_font))
 }
 
@@ -147,35 +78,13 @@ fn render_dropdown(
         .iter()
         .map(|entry| render_entry(entry, mc, shape, ui_font))
         .collect();
-    if mc.graphite {
-        // Fitted to its rows, 28 px rows with no gaps between them, so every
-        // hover fill touches the next and the card pads its rows evenly.
-        return Menu::new(items)
-            .width(Length::Fixed(graphite::dropdown_width(menu, ui_font)))
-            .offset(4.0)
-            .spacing(0.0)
-            .padding(graphite::dropdown_padding());
-    }
+    // Fitted to its rows, 28 px rows with no gaps between them, so every
+    // hover fill touches the next and the card pads its rows evenly.
     Menu::new(items)
-        .max_width(DROPDOWN_WIDTH)
-        // Sit a couple of pixels below the bar — offset(0) overlaps
-        // the bar's bottom row because the dropdown's 1px border
-        // paints on the same pixel as the bar's baseline.
-        .offset(2.0)
-        .spacing(2.0)
-        // iced_aw paints the dropdown's background quad at
-        // `items.x - padding.left` (see `pad_rectangle` in
-        // `iced_aw/src/widget/menu/menu_tree.rs`). Any positive
-        // left-padding here drags the visible dropdown LEFT of the
-        // root button's highlight box. Zero on the left keeps the
-        // dropdown's left border flush with the root's layout
-        // bounds, matching Altium's alignment.
-        .padding(iced::Padding {
-            top: 5.0,
-            right: 5.0,
-            bottom: 5.0,
-            left: 0.0,
-        })
+        .width(Length::Fixed(graphite::dropdown_width(menu, ui_font)))
+        .offset(4.0)
+        .spacing(0.0)
+        .padding(graphite::dropdown_padding())
 }
 
 fn render_entry(
@@ -187,8 +96,7 @@ fn render_entry(
     match entry {
         MenuEntry::Item(item) => render_item(item, mc, shape),
         MenuEntry::Submenu(menu) => render_submenu(menu, mc, ui_font),
-        MenuEntry::Separator if mc.graphite => Item::new(graphite::separator(mc)),
-        MenuEntry::Separator => separator(mc),
+        MenuEntry::Separator => Item::new(graphite::separator(mc)),
     }
 }
 
@@ -196,24 +104,14 @@ fn render_entry(
 /// renders greyed out with no press handler.
 fn render_item(item: &MenuItem, mc: MenuColors, shape: graphite::RowShape) -> MenuItemView {
     let shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
-    let row = if mc.graphite {
-        graphite::item_btn(
-            &item.label,
-            item.checked,
-            shortcut,
-            item.dispatches().cloned(),
-            mc,
-            shape,
-        )
-    } else {
-        menu_item_btn(
-            &item.label,
-            item.checked,
-            shortcut,
-            item.dispatches().cloned(),
-            mc,
-        )
-    };
+    let row = graphite::item_btn(
+        &item.label,
+        item.checked,
+        shortcut,
+        item.dispatches().cloned(),
+        mc,
+        shape,
+    );
     if !matches!(item.state, ItemState::Placeholder) {
         return Item::new(row);
     }

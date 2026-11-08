@@ -378,7 +378,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     array_id,
                     scheme,
                 })
-                .text_size(10)
                 .padding([3.0, SP.m])
                 .width(Length::Fill),
             ]

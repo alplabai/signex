@@ -72,7 +72,6 @@ pub(super) fn push_focused_pin_section<'a>(
     col: Column<Element<'a, PanelMsg>>,
     ctx: &PanelContext,
     muted: Color,
-    border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(pin) = pin_rows(&ctx.selection_info)
         .into_iter()
@@ -91,8 +90,6 @@ pub(super) fn push_focused_pin_section<'a>(
             FOCUSED_PIN_SECTION_KEY,
             &title,
             &ctx.collapsed_sections,
-            muted,
-            border_c,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
@@ -143,8 +140,6 @@ pub(super) fn push_pins_section<'a>(
             PINS_SECTION_KEY,
             &title,
             &ctx.collapsed_sections,
-            muted,
-            border_c,
             move || {
                 let rows = pin_rows(info);
                 // The Net column exists only once the project net index can answer.

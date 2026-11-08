@@ -232,7 +232,6 @@ fn view_document<'a>(
     let mode_picker = pick_list(Some(mode), DatasheetMode::ALL, ToString::to_string)
         .graphite()
         .on_select(move |m| event(&mode_address, DatasheetMsg::SetMode(index, m)))
-        .text_size(TS.body)
         .padding([SP.s, SP.m])
         .boxed();
 

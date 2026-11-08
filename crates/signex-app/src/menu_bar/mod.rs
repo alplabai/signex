@@ -2,17 +2,10 @@
 //!
 //! Altium-style menu structure: File, Edit, View, Place, Design, Tools, Window, Help.
 //! iced_aw handles all overlay positioning, hover-to-switch, and keyboard navigation.
-//! Anchored on the left by the Signex wordmark — PNGs rasterised from
-//! `brand/signex-logo-{white,black}.svg` into `brand/generated/` at 1×/2×/3×
-//! the on-screen 96×31 logical size. Regenerate via
-//! `python installer/build-wordmark.py`.
 
-use std::sync::LazyLock;
-
-use iced::widget::{button, container, image, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{container, row, text};
+use iced::{Color, Element, Length, Theme};
 use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
-use iced_aw::style::menu_bar as menu_style;
 use signex_types::theme::ThemeTokens;
 
 use crate::keymap::{AppCommandId, CompiledKeymap};
@@ -20,67 +13,6 @@ use crate::styles;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-/// Wordmark PNGs pre-rasterised from `signex-logo-{white,black}.svg` at
-/// 1× / 2× / 3× the on-screen 96×31 logical size. Picked at view-time by
-/// window scale factor so the lockup renders 1:1 with device pixels —
-/// which is the only way to get crisp path-text at a size this small
-/// (resvg's path rasterization has no font hinting, so a single SVG
-/// stretched across DPI tiers aliases at the stems). Regenerate with
-/// `python installer/build-wordmark.py` after editing the source SVGs.
-static BRAND_WORDMARK_WHITE_1X: LazyLock<image::Handle> = LazyLock::new(|| {
-    image::Handle::from_bytes(
-        include_bytes!("../../assets/brand/generated/wordmark-white-1x.png").as_slice(),
-    )
-});
-static BRAND_WORDMARK_WHITE_2X: LazyLock<image::Handle> = LazyLock::new(|| {
-    image::Handle::from_bytes(
-        include_bytes!("../../assets/brand/generated/wordmark-white-2x.png").as_slice(),
-    )
-});
-static BRAND_WORDMARK_WHITE_3X: LazyLock<image::Handle> = LazyLock::new(|| {
-    image::Handle::from_bytes(
-        include_bytes!("../../assets/brand/generated/wordmark-white-3x.png").as_slice(),
-    )
-});
-static BRAND_WORDMARK_BLACK_1X: LazyLock<image::Handle> = LazyLock::new(|| {
-    image::Handle::from_bytes(
-        include_bytes!("../../assets/brand/generated/wordmark-black-1x.png").as_slice(),
-    )
-});
-static BRAND_WORDMARK_BLACK_2X: LazyLock<image::Handle> = LazyLock::new(|| {
-    image::Handle::from_bytes(
-        include_bytes!("../../assets/brand/generated/wordmark-black-2x.png").as_slice(),
-    )
-});
-static BRAND_WORDMARK_BLACK_3X: LazyLock<image::Handle> = LazyLock::new(|| {
-    image::Handle::from_bytes(
-        include_bytes!("../../assets/brand/generated/wordmark-black-3x.png").as_slice(),
-    )
-});
-
-/// Logical on-screen size of the wordmark (matches the SVG aspect of
-/// 1600:520 → ~3.08:1). Changing this requires regenerating the PNGs at
-/// matching multiples via `build-wordmark.py`. Stored as `f32` because
-/// `iced::widget::Image::{width,height}` take `impl Into<Length>` and
-/// `Length` implements `From<f32>` but not `From<u16>`.
-const WORDMARK_LOGICAL_W: f32 = 96.0;
-const WORDMARK_LOGICAL_H: f32 = 31.0;
-
-/// Pick the PNG tier that will render closest to 1:1 with device pixels
-/// at the given OS scale factor. The small slack (`+ 0.05`) absorbs
-/// floating-point jitter — at exactly 1.0 we want the 1× asset, not the
-/// 2× downsampled to 96 px.
-pub(crate) fn wordmark_tier(scale: f32) -> u8 {
-    let s = if scale > 0.0 { scale } else { 1.0 };
-    if s <= 1.05 {
-        1
-    } else if s <= 2.05 {
-        2
-    } else {
-        3
-    }
-}
 
 // ─── Messages ─────────────────────────────────────────────────
 
@@ -265,7 +197,7 @@ impl MenuMessage {
 /// render as an active link or a disabled item. Keeps the menu
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
 /// schematic is open.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MenuContext<'a> {
     /// The enablement facts for this window; rows keyed on a command id
     /// grey themselves through [`crate::app::command::is_enabled`] (#368).
@@ -275,12 +207,6 @@ pub struct MenuContext<'a> {
     /// menu entry reads this but the field stays so callers don't
     /// need to update their struct literal when we wire it up.
     pub has_project: bool,
-    /// OS scale factor of the window hosting this menu bar. Drives the
-    /// wordmark PNG tier picker (1× / 2× / 3×) so the lockup is rendered
-    /// at 1:1 with device pixels. Defaults to 1.0 before the main
-    /// window opens and for detached-modal / undocked-tab windows until
-    /// per-window scale tracking lands.
-    pub scale_factor: f32,
     /// Active committed shortcut profile for menu shortcut labels.
     pub active_keymap: Option<std::sync::Arc<CompiledKeymap>>,
     /// File ▸ Open Recent entries, most recent first.
@@ -290,35 +216,10 @@ pub struct MenuContext<'a> {
     pub(crate) open_panels: Vec<crate::panels::PanelKind>,
 }
 
-impl Default for MenuContext<'_> {
-    fn default() -> Self {
-        Self {
-            commands: Default::default(),
-            has_project: false,
-            scale_factor: 1.0,
-            active_keymap: None,
-            recent_projects: &[],
-            open_panels: Vec::new(),
-        }
-    }
-}
-
 // ─── Constants ────────────────────────────────────────────────
 
-/// Height of the title and menu bar on the legacy themes.
-pub const MENU_BAR_HEIGHT: f32 = 36.0;
-/// Height of the title and menu bar on the Graphite themes.
-pub const GRAPHITE_MENU_BAR_HEIGHT: f32 = crate::styles::ChromeMetrics::DEFAULT.menu;
-
-/// The title and menu bar height for `tokens`' theme.
-pub fn menu_bar_height(tokens: &ThemeTokens) -> f32 {
-    if styles::is_graphite(tokens) {
-        GRAPHITE_MENU_BAR_HEIGHT
-    } else {
-        MENU_BAR_HEIGHT
-    }
-}
-const DROPDOWN_WIDTH: f32 = 240.0;
+/// Height of the title and menu bar.
+pub const MENU_BAR_HEIGHT: f32 = crate::styles::ChromeMetrics::DEFAULT.menu;
 
 /// Menu typography scale. Labels are the baseline; shortcuts ride a step
 /// smaller so they read as metadata; the submenu chevron rides a step
@@ -326,9 +227,10 @@ const DROPDOWN_WIDTH: f32 = 240.0;
 /// at the same pixel height and would otherwise look shrunken next to the
 /// label. Exposed as constants so every menu row pulls from the same
 /// scale — no `size(11)`/`size(12)`/`size(14)` sprinkled around.
-const MENU_LABEL_SIZE: f32 = signex_widgets::active_bar_dropdown::MENU_LABEL_SIZE;
 const MENU_SHORTCUT_SIZE: f32 = signex_widgets::active_bar_dropdown::MENU_SHORTCUT_SIZE;
-const MENU_CHEVRON_SIZE: f32 = crate::styles::chrome_px(18.0);
+
+/// Logical width of the chrome wordmark slot the legacy chrome reserves.
+const WORDMARK_LOGICAL_W: f32 = 96.0;
 
 /// Approximate visible width of the menu bar in pixels. Includes the
 /// Signex wordmark on the left, plus the sum of root button widths
@@ -365,14 +267,11 @@ struct MenuColors {
     hover: Color,
     /// Separator line inside a dropdown.
     line_soft: Color,
-    /// Graphite theme: flat roots, radius-10 dropdown, themed shadow.
-    graphite: bool,
     shadow: iced::Shadow,
 }
 
 impl MenuColors {
     fn from_tokens(tokens: &ThemeTokens) -> Self {
-        let graphite = styles::is_graphite(tokens);
         Self {
             text: styles::ti(tokens.text),
             text_muted: styles::ti(tokens.text_secondary),
@@ -381,19 +280,10 @@ impl MenuColors {
                 Color { a: t.a * 0.6, ..t }
             },
             toolbar_bg: styles::ti(tokens.toolbar_bg),
-            panel_bg: if graphite {
-                styles::tokens::resolve(tokens).raised
-            } else {
-                styles::ti(tokens.paper)
-            },
+            panel_bg: styles::tokens::resolve(tokens).raised,
             border: styles::ti(tokens.border),
             hover: styles::ti(tokens.hover),
-            line_soft: if graphite {
-                styles::tokens::resolve(tokens).line_soft
-            } else {
-                styles::ti(tokens.border)
-            },
-            graphite,
+            line_soft: styles::tokens::resolve(tokens).line_soft,
             shadow: styles::floating_shadow(
                 tokens,
                 iced::Shadow {
@@ -473,198 +363,7 @@ pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Elem
     )
 }
 
-/// Perceptual-luminance test used to pick the white/black wordmark and
-/// (later) matching chrome icons. Mirrors the sRGB Y' coefficients so
-/// cyan/green tones don't fool the check like a naive (r+g+b)/3 would.
-fn is_dark_surface(c: signex_types::theme::Color) -> bool {
-    let r = c.r as f32 / 255.0;
-    let g = c.g as f32 / 255.0;
-    let b = c.b as f32 / 255.0;
-    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    lum < 0.5
-}
-
 // ─── Private helpers ─────────────────────────────────────────
-
-/// Root-level menu button (top bar).
-///
-/// Altium paints a subtle framed highlight behind the label on hover and
-/// keeps it lit while the dropdown is open. `button::Status::Hovered` covers
-/// the pointer case; `Pressed` is the "menu is open" state (iced_aw holds
-/// the root in Pressed while its submenu is visible).
-fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
-    if mc.graphite {
-        return graphite::root_btn(label, mc);
-    }
-    let label = label.to_owned();
-    let hover_bg = mc.hover;
-    let border = mc.border;
-    let text_c = mc.text;
-    let btn = button(text(label).size(MENU_LABEL_SIZE).color(text_c))
-        // Tight horizontal padding so the highlight box hugs the label —
-        // Altium's root buttons don't extend far past their text. A wide
-        // highlight pushes the dropdown's anchor (iced_aw uses the
-        // button's layout bounds) out to the left of where the label
-        // sits, which reads as "dropdown starts too far left."
-        .padding([7, 6])
-        .on_press(MenuMessage::NoOp)
-        .style(move |_: &Theme, status: button::Status| {
-            let lit = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            button::Style {
-                background: if lit {
-                    Some(Background::Color(hover_bg))
-                } else {
-                    None
-                },
-                text_color: text_c,
-                border: Border {
-                    width: if lit { 1.0 } else { 0.0 },
-                    radius: 2.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                ..button::Style::default()
-            }
-        });
-    iced::advanced::Widget::_boxed(btn)
-}
-
-/// Menu row that acts as a submenu header — label on the left, right
-/// chevron on the right, no shortcut. Does not dispatch on click; the
-/// menu framework opens the nested submenu on hover.
-fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
-    let label = label.to_owned();
-    let r = row![
-        text(label).size(MENU_LABEL_SIZE).color(mc.text),
-        iced::widget::Space::new().width(Length::Fill),
-        text("›".to_string())
-            .size(MENU_CHEVRON_SIZE)
-            .color(mc.text_muted),
-    ]
-    .spacing(SP.m)
-    .align_y(iced::Alignment::Center);
-    let btn = button(r)
-        // Match the padding used by `menu_item_btn` so Export sits on the
-        // same left/right grid as the normal leaf rows (Save, Open…).
-        .padding([SP.s, SP.l])
-        .width(Length::Fill)
-        .on_press(MenuMessage::NoOp)
-        .style(move |_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered | button::Status::Pressed => {
-                    Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
-                }
-                _ => None,
-            };
-            button::Style {
-                background: bg,
-                border: Border::default(),
-                text_color: mc.text,
-                ..button::Style::default()
-            }
-        });
-    iced::advanced::Widget::_boxed(btn)
-}
-
-/// Separator line between menu sections.
-fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(iced::advanced::Widget::_boxed(
-        container(iced::widget::Space::new())
-            .height(1)
-            .width(Length::Fill)
-            .padding([SP.xs, SP.m])
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(mc.border)),
-                ..container::Style::default()
-            }),
-    ))
-}
-
-/// Build a single menu item button with label + shortcut text.
-fn menu_item_btn(
-    label: &str,
-    checked: Option<bool>,
-    shortcut: Option<String>,
-    msg: Option<MenuMessage>,
-    mc: MenuColors,
-) -> Element<'static, MenuMessage> {
-    let enabled = msg.is_some();
-    let text_c = if enabled { mc.text } else { mc.text_disabled };
-
-    let label = label.to_owned();
-    // A toggle row reserves the mark column whether or not it is checked,
-    // so the labels of a group line up.
-    let mark = checked.map(|on| {
-        iced::advanced::Widget::_boxed(
-            text(if on { "\u{2713}" } else { "" })
-                .size(MENU_LABEL_SIZE)
-                .color(text_c)
-                .width(Length::Fixed(14.0)),
-        )
-    });
-    let mut r: iced::widget::Row<Element<'static, MenuMessage>> = iced::widget::Row::new()
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center)
-        .width(Length::Fill);
-    if let Some(mark) = mark {
-        r = r.push(mark);
-    }
-    r = r.push(iced::advanced::Widget::_boxed(
-        text(label)
-            .size(MENU_LABEL_SIZE)
-            .color(text_c)
-            .wrapping(iced::widget::text::Wrapping::None),
-    ));
-
-    if let Some(sc) = shortcut {
-        r = r.push(iced::advanced::Widget::_boxed(
-            iced::widget::Space::new().width(Length::Fill),
-        ));
-        r = r.push(iced::advanced::Widget::_boxed(
-            text(sc)
-                .size(MENU_SHORTCUT_SIZE)
-                .color(mc.text_muted)
-                .wrapping(iced::widget::text::Wrapping::None),
-        ));
-    }
-
-    let hover_bg = mc.hover;
-    let graphite_rows = mc.graphite;
-    let btn = button(r).padding([SP.s, SP.l]).width(Length::Fill).style(
-        move |_: &Theme, status: button::Status| {
-            let bg = if enabled {
-                match status {
-                    button::Status::Hovered | button::Status::Pressed => {
-                        Some(Background::Color(hover_bg))
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            button::Style {
-                background: bg,
-                text_color: text_c,
-                border: Border {
-                    radius: if graphite_rows {
-                        graphite::ITEM_RADIUS
-                    } else {
-                        2.0
-                    }
-                    .into(),
-                    ..Border::default()
-                },
-                ..button::Style::default()
-            }
-        },
-    );
-
-    if let Some(m) = msg {
-        iced::advanced::Widget::_boxed(btn.on_press(m))
-    } else {
-        iced::advanced::Widget::_boxed(btn)
-    }
-}
 
 #[cfg(test)]
 mod golden_tests;

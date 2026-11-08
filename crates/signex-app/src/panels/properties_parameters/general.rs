@@ -40,29 +40,18 @@ pub fn view_custom_selection_filters_section<'a>(
     )
 }
 
-/// The same section on the Graphite section chrome when the theme is
-/// Graphite; the stock section otherwise.
+/// The section on the Graphite section chrome.
 fn selection_filters_section_for<'a>(
     ctx: &'a PanelContext,
     palette: PanelPalette,
 ) -> Column<Element<'a, PanelMsg>> {
     let presets = ctx.custom_filter_presets.clone();
     let tab = ctx.active_custom_filter_tab;
-    if !crate::styles::is_graphite(&ctx.tokens) {
-        return view_custom_selection_filters_section(
-            presets,
-            tab,
-            &ctx.collapsed_sections,
-            palette,
-        );
-    }
     Column::new().spacing(0).width(Length::Fill).push(
         ctx.collapsible(
             "prop_sel_filter",
             "Custom Selection Filters",
             &ctx.collapsed_sections,
-            palette.primary,
-            palette.border,
             move || selection_filters_body(presets, tab, palette),
         )
         .boxed(),
@@ -75,13 +64,7 @@ fn selection_filters_body<'a>(
     active_custom_filter_tab: usize,
     palette: PanelPalette,
 ) -> Column<Element<'a, PanelMsg>> {
-    let PanelPalette {
-        muted,
-        primary,
-        accent: accent_c,
-        tag_hover,
-        ..
-    } = palette;
+    let PanelPalette { muted, primary, .. } = palette;
     use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
     let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
     let muted_c = muted;
@@ -121,13 +104,7 @@ fn selection_filters_body<'a>(
         } else {
             preset.name.clone()
         };
-        tabs = tabs.push(custom_filter_tab(
-            label,
-            idx == active_tab,
-            idx,
-            tag_hover,
-            accent_c,
-        ));
+        tabs = tabs.push(custom_filter_tab(label, idx == active_tab, idx));
     }
     if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
         tabs = tabs.push(
@@ -166,14 +143,7 @@ fn selection_filters_body<'a>(
     .align_y(iced::Alignment::Center);
     let mut wrap = Wrap::new().spacing(SP.s).line_spacing(4.0);
     for &f in SelectionFilter::ALL {
-        wrap = wrap.push(preset_chip(
-            f.label(),
-            active_tab,
-            f,
-            included.contains(&f),
-            tag_hover,
-            accent_c,
-        ));
+        wrap = wrap.push(preset_chip(f.label(), active_tab, f, included.contains(&f)));
     }
     c = c.push(
         container(
@@ -187,20 +157,17 @@ fn selection_filters_body<'a>(
 
 pub fn view_properties_general<'a>(
     ctx: &'a PanelContext,
-    _muted: Color,
     primary: Color,
-    border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     // Graphite muted ink for labels and hints, on the shared label column.
     let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
-    let label = LabelInk::for_tokens(muted, &ctx.tokens);
+    let label = LabelInk::graphite(muted);
     let hairline = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
     // Derive button/input colors from tokens (Copy values captured in closures)
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
         input_bg,
         input_bdr,
-        seg_hover,
         panel_bg,
         ..
     } = palette;
@@ -232,8 +199,6 @@ pub fn view_properties_general<'a>(
                 "prop_general",
                 "General",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
                         Column::new().spacing(0).width(Length::Fill);
@@ -248,8 +213,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr
                                 ),
                                 seg_btn(
                                     "mils",
@@ -258,8 +221,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr
                                 ),
                             ]
                             .spacing(0.0)
@@ -352,8 +313,6 @@ pub fn view_properties_general<'a>(
                 "prop_page_opts",
                 "Page Options",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
                         Column::new().spacing(0).width(Length::Fill);
@@ -368,8 +327,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr,
                                 ),
                                 seg_btn(
                                     "Standard",
@@ -378,8 +335,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr,
                                 ),
                                 seg_btn(
                                     "Custom",
@@ -388,8 +343,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr,
                                 ),
                             ]
                             .spacing(0.0)
@@ -535,12 +488,10 @@ pub fn view_properties_general<'a>(
 
     // Title Block (collapsible, #1080)
     col = col.push(thin_sep(hairline));
-    col = col.push(super::view_title_block_section(
-        ctx, muted, primary, border_c,
-    ));
+    col = col.push(super::view_title_block_section(ctx));
 
     col = col.push(thin_sep(hairline));
-    col = col.push(view_net_classes_section(ctx, palette).boxed());
+    col = col.push(view_net_classes_section(ctx).boxed());
 
     col
 }
@@ -572,19 +523,11 @@ pub fn view_properties_parameters<'a>(
     tokens: &ThemeTokens,
     muted: Color,
     primary: Color,
-    border_c: Color,
     input_bg: Color,
-    input_bdr: Color,
-    seg_hover: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    let graphite = crate::styles::is_graphite(tokens);
-    col = col.push(if graphite {
-        form_look::section_label("Parameters", tokens)
-    } else {
-        section_hdr("\u{25BC} Parameters", primary, border_c).boxed()
-    });
+    col = col.push(form_look::section_label("Parameters", tokens));
 
     // Sub-tabs: All | Parameters | Rules
     col = col.push(
@@ -597,8 +540,6 @@ pub fn view_properties_parameters<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr
                 ),
                 seg_btn(
                     "Parameters",
@@ -607,8 +548,6 @@ pub fn view_properties_parameters<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr
                 ),
                 seg_btn(
                     "Rules",
@@ -617,8 +556,6 @@ pub fn view_properties_parameters<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr
                 ),
             ]
             .spacing(0.0)
@@ -629,78 +566,10 @@ pub fn view_properties_parameters<'a>(
         .boxed(),
     );
 
-    if graphite {
-        return col.push(super::graphite_table::parameter_table(
-            tokens,
-            DOCUMENT_PARAMETERS,
-        ));
-    }
-
-    // Table header
-    col = col.push(thin_sep(border_c));
-    col = col.push(
-        container(
-            row![
-                text("Name")
-                    .size(TS.body)
-                    .color(muted)
-                    .width(Length::FillPortion(3))
-                    .boxed(),
-                text("Value")
-                    .size(TS.body)
-                    .color(muted)
-                    .width(Length::FillPortion(2))
-                    .boxed(),
-            ]
-            .spacing(SP.s),
-        )
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
-
-    // Parameter rows (standard Altium document parameters)
-
-    for (name, val) in DOCUMENT_PARAMETERS {
-        col = col.push(param_table_row(name, val, primary, muted, border_c));
-    }
-
-    col
-}
-
-/// Parameter table row with subtle bottom border.
-pub fn param_table_row<'a, M: 'a>(
-    name: &str,
-    value: &str,
-    name_c: Color,
-    val_c: Color,
-    border_c: Color,
-) -> Element<'a, M> {
-    column![
-        container(
-            row![
-                text(name.to_string())
-                    .size(TS.body)
-                    .color(name_c)
-                    .width(Length::FillPortion(3))
-                    .wrapping(iced::widget::text::Wrapping::None)
-                    .boxed(),
-                text(value.to_string())
-                    .size(TS.body)
-                    .color(val_c)
-                    .width(Length::FillPortion(2))
-                    .boxed(),
-            ]
-            .spacing(SP.s),
-        )
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-        thin_sep(border_c),
-    ]
-    .spacing(0)
-    .boxed()
+    col.push(super::graphite_table::parameter_table(
+        tokens,
+        DOCUMENT_PARAMETERS,
+    ))
 }
 
 /// Properties panel tab button (General / Parameters).
@@ -768,23 +637,12 @@ fn graphite_filter_chip(
     })
 }
 
-/// Label of a filter tab or chip: the legacy fixed on / off colours, or the
-/// Graphite ink pair resolved from the theme.
-fn chip_label<'a>(
-    label: String,
-    on: bool,
-    legacy_on: Color,
-    legacy_off: Color,
-) -> iced::widget::Text<'a> {
+/// Label of a filter tab or chip: the Graphite ink pair resolved from the theme.
+fn chip_label<'a>(label: String, on: bool) -> iced::widget::Text<'a> {
     text(label)
         .size(TS.body)
         .style(move |theme: &Theme| iced::widget::text::Style {
-            color: Some(match form_look::FormLook::of(theme) {
-                Some(l) if on => l.ink,
-                Some(l) => l.ink3,
-                None if on => legacy_on,
-                None => legacy_off,
-            }),
+            color: form_look::FormLook::of(theme).map(|l| if on { l.ink } else { l.ink3 }),
             ..Default::default()
         })
 }
@@ -793,43 +651,17 @@ fn chip_label<'a>(
 /// gets a filled background; both states use the theme accent for the
 /// border so the section reads as one piece with the chips and the
 /// Active Bar dropdown.
-pub fn custom_filter_tab(
-    label: String,
-    active: bool,
-    idx: usize,
-    hover_bg: Color,
-    border_c: Color,
-) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
-    iced::widget::button(chip_label(label, active, text_on, text_off))
+pub fn custom_filter_tab(label: String, active: bool, idx: usize) -> Element<'static, PanelMsg> {
+    iced::widget::button(chip_label(label, active))
         .padding([3, 10])
         .on_press(PanelMsg::SelectCustomFilterTab(idx))
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
-            if let Some(style) = form_look::tab_chip(
+            form_look::tab_chip(
                 theme,
                 active,
                 matches!(status, iced::widget::button::Status::Hovered),
-            ) {
-                return style;
-            }
-            let bg = match status {
-                iced::widget::button::Status::Hovered if !active => Background::Color(hover_bg),
-                _ if active => Background::Color(active_bg),
-                _ => Background::Color(Color::TRANSPARENT),
-            };
-            iced::widget::button::Style {
-                background: Some(bg),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border_c,
-                    ..Default::default()
-                },
-                text_color: if active { text_on } else { text_off },
-                ..iced::widget::button::Style::default()
-            }
+            )
+            .unwrap_or_default()
         })
         .boxed()
 }
@@ -842,42 +674,19 @@ pub fn preset_chip(
     preset_idx: usize,
     filter: crate::active_bar::SelectionFilter,
     enabled: bool,
-    hover_bg: Color,
-    border_c: Color,
 ) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     iced::widget::button(
-        chip_label(label.to_string(), enabled, text_on, text_off)
-            .align_x(iced::alignment::Horizontal::Center),
+        chip_label(label.to_string(), enabled).align_x(iced::alignment::Horizontal::Center),
     )
     .padding([3.0, SP.m])
     .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
     .style(move |theme: &Theme, status: iced::widget::button::Status| {
-        if let Some(style) = graphite_filter_chip(
+        graphite_filter_chip(
             theme,
             enabled,
             matches!(status, iced::widget::button::Status::Hovered),
-        ) {
-            return style;
-        }
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
-            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-                ..Default::default()
-            },
-            text_color: if enabled { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
+        )
+        .unwrap_or_default()
     })
     .boxed()
 }
@@ -936,10 +745,6 @@ pub(crate) fn seg_text(
 }
 
 /// Segmented button (for units toggle etc).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a general-properties row builder whose parameters are all independent"
-)]
 pub fn seg_btn<'a>(
     label: &str,
     active: bool,
@@ -947,14 +752,7 @@ pub fn seg_btn<'a>(
     active_bg: Color,
     text_active: Color,
     text_inactive: Color,
-    hover_bg: Color,
-    seg_border: Color,
 ) -> Element<'a, PanelMsg> {
-    let bg = if active {
-        active_bg
-    } else {
-        Color::TRANSPARENT
-    };
     let text_c = seg_text(active, text_active, text_inactive, active_bg);
     iced::widget::button(
         text(label.to_string())
@@ -967,23 +765,7 @@ pub fn seg_btn<'a>(
     .on_press(msg)
     .style(move |theme: &Theme, status: iced::widget::button::Status| {
         let hovered = matches!(status, iced::widget::button::Status::Hovered);
-        if let Some(style) = form_look::segment_cell(theme, active, hovered && !active) {
-            return style;
-        }
-        iced::widget::button::Style {
-            background: Some(Background::Color(if hovered && !active {
-                hover_bg
-            } else {
-                bg
-            })),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: seg_border,
-                ..Default::default()
-            },
-            ..iced::widget::button::Style::default()
-        }
+        form_look::segment_cell(theme, active, hovered && !active).unwrap_or_default()
     })
     .boxed()
 }

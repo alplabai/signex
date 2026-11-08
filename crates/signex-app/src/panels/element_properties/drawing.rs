@@ -128,8 +128,6 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     "draw_line",
                     "Properties",
                     &ctx.collapsed_sections,
-                    muted,
-                    border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
@@ -182,8 +180,6 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     "draw_rect",
                     "Properties",
                     &ctx.collapsed_sections,
-                    muted,
-                    border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
@@ -238,8 +234,6 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     "draw_circle",
                     "Properties",
                     &ctx.collapsed_sections,
-                    muted,
-                    border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
@@ -289,8 +283,6 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     "draw_arc",
                     "Properties",
                     &ctx.collapsed_sections,
-                    muted,
-                    border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
@@ -348,8 +340,6 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     "draw_poly",
                     "Properties",
                     &ctx.collapsed_sections,
-                    muted,
-                    border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(prop_kv_row("Vertices", &vert_count.to_string(), muted, ink));

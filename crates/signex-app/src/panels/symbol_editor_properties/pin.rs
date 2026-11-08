@@ -53,8 +53,7 @@ fn view_pin_symbol_picker<'a>(
             value,
         },
     )
-    .padding([SP.xs, SP.s])
-    .text_size(10);
+    .padding([SP.xs, SP.s]);
     container(
         row![
             text(label.to_string())
@@ -159,8 +158,7 @@ pub(super) fn view_pin_selection<'a>(
             PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
         },
     )
-    .padding([SP.xs, SP.s])
-    .text_size(11);
+    .padding([SP.xs, SP.s]);
     let electrical_row: Element<'a, PanelMsg> = container(
         row![
             text("Electrical")
@@ -239,8 +237,7 @@ pub(super) fn view_pin_selection<'a>(
             PanelMsg::SymEditorSetPinOrientation { pin_idx, value }
         },
     )
-    .padding([SP.xs, SP.s])
-    .text_size(11);
+    .padding([SP.xs, SP.s]);
     let orientation_row: Element<'a, PanelMsg> = container(
         row![
             text("Orientation")

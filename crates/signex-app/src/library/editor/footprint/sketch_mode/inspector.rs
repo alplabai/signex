@@ -280,7 +280,6 @@ fn view_role<'a>(
             path: path.clone(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetRole { id, role: new_role }),
         })
-        .text_size(TS.body)
         .padding([SP.s, SP.m])
         .width(Length::Fill);
 

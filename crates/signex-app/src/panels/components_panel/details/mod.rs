@@ -12,7 +12,7 @@ pub(crate) mod symbol_canvas;
 #[path = "pan_app_tests.rs"]
 mod pan_app_tests;
 
-use iced::widget::{Column, Space, column, container, pick_list, row, scrollable, text};
+use iced::widget::{Column, Space, column, container, pick_list, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
@@ -22,7 +22,7 @@ use signex_types::schematic::LibSymbol;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::{HINT_TEXT_SIZE, PANEL_TEXT_SIZE, ROW_TEXT_SIZE, SECTION_HEADER_TEXT_SIZE, SP};
+use super::{HINT_TEXT_SIZE, ROW_TEXT_SIZE, SP};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsPanelRowKey, ComponentsPanelState};
 
@@ -199,21 +199,11 @@ pub(crate) fn view<'a>(
     grid: symbol_canvas::SheetGrid,
     device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
-    let is_graphite = crate::styles::is_graphite(tokens);
-    let muted = if is_graphite {
-        crate::styles::tokens::resolve(tokens).ink4
-    } else {
-        theme_ext::text_secondary(tokens)
-    };
-    let primary = theme_ext::text_primary(tokens);
+    let muted = crate::styles::tokens::resolve(tokens).ink4;
 
     let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
         container(text(message).size(HINT_TEXT_SIZE).color(color))
-            .padding(if is_graphite {
-                [SP.s, 10.0]
-            } else {
-                [SP.l, SP.m]
-            })
+            .padding([SP.s, 10.0])
             .width(Length::Fill)
             .boxed()
     };
@@ -242,18 +232,8 @@ pub(crate) fn view<'a>(
         ("", p) => p.to_owned(),
         (m, p) => format!("{m} — {p}"),
     };
-    if is_graphite {
-        col = col.push(graphite::header_card(d, maker, tokens));
-    } else {
-        col = legacy_header(col, d, maker, primary, muted);
-    }
-    let title = |label: &'a str| {
-        if is_graphite {
-            graphite::section_label(label, tokens)
-        } else {
-            section_title(label, primary)
-        }
-    };
+    col = col.push(graphite::header_card(d, maker, tokens));
+    let title = |label: &'a str| graphite::section_label(label, tokens);
 
     col = col.push(title("Symbol"));
     col = col.push(match &d.symbol {
@@ -291,7 +271,6 @@ pub(crate) fn view<'a>(
             .on_select(|choice: FootprintChoice| {
                 LibraryMessage::ComponentsPanelFootprintPicked(choice.reference)
             })
-            .text_size(ROW_TEXT_SIZE)
             .width(Length::Fill)
             .boxed(),
         );
@@ -334,83 +313,14 @@ pub(crate) fn view<'a>(
         );
     }
     for (name, value) in &d.parameters {
-        if is_graphite {
-            col = col.push(graphite::parameter_row(name, value, tokens));
-            continue;
-        }
-        col = col.push(
-            row![
-                text(name.as_str())
-                    .size(ROW_TEXT_SIZE)
-                    .color(muted)
-                    .width(Length::FillPortion(2))
-                    .wrapping(iced::widget::text::Wrapping::None),
-                text(value.as_str())
-                    .size(ROW_TEXT_SIZE)
-                    .color(primary)
-                    .width(Length::FillPortion(3)),
-            ]
-            .spacing(SP.s)
-            .boxed(),
-        );
+        col = col.push(graphite::parameter_row(name, value, tokens));
     }
     col = col.push(Space::new().height(SP.m).boxed());
 
-    scrollable(
-        container(col)
-            .padding(if is_graphite {
-                [SP.s, 10.0]
-            } else {
-                [SP.s, SP.m]
-            })
-            .width(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(crate::panels::form_look::scrollbar_style)
-    .boxed()
-}
-
-/// The legacy header lines: part number, class and lifecycle, maker and
-/// description.
-fn legacy_header<'a>(
-    mut col: Column<Element<'a, LibraryMessage>>,
-    d: &'a ComponentDetails,
-    maker: String,
-    primary: Color,
-    muted: Color,
-) -> Column<Element<'a, LibraryMessage>> {
-    col = col.push(
-        text(d.internal_pn.as_str())
-            .size(SECTION_HEADER_TEXT_SIZE)
-            .color(primary)
-            .boxed(),
-    );
-    let mut facts = vec![d.class.as_str(), d.lifecycle.as_str()];
-    facts.retain(|f| !f.is_empty());
-    col = col.push(
-        text(facts.join("  ·  "))
-            .size(HINT_TEXT_SIZE)
-            .color(muted)
-            .boxed(),
-    );
-    if !maker.is_empty() {
-        col = col.push(text(maker).size(ROW_TEXT_SIZE).color(primary).boxed());
-    }
-    if !d.description.trim().is_empty() {
-        col = col.push(
-            text(d.description.as_str())
-                .size(HINT_TEXT_SIZE)
-                .color(muted)
-                .boxed(),
-        );
-    }
-    col
-}
-
-fn section_title<'a>(label: &'a str, color: Color) -> Element<'a, LibraryMessage> {
-    container(text(label).size(PANEL_TEXT_SIZE).color(color))
-        .padding([SP.s, 0.0])
+    scrollable(container(col).padding([SP.s, 10.0]).width(Length::Fill))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(crate::panels::form_look::scrollbar_style)
         .boxed()
 }
 
@@ -424,11 +334,7 @@ fn preview_box<'a>(
 ) -> Element<'a, LibraryMessage> {
     let bg = crate::styles::ti(tokens.panel_bg);
     let border_c = theme_ext::border_color(tokens);
-    let radius = if crate::styles::is_graphite(tokens) {
-        crate::styles::Radii::GRAPHITE.control
-    } else {
-        SP.xs
-    };
+    let radius = crate::styles::Radii::GRAPHITE.control;
     container(inner)
         .width(Length::Fill)
         // Inset by the border so a preview's own fill leaves the stroke and

@@ -364,7 +364,7 @@ fn unit_cell<'a>(
             let address = address.clone();
             let name = name.to_string();
             let allow_none = selected.is_none();
-            unit_picker(selected, allow_none, TS.body, move |unit| {
+            unit_picker(selected, allow_none, move |unit| {
                 editor_event(
                     &address,
                     EditorMsg::ParamUnitPicked {
