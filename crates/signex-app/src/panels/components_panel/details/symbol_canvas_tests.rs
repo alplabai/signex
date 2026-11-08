@@ -319,14 +319,15 @@ fn over(event: iced::Event, state: &mut PreviewState, p: &SymbolSheetPreview) ->
 fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
     let p = program(body_symbol(), DOTS);
     let mut state = shown(&p);
-    let scroll = Vector::new(0.0, 200.0);
-    let window_at = iced::Point::new(100.0, 80.0);
+    // Window positions; the cursor (content space) is inside the box.
+    let scroll = Vector::new(0.0, 60.0);
+    let window_at = iced::Point::new(100.0, 20.0);
     let press = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
     let cursor = |at: iced::Point| mouse::Cursor::Available(at + scroll);
     let pressed = canvas::Program::<()>::update(&p, &mut state, &press, BOX, cursor(window_at));
     assert!(pressed.is_some(), "the press starts a pan");
     let before = state.camera.offset;
-    for (step, to) in [(130.0, 80.0), (150.0, 95.0)].into_iter().enumerate() {
+    for (step, to) in [(130.0, 20.0), (150.0, 35.0)].into_iter().enumerate() {
         let to = iced::Point::new(to.0, to.1);
         let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: to });
         let _ = canvas::Program::<()>::update(&p, &mut state, &moved, BOX, cursor(to));
@@ -337,7 +338,7 @@ fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
         );
     }
     // Over a scrollbar or a layer above, the obstructed cursor still drags.
-    let to = iced::Point::new(160.0, 100.0);
+    let to = iced::Point::new(160.0, 40.0);
     let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: to });
     let _ = canvas::Program::<()>::update(&p, &mut state, &moved, BOX, cursor(to).obstruct());
     assert_eq!(state.camera.offset, before + (to - window_at));

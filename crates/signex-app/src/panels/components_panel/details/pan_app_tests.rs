@@ -200,8 +200,49 @@ fn label_in(live: &mut Live, title: &str, area: Rectangle) -> Rectangle {
             text.eq_ignore_ascii_case(title) && bounds.x >= area.x && bounds.x < area.x + area.width
         })
         .max_by(|a, b| a.1.y.total_cmp(&b.1.y))
-        .unwrap_or_else(|| panic!("no {title:?} text in {area:?}"))
+        .unwrap_or_else(|| {
+            let lower = title.to_lowercase();
+            let near: Vec<&(String, Rectangle)> = found
+                .texts
+                .iter()
+                .filter(|(text, _)| text.to_lowercase().contains(&lower))
+                .collect();
+            panic!("no {title:?} text in {area:?}; texts like it: {near:?}")
+        })
         .1
+}
+
+/// Bounds and scroll offset of every scrollable of the live tree.
+fn scrollables(live: &mut Live) -> Vec<(Rectangle, iced::Vector)> {
+    #[derive(Default)]
+    struct Found(Vec<(Rectangle, iced::Vector)>);
+    impl iced::advanced::widget::Operation for Found {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation),
+        ) {
+            operate(self);
+        }
+
+        fn scrollable(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            bounds: Rectangle,
+            _content: Size,
+            translation: iced::Vector,
+            _state: &mut dyn iced::advanced::widget::operation::Scrollable,
+        ) {
+            self.0.push((bounds, translation));
+        }
+    }
+    let window = live.app.ui_state.main_window_id.expect("main window");
+    let mut renderer = crate::layout_probe::headless_renderer();
+    let cache = std::mem::take(&mut live.cache);
+    let mut ui = UserInterface::build(live.app.view(window), WINDOW, cache, &mut renderer);
+    let mut found = Found::default();
+    ui.operate(&renderer, &mut found);
+    live.cache = ui.into_cache();
+    found.0
 }
 
 fn drive(app: &mut Live, events: &[(Event, Point)]) -> Vec<mouse::Interaction> {
@@ -473,12 +514,24 @@ fn the_previews_pan_one_to_one_in_a_scrolled_details_pane() {
     for theme in THEMES {
         for title in ["Symbol", "Footprint"] {
             let (mut live, _) = start(theme, PanelPosition::Right);
-            live.app.library.components_panel.list_height = 760.0;
             let right = region(&live.app, PanelPosition::Right);
-            let label = label_in(&mut live, "Symbol", right);
-            let over = Point::new(label.x + 4.0, label.y + label.height / 2.0);
+            // The details pane is the lowest scrollable of the dock; give the
+            // list all but 220 px of its height so the details must scroll.
+            let details = |live: &mut Live| {
+                scrollables(live)
+                    .into_iter()
+                    .filter(|(b, _)| b.x >= right.x)
+                    .max_by(|a, b| a.0.y.total_cmp(&b.0.y))
+                    .expect("the details pane")
+            };
+            let (pane, _) = details(&mut live);
+            live.app.library.components_panel.list_height += pane.height - 220.0;
+            let (pane, _) = details(&mut live);
+            let over = Point::new(pane.x + 6.0, pane.y + pane.height / 2.0);
+            // Far enough to bring the preview under test into the short pane.
+            let by = if title == "Symbol" { 90.0 } else { 300.0 };
             let wheel = Event::Mouse(mouse::Event::WheelScrolled {
-                delta: mouse::ScrollDelta::Pixels { x: 0.0, y: -90.0 },
+                delta: mouse::ScrollDelta::Pixels { x: 0.0, y: -by },
             });
             // Frames long after the wheel settle the smooth scroll.
             let later = |ms: u64| {
@@ -498,12 +551,10 @@ fn the_previews_pan_one_to_one_in_a_scrolled_details_pane() {
                     later(4_000),
                 ],
             );
-            let scrolled = label_in(&mut live, "Symbol", right);
+            let (_, scroll) = details(&mut live);
             assert!(
-                scrolled.y < label.y - 20.0,
-                "{theme:?}: the details pane scrolled ({} -> {})",
-                label.y,
-                scrolled.y
+                scroll.y > 40.0,
+                "{theme:?}: the details pane scrolled by {scroll:?} in {pane:?}"
             );
             let label = label_in(&mut live, title, right);
             let at = preview_point(&mut live, label);

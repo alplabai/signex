@@ -549,14 +549,15 @@ fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
     let model = preview_of(&fixture());
     let mut state = show(&model);
     let program = FootprintPreview::new(&model);
-    let scroll = iced::Vector::new(0.0, 200.0);
+    // Window positions; the cursor (content space) is inside the box.
+    let scroll = iced::Vector::new(0.0, 60.0);
     let cursor = |at: Point| mouse::Cursor::Available(at + scroll);
-    let window_at = Point::new(100.0, 80.0);
+    let window_at = Point::new(100.0, 20.0);
     let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
     let pressed = Program::<()>::update(&program, &mut state, &press, BOX, cursor(window_at));
     assert!(pressed.is_some(), "the press starts a pan");
     let before = state.offset();
-    for to in [Point::new(130.0, 80.0), Point::new(150.0, 95.0)] {
+    for to in [Point::new(130.0, 20.0), Point::new(150.0, 35.0)] {
         let moved = Event::Mouse(mouse::Event::CursorMoved { position: to });
         let _ = Program::<()>::update(&program, &mut state, &moved, BOX, cursor(to));
         assert_eq!(state.offset(), before + (to - window_at), "to {to:?}");
