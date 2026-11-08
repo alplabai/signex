@@ -27,6 +27,11 @@ fn putting_both_corpus_pads_on_one_net_draws_the_unrouted_link() {
     let mut board = corpus_board("routed_board.snxpcb");
     let pads = &mut board.footprints[0].pads;
     pads[1].net = pads[0].net.clone();
+    // 1 mm wide pads at 1 mm pitch touch, which is copper joined; narrow
+    // them so the two stand apart.
+    for pad in pads.iter_mut() {
+        pad.size.x = 0.5;
+    }
     // Footprint at (50, 25) mm, pads local (50.5, 25) and (51.5, 25); the
     // tracks are at y = 200 mm.
     assert_eq!(

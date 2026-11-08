@@ -39,6 +39,36 @@ impl Shape {
         }
     }
 
+    /// Whether the shape shares a point with the simple polygon `poly`
+    /// (corners in order, either winding, convex or not); touching counts.
+    /// A polygon with fewer than 3 corners holds nothing. The shape is a
+    /// stadium or a convex polygon, so it meets `poly` exactly when an edge
+    /// of `poly` reaches it, or it lies wholly inside `poly`, or `poly` lies
+    /// wholly inside it. Integer nm; no floats beyond `outline`'s ellipse.
+    pub fn overlaps_polygon(&self, poly: &[PointNm]) -> bool {
+        if poly.len() < 3 {
+            return false;
+        }
+        let edges = (0..poly.len()).map(|i| (poly[i], poly[(i + 1) % poly.len()]));
+        match self.core() {
+            Core::Stadium { a, b, radius } => {
+                point_in_polygon(poly, a)
+                    || edges
+                        .into_iter()
+                        .any(|(c, d)| segment_gap_within(a, b, c, d, radius.max(0)))
+            }
+            Core::Polygon(own) => {
+                own.len() >= 3
+                    && (own.iter().any(|&p| point_in_polygon(poly, p))
+                        || inside_convex(&own, poly[0])
+                        || edges.into_iter().any(|(c, d)| {
+                            (0..own.len())
+                                .any(|i| segments_intersect(own[i], own[(i + 1) % own.len()], c, d))
+                        }))
+            }
+        }
+    }
+
     fn core(&self) -> Core {
         match *self {
             Shape::Disc { center, radius } => Core::Stadium {
@@ -72,6 +102,26 @@ fn stadium_meets_polygon(a: PointNm, b: PointNm, radius: i64, poly: &[PointNm]) 
     }
     let radius = radius.max(0);
     (0..poly.len()).any(|i| segment_gap_within(a, b, poly[i], poly[(i + 1) % poly.len()], radius))
+}
+
+/// Whether `p` lies in or on a simple polygon (even-odd crossing count).
+fn point_in_polygon(poly: &[PointNm], p: PointNm) -> bool {
+    let mut inside = false;
+    for i in 0..poly.len() {
+        let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
+        if orientation(a, b, p) == 0 && crate::rect::RectNm::new(a, b).contains_point(p) {
+            return true;
+        }
+        if (a.y > p.y) != (b.y > p.y) {
+            // The edge crosses the ray from p towards +x when p is left of
+            // it: sign of the turn, flipped for a downward edge.
+            let left = orientation(a, b, p) > 0;
+            if left == (b.y > a.y) {
+                inside = !inside;
+            }
+        }
+    }
+    inside
 }
 
 /// Whether `p` lies in (or on) a convex polygon of either winding.

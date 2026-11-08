@@ -1,7 +1,8 @@
 //! The ratsnest: the shortest unrouted connections that would join a
 //! net's pads (#2192).
 //!
-//! Copper that already touches (a track across a pad, a via on a track)
+//! Copper that already touches (a track across a pad, a via on a track,
+//! two tracks crossing, anything on a same-net zone's outline)
 //! forms an island. Per net, the islands that hold pads are joined by a
 //! minimum spanning forest. The answer is a pure function of the board and
 //! is the same on every run: integer nm throughout, sorted output.
@@ -14,6 +15,7 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::index::{BoardIndex, ItemRef, RectSelect, track_shape, via_shape};
 use crate::mst::{Edge, euclidean_mst, spanning_forest};
+use crate::rect::RectNm;
 use crate::shape::Shape;
 use crate::transform::{Side, pad_shape, pad_world_center};
 use crate::union_find::UnionFind;
@@ -56,7 +58,8 @@ pub fn ratsnest(board: &PcbBoard) -> Vec<RatLine> {
     let index = BoardIndex::build(board);
     let slot: HashMap<ItemRef, usize> =
         nodes.iter().enumerate().map(|(i, n)| (n.item, i)).collect();
-    let mut islands = UnionFind::new(nodes.len());
+    let zones = collect_zones(board);
+    let mut islands = UnionFind::new(nodes.len() + zones.len());
     for (i, node) in nodes.iter().enumerate() {
         for hit in index.hit_rect(&node.shape.aabb(), RectSelect::Touching) {
             let Some(&j) = slot.get(&hit) else { continue };
@@ -66,6 +69,22 @@ pub fn ratsnest(board: &PcbBoard) -> Vec<RatLine> {
                 && node.shape.overlaps(&other.shape)
             {
                 islands.union(i, j);
+            }
+        }
+    }
+    // A zone joins every same-net item it overlaps on a shared layer; the
+    // zones are nodes after the items and hold no pad.
+    for (z, zone) in zones.iter().enumerate() {
+        let rect = RectNm::bounding(zone.outline.iter().copied());
+        let hits = rect.map(|r| index.hit_rect(&r, RectSelect::Touching));
+        for hit in hits.into_iter().flatten() {
+            let Some(&j) = slot.get(&hit) else { continue };
+            let other = &nodes[j];
+            if other.net == zone.net
+                && other.layers & zone.layers != 0
+                && other.shape.overlaps_polygon(&zone.outline)
+            {
+                islands.union(nodes.len() + z, j);
             }
         }
     }
@@ -151,6 +170,41 @@ fn representative(pads: &[PointNm]) -> PointNm {
         .copied()
         .min_by_key(|p| (off(p), *p))
         .unwrap_or(PointNm::ORIGIN)
+}
+
+/// A zone's copper: its OUTLINE polygon, since the model stores no filled
+/// polygon (the fill is not computed or saved). Holes and the clearance
+/// the fill keeps from other nets are ignored, so a pad in a hole or a
+/// pad the fill would isolate still counts as joined.
+struct ZoneCopper {
+    net: u32,
+    layers: u32,
+    outline: Vec<PointNm>,
+}
+
+fn collect_zones(board: &PcbBoard) -> Vec<ZoneCopper> {
+    board
+        .zones
+        .iter()
+        .filter_map(|zone| {
+            let layers = layer_mask(std::iter::once(zone.layer.as_str()));
+            let outline: Result<Vec<PointNm>, _> = zone
+                .outline
+                .iter()
+                .map(|&p| PointNm::from_mm(p, "zone.outline"))
+                .collect();
+            match outline {
+                Ok(outline) if zone.net != 0 && layers != 0 && outline.len() >= 3 => {
+                    Some(ZoneCopper {
+                        net: zone.net,
+                        layers,
+                        outline,
+                    })
+                }
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 fn collect_nodes(board: &PcbBoard) -> Vec<Node> {

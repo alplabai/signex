@@ -29,11 +29,25 @@ crate would be the "kept in step" pair ADR-0005 bans.
   closest pads (Kruskal, `spanning_forest`); beyond that each island is one
   representative pad and the join is `euclidean_mst`.
 - Net 0 is no net. Pads with no net are ignored.
-- Not modelled: zone fills (a pad inside a same-net pour still gets a
-  line); drill holes (a through-hole pad is solid copper, so a track
-  through its hole counts as touching); and the clearance a track needs
-  to a pad of another net (that is DRC). Two tracks that cross, or a track
-  that crosses a via, do join: they are copper overlapping copper.
+- Crossing tracks: two same-net tracks on a shared copper layer join
+  when their capsules (centre segment plus half the width) overlap, so a
+  cross mid-segment counts with no end on the other. Parallel tracks join
+  only when the edges touch; a 1 nm gap does not.
+- Zones: a same-net zone is copper on its one layer. A pad, track or via
+  joins it when its shape overlaps the zone polygon (touching counts), and
+  everything that joins one zone is one island. The polygon is the zone's
+  OUTLINE, because the model stores no filled polygon (the fill is not
+  computed or saved); it may be concave. The test is integer nm
+  (`Shape::overlaps_polygon`); the only float is the 32-point ellipse
+  outline above. A via joins a zone on any copper layer of its span that
+  the zone is on; a through pad or via reaches every layer.
+- Not modelled: the zone fill itself, so zone holes and the clearance the
+  fill keeps from other nets are ignored (a pad inside a hole, or one the
+  real fill would leave isolated, still counts as joined); two overlapping
+  same-net zones with nothing else in common are not joined to each other;
+  drill holes (a through-hole pad is solid copper, so a track through its
+  hole counts as touching); and the clearance a track needs to a pad of
+  another net (that is DRC).
 
 ## Cost
 

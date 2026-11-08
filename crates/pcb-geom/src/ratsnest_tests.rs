@@ -423,3 +423,222 @@ fn pads_that_stop_short_of_touching_stay_apart() {
     );
     assert_eq!(ratsnest(&board(vec![fp], vec![], vec![])).len(), 1);
 }
+
+// ---- crossing tracks and zones (#2200) ------------------------------------
+
+fn zone(net: u32, layer: &str, rect: (f64, f64, f64, f64)) -> signex_types::pcb::Zone {
+    let (x0, y0, x1, y1) = rect;
+    signex_types::pcb::Zone {
+        uuid: id(4000 + u128::from(net)),
+        net,
+        net_name: format!("N{net}"),
+        layer: layer.into(),
+        outline: vec![
+            Point::new(x0, y0),
+            Point::new(x1, y0),
+            Point::new(x1, y1),
+            Point::new(x0, y1),
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    }
+}
+
+/// Two 1 mm pads, (0,0) and (20,0), net 1, plus the extra copper.
+fn two_pads_with(
+    segments: Vec<Segment>,
+    vias: Vec<Via>,
+    zones: Vec<signex_types::pcb::Zone>,
+) -> PcbBoard {
+    let fp = footprint(
+        1,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 20.0, 0.0, 1, "TopCopper"),
+        ],
+    );
+    let mut b = board(vec![fp], segments, vias);
+    b.zones = zones;
+    b
+}
+
+fn apart() -> Vec<RatLine> {
+    vec![line(1, at(0, 0), at(20, 0))]
+}
+
+#[test]
+fn tracks_that_cross_mid_segment_are_one_island() {
+    // 0,0 -> 10,10 and 20,0 -> 10,10 would meet at an end; instead cross:
+    // A: (0,0)-(12,12) from pad 1; B: (20,0)-(8,12) from pad 2. They cross
+    // at (10,10)... neither end lies on the other.
+    let b = two_pads_with(
+        vec![
+            track(1, (0.0, 0.0), (12.0, 12.0), 1, "TopCopper"),
+            track(2, (20.0, 0.0), (8.0, 12.0), 1, "TopCopper"),
+        ],
+        vec![],
+        vec![],
+    );
+    assert!(ratsnest(&b).is_empty());
+}
+
+#[test]
+fn parallel_tracks_with_a_one_nm_gap_do_not_join() {
+    // Width 0.25: edges are 0.125 mm out. Centres 0.25 mm + 1 nm apart
+    // leave a 1 nm gap; 0.25 mm apart exactly touch.
+    let gap = |dy: f64| {
+        two_pads_with(
+            vec![
+                track(1, (0.0, 5.0), (10.0, 5.0), 1, "TopCopper"),
+                track(2, (0.0, 5.0 + dy), (10.0, 5.0 + dy), 1, "TopCopper"),
+                // Tie each pad to its own track so the pads' islands are
+                // decided by whether the two tracks join.
+                track(3, (0.0, 0.0), (0.0, 5.0), 1, "TopCopper"),
+                track(4, (20.0, 0.0), (20.0, 5.0 + dy), 1, "TopCopper"),
+                track(5, (10.0, 5.0 + dy), (20.0, 5.0 + dy), 1, "TopCopper"),
+            ],
+            vec![],
+            vec![],
+        )
+    };
+    assert!(ratsnest(&gap(0.25)).is_empty());
+    assert_eq!(ratsnest(&gap(0.250_001)), apart());
+}
+
+#[test]
+fn crossing_tracks_on_other_layers_or_nets_do_not_join() {
+    let crossing = |layer_b: &str, net_b: u32| {
+        two_pads_with(
+            vec![
+                track(1, (0.0, 0.0), (12.0, 12.0), 1, "TopCopper"),
+                track(2, (20.0, 0.0), (8.0, 12.0), net_b, layer_b),
+            ],
+            vec![],
+            vec![],
+        )
+    };
+    assert_eq!(ratsnest(&crossing("BottomCopper", 1)), apart());
+    assert_eq!(ratsnest(&crossing("TopCopper", 2)), apart());
+}
+
+#[test]
+fn a_zone_joins_the_pads_it_covers() {
+    // Pad 1 at 0,0 and pad 2 at 20,0 both sit in one zone.
+    let b = two_pads_with(
+        vec![],
+        vec![],
+        vec![zone(1, "TopCopper", (-2.0, -2.0, 22.0, 2.0))],
+    );
+    assert!(ratsnest(&b).is_empty());
+}
+
+#[test]
+fn a_zone_edge_one_nm_short_of_a_pad_does_not_join_it() {
+    // Pad 2 spans x 19.5..20.5. The zone ends at 19.5 (touching) or
+    // 19.499999 (1 nm short).
+    let end = |x1: f64| {
+        two_pads_with(
+            vec![],
+            vec![],
+            vec![zone(1, "TopCopper", (-2.0, -2.0, x1, 2.0))],
+        )
+    };
+    assert!(ratsnest(&end(19.5)).is_empty());
+    assert_eq!(ratsnest(&end(19.499_999)), apart());
+}
+
+#[test]
+fn a_zone_on_another_layer_or_net_joins_nothing() {
+    let r = (-2.0, -2.0, 22.0, 2.0);
+    assert_eq!(
+        ratsnest(&two_pads_with(
+            vec![],
+            vec![],
+            vec![zone(1, "BottomCopper", r)]
+        )),
+        apart()
+    );
+    assert_eq!(
+        ratsnest(&two_pads_with(
+            vec![],
+            vec![],
+            vec![zone(2, "TopCopper", r)]
+        )),
+        apart()
+    );
+}
+
+#[test]
+fn a_track_or_a_via_on_a_zone_joins_through_it() {
+    // Pad 1 -> track into the zone; pad 2 -> track into the zone. The
+    // zone sits between, touching neither pad.
+    let z = zone(1, "TopCopper", (8.0, -2.0, 12.0, 2.0));
+    let tracks = vec![
+        track(1, (0.0, 0.0), (9.0, 0.0), 1, "TopCopper"),
+        track(2, (20.0, 0.0), (11.0, 0.0), 1, "TopCopper"),
+    ];
+    assert!(ratsnest(&two_pads_with(tracks.clone(), vec![], vec![z.clone()])).is_empty());
+    // Without the zone the two tracks leave a gap.
+    assert_eq!(
+        ratsnest(&two_pads_with(tracks, vec![], vec![])),
+        vec![line(1, at(0, 0), at(20, 0))]
+    );
+}
+
+#[test]
+fn a_via_joins_a_zone_on_a_layer_it_spans_but_not_one_it_does_not() {
+    // Pad 1 (top) -> track -> via at 1,0 (through); pad 2 is on the
+    // bottom and sits on a bottom zone that the via lands in.
+    let top = footprint(1, "TopCopper", vec![pad(1, 0.0, 0.0, 1, "TopCopper")]);
+    let bottom = footprint(2, "BottomCopper", vec![pad(2, 0.0, 8.0, 1, "BottomCopper")]);
+    let mut b = board(
+        vec![top, bottom],
+        vec![track(1, (0.0, 0.0), (1.0, 0.0), 1, "TopCopper")],
+        vec![via(1, (1.0, 0.0), 1)],
+    );
+    b.zones = vec![zone(1, "BottomCopper", (-2.0, -2.0, 2.0, 10.0))];
+    assert!(ratsnest(&b).is_empty());
+    // A blind via spanning only the top layer does not reach the bottom zone.
+    b.vias[0].via_type = ViaType::Blind;
+    b.vias[0].layers = vec!["TopCopper".into()];
+    assert_eq!(ratsnest(&b), vec![line(1, at(0, 0), at(0, 8))]);
+}
+
+#[test]
+fn a_concave_zone_joins_only_where_it_has_copper() {
+    // A U: arms x -2..2 and x 18..22 up from a base y 4..6; pads at y=0 sit
+    // in the arms; the notch (x 2..18, y -2..4) is empty.
+    let mut z = zone(1, "TopCopper", (0.0, 0.0, 0.0, 0.0));
+    let pts = [
+        (-2.0, -2.0),
+        (2.0, -2.0),
+        (2.0, 4.0),
+        (18.0, 4.0),
+        (18.0, -2.0),
+        (22.0, -2.0),
+        (22.0, 6.0),
+        (-2.0, 6.0),
+    ];
+    z.outline = pts.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    assert!(ratsnest(&two_pads_with(vec![], vec![], vec![z.clone()])).is_empty());
+    // A pad in the notch is not on the zone.
+    let fp = footprint(
+        1,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 10.0, 0.0, 1, "TopCopper"),
+        ],
+    );
+    let mut b = board(vec![fp], vec![], vec![]);
+    b.zones = vec![z];
+    assert_eq!(ratsnest(&b), vec![line(1, at(0, 0), at(10, 0))]);
+}
