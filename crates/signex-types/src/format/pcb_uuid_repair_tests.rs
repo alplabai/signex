@@ -85,11 +85,13 @@ fn pad(n: u128, number: &str) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        net_locked: false,
     }
 }
 
 fn footprint(n: u128, reference: &str, pads: Vec<Pad>) -> Footprint {
     Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: id(n),

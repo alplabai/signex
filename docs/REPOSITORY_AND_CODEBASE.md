@@ -24,13 +24,14 @@ This repository contains the Signex desktop editor codebase.
 The repository exists to build one product family from one shared foundation:
 
 - **Signex Community** — the open desktop EDA editor
-- **Signex Pro** — the commercial edition that adds Signal AI and live
-  collaboration
+- **Signex Pro** — the commercial edition that adds hosted Signex AI and the
+  Generator (Team adds collaboration; Enterprise adds SSO, a self-hosted AI
+  gateway and data agreements)
 
 The core rule is simple:
 
-**There is one editor core and one primary codebase. Community and Pro are not
-separate products implemented in separate repositories.**
+**There is one editor core, and it lives here. Pro is built from a separate
+private workspace that depends on this core; it is not a fork of it.**
 
 This matters for three reasons:
 
@@ -92,9 +93,12 @@ services for normal editing workflows.
 Signex Pro is built on top of the same core and adds capabilities that require
 commercial infrastructure or proprietary integration, especially:
 
-- Signal AI
-- Live collaboration
-- Team-oriented cloud workflows
+- Signex AI and the Generator, run through Signex's hosted service (Pro)
+- Live collaboration (Team)
+- SSO, a self-hosted AI gateway and data agreements (Enterprise)
+
+The plugin system and the headless CLI are Community, not Pro. Customer
+designs are never used for AI training unless the customer opts in.
 
 Pro-specific integrations should remain separable from the editor core so that:
 
@@ -134,6 +138,7 @@ signex/
 │   ├── signex-output/              # PDF / netlist / BOM export (+ signex-bom)
 │   ├── signex-renderer/            # domain types → render primitives (+ signex-gfx)
 │   ├── signex-library/             # .snxlib library model (+ signex-library-server)
+│   ├── pcb-geom/                   # integer-nm board geometry: R-tree, hit-test, MST (reads signex-types)
 │   ├── signex-widgets/             # reusable iced widgets
 │   ├── signex-i18n/                # UI message catalogs and locale-aware formatting
 │   └── signex-3d-model-importer/   # STEP / WRL importer
@@ -329,8 +334,9 @@ The most likely additions are:
 - `signex-sketch` — 2D parametric sketch mode for footprint editor + PCB
   outline (v0.13+; see `docs/internal/SKETCH_MODE_PLAN.md`)
 - `signex-drc` — PCB design rule check engine (PCB Viewer and later)
-- `pcb-geom` — geometry primitives for PCB (polygon offset, R-tree,
-  Delaunay, boolean ops) shared by router, DRC, and render. Added with the PCB Viewer.
+- `pcb-geom` — *(landed, #2174)* integer-nm board geometry: R-tree, hit-test,
+  union-find, spanning tree, pad world transform. Polygon offset, Delaunay and
+  boolean ops are not part of it yet.
 - `pcb-router` — interactive router (walkaround, shove, diff pair,
   tuning, pour). Added with PCB Routing. See `internal/docs/PCB_ROUTER_PLAN.md`.
 

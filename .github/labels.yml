@@ -123,7 +123,7 @@
   description: "Differentiator — drives Pro adoption; ships PCB Routing through Pro Release"
 - name: "tier: p3"
   color: "006b75"
-  description: "Nice to have — stable core required first; after the Pro Release (Signal AI Core onward)"
+  description: "Nice to have — stable core required first; after the Pro Release (Signex AI Core onward)"
 
 # ────────────────────────── priority: ─────────────────────────
 - name: "priority: critical"

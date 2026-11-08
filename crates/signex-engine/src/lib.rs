@@ -20,6 +20,7 @@ mod sheet;
 mod sheet_entry;
 mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
+pub mod pcb;
 mod sheet_placement;
 mod transform;
 
