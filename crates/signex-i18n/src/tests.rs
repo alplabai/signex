@@ -3,7 +3,7 @@ use unic_langid::LanguageIdentifier;
 use crate::bundle::{build_from, render};
 use crate::catalog::{EN_US, EN_XA};
 use crate::locale::negotiate;
-use crate::{Arg, I18n, LanguagePref, MessageId, UserText, ids};
+use crate::{Arg, I18n, LanguagePref, LocalNumber, MessageId, UserText, ids};
 
 const FSI: char = '\u{2068}';
 const PDI: char = '\u{2069}';
@@ -108,7 +108,7 @@ fn the_pseudolocale_transforms_text_and_en_us_is_untouched() {
 #[test]
 fn numbers_follow_the_locale_through_icu() {
     let source = "count = { $n } items\n";
-    let arg = [("n", Arg::from(1_234_567.5_f64))];
+    let arg = [("n", Arg::from(LocalNumber(1_234_567.5)))];
     let us = render(&build_from("en-US", &[source]), "count", &arg)
         .unwrap()
         .text;

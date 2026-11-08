@@ -19,5 +19,8 @@ log = "0.4"
 sys-locale = "0.3"
 unic-langid = "0.9"
 
+[dev-dependencies]
+fluent-syntax = "0.12"
+
 [lints]
 workspace = true

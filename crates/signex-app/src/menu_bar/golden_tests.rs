@@ -381,5 +381,20 @@ fn approx_menu_bar_width_is_unchanged() {
             "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help"
         ]
     );
-    assert_eq!(super::approx_menu_bar_width(), 493.0);
+    assert_eq!(
+        super::approx_menu_bar_width(&signex_i18n::I18n::en_us()),
+        493.0
+    );
+}
+
+/// The estimate counts the title the bar draws: under the pseudolocale the
+/// File title is longer, and the width grows by exactly that many glyphs.
+#[test]
+fn approx_menu_bar_width_follows_the_catalog_titles() {
+    let xa = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+    let en = signex_i18n::I18n::en_us();
+    let drawn = |i18n: &signex_i18n::I18n| super::model::root_titles(i18n)[0].chars().count();
+    assert!(drawn(&xa) > drawn(&en), "en-XA File title is longer");
+    let grown = super::approx_menu_bar_width(&xa) - super::approx_menu_bar_width(&en);
+    assert_eq!(grown, (drawn(&xa) - drawn(&en)) as f32 * 7.5);
 }

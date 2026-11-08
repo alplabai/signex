@@ -8,7 +8,7 @@ use unic_langid::LanguageIdentifier;
 
 use crate::catalog::{self, EN_XA};
 use crate::numbers::format_value;
-use crate::types::Arg;
+use crate::types::{Arg, ArgKind};
 
 pub(crate) type Bundle = FluentBundle<FluentResource>;
 
@@ -54,9 +54,9 @@ pub(crate) fn render(bundle: &Bundle, id: &str, args: &[(&str, Arg)]) -> Option<
     let pattern = bundle.get_message(id)?.value()?;
     let mut fluent_args = FluentArgs::new();
     for (key, arg) in args {
-        let value = match arg {
-            Arg::Text(text) => FluentValue::from(text.clone()),
-            Arg::Number(number) => FluentValue::from(*number),
+        let value = match &arg.0 {
+            ArgKind::Text(text) => FluentValue::from(text.clone()),
+            ArgKind::Number(number) => FluentValue::from(*number),
         };
         fluent_args.set(*key, value);
     }

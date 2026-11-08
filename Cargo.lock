@@ -5593,6 +5593,7 @@ dependencies = [
  "fluent-bundle",
  "fluent-langneg",
  "fluent-pseudo",
+ "fluent-syntax",
  "icu_decimal",
  "icu_locale_core",
  "intl-memoizer",
