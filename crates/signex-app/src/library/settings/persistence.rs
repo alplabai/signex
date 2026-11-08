@@ -238,7 +238,7 @@ mod tests {
     /// fully intact, and reports the failure instead of swallowing it.
     ///
     /// Discriminator: denying new-file creation in the destination's
-    /// parent directory makes `atomic_write`'s `File::create(&tmp)` fail
+    /// parent directory makes `atomic_write`'s temp-file creation fail
     /// before it can touch the destination, regardless of the unique
     /// per-writer temp name it picks (#416). A plain `fs::write` would
     /// ignore that and clobber the old file — so this test fails on a

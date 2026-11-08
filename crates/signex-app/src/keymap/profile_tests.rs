@@ -131,7 +131,7 @@ fn persistence_round_trip_keeps_bundled_profiles_and_active_custom_profile() {
 /// fully intact instead of truncating them.
 ///
 /// Discriminator: denying new-file creation in the destination's parent
-/// directory makes `atomic_write`'s `File::create(&tmp)` fail before it can
+/// directory makes `atomic_write`'s temp-file creation fail before it can
 /// touch the destination, regardless of the unique per-writer temp name it
 /// picks (#416), and the call returns `Err`. A plain `fs::write` would
 /// ignore that and clobber the old file — so this test fails on a revert.
