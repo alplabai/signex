@@ -13,12 +13,11 @@ use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
-use crate::capability::{Capability, capability_of};
+use crate::capability::capability_of;
 use crate::confine::canonical;
 use crate::policy::{Approved, Policy};
 use crate::protocol::{MessageLine, Request, ResultLine, Status};
 use crate::roots::project_root;
-use crate::vcs::check_repo;
 
 /// How much of a command line the audit log keeps.
 const AUDIT_LINE_CHARS: usize = 400;
@@ -169,11 +168,6 @@ impl Session {
         {
             return (Status::Refused, Some(reason), None);
         }
-        if capability_of(approved.meta) == Capability::Save
-            && let Err(reason) = self.check_git(approved.command.as_str())
-        {
-            return (Status::Refused, Some(reason), None);
-        }
         let Some(dialogs) = self.app.headless_answers() else {
             return (Status::Failed, Some("the app is not headless".into()), None);
         };
@@ -189,34 +183,6 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
-    }
-
-    /// A save on a project with git enabled commits. That needs the `vcs`
-    /// capability and a repository that is a real folder of the project, and
-    /// the repository folder is a write target like any other.
-    fn check_git(&self, command: &str) -> Result<(), String> {
-        let mut repos = Vec::new();
-        for project in self
-            .app
-            .document_state
-            .projects
-            .iter()
-            .filter(|project| project.data.enable_git)
-        {
-            if !self.policy.capabilities.contains(&Capability::Vcs) {
-                return Err(format!(
-                    "`{command}` would commit to the git repository of {} (git is enabled for the project); \
-                     pass --allow vcs",
-                    project.path.display()
-                ));
-            }
-            let dir = project
-                .path
-                .parent()
-                .ok_or_else(|| format!("{} has no folder", project.path.display()))?;
-            repos.push(check_repo(dir, &self.roots)?);
-        }
-        self.policy.check_write_targets(&repos, &self.roots)
     }
 
     /// Where a save can land without an operand: the active document, every

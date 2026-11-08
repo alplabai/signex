@@ -12,7 +12,7 @@ pub fn project_root(project_dir: &Path, home: Option<&Path>) -> Result<Vec<PathB
     if home.is_some_and(|home| home.starts_with(project_dir)) {
         return Err(format!(
             "{} is the home folder or one above it, which is too broad to be the project's folder; \
-             move the project into its own folder, or name the folder to allow with --allow-path",
+             move the project into its own folder",
             project_dir.display()
         ));
     }

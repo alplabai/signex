@@ -16,6 +16,5 @@ pub mod protocol;
 mod roots;
 mod run;
 mod session;
-mod vcs;
 
 pub use run::{RunReport, run};

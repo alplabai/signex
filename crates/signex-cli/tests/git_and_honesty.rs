@@ -1,10 +1,12 @@
-//! Git on save, results that must not say `ran` when nothing happened, and the
-//! project folder that may not be home (#1923).
+//! A run never touches git, results that must not say `ran` when nothing
+//! happened, and the project folder that may not be home (#1923).
 
 mod support;
 
+use std::path::Path;
+
 use serde_json::json;
-use support::{enable_git, fixture, jsonl, run_cli, run_cli_env, snapshot, temp_root};
+use support::{Fixture, enable_git, fixture, jsonl, run_cli, run_cli_env, snapshot, temp_root};
 
 fn refusal(out: &support::Output, index: usize) -> &str {
     assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
@@ -19,83 +21,24 @@ fn open_edit_save() -> String {
     ])
 }
 
-#[test]
-fn a_gitdir_file_pointing_outside_is_refused_and_the_outside_repo_is_untouched() {
+/// A git-enabled project whose `.git` is made by `dot_git`, with an outside
+/// repository folder `victim` the `.git` may point at. Runs `--save` and
+/// checks: the sheet is saved inside the project, the outside repository is
+/// byte-equal, nothing was written outside the project, and the Messages log
+/// says the commit was skipped. `after` checks `.git` itself.
+fn save_with_dot_git(dot_git: impl FnOnce(&Fixture, &Path), after: impl FnOnce(&Fixture)) {
     let (_guard, root) = temp_root();
     let fx = fixture(&root);
     enable_git(&fx);
     let (_victim_guard, victim) = temp_root();
-    std::fs::create_dir_all(victim.join(".git")).unwrap();
-    std::fs::write(victim.join(".git").join("HEAD"), "ref: refs/heads/main\n").unwrap();
-    std::fs::write(
-        fx.dir.join(".git"),
-        format!("gitdir: {}\n", victim.join(".git").display()),
-    )
-    .unwrap();
+    let victim_git = victim.join(".git");
+    std::fs::create_dir_all(&victim_git).unwrap();
+    std::fs::write(victim_git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    dot_git(&fx, &victim_git);
     let before = snapshot(&victim);
-    let project = fx.project.to_str().unwrap();
-
-    for allow in [&["--save"][..], &["--save", "--allow", "vcs"][..]] {
-        let mut args = vec!["run", project, "--keep-going"];
-        args.extend_from_slice(allow);
-        let out = run_cli(&args, open_edit_save());
-        let reason = refusal(&out, 2);
-        assert!(
-            reason.contains("pass --allow vcs") || reason.contains("`gitdir:` file"),
-            "{allow:?}: {reason}"
-        );
-        assert_eq!(
-            snapshot(&victim),
-            before,
-            "{allow:?}: the outside repo changed"
-        );
-    }
-    assert!(
-        fx.dir.join(".git").is_file(),
-        "the gitdir file was left alone"
-    );
-}
-
-#[test]
-fn a_save_on_a_git_project_needs_vcs_and_never_runs_git_init() {
-    let (_guard, root) = temp_root();
-    let fx = fixture(&root);
-    enable_git(&fx);
-    let project = fx.project.to_str().unwrap();
-
-    let without = run_cli(
-        &["run", project, "--keep-going", "--save"],
-        open_edit_save(),
-    );
-    assert!(
-        refusal(&without, 2).contains("pass --allow vcs"),
-        "{}",
-        without.stdout
-    );
-    assert!(!fx.dir.join(".git").exists(), "no .git was created");
-
-    let allowed = run_cli(
-        &["run", project, "--keep-going", "--save", "--allow", "vcs"],
-        open_edit_save(),
-    );
-    assert!(
-        refusal(&allowed, 2).contains("has no .git folder"),
-        "{}",
-        allowed.stdout
-    );
-    assert!(!fx.dir.join(".git").exists(), "no .git was created");
-}
-
-#[test]
-fn with_vcs_and_a_real_git_folder_the_commit_happens_inside_the_project_only() {
-    let (_guard, root) = temp_root();
-    let fx = fixture(&root);
-    enable_git(&fx);
-    git2::Repository::init(&fx.dir).expect("init the project's repository");
-    let project = fx.project.to_str().unwrap();
 
     let out = run_cli(
-        &["run", project, "--save", "--allow", "vcs"],
+        &["run", fx.project.to_str().unwrap(), "--save"],
         open_edit_save(),
     );
 
@@ -104,15 +47,68 @@ fn with_vcs_and_a_real_git_folder_the_commit_happens_inside_the_project_only() {
         "{}\n{}",
         out.stdout, out.stderr
     );
-    let repo = git2::Repository::open(&fx.dir).expect("repository");
+    let saved = signex_types::format::SnxSchematic::parse(
+        &std::fs::read_to_string(&fx.sheet).expect("the saved sheet"),
+    )
+    .expect("reads back")
+    .sheet;
+    assert_eq!(saved.junctions.len(), 1, "the document was saved");
+    assert_eq!(snapshot(&victim), before, "the outside repository changed");
     assert!(
-        repo.head().is_ok(),
-        "the save committed inside the project's repository"
+        snapshot(&root)
+            .keys()
+            .all(|path| path.starts_with(&fx.dir) && !path.starts_with(fx.dir.join(".git/objects"))),
+        "something was written outside the project, or git objects were created"
     );
-    assert!(fx.dir.join(".git").is_dir());
-    assert!(
-        snapshot(&root).keys().all(|path| path.starts_with(&fx.dir)),
-        "nothing was written outside the project"
+    let skipped = out.lines[2]["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|m| {
+            m["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("commit skipped in a headless run"))
+        });
+    assert!(skipped, "the Messages line is missing: {}", out.stdout);
+    after(&fx);
+}
+
+#[test]
+fn a_gitdir_file_pointing_outside_is_never_followed() {
+    save_with_dot_git(
+        |fx, victim_git| {
+            std::fs::write(
+                fx.dir.join(".git"),
+                format!("gitdir: {}\n", victim_git.display()),
+            )
+            .unwrap();
+        },
+        |fx| {
+            assert!(
+                fx.dir.join(".git").is_file(),
+                "the gitdir file is as it was"
+            )
+        },
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_git_symlink_pointing_outside_is_never_followed() {
+    save_with_dot_git(
+        |fx, victim_git| std::os::unix::fs::symlink(victim_git, fx.dir.join(".git")).unwrap(),
+        |fx| {
+            let meta = std::fs::symlink_metadata(fx.dir.join(".git")).unwrap();
+            assert!(meta.file_type().is_symlink(), "the link is as it was");
+        },
+    );
+}
+
+#[test]
+fn a_git_project_with_no_git_folder_gets_none_created() {
+    save_with_dot_git(
+        |_fx, _victim| {},
+        |fx| assert!(!fx.dir.join(".git").exists(), "no repository was created"),
     );
 }
 
@@ -135,18 +131,14 @@ fn a_command_whose_only_effect_was_a_dropped_window_is_refused() {
         ],
         commands,
     );
-    let reason = refusal(&out, 1);
-    assert!(
-        reason.contains("needs a window"),
-        "{reason}\n{}",
-        out.stdout
-    );
-    let reason = refusal(&out, 2);
-    assert!(
-        reason.contains("needs a window"),
-        "{reason}\n{}",
-        out.stdout
-    );
+    for index in [1, 2] {
+        let reason = refusal(&out, index);
+        assert!(
+            reason.contains("needs a window"),
+            "{reason}\n{}",
+            out.stdout
+        );
+    }
 }
 
 #[test]

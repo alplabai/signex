@@ -92,16 +92,14 @@ is enforced before the app sees a command.
   a path that did not exist at the check can be created as a link before the
   write. A process of the same user racing symlinks inside the project folder
   is out of scope.
-- **Git.** A save on a project with git enabled makes the app commit. That
-  needs the `vcs` capability (`--allow vcs`; `--save` does not grant it), and
-  `<project>/.git` must be a real folder inside the project: a `gitdir:` file,
-  a link, a `commondir` or an `objects/info/alternates` file is refused, and a
-  missing one is refused too (the app would run `git init`). The `.git` folder
-  is a write target like any other.
+- **No git.** The CLI does not commit to git: a headless run never opens,
+  creates or commits to a repository, whatever `enable_git` says and wherever
+  `.git` points (a `gitdir:` file, a link, config includes). A save logs
+  "commit skipped in a headless run"; commit yourself after the run. Vetted
+  git support is a follow-up.
 - **Capabilities.** Each catalog command needs exactly one group: `read`,
-  `edit`, `save`, `export`, `delete` or `library-write`; `vcs` is held by a
-  run and no command needs it on its own. A run holds `read,edit`; `--allow`
-  adds groups. A refused command names the one it needs. `edit` is any command
+  `edit`, `save`, `export`, `delete` or `library-write`. A run holds
+  `read,edit`; `--allow` adds groups. A refused command names the one it needs. `edit` is any command
   the catalog marks `mutates_doc`; the writers and exporters are pinned by a
   test. `delete` has no command yet: it exists so the first file-removing
   command cannot run unnamed.
