@@ -295,12 +295,18 @@ impl Signex {
 /// would read "out of date" for good, with nothing for Update to move.
 pub(crate) fn referenced_bodies(
     doc: &signex_types::schematic::SchematicSheet,
-) -> Vec<(String, signex_types::schematic::LibSymbol)> {
-    let used: std::collections::HashSet<&str> = doc.symbols.iter().map(|s| s.body_key()).collect();
+) -> Vec<(String, String, signex_types::schematic::LibSymbol)> {
+    // The library symbol is what an instance names, not what the key spells.
+    let mut used: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for s in &doc.symbols {
+        used.entry(s.body_key()).or_insert(&s.lib_id);
+    }
     doc.lib_symbols
         .iter()
-        .filter(|(key, _)| used.contains(key.as_str()))
-        .map(|(key, body)| (key.clone(), body.clone()))
+        .filter_map(|(key, body)| {
+            let lib_id = used.get(key.as_str())?;
+            Some((key.clone(), (*lib_id).to_owned(), body.clone()))
+        })
         .collect()
 }
 

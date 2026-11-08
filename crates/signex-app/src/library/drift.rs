@@ -76,10 +76,10 @@ pub struct DriftReport {
     pub generation: u64,
 }
 
-/// One sheet's embedded entries: `(sheet path, [(body_ref, embedded copy)])`,
+/// One sheet's embedded entries: `(sheet path, [(body_ref, lib_id of an instance drawing with it, embedded copy)])`,
 /// only the bodies some symbol on the sheet draws with.
 /// The copies are cloned on the UI thread and hashed in the worker.
-pub type SheetEntries = (PathBuf, Vec<(String, LibSymbol)>);
+pub type SheetEntries = (PathBuf, Vec<(String, String, LibSymbol)>);
 
 /// One sheet's library-backed parts: `(sheet path, [(lib_id, stamp)])`, to
 /// compare with their rows (#1867).
@@ -122,10 +122,12 @@ pub fn compute_drift(
     let mut removed: HashSet<String> = HashSet::new();
     for (sheet, entries) in sheets {
         let mut drifted = BTreeSet::new();
-        for (body_key, embedded) in entries {
+        for (body_key, instance_lib_id, embedded) in entries {
             // Entries are versions of a library symbol: judge each against
             // the library's current one.
-            let lib_id = &signex_types::schematic::lib_id_of_body_ref(body_key).to_string();
+            // The library symbol is the one an instance names, not what the key
+            // spells: a hand-edited or re-keyed entry may not spell it.
+            let lib_id = instance_lib_id;
             let Some((library_id, symbol_id)) = split_lib_id(lib_id) else {
                 continue;
             };
@@ -945,8 +947,11 @@ mod tests {
     #[test]
     fn an_unopenable_library_is_reported_once_for_all_its_placed_parts() {
         let library = Uuid::now_v7();
-        let entries: Vec<(String, LibSymbol)> = (0..40)
-            .map(|_| (format!("{library}:{}", Uuid::now_v7()), sym("a")))
+        let entries: Vec<(String, String, LibSymbol)> = (0..40)
+            .map(|_| {
+                let id = format!("{library}:{}", Uuid::now_v7());
+                (id.clone(), id, sym("a"))
+            })
             .collect();
         let sheets = vec![(PathBuf::from("/tmp/a.snxsch"), entries)];
         let libs = vec![MountedLibrary {
