@@ -160,13 +160,9 @@ impl LayerPalette {
         }
     }
 
-    /// The palette a theme paints with.
-    pub fn for_tokens(tokens: &signex_types::theme::ThemeTokens) -> Self {
-        if crate::styles::is_graphite(tokens) {
-            Self::Graphite
-        } else {
-            Self::Legacy
-        }
+    /// The palette a theme paints with: every theme is Graphite.
+    pub fn for_tokens(_tokens: &signex_types::theme::ThemeTokens) -> Self {
+        Self::Graphite
     }
 }
 

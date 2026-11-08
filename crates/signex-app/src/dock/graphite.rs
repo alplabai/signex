@@ -1,6 +1,5 @@
 //! Graphite dock chrome: title bar, tab strip, icon buttons, rail and the
-//! floating card. Only called when `styles::is_graphite(tokens)`; the legacy
-//! look stays in `view.rs`.
+//! floating card.
 
 use iced::widget::{button, container};
 use iced::{Background, Border, Color, Font, Shadow, Theme, border, font};
@@ -138,7 +137,7 @@ pub(super) fn rail_tab(
 /// Floating panel: one card (radius 10, hairline, themed shadow).
 pub(super) fn floating_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let (bg, ink, line) = (ti(tokens.panel_bg), ti(tokens.text), ti(tokens.border));
-    let shadow: Shadow = floating_shadow(tokens, Shadow::default());
+    let shadow: Shadow = floating_shadow(tokens);
     move |_| container::Style {
         background: Some(Background::Color(bg)),
         text_color: Some(ink),

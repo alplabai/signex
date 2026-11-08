@@ -79,7 +79,7 @@ pub(super) use properties_parameters::{
     form_edit_row, form_font_link_row, form_grid_row, form_input_row, form_label, form_mm_edit_row,
     form_pick_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
     net_params_tabs, preplacement_justification_grid, props_tab_btn, section_hdr, seg_btn,
-    thin_sep, view_custom_selection_filters_section,
+    thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -131,9 +131,9 @@ pub use symbol_context::{
     SymbolPinSummary,
 };
 pub(super) use widgets::{
-    LabelInk, collapsible_section, collapsible_section_header, form_edit_row_f64,
-    is_section_collapsed, part_tree_row, prop_kv_row, property_label, section_title, separator,
-    shape_fill_row, shape_icon_handle, view_stub,
+    LabelInk, collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
+    prop_kv_row, property_label, section_title, separator, shape_fill_row, shape_icon_handle,
+    view_stub,
 };
 pub use wire_style_rows::{WireColorPicker, wire_color_row, wire_width_row};
 
@@ -289,19 +289,17 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
-        PanelKind::Filter if crate::styles::is_graphite(&ctx.tokens) => empty_state_card(
+        PanelKind::Filter => empty_state_card(
             &ctx.tokens,
             "Selection Filter",
             "All object types enabled",
             None,
         ),
-        PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
-        PanelKind::SignexAi if crate::styles::is_graphite(&ctx.tokens) => {
+        PanelKind::SignexAi => {
             return signal::view(ctx);
         }
-        PanelKind::SignexAi => view_stub("Signex AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),

@@ -318,8 +318,8 @@ fn param_row<'a>(
         None,
         tokens,
     );
-    // Graphite: a row with a problem sits on an `err_soft` wash.
-    if problem.is_none() || !crate::styles::is_graphite(tokens) {
+    // A row with a problem sits on an `err_soft` wash.
+    if problem.is_none() {
         return row;
     }
     let wash = crate::styles::tokens::resolve(tokens).err_soft;

@@ -172,8 +172,8 @@ impl Signex {
             on_pin_cell: |row, col| Message::Erc(ErcMsg::PinMatrixCellCycled { row, col }),
         });
 
-        // Graphite: severity chips with the rule counts above the grid.
-        let chips: Element<'_, Message> = if crate::styles::is_graphite(tokens) {
+        // Severity chips with the rule counts above the grid.
+        let chips: Element<'_, Message> = {
             let mut counts = [0usize; 4];
             for rule in &signex_erc::RuleKind::ALL {
                 let current = severity_map
@@ -192,8 +192,6 @@ impl Signex {
                 .padding([SP.l, 14.0])
                 .width(Length::Fill)
                 .boxed()
-        } else {
-            Space::new().height(0).boxed()
         };
 
         // In-window: sized to the window-capped modal. Detached: the OS

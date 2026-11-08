@@ -8,12 +8,11 @@ use crate::app::state::{ModalId, Signex};
 use crate::app::view::dialogs::DIALOG_TITLE_BAR_H;
 
 impl Signex {
-    /// Whether a dialog window opened now draws its own title bar: on a
-    /// Graphite theme while the main window draws its own chrome. Decided
-    /// once per window, when it opens (the OS frame cannot change later).
+    /// Whether a dialog window opened now draws its own title bar: while the
+    /// main window draws its own chrome. Decided once per window, when it
+    /// opens (the OS frame cannot change later).
     pub(crate) fn dialog_windows_borderless(&self) -> bool {
-        crate::styles::is_graphite(&self.document_state.panel_ctx.tokens)
-            && !self.window_controls_layout().is_native()
+        !self.window_controls_layout().is_native()
     }
 
     /// Whether the dialog window `id` was opened borderless.
@@ -127,14 +126,15 @@ mod tests {
         );
     }
 
-    /// A legacy theme keeps the native frame.
+    /// A dialog keeps the native frame exactly when the main window does.
     #[test]
-    fn a_legacy_theme_keeps_the_native_dialog_frame() {
-        let (mut app, _task) = Signex::new();
-        app.document_state.panel_ctx.tokens = crate::styles::legacy_tokens_fixture();
-        assert!(!app.dialog_windows_borderless());
+    fn a_dialog_window_has_the_native_frame_when_the_main_window_has_it() {
+        let app = graphite_app();
+        let native = app.window_controls_layout().is_native();
+        assert_eq!(app.dialog_windows_borderless(), !native);
         let (settings, borderless) = app.dialog_window_settings(ModalId::About);
-        assert!(settings.decorations && !borderless);
+        assert_eq!(settings.decorations, native);
+        assert_eq!(borderless, !native);
     }
 
     #[test]

@@ -333,6 +333,55 @@ mod tests {
         assert!(x >= 440.0);
     }
 
+    /// The field is centred on the window, shrinks monotonically as the
+    /// window narrows, and never runs under the menu items or the right
+    /// cluster, for every window-control layout.
+    #[test]
+    fn search_bar_stays_centred_and_clamped() {
+        let in_window = crate::menu_bar::approx_graphite_menu_bar_width();
+        // Windows-style: nothing leading, 138 px of controls trailing.
+        search_bar_invariants(0.0, 138.0, in_window);
+        // Native macOS lights: room leading, nothing trailing.
+        search_bar_invariants(78.0, 0.0, in_window);
+        // Round buttons on both sides.
+        search_bar_invariants(56.0, 40.0, in_window);
+        // The system menu bar carries the menus: nothing to clear.
+        search_bar_invariants(78.0, 0.0, 0.0);
+    }
+
+    fn search_bar_invariants(leading_w: f32, trailing_w: f32, menu_w: f32) {
+        let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
+        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
+            let (x, w) = search_geometry(window_w, leading_w, trailing_w, menu_w);
+            let right_limit = window_w - (trailing_w + RIGHT_CLUSTER_W + CHROME_SEARCH_RIGHT_GAP);
+            assert!(
+                (CHROME_SEARCH_BAR_MIN_WIDTH..=SEARCH_MAX_W).contains(&w),
+                "bar width {w} out of range at {window_w}"
+            );
+            assert!(
+                x >= menu_end,
+                "bar slid under the menu at {window_w}: x={x}"
+            );
+            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
+            assert!(
+                x + w <= right_limit.max(menu_end + w),
+                "bar runs under the right cluster at {window_w}: x={x} w={w}"
+            );
+            // Centred whenever the window is wide enough for it.
+            let centred = (window_w - w) / 2.0;
+            if centred >= menu_end && centred + w <= right_limit {
+                assert!(
+                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
+                    "bar off window centre at {window_w}: x={x} w={w}"
+                );
+            }
+        }
+        // Narrowing the window never widens the bar.
+        let (_, wide) = search_geometry(1920.0, leading_w, trailing_w, menu_w);
+        let (_, narrow) = search_geometry(1100.0, leading_w, trailing_w, menu_w);
+        assert!(narrow <= wide, "bar grew as the window shrank");
+    }
+
     #[test]
     fn the_toggle_glyph_follows_the_bar_lightness() {
         use signex_types::theme::Color as C;

@@ -1,6 +1,5 @@
 //! Graphite controls of the Annotate dialog: the checkbox pip, the order
-//! and lock toggles, the field box and the order-preview cell. Callers use
-//! them only when `is_graphite(tokens)`.
+//! and lock toggles, the field box and the order-preview cell.
 
 use iced::widget::{Column, Row, Space, button, canvas, container, text};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
@@ -84,24 +83,6 @@ pub(super) fn field_box(
     theme_tokens: &ThemeTokens,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
     crate::styles::field(theme_tokens, false)
-}
-
-/// One cell of the order-preview legend: sunken fill, hairline, mono ink.
-pub(super) fn preview_cell(
-    theme_tokens: &ThemeTokens,
-) -> impl Fn(&Theme) -> container::Style + 'static {
-    let r = tokens::resolve(theme_tokens);
-    let (fill, edge) = (r.sunken, r.line_soft);
-    move |_: &Theme| container::Style {
-        background: Some(Background::Color(fill)),
-        border: Border {
-            width: 1.0,
-            color: edge,
-            radius: 4.0.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    }
 }
 
 /// Bare button style: no fill, no border. The lock checkbox draws itself.

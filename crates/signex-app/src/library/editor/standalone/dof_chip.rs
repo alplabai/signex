@@ -9,7 +9,7 @@ use signex_widgets::theme_ext;
 
 use crate::app::FootprintDocument;
 use crate::library::messages::LibraryMessage;
-use crate::styles::{PillTone, Radii, is_graphite, pill_colors};
+use crate::styles::{PillTone, Radii, pill_colors};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -74,14 +74,11 @@ fn pill<'a>(
         .boxed()
 }
 
-/// The chips floating at the canvas's top-left. Empty off Graphite.
+/// The chips floating at the canvas's top-left.
 pub fn overlay<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    if !is_graphite(tokens) {
-        return Space::new().boxed();
-    }
     let line = theme_ext::border_color(tokens);
     let (tone, label) = dof_state(editor);
     let (fill, ink) = pill_colors(tokens, tone);

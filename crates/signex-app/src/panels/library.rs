@@ -391,8 +391,8 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     };
 
     // Breadcrumb — file name + footprint count.
-    // Graphite shows the footprint's display name; the file stem is a uuid.
-    let file_name = if crate::styles::is_graphite(&ctx.tokens) && !fp.footprint_name.is_empty() {
+    // Show the footprint's display name; the file stem is a uuid.
+    let file_name = if !fp.footprint_name.is_empty() {
         fp.footprint_name.clone()
     } else {
         fp.path

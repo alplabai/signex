@@ -1,56 +1,33 @@
-//! Graphite helpers: only Graphite themes change; legacy themes keep their look.
+//! Graphite helpers.
 
 use super::graphite::*;
-use super::ti;
 use super::tokens::resolve;
-use iced::{Background, Color, Shadow, Theme, Vector};
+use iced::{Theme, Vector};
 use signex_types::theme::{ThemeId, theme_tokens};
 
-fn legacy_shadow() -> Shadow {
-    Shadow {
-        color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
-        offset: Vector::new(2.0, 3.0),
-        blur_radius: 12.0,
-    }
-}
-
-/// Legacy themes keep the shadow the call site passes; Graphite themes get
-/// (0, 6) / 20 in their own shadow colour.
+/// Floating surfaces get (0, 6) / 20 in the theme's own shadow colour.
 #[test]
-fn only_graphite_themes_change_the_floating_shadow() {
+fn the_floating_shadow_uses_the_graphite_token() {
     for id in ThemeId::BUILTINS {
         let t = theme_tokens(*id);
-        let got = floating_shadow(&t, legacy_shadow());
-        if is_graphite(&t) {
-            assert_eq!(got.offset, Vector::new(0.0, 6.0), "{id:?}");
-            assert_eq!(got.blur_radius, 20.0, "{id:?}");
-            assert_eq!(got.color, resolve(&t).shadow, "{id:?}");
-        } else {
-            assert_eq!(got, legacy_shadow(), "{id:?}");
-        }
+        let got = floating_shadow(&t);
+        assert_eq!(got.offset, Vector::new(0.0, 6.0), "{id:?}");
+        assert_eq!(got.blur_radius, 20.0, "{id:?}");
+        assert_eq!(got.color, resolve(&t).shadow, "{id:?}");
     }
 }
 
-/// The legacy splitter is still the filled border colour; the Graphite one
-/// is transparent with a single 1 px edge.
+/// The splitter is transparent with a single 1 px edge.
 #[test]
-fn the_splitter_is_a_one_px_line_only_in_graphite() {
+fn the_splitter_is_a_one_px_line() {
     for id in ThemeId::BUILTINS {
         let t = theme_tokens(*id);
         for horizontal in [true, false] {
             let style = resize_handle_edge(&t, horizontal)(&Theme::Dark);
-            if is_graphite(&t) {
-                assert!(style.background.is_none(), "{id:?}");
-                let b = style.border;
-                let widths = [b.top.width, b.right.width, b.bottom.width, b.left.width];
-                assert_eq!(widths.iter().flatten().count(), 1, "{id:?}");
-            } else {
-                assert_eq!(
-                    style.background,
-                    Some(Background::Color(ti(t.border))),
-                    "{id:?}"
-                );
-            }
+            assert!(style.background.is_none(), "{id:?}");
+            let b = style.border;
+            let widths = [b.top.width, b.right.width, b.bottom.width, b.left.width];
+            assert_eq!(widths.iter().flatten().count(), 1, "{id:?}");
         }
     }
 }

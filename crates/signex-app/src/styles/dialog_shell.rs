@@ -9,7 +9,7 @@ use iced::widget::{Row, column, container, svg, text};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
-use super::{PillTone, Radii, Spacing, TypeScale, chrome_px, is_graphite, pill_colors, ti, tokens};
+use super::{PillTone, Radii, Spacing, TypeScale, chrome_px, pill_colors, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -129,10 +129,8 @@ fn title_font() -> iced::Font {
     }
 }
 
-/// The leading block of a dialog body. Graphite: the tile, then `title`
-/// with `secondary` under it (left out when empty, so no gap is left).
-/// Other themes: the plain message line they always had, `secondary` when
-/// given and `title` otherwise (their header already names the dialog).
+/// The leading block of a dialog body: the tile, then `title` with
+/// `secondary` under it (left out when empty, so no gap is left).
 pub fn dialog_intro<'a, M: 'a>(
     icon: DialogIcon,
     title: impl Into<String>,
@@ -141,9 +139,6 @@ pub fn dialog_intro<'a, M: 'a>(
 ) -> Element<'a, M> {
     let title = title.into();
     let secondary = secondary.filter(|s| !s.trim().is_empty());
-    if !is_graphite(tokens) {
-        return super::dialog_message(secondary.unwrap_or(title), tokens);
-    }
     let r = tokens::resolve(tokens);
     let mut lines = column![
         text(title)
@@ -191,9 +186,6 @@ mod tests {
         assert_eq!(DialogIcon::Library.tone(), PillTone::Accent);
         for id in ThemeId::BUILTINS {
             let t = signex_types::theme::theme_tokens(*id);
-            if !is_graphite(&t) {
-                continue;
-            }
             let r = tokens::resolve(&t);
             assert_eq!(pill_colors(&t, DialogIcon::Warn.tone()).0, r.warn_soft);
             assert_eq!(pill_colors(&t, DialogIcon::Error.tone()).0, r.err_soft);

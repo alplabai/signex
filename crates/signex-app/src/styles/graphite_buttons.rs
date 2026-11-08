@@ -78,3 +78,26 @@ pub fn ghost_button(
         ..button::Style::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The ghost button (the dialogs' neutral close) fills only on hover and
+    /// press, in every built-in theme, and hover differs from press.
+    #[test]
+    fn ghost_button_fills_only_on_hover_and_press() {
+        for &id in signex_types::theme::ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let style = ghost_button(&tokens);
+            let theme = Theme::Dark;
+            let rest = style(&theme, button::Status::Active);
+            let hover = style(&theme, button::Status::Hovered);
+            let pressed = style(&theme, button::Status::Pressed);
+            assert!(rest.background.is_none(), "{id:?}");
+            assert!(hover.background.is_some(), "{id:?}");
+            assert!(pressed.background.is_some(), "{id:?}");
+            assert_ne!(hover.background, pressed.background, "{id:?}");
+        }
+    }
+}

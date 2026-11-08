@@ -284,14 +284,7 @@ impl MenuColors {
             border: styles::ti(tokens.border),
             hover: styles::ti(tokens.hover),
             line_soft: styles::tokens::resolve(tokens).line_soft,
-            shadow: styles::floating_shadow(
-                tokens,
-                iced::Shadow {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                    offset: iced::Vector::new(2.0, 4.0),
-                    blur_radius: 8.0,
-                },
-            ),
+            shadow: styles::floating_shadow(tokens),
         }
     }
 }

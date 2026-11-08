@@ -1,6 +1,5 @@
 //! Graphite look of the Components panel details: the header card with the
-//! lifecycle pill, the section labels and the parameter rows. Legacy themes
-//! never reach these; `details::view` branches on `is_graphite`.
+//! lifecycle pill, the section labels and the parameter rows.
 
 use iced::widget::{Column, column, container, row, text};
 use iced::{Alignment, Element, Font, Length, Padding, Widget};

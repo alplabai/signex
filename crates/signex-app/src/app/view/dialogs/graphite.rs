@@ -1,7 +1,5 @@
 //! Graphite parts shared by the dialog bodies: the subtitled header, the
-//! severity chips, the changed-row tint and the recovery icon tile. Callers
-//! use them only when `is_graphite(tokens)`; legacy themes keep their
-//! existing look.
+//! severity chips, the changed-row tint and the recovery icon tile.
 
 use iced::widget::{Row, container, text};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
