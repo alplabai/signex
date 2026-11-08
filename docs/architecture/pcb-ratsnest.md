@@ -41,13 +41,18 @@ crate would be the "kept in step" pair ADR-0005 bans.
   (`Shape::overlaps_polygon`); the only float is the 32-point ellipse
   outline above. A via joins a zone on any copper layer of its span that
   the zone is on; a through pad or via reaches every layer.
-- Not modelled: the zone fill itself, so zone holes and the clearance the
-  fill keeps from other nets are ignored (a pad inside a hole, or one the
-  real fill would leave isolated, still counts as joined); two overlapping
-  same-net zones with nothing else in common are not joined to each other;
-  drill holes (a through-hole pad is solid copper, so a track through its
-  hole counts as touching); and the clearance a track needs to a pad of
-  another net (that is DRC).
+- Zone to zone: two same-net zones on a shared copper layer whose
+  outlines meet (an edge crossing or touching, or one wholly inside the
+  other) are one copper, found through an R-tree of outline boxes. Zones 1 nm
+  apart do not join.
+- Not modelled: the zone fill itself (#2216 tracks using the filled polygon,
+  holes and clearance, once fills are computed). Until then zone holes and
+  the clearance the fill keeps from other nets are ignored: a pad inside a
+  zone hole counts as joined and gets no ratsnest line (a false negative),
+  as does one the real fill would leave isolated; drill holes (a
+  through-hole pad is solid copper, so a track through its hole counts as
+  touching); and the clearance a track needs to a pad of another net (that
+  is DRC).
 
 ## Cost
 

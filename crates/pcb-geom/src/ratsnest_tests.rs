@@ -642,3 +642,32 @@ fn a_concave_zone_joins_only_where_it_has_copper() {
     b.zones = vec![z];
     assert_eq!(ratsnest(&b), vec![line(1, at(0, 0), at(10, 0))]);
 }
+
+/// Zone A over pad 1 (x -2..10) and zone B over pad 2 (x `b_x0`..22).
+fn zones_a_and_b(b_x0: f64, layer_b: &str, net_b: u32) -> PcbBoard {
+    let a = zone(1, "TopCopper", (-2.0, -2.0, 10.0, 2.0));
+    let mut b = zone(net_b, layer_b, (b_x0, -2.0, 22.0, 2.0));
+    b.uuid = id(4900);
+    two_pads_with(vec![], vec![], vec![a, b])
+}
+
+#[test]
+fn overlapping_same_net_zones_join_their_pads() {
+    assert!(ratsnest(&zones_a_and_b(8.0, "TopCopper", 1)).is_empty());
+}
+
+#[test]
+fn zones_touching_join_and_zones_1_nm_apart_do_not() {
+    assert!(ratsnest(&zones_a_and_b(10.0, "TopCopper", 1)).is_empty());
+    assert_eq!(
+        ratsnest(&zones_a_and_b(10.000_001, "TopCopper", 1)),
+        apart()
+    );
+}
+
+#[test]
+fn overlapping_zones_on_another_layer_or_net_do_not_join() {
+    // Pad 2 is a top pad, so a bottom zone B also leaves it unjoined.
+    assert_eq!(ratsnest(&zones_a_and_b(8.0, "BottomCopper", 1)), apart());
+    assert_eq!(ratsnest(&zones_a_and_b(8.0, "TopCopper", 2)), apart());
+}

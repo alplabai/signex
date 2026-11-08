@@ -76,3 +76,37 @@ fn an_ellipse_overlaps_a_disc_on_its_long_axis_only() {
     assert!(oval.overlaps(&at(3, 0)));
     assert!(!oval.overlaps(&at(0, 3)));
 }
+
+#[test]
+fn polygons_meet_on_crossing_touching_and_containing_but_not_a_1_nm_gap() {
+    let sq = |x0: i64, y0: i64, x1: i64, y1: i64| {
+        vec![
+            PointNm::new(x0, y0),
+            PointNm::new(x1, y0),
+            PointNm::new(x1, y1),
+            PointNm::new(x0, y1),
+        ]
+    };
+    let a = sq(0, 0, 10, 10);
+    assert!(polygons_meet(&a, &sq(5, 5, 15, 15))); // edges cross
+    assert!(polygons_meet(&a, &sq(10, 0, 20, 10))); // shared edge
+    assert!(polygons_meet(&a, &sq(10, 10, 20, 20))); // one corner
+    assert!(!polygons_meet(&a, &sq(11, 0, 20, 10)));
+    assert!(!polygons_meet(&a, &sq(10 + 1, 10 + 1, 20, 20)));
+    assert!(polygons_meet(&a, &sq(2, 2, 4, 4))); // b inside a
+    assert!(polygons_meet(&sq(2, 2, 4, 4), &a)); // a inside b
+    assert!(!polygons_meet(&a, &a[..2]));
+    // A U-shape: a square in its notch touches no copper of it.
+    let u = vec![
+        PointNm::new(0, 0),
+        PointNm::new(30, 0),
+        PointNm::new(30, 30),
+        PointNm::new(20, 30),
+        PointNm::new(20, 10),
+        PointNm::new(10, 10),
+        PointNm::new(10, 30),
+        PointNm::new(0, 30),
+    ];
+    assert!(!polygons_meet(&u, &sq(12, 12, 18, 18)));
+    assert!(polygons_meet(&u, &sq(12, 8, 18, 18)));
+}

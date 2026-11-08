@@ -2,13 +2,15 @@
 //! net's pads (#2192).
 //!
 //! Copper that already touches (a track across a pad, a via on a track,
-//! two tracks crossing, anything on a same-net zone's outline)
+//! two tracks crossing, anything on a same-net zone's outline, zones
+//! overlapping each other)
 //! forms an island. Per net, the islands that hold pads are joined by a
 //! minimum spanning forest. The answer is a pure function of the board and
 //! is the same on every run: integer nm throughout, sorted output.
 
 use std::collections::{BTreeMap, HashMap};
 
+use rstar::{AABB, RTree, RTreeObject};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard, ViaType};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -17,6 +19,7 @@ use crate::index::{BoardIndex, ItemRef, RectSelect, track_shape, via_shape};
 use crate::mst::{Edge, euclidean_mst, spanning_forest};
 use crate::rect::RectNm;
 use crate::shape::Shape;
+use crate::shape_overlap::polygons_meet;
 use crate::transform::{Side, pad_shape, pad_world_center};
 use crate::union_find::UnionFind;
 use crate::units::PointNm;
@@ -85,6 +88,27 @@ pub fn ratsnest(board: &PcbBoard) -> Vec<RatLine> {
                 && other.shape.overlaps_polygon(&zone.outline)
             {
                 islands.union(nodes.len() + z, j);
+            }
+        }
+    }
+    // Same-net zones on a shared layer whose outlines meet are one copper.
+    let tree = RTree::bulk_load(
+        zones
+            .iter()
+            .enumerate()
+            .filter_map(|(z, zone)| ZoneBox::new(z, zone))
+            .collect(),
+    );
+    for entry in tree.iter() {
+        let zone = &zones[entry.zone];
+        for other in tree.locate_in_envelope_intersecting(&entry.envelope) {
+            let peer = &zones[other.zone];
+            if other.zone > entry.zone
+                && peer.net == zone.net
+                && peer.layers & zone.layers != 0
+                && polygons_meet(&zone.outline, &peer.outline)
+            {
+                islands.union(nodes.len() + entry.zone, nodes.len() + other.zone);
             }
         }
     }
@@ -170,6 +194,33 @@ fn representative(pads: &[PointNm]) -> PointNm {
         .copied()
         .min_by_key(|p| (off(p), *p))
         .unwrap_or(PointNm::ORIGIN)
+}
+
+/// A zone's bounding box in the R-tree that pairs overlapping zones.
+struct ZoneBox {
+    zone: usize,
+    envelope: AABB<[i128; 2]>,
+}
+
+impl ZoneBox {
+    fn new(zone: usize, copper: &ZoneCopper) -> Option<Self> {
+        let r = RectNm::bounding(copper.outline.iter().copied())?;
+        Some(ZoneBox {
+            zone,
+            envelope: AABB::from_corners(
+                [i128::from(r.min.x), i128::from(r.min.y)],
+                [i128::from(r.max.x), i128::from(r.max.y)],
+            ),
+        })
+    }
+}
+
+impl RTreeObject for ZoneBox {
+    type Envelope = AABB<[i128; 2]>;
+
+    fn envelope(&self) -> Self::Envelope {
+        self.envelope
+    }
 }
 
 /// A zone's copper: its OUTLINE polygon, since the model stores no filled

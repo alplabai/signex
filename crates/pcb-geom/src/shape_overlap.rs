@@ -104,6 +104,25 @@ fn stadium_meets_polygon(a: PointNm, b: PointNm, radius: i64, poly: &[PointNm]) 
     (0..poly.len()).any(|i| segment_gap_within(a, b, poly[i], poly[(i + 1) % poly.len()], radius))
 }
 
+/// Whether two simple polygons (corners in order, convex or not) share a
+/// point; touching counts. Two simple polygons meet exactly when an edge of
+/// one meets an edge of the other, or one holds a corner of the other
+/// (wholly inside). Integer nm.
+pub(crate) fn polygons_meet(a: &[PointNm], b: &[PointNm]) -> bool {
+    if a.len() < 3 || b.len() < 3 {
+        return false;
+    }
+    let edge = |p: &[PointNm], i: usize| (p[i], p[(i + 1) % p.len()]);
+    (0..a.len()).any(|i| {
+        let (p, q) = edge(a, i);
+        (0..b.len()).any(|j| {
+            let (r, t) = edge(b, j);
+            segments_intersect(p, q, r, t)
+        })
+    }) || point_in_polygon(a, b[0])
+        || point_in_polygon(b, a[0])
+}
+
 /// Whether `p` lies in or on a simple polygon (even-odd crossing count).
 fn point_in_polygon(poly: &[PointNm], p: PointNm) -> bool {
     let mut inside = false;

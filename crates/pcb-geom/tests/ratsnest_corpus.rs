@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use pcb_geom::{PointNm, RatLine, ratsnest};
 use signex_types::format::SnxPcb;
-use signex_types::pcb::{PcbBoard, Point, Segment};
+use signex_types::pcb::{PcbBoard, Point, Segment, Zone};
 use uuid::Uuid;
 
 fn corpus_board(name: &str) -> PcbBoard {
@@ -92,5 +92,62 @@ fn ten_thousand_tracks_are_joined_within_the_debug_budget() {
     // Each of the 50 split rows needs one link, pad to pad.
     assert_eq!(lines.len(), 50);
     // Loose for debug CI; release is a few tens of ms (see docs).
+    assert!(took.as_millis() < 5_000, "{took:?}");
+}
+
+/// The 10k-track board plus 300 zones: three per net, 30 mm wide strips along
+/// the net's row, 20 mm apart so neighbours overlap each other and the row's
+/// tracks and pads. Every third zone is on the bottom layer.
+fn ten_thousand_tracks_and_zones() -> PcbBoard {
+    let mut board = ten_thousand_tracks();
+    board.zones.clear();
+    for k in 0..3u32 {
+        for row in 0..100u32 {
+            let (x0, y) = (f64::from(k) * 20.0 + 90.0, f64::from(row));
+            let corners = [
+                (x0, y - 0.4),
+                (x0 + 30.0, y - 0.4),
+                (x0 + 30.0, y + 0.4),
+                (x0, y + 0.4),
+            ];
+            board.zones.push(Zone {
+                uuid: Uuid::from_u128(40_000 + u128::from(k * 100 + row)),
+                net: row + 1,
+                net_name: String::new(),
+                layer: if (k + row) % 3 == 0 {
+                    "BottomCopper"
+                } else {
+                    "TopCopper"
+                }
+                .into(),
+                outline: corners.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+                holes: Vec::new(),
+                priority: 0,
+                fill_type: String::new(),
+                thermal_relief: false,
+                thermal_gap: 0.0,
+                thermal_width: 0.0,
+                clearance: 0.0,
+                min_thickness: 0.0,
+                unknown: Default::default(),
+            });
+        }
+    }
+    board
+}
+
+#[test]
+fn ten_thousand_tracks_and_three_hundred_zones_stay_within_the_debug_budget() {
+    let board = ten_thousand_tracks_and_zones();
+    assert_eq!(board.zones.len(), 300);
+    let started = Instant::now();
+    let lines = ratsnest(&board);
+    let took = started.elapsed();
+    println!(
+        "ratsnest 10k tracks + 300 zones: {took:?}, {} lines",
+        lines.len()
+    );
+    // The zones only ever join, so no row gains a link.
+    assert!(lines.len() <= 50, "{} lines", lines.len());
     assert!(took.as_millis() < 5_000, "{took:?}");
 }
