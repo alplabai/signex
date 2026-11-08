@@ -120,6 +120,21 @@ fn build_with_class(
         class,
         parameters,
         WorkflowMode::Personal,
+        "SNX-TWO",
+    )
+}
+
+/// [`fixture`] whose row carries the internal part number `pn`, so a test
+/// can match a log line that only its own part can produce.
+pub(crate) fn fixture_with_part_number(pn: &str) -> Fixture {
+    build_in_mode(
+        "lib",
+        None,
+        two_unit_symbol(),
+        "IC",
+        ParamMap::new(),
+        WorkflowMode::Personal,
+        pn,
     )
 }
 
@@ -132,6 +147,7 @@ pub(crate) fn team_fixture(name: &str) -> Fixture {
         "IC",
         ParamMap::new(),
         WorkflowMode::Team,
+        "SNX-TWO",
     )
 }
 
@@ -142,6 +158,7 @@ fn build_in_mode(
     class: &str,
     parameters: ParamMap,
     mode: WorkflowMode,
+    part_number: &str,
 ) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -188,7 +205,7 @@ fn build_in_mode(
     let row = ComponentRow {
         alternate_symbols: Vec::new(),
         row_id,
-        internal_pn: InternalPn::new("SNX-TWO"),
+        internal_pn: InternalPn::new(part_number),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
@@ -499,7 +516,7 @@ fn the_picker_message_places_end_to_end_with_no_io_in_update() {
 
 #[test]
 fn replacing_after_the_library_symbol_changed_warns_and_keeps_the_sheet_copy() {
-    let f = fixture();
+    let f = fixture_with_part_number(DRIFT_PN);
     let mut app = app_with_library(&f);
     let first = resolve(&f, f.row_id).expect("resolves");
     let mut edited = first.clone();
@@ -519,19 +536,22 @@ fn replacing_after_the_library_symbol_changed_warns_and_keeps_the_sheet_copy() {
     );
 }
 
-/// Place `resolved` and report whether the drift warning for this fixture's
-/// part was logged by this placement. The ring is shared by the whole test
-/// binary and paste tests log a similar "keeps its existing copy" warning,
-/// so the needle names this part, and only entries newer than the placement
-/// count.
+/// Part number only the drift test uses, so no other test can log its warning.
+const DRIFT_PN: &str = "SNX-DRIFT-364";
+
+/// Place `resolved` and report whether the drift warning for [`DRIFT_PN`]
+/// was logged by this placement. The ring is shared by the whole test
+/// binary, so the needle names this test's own part, and only entries newer
+/// than the placement count.
 fn warned(app: &mut Signex, f: &Fixture, resolved: Box<ResolvedPlacement>) -> bool {
     let _ = signex_app::diagnostics::init_logging();
     let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
     complete(app, f, "place-364.snxsch", Ok(resolved));
     signex_app::diagnostics::recent_entries().iter().any(|e| {
         e.id > before
-            && e.message
-                .contains("Library symbol for SNX-TWO changed since it was first placed")
+            && e.message.contains(&format!(
+                "Library symbol for {DRIFT_PN} changed since it was first placed"
+            ))
             && e.message.contains("keeps its existing copy")
     })
 }
