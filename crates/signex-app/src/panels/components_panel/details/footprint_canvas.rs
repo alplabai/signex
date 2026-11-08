@@ -171,12 +171,13 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
                 state.pan_from = cursor.position();
                 Some(Action::capture())
             }
-            mouse::Event::CursorMoved { position } => {
+            mouse::Event::CursorMoved { .. } => {
                 let last = state.pan_from?;
+                let position = super::symbol_canvas::drag_position(cursor)?;
                 state
                     .camera
                     .pan_by(Vector::new(position.x - last.x, position.y - last.y));
-                state.pan_from = Some(*position);
+                state.pan_from = Some(position);
                 state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())

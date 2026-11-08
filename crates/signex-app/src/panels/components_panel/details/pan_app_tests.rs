@@ -213,6 +213,9 @@ fn drive(app: &mut Live, events: &[(Event, Point)]) -> Vec<mouse::Interaction> {
 struct Live {
     app: Signex,
     cache: Cache,
+    /// Whether the window asked to be redrawn after each event of the last
+    /// `drive_with`: without that the runtime shows no change.
+    redraws: Vec<bool>,
     _tmp: tempfile::TempDir,
 }
 
@@ -222,6 +225,7 @@ fn start(theme: ThemeId, side: PanelPosition) -> (Live, ComponentsPanelRowKey) {
         Live {
             app,
             cache: Cache::default(),
+            redraws: Vec::new(),
             _tmp: tmp,
         },
         key,
@@ -238,18 +242,18 @@ fn drive_with(
     snap: bool,
 ) -> (Vec<mouse::Interaction>, Vec<Vec<u8>>) {
     use iced::advanced::renderer::Headless as _;
-    let app = &mut live.app;
-    let window = app.ui_state.main_window_id.expect("main window");
+    let window = live.app.ui_state.main_window_id.expect("main window");
     let mut renderer = crate::layout_probe::headless_renderer();
     let mut cache = std::mem::take(&mut live.cache);
     let mut out = Vec::new();
     let mut frames = Vec::new();
+    live.redraws.clear();
     for (event, at) in events {
         let cursor = mouse::Cursor::Available(*at);
         let mut published = Bus::new();
         {
-            let mut ui = UserInterface::build(app.view(window), WINDOW, cache, &mut renderer);
-            let _ = ui.update(
+            let mut ui = UserInterface::build(live.app.view(window), WINDOW, cache, &mut renderer);
+            let (event_state, _) = ui.update(
                 &iced::window::Headless,
                 &Waker::noop(),
                 std::slice::from_ref(event),
@@ -257,13 +261,20 @@ fn drive_with(
                 &mut renderer,
                 &mut published,
             );
+            // An outdated interface is rebuilt and so redrawn.
+            live.redraws.push(match event_state {
+                State::Updated { redraw_request, .. } => {
+                    !matches!(redraw_request, iced::window::RedrawRequest::Wait)
+                }
+                State::Outdated => true,
+            });
             cache = ui.into_cache();
         }
         for message in published {
-            send(app, message);
+            send(&mut live.app, message);
         }
         // Read the interaction off a fresh build, as the next frame sees it.
-        let mut ui = UserInterface::build(app.view(window), WINDOW, cache, &mut renderer);
+        let mut ui = UserInterface::build(live.app.view(window), WINDOW, cache, &mut renderer);
         let (state, _) = ui.update(
             &iced::window::Headless,
             &Waker::noop(),
@@ -279,7 +290,7 @@ fn drive_with(
             State::Outdated => mouse::Interaction::None,
         });
         if snap {
-            let theme = app.theme(window).expect("theme");
+            let theme = live.app.theme(window).expect("theme");
             ui.draw(
                 &mut renderer,
                 &theme,
@@ -381,6 +392,11 @@ fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
         seen,
         vec![Grab, Grabbing, Grabbing, Grabbing, Grab],
         "{what} at {from:?}"
+    );
+    assert!(
+        app.redraws[2] && app.redraws[3],
+        "{what}: a drag move asks for a redraw ({:?})",
+        app.redraws
     );
     // Inside the preview: from the first grab row down, beside the press.
     // The drawing has moved, and moved exactly with the pointer: the frame

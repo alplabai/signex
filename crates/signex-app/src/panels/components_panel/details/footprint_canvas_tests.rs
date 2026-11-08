@@ -335,10 +335,18 @@ fn wheel_zooms_about_the_cursor_and_drag_pans() {
     let zoomed_offset = state.offset();
     let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
     let _ = Program::<()>::update(&program, &mut state, &press, BOX, cursor);
+    // A cursor move comes with the cursor at its position, as from the runtime.
+    let dragged_to = Point::new(anchor.x + 30.0, anchor.y - 12.0);
     let drag = Event::Mouse(mouse::Event::CursorMoved {
-        position: Point::new(anchor.x + 30.0, anchor.y - 12.0),
+        position: dragged_to,
     });
-    let _ = Program::<()>::update(&program, &mut state, &drag, BOX, cursor);
+    let _ = Program::<()>::update(
+        &program,
+        &mut state,
+        &drag,
+        BOX,
+        mouse::Cursor::Available(dragged_to),
+    );
     assert_eq!(state.offset().x, zoomed_offset.x + 30.0);
     assert_eq!(state.offset().y, zoomed_offset.y - 12.0);
     let release = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
@@ -531,6 +539,28 @@ fn pinch_zoom_is_cursor_anchored_floored_and_ignores_no_ops() {
     }
     assert_eq!(cam.scale, super::MIN_PREVIEW_SCALE);
     assert!(!super::pinch_zoom(&mut cam, anchor, -0.5));
+}
+
+/// Inside a pane scrolled by `scroll`, iced shifts the widget cursor but not
+/// the event's window position. A drag still moves the footprint exactly
+/// with the pointer, on the first move too.
+#[test]
+fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
+    let model = preview_of(&fixture());
+    let mut state = show(&model);
+    let program = FootprintPreview::new(&model);
+    let scroll = iced::Vector::new(0.0, 200.0);
+    let cursor = |at: Point| mouse::Cursor::Available(at + scroll);
+    let window_at = Point::new(100.0, 80.0);
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let pressed = Program::<()>::update(&program, &mut state, &press, BOX, cursor(window_at));
+    assert!(pressed.is_some(), "the press starts a pan");
+    let before = state.offset();
+    for to in [Point::new(130.0, 80.0), Point::new(150.0, 95.0)] {
+        let moved = Event::Mouse(mouse::Event::CursorMoved { position: to });
+        let _ = Program::<()>::update(&program, &mut state, &moved, BOX, cursor(to));
+        assert_eq!(state.offset(), before + (to - window_at), "to {to:?}");
+    }
 }
 
 /// The Graphite previews paint opaque pad gold (#D8B46A) with a darker

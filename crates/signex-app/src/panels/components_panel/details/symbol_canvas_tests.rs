@@ -302,9 +302,45 @@ fn event(event: mouse::Event, state: &mut PreviewState, p: &SymbolSheetPreview) 
     over(iced::Event::Mouse(event), state, p)
 }
 
+/// Deliver `event` the way the runtime does: a cursor move comes with the
+/// cursor at its position; anything else finds it over the box.
 fn over(event: iced::Event, state: &mut PreviewState, p: &SymbolSheetPreview) -> bool {
-    let cursor = mouse::Cursor::Available(iced::Point::new(100.0, 80.0));
-    canvas::Program::<()>::update(p, state, &event, BOX, cursor).is_some()
+    let at = match event {
+        iced::Event::Mouse(mouse::Event::CursorMoved { position }) => position,
+        _ => iced::Point::new(100.0, 80.0),
+    };
+    canvas::Program::<()>::update(p, state, &event, BOX, mouse::Cursor::Available(at)).is_some()
+}
+
+/// Inside a pane scrolled by `scroll`, iced shifts the widget cursor by the
+/// scroll offset but hands the event its window position unchanged. A drag
+/// still moves the drawing exactly with the pointer, on the first move too.
+#[test]
+fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
+    let p = program(body_symbol(), DOTS);
+    let mut state = shown(&p);
+    let scroll = Vector::new(0.0, 200.0);
+    let window_at = iced::Point::new(100.0, 80.0);
+    let press = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let cursor = |at: iced::Point| mouse::Cursor::Available(at + scroll);
+    let pressed = canvas::Program::<()>::update(&p, &mut state, &press, BOX, cursor(window_at));
+    assert!(pressed.is_some(), "the press starts a pan");
+    let before = state.camera.offset;
+    for (step, to) in [(130.0, 80.0), (150.0, 95.0)].into_iter().enumerate() {
+        let to = iced::Point::new(to.0, to.1);
+        let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: to });
+        let _ = canvas::Program::<()>::update(&p, &mut state, &moved, BOX, cursor(to));
+        assert_eq!(
+            state.camera.offset,
+            before + (to - window_at),
+            "move {step} follows the pointer"
+        );
+    }
+    // Over a scrollbar or a layer above, the obstructed cursor still drags.
+    let to = iced::Point::new(160.0, 100.0);
+    let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: to });
+    let _ = canvas::Program::<()>::update(&p, &mut state, &moved, BOX, cursor(to).obstruct());
+    assert_eq!(state.camera.offset, before + (to - window_at));
 }
 
 fn hold_ctrl(state: &mut PreviewState, p: &SymbolSheetPreview) {
