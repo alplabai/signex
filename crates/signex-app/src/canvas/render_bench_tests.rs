@@ -189,6 +189,7 @@ pub(super) fn generate(cols: usize, rows: usize, v: Variant) -> Generated {
                     stroke_width: 0.25,
                     unknown_columns: Default::default(),
                     locked: false,
+                    color: None,
                 });
                 SelectedItem::new(uuid, SelectedKind::Wire)
             };
