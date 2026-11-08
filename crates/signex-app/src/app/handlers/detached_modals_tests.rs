@@ -559,6 +559,56 @@ fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
     );
 }
 
+/// The Copy to Library footer is one right-aligned row: Cancel, then the
+/// one primary action (it was split, the primary at the far left), and the
+/// window leaves no empty band between the body and the footer, on Graphite
+/// (with its title bar) and on a legacy theme.
+#[test]
+fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
+    use signex_types::theme::ThemeId;
+    for theme_id in [ThemeId::GraphiteLight, ThemeId::Signex] {
+        let (mut app, _main) = test_app();
+        app.ui_state.theme_id = theme_id;
+        app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+        open(&mut app, ModalId::LibraryStockCopy);
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
+        let window = window_size(&app, id, ModalId::LibraryStockCopy);
+        let texts = lay_out_texts(app.view(id), window);
+        let find = |label: &str| {
+            texts
+                .iter()
+                .find(|t| t.text == label)
+                .unwrap_or_else(|| panic!("{theme_id:?}: {label}"))
+                .bounds
+        };
+        let cancel = find("Cancel");
+        let new_library = find("New Library\u{2026}");
+        assert!(
+            cancel.x + cancel.width < new_library.x,
+            "{theme_id:?}: Cancel comes first"
+        );
+        assert!(
+            (cancel.y - new_library.y).abs() < 1.0,
+            "{theme_id:?}: one row"
+        );
+        assert!(
+            window.width / 2.0 < cancel.x,
+            "{theme_id:?}: the footer is right-aligned, Cancel at {}",
+            cancel.x
+        );
+        let hint = texts
+            .iter()
+            .find(|t| t.text.contains("No writable library"))
+            .expect("the empty-list hint");
+        let gap = cancel.y - (hint.bounds.y + hint.bounds.height);
+        assert!(
+            (0.0..=48.0).contains(&gap),
+            "{theme_id:?}: {gap} px between the hint and the footer"
+        );
+    }
+}
+
 /// Copy to Library with no writable library grows by one note line for each
 /// note shown (an unavailable previous library, an error), and the notes
 /// stay above the footer.

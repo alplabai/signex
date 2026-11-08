@@ -133,4 +133,73 @@ mod tests {
         app.forget_closed_dialog_windows();
         assert!(!app.dialog_window_is_borderless(id));
     }
+
+    /// A Graphite app whose About dialog is open in its own window, opened
+    /// borderless whatever the platform's window controls are.
+    fn about_in_a_borderless_window() -> (Signex, iced::window::Id) {
+        let mut app = graphite_app();
+        app.ui_state.main_window_id = Some(iced::window::Id::unique());
+        app.ui_state.main_window_opened = true;
+        app.ui_state.first_run_tour_open = false;
+        app.ui_state.about_open = true;
+        let _ = app.sync_detached_modals();
+        let id = app.detached_window_of(ModalId::About).expect("window");
+        app.note_dialog_window(id, true);
+        (app, id)
+    }
+
+    /// The title bar sits on top of the window: the dialog's title is in
+    /// it and every line of the body is laid out below it.
+    #[test]
+    fn a_borderless_dialog_window_draws_its_title_bar_above_the_body() {
+        let (mut app, id) = about_in_a_borderless_window();
+        let size = app.dialog_window_size(ModalId::About, true);
+        let bar = crate::app::view::dialogs::DIALOG_TITLE_BAR_H;
+        let close = "\u{00D7}";
+        let texts = crate::layout_probe::lay_out_texts(app.view(id), size);
+        let title = texts
+            .iter()
+            .find(|t| t.text == "About Signex")
+            .expect("the title in the bar");
+        assert!(title.bounds.y + title.bounds.height <= bar, "{title:?}");
+        assert!(texts.iter().any(|t| t.text == close), "the bar's close");
+        let body: Vec<_> = texts
+            .iter()
+            .filter(|t| t.text != "About Signex" && t.text != close)
+            .collect();
+        assert!(!body.is_empty());
+        for t in body {
+            assert!(t.bounds.y >= bar, "{t:?} is under the title bar");
+        }
+        // A window with the OS frame draws no bar of its own.
+        app.note_dialog_window(id, false);
+        let size = app.dialog_window_size(ModalId::About, false);
+        let texts = crate::layout_probe::lay_out_texts(app.view(id), size);
+        assert!(texts.iter().all(|t| t.text != "About Signex"));
+    }
+
+    /// The bar's close is the OS close: it runs the dialog's own close.
+    #[test]
+    fn the_title_bar_close_runs_the_dialogs_own_close() {
+        let (mut app, id) = about_in_a_borderless_window();
+        let _ = app.update(crate::app::Message::Window(
+            crate::app::WindowMsg::DialogCloseClicked(id),
+        ));
+        assert!(!app.ui_state.about_open, "the dialog closed");
+        assert!(app.detached_window_of(ModalId::About).is_none());
+    }
+
+    /// Pressing the bar asks the OS to move that window; an edge, to resize it.
+    #[test]
+    fn pressing_the_title_bar_or_an_edge_starts_a_window_move_or_resize() {
+        let (mut app, id) = about_in_a_borderless_window();
+        let task = app.update(crate::app::Message::Window(
+            crate::app::WindowMsg::DialogTitleBarPressed(id),
+        ));
+        assert!(task.units() > 0, "a window drag was requested");
+        let task = app.update(crate::app::Message::Window(
+            crate::app::WindowMsg::DialogEdgePressed(id, iced::window::Direction::East),
+        ));
+        assert!(task.units() > 0, "a window resize was requested");
+    }
 }
