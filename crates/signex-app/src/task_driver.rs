@@ -75,6 +75,8 @@ impl std::error::Error for DriveError {}
 struct Effects {
     clipboard: Option<Content>,
     has_exited: bool,
+    /// Window actions that got no answer (see [`TaskDriver::dropped_window_actions`]).
+    dropped_windows: u64,
 }
 
 /// One headless session: one tokio runtime and one clipboard.
@@ -105,6 +107,14 @@ impl TaskDriver {
     /// Whether a task asked the app to exit. Once it has, nothing more runs.
     pub fn has_exited(&self) -> bool {
         self.effects.has_exited
+    }
+
+    /// How many window actions (a window the command asked for that is not
+    /// opened, closed or measured here) the driver has dropped since it was
+    /// made. A caller that must not report such a command as done compares
+    /// it before and after.
+    pub fn dropped_window_actions(&self) -> u64 {
+        self.effects.dropped_windows
     }
 
     /// The text on the in-memory clipboard, if it holds text.
@@ -254,7 +264,10 @@ impl Effects {
             Win::GetScaleFactor(_, channel) => {
                 channel.send(HEADLESS_SCALE_FACTOR).ignore(UNANSWERED)
             }
-            _ => dropped("window"),
+            _ => {
+                self.dropped_windows += 1;
+                dropped("window");
+            }
         }
         None
     }
@@ -306,6 +319,26 @@ mod tests {
             app.ui_state.window_size,
             (HEADLESS_WINDOW_SIZE.width, HEADLESS_WINDOW_SIZE.height)
         );
+    }
+
+    #[test]
+    fn a_window_action_the_driver_does_not_perform_is_counted_and_an_answered_one_is_not() {
+        let mut driver = TaskDriver::new();
+        let id = iced::window::Id::unique();
+        assert_eq!(driver.dropped_window_actions(), 0);
+        let size = iced::window::size(id).then(|_| Task::done(noop()));
+        assert_eq!(driver.outputs(size).expect("size").len(), 1);
+        assert_eq!(
+            driver.dropped_window_actions(),
+            0,
+            "a measured window is answered"
+        );
+        let drop_one = iced::window::maximize::<Message>(id, true);
+        assert!(driver.outputs(drop_one).expect("maximize").is_empty());
+        assert_eq!(driver.dropped_window_actions(), 1);
+        let drop_two = iced::window::minimize::<Message>(id, true);
+        assert!(driver.outputs(drop_two).expect("minimize").is_empty());
+        assert_eq!(driver.dropped_window_actions(), 2);
     }
 
     #[test]
