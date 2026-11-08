@@ -10,9 +10,9 @@ use crate::confine::resolve;
 
 /// `project_dir` plus each of `listed` (the project's library entries, a
 /// relative one against `project_dir`) that resolves to an existing folder,
-/// was really `mounted`, and is not too broad: not a filesystem root, not
-/// `home`, and not a folder that holds the project. Anything else a run needs
-/// is named with `--allow-path`.
+/// was really `mounted`, and is not too broad: not `home`, and not a folder
+/// that holds the project (which rules out `..` and a filesystem root).
+/// Anything else a run needs is named with `--allow-path`.
 pub fn allowed_roots(
     project_dir: &Path,
     listed: &[PathBuf],
@@ -28,7 +28,6 @@ pub fn allowed_roots(
         .filter_map(|entry| resolve(&project_dir.join(entry)).ok())
         .filter(|root| root.is_dir())
         .filter(|root| mounted.contains(root))
-        .filter(|root| root.parent().is_some())
         .filter(|root| home != Some(root.as_path()))
         .filter(|root| !project_dir.starts_with(root));
     std::iter::once(project_dir.to_path_buf())
