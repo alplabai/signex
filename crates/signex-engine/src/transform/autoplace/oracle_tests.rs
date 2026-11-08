@@ -99,6 +99,7 @@ impl Lcg {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: a,
         end: b,

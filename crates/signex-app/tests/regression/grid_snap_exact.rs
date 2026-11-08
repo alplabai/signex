@@ -19,6 +19,7 @@ fn nm(mm: f64) -> i64 {
 fn wire_at(x: f64) -> (Wire, uuid::Uuid) {
     let uuid = uuid::Uuid::now_v7();
     let wire = Wire {
+        color: None,
         unknown_columns: Default::default(),
         uuid,
         start: Point::new(x, 0.0),

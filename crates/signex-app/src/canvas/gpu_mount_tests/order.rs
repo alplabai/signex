@@ -48,6 +48,7 @@ fn sheet_of(drawings: Vec<SchDrawing>) -> SchematicSheet {
 
 fn wire_across(y: f64) -> Wire {
     Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(6.0, y),
         end: Point::new(20.0, y),

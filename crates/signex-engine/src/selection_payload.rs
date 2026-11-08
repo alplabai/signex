@@ -180,6 +180,7 @@ mod tests {
             ..Default::default()
         };
         let wire = Wire {
+            color: None,
             uuid: Uuid::now_v7(),
             start: Point::new(25.4, 25.4),
             end: Point::new(38.1, 25.4),
@@ -262,6 +263,7 @@ mod tests {
         // A stem ending on a trunk that is NOT copied: the engine would call
         // a minted dot there unjustified and retire it.
         let stem = Wire {
+            color: None,
             uuid: Uuid::now_v7(),
             start: Point::new(10.16, 0.0),
             end: Point::new(10.16, 10.16),

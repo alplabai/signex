@@ -46,6 +46,7 @@ pub mod signal;
 mod status;
 mod symbol_context;
 mod widgets;
+mod wire_style_rows;
 
 #[cfg(test)]
 mod contrast_tests;
@@ -134,6 +135,7 @@ pub(super) use widgets::{
     is_section_collapsed, part_tree_row, prop_kv_row, property_label, section_title, separator,
     shape_fill_row, shape_icon_handle, view_stub,
 };
+pub use wire_style_rows::{WireColorPicker, wire_color_row, wire_width_row};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PanelKind {

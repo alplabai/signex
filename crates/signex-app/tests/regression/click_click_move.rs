@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 fn wire(uuid: uuid::Uuid, y: f64) -> Wire {
     Wire {
+        color: None,
         unknown_columns: Default::default(),
         uuid,
         start: Point::new(10.0, y),

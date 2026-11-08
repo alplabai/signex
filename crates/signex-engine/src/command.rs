@@ -69,6 +69,7 @@ pub enum CommandKind {
     SetSymbolDnp,
     SetSymbolFlag,
     SetWireWidth,
+    SetWireColor,
     SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
@@ -212,6 +213,12 @@ pub enum Command {
     SetWireWidth {
         wire_id: Uuid,
         width_mm: f64,
+    },
+    /// Set a wire's own colour; `None` clears it back to the theme wire
+    /// colour. The wire colour wins over a per-net colour and a class colour.
+    SetWireColor {
+        wire_id: Uuid,
+        color: Option<signex_types::theme::Color>,
     },
     /// Show the normal or the alternate (De Morgan) body of a symbol's library
     /// symbol. Refused with `EngineError::SymbolBodyPinsConnected` when a wired
@@ -580,6 +587,7 @@ impl Command {
             Command::SetSymbolDnp { .. } => CommandKind::SetSymbolDnp,
             Command::SetSymbolFlag { .. } => CommandKind::SetSymbolFlag,
             Command::SetWireWidth { .. } => CommandKind::SetWireWidth,
+            Command::SetWireColor { .. } => CommandKind::SetWireColor,
             Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,

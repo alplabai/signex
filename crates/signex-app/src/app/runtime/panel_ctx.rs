@@ -563,6 +563,8 @@ impl Signex {
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
+        let wire_color_picker = self.document_state.panel_ctx.wire_color_picker;
+        let selected_wire_style = self.document_state.panel_ctx.selected_wire_style;
         let child_sheet_fill_picker_open =
             self.document_state.panel_ctx.child_sheet_fill_picker_open;
         let child_sheet_border_advanced_open = self
@@ -709,6 +711,8 @@ impl Signex {
             child_sheet_fill_picker_open,
             child_sheet_border_advanced_open,
             child_sheet_fill_advanced_open,
+            wire_color_picker,
+            selected_wire_style,
             child_sheet_stroke_width_buf,
             child_sheet_name_buf,
             child_sheet_file_buf,

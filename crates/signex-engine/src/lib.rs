@@ -573,6 +573,7 @@ impl Engine {
             | Command::SetSymbolDnp { .. }
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
+            | Command::SetWireColor { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }

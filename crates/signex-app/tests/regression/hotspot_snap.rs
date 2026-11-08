@@ -221,6 +221,7 @@ fn move_pin_tip_near_wire_end(hotspots: bool) -> (f64, f64) {
     };
     let id = symbol.uuid;
     let wire = Wire {
+        color: None,
         unknown_columns: Default::default(),
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(50.0, 50.0),

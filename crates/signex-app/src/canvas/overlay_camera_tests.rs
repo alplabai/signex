@@ -38,6 +38,7 @@ pub(crate) fn graphite_app_showing(
     app.sync_panel_theme();
 
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: signex_types::schematic::Point::new(20.0, 20.0),
         end: signex_types::schematic::Point::new(60.0, 20.0),

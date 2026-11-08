@@ -874,6 +874,38 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         }
     }
 
+    // ── Wire style ──: width preset and own colour, undoable.
+    if let (Some(id), Some((width, color))) = (uuid, ctx.selected_wire_style) {
+        let picker = ctx.wire_color_picker;
+        col = col.push(
+            ctx.collapsible(
+                "sel_wire_style",
+                "Style",
+                &ctx.collapsed_sections,
+                muted,
+                border_c,
+                move || {
+                    Column::new()
+                        .spacing(0)
+                        .width(Length::Fill)
+                        .push(crate::panels::wire_width_row(
+                            width,
+                            move |preset| PanelMsg::EditWireWidth(id, preset),
+                            muted,
+                        ))
+                        .push(crate::panels::wire_color_row(
+                            color,
+                            picker,
+                            std::rc::Rc::new(move |c| PanelMsg::EditWireColor(id, c)),
+                            muted,
+                            border_c,
+                        ))
+                },
+            )
+            .boxed(),
+        );
+    }
+
     // ── Lock ── (#1573): wires, labels, text notes and drawings.
     if let (Some(id), Some(kind)) = (uuid, selected_kind)
         && matches!(

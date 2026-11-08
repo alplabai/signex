@@ -556,3 +556,5 @@ mod navigator_async;
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/wire_tab_options.rs"]
+mod wire_tab_options;

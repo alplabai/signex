@@ -596,6 +596,7 @@ fn wire_ctx() -> ExportContext {
 
     let mut sheet = empty_sheet();
     sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::nil(),
         start: Point::new(0.0, 0.0),
         end: Point::new(50.0, 20.0),

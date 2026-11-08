@@ -22,6 +22,7 @@ fn part(reference: &str, value: &str, x: f64) -> Symbol {
 
 fn wire(x: f64) -> Wire {
     Wire {
+        color: None,
         uuid: Uuid::now_v7(),
         start: Point::new(x, 20.0),
         end: Point::new(x + 10.0, 20.0),

@@ -95,6 +95,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
     let r1 = symbol("R1", (10.0, 10.0), r1_mirror.0, r1_mirror.1);
     let pin = pin_world(&r1);
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(pin.0, pin.1),
         end: Point::new(20.0, 10.0),
@@ -718,6 +719,7 @@ fn a_self_contained_selection_keeps_its_netlist() {
     let r2 = symbol("R2", (30.0, 10.0), false, false);
     let (a, b) = (pin_world(&r1), (28.0, 10.0));
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -760,6 +762,7 @@ fn two_mirrors_cancel_without_drift() {
     // Anchors at x = 10 and 11: the centre 10.5 is off the grid but on the
     // half grid, the drift case that re-snapping the centre each press had.
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(10.0, 10.0),
         end: Point::new(11.0, 12.0),
@@ -811,6 +814,7 @@ fn a_lone_off_grid_label_turns_in_place() {
 
 fn wire_from(a: (f64, f64), b: (f64, f64)) -> (SchematicSheet, SelectedItem) {
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),

@@ -202,6 +202,7 @@ fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
 pub(super) fn fixture() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
     sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(5.0, 5.0),
         end: Point::new(20.0, 5.0),
@@ -211,6 +212,7 @@ pub(super) fn fixture() -> SchematicSheet {
     });
     // A second wire a drag leaves alone.
     sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(5.0, 8.0),
         end: Point::new(20.0, 8.0),

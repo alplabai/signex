@@ -13,6 +13,7 @@ impl Signex {
     /// next segment starts from.
     pub(crate) fn place_wire_at(&mut self, start: Point, end: Point, mode: DrawMode) -> Point {
         let segments = constrain_segments(start, end, mode);
+        let (stroke_width, color) = self.wire_placement_style();
         let commands: Vec<_> = segments
             .iter()
             .map(|seg| signex_engine::Command::PlaceWireSegment {
@@ -21,7 +22,8 @@ impl Signex {
                     uuid: uuid::Uuid::now_v7(),
                     start: seg.0,
                     end: seg.1,
-                    stroke_width: 0.0,
+                    stroke_width,
+                    color,
                     locked: false,
                 },
             })
@@ -30,6 +32,17 @@ impl Signex {
             self.apply_engine_commands(commands, false, false);
         }
         segments.last().map(|s| s.1).unwrap_or(end)
+    }
+
+    /// The width and colour the next wire is placed with: what the Tab form
+    /// of the Wire tool holds, else the default width and no colour.
+    fn wire_placement_style(&self) -> (f64, Option<signex_types::theme::Color>) {
+        match &self.document_state.panel_ctx.pre_placement {
+            Some(pp) if pp.kind == crate::panels::PrePlacementKind::Wire => {
+                (pp.wire_width.stroke_mm(), pp.wire_color)
+            }
+            _ => (0.0, None),
+        }
     }
 
     /// [`Self::place_wire_at`] for a bus.
