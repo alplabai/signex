@@ -1,0 +1,33 @@
+id: no-case-in-view
+language: rust
+severity: error
+message: "No to_uppercase/to_lowercase in view code: case rules depend on the language."
+note: |
+  Upper- and lower-casing is locale-specific (Turkish maps i to İ and I to
+  ı), so a hand-cased label is wrong in some UI language. Case display text
+  with the i18n casemap (#2063). Folding an identifier or data value that
+  the user never reads is not a display concern: that site takes
+  `// ast-grep-ignore: no-case-in-view` with the reason on the line above.
+files:
+  - crates/signex-app/src/**/view/**/*.rs
+  - crates/signex-app/src/**/views/**/*.rs
+ignores:
+  - "**/*_tests.rs"
+  - "**/tests.rs"
+  - "**/tests/**"
+rule:
+  all:
+    - any:
+        - pattern: $X.to_uppercase()
+        - pattern: $X.to_lowercase()
+        - pattern: $X.to_ascii_uppercase()
+        - pattern: $X.to_ascii_lowercase()
+    - inside:
+        stopBy: end
+        kind: function_item
+    - not:
+        inside:
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'

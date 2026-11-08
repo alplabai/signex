@@ -15,10 +15,13 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Whether a row survives the filter: a case-insensitive substring of its
 /// reference, value or footprint. An empty filter keeps every row.
 fn row_matches_filter(filter: &str, sym: &signex_types::schematic::Symbol) -> bool {
+    // Match folding, never shown: the same fold on both sides of the compare.
+    // ast-grep-ignore: no-case-in-view
     let needle = filter.trim().to_lowercase();
     needle.is_empty()
         || [&sym.reference, &sym.value, &sym.footprint]
             .iter()
+            // ast-grep-ignore: no-case-in-view
             .any(|field| field.to_lowercase().contains(&needle))
 }
 
