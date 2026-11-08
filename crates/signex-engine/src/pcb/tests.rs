@@ -25,12 +25,12 @@ fn board() -> PcbBoard {
         "footprints": [
             {
                 "uuid": FP_A, "reference": "U1", "position": {"x": 10.1, "y": 20.2},
-                "rotation": 33.333333333333336, "layer": "F.Cu",
+                "rotation": 33.333333333333336, "layer": "TopCopper",
                 "pads": [{
                     "uuid": "00000000-0000-0000-0000-0000000000a1", "number": "1",
                     "pad_type": "smd", "shape": "rect",
                     "position": {"x": -1.27, "y": 0.1}, "size": {"x": 0.6, "y": 1.1},
-                    "drill": null, "layers": ["F.Cu", "F.Mask", "F.Paste"], "net": null
+                    "drill": null, "layers": ["TopCopper", "TopSolderMask", "TopPaste"], "net": null
                 }, {
                     "uuid": "00000000-0000-0000-0000-0000000000a2", "number": "2",
                     "pad_type": "thru", "shape": "circle",
@@ -38,28 +38,28 @@ fn board() -> PcbBoard {
                     "drill": {"diameter": 0.5}, "layers": ["*.Cu", "*.Mask"], "net": null
                 }],
                 "graphics": [{
-                    "graphic_type": "line", "layer": "F.SilkS", "width": 0.15,
+                    "graphic_type": "line", "layer": "TopSilkscreen", "width": 0.15,
                     "start": {"x": -2.5, "y": 1.0}, "end": {"x": 2.5, "y": 1.0},
                     "center": null, "mid": null, "position": null,
                     "points": [{"x": 0.3, "y": 0.7}], "rotation": 12.5
                 }],
                 "properties": [{
                     "key": "Reference", "value": "U1", "position": {"x": 0.7, "y": -2.0},
-                    "rotation": 0.0, "layer": "F.SilkS"
+                    "rotation": 0.0, "layer": "TopSilkscreen"
                 }]
             },
             {
                 "uuid": FP_B, "reference": "R1", "position": {"x": 0.30000000000000004, "y": 7.0},
-                "rotation": 0.0, "layer": "B.Cu"
+                "rotation": 0.0, "layer": "BottomCopper"
             }
         ],
         "segments": [
-            {"uuid": SEG_1, "start": {"x": 0.0, "y": 0.0}, "end": {"x": 1.0, "y": 0.0}, "layer": "F.Cu"},
-            {"uuid": SEG_2, "start": {"x": 1.0, "y": 0.0}, "end": {"x": 2.0, "y": 0.0}, "layer": "F.Cu"},
-            {"uuid": SEG_3, "start": {"x": 2.0, "y": 0.0}, "end": {"x": 3.0, "y": 0.0}, "layer": "B.Cu"}
+            {"uuid": SEG_1, "start": {"x": 0.0, "y": 0.0}, "end": {"x": 1.0, "y": 0.0}, "layer": "TopCopper"},
+            {"uuid": SEG_2, "start": {"x": 1.0, "y": 0.0}, "end": {"x": 2.0, "y": 0.0}, "layer": "TopCopper"},
+            {"uuid": SEG_3, "start": {"x": 2.0, "y": 0.0}, "end": {"x": 3.0, "y": 0.0}, "layer": "BottomCopper"}
         ],
-        "vias": [{"uuid": VIA_1, "position": {"x": 3.0, "y": 0.0}, "layers": ["F.Cu", "B.Cu"]}],
-        "zones": [{"uuid": ZONE_1, "layer": "B.Cu", "outline": [{"x": 0.0, "y": 0.0}]}],
+        "vias": [{"uuid": VIA_1, "position": {"x": 3.0, "y": 0.0}, "layers": ["TopCopper", "BottomCopper"]}],
+        "zones": [{"uuid": ZONE_1, "layer": "BottomCopper", "outline": [{"x": 0.0, "y": 0.0}]}],
         "texts": [{"uuid": TEXT_1, "text": "rev A", "position": {"x": 4.0, "y": 4.0}}]
     }))
     .unwrap()
@@ -295,29 +295,67 @@ fn random_edit_sequences_unwind_to_the_original_board() {
     }
 }
 
+/// World point of a footprint-local point (ADR-0005): mirror local x on the
+/// bottom side, rotate counter-clockwise by the rotation, translate.
+fn world(fp: &signex_types::pcb::Footprint, local: Point) -> (f64, f64) {
+    let x = if fp.layer == "BottomCopper" {
+        -local.x
+    } else {
+        local.x
+    };
+    let (s, c) = fp.rotation.to_radians().sin_cos();
+    (
+        c * x - s * local.y + fp.position.x,
+        s * x + c * local.y + fp.position.y,
+    )
+}
+
 #[test]
-fn flip_mirrors_local_geometry_and_swaps_sides() {
+fn flip_swaps_sides_and_keeps_local_geometry() {
     let mut b = board();
+    let before = b.footprints[0].clone();
     BoardCommand::Flip {
         footprint: id(FP_A),
     }
     .apply(&mut b)
     .unwrap();
     let fp = &b.footprints[0];
-    assert_eq!(fp.layer, "B.Cu");
+    assert_eq!(fp.layer, "BottomCopper");
     assert_eq!(fp.rotation, -33.333333333333336);
-    assert_eq!(fp.position, Point { x: 10.1, y: 20.2 });
-    assert_eq!(fp.pads[0].position, Point { x: 1.27, y: 0.1 });
-    assert_eq!(fp.pads[0].layers, ["B.Cu", "B.Mask", "B.Paste"]);
+    assert_eq!(fp.position, before.position);
+    assert_eq!(fp.pads[0].position, before.pads[0].position);
+    assert_eq!(fp.pads[1].position, before.pads[1].position);
+    assert_eq!(
+        fp.pads[0].layers,
+        ["BottomCopper", "BottomSolderMask", "BottomPaste"]
+    );
     assert_eq!(fp.pads[1].layers, ["*.Cu", "*.Mask"]);
-    assert!(fp.pads[1].position.x.is_sign_positive(), "0 stays +0");
     let g = &fp.graphics[0];
-    assert_eq!(g.layer, "B.SilkS");
-    assert_eq!(g.start, Some(Point { x: 2.5, y: 1.0 }));
-    assert_eq!(g.points, [Point { x: -0.3, y: 0.7 }]);
-    assert_eq!(g.rotation, -12.5);
-    assert_eq!(fp.properties[0].layer.as_deref(), Some("B.SilkS"));
-    assert_eq!(fp.properties[0].position, Some(Point { x: -0.7, y: -2.0 }));
+    assert_eq!(g.layer, "BottomSilkscreen");
+    assert_eq!(g.start, before.graphics[0].start);
+    assert_eq!(g.points, before.graphics[0].points);
+    assert_eq!(g.rotation, before.graphics[0].rotation);
+    assert_eq!(fp.properties[0].layer.as_deref(), Some("BottomSilkscreen"));
+    assert_eq!(fp.properties[0].position, before.properties[0].position);
+}
+
+#[test]
+fn flipped_pad_world_position_is_the_mirror_of_the_original() {
+    let mut b = board();
+    let top = b.footprints[0].clone();
+    BoardCommand::Flip {
+        footprint: id(FP_A),
+    }
+    .apply(&mut b)
+    .unwrap();
+    let bottom = &b.footprints[0];
+    for (before, after) in top.pads.iter().zip(&bottom.pads) {
+        let (wx, wy) = world(&top, before.position);
+        let (fx, fy) = world(bottom, after.position);
+        // Mirror about the vertical line through the footprint origin.
+        assert!((fx - (2.0 * top.position.x - wx)).abs() < 1e-9, "x");
+        assert!((fy - wy).abs() < 1e-9, "y");
+    }
 }
 
 #[test]
@@ -457,17 +495,18 @@ fn restore_refuses_a_gap_or_a_shared_index() {
 }
 
 #[test]
-fn layer_names_mirror_by_side_prefix() {
-    for (name, mirrored) in [
-        ("F.Cu", "B.Cu"),
-        ("B.SilkS", "F.SilkS"),
-        ("F.Courtyard", "B.Courtyard"),
-        ("In2.Cu", "In2.Cu"),
+fn layer_names_swap_by_side() {
+    for (name, swapped) in [
+        ("TopCopper", "BottomCopper"),
+        ("BottomSilkscreen", "TopSilkscreen"),
+        ("TopCourtyard", "BottomCourtyard"),
+        ("Inner2Copper", "Inner2Copper"),
+        ("EdgeCuts", "EdgeCuts"),
         ("*.Cu", "*.Cu"),
         ("Mechanical 1", "Mechanical 1"),
         ("", ""),
     ] {
-        assert_eq!(mirror_layer_name(name), mirrored);
-        assert_eq!(mirror_layer_name(mirrored), name);
+        assert_eq!(opposite_side_name(name), swapped);
+        assert_eq!(opposite_side_name(swapped), name);
     }
 }

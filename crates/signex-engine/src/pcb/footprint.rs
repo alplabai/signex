@@ -1,6 +1,6 @@
 //! Move, rotate and flip one footprint. Pads, graphics and property texts
-//! are stored in the footprint's local frame, so a move or a rotation only
-//! touches the footprint's own origin and angle.
+//! are stored in the footprint's local frame, so none of the three rewrites
+//! them. Lock state is the caller's check, not this module's.
 
 use signex_types::pcb::{Footprint, PcbBoard, Point};
 use uuid::Uuid;
@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
 use super::items::BoardItemId;
-use super::layer_side::mirror_in_place;
+use super::layer_side::swap_side_in_place;
 
 fn find(board: &mut PcbBoard, id: Uuid) -> Result<&mut Footprint, BoardCommandError> {
     board
@@ -72,47 +72,27 @@ pub(super) fn flip(board: &mut PcbBoard, id: Uuid) -> Result<Applied, BoardComma
     })
 }
 
-/// Mirror `fp` to the other side. World = R(θ)·local + origin, and mirroring
-/// that about the vertical line through the origin equals R(−θ) applied to
-/// the local point with x negated. Negation is exact, so two flips restore
-/// every bit.
+/// Flip `fp` to the other side. Pads, graphics and properties keep their
+/// library-local geometry (ADR-0005); only sided layers swap and the
+/// rotation is negated, which with the placement-time x mirror gives
+/// M·R(θ)·l + o. Negation is exact, so two flips restore every bit.
+///
+/// Property positions are read as footprint-local like pads, so they stay
+/// untouched too. Unknown pad columns pass through unchanged.
 fn flip_footprint(fp: &mut Footprint) {
-    mirror_in_place(&mut fp.layer);
+    swap_side_in_place(&mut fp.layer);
     fp.rotation = negate_keeping_zero(fp.rotation);
     for pad in &mut fp.pads {
-        mirror_point(&mut pad.position);
-        pad.layers.iter_mut().for_each(mirror_in_place);
+        pad.layers.iter_mut().for_each(swap_side_in_place);
     }
     for graphic in &mut fp.graphics {
-        mirror_in_place(&mut graphic.layer);
-        for p in [
-            &mut graphic.start,
-            &mut graphic.end,
-            &mut graphic.center,
-            &mut graphic.mid,
-            &mut graphic.position,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            mirror_point(p);
-        }
-        graphic.points.iter_mut().for_each(mirror_point);
-        graphic.rotation = negate_keeping_zero(graphic.rotation);
+        swap_side_in_place(&mut graphic.layer);
     }
     for property in &mut fp.properties {
         if let Some(layer) = property.layer.as_mut() {
-            mirror_in_place(layer);
+            swap_side_in_place(layer);
         }
-        if let Some(p) = property.position.as_mut() {
-            mirror_point(p);
-        }
-        property.rotation = negate_keeping_zero(property.rotation);
     }
-}
-
-fn mirror_point(p: &mut Point) {
-    p.x = negate_keeping_zero(p.x);
 }
 
 /// Negate, keeping a zero as it is so a value at 0 does not read back

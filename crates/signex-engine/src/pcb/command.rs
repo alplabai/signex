@@ -12,9 +12,12 @@ pub enum BoardCommand {
     MoveFootprint { footprint: Uuid, to: Point },
     /// Set the footprint's rotation about its origin to `degrees`.
     Rotate { footprint: Uuid, degrees: f64 },
-    /// Move the footprint to the other side of the board: its layers swap
-    /// sides and its local geometry mirrors about the local Y axis. A flip
-    /// is its own inverse.
+    /// Move the footprint to the other side of the board: its layer and its
+    /// pads' and graphics' sided layers swap, and its rotation is negated.
+    /// Local geometry is untouched; the x mirror is applied when the
+    /// footprint is placed on the board (ADR-0005). A flip is its own
+    /// inverse. The caller enforces `Footprint::locked` for move, rotate
+    /// and flip.
     Flip { footprint: Uuid },
     /// Replace the board outline polygon.
     SetBoardOutline { outline: Vec<Point> },
