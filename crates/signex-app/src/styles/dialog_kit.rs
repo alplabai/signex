@@ -187,8 +187,6 @@ fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> 
         _ if disabled => ti(tokens.text_secondary),
         DialogButtonKind::Primary if is_graphite(tokens) => tokens::resolve(tokens).primary_ink,
         DialogButtonKind::Primary | DialogButtonKind::Accent => tokens::on_accent(tokens),
-        // The quiet Graphite action reads in the third ink, as in the mock-up.
-        DialogButtonKind::Ghost if is_graphite(tokens) => tokens::resolve(tokens).ink3,
         DialogButtonKind::Secondary | DialogButtonKind::Ghost | DialogButtonKind::Cancel => {
             ti(tokens.text)
         }
