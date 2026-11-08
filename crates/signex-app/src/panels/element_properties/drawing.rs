@@ -59,6 +59,8 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
     let fill = parse_fill(&get("Fill"));
     let show_fill = matches!(elem_type.as_str(), "Rectangle" | "Circle" | "Polygon");
 
+    let ink = crate::styles::ti(ctx.tokens.text);
+    let preview_ground = crate::styles::tokens::resolve(&ctx.tokens).sunken;
     let mut col = Column::new().spacing(0).width(Length::Fill);
     // Header: shape icon + type label. Draft SVGs live at
     // assets/icons/shape_*.svg and can be swapped out for final art
@@ -67,18 +69,13 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
             row![
                 iced::widget::svg(icon).width(16).height(16),
-                text(elem_type.clone())
-                    .size(TS.body)
-                    .color(Color::from_rgb(0.90, 0.90, 0.92)),
+                text(elem_type.clone()).size(TS.body).color(ink),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
             .boxed()
         } else {
-            text(elem_type.clone())
-                .size(TS.body)
-                .color(Color::from_rgb(0.90, 0.90, 0.92))
-                .boxed()
+            text(elem_type.clone()).size(TS.body).color(ink).boxed()
         };
     col = col.push(
         container(header_row)
@@ -108,7 +105,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                 .padding([SP.m, SP.l])
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 0.6))),
+                    background: Some(Background::Color(preview_ground)),
                     border: Border {
                         width: 1.0,
                         color: border_c,
@@ -355,12 +352,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     border_c,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(prop_kv_row(
-                            "Vertices",
-                            &vert_count.to_string(),
-                            muted,
-                            Color::from_rgb(0.90, 0.90, 0.92),
-                        ));
+                        c = c.push(prop_kv_row("Vertices", &vert_count.to_string(), muted, ink));
                         c = c.push(drawing_num_row(
                             "Border",
                             DrawingFieldId::PolyBorder,
@@ -380,12 +372,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         _ => {
             for (key, value) in &ctx.selection_info {
                 if key != "Type" {
-                    col = col.push(prop_kv_row(
-                        key,
-                        value,
-                        muted,
-                        Color::from_rgb(0.9, 0.9, 0.92),
-                    ));
+                    col = col.push(prop_kv_row(key, value, muted, ink));
                 }
             }
         }
@@ -552,25 +539,7 @@ fn drawing_placement_row<'a>(
         iced::widget::button(text(label).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Placement(placement)))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(if active {
-                    Color::from_rgb(0.20, 0.36, 0.58)
-                } else {
-                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
-                })),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: Color::from_rgb(0.28, 0.28, 0.32),
-                    ..Border::default()
-                },
-                text_color: if active {
-                    Color::from_rgb(1.0, 1.0, 1.0)
-                } else {
-                    muted
-                },
-                ..iced::widget::button::Style::default()
-            })
+            .style(crate::panels::form_look::option_tile(active))
             .boxed()
     };
     row![
@@ -602,25 +571,7 @@ fn drawing_fill_row<'a>(
         iced::widget::button(text(label).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(if active {
-                    Color::from_rgb(0.20, 0.36, 0.58)
-                } else {
-                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
-                })),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: Color::from_rgb(0.28, 0.28, 0.32),
-                    ..Border::default()
-                },
-                text_color: if active {
-                    Color::from_rgb(1.0, 1.0, 1.0)
-                } else {
-                    muted
-                },
-                ..iced::widget::button::Style::default()
-            })
+            .style(crate::panels::form_look::option_tile(active))
             .boxed()
     };
     row![

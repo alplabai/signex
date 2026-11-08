@@ -243,10 +243,7 @@ pub(in crate::panels) fn segment_cell(
 }
 
 /// Ghost button: transparent, hairline, radius 7. `None` on other themes.
-pub(in crate::panels) fn ghost_button(
-    theme: &Theme,
-    status: button::Status,
-) -> Option<button::Style> {
+pub(crate) fn ghost_button(theme: &Theme, status: button::Status) -> Option<button::Style> {
     let l = FormLook::of(theme)?;
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
     Some(button::Style {
@@ -260,6 +257,24 @@ pub(in crate::panels) fn ghost_button(
         },
         ..button::Style::default()
     })
+}
+
+/// Option tile of a Properties row (fill, placement, a class list): a ghost
+/// button, the chosen one in accent-soft with an accent hairline. The stock
+/// secondary style on any other theme.
+pub(crate) fn option_tile(
+    active: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let Some(mut style) = ghost_button(theme, status) else {
+            return button::secondary(theme, status);
+        };
+        if let (true, Some(l)) = (active, FormLook::of(theme)) {
+            style.background = Some(Background::Color(l.accent_soft));
+            style.border.color = l.accent;
+        }
+        style
+    }
 }
 
 /// Active tab chip of the Properties tab strip: accent-soft fill, radius 7.

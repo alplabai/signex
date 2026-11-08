@@ -303,25 +303,7 @@ pub fn shape_fill_row<'a>(
         button(text(label).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
-            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(if active {
-                    Color::from_rgb(0.20, 0.36, 0.58)
-                } else {
-                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
-                })),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: Color::from_rgb(0.28, 0.28, 0.32),
-                    ..iced::Border::default()
-                },
-                text_color: if active {
-                    Color::from_rgb(1.0, 1.0, 1.0)
-                } else {
-                    muted
-                },
-                ..iced::widget::button::Style::default()
-            })
+            .style(super::form_look::option_tile(active))
             .boxed()
     };
     row![

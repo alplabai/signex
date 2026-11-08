@@ -36,19 +36,7 @@ pub(super) fn view<'a>(
             container(text("+ Add Parameter").size(TS.body).color(text_c)).padding([SP.xs, SP.l])
         )
         .on_press(send.clone()(BrowserEditMsg::AddParam))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        }),
+        .style(crate::panels::form_look::option_tile(false)),
     ]
     .align_y(iced::Alignment::Center);
 
@@ -77,9 +65,9 @@ pub(super) fn view<'a>(
         .padding([SP.xs, 6.0]),
     )
     .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.04,
-        ))),
+        background: Some(iced::Background::Color(
+            crate::styles::tokens::resolve(tokens).field,
+        )),
         border: Border {
             width: 0.0,
             radius: 2.0.into(),
@@ -285,9 +273,9 @@ fn param_row<'a>(
             })
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
+            background: Some(iced::Background::Color(
+                crate::styles::tokens::resolve(tokens).field,
+            )),
             text_color: muted,
             border: Border {
                 width: 1.0,

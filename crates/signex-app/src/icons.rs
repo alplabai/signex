@@ -138,6 +138,9 @@ bar_icon!(
     "active_bar/graphite/chevron.svg"
 );
 canonical_icon!(icon_close, "close.svg");
+canonical_icon!(icon_plus, "chrome/plus.svg");
+canonical_icon!(icon_undo, "chrome/undo.svg");
+canonical_icon!(icon_redo, "chrome/redo.svg");
 canonical_icon!(icon_collapse_down, "collapse_down.svg");
 canonical_icon!(icon_collapse_left, "collapse_left.svg");
 canonical_icon!(icon_collapse_right, "collapse_right.svg");

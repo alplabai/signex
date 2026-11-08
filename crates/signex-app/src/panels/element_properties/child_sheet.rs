@@ -127,14 +127,10 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                 ));
                 c = c.push(
                     container(
-                        iced::widget::button(
-                            text("Reset to Default")
-                                .size(TS.caption)
-                                .color(Color::from_rgb(0.92, 0.92, 0.94)),
-                        )
-                        .padding([SP.s, 10.0])
-                        .on_press(PanelMsg::ResetChildSheetStyle(id))
-                        .style(iced::widget::button::secondary),
+                        iced::widget::button(text("Reset to Default").size(TS.caption))
+                            .padding([SP.s, 10.0])
+                            .on_press(PanelMsg::ResetChildSheetStyle(id))
+                            .style(crate::panels::form_look::option_tile(false)),
                     )
                     .padding([6.0, SP.m])
                     .width(Length::Fill)
@@ -231,7 +227,7 @@ fn child_sheet_stroke_width_row<'a>(
     stored_value: f64,
     buffered: Option<String>,
     muted: Color,
-    border_c: Color,
+    _border_c: Color,
 ) -> Element<'a, PanelMsg> {
     let display = match buffered {
         Some(s) => s,
@@ -246,20 +242,7 @@ fn child_sheet_stroke_width_row<'a>(
         .width(120)
         .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
         .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
-        .style(
-            move |_theme: &Theme, _status| iced::widget::text_input::Style {
-                background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
-                border: Border {
-                    width: 1.0,
-                    color: border_c,
-                    radius: 2.0.into(),
-                    ..Border::default()
-                },
-                placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
-                value: Color::from_rgb(0.95, 0.95, 0.96),
-                selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
-            },
-        );
+        .style(crate::panels::form_look::text_input_style);
 
     container(
         row![
@@ -287,7 +270,7 @@ fn buffered_or(buf: &Option<(uuid::Uuid, String)>, id: uuid::Uuid, live: &str) -
 fn child_sheet_text_row<'a>(
     label: &'a str,
     value: &str,
-    border_c: Color,
+    _border_c: Color,
     muted: Color,
     on_input: impl Fn(String) -> PanelMsg + 'a,
     on_submit: PanelMsg,
@@ -298,20 +281,7 @@ fn child_sheet_text_row<'a>(
         .width(Length::Fill)
         .on_input(on_input)
         .on_submit(on_submit)
-        .style(
-            move |_theme: &Theme, _status| iced::widget::text_input::Style {
-                background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
-                border: Border {
-                    width: 1.0,
-                    color: border_c,
-                    radius: 2.0.into(),
-                    ..Border::default()
-                },
-                placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
-                value: Color::from_rgb(0.95, 0.95, 0.96),
-                selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
-            },
-        );
+        .style(crate::panels::form_look::text_input_style);
     container(
         row![text(label).size(TS.body).color(muted).width(84), input]
             .spacing(SP.s)
