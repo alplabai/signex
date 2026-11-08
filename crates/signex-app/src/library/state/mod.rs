@@ -118,7 +118,7 @@ impl LifecycleFilter {
 
     /// Whether a row in `state` should render under this filter.
     /// Deprecated rows are hidden by default and render tinted when
-    /// `IncludeDeprecated` shows them (see `lifecycle_dot_color`).
+    /// `IncludeDeprecated` shows them.
     /// `LifecycleState` is `#[non_exhaustive]`, so any future variant
     /// falls through to hidden.
     pub fn allows(self, state: signex_library::LifecycleState) -> bool {

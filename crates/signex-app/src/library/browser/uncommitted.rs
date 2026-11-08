@@ -23,44 +23,7 @@ pub(super) fn view_uncommitted_banner<'a>(
         if count == 1 { "" } else { "s" },
         pending.reason
     );
-    if crate::styles::is_graphite(tokens) {
-        return sidebar_footer(library_path, committing, summary, tokens);
-    }
-    let warn = theme_ext::text_primary(tokens);
-    let commit_now = button(
-        text(if committing {
-            "Committing…"
-        } else {
-            "Commit now"
-        })
-        .size(BROWSER_TEXT_SIZE)
-        .color(warn),
-    )
-    .padding([SP.s, 10.0])
-    .on_press_maybe((!committing).then(|| LibraryMessage::BrowserCommitPending {
-        library_path: library_path.to_path_buf(),
-    }));
-    container(
-        row![
-            text(summary).size(BROWSER_TEXT_SIZE).color(warn),
-            Space::new().width(Length::Fill),
-            commit_now,
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([6.0, 10.0])
-    .width(Length::Fill)
-    .style(move |_| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            0.95, 0.65, 0.1, 0.18,
-        ))),
-        border: Border::default()
-            .width(1.0)
-            .rounded(3.0)
-            .color(iced::Color::from_rgba(0.95, 0.65, 0.1, 0.6)),
-        ..iced::widget::container::Style::default()
-    })
-    .boxed()
+    sidebar_footer(library_path, committing, summary, tokens)
 }
 
 /// Graphite: the banner sits in the sidebar footer, in the `warn` ink over

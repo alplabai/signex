@@ -342,28 +342,6 @@ pub(super) fn derive_columns(
     columns
 }
 
-/// Per-lifecycle indicator dot colour. Matches plan §6:
-///
-/// * Released → green;
-/// * Draft / InReview → neutral grey ("active, but not preferred");
-/// * Deprecated → amber/yellow;
-/// * Obsolete → muted dark grey.
-///
-/// Centralised here so both the dot and any future lifecycle badge
-/// in the side preview pane can pull the same colour.
-pub(super) fn lifecycle_dot_color(state: LifecycleState) -> iced::Color {
-    match state {
-        LifecycleState::Released => iced::Color::from_rgb(0.30, 0.78, 0.40),
-        LifecycleState::InReview => iced::Color::from_rgb(0.50, 0.65, 0.95),
-        LifecycleState::Draft => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.45),
-        LifecycleState::Deprecated => iced::Color::from_rgb(0.96, 0.78, 0.10),
-        LifecycleState::Obsolete => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20),
-        // `LifecycleState` is `#[non_exhaustive]` — fall back to the
-        // muted "Draft" colour for any future state we haven't styled yet.
-        _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.30),
-    }
-}
-
 fn shorten_label(key: &str) -> String {
     if key.len() <= 14 {
         key.to_string()

@@ -7,9 +7,7 @@ use iced::widget::{Row, container, text};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
-use crate::styles::{
-    self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, is_graphite, tokens,
-};
+use crate::styles::{self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -19,17 +17,13 @@ pub(super) fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
-/// Dialog header: on Graphite, title plus subtitle; on other themes the
-/// plain title strip (the subtitle is dropped there).
+/// Dialog header: title plus optional subtitle.
 pub(super) fn titled_header<'a, M: Clone + 'a>(
     title: &'static str,
     subtitle: Option<String>,
     on_close: M,
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    if !is_graphite(theme_tokens) {
-        return super::widgets::modal_title_header(title, on_close, theme_tokens);
-    }
     super::header::graphite_header(
         title,
         subtitle,
@@ -40,14 +34,9 @@ pub(super) fn titled_header<'a, M: Clone + 'a>(
     )
 }
 
-/// The button kind of a dialog's call to action: copper on Graphite, the
-/// existing primary elsewhere.
-pub(super) fn call_to_action(theme_tokens: &ThemeTokens) -> DialogButtonKind {
-    if is_graphite(theme_tokens) {
-        DialogButtonKind::Accent
-    } else {
-        DialogButtonKind::Primary
-    }
+/// The button kind of a dialog's call to action: copper.
+pub(super) fn call_to_action(_theme_tokens: &ThemeTokens) -> DialogButtonKind {
+    DialogButtonKind::Accent
 }
 
 /// Row tint of an Annotate row whose designator changes: the soft accent
