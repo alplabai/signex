@@ -49,8 +49,8 @@ fn send(app: &mut Signex, message: Message) {
         .expect("the message settled");
 }
 
-/// The app in `theme` with the sample project and its sheet open (a bare
-/// Start screen has no docks), the stock library mounted, the Components
+/// The app in `theme` with the sample sheet open (a bare Start screen has no
+/// docks), the stock library mounted, the Components
 /// panel showing in the `side` dock and its first stock row selected with
 /// its details loaded. Returns the selected row too.
 fn app_with_details(
@@ -70,14 +70,21 @@ fn app_with_details(
         &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/sample-project"),
         &sample,
     );
-    let project = sample.join("linear-regulator.snxprj");
-    for path in [project.clone(), project.with_extension("snxsch")] {
-        send(
-            &mut app,
-            Message::File(crate::app::FileMsg::Opened(Some(path))),
-        );
-    }
+    // The sheet alone: opening the project would record it in Open Recent,
+    // which this process's other tests read back from the shared prefs file.
+    let recent = app.ui_state.recent_projects.entries().to_vec();
+    send(
+        &mut app,
+        Message::File(crate::app::FileMsg::Opened(Some(
+            sample.join("linear-regulator.snxsch"),
+        ))),
+    );
     assert!(!app.document_state.tabs.is_empty(), "the sheet is open");
+    assert_eq!(
+        app.ui_state.recent_projects.entries(),
+        recent.as_slice(),
+        "nothing was added to Open Recent"
+    );
     let stock = stock_root();
     app.library.pending_mounts.clear();
     app.library.stock_library_root = Some(stock.clone());
@@ -495,11 +502,9 @@ fn the_previews_pan_with_a_component_editor_tab_in_front() {
             let at = preview_point(&mut live, label);
             assert_drag_pans(&mut live, at, &format!("{theme:?} panel {title}"));
 
-            let left = live.app.ui_state.left_width;
-            let centre = Rectangle::new(
-                Point::new(left, 0.0),
-                Size::new(right.x - left, WINDOW.height),
-            );
+            // Everything left of the right dock: an emptied left dock hides,
+            // and the editor then starts at the window's edge.
+            let centre = Rectangle::new(Point::ORIGIN, Size::new(right.x, WINDOW.height));
             let label = label_in(&mut live, title, centre);
             let at = preview_point(&mut live, label);
             assert_drag_pans(&mut live, at, &format!("{theme:?} editor {title}"));
@@ -529,8 +534,10 @@ fn the_previews_pan_one_to_one_in_a_scrolled_details_pane() {
             live.app.library.components_panel.list_height += pane.height - 220.0;
             let (pane, _) = details(&mut live);
             let over = Point::new(pane.x + 6.0, pane.y + pane.height / 2.0);
-            // Far enough to bring the preview under test into the short pane.
-            let by = if title == "Symbol" { 90.0 } else { 300.0 };
+            // Bring the section label under test to the top of the short pane,
+            // so its preview lies inside it.
+            let label = label_in(&mut live, title, right);
+            let by = (label.y - pane.y - 4.0).max(60.0);
             let wheel = Event::Mouse(mouse::Event::WheelScrolled {
                 delta: mouse::ScrollDelta::Pixels { x: 0.0, y: -by },
             });
@@ -555,13 +562,16 @@ fn the_previews_pan_one_to_one_in_a_scrolled_details_pane() {
             let (_, scroll) = details(&mut live);
             if scroll.y <= 40.0 {
                 let all = scrollables(&mut live);
-                let seen = drive(&mut live, &[moved(over)]);
                 panic!(
-                    "{theme:?}: the details pane scrolled by {scroll:?} in {pane:?}                      (wheel at {over:?}, hover {seen:?}); scrollables: {all:?}"
+                    "{theme:?}: the details pane scrolled by {scroll:?} in {pane:?} (wheel at {over:?}); scrollables: {all:?}"
                 );
             }
             let label = label_in(&mut live, title, right);
             let at = preview_point(&mut live, label);
+            assert!(
+                at.y + 70.0 < pane.y + pane.height,
+                "{theme:?} {title}: the drag at {at:?} stays inside the pane {pane:?}"
+            );
             assert_drag_pans(&mut live, at, &format!("{theme:?} scrolled {title}"));
         }
     }
