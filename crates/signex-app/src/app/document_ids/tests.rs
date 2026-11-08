@@ -1051,6 +1051,24 @@ fn a_parked_board_is_listed_loaded_and_dirty_and_read_with_its_unsaved_edits() {
         &[&format!("document={}", uid(900))],
     );
     assert_eq!(read["header"]["thickness"], 2.4, "the unsaved edit: {read}");
+
+    let via: signex_types::pcb::Via = serde_json::from_value(serde_json::json!({
+        "uuid": uid(901),
+        "position": {"x": 1.0, "y": 2.0},
+    }))
+    .unwrap();
+    app.document_state
+        .parked_pcb_boards
+        .get_mut(&board)
+        .unwrap()
+        .vias
+        .push(via);
+    let found = headless(
+        &mut app,
+        "find_items",
+        &[&format!("document={}", uid(900)), "kind=via"],
+    );
+    assert_eq!(found["count"], 1, "the parked board is searched: {found}");
 }
 
 #[test]
