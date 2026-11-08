@@ -128,6 +128,33 @@ impl Signex {
             .ok_or_else(|| format!("{} has no file", entry.name))
     }
 
+    /// The files, besides `path` itself, that saving the document at `path`
+    /// can write (#2172), for a runner that checks them before it lets the
+    /// command run. A project file also creates its pending libraries; a
+    /// sheet saved `as_copy` re-points its project file and rewrites the
+    /// project's sheets that may reference it. A plain sheet save writes
+    /// nothing else.
+    pub fn save_side_writes(&self, path: &std::path::Path, as_copy: bool) -> Vec<PathBuf> {
+        let docs = &self.document_state;
+        if let Some(project) = docs.projects.iter().find(|p| p.path == path) {
+            return project
+                .pending_libraries
+                .values()
+                .map(|spec| spec.lib_path.clone())
+                .collect();
+        }
+        let Some(project) = docs.document_project(path).filter(|_| as_copy) else {
+            return Vec::new();
+        };
+        let Some(idx) = docs.projects.iter().position(|p| p.id == project.id) else {
+            return Vec::new();
+        };
+        let plan = self.plan_reference_rewrites(idx, path, "");
+        let mut writes = self.disk_parent_candidates(Some(project.id), &plan, path);
+        writes.push(project.path.clone());
+        writes
+    }
+
     /// The dialog answers of an app from [`Self::boot_headless`]; `None`
     /// for an app with native dialogs.
     pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {

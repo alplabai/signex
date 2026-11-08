@@ -601,3 +601,41 @@ fn a_save_by_id_checks_the_named_document_not_the_active_or_unrelated_files() {
     );
     live.finish();
 }
+
+/// A Save As by document also re-points the project file that lists the
+/// sheet: that file is checked with the named one, so a project file that is
+/// a link out refuses the run before anything is written.
+#[cfg(unix)]
+#[test]
+fn a_save_as_by_id_also_checks_the_project_file_it_re_points() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let outside = replace_with_link_to_outside(&fx.project, &other);
+    let before = std::fs::read(&outside).unwrap();
+    let copy = fx.sheet.with_file_name("copy.snxsch");
+
+    let saved = live.send(&json!({
+        "id": "save_document_as",
+        "args": {"document": id, "path": copy}
+    }));
+
+    assert_eq!(saved["status"], "refused", "{saved}");
+    assert!(
+        saved["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("demo.snxprj is a symbolic link")),
+        "{saved}"
+    );
+    assert!(!copy.exists(), "nothing was written");
+    assert_eq!(std::fs::read(&outside).unwrap(), before);
+    live.finish();
+}

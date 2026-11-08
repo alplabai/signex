@@ -160,12 +160,19 @@ impl Session {
             Err(reason) => return (Status::Refused, Some(reason), None),
         };
         // A command that writes also writes files no operand names. One that
-        // names its document writes that document, not whatever is active.
+        // names its document writes that document (not whatever is active)
+        // and what saving it writes besides: its project file, the sheets a
+        // Save As rewrites, the libraries a project save creates.
         if capability_of(approved.meta).writes_files() {
             let targets = if named.is_empty() {
                 self.implicit_write_targets()
             } else {
-                named
+                let as_copy = approved.command.as_str() == "save_document_as";
+                let side: Vec<PathBuf> = named
+                    .iter()
+                    .flat_map(|path| self.app.save_side_writes(path, as_copy))
+                    .collect();
+                named.into_iter().chain(side).collect()
             };
             if let Err(reason) = self.policy.check_write_targets(&targets, &self.roots) {
                 return (Status::Refused, Some(reason), None);
