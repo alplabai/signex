@@ -512,3 +512,30 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
     );
     assert!(!b.is_dirty());
 }
+
+/// A sheet loaded only for an answer is not repaired: it is dropped after, so
+/// a new id would name a document that never keeps it.
+#[test]
+fn a_sheet_loaded_only_for_a_query_keeps_the_id_its_file_holds() {
+    let dir = temp_dir();
+    let mut app = app_with_files(dir.path());
+    // An open sheet elsewhere repeats the id of the unloaded Sub.
+    crate::app::handlers::editing_commands::net_color_driver::add_sheet_with(
+        &mut app,
+        &path("open.snxsch"),
+        crate::app::command::queries::tests::sheet(SHEET + 1),
+    );
+    let found = headless(&mut app, "find_items", &["kind=symbol", "designator=U3"]);
+    let in_sub: Vec<_> = found["elements"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| {
+            e["document"]["path"]
+                .as_str()
+                .is_some_and(|p| p.ends_with("Sub.snxsch"))
+        })
+        .collect();
+    assert_eq!(in_sub.len(), 1);
+    assert_eq!(in_sub[0]["document"]["id"], uid(SHEET + 1).to_string());
+}
