@@ -160,6 +160,9 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// The open transaction, if any (`exec/transaction.rs`, #2178): history
+    /// stays suppressed while it is open.
+    transaction: Option<exec::transaction::Transaction>,
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
@@ -300,6 +303,7 @@ impl Engine {
             path,
             history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -332,6 +336,7 @@ impl Engine {
             path: Some(path.to_path_buf()),
             history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,

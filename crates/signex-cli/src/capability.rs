@@ -143,6 +143,14 @@ mod tests {
         assert!(seen.contains(&Capability::Read) && seen.contains(&Capability::Edit));
     }
 
+    /// An agent's edit list and its revert change a document in memory only:
+    /// `edit`, never `save`.
+    #[test]
+    fn an_agents_edit_list_and_its_revert_need_the_edit_capability() {
+        assert_eq!(cap("apply_edits"), Capability::Edit);
+        assert_eq!(cap("revert"), Capability::Edit);
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()

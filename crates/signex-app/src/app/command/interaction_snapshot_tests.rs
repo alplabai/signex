@@ -19,7 +19,8 @@ pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
     format!(
         "active_path={:?}\nactive_tab={}\nactive_project={:?}\ntabs={tabs:?}\nfocused_window={:?}\n\
          tool={:?}\nselected={:?}\nmove_epoch={}\nediting_text={:?}\nwire_preview={:?}\n\
-         drawing_mode={}\npalette={:?}\npending_net_color={:?}",
+         drawing_mode={}\npalette={:?}\npending_net_color={:?}\nmove_pick={:?}\n\
+         wire_drawing={}\narc={:?}\npolyline={:?}\nshape_anchor={:?}",
         docs.active_path,
         docs.active_tab,
         docs.active_project,
@@ -32,5 +33,10 @@ pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
         canvas.drawing_mode,
         app.ui_state.command_palette,
         app.ui_state.pending_net_color,
+        app.ui_state.move_pick,
+        app.interaction_state.wire_drawing,
+        app.interaction_state.arc_points,
+        app.interaction_state.polyline_points,
+        app.interaction_state.shape_anchor,
     )
 }
