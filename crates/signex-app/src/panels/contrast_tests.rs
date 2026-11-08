@@ -11,7 +11,7 @@ use crate::styles::tokens::{
 };
 use iced::Color;
 use iced::widget::button;
-use signex_types::theme::{ThemeId, theme_tokens};
+use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 
 /// A theme is light when its panel is light, whatever its name.
 fn is_light(id: ThemeId) -> bool {
@@ -54,26 +54,48 @@ fn selected_segment_text_is_readable_on_every_light_theme() {
     }
 }
 
-/// The label rule was written for a retired light theme whose accent equalled
-/// its selection fill; it must keep every light theme readable.
+/// The retired Solarized Light tokens and the iced theme they drew with: the
+/// light palette whose accent equals its selection fill, the collision the
+/// label rules below exist for. No shipped theme has it any more, but the
+/// rules stay, so they are pinned on these inputs.
+fn collision_tokens() -> ThemeTokens {
+    let c = |hex: &str| signex_types::theme::Color::from_hex(hex);
+    ThemeTokens {
+        bg: c("#FDF6E3"),
+        paper: c("#EEE8D5"),
+        text: c("#657B83"),
+        text_secondary: c("#93A1A1"),
+        accent: c("#268BD2"),
+        border: c("#93A1A1"),
+        panel_bg: c("#FDF6E3"),
+        toolbar_bg: c("#EEE8D5"),
+        statusbar_bg: c("#EEE8D5"),
+        selection: c("#268BD2"),
+        hover: c("#EEE8D5"),
+        error: c("#DC322F"),
+        warning: c("#CB4B16"),
+        success: c("#859900"),
+        extended: signex_types::theme::ExtendedTokens::NONE,
+    }
+}
+
 #[test]
-fn add_filter_label_is_readable_on_every_light_theme() {
-    for id in light_themes() {
-        let tokens = theme_tokens(id);
-        let p = PanelPalette::from_tokens(&tokens);
-        let theme = Signex::id_to_iced_theme(id);
-        for status in [
-            button::Status::Active,
-            button::Status::Hovered,
-            button::Status::Pressed,
-        ] {
-            let style = add_filter_button_style(&theme, status, p.primary);
-            assert_readable(
-                &format!("{id:?} + Add Filter {status:?}"),
-                style.text_color,
-                solid(style.background),
-            );
-        }
+fn add_filter_label_is_readable_on_the_accent_selection_collision() {
+    let tokens = collision_tokens();
+    assert_eq!(tokens.accent, tokens.selection, "fixture precondition");
+    let p = PanelPalette::from_tokens(&tokens);
+    let theme = iced::Theme::Light;
+    for status in [
+        button::Status::Active,
+        button::Status::Hovered,
+        button::Status::Pressed,
+    ] {
+        let style = add_filter_button_style(&theme, status, p.primary);
+        assert_readable(
+            &format!("+ Add Filter {status:?}"),
+            style.text_color,
+            solid(style.background),
+        );
     }
 }
 
@@ -184,23 +206,21 @@ fn dark_themes_keep_every_label_that_was_visible() {
 }
 
 #[test]
-fn focused_erc_severity_letter_is_readable_on_every_light_theme() {
+fn focused_erc_severity_letter_is_readable_on_the_accent_selection_collision() {
     use signex_widgets::theme_ext;
-    for id in light_themes() {
-        let tokens = theme_tokens(id);
-        let fill = ti(tokens.selection);
-        for (name, colour) in [
-            ("E", theme_ext::error_color(&tokens)),
-            ("W", theme_ext::warning_color(&tokens)),
-            ("I", theme_ext::accent(&tokens)),
-        ] {
-            assert_readable(
-                &format!("{id:?} ERC severity {name}"),
-                erc_severity_text(&tokens, true, colour),
-                fill,
-            );
-            assert_eq!(erc_severity_text(&tokens, false, colour), colour);
-        }
+    let tokens = collision_tokens();
+    let fill = ti(tokens.selection);
+    for (name, colour) in [
+        ("E", theme_ext::error_color(&tokens)),
+        ("W", theme_ext::warning_color(&tokens)),
+        ("I", theme_ext::accent(&tokens)),
+    ] {
+        assert_readable(
+            &format!("ERC severity {name}"),
+            erc_severity_text(&tokens, true, colour),
+            fill,
+        );
+        assert_eq!(erc_severity_text(&tokens, false, colour), colour);
     }
 }
 
