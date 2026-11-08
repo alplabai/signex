@@ -874,7 +874,10 @@ impl FootprintDocument {
     /// state. Resets the canvas cache so the next render reflects
     /// the rolled-back geometry.
     fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        // The file's id is the live one, not the snapshot's (#2172).
+        let live_id = self.file.file_uuid;
         self.file = snap.file;
+        self.file.file_uuid = live_id;
         self.active_idx = snap.active_idx;
         self.state.pads = snap.pads;
         self.state.selected_pad = snap.selected_pad;

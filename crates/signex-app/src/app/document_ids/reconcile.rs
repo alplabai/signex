@@ -35,6 +35,11 @@ impl Signex {
             .filter_map(DocumentKey::of)
             .collect();
         let ids = &mut self.document_state.document_ids;
+        ids.forget_unheld_orders(
+            tab_keys
+                .iter()
+                .chain(held.iter().filter_map(|e| e.key.as_ref())),
+        );
         for key in tab_keys
             .iter()
             .chain(held.iter().filter_map(|e| e.key.as_ref()))

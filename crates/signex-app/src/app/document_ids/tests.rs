@@ -862,3 +862,72 @@ fn a_head_is_wanted_again_when_its_file_changed_on_disk() {
     ids.set_header(file.clone(), DocumentId::from_uuid(uid(1)), Some(earlier));
     assert!(ids.header_wanted(&file), "a changed file is read again");
 }
+
+#[test]
+fn a_copy_opened_again_does_not_take_the_id_of_the_sheet_open_now() {
+    let dir = temp_dir();
+    let (a, b) = (dir.path().join("a.snxsch"), dir.path().join("b.snxsch"));
+    write_sheet_file(&a, uid(SHEET));
+    write_sheet_file(&b, uid(SHEET));
+    let (mut app, _task) = Signex::new();
+    let mut driver = crate::task_driver::TaskDriver::new();
+    let open =
+        |app: &mut Signex, driver: &mut crate::task_driver::TaskDriver, p: &std::path::PathBuf| {
+            driver
+                .send(
+                    app,
+                    crate::app::Message::File(crate::app::FileMsg::Opened(Some(p.clone()))),
+                )
+                .unwrap();
+        };
+    open(&mut app, &mut driver, &b);
+    close_tab_of(&mut app, &b);
+    open(&mut app, &mut driver, &a);
+    assert_eq!(app.document_state.engines[&a].document().uuid, uid(SHEET));
+    open(&mut app, &mut driver, &b);
+    assert_eq!(
+        app.document_state.engines[&a].document().uuid,
+        uid(SHEET),
+        "the open sheet a, alone with its id when opened, lost it to a reopened copy"
+    );
+}
+
+#[test]
+fn undo_and_redo_keep_a_symbol_files_live_id() {
+    use crate::app::SymbolDocument;
+    let mut doc = SymbolDocument::new(
+        std::path::PathBuf::from("a.snxsym"),
+        signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("A")),
+    );
+    assert!(doc.record_edit(None, |d| {
+        d.file.symbols[0].name.push('x');
+        true
+    }));
+    doc.file.file_uuid = uid(9);
+    assert!(doc.undo());
+    assert_eq!(doc.file.file_uuid, uid(9), "undo");
+    doc.file.file_uuid = uid(10);
+    assert!(doc.redo());
+    assert_eq!(doc.file.file_uuid, uid(10), "redo");
+}
+
+#[test]
+fn undo_and_redo_keep_a_footprint_files_live_id() {
+    use crate::app::FootprintDocument;
+    let mut doc = FootprintDocument::new(
+        std::path::PathBuf::from("a.snxfpt"),
+        signex_library::FootprintFile::from_footprint(
+            signex_library::primitive::footprint::Footprint::empty("F"),
+        ),
+    );
+    assert!(doc.record_edit(None, |d| {
+        d.file.display_name.push('x');
+        true
+    }));
+    doc.file.file_uuid = uid(9);
+    assert!(doc.undo());
+    assert_eq!(doc.file.file_uuid, uid(9), "undo");
+    doc.file.file_uuid = uid(10);
+    assert!(doc.redo());
+    assert_eq!(doc.file.file_uuid, uid(10), "redo");
+}

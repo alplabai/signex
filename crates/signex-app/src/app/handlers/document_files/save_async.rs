@@ -57,8 +57,15 @@ impl Signex {
         let revision = engine.revision();
         let measure = crate::schematic_runtime::text_width::live_extent_measure();
         // A Save As makes a new document: the copy is written with an id of
-        // its own, and the document takes it when the write lands (#2172).
-        let encoded = if save_as_from.is_some() {
+        // its own, and the document takes it when the write lands (#2172). A
+        // Save As onto another spelling of its own file (a case variant) is
+        // the same document: it keeps its id.
+        let new_document = save_as_from.as_ref().is_some_and(|from| {
+            let fold = self.identity_fold_for(from);
+            crate::app::state::scope::path_key_with(from, fold)
+                != crate::app::state::scope::path_key_with(&target, fold)
+        });
+        let encoded = if new_document {
             engine.serialize_as_copy_with_extents(
                 signex_types::document_id::DocumentId::new().as_uuid(),
                 measure,
@@ -300,7 +307,7 @@ impl Signex {
         let old = engine.document().uuid;
         engine.reassign_document_id(id.as_uuid());
         // The project follows the copy; its net waivers name the sheet by id.
-        if !old.is_nil() {
+        if !old.is_nil() && old != id.as_uuid() {
             self.follow_waivers(
                 owner,
                 old,

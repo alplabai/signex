@@ -34,7 +34,12 @@ in the file's unknown keys. No token was reused or changed.
 - **A copy made outside Signex** repeats an id. The document seen first keeps it;
   a later one is given a new id in memory, Messages says so, and its next save
   writes it. All repairs happen in `Signex::reconcile_document_ids`, the one place
-  an id is assigned to an existing document.
+  an id is assigned to an existing document. "Seen first" counts among the
+  documents loaded now: a closed one has no claim, so a copy that is opened
+  again later yields to the document that holds the id at that time. A file that
+  is only listed or loaded for one query is never given an id.
+- **Undo and a recovery restore keep the open document's id** (a sheet, symbol
+  or footprint): they bring back content, not identity.
 - **Every document an open project references is listed with its id**, opened in
   a tab or not. The id of a file that is not loaded is read from the head of the
   file on a worker when the project opens (`ProjectMsg::DocumentHeadersRead`);

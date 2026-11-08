@@ -823,3 +823,41 @@ fn a_save_as_that_could_not_re_key_adopts_no_id() {
     assert_eq!(app.document_state.engines[&a].document().uuid, old);
     assert_eq!(waiver_objects(&app)[0], vec![format!("net:SENSE@{old}")]);
 }
+
+/// #2172: a Save As onto another spelling of the document's own file (a case
+/// variant, on a volume that folds case) is the same document: it keeps its
+/// id and its waivers.
+#[test]
+fn a_save_as_onto_a_case_variant_of_its_own_file_keeps_the_id() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("A.snxsch");
+    let variant = tmp.path().join("a.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let id = open_active(&mut app, &a, uuid::Uuid::now_v7());
+    push_waiver_project(&mut app, tmp.path(), id, uuid::Uuid::now_v7());
+    // The volume is decided to fold case, whatever this host's is.
+    app.document_state.projects[0].case_fold = signex_app::app::CaseFold {
+        fold_case: true,
+        ..Default::default()
+    };
+    app.document_state.projects[0].case_decided = true;
+
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::SaveAs {
+            from_path: a.clone(),
+            to_path: variant.clone(),
+        }),
+    );
+
+    let doc = app
+        .document_state
+        .engines
+        .get(&variant)
+        .or_else(|| app.document_state.engines.get(&a))
+        .expect("the document is held");
+    assert_eq!(doc.document().uuid, id, "same document, same id");
+    assert_eq!(header_id(&variant), id, "the file keeps the id");
+    assert_eq!(waiver_objects(&app)[0], vec![format!("net:SENSE@{id}")]);
+}

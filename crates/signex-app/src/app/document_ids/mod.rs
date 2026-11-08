@@ -119,6 +119,15 @@ impl DocumentIds {
             None => true,
         });
     }
+
+    /// Forget the first-seen order of every document not in `held`: one that
+    /// was closed has no claim on an id, so a copy opened later does not
+    /// outrank the document that holds it now.
+    pub(crate) fn forget_unheld_orders<'a>(&mut self, held: impl Iterator<Item = &'a DocumentKey>) {
+        let held: std::collections::HashSet<&DocumentKey> = held.collect();
+        self.seen.retain(|key, _| held.contains(key));
+    }
+
     /// The first-seen order of `key`, assigned on first sight.
     pub(crate) fn seen_order(&mut self, key: &DocumentKey) -> u64 {
         if let Some(order) = self.seen.get(key) {

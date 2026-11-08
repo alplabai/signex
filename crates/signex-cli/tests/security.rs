@@ -764,3 +764,52 @@ fn a_changed_head_is_read_again_by_the_next_listing() {
     assert_eq!(id_of(&after), json!(second.to_string()), "{after}");
     live.finish();
 }
+
+/// A Save As may rewrite the project's other sheets that reference the one
+/// saved, so one of them that is a link out refuses it, named as a parent.
+#[cfg(unix)]
+#[test]
+fn a_save_as_by_id_names_a_parent_sheet_that_is_a_link_out() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let extra = fx.sheet.with_file_name("Extra.snxsch");
+    std::fs::copy(&fx.sheet, &extra).unwrap();
+    let outside = replace_with_link_to_outside(&extra, &other);
+    let before = std::fs::read(&outside).unwrap();
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Extra".into(),
+        filename: "Extra.snxsch".into(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let copy = fx.sheet.with_file_name("copy.snxsch");
+
+    let saved = live.send(&json!({
+        "id": "save_document_as",
+        "args": {"document": id, "path": copy}
+    }));
+
+    assert_eq!(saved["status"], "refused", "{saved}");
+    assert!(
+        saved["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("also writes the parent sheet")),
+        "{saved}"
+    );
+    assert!(!copy.exists());
+    assert_eq!(std::fs::read(&outside).unwrap(), before);
+    live.finish();
+}
