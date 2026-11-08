@@ -36,6 +36,8 @@ mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
 #[cfg(test)]
 mod placement_tests;
+#[cfg(test)]
+mod power_ghost_text_tests;
 mod status_activity;
 mod status_readout;
 mod sync_sheet_pins;

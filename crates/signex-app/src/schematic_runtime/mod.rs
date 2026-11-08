@@ -316,6 +316,23 @@ pub fn power_port_preview_snapshot(
         });
     }
 
+    // The net name goes through the placed port's rule, so the ghost shows
+    // it where, and turned as, the click will commit it.
+    if !symbol.value.is_empty() {
+        let mut sheet = SchematicSheet::default();
+        sheet.symbols.push(symbol.clone());
+        if let Some(text) = snapshot::field_text_input(
+            symbol,
+            &symbol.value,
+            sheet.drawn_value_text(&sheet.symbols[0]).as_deref(),
+            snapshot::FieldSlot::Value,
+            to_rgba(color),
+            None,
+        ) {
+            parameter_texts.push(text);
+        }
+    }
+
     // The body is the placed port's own lowering, so the ghost shows the
     // shape the click will commit.
     let (primitives, bbox) = symbol::symbol_geometry_of(None, symbol, None, defaults);
