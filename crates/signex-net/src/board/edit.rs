@@ -13,20 +13,29 @@ pub struct PadNetChange {
     pub net: Option<PadNet>,
 }
 
+/// One zone's net name after the edit; its net number never changes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZoneNetName {
+    pub zone: Uuid,
+    pub name: String,
+}
+
 /// The board's net table plus the pads whose net changes. Pure data: it
 /// holds no reference to the board and can be applied, stored or undone.
 #[derive(Debug, Clone)]
 pub struct BoardNetEdit {
     pub nets: Vec<NetDef>,
     pub pads: Vec<PadNetChange>,
+    /// Zones on a net the table renamed.
+    pub zones: Vec<ZoneNetName>,
 }
 
 impl BoardNetEdit {
     /// Write the edit into `board` and return the edit that undoes it.
     ///
-    /// A change whose footprint or pad is no longer on the board is skipped
-    /// and left out of the inverse, so the inverse only restores what this
-    /// call actually wrote.
+    /// A change whose footprint, pad or zone is no longer on the board is
+    /// skipped and left out of the inverse, so the inverse only restores what
+    /// this call actually wrote.
     pub fn apply(self, board: &mut PcbBoard) -> BoardNetEdit {
         let old_nets = std::mem::replace(&mut board.nets, self.nets);
         let footprint_at: HashMap<Uuid, usize> = board
@@ -51,9 +60,20 @@ impl BoardNetEdit {
                 net: old,
             });
         }
+        let mut undo_zones = Vec::with_capacity(self.zones.len());
+        for change in self.zones {
+            if let Some(zone) = board.zones.iter_mut().find(|z| z.uuid == change.zone) {
+                let old = std::mem::replace(&mut zone.net_name, change.name);
+                undo_zones.push(ZoneNetName {
+                    zone: change.zone,
+                    name: old,
+                });
+            }
+        }
         BoardNetEdit {
             nets: old_nets,
             pads: undo,
+            zones: undo_zones,
         }
     }
 }

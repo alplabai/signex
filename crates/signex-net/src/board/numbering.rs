@@ -18,6 +18,10 @@ pub(super) struct Numbered {
     pub table: Vec<NetDef>,
     pub number_of: HashMap<NetId, u32>,
     pub name_of: HashMap<NetId, String>,
+    /// Matched board nets whose name changed: number -> new name.
+    pub renamed: HashMap<u32, String>,
+    /// Retained nets that only copper uses (no kept pad holds them).
+    pub copper_only: Vec<u32>,
 }
 
 /// `assigned` maps each pad the sync sets to its net; `kept` are the pads it
@@ -30,13 +34,16 @@ pub(super) fn number_nets(
 ) -> Numbered {
     let matched = match_existing(netlist, board, assigned);
 
-    let mut in_use = copper_numbers(board);
+    let copper = copper_numbers(board);
+    let mut in_use = copper.clone();
+    let mut kept_pad_nets: HashSet<u32> = HashSet::new();
     for fp in &board.footprints {
         for pad in &fp.pads {
             if let Some(n) = &pad.net
                 && kept.contains(&(fp.uuid, pad.uuid))
             {
                 in_use.insert(n.number);
+                kept_pad_nets.insert(n.number);
             }
         }
     }
@@ -67,13 +74,23 @@ pub(super) fn number_nets(
         table: Vec::new(),
         number_of: HashMap::new(),
         name_of: HashMap::new(),
+        renamed: HashMap::new(),
+        copper_only: retained
+            .iter()
+            .map(|d| d.number)
+            .filter(|n| copper.contains(n) && !kept_pad_nets.contains(n))
+            .collect(),
     };
     for net in &netlist.nets {
         let (number, name) = match matched.get(&net.id) {
             Some(&number) => {
                 let old = old_name.get(&number).copied().unwrap_or_default();
                 let keep_old = is_auto_name(&net.name, net.id) && !old.is_empty();
-                (number, if keep_old { old } else { net.name.as_str() })
+                let name = if keep_old { old } else { net.name.as_str() };
+                if name != old {
+                    out.renamed.insert(number, name.to_string());
+                }
+                (number, name)
             }
             None => {
                 let number = if net.id.0 != 0 && !reserved.contains(&net.id.0) {

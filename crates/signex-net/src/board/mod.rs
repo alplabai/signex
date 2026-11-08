@@ -13,7 +13,7 @@ mod numbering;
 #[cfg(test)]
 mod tests;
 
-pub use edit::{BoardNetEdit, PadNetChange};
+pub use edit::{BoardNetEdit, PadNetChange, ZoneNetName};
 pub use key::{PadLinkKey, ReferencePad, ReferencePadKey};
 
 use std::collections::{HashMap, HashSet};
@@ -47,6 +47,12 @@ pub enum PadNetIssue {
     /// The pad has no link key (unnumbered, or its footprint has no
     /// reference); it keeps its net.
     PadWithoutTerminal { footprint: Uuid, pad: Uuid },
+    /// The pad has a key, but no terminal of the schematic symbol matches it
+    /// (shield, mounting or exposed pad); it keeps its net.
+    PadNotOnSymbol { footprint: Uuid, pad: Uuid },
+    /// No pad holds this board net any more, but tracks, vias or zones still
+    /// use it; they stay on a net with no pads.
+    NetKeptForCopper { number: u32 },
 }
 
 /// The edit that brings the board in line with the netlist, and what could
@@ -127,6 +133,13 @@ pub fn assign_pad_nets<K: PadLinkKey>(
     leave_unlinked_pads(board, key, &keyed, &mut kept, &mut issues);
 
     let numbered = number_nets(netlist, board, &assigned, &kept);
+    let mut orphaned = numbered.copper_only.clone();
+    orphaned.sort_unstable();
+    issues.extend(
+        orphaned
+            .into_iter()
+            .map(|number| PadNetIssue::NetKeptForCopper { number }),
+    );
     let target: HashMap<PadRef, PadNet> = assigned
         .iter()
         .map(|(&pad, net)| {
@@ -141,15 +154,16 @@ pub fn assign_pad_nets<K: PadLinkKey>(
     BoardNetAssignment {
         edit: BoardNetEdit {
             nets: numbered.table,
-            pads: pad_changes(board, &target, &kept),
+            pads: pad_changes(board, &target, &kept, &numbered.renamed),
+            zones: zone_renames(board, &numbered.renamed),
         },
         issues,
     }
 }
 
 /// Pads the schematic cannot speak for stay as they are, with an issue:
-/// pads with no link key, and every pad of a footprint none of whose keys is
-/// a schematic terminal.
+/// pads with no link key, keyed pads on a linked footprint that match no
+/// terminal, and every pad of a footprint none of whose keys is a terminal.
 fn leave_unlinked_pads<K: PadLinkKey>(
     board: &PcbBoard,
     key: &K,
@@ -171,7 +185,14 @@ fn leave_unlinked_pads<K: PadLinkKey>(
                     pad: pad.uuid,
                 });
             }
-            if !linked || k.is_none() {
+            let off_symbol = linked && k.as_ref().is_some_and(|k| !keyed.contains_key(k));
+            if off_symbol {
+                issues.push(PadNetIssue::PadNotOnSymbol {
+                    footprint: fp.uuid,
+                    pad: pad.uuid,
+                });
+            }
+            if !linked || k.is_none() || off_symbol {
                 kept.insert((fp.uuid, pad.uuid));
             }
         }
@@ -218,17 +239,46 @@ fn key_terminals<'a, K: PadLinkKey>(
     (order, keyed)
 }
 
+/// Zones on a renamed net take its new name.
+fn zone_renames(board: &PcbBoard, renamed: &HashMap<u32, String>) -> Vec<ZoneNetName> {
+    board
+        .zones
+        .iter()
+        .filter_map(|z| {
+            let name = renamed.get(&z.net)?;
+            (z.net_name != *name).then(|| ZoneNetName {
+                zone: z.uuid,
+                name: name.clone(),
+            })
+        })
+        .collect()
+}
+
 /// Every pad outside `kept` whose net differs from `target` (absent = no
-/// net), in board order.
+/// net), in board order. A kept pad on a renamed net only takes the new name.
 fn pad_changes(
     board: &PcbBoard,
     target: &HashMap<PadRef, PadNet>,
     kept: &HashSet<PadRef>,
+    renamed: &HashMap<u32, String>,
 ) -> Vec<PadNetChange> {
     let mut changes = Vec::new();
     for fp in &board.footprints {
         for pad in &fp.pads {
             if kept.contains(&(fp.uuid, pad.uuid)) {
+                if let Some(net) = &pad.net
+                    && let Some(name) = renamed.get(&net.number)
+                    && net.name != *name
+                {
+                    changes.push(PadNetChange {
+                        footprint: fp.uuid,
+                        pad: pad.uuid,
+                        net: Some(PadNet {
+                            number: net.number,
+                            name: name.clone(),
+                        }),
+                    });
+                }
                 continue;
             }
             let wanted = target.get(&(fp.uuid, pad.uuid));

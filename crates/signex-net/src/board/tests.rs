@@ -449,7 +449,7 @@ fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
         start: pt(0.0, 0.0),
         end: pt(1.0, 0.0),
         width: 0.2,
-        layer: "F.Cu".to_string(),
+        layer: "TopCopper".to_string(),
         net: number,
         unknown_columns: Default::default(),
     });
@@ -467,7 +467,7 @@ fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
         uuid: Uuid::now_v7(),
         net: number,
         net_name: name.to_string(),
-        layer: "F.Cu".to_string(),
+        layer: "TopCopper".to_string(),
         outline: Vec::new(),
         holes: Vec::new(),
         priority: 0,
@@ -622,4 +622,97 @@ fn a_conflicting_pad_keeps_its_existing_net() {
         .edit
         .apply(&mut pcb);
     assert_eq!(pad_net(&pcb, "U1", "1"), Some(&old));
+}
+
+#[test]
+fn a_keyed_pad_off_the_symbol_keeps_its_net_and_is_reported() {
+    let netlist = build_netlist(&divider_sheet());
+    let mut pcb = board(vec![
+        footprint("R1", &["1", "2", "SH"]),
+        footprint("R2", &["1", "2"]),
+    ]);
+    let shield = PadNet {
+        number: 9,
+        name: "GND".to_string(),
+    };
+    pcb.nets.push(NetDef {
+        number: 9,
+        name: "GND".to_string(),
+    });
+    pcb.footprints[0].pads[2].net = Some(shield.clone());
+    let (fp, pad) = (pcb.footprints[0].uuid, pcb.footprints[0].pads[2].uuid);
+
+    let assignment = assign_pad_nets(&netlist, &pcb, &ReferencePadKey);
+    assert_eq!(
+        assignment.issues,
+        vec![PadNetIssue::PadNotOnSymbol {
+            footprint: fp,
+            pad
+        }]
+    );
+    assignment.edit.apply(&mut pcb);
+    assert_eq!(pad_net(&pcb, "R1", "SH"), Some(&shield));
+    assert!(pcb.nets.iter().any(|n| n.number == 9));
+    assert!(pad_net(&pcb, "R1", "1").is_some());
+}
+
+#[test]
+fn retiring_a_net_that_still_has_copper_is_reported() {
+    let (before, _) = divider_netlists();
+    let mut pcb = board(vec![
+        footprint("R1", &["1", "2"]),
+        footprint("R2", &["1", "2"]),
+    ]);
+    assign_pad_nets(&before, &pcb, &ReferencePadKey)
+        .edit
+        .apply(&mut pcb);
+    copper_on(&mut pcb, 2, "N$2");
+    let only_in = Netlist {
+        nets: vec![
+            net(1, "IN", vec![terminal("R1", "1")]),
+            net(3, "OUT", vec![terminal("R2", "2")]),
+        ],
+    };
+    let assignment = assign_pad_nets(&only_in, &pcb, &ReferencePadKey);
+    assert!(
+        assignment
+            .issues
+            .contains(&PadNetIssue::NetKeptForCopper { number: 2 }),
+        "{:?}",
+        assignment.issues
+    );
+}
+
+#[test]
+fn a_renamed_net_renames_kept_pads_and_zones_and_undoes() {
+    let mut pcb = board(vec![footprint("U1", &["1", "SH"])]);
+    pcb.nets.push(NetDef {
+        number: 4,
+        name: "OLD".to_string(),
+    });
+    let old = PadNet {
+        number: 4,
+        name: "OLD".to_string(),
+    };
+    pcb.footprints[0].pads[0].net = Some(old.clone());
+    pcb.footprints[0].pads[1].net = Some(old.clone());
+    copper_on(&mut pcb, 4, "OLD");
+    let netlist = Netlist {
+        nets: vec![net(1, "NEW", vec![terminal("U1", "1")])],
+    };
+
+    let inverse = assign_pad_nets(&netlist, &pcb, &ReferencePadKey)
+        .edit
+        .apply(&mut pcb);
+    let renamed = PadNet {
+        number: 4,
+        name: "NEW".to_string(),
+    };
+    assert_eq!(pad_net(&pcb, "U1", "1"), Some(&renamed));
+    assert_eq!(pad_net(&pcb, "U1", "SH"), Some(&renamed), "kept pad");
+    assert_eq!(pcb.zones[0].net_name, "NEW");
+
+    inverse.apply(&mut pcb);
+    assert_eq!(pad_net(&pcb, "U1", "SH"), Some(&old));
+    assert_eq!(pcb.zones[0].net_name, "OLD");
 }
