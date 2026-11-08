@@ -267,3 +267,24 @@ pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
         None => refused(format!("{} is not open in a tab", entry.name)),
     }
 }
+
+/// `assign_net_class document=.. net_name=N [class=C]`: put the net in the
+/// class (or take it out of its listed one) of the project that sheet belongs
+/// to, as the label picker does; the pick lands on that sheet's timeline.
+pub(super) fn assign_net_class(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let Some(OperandValue::Text(net)) = args.operand("net_name") else {
+        return refused("`assign_net_class` needs the operand `net_name`");
+    };
+    let path = match named_sheet(app, args, "`assign_net_class`") {
+        Ok(path) => path,
+        Err(reason) => return refused(reason),
+    };
+    let class = match args.operand("class") {
+        Some(OperandValue::Text(class)) => Some(class.as_str()),
+        _ => None,
+    };
+    match app.assign_net_to_class(Some(&path), net, class) {
+        Ok(()) => ran(Task::none()),
+        Err(reason) => refused(reason),
+    }
+}

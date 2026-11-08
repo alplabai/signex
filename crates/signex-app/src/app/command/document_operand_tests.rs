@@ -392,6 +392,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
     for name in [
         "color_net",
         "clear_all_net_colors",
+        "assign_net_class",
         "undo",
         "redo",
         "save_document",
@@ -415,6 +416,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                 [
                     "color_net",
                     "clear_all_net_colors",
+                    "assign_net_class",
                     "undo",
                     "redo",
                     "save_document",
@@ -457,6 +459,7 @@ fn a_headless_run_that_names_no_document_is_asked_for_one() {
         "save_document_as",
         "close_active_document",
         "clear_all_net_colors",
+        "assign_net_class",
     ] {
         let missing = super::missing_headless_operand(&id(name));
         assert_eq!(missing, Some("document"), "{name}");

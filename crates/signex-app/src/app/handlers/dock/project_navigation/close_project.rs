@@ -301,7 +301,6 @@ impl Signex {
                 .cloned()
                 .collect();
             for path in sweep {
-                self.forget_net_class_picks_on(&path);
                 self.document_state.remove_engine(&path);
                 self.document_state
                     .document_saves
@@ -353,7 +352,6 @@ impl Signex {
         });
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
-        self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
@@ -708,7 +706,6 @@ impl Signex {
     /// symbol / footprint editor and tab. The one discard both Discard All
     /// prompts (Close Project, Close Library) run per file.
     pub(crate) fn discard_document_draft(&mut self, path: &std::path::Path) -> Task<Message> {
-        self.forget_net_class_picks_on(path);
         self.document_state
             .document_saves
             .forget_where(|p| p == path);

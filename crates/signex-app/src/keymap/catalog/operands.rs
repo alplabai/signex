@@ -67,6 +67,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("rotation", OperandKind::Angle),
     ("text", OperandKind::Text),
     ("net_name", OperandKind::Text),
+    ("class", OperandKind::Text),
     ("lib_id", OperandKind::Text),
     ("path", OperandKind::Path),
     ("overwrite", OperandKind::Bool),
@@ -182,6 +183,13 @@ pub const READ_DOCUMENT: &[Operand] = &[
     optional("fields", OperandKind::Text),
     optional("offset", OperandKind::Text),
     optional("limit", OperandKind::Text),
+];
+/// Put a net, by its name in the project netlist, in a class of the project
+/// the named sheet belongs to; no `class` takes it out of its listed class.
+pub const ASSIGN_NET_CLASS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("net_name", OperandKind::Text),
+    optional("class", OperandKind::Text),
 ];
 
 /// The golden column: `name:kind` with `/unit`, `?` when optional, comma

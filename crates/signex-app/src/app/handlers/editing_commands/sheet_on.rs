@@ -39,7 +39,6 @@ impl Signex {
                 return Err(reason);
             }
         };
-        self.clear_net_class_pick_redo(path);
         self.after_sheet_change(path, invalidation);
         Ok(invalidation != RenderInvalidation::NONE)
     }
@@ -50,7 +49,7 @@ impl Signex {
     /// of a project-wide run (annotate, replace, re-prefix) is refused: it
     /// moves other sheets too, which only the run's own undo may do.
     pub(crate) fn step_sheet_on(&mut self, path: &Path, undo: bool) -> Result<bool, String> {
-        if self.has_net_class_pick(path, undo) && self.step_net_class_pick_on(path, undo) {
+        if self.step_net_class_pick_on(path, undo) {
             self.after_sheet_change(path, RenderInvalidation::NET_COLORS);
             return Ok(true);
         }

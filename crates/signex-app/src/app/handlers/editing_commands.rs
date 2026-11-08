@@ -37,7 +37,7 @@ impl Signex {
     /// One undo of the active sheet: its newest net-class pick or engine edit
     /// (net colours are engine edits), whichever came last. Whether a step ran.
     pub(crate) fn undo_active_sheet(&mut self) -> bool {
-        if self.undo_net_class_pick() {
+        if self.step_net_class_pick(true) {
             return true;
         }
         let undone = self.apply_engine_undo(true);
@@ -54,7 +54,7 @@ impl Signex {
 
     /// One redo of the active sheet, see [`Self::undo_active_sheet`].
     pub(crate) fn redo_active_sheet(&mut self) -> bool {
-        if self.redo_net_class_pick() {
+        if self.step_net_class_pick(false) {
             return true;
         }
         let redone = self.apply_engine_redo(true);

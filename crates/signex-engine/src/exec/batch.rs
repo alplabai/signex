@@ -349,7 +349,7 @@ mod tests {
             DocumentPatch::NO_CONNECTS | DocumentPatch::LABELS
         );
         assert_eq!(
-            engine.history.undo_steps()[0].patch_pair.document,
+            engine.history.undo_steps()[0].edit().patch_pair.document,
             patch_pair.document
         );
     }

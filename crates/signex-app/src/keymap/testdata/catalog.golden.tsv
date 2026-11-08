@@ -202,6 +202,7 @@ place_graphic	place	Place graphic	Graphic...	Schematic	-	-	RequiresDocument(Sche
 clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocument(Schematic)	-	-
 color_net	view	Color net	Custom Color...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,color:color,document:document
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
+assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

@@ -35,6 +35,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("save_document", doc::save),
     ("save_document_as", doc::save_as),
     ("close_active_document", doc::close),
+    ("assign_net_class", doc::assign_net_class),
     ("place_net_label", place::net_label),
     ("place_local_net_label", place::net_label),
     ("place_global_label", place::global_label),
@@ -60,6 +61,19 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
         .iter()
         .find(|(id, _)| *id == command.as_str())
         .map(|(_, handler)| *handler)
+}
+
+/// Why `command` does nothing without operands on a surface that gives it
+/// none (palette, key binding, menu): its GUI surface is another widget, and
+/// a command never opens, closes or focuses one as a side effect.
+pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static str> {
+    match command.as_str() {
+        "assign_net_class" => Some(
+            "`assign_net_class` needs the operand `net_name` — \
+             use the Net Class row in Properties",
+        ),
+        _ => None,
+    }
 }
 
 /// The ids that run their operands.
