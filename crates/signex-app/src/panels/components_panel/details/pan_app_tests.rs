@@ -142,25 +142,90 @@ fn region(app: &Signex, side: PanelPosition) -> Rectangle {
     }
 }
 
-/// The last text reading `title` (any case: Graphite sets section labels in
-/// capitals) whose left edge lies in `area`.
-fn label_in(app: &Signex, title: &str, area: Rectangle) -> Rectangle {
-    let window = app.ui_state.main_window_id.expect("main window");
-    let texts = crate::layout_probe::lay_out_texts(app.view(window), WINDOW);
-    texts
-        .iter()
-        .filter(|t| {
-            t.text.eq_ignore_ascii_case(title)
-                && t.bounds.x >= area.x
-                && t.bounds.x < area.x + area.width
-        })
-        .max_by(|a, b| a.bounds.y.total_cmp(&b.bounds.y))
-        .unwrap_or_else(|| panic!("no {title:?} text in {area:?}"))
-        .bounds
+/// Every text of the live tree with its window bounds: a scrolled pane's
+/// texts are moved by its scroll offset.
+#[derive(Default)]
+struct WindowTexts {
+    texts: Vec<(String, Rectangle)>,
+    /// Scroll offset of the scrollables around the widget being visited.
+    offset: iced::Vector,
+    /// Offset of a scrollable just met, applied to its content.
+    pending: iced::Vector,
 }
 
-fn drive(app: &mut Signex, events: &[(Event, Point)]) -> Vec<mouse::Interaction> {
+impl iced::advanced::widget::Operation for WindowTexts {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation)) {
+        let saved = self.offset;
+        self.offset = self.offset + std::mem::take(&mut self.pending);
+        operate(self);
+        self.offset = saved;
+    }
+
+    fn scrollable(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        _bounds: Rectangle,
+        _content: Size,
+        translation: iced::Vector,
+        _state: &mut dyn iced::advanced::widget::operation::Scrollable,
+    ) {
+        self.pending = translation;
+    }
+
+    fn text(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        bounds: Rectangle,
+        text: &mut dyn iced::advanced::widget::operation::Text,
+    ) {
+        self.texts
+            .push((text.text().into_owned(), bounds - self.offset));
+    }
+}
+
+/// The last text reading `title` (any case: Graphite sets section labels in
+/// capitals) whose left edge lies in `area`, where the live tree draws it.
+fn label_in(live: &mut Live, title: &str, area: Rectangle) -> Rectangle {
+    let window = live.app.ui_state.main_window_id.expect("main window");
+    let mut renderer = crate::layout_probe::headless_renderer();
+    let cache = std::mem::take(&mut live.cache);
+    let mut ui = UserInterface::build(live.app.view(window), WINDOW, cache, &mut renderer);
+    let mut found = WindowTexts::default();
+    ui.operate(&renderer, &mut found);
+    live.cache = ui.into_cache();
+    found
+        .texts
+        .iter()
+        .filter(|(text, bounds)| {
+            text.eq_ignore_ascii_case(title) && bounds.x >= area.x && bounds.x < area.x + area.width
+        })
+        .max_by(|a, b| a.1.y.total_cmp(&b.1.y))
+        .unwrap_or_else(|| panic!("no {title:?} text in {area:?}"))
+        .1
+}
+
+fn drive(app: &mut Live, events: &[(Event, Point)]) -> Vec<mouse::Interaction> {
     drive_with(app, events, false).0
+}
+
+/// The app and its widget tree, kept across frames as the runtime keeps
+/// them, so the details scroll offset and the canvas cameras persist.
+struct Live {
+    app: Signex,
+    cache: Cache,
+    _tmp: tempfile::TempDir,
+}
+
+fn start(theme: ThemeId, side: PanelPosition) -> (Live, ComponentsPanelRowKey) {
+    let (app, tmp, key) = app_with_details(theme, side);
+    (
+        Live {
+            app,
+            cache: Cache::default(),
+            _tmp: tmp,
+        },
+        key,
+    )
 }
 
 /// Feed `events` one per frame, the way the runtime does: the view is rebuilt
@@ -168,14 +233,15 @@ fn drive(app: &mut Signex, events: &[(Event, Point)]) -> Vec<mouse::Interaction>
 /// `update`. Returns the mouse interaction after each event and, with
 /// `snap`, the window's pixels after each event.
 fn drive_with(
-    app: &mut Signex,
+    live: &mut Live,
     events: &[(Event, Point)],
     snap: bool,
 ) -> (Vec<mouse::Interaction>, Vec<Vec<u8>>) {
     use iced::advanced::renderer::Headless as _;
+    let app = &mut live.app;
     let window = app.ui_state.main_window_id.expect("main window");
     let mut renderer = crate::layout_probe::headless_renderer();
-    let mut cache = Cache::default();
+    let mut cache = std::mem::take(&mut live.cache);
     let mut out = Vec::new();
     let mut frames = Vec::new();
     for (event, at) in events {
@@ -233,17 +299,33 @@ fn drive_with(
         }
         cache = ui.into_cache();
     }
+    live.cache = cache;
     (out, frames)
 }
 
-/// Pixels of `frame` that differ from `before` inside `area`.
-fn changed_pixels(before: &[u8], frame: &[u8], area: Rectangle) -> usize {
+/// Pixels inside `area` of `frame` that differ from `before` shifted by
+/// `shift` px, and the pixel count of `area`. A zero shift counts what
+/// changed; the drag's shift counts what did not follow the pointer.
+fn mismatched_pixels(
+    before: &[u8],
+    frame: &[u8],
+    area: Rectangle,
+    shift: (usize, usize),
+) -> (usize, usize) {
     let width = WINDOW.width as usize;
-    let rows = (area.y.max(0.0) as usize)..((area.y + area.height).min(WINDOW.height) as usize);
-    let cols = (area.x.max(0.0) as usize)..((area.x + area.width).min(WINDOW.width) as usize);
-    rows.flat_map(|y| cols.clone().map(move |x| (y * width + x) * 4))
-        .filter(|&i| before[i..i + 3] != frame[i..i + 3])
-        .count()
+    let (x0, y0) = (area.x as usize, area.y as usize);
+    let (x1, y1) = (x0 + area.width as usize, y0 + area.height as usize);
+    let at = |x: usize, y: usize| (y * width + x) * 4;
+    let mut differ = 0;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let (i, j) = (at(x, y), at(x - shift.0, y - shift.1));
+            if frame[i..i + 3] != before[j..j + 3] {
+                differ += 1;
+            }
+        }
+    }
+    (differ, (x1 - x0) * (y1 - y0))
 }
 
 fn moved(to: Point) -> (Event, Point) {
@@ -253,7 +335,7 @@ fn moved(to: Point) -> (Event, Point) {
 /// A point well inside the preview under `label`: the first point below
 /// the label that offers a grab, plus a margin. Panics with the hover scan
 /// when nothing below the label offers one.
-fn preview_point(app: &mut Signex, label: Rectangle) -> Point {
+fn preview_point(app: &mut Live, label: Rectangle) -> Point {
     let x = label.x + 40.0;
     let points: Vec<Point> = (0..60)
         .map(|i| Point::new(x, label.y + label.height + i as f32 * 6.0))
@@ -273,7 +355,7 @@ fn preview_point(app: &mut Signex, label: Rectangle) -> Point {
 
 /// Hover, press, two moves, release at `from`: the hover grabs, the drag
 /// holds the grab, the release lets go, and the drawn preview has moved.
-fn assert_drag_pans(app: &mut Signex, from: Point, what: &str) {
+fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
     // Off any grid multiple, so the moved grid cannot land on itself.
     let to = Point::new(from.x + 25.0, from.y + 15.0);
     let further = Point::new(from.x + 37.0, from.y + 23.0);
@@ -301,24 +383,32 @@ fn assert_drag_pans(app: &mut Signex, from: Point, what: &str) {
         "{what} at {from:?}"
     );
     // Inside the preview: from the first grab row down, beside the press.
+    // The drawing has moved, and moved exactly with the pointer: the frame
+    // after the drag is the frame before it shifted by the drag.
     let area = Rectangle::new(
-        Point::new(from.x - 35.0, from.y - 30.0),
-        Size::new(200.0, 110.0),
+        Point::new(from.x + 2.0, from.y - 7.0),
+        Size::new(150.0, 70.0),
     );
-    let moved_px = changed_pixels(&frames[0], &frames[3], area);
+    let (changed, total) = mismatched_pixels(&frames[0], &frames[3], area, (0, 0));
     assert!(
-        moved_px > 200,
-        "{what}: the drawn preview did not move ({moved_px} pixels changed in {area:?})"
+        changed > 20,
+        "{what}: the drawn preview did not move ({changed} of {total} pixels changed in {area:?})"
+    );
+    let (off, total) = mismatched_pixels(&frames[0], &frames[3], area, (37, 23));
+    assert!(
+        off <= total / 50,
+        "{what}: the drawing did not follow the pointer 1:1 ({off} of {total} pixels off in {area:?})"
     );
 }
 
 fn panel_previews_pan(side: PanelPosition) {
     for theme in THEMES {
         for title in ["Symbol", "Footprint"] {
-            let (mut app, _tmp, _) = app_with_details(theme, side);
-            let label = label_in(&app, title, region(&app, side));
-            let at = preview_point(&mut app, label);
-            assert_drag_pans(&mut app, at, &format!("{theme:?} {side:?} {title}"));
+            let (mut live, _) = start(theme, side);
+            let area = region(&live.app, side);
+            let label = label_in(&mut live, title, area);
+            let at = preview_point(&mut live, label);
+            assert_drag_pans(&mut live, at, &format!("{theme:?} {side:?} {title}"));
         }
     }
 }
@@ -340,20 +430,94 @@ fn the_panel_previews_pan_in_the_right_dock_on_every_theme() {
 fn the_previews_pan_with_a_component_editor_tab_in_front() {
     for theme in THEMES {
         for title in ["Symbol", "Footprint"] {
-            let (mut app, _tmp, key) = app_with_details(theme, PanelPosition::Right);
-            open_editor(&mut app, &key);
-            let right = region(&app, PanelPosition::Right);
-            let label = label_in(&app, title, right);
-            let at = preview_point(&mut app, label);
-            assert_drag_pans(&mut app, at, &format!("{theme:?} panel {title}"));
+            let (mut live, key) = start(theme, PanelPosition::Right);
+            open_editor(&mut live.app, &key);
+            let right = region(&live.app, PanelPosition::Right);
+            let label = label_in(&mut live, title, right);
+            let at = preview_point(&mut live, label);
+            assert_drag_pans(&mut live, at, &format!("{theme:?} panel {title}"));
 
+            let left = live.app.ui_state.left_width;
             let centre = Rectangle::new(
-                Point::new(app.ui_state.left_width, 0.0),
-                Size::new(right.x - app.ui_state.left_width, WINDOW.height),
+                Point::new(left, 0.0),
+                Size::new(right.x - left, WINDOW.height),
             );
-            let label = label_in(&app, title, centre);
-            let at = preview_point(&mut app, label);
-            assert_drag_pans(&mut app, at, &format!("{theme:?} editor {title}"));
+            let label = label_in(&mut live, title, centre);
+            let at = preview_point(&mut live, label);
+            assert_drag_pans(&mut live, at, &format!("{theme:?} editor {title}"));
         }
+    }
+}
+
+/// The details pane scrolled down (a short pane: the list takes most of the
+/// dock) still pans its previews 1:1 under the pointer.
+#[test]
+fn the_previews_pan_one_to_one_in_a_scrolled_details_pane() {
+    for theme in THEMES {
+        for title in ["Symbol", "Footprint"] {
+            let (mut live, _) = start(theme, PanelPosition::Right);
+            live.app.library.components_panel.list_height = 760.0;
+            let right = region(&live.app, PanelPosition::Right);
+            let label = label_in(&mut live, "Symbol", right);
+            let over = Point::new(label.x + 4.0, label.y + label.height / 2.0);
+            let wheel = Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Pixels { x: 0.0, y: -90.0 },
+            });
+            // Frames long after the wheel settle the smooth scroll.
+            let later = |ms: u64| {
+                let at = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+                (
+                    Event::Window(iced::window::Event::RedrawRequested(at)),
+                    over,
+                )
+            };
+            drive(
+                &mut live,
+                &[
+                    moved(over),
+                    (wheel, over),
+                    later(0),
+                    later(2_000),
+                    later(4_000),
+                ],
+            );
+            let scrolled = label_in(&mut live, "Symbol", right);
+            assert!(
+                scrolled.y < label.y - 20.0,
+                "{theme:?}: the details pane scrolled ({} -> {})",
+                label.y,
+                scrolled.y
+            );
+            let label = label_in(&mut live, title, right);
+            let at = preview_point(&mut live, label);
+            assert_drag_pans(&mut live, at, &format!("{theme:?} scrolled {title}"));
+        }
+    }
+}
+
+/// Software-rendered PNGs of the maintainer's layout (component editor in
+/// front, Components panel in the right dock) for a visual check. Set
+/// `SIGNEX_PANEL_SHOTS` to the output directory and run with `--ignored`.
+#[test]
+#[ignore = "writes PNGs into $SIGNEX_PANEL_SHOTS"]
+fn render_components_panel_shots() {
+    let Ok(dir) = std::env::var("SIGNEX_PANEL_SHOTS") else {
+        return;
+    };
+    let dir = PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).expect("out dir");
+    for theme in THEMES {
+        let (mut live, key) = start(theme, PanelPosition::Right);
+        open_editor(&mut live.app, &key);
+        let at = Point::new(WINDOW.width / 2.0, 10.0);
+        let (_, frames) = drive_with(&mut live, &[moved(at)], true);
+        image::save_buffer(
+            dir.join(format!("components-{theme:?}.png")),
+            &frames[0],
+            WINDOW.width as u32,
+            WINDOW.height as u32,
+            image::ColorType::Rgba8,
+        )
+        .expect("write png");
     }
 }
