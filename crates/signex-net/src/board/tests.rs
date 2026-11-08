@@ -544,7 +544,11 @@ fn merged_in() -> Netlist {
             net(
                 1,
                 "IN",
-                vec![terminal("R1", "1"), terminal("R1", "2"), terminal("R2", "1")],
+                vec![
+                    terminal("R1", "1"),
+                    terminal("R1", "2"),
+                    terminal("R2", "1"),
+                ],
             ),
             net(3, "OUT", vec![terminal("R2", "2")]),
         ],
@@ -654,10 +658,7 @@ fn a_keyed_pad_off_the_symbol_keeps_its_net_and_is_reported() {
     let assignment = assign_pad_nets(&netlist, &pcb, &ReferencePadKey);
     assert_eq!(
         assignment.issues,
-        vec![PadNetIssue::PadNotOnSymbol {
-            footprint: fp,
-            pad
-        }]
+        vec![PadNetIssue::PadNotOnSymbol { footprint: fp, pad }]
     );
     assignment.edit.apply(&mut pcb);
     assert_eq!(pad_net(&pcb, "R1", "SH"), Some(&shield));
