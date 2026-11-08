@@ -218,6 +218,9 @@ impl Signex {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove_untracked(&path);
                 if self.is_open_result_superseded(&path, &result) {
+                    if result.is_ok() {
+                        self.attach_parked_tab_for_superseded_open(&path, title);
+                    }
                     self.activate_tab_for_path(&path);
                     return self.finish_update();
                 }

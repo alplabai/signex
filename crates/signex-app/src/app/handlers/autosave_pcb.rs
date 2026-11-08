@@ -16,34 +16,22 @@ use crate::autosave::DocStamp;
 use signex_types::pcb::PcbBoard;
 
 impl Signex {
-    /// Is a PCB tab open on `path`?
+    /// Is a PCB open on `path`: a tab, or a board parked when its dirty tab
+    /// closed (#2149)?
     pub(super) fn is_open_pcb(&self, path: &Path) -> bool {
-        self.document_state
-            .tabs
-            .iter()
-            .any(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
+        self.document_state.holds_pcb(path)
     }
 
     pub(super) fn open_pcb_paths(&self) -> Vec<PathBuf> {
-        self.document_state
-            .tabs
-            .iter()
-            .filter(|tab| matches!(tab.kind, TabKind::Pcb))
-            .map(|tab| tab.path.clone())
-            .collect()
+        self.document_state.held_pcb_paths()
     }
 
-    /// Does an open PCB tab at `path` hold edits that are not on disk? A save
+    /// Does the open PCB at `path` hold edits that are not on disk? A save
     /// clears the flags when it lands, so a write in flight still counts.
     pub(super) fn is_dirty_pcb(&self, path: &Path) -> bool {
         let document = &self.document_state;
-        document
-            .tabs
-            .iter()
-            .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
-            .is_some_and(|_| {
-                document.is_document_dirty(path) || document.document_saves.is_saving(path)
-            })
+        document.holds_pcb(path)
+            && (document.is_document_dirty(path) || document.document_saves.is_saving(path))
     }
 
     pub(super) fn dirty_pcb_paths(&self) -> Vec<PathBuf> {
@@ -53,17 +41,12 @@ impl Signex {
             .collect()
     }
 
-    /// The bytes a save of the PCB at `path` would write. `None` when the
-    /// tab holds no board to protect: a board dropped by a failed History
+    /// The bytes a save of the PCB at `path` would write. `None` when it
+    /// holds no board to protect: a board dropped by a failed History
     /// restore is stale, and one opened read-only (newer format) is never
     /// saved, so neither gets a copy.
     fn pcb_autosave_bytes(&self, path: &Path) -> Option<Result<Vec<u8>, String>> {
-        let tab = self
-            .document_state
-            .tabs
-            .iter()
-            .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)?;
-        let board = tab.cached_document.as_ref()?.as_pcb()?;
+        let board = self.document_state.pcb_board(path)?;
         if board.unknown.newer_minor_source.is_some() {
             return None;
         }

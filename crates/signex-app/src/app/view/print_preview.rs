@@ -21,7 +21,8 @@ impl Signex {
     /// overlay when both would otherwise render; dismiss_layer handles
     /// click-outside-to-close.
     pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
-        use iced::widget::{column, container, row, text};
+        use iced::widget::{column, container, row};
+        use signex_widgets::{raw, text};
         let Some(notice) = self.document_state.error_notice.as_ref() else {
             return iced::widget::Space::new().boxed();
         };
@@ -49,9 +50,11 @@ impl Signex {
             dialog_body(
                 column![
                     row![
-                        text("\u{26A0}").size(TS.glyph).color(err_red),
+                        text(raw("\u{26A0}")).size(TS.glyph).color(err_red),
                         iced::widget::Space::new().width(SP.m),
-                        text(notice.title.clone()).size(TS.heading).color(text_c),
+                        text(raw(notice.title.clone()))
+                            .size(TS.heading)
+                            .color(text_c),
                     ]
                     .align_y(iced::Alignment::Center),
                     container(iced::widget::scrollable(dialog_message(
@@ -126,7 +129,8 @@ impl Signex {
     /// omission recorded in its header comment) or cancel and write nothing.
     /// The refusal stays the default; "Export anyway" is an explicit choice.
     pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
-        use iced::widget::{column, container, row, text};
+        use iced::widget::{column, container, row};
+        use signex_widgets::{raw, text};
         let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
             return iced::widget::Space::new().boxed();
         };
@@ -148,9 +152,9 @@ impl Signex {
             dialog_body(
                 column![
                     row![
-                        text("\u{26A0}").size(TS.glyph).color(warn),
+                        text(raw("\u{26A0}")).size(TS.glyph).color(warn),
                         iced::widget::Space::new().width(SP.m),
-                        text("Netlist is incomplete").size(TS.heading).color(text_c),
+                        text(raw("Netlist is incomplete")).size(TS.heading).color(text_c),
                     ]
                     .align_y(iced::Alignment::Center),
                     dialog_message(
@@ -162,7 +166,7 @@ impl Signex {
                         tokens,
                     ),
                     container(iced::widget::scrollable(
-                        text(detail).size(TS.body).color(text_muted)
+                        text(raw(detail)).size(TS.body).color(text_muted)
                     ))
                     .height(Length::Fit.max(120.0)),
                 ]
@@ -272,7 +276,8 @@ impl Signex {
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
         use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{draggable_header, modal_title_header, os_title_bar_slot};
-        use iced::widget::{column, container, text};
+        use iced::widget::{column, container};
+        use signex_widgets::{raw, text};
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -314,7 +319,12 @@ impl Signex {
             (None, false) => format!("{} page(s)", preview.pages.len()),
         };
         let footer = dialog_footer_split(
-            vec![text(footer_caption).size(TS.body).color(text_muted).boxed()],
+            vec![
+                text(raw(footer_caption))
+                    .size(TS.body)
+                    .color(text_muted)
+                    .boxed(),
+            ],
             vec![dialog_button(
                 "Export PDF",
                 DialogButtonKind::Primary,

@@ -1,8 +1,9 @@
 //! Editing section — schematic move behaviour.
 
 use super::*;
-use iced::widget::{Space, checkbox, column, pick_list, row, slider, text};
+use iced::widget::{Space, column, pick_list, row, slider};
 use iced::{Element, Length, Widget};
+use signex_widgets::{checkbox, raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -30,10 +31,10 @@ pub(super) fn content_editing<'a>(
 ) -> Element<'a, PrefMsg> {
     let setting = row![
         column![
-            text("Keep wires connected when moving")
+            text(raw("Keep wires connected when moving"))
                 .size(TS.label)
                 .style(text_primary),
-            text(MOVE_KEEPS_WIRES_HELP)
+            text(raw(MOVE_KEEPS_WIRES_HELP))
                 .size(TS.caption)
                 .style(text_muted),
         ]
@@ -48,10 +49,10 @@ pub(super) fn content_editing<'a>(
 
     let net_hover = row![
         column![
-            text("Show net info on hover")
+            text(raw("Show net info on hover"))
                 .size(TS.label)
                 .style(text_primary),
-            text(NET_HOVER_HELP).size(TS.caption).style(text_muted),
+            text(raw(NET_HOVER_HELP)).size(TS.caption).style(text_muted),
         ]
         .spacing(3)
         .width(320),
@@ -64,10 +65,12 @@ pub(super) fn content_editing<'a>(
 
     let drag_direction = row![
         column![
-            text("Select by drag direction")
+            text(raw("Select by drag direction"))
                 .size(TS.label)
                 .style(text_primary),
-            text(DRAG_DIRECTION_HELP).size(TS.caption).style(text_muted),
+            text(raw(DRAG_DIRECTION_HELP))
+                .size(TS.caption)
+                .style(text_muted),
         ]
         .spacing(3)
         .width(320),
@@ -80,8 +83,12 @@ pub(super) fn content_editing<'a>(
 
     let increment_step = row![
         column![
-            text("Increment step").size(TS.label).style(text_primary),
-            text(INCREMENT_STEP_HELP).size(TS.caption).style(text_muted),
+            text(raw("Increment step"))
+                .size(TS.label)
+                .style(text_primary),
+            text(raw(INCREMENT_STEP_HELP))
+                .size(TS.caption)
+                .style(text_muted),
         ]
         .spacing(3)
         .width(320),
@@ -92,7 +99,7 @@ pub(super) fn content_editing<'a>(
             PrefMsg::DraftIncrementStep,
         )
         .width(140),
-        text(format!("{draft_increment_step:+}"))
+        text(raw(format!("{draft_increment_step:+}")))
             .size(TS.label)
             .style(text_primary)
             .width(48)
@@ -103,10 +110,10 @@ pub(super) fn content_editing<'a>(
 
     let paste_designators = row![
         column![
-            text("Designators on paste")
+            text(raw("Designators on paste"))
                 .size(TS.label)
                 .style(text_primary),
-            text(PASTE_DESIGNATORS_HELP)
+            text(raw(PASTE_DESIGNATORS_HELP))
                 .size(TS.caption)
                 .style(text_muted),
         ]
@@ -125,10 +132,10 @@ pub(super) fn content_editing<'a>(
 
     let autosave = row![
         column![
-            text("Autosave recovery copies")
+            text(raw("Autosave recovery copies"))
                 .size(TS.label)
                 .style(text_primary),
-            text(AUTOSAVE_HELP).size(TS.caption).style(text_muted),
+            text(raw(AUTOSAVE_HELP)).size(TS.caption).style(text_muted),
         ]
         .spacing(3)
         .width(320),

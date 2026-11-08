@@ -180,7 +180,24 @@ fn every_id_renders_from_the_embedded_en_us_catalog() {
             id.as_str()
         );
     }
-    assert_eq!(i18n.emitted_for_test(), 0, "an id fell back or is missing");
+    // Ids render with no arguments, so a message with a `{ $var }` logs a
+    // format problem; only a fall-back or a missing id is a failure here.
+    assert_eq!(
+        i18n.lookup_problems_for_test(),
+        0,
+        "an id fell back or is missing"
+    );
+}
+
+#[test]
+fn a_message_with_a_variable_is_not_a_lookup_problem() {
+    let i18n = I18n::en_us_from_sources_for_test(&["with-var = Zoom { $percent }\n"]);
+    let id = crate::MessageId::new("with-var");
+    let _ = i18n.message(id, &[]);
+    assert_eq!(i18n.emitted_for_test(), 1, "the format problem is logged");
+    assert_eq!(i18n.lookup_problems_for_test(), 0);
+    let _ = i18n.message(crate::MessageId::new("absent"), &[]);
+    assert_eq!(i18n.lookup_problems_for_test(), 1);
 }
 
 #[test]

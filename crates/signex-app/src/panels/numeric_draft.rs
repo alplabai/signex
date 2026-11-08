@@ -26,7 +26,8 @@
 use std::path::PathBuf;
 
 use iced::Length;
-use iced::widget::{TextInput, text_input};
+use iced::widget::TextInput;
+use signex_widgets::{raw, text_input};
 
 use super::{
     GraphicFieldId, GraphicKindSummary, GraphicSummary, PanelMsg, PrePlacementData,
@@ -166,7 +167,7 @@ pub fn numeric_input<'a>(
     value: f64,
     draft: Option<&NumericDraft>,
 ) -> TextInput<'a, PanelMsg> {
-    text_input(placeholder.to_string(), shown_text(draft, key, value))
+    text_input(raw(placeholder.to_string()), shown_text(draft, key, value))
         .on_input(move |s| PanelMsg::NumericFieldTyped(key, s))
         .on_submit(PanelMsg::NumericFieldSubmitted(key))
         .width(Length::FillPortion(3))

@@ -6,8 +6,9 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Space, button, column, container, text};
+use iced::widget::{Space, column, container};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 use super::widgets::modal_title_header;
 use crate::app::path_ops::PlacingSymbol;
@@ -69,10 +70,10 @@ impl Signex {
                 let subtitle_owned = subtitle.to_string();
                 button(
                     column![
-                        text(format!("\u{2192} {}", title_owned))
+                        text(raw(format!("\u{2192} {}", title_owned)))
                             .size(TS.label)
                             .color(text_c),
-                        text(subtitle_owned).size(TS.caption).color(text_muted),
+                        text(raw(subtitle_owned)).size(TS.caption).color(text_muted),
                     ]
                     .spacing(SP.s)
                     .padding([SP.xs, 0.0]),
@@ -150,10 +151,10 @@ impl Signex {
         .spacing(SP.s);
         if !blockers.other_parents.is_empty() {
             prompt = prompt.push(
-                text(format!(
+                text(raw(format!(
                     "It is also placed by {}, so it cannot be deleted from here.",
                     blockers.parent_names()
-                ))
+                )))
                 .size(TS.caption)
                 .color(text_muted)
                 .boxed(),
@@ -161,10 +162,10 @@ impl Signex {
         }
         if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_library) {
             prompt = prompt.push(
-                text(format!(
+                text(raw(format!(
                     "It cannot be deleted from here: whether another sheet places it is not \
                      known yet ({why}). You can exclude it from the project."
-                ))
+                )))
                 .size(TS.caption)
                 .color(text_muted)
                 .boxed(),
@@ -177,12 +178,12 @@ impl Signex {
             && blockers.own_parent.is_some()
         {
             prompt = prompt.push(
-                text(format!(
+                text(raw(format!(
                     "Deleting it leaves {} sheet symbol(s) pointing at a missing file: {}. \
                      ERC and netlist export will report them until they are removed.",
                     blockers.symbols.len(),
                     PlacingSymbol::describe_all(&blockers.symbols)
-                ))
+                )))
                 .size(TS.caption)
                 .color(text_muted)
                 .boxed(),
@@ -190,11 +191,11 @@ impl Signex {
         }
         if blockers.placed && !blockers.unlisted {
             prompt = prompt.push(
-                text(format!(
+                text(raw(format!(
                     "Excluding it does not take it out of the design: a sheet symbol still \
                          places it ({}).",
                     PlacingSymbol::describe_all(&blockers.symbols)
-                ))
+                )))
                 .size(TS.caption)
                 .color(text_muted)
                 .boxed(),
@@ -202,23 +203,25 @@ impl Signex {
         }
         if blockers.unlisted {
             prompt = prompt.push(
-                text("It is not a page of this project, so there is nothing to exclude.")
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
+                text(raw(
+                    "It is not a page of this project, so there is nothing to exclude.",
+                ))
+                .size(TS.caption)
+                .color(text_muted)
+                .boxed(),
             );
         }
         // Library names can repeat across folders; the full path says which
         // one is affected. Sheets and PCBs get no extra line.
         if is_library {
             prompt = prompt.push(
-                text(st.target_path.display().to_string())
+                text(raw(st.target_path.display().to_string()))
                     .size(TS.caption)
                     .color(text_muted)
                     .boxed(),
             );
             if let Some(line) = self.library_usage_line(st) {
-                prompt = prompt.push(text(line).size(TS.caption).color(text_muted).boxed());
+                prompt = prompt.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
             }
         }
 
@@ -425,7 +428,7 @@ impl Signex {
         path_labels
             .chain(row_labels)
             .map(|name| {
-                container(text(name).size(TS.body).color(text_c))
+                container(text(raw(name)).size(TS.body).color(text_c))
                     .padding([SP.s, SP.m])
                     .boxed()
             })
@@ -460,7 +463,7 @@ impl Signex {
         let mut body: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.m);
         if self.ui_state.quit_confirm_refreshed {
             body = body.push(
-                text("The unsaved list changed; review and confirm again.")
+                text(raw("The unsaved list changed; review and confirm again."))
                     .size(TS.body)
                     .color(crate::styles::tokens::danger(tokens))
                     .boxed(),

@@ -2,8 +2,9 @@
 
 use super::*;
 use crate::annotate_undo::AnnotateUndo;
-use iced::widget::{Space, Widget, column, pick_list, row, text};
+use iced::widget::{Space, Widget, column, pick_list, row};
 use iced::{Element, Length};
+use signex_widgets::{raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -14,8 +15,12 @@ const ANNOTATE_UNDO_HELP: &str = "How many undo steps one annotate run is. One s
 pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg> {
     let setting = row![
         column![
-            text("Annotate undo").size(TS.label).style(text_primary),
-            text(ANNOTATE_UNDO_HELP).size(TS.caption).style(text_muted),
+            text(raw("Annotate undo"))
+                .size(TS.label)
+                .style(text_primary),
+            text(raw(ANNOTATE_UNDO_HELP))
+                .size(TS.caption)
+                .style(text_muted),
         ]
         .spacing(3)
         .width(320),

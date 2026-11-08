@@ -45,4 +45,5 @@ signex-renderer -> signex-3d-model-importer
 signex-renderer -> signex-gfx
 signex-renderer -> signex-types
 signex-sketch -> signex-types
+signex-widgets -> signex-i18n
 signex-widgets -> signex-types

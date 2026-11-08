@@ -7,11 +7,12 @@
 //! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
 //! to open the standalone `.snxsym` / `.snxfpt` document tab.
 
-use iced::widget::{Column, Space, Widget, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, Widget, column, container, row, scrollable};
 use iced::{Element, Length};
 use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text};
 
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 
@@ -119,7 +120,7 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
     };
 
     let identity = column![
-        text(description)
+        text(raw(description))
             .size(TS.body)
             .color(description_color)
             .boxed()
@@ -130,8 +131,8 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
     let labelled = |label: &'static str, value: String| {
         let value_color = if value == NOT_SET { muted } else { text_c };
         row![
-            text(label).size(TS.body).color(muted).boxed(),
-            text(value).size(TS.body).color(value_color).boxed(),
+            text(raw(label)).size(TS.body).color(muted).boxed(),
+            text(raw(value)).size(TS.body).color(value_color).boxed(),
         ]
         .spacing(SP.m)
         .boxed()
@@ -425,14 +426,20 @@ fn pin_map_subsection<'a>(
     {
         let pad_cell: Element<'a, LibraryMessage> = if line.is_override {
             row![
-                text(line.pad.clone()).size(TS.body).color(text_c).boxed(),
-                text("override").size(TS.caption).color(muted).boxed(),
+                text(raw(line.pad.clone()))
+                    .size(TS.body)
+                    .color(text_c)
+                    .boxed(),
+                text(raw("override")).size(TS.caption).color(muted).boxed(),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
             .boxed()
         } else {
-            text(line.pad.clone()).size(TS.body).color(text_c).boxed()
+            text(raw(line.pad.clone()))
+                .size(TS.body)
+                .color(text_c)
+                .boxed()
         };
         let label = if line.is_override {
             "Edit override"
@@ -450,14 +457,17 @@ fn pin_map_subsection<'a>(
         table = table.push(kit::table_row(
             vec![
                 (
-                    text(line.number.clone())
+                    text(raw(line.number.clone()))
                         .size(TS.body)
                         .color(text_c)
                         .boxed(),
                     widths[0],
                 ),
                 (
-                    text(line.name.clone()).size(TS.body).color(text_c).boxed(),
+                    text(raw(line.name.clone()))
+                        .size(TS.body)
+                        .color(text_c)
+                        .boxed(),
                     widths[1],
                 ),
                 (pad_cell, widths[2]),
@@ -492,7 +502,7 @@ fn override_editor_row<'a>(
 
     let pin_for_input = pin_number.to_string();
     let address_for_input = address.clone();
-    let input = iced::widget::text_input("pad number…", buf)
+    let input = signex_widgets::text_input(signex_widgets::raw("pad number…"), buf)
         .on_input(move |s| {
             editor_event(
                 &address_for_input,
@@ -536,7 +546,7 @@ fn override_editor_row<'a>(
 
     container(
         row![
-            text(format!("Override pin {pin_number} →"))
+            text(raw(format!("Override pin {pin_number} →")))
                 .size(TS.body)
                 .color(muted)
                 .boxed(),
@@ -582,7 +592,7 @@ fn where_used_footer<'a>(
         theme_ext::text_primary(tokens)
     };
     kit::card(
-        text(where_used_label(uses.len(), projects))
+        text(raw(where_used_label(uses.len(), projects)))
             .size(TS.body)
             .color(color)
             .boxed(),

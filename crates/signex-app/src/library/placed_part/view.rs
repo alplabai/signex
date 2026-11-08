@@ -2,12 +2,13 @@
 //! Change Component (#1260) and the datasheet list (#1301). Pure: the lines
 //! shown are built by [`preview_lines`] from the engine's preview.
 
-use iced::widget::{Space, button, column, container, scrollable, text};
+use iced::widget::{Space, column, container, scrollable};
 use iced::{Element, Length, Widget};
 use signex_engine::ComponentChangePreview;
 use signex_types::schematic::PinMatchedBy;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text};
 
 use crate::library::messages::{LibraryMessage, PlacedPartMsg};
 use crate::library::modal_chrome::{footer_strip, header, primary_btn, secondary_btn};
@@ -147,7 +148,7 @@ fn option_button<'a>(
     message: LibraryMessage,
 ) -> Element<'a, LibraryMessage> {
     button(
-        text(label.to_string())
+        text(raw(label.to_string()))
             .size(TS.body)
             .color(theme_ext::text_primary(tokens)),
     )
@@ -168,10 +169,10 @@ pub fn change_preview_view<'a>(
     let warning = theme_ext::warning_color(tokens);
     let text_c = theme_ext::text_primary(tokens);
     let mut lines = column![
-        text(format!(
+        text(raw(format!(
             "{} becomes {}. Its designator and parameters stay.",
             change.reference, change.resolved.internal_pn
-        ))
+        )))
         .size(TS.body)
         .color(text_c),
         Space::new().height(SP.m),
@@ -182,7 +183,7 @@ pub fn change_preview_view<'a>(
             LineKind::Info => muted,
             LineKind::Warning => warning,
         };
-        lines = lines.push(text(line.text).size(TS.body).color(color).boxed());
+        lines = lines.push(text(raw(line.text)).size(TS.body).color(color).boxed());
     }
     let buttons = vec![
         secondary_btn(
@@ -213,10 +214,10 @@ pub fn datasheet_choice_view<'a>(
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let mut list = column![
-        text(format!(
+        text(raw(format!(
             "Which document of {} do you want to open?",
             choice.reference
-        ))
+        )))
         .size(TS.body)
         .color(theme_ext::text_primary(tokens)),
         Space::new().height(SP.m),

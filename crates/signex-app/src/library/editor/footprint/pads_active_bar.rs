@@ -19,9 +19,10 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{button, container, row, text};
+use iced::widget::{container, row};
 use iced::{Border, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::{Spacing, TypeScale};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
@@ -58,7 +59,7 @@ pub fn mode_switcher_overlay<'a>(
         let label_color = if active { on_accent } else { text_c };
         button(
             container(
-                text(label)
+                text(raw(label))
                     .size(ts.body)
                     .color(label_color)
                     .align_x(iced::alignment::Horizontal::Center),

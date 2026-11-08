@@ -1,4 +1,5 @@
-use iced::widget::{button, text};
+use signex_widgets::{button, raw, text};
+
 use iced::{Background, Border, Color, Element, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
@@ -14,7 +15,7 @@ pub(crate) fn view<'a>(
     let text_color = theme::color(tokens.text);
     let border = theme::color(tokens.border);
     button(
-        text(theme_id.label().to_string())
+        text(raw(theme_id.label().to_string()))
             .size(11)
             .color(text_color),
     )

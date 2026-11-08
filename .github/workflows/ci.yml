@@ -375,6 +375,18 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/check_file_size.sh
 
+      # Hard gate (#2056): UI text goes through the house widgets, and `raw("…")`
+      # is the escape hatch for text not in the message catalog yet. The count
+      # of raw call sites may not grow (scripts/check_raw_labels.sh); clippy's
+      # `disallowed-methods` (clippy.toml) bans the raw iced widget functions.
+      - name: Raw-label ratchet
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_raw_labels.sh
+
+      - name: Raw-label ratchet controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_raw_labels.sh
+
       # This step fails hard (NOT continue-on-error) on a violation, and
       # `ci · required` gates the merge on this job, so a violation actually
       # blocks it (GH #548 proposal 2).

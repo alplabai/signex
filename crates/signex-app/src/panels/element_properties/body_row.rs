@@ -80,15 +80,15 @@ pub(super) fn push_body_row<'a>(
             pick,
             muted,
         )),
-        BODY_NORMAL => c.push(iced::widget::Widget::boxed(iced::widget::tooltip::<
+        BODY_NORMAL => c.push(iced::widget::Widget::boxed(signex_widgets::tooltip::<
             _,
             _,
             iced::Theme,
         >(
             form_input_row("Body", "Normal", muted, input_bg, input_bdr),
-            iced::widget::text::<iced::Theme>(
+            signex_widgets::text::<iced::Theme>(signex_widgets::raw(
                 "This library symbol has no alternate (De Morgan) body",
-            )
+            ))
             .size(TS.body),
             iced::widget::tooltip::Position::Bottom,
         ))),
