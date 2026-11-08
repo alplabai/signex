@@ -5,7 +5,9 @@
 
 pub mod active_bar;
 pub mod history_pane;
+mod house;
 pub mod icon_button;
+mod label;
 pub mod passive_calculator;
 pub mod status_bar;
 pub mod tab_pill;
@@ -19,6 +21,26 @@ pub mod tree_view;
 pub use active_bar::dropdown as active_bar_dropdown;
 
 pub use history_pane::{HistoryEntry, history_pane};
+pub use house::{CheckboxLabel, Content, button, checkbox, text, text_input, tooltip};
+pub use label::{Label, raw};
+
+// The iced modules behind the house functions of the same name, so
+// `use signex_widgets::button;` brings `button(..)` and `button::Style`.
+pub mod button {
+    pub use iced::widget::button::*;
+}
+pub mod checkbox {
+    pub use iced::widget::checkbox::*;
+}
+pub mod text {
+    pub use iced::widget::text::*;
+}
+pub mod text_input {
+    pub use iced::widget::text_input::*;
+}
+pub mod tooltip {
+    pub use iced::widget::tooltip::*;
+}
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 pub use translate::Translate;
 
