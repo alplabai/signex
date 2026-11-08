@@ -115,7 +115,11 @@ impl SchematicCanvas<'_> {
         allow_shift: bool,
     ) -> RetainedLayer {
         let viewport = bounds.size();
-        let mut retained = self.content_surface.borrow_mut();
+        // A GPU-mounted sheet replays only its rotated and oversize texts here.
+        let mut retained = match self.mode {
+            ContentMode::Cpu => self.content_surface.borrow_mut(),
+            ContentMode::GpuOverlay => self.gpu_text_surface.borrow_mut(),
+        };
         let mut shift = retained
             .shift_to(transform, viewport)
             .filter(|s| allow_shift || (s.x == 0.0 && s.y == 0.0));
