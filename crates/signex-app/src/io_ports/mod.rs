@@ -18,17 +18,32 @@ use std::path::Path;
 pub struct IoPorts {
     pub picker: Picker,
     pub opener: Opener,
+    pub git: GitCommits,
 }
 
 impl IoPorts {
     /// A headless run: dialogs answered from `answers` (replaced per command,
-    /// see [`HeadlessAnswers::replace_all`]), launches refused.
+    /// see [`HeadlessAnswers::replace_all`]), launches refused, no git.
     pub fn headless(answers: HeadlessAnswers) -> Self {
         Self {
             picker: Picker::Headless(answers),
             opener: Opener::Refuse,
+            git: GitCommits::Skip,
         }
     }
+}
+
+/// Whether a save of a project with git enabled commits to its repository.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum GitCommits {
+    /// The project's own repository: opened, created if missing, committed to.
+    #[default]
+    Native,
+    /// A headless run never opens, creates or commits to a repository: where
+    /// a repository is (a `gitdir:` file, a link, config includes) is the
+    /// project folder's say, not the caller's, and the commit would write
+    /// outside it.
+    Skip,
 }
 
 /// Where a browser or viewer launch goes.

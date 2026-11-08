@@ -5,9 +5,10 @@
 //! Right side: settings panel for the selected category.
 
 use crate::render_config::{GridStyle, PinSelectionMode};
-use iced::widget::{Column, Space, Widget, button, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, Widget, column, container, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
+use signex_widgets::{button, raw, text};
 
 use crate::app::view::dialogs::{
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
@@ -429,7 +430,7 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
     // the app uses so the chrome stays consistent across surfaces.
     let header = container(
         row![
-            text("Preferences")
+            text(raw("Preferences"))
                 .size(MODAL_HEADER_TITLE_SIZE)
                 .style(text_primary),
             Space::new().width(Length::Fill),
@@ -540,7 +541,9 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
             last_group = group;
             col = col.push(
                 container(
-                    text(group.to_uppercase())
+                    // user-visible: migrate to the #2063 casemap
+                    // ast-grep-ignore: no-case-in-view
+                    text(raw(group.to_uppercase()))
                         .size(TS.caption)
                         .style(text_muted),
                 )
@@ -573,7 +576,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
     button(
         container(
             row![
-                text(item.label())
+                text(raw(item.label()))
                     .size(TS.label)
                     .style(move |theme: &Theme| text::Style {
                         color: Some(if is_active {
@@ -696,7 +699,9 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         return None;
     }
     let footer_row: Element<'a, PrefMsg> = row![
-        text("● Unsaved changes").size(TS.body).style(text_warning),
+        text(raw("● Unsaved changes"))
+            .size(TS.body)
+            .style(text_warning),
         Space::new().width(Length::Fill),
         discard_btn(),
         Space::new().width(SP.l),
@@ -783,7 +788,7 @@ fn build_prefs_file_banner<'a>(
         // repair is the path the app actually reads and writes.
         let path = crate::fonts::prefs_file_path().display().to_string();
         lines = lines.push(
-            text(format!("Your preferences file at {path} {error}."))
+            text(raw(format!("Your preferences file at {path} {error}.")))
                 .size(TS.body)
                 .style(text_warning),
         );
@@ -795,18 +800,18 @@ fn build_prefs_file_banner<'a>(
         // Distributors pane it invites a user to re-enter API keys that
         // did save.
         lines = lines.push(
-            text(
+            text(raw(
                 "Appearance, ERC severities, component classes and panel layout are showing \
-                 their defaults, and changes to them are not being saved. The file itself \
-                 has not been altered — repair it by hand, or start a fresh one and keep \
-                 the old file beside it.",
-            )
+             their defaults, and changes to them are not being saved. The file itself \
+             has not been altered — repair it by hand, or start a fresh one and keep \
+             the old file beside it.",
+            ))
             .size(TS.caption)
             .style(text_muted),
         );
     }
     if !status.is_empty() {
-        lines = lines.push(text(status).size(TS.caption).style(text_muted));
+        lines = lines.push(text(raw(status)).size(TS.caption).style(text_muted));
     }
 
     let mut strip = row![lines].spacing(SP.xl).align_y(iced::Alignment::Center);
@@ -814,7 +819,7 @@ fn build_prefs_file_banner<'a>(
     // banner is a result line and there is nothing left to reset.
     if load_error.is_some() {
         strip = strip.push(
-            button(text("Start a fresh preferences file").size(TS.body))
+            button(text(raw("Start a fresh preferences file")).size(TS.body))
                 .padding([7, 14])
                 .on_press(PrefMsg::ResetPrefsFile)
                 // NOT `secondary_button_style` — that fills with
@@ -855,7 +860,7 @@ fn build_prefs_file_banner<'a>(
 }
 
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Save").size(TS.label))
+    button(text(raw("Save")).size(TS.label))
         .padding([SP.m, 20.0])
         .on_press(PrefMsg::Save)
         .style(success_button_style)
@@ -863,7 +868,7 @@ fn save_btn<'a>() -> Element<'a, PrefMsg> {
 }
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Discard & Close").size(TS.label))
+    button(text(raw("Discard & Close")).size(TS.label))
         .padding([SP.m, SP.xl])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)

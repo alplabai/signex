@@ -175,6 +175,11 @@ impl BoardIndex {
 
     /// Every item `rect` selects under `mode`, sorted by [`ItemRef`].
     pub fn hit_rect(&self, rect: &RectNm, mode: RectSelect) -> Vec<ItemRef> {
+        // Corners are capped at four times MAX_ABS_NM, like `hit_point`'s
+        // point: nothing on the board lies beyond, and no input overflows.
+        let far = 4 * MAX_ABS_NM;
+        let clamp = |p: PointNm| PointNm::new(p.x.clamp(-far, far), p.y.clamp(-far, far));
+        let rect = &RectNm::new(clamp(rect.min), clamp(rect.max));
         let candidates = self
             .tree
             .locate_in_envelope_intersecting(&envelope_of(rect));

@@ -21,6 +21,7 @@ fn pad(n: u128, x: f64) -> Pad {
             name: "N1".into(),
         }),
         roundrect_ratio: 0.0,
+        net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -36,6 +37,7 @@ fn two_pad_board() -> PcbBoard {
         rotation: 0.0,
         layer: "TopCopper".into(),
         locked: false,
+        schematic_link: None,
         pads: vec![pad(1, 0.0), pad(2, 5.0)],
         graphics: vec![],
         properties: vec![],

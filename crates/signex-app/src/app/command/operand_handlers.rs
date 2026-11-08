@@ -10,6 +10,7 @@
 use iced::Task;
 use signex_types::theme::Color;
 
+use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, OperandValue, enablement};
 use crate::app::mutation_gateway::CommandOutcome as Mutation;
 use crate::app::{Message, Signex};
@@ -22,11 +23,30 @@ type Ran = (CommandOutcome, Task<Message>);
 pub(crate) type OperandHandler = fn(&mut Signex, &CommandArgs) -> Ran;
 
 /// Every command that runs its operands, by id. Each needs a click-equivalence
-/// test (`operand_handler_tests`); `every_operand_command_has_a_handler_or_is_refused`
+/// test (`operand_handler_tests`, `placement_operand_tests`);
+/// `every_operand_command_has_a_handler_or_is_refused`
 /// keeps this table and the catalog in step.
 const HANDLERS: &[(&str, OperandHandler)] = &[
     ("color_net", color_net),
     ("clear_all_net_colors", clear_all_net_colors),
+    ("assign_net_class", assign_net_class),
+    ("place_net_label", place::net_label),
+    ("place_local_net_label", place::net_label),
+    ("place_global_label", place::global_label),
+    ("place_hierarchical_label", place::hierarchical_label),
+    ("place_power_symbol", place::power),
+    ("place_no_connect", place::no_connect),
+    ("place_junction", place::junction),
+    ("place_no_erc", place::no_erc),
+    ("place_wire", place::wire),
+    ("draw_wire", place::wire),
+    ("place_bus", place::bus),
+    ("draw_bus", place::bus),
+    ("place_text", place::text_note),
+    ("place_text_string", place::text_note),
+    ("draw_line", place::line),
+    ("draw_graphic_line", place::line),
+    ("draw_rectangle", place::rectangle),
 ];
 
 /// The handler of `command`, if it runs its operands.
@@ -35,6 +55,25 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
         .iter()
         .find(|(id, _)| *id == command.as_str())
         .map(|(_, handler)| *handler)
+}
+
+/// Why `command` does nothing without operands on a surface that gives it
+/// none (palette, key binding, menu): its GUI surface is another widget, and
+/// a command never opens, closes or focuses one as a side effect.
+pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static str> {
+    match command.as_str() {
+        "assign_net_class" => Some(
+            "`assign_net_class` needs the operand `net_name` — \
+             use the Net Class row in Properties",
+        ),
+        _ => None,
+    }
+}
+
+/// Whether a headless caller must name the document (`path`) the command
+/// acts on: it never falls back to the active one.
+pub(crate) fn headless_needs_path(command: &AppCommandId) -> bool {
+    command.as_str() == "assign_net_class"
 }
 
 /// The ids that run their operands.
@@ -117,5 +156,25 @@ fn clear_all_net_colors(app: &mut Signex, args: &CommandArgs) -> Ran {
         refused("the sheet is read-only: its net colours were kept")
     } else {
         refused("there are no net colours to clear")
+    }
+}
+
+/// `assign_net_class net_name=N [class=C] [path=..]`: put the net in the
+/// class (or take it out of its listed one), as the label picker does.
+fn assign_net_class(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let Some(OperandValue::Text(net)) = args.operand("net_name") else {
+        return refused("`assign_net_class` needs the operand `net_name`");
+    };
+    let sheet = match args.operand("path") {
+        Some(OperandValue::Path(path)) => Some(std::path::PathBuf::from(path)),
+        _ => None,
+    };
+    let class = match args.operand("class") {
+        Some(OperandValue::Text(class)) => Some(class.as_str()),
+        _ => None,
+    };
+    match app.assign_net_to_class(sheet.as_deref(), net, class) {
+        Ok(()) => ran(),
+        Err(reason) => refused(reason),
     }
 }

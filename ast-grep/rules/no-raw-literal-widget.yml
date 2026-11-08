@@ -1,0 +1,85 @@
+id: no-raw-literal-widget
+language: rust
+severity: error
+message: "A string literal is not a widget: build it with text(raw(\"…\")) or text(t!(…))."
+note: |
+  In this iced fork `&str` is itself a widget, so a literal can reach the UI
+  through `container("X")`, `"X".boxed()` or `Text::from("X")` without any
+  function clippy.toml bans, skipping the message catalog (#2056, #2053). Wrap
+  it in `text(raw("X"))` (migrating areas move it to `t!`). A literal is never
+  user content, so `UserText::new("X")` is refused too: UserText wraps what the
+  user wrote. `row![…]` and `column![…]` hold unparsed token trees that this
+  rule cannot see; scripts/check_raw_labels.sh checks those.
+  A `"X".into()` that is not a widget (a String, a PathBuf) takes
+  `// ast-grep-ignore: no-raw-literal-widget` on the line above.
+files:
+  - crates/signex-app/src/**/*.rs
+  - crates/signex-widgets/src/**/*.rs
+  - crates/chrome-catalog/src/**/*.rs
+ignores:
+  - "**/*_tests.rs"
+  - "**/tests.rs"
+  - "**/tests/**"
+  - crates/signex-widgets/src/house.rs
+  - crates/signex-widgets/src/house_extra.rs
+  - crates/signex-widgets/src/label.rs
+constraints:
+  S:
+    kind: string_literal
+  T:
+    regex: '^(iced::(widget::)?)?(Text|Element)\b'
+rule:
+  all:
+    - any:
+        # A call, bare or path-qualified (iced::widget::container(..)), whose
+        # first argument is a string literal.
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)(container|scrollable|mouse_area|button|center|center_x|center_y|right|bottom|float|pin|sensor|opaque)$|(^|::)(Element|Text|Span)::from$|(^|::)(Container|Scrollable|MouseArea)::new$|(^|::)UserText::new$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 1
+                  kind: string_literal
+        # hover(base, top) takes a widget in both arguments.
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)hover$'
+            - has:
+                field: arguments
+                has:
+                  any:
+                    - nthChild: 1
+                    - nthChild: 2
+                  kind: string_literal
+        # The tip of a tooltip is its second argument.
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)tooltip$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 2
+                  kind: string_literal
+        - pattern: $S.boxed()
+        - pattern: "let $P: $T = $S.into();"
+        - all:
+            - pattern: $S.into()
+            - inside:
+                stopBy: end
+                kind: function_item
+                has:
+                  field: return_type
+                  regex: '^(iced::)?(Element|Column|Row|Container|Text)<'
+    - not:
+        inside:
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'

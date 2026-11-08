@@ -239,8 +239,9 @@ impl DocumentState {
 
     /// Clear every stored dirty mark of `path` without touching the engine's
     /// save point: for a discard, where an engine at `path` is not known to
-    /// equal the file.
+    /// equal the file. A board parked for `path` goes with the mark.
     pub fn clear_document_dirty(&mut self, path: &Path) {
+        self.parked_pcb_boards.remove(path);
         self.dirty_docs.paths.remove(path);
         self.dirty_docs.external.remove(path);
         self.dirty_docs.project_saved.remove(path);

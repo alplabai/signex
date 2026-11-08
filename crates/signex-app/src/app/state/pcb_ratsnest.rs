@@ -83,6 +83,7 @@ mod tests {
                 name: "N1".into(),
             }),
             roundrect_ratio: 0.0,
+            net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         }
@@ -98,6 +99,7 @@ mod tests {
             rotation: 0.0,
             layer: "TopCopper".into(),
             locked: false,
+            schematic_link: None,
             pads: xs
                 .iter()
                 .enumerate()

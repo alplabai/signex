@@ -15,9 +15,11 @@ use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
 use crate::pcb::{
-    DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, Via, ViaType,
+    DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, SymbolLink,
+    Via, ViaType,
 };
-use crate::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer, UserLayer};
+use crate::pcb_layer::{CopperLayer, InnerCopper, MechanicalLayer, PcbLayer, TechnicalLayer};
+use crate::schematic::InstancePath;
 use uuid::Uuid;
 
 /// Bulk row for one [`Footprint`] in the `[footprints]` block.
@@ -348,14 +350,14 @@ crate::token_enum! {
 }
 
 /// The on-disk name of `layer`: `TopCopper`, `Inner<n>Copper`,
-/// `BottomCopper`, a technical name such as `TopSilkscreen`, or `User.<n>`.
+/// `BottomCopper`, a technical name such as `TopSilkscreen`, or `Mechanical<n>`.
 pub fn pcb_layer_token(layer: PcbLayer) -> String {
     match layer {
         PcbLayer::Copper(CopperLayer::Top) => "TopCopper".to_string(),
         PcbLayer::Copper(CopperLayer::Inner(n)) => format!("Inner{}Copper", n.index()),
         PcbLayer::Copper(CopperLayer::Bottom) => "BottomCopper".to_string(),
         PcbLayer::Technical(t) => technical_layer_str(t).to_string(),
-        PcbLayer::User(n) => format!("User.{}", n.index()),
+        PcbLayer::Mechanical(n) => format!("Mechanical{}", n.index()),
     }
 }
 
@@ -376,10 +378,10 @@ pub fn parse_pcb_layer(token: &str) -> Option<PcbLayer> {
             .and_then(InnerCopper::new)
             .map(|n| PcbLayer::Copper(CopperLayer::Inner(n)));
     }
-    if let Some(n) = token.strip_prefix("User.") {
+    if let Some(n) = token.strip_prefix("Mechanical") {
         return canonical_index(n)
-            .and_then(UserLayer::new)
-            .map(PcbLayer::User);
+            .and_then(MechanicalLayer::new)
+            .map(PcbLayer::Mechanical);
     }
     let technical = parse_technical_layer_or_margin(token);
     (technical_layer_str(technical) == token).then_some(PcbLayer::Technical(technical))
@@ -417,6 +419,7 @@ fn split_layers(s: &str) -> Vec<String> {
 pub(in crate::format) fn footprint_to_row(
     fp: &Footprint,
 ) -> Result<PcbFootprintRow, NonFiniteField> {
+    let unknown_columns = with_link_cell(fp.unknown_columns.clone(), fp.schematic_link.as_ref());
     Ok(PcbFootprintRow {
         uuid: fp.uuid,
         ref_des: fp.reference.clone(),
@@ -426,14 +429,15 @@ pub(in crate::format) fn footprint_to_row(
         rotation: fp.rotation,
         layer: fp.layer.clone(),
         value: fp.value.clone(),
-        unknown_columns: fp.unknown_columns.clone(),
+        unknown_columns,
     })
 }
 
 pub(in crate::format) fn row_to_footprint(
-    row: PcbFootprintRow,
+    mut row: PcbFootprintRow,
     extras: FootprintExtras,
 ) -> Footprint {
+    let schematic_link = take_link_cell(&mut row.unknown_columns);
     Footprint {
         uuid: row.uuid,
         reference: row.ref_des,
@@ -453,8 +457,88 @@ pub(in crate::format) fn row_to_footprint(
         pads: Vec::new(),
         graphics: extras.graphics,
         properties: extras.properties,
+        schematic_link,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
+    }
+}
+
+/// Header of the optional `sch_link` footprint column: the footprint's
+/// schematic part as `<unit uuid>[+<unit uuid>...]@<sheet path>`, units in
+/// ascending order, e.g. `0190...@/` for a one-unit part on a root page or
+/// `0190...a+0190...b@/<sheet uuid>` for a two-unit part on a child sheet
+/// occurrence. A foreign column like `net_locked`: absent when no footprint
+/// is linked, an empty cell for an unlinked footprint of a block that has
+/// linked ones.
+pub(in crate::format) const SCH_LINK_COLUMN: &str = "sch_link";
+
+fn link_cell(link: &SymbolLink) -> String {
+    let units: Vec<String> = link.units.iter().map(Uuid::to_string).collect();
+    format!("{}@{}", units.join("+"), link.sheet)
+}
+
+fn with_link_cell(mut columns: UnknownColumns, link: Option<&SymbolLink>) -> UnknownColumns {
+    if let Some(link) = link {
+        columns.set(SCH_LINK_COLUMN, link_cell(link));
+    }
+    columns
+}
+
+/// An empty cell is "no link"; a cell this build cannot parse is not ours
+/// to read, so it stays a foreign cell and round-trips untouched.
+fn take_link_cell(columns: &mut UnknownColumns) -> Option<SymbolLink> {
+    let cell = columns.get(SCH_LINK_COLUMN)?;
+    if cell.is_empty() {
+        columns.take(SCH_LINK_COLUMN);
+        return None;
+    }
+    let (units, sheet) = cell.split_once('@')?;
+    let units = units
+        .split('+')
+        .map(|u| Uuid::parse_str(u).ok())
+        .collect::<Option<Vec<_>>>()?;
+    let link = SymbolLink::new(InstancePath::parse(sheet)?, units);
+    // Only a cell that writes back identically is ours.
+    if link_cell(&link) != cell {
+        return None;
+    }
+    columns.take(SCH_LINK_COLUMN);
+    Some(link)
+}
+
+/// Header of the optional `net_locked` pad column. Like the schematic's
+/// `locked` column it is not a known column: it rides the foreign-column
+/// path. A board with no locked pad has no such header and re-saves
+/// byte-identical, and a build that predates the lock keeps it. When any pad
+/// is locked the header is written after the known columns, in first-seen
+/// order among the block's foreign columns (its position among the known
+/// ones is not kept), and every unlocked pad writes an empty cell. See
+/// `unknown_columns` for the contract.
+pub(in crate::format) const NET_LOCKED_COLUMN: &str = "net_locked";
+
+/// The cell a locked pad writes; every other pad of the block writes empty.
+const NET_LOCKED_CELL: &str = "true";
+
+fn with_net_locked_cell(mut columns: UnknownColumns, locked: bool) -> UnknownColumns {
+    if locked {
+        columns.set(NET_LOCKED_COLUMN, NET_LOCKED_CELL.to_string());
+    }
+    columns
+}
+
+/// `true` locks and an empty cell is an unlocked pad; any other value is not
+/// ours to read, so it stays a foreign cell and round-trips untouched.
+fn take_net_locked_cell(columns: &mut UnknownColumns) -> bool {
+    match columns.get(NET_LOCKED_COLUMN) {
+        Some(NET_LOCKED_CELL) => {
+            columns.take(NET_LOCKED_COLUMN);
+            true
+        }
+        Some("") => {
+            columns.take(NET_LOCKED_COLUMN);
+            false
+        }
+        _ => false,
     }
 }
 
@@ -488,11 +572,12 @@ pub(in crate::format) fn pad_to_row(
         net_number,
         net_name,
         roundrect_ratio: pad.roundrect_ratio,
-        unknown_columns: pad.unknown_columns.clone(),
+        unknown_columns: with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
     })
 }
 
-pub(in crate::format) fn row_to_pad(row: PcbPadRow, extras: PadExtras) -> Pad {
+pub(in crate::format) fn row_to_pad(mut row: PcbPadRow, extras: PadExtras) -> Pad {
+    let net_locked = take_net_locked_cell(&mut row.unknown_columns);
     let drill = if row.drill > 0 {
         Some(DrillDef {
             diameter: nm_to_mm(row.drill),
@@ -526,6 +611,7 @@ pub(in crate::format) fn row_to_pad(row: PcbPadRow, extras: PadExtras) -> Pad {
         layers: split_layers(&row.layers),
         net,
         roundrect_ratio: row.roundrect_ratio,
+        net_locked,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
     }

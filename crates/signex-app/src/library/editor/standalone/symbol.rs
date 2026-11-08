@@ -1,10 +1,11 @@
 //! Standalone `.snxsym` symbol-editor document tab view builders.
 //! Split from `library/editor/standalone.rs` as pure code motion.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::coord::Unit;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text};
 
 use crate::app::SymbolDocument;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
@@ -89,7 +90,7 @@ fn view_symbol_status<'a>(
     let pin_count = format!("{} pins", editor.primitive().pins.len());
     let tool_text = format!("Tool: {}", editor.tool.label());
 
-    let sep = || text("|").size(TS.caption).color(muted);
+    let sep = || text(raw("|")).size(TS.caption).color(muted);
 
     // Grid toggle button.
     let grid_vis_label = if display.grid_visible {
@@ -97,7 +98,7 @@ fn view_symbol_status<'a>(
     } else {
         "Grid: OFF"
     };
-    let grid_toggle = button(text(grid_vis_label).size(TS.body).color(text_c))
+    let grid_toggle = button(text(raw(grid_vis_label)).size(TS.body).color(text_c))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
@@ -107,7 +108,7 @@ fn view_symbol_status<'a>(
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
-    let grid_cycle = button(text(grid_size_label).size(TS.body).color(muted))
+    let grid_cycle = button(text(raw(grid_size_label)).size(TS.body).color(muted))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
@@ -130,27 +131,27 @@ fn view_symbol_status<'a>(
 
     container(
         row![
-            text(coord_text).size(TS.body).color(text_c),
+            text(raw(coord_text)).size(TS.body).color(text_c),
             sep(),
-            text(zoom_text).size(TS.body).color(muted),
+            text(raw(zoom_text)).size(TS.body).color(muted),
             sep(),
-            text(pin_count).size(TS.body).color(muted),
+            text(raw(pin_count)).size(TS.body).color(muted),
             sep(),
-            text(tool_text).size(TS.body).color(muted),
+            text(raw(tool_text)).size(TS.body).color(muted),
             sep(),
             grid_toggle,
             grid_cycle,
             copy_again,
             Space::new().width(Length::Fill),
             match &editor.status_message {
-                Some(msg) => text(msg.clone())
+                Some(msg) => text(raw(msg.clone()))
                     .size(TS.caption)
                     .color(theme_ext::error_color(tokens)),
-                None => text(if editor.selected.is_some() {
+                None => text(raw(if editor.selected.is_some() {
                     "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
                 } else {
                     "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
-                })
+                }))
                 .size(TS.caption)
                 .color(muted),
             },
@@ -191,7 +192,7 @@ fn view_symbol_toolbar<'a>(
 
     // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
     let btn = |label: &'static str, msg: PrimitiveEdit| {
-        button(text(label).size(TS.body).color(text_c))
+        button(text(raw(label)).size(TS.body).color(text_c))
             .padding([SP.s, SP.l])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
@@ -213,7 +214,7 @@ fn view_symbol_toolbar<'a>(
             body_controls,
             Space::new().width(SP.l),
             btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
-            text(format!("Part {active_part} / {max_part}"))
+            text(raw(format!("Part {active_part} / {max_part}")))
                 .size(TS.body)
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
@@ -251,14 +252,14 @@ fn body_toolbar<'a>(
         msg: PrimitiveEdit::Symbol(msg),
     };
     let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
-        button(text(label).size(TS.body).color(text_c))
+        button(text(raw(label)).size(TS.body).color(text_c))
             .padding([SP.s, SP.m])
             .on_press(send(msg))
             .style(symbol_tool_button_style(active, tokens))
     };
     let view = editor.view();
     row![
-        text("Body").size(TS.body).color(text_c),
+        text(raw("Body")).size(TS.body).color(text_c),
         button_for(
             "Normal",
             view.body == BodyStyle::Normal,

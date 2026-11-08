@@ -20,6 +20,7 @@ mod sheet;
 mod sheet_entry;
 mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
+pub mod pcb;
 mod sheet_placement;
 mod transform;
 
@@ -44,6 +45,8 @@ mod object_lock_tests;
 #[cfg(test)]
 mod wire_merge_tests;
 
+#[cfg(test)]
+mod class_pick_marker_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
@@ -85,8 +88,8 @@ pub use find::{
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
 };
-use history::HistoryEntry;
-pub use history::UndoGroupId;
+use history::HistoryStep;
+pub use history::{ClassPickMarker, UndoGroupId};
 pub use multi_edit::{
     LabelGroup, MultiEdit, SelectionGroups, Shared, SymbolGroup, WireGroup,
     edit_commands as multi_edit_commands, selection_groups,
@@ -148,7 +151,7 @@ pub struct Engine {
     /// file, which reads as dirty. An engine built from content that is not
     /// known to be on disk (`new`, a recovery copy) starts unknown. See
     /// [`Engine::is_at_save_point`].
-    history: History<HistoryEntry>,
+    history: History<HistoryStep>,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
     /// records one coalesced entry when the loop finishes. Always `false`

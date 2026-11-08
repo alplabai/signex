@@ -186,7 +186,6 @@ impl Signex {
             update_selection_info,
         );
         if changed {
-            self.clear_active_net_class_pick_redo();
             (CommandOutcome::Changed, None)
         } else {
             (CommandOutcome::Unchanged, None)
@@ -310,9 +309,6 @@ impl Signex {
             clear_overlay_cache,
             update_selection_info,
         );
-        if changed {
-            self.clear_active_net_class_pick_redo();
-        }
         let outcome = if failed.is_some() {
             CommandOutcome::Failed
         } else if changed {
@@ -321,13 +317,6 @@ impl Signex {
             CommandOutcome::Unchanged
         };
         (outcome, failed)
-    }
-
-    /// A recorded edit ends the redo branch of the sheet's net-class picks.
-    fn clear_active_net_class_pick_redo(&mut self) {
-        if let Some(path) = self.document_state.active_path.clone() {
-            self.clear_net_class_pick_redo(&path);
-        }
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -342,8 +331,6 @@ impl Signex {
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
-        // Any history-recording edit ends the colour redo branch.
-        self.clear_active_net_class_pick_redo();
         self.document_state.note_sheet_edit();
         self.sync_active_history_dirty()
     }

@@ -1,9 +1,10 @@
 //! Help ▸ About Signex dialog — product name, version, licence and the
 //! "Copy version info" action. Styled from `ThemeTokens` only.
 
-use iced::widget::{Widget, button, column, container, row, text};
+use iced::widget::{Widget, column, container, row};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::about::{ExternalLink, LICENSE_NAME, VERSION};
 use crate::app::view::dialogs::modal_title_header;
@@ -37,27 +38,29 @@ fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
         tokens,
     );
 
-    let license_link = button(text(format!("{LICENSE_NAME} license")).size(TS.label))
+    let license_link = button(text(raw(format!("{LICENSE_NAME} license"))).size(TS.label))
         .padding(0)
         .on_press(Message::Overlay(OverlayMsg::OpenLink(
             ExternalLink::License,
         )))
         .style(styles::menu_item(tokens));
-    let copy_button = button(text("Copy version info").size(TS.label))
+    let copy_button = button(text(raw("Copy version info")).size(TS.label))
         .on_press(Message::Overlay(OverlayMsg::CopyAboutInfo))
         .style(styles::menu_item(tokens));
 
     let body = container(
         column![
-            text("Signex").size(TS.display).color(text_primary),
-            text(format!("Version {VERSION}"))
+            text(raw("Signex")).size(TS.display).color(text_primary),
+            text(raw(format!("Version {VERSION}")))
                 .size(TS.label)
                 .color(text_primary),
-            text("AI-first electronics design automation")
+            text(raw("AI-first electronics design automation"))
                 .size(TS.body)
                 .color(text_secondary),
             row![
-                text("Licensed under").size(TS.label).color(text_secondary),
+                text(raw("Licensed under"))
+                    .size(TS.label)
+                    .color(text_secondary),
                 license_link
             ]
             .spacing(SP.s)

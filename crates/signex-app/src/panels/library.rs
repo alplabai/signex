@@ -66,7 +66,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text("SCH Library").size(TS.body).color(primary))
+        container(text(raw("SCH Library")).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -76,10 +76,10 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let Some(sym) = ctx.symbol_editor.as_ref() else {
         col = col.push(
             container(
-                text(
+                text(raw(
                     "Open a `.snxsym` to see its symbols here. Right-click a library node \
-                     in the project tree and pick `Add New ▸ Symbol` to create one.",
-                )
+                 in the project tree and pick `Add New ▸ Symbol` to create one.",
+                ))
                 .size(TS.caption)
                 .color(muted),
             )
@@ -123,7 +123,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         None => format!("{}  ({} symbols)", symbol_file, sym.symbols_in_file.len()),
     };
     col = col.push(
-        container(text(breadcrumb).size(TS.caption).color(muted))
+        container(text(raw(breadcrumb)).size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .boxed(),
     );
@@ -134,11 +134,11 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(
         container(
             row![
-                text("Design Item ID")
+                text(raw("Design Item ID"))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(3)),
-                text("Description")
+                text(raw("Description"))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(4)),
@@ -161,13 +161,13 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let label_color = if is_active { primary } else { muted };
         let bg_active = crate::styles::ti(ctx.tokens.selection);
         let row_msg = PanelMsg::SchLibrarySelectSymbol(entry.idx);
-        let row_btn = iced::widget::button(
+        let row_btn = signex_widgets::button(
             row![
-                text(entry.name.clone())
+                text(raw(entry.name.clone()))
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::FillPortion(3)),
-                text(entry.description.clone())
+                text(raw(entry.description.clone()))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(4)),
@@ -267,20 +267,21 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // Place — fires on the active symbol (would dispatch to schematic
     // place flow when wired). Stub for now: greyed-out.
-    let place_btn = iced::widget::button(text("Place").size(TS.body).color(muted))
+    let place_btn = signex_widgets::button(text(raw("Place")).size(TS.body).color(muted))
         .padding([SP.s, 10.0])
         .style(action_btn_style(true, false));
 
-    let add_btn = iced::widget::button(text("Add").size(TS.body).color(primary))
+    let add_btn = signex_widgets::button(text(raw("Add")).size(TS.body).color(primary))
         .padding([SP.s, 10.0])
         .on_press(PanelMsg::SchLibraryAddSymbol)
         .style(action_btn_style(false, true));
 
     let can_delete = sym.symbols_in_file.len() > 1;
     let delete_color = if can_delete { primary } else { muted };
-    let mut delete_btn = iced::widget::button(text("Delete").size(TS.body).color(delete_color))
-        .padding([SP.s, 10.0])
-        .style(action_btn_style(false, can_delete));
+    let mut delete_btn =
+        signex_widgets::button(text(raw("Delete")).size(TS.body).color(delete_color))
+            .padding([SP.s, 10.0])
+            .style(action_btn_style(false, can_delete));
     if can_delete {
         delete_btn = delete_btn.on_press(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx));
     }
@@ -288,7 +289,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // Edit — opens the active symbol in the standalone editor (for
     // when the SCH Library panel is the only visible surface).
     // Stub for now since the symbol is already open in its tab.
-    let edit_btn = iced::widget::button(text("Edit").size(TS.body).color(muted))
+    let edit_btn = signex_widgets::button(text(raw("Edit")).size(TS.body).color(muted))
         .padding([SP.s, 10.0])
         .style(action_btn_style(false, false));
 
@@ -324,22 +325,30 @@ fn delete_warning_block<'a>(
     primary: Color,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
-    let mut block: Column<Element<'a, PanelMsg>> = Column::new()
-        .spacing(SP.xs)
-        .push(text(warning.heading()).size(TS.body).color(primary).boxed());
+    let mut block: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).push(
+        text(raw(warning.heading()))
+            .size(TS.body)
+            .color(primary)
+            .boxed(),
+    );
     for line in &warning.lines {
-        block = block.push(text(line.as_str()).size(TS.caption).color(muted).boxed());
+        block = block.push(
+            text(raw(line.as_str()))
+                .size(TS.caption)
+                .color(muted)
+                .boxed(),
+        );
     }
     block = block.push(
-        text("Deleting it leaves placed parts on their embedded copy; the library symbol will be missing.")
+        text(raw("Deleting it leaves placed parts on their embedded copy; the library symbol will be missing."))
             .size(TS.caption)
             .color(muted)
             .boxed(),
     );
-    let confirm = iced::widget::button(text("Delete anyway").size(TS.body))
+    let confirm = signex_widgets::button(text(raw("Delete anyway")).size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::SchLibraryDeleteConfirmed(warning.idx));
-    let cancel = iced::widget::button(text("Cancel").size(TS.body))
+    let cancel = signex_widgets::button(text(raw("Cancel")).size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::SchLibraryDeleteCancelled);
     block = block.push(row![confirm, cancel].spacing(SP.m).boxed());
@@ -366,7 +375,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text("Footprint Library").size(TS.body).color(primary))
+        container(text(raw("Footprint Library")).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -376,11 +385,11 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     let Some(fp) = ctx.footprint_editor.as_ref() else {
         col = col.push(
             container(
-                text(
+                text(raw(
                     "Open a `.snxfpt` to see its footprints here. Right-click a \
-                     `.snxlib` (or a project) in the project tree and pick \
-                     `Add New ▸ Footprint Library` to create one.",
-                )
+                 `.snxlib` (or a project) in the project tree and pick \
+                 `Add New ▸ Footprint Library` to create one.",
+                ))
                 .size(TS.caption)
                 .color(muted),
             )
@@ -409,7 +418,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         },
     );
     col = col.push(
-        container(text(breadcrumb).size(TS.caption).color(muted))
+        container(text(raw(breadcrumb)).size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .boxed(),
     );
@@ -419,8 +428,11 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     col = col.push(
         container(
             row![
-                text("Name").size(TS.body).color(muted).width(Length::Fill),
-                text("Pads").size(TS.body).color(muted),
+                text(raw("Name"))
+                    .size(TS.body)
+                    .color(muted)
+                    .width(Length::Fill),
+                text(raw("Pads")).size(TS.body).color(muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
@@ -453,13 +465,13 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         } else {
             muted
         };
-        let row_btn = iced::widget::button(
+        let row_btn = signex_widgets::button(
             row![
-                text(footprint_row.name.clone())
+                text(raw(footprint_row.name.clone()))
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::Fill),
-                text(footprint_row.pad_count.to_string())
+                text(raw(footprint_row.pad_count.to_string()))
                     .size(TS.body)
                     .color(label_color),
             ]
@@ -510,8 +522,8 @@ fn view_footprint_library_button_row<'a>(
     let mk_btn = |label: &'static str, on_press: Option<PanelMsg>| -> Element<'a, PanelMsg> {
         let enabled = on_press.is_some();
         let label_color = if enabled { primary } else { muted };
-        let mut btn = iced::widget::button(
-            text(label)
+        let mut btn = signex_widgets::button(
+            text(raw(label))
                 .size(TS.body)
                 .color(label_color)
                 .align_x(iced::alignment::Horizontal::Center),
@@ -584,7 +596,7 @@ pub fn view_library_row_properties<'a>(
         d.internal_pn.clone()
     };
 
-    let pick_symbol_btn = button(text("Pick Symbol…").size(TS.body).color(primary))
+    let pick_symbol_btn = button(text(raw("Pick Symbol…")).size(TS.body).color(primary))
         .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickSymbol))
         .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -601,7 +613,7 @@ pub fn view_library_row_properties<'a>(
             ..iced::widget::button::Style::default()
         });
 
-    let pick_footprint_btn = button(text("Pick Footprint…").size(TS.body).color(primary))
+    let pick_footprint_btn = button(text(raw("Pick Footprint…")).size(TS.body).color(primary))
         .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickFootprint))
         .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -619,28 +631,28 @@ pub fn view_library_row_properties<'a>(
         });
 
     let body = column![
-        text("Library Row").size(TS.body).color(muted),
+        text(raw("Library Row")).size(TS.body).color(muted),
         Space::new().height(4),
-        text(pn_text).size(TS.title).color(primary),
+        text(raw(pn_text)).size(TS.title).color(primary),
         Space::new().height(2),
-        text(format!(
+        text(raw(format!(
             "table: {}  ·  class: {}  ·  {}  ·  row {}",
             d.table, d.class, d.lifecycle_label, row_id_short,
-        ))
+        )))
         .size(TS.caption)
         .color(muted),
         Space::new().height(12),
-        text("Symbol").size(TS.body).color(muted),
+        text(raw("Symbol")).size(TS.body).color(muted),
         Space::new().height(4),
-        text(d.symbol_summary.clone())
+        text(raw(d.symbol_summary.clone()))
             .size(TS.body)
             .color(if d.symbol_unbound { warning } else { primary }),
         Space::new().height(6),
         pick_symbol_btn,
         Space::new().height(14),
-        text("Footprint").size(TS.body).color(muted),
+        text(raw("Footprint")).size(TS.body).color(muted),
         Space::new().height(4),
-        text(d.footprint_summary.clone())
+        text(raw(d.footprint_summary.clone()))
             .size(TS.body)
             .color(if d.footprint_unbound {
                 warning

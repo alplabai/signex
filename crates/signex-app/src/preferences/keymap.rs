@@ -4,8 +4,9 @@
 //! single-file `preferences` module.
 
 use super::*;
-use iced::widget::{Column, Space, Widget, button, column, container, row, text, text_input};
+use iced::widget::{Column, Space, Widget, column, container, row};
 use iced::{Background, Border, Element, Length, Theme};
+use signex_widgets::{button, raw, text, text_input};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -35,7 +36,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     // Delete is only wired for custom profiles — built-ins are
     // protected by the model, so the button is inert on a built-in.
     let delete_button = {
-        let base = button(container(text("Delete").size(TS.body)).padding([5.0, SP.l]))
+        let base = button(container(text(raw("Delete")).size(TS.body)).padding([5.0, SP.l]))
             .style(danger_button_style);
         if active_is_custom {
             base.on_press(PrefMsg::KeymapDeleteActiveProfile)
@@ -47,7 +48,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     let header = column![
         section_title("Keyboard Shortcuts"),
         Space::new().height(4),
-        text("Configure keyboard shortcut profiles. Command names and categories come from Signex command metadata.")
+        text(raw("Configure keyboard shortcut profiles. Command names and categories come from Signex command metadata."))
             .size(TS.body)
             .style(text_muted),
     ]
@@ -64,12 +65,12 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         let location = crate::keymap::config_path()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "its usual location".to_string());
-        text(format!(
+        text(raw(format!(
             "Your saved keyboard shortcuts could not be loaded from {location} — {error}. \
              The built-in profiles are in use for this session and that file has not been \
              changed. Saving from this pane overwrites it, so the original is kept beside \
              it as a .bak file."
-        ))
+        )))
         .size(TS.caption)
         .style(text_warning)
         .boxed()
@@ -87,18 +88,22 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     // the only thing in the app that deletes it; no save path does.
     let backup_row: Option<Element<'a, PrefMsg>> = backup.map(|bak| {
         column![
-            text(format!(
+            text(raw(format!(
                 "A backup of your previous keyboard shortcuts is kept at {bak}."
-            ))
+            )))
             .size(TS.caption)
             .style(text_muted),
             row![
-                button(container(text("Restore from backup").size(TS.body)).padding([5.0, SP.l]))
-                    .on_press(PrefMsg::KeymapRestoreFromBackup)
-                    .style(secondary_button_style),
-                button(container(text("Delete the backup").size(TS.body)).padding([5.0, SP.l]))
-                    .on_press(PrefMsg::KeymapDiscardBackup)
-                    .style(danger_button_style),
+                button(
+                    container(text(raw("Restore from backup")).size(TS.body)).padding([5.0, SP.l])
+                )
+                .on_press(PrefMsg::KeymapRestoreFromBackup)
+                .style(secondary_button_style),
+                button(
+                    container(text(raw("Delete the backup")).size(TS.body)).padding([5.0, SP.l])
+                )
+                .on_press(PrefMsg::KeymapDiscardBackup)
+                .style(danger_button_style),
             ]
             .spacing(SP.m),
         ]
@@ -109,8 +114,8 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     // Profile picker + recorder stay ABOVE the search box and groups.
     let profile_row = row![
         column![
-            text("Profile").size(TS.label).style(text_primary),
-            text(active_summary).size(TS.caption).style(text_muted),
+            text(raw("Profile")).size(TS.label).style(text_primary),
+            text(raw(active_summary)).size(TS.caption).style(text_muted),
         ]
         .spacing(3)
         .width(160),
@@ -122,14 +127,14 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         .on_select(|profile: KeymapProfileOption| PrefMsg::KeymapProfileSelected(profile.id))
         .text_size(12)
         .width(180),
-        button(container(text("Create").size(TS.body)).padding([5.0, SP.l]))
+        button(container(text(raw("Create")).size(TS.body)).padding([5.0, SP.l]))
             .on_press(PrefMsg::KeymapCreateCustomProfile)
             .style(primary_button_style),
         delete_button,
-        button(container(text("Import").size(TS.body)).padding([5.0, SP.l]))
+        button(container(text(raw("Import")).size(TS.body)).padding([5.0, SP.l]))
             .on_press(PrefMsg::KeymapImportProfile)
             .style(secondary_button_style),
-        button(container(text("Export").size(TS.body)).padding([5.0, SP.l]))
+        button(container(text(raw("Export")).size(TS.body)).padding([5.0, SP.l]))
             .on_press(PrefMsg::KeymapExportProfile)
             .style(secondary_button_style),
         Space::new().width(Length::Fill),
@@ -153,18 +158,22 @@ pub(super) fn content_keyboard_shortcuts<'a>(
 
     // Search box — case-insensitive filter across every group. Uses the
     // default (theme-aware) text_input styling like the other panes.
-    let search_box = text_input("Search shortcuts…", search)
+    let search_box = text_input(raw("Search shortcuts…"), search)
         .on_input(PrefMsg::KeymapSearchChanged)
         .padding(6)
         .size(TS.label)
         .width(Length::Fill);
 
     let table_header = row![
-        container(text("Category").size(TS.body).style(text_muted)).width(Length::FillPortion(2)),
-        container(text("Command").size(TS.body).style(text_muted)).width(Length::FillPortion(4)),
-        container(text("Context").size(TS.body).style(text_muted)).width(Length::FillPortion(2)),
-        container(text("Shortcut").size(TS.body).style(text_muted)).width(Length::FillPortion(2)),
-        container(text("State").size(TS.body).style(text_muted)).width(Length::FillPortion(2)),
+        container(text(raw("Category")).size(TS.body).style(text_muted))
+            .width(Length::FillPortion(2)),
+        container(text(raw("Command")).size(TS.body).style(text_muted))
+            .width(Length::FillPortion(4)),
+        container(text(raw("Context")).size(TS.body).style(text_muted))
+            .width(Length::FillPortion(2)),
+        container(text(raw("Shortcut")).size(TS.body).style(text_muted))
+            .width(Length::FillPortion(2)),
+        container(text(raw("State")).size(TS.body).style(text_muted)).width(Length::FillPortion(2)),
     ]
     .spacing(SP.m)
     .padding([SP.s, 0.0]);
@@ -176,7 +185,12 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     content = content.extend(load_error_banner);
     content = content.extend(backup_row);
     content = content.push(profile_row.boxed());
-    content = content.push(text(status_line).size(TS.caption).style(text_muted).boxed());
+    content = content.push(
+        text(raw(status_line))
+            .size(TS.caption)
+            .style(text_muted)
+            .boxed(),
+    );
 
     if let Some(recorder) = recorder {
         content = content.push(keymap_recorder_control(recorder));
@@ -191,7 +205,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         } else {
             format!("No shortcuts match “{}”.", search.trim())
         };
-        content = content.push(text(empty).size(TS.body).style(text_muted).boxed());
+        content = content.push(text(raw(empty)).size(TS.body).style(text_muted).boxed());
         return content.boxed();
     }
 
@@ -283,7 +297,7 @@ fn keymap_table_row<'a>(
                 };
                 row![
                     shortcut_chip(&row_model.trigger, tone),
-                    button(container(text("Edit").size(TS.caption)).padding([3.0, SP.m]))
+                    button(container(text(raw("Edit")).size(TS.caption)).padding([3.0, SP.m]))
                         .on_press(PrefMsg::KeymapRecorderOpen {
                             slot: row_model.slot,
                             command,
@@ -297,7 +311,7 @@ fn keymap_table_row<'a>(
                 .align_y(iced::Alignment::Center)
                 .boxed()
             } else {
-                text(row_model.trigger.clone())
+                text(raw(row_model.trigger.clone()))
                     .size(TS.body)
                     .style(text_muted)
                     .boxed()
@@ -308,25 +322,25 @@ fn keymap_table_row<'a>(
 
     row![
         container(
-            text(title_case(&row_model.category))
+            text(raw(title_case(&row_model.category)))
                 .size(TS.body)
                 .style(text_muted)
         )
         .width(Length::FillPortion(2)),
         container(
-            text(row_model.label.clone())
+            text(raw(row_model.label.clone()))
                 .size(TS.body)
                 .style(text_primary)
         )
         .width(Length::FillPortion(4)),
         container(
-            text(context_label(row_model.context))
+            text(raw(context_label(row_model.context)))
                 .size(TS.body)
                 .style(text_muted)
         )
         .width(Length::FillPortion(2)),
         container(trigger_cell).width(Length::FillPortion(2)),
-        container(text(state).size(TS.body).style(state_style)).width(Length::FillPortion(2)),
+        container(text(raw(state)).size(TS.body).style(state_style)).width(Length::FillPortion(2)),
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center)
@@ -352,7 +366,7 @@ fn shortcut_chip<'a>(label: &str, tone: ChipTone) -> Element<'a, PrefMsg> {
         label.to_string()
     };
     container(
-        text(label)
+        text(raw(label))
             .size(TS.body)
             .style(move |theme: &Theme| text::Style {
                 color: Some(match tone {
@@ -403,7 +417,7 @@ fn keymap_recorder_control<'a>(
     // modal's neutral constants — otherwise the labels would vanish on a
     // light theme where the card background flips light.
     let recorded: Element<'a, PrefMsg> = if recorder.strokes.is_empty() {
-        text("Press Record, then type a shortcut")
+        text(raw("Press Record, then type a shortcut"))
             .size(TS.label)
             .style(iced::widget::text::secondary)
             .boxed()
@@ -426,12 +440,12 @@ fn keymap_recorder_control<'a>(
         None
     };
     let capture_status: Element<'a, PrefMsg> = if recorder.recording {
-        text("Recording")
+        text(raw("Recording"))
             .size(TS.body)
             .style(iced::widget::text::warning)
             .boxed()
     } else {
-        text("Recorded")
+        text(raw("Recorded"))
             .size(TS.body)
             .style(iced::widget::text::secondary)
             .boxed()
@@ -445,7 +459,7 @@ fn keymap_recorder_control<'a>(
 
     let recorder_warning: Element<'a, PrefMsg> =
         match recorder_shadow_warning(&recorder.trigger_text()) {
-            Some(message) if !recorder.strokes.is_empty() => text(message)
+            Some(message) if !recorder.strokes.is_empty() => text(raw(message))
                 .size(TS.body)
                 .style(|theme: &Theme| text::Style {
                     color: Some(theme.palette().warning.base.color),
@@ -456,11 +470,11 @@ fn keymap_recorder_control<'a>(
         };
 
     let record_button = if recorder.recording {
-        button(container(text("Stop").size(TS.body)).padding([5.0, SP.l]))
+        button(container(text(raw("Stop")).size(TS.body)).padding([5.0, SP.l]))
             .on_press(PrefMsg::KeymapRecorderStop)
             .style(danger_button_style)
     } else {
-        button(container(text("Record").size(TS.body)).padding([5.0, SP.l]))
+        button(container(text(raw("Record")).size(TS.body)).padding([5.0, SP.l]))
             .on_press(PrefMsg::KeymapRecorderStart)
             .style(primary_button_style)
     };
@@ -469,14 +483,14 @@ fn keymap_recorder_control<'a>(
         column![
             row![
                 column![
-                    text("Edit Shortcut").size(TS.heading).style(iced::widget::text::base),
-                    text(recorder.command_label.clone())
+                    text(raw("Edit Shortcut")).size(TS.heading).style(iced::widget::text::base),
+                    text(raw(recorder.command_label.clone()))
                         .size(TS.body)
                         .style(iced::widget::text::secondary),
                 ]
                 .spacing(3),
                 Space::new().width(Length::Fill),
-                button(container(text("Cancel").size(TS.body)).padding([5.0, SP.l]))
+                button(container(text(raw("Cancel")).size(TS.body)).padding([5.0, SP.l]))
                     .on_press(PrefMsg::KeymapRecorderCancel)
                     .style(secondary_button_style),
             ]
@@ -484,10 +498,10 @@ fn keymap_recorder_control<'a>(
             container(
                 column![
                     row![
-                        text(context_label(recorder.context))
+                        text(raw(context_label(recorder.context)))
                             .size(TS.body)
                             .style(iced::widget::text::secondary),
-                        text("Current").size(TS.body).style(iced::widget::text::secondary),
+                        text(raw("Current")).size(TS.body).style(iced::widget::text::secondary),
                         shortcut_chip(&recorder.original_trigger, ChipTone::Neutral),
                     ]
                     .spacing(SP.m)
@@ -511,17 +525,17 @@ fn keymap_recorder_control<'a>(
                     ..container::Style::default()
                 }
             }),
-            text("Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.")
+            text(raw("Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close."))
                 .size(TS.caption)
                 .style(iced::widget::text::secondary),
             recorder_warning,
             row![
                 record_button,
-                button(container(text("Clear").size(TS.body)).padding([5.0, SP.l]))
+                button(container(text(raw("Clear")).size(TS.body)).padding([5.0, SP.l]))
                     .on_press(PrefMsg::KeymapRecorderClear)
                     .style(secondary_button_style),
                 Space::new().width(Length::Fill),
-                button(container(text("OK").size(TS.body)).padding([5.0, SP.l]))
+                button(container(text(raw("OK")).size(TS.body)).padding([5.0, SP.l]))
                     .on_press(PrefMsg::KeymapRecorderApply)
                     .style(primary_button_style),
             ]
@@ -621,6 +635,7 @@ fn title_case(value: &str) -> String {
         .map(|part| {
             let mut chars = part.chars();
             match chars.next() {
+                // user-visible: migrate to the #2063 casemap (inside format!, which the case lint cannot see)
                 Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
                 None => String::new(),
             }

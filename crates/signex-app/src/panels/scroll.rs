@@ -24,7 +24,7 @@ mod tests {
     use super::*;
     use crate::layout_probe::{find, lay_out_texts};
     use iced::Widget as _;
-    use iced::widget::text;
+    use signex_widgets::{raw, text};
 
     /// The default scrollbar width; the gutter must be at least this.
     const BAR_WIDTH: f32 = 10.0;
@@ -40,7 +40,7 @@ mod tests {
         // out twice inside: the gutter is decided after the first pass.
         let row = || {
             iced::widget::column![
-                text("row").width(Length::Fill).boxed(),
+                text(raw("row")).width(Length::Fill).boxed(),
                 iced::widget::Space::new().height(900).boxed()
             ]
         };

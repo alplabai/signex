@@ -47,6 +47,10 @@ impl Signex {
                 });
                 Task::batch([save, self.finish_update()])
             }
+            UiMsg::LanguageChanged(pref) => {
+                let save = self.set_language(pref);
+                Task::batch([save, self.finish_update()])
+            }
             UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
                 let save = self.handle_unit_cycle_request();
                 Task::batch([save, self.finish_update()])

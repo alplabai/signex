@@ -55,6 +55,8 @@ impl CellSortKey {
         };
         Self {
             kind,
+            // identifier/data folding, never shown
+            // ast-grep-ignore: no-case-in-view
             lowercase: cell.to_lowercase(),
         }
     }
@@ -65,11 +67,15 @@ impl CellSortKey {
         match value.as_quantity() {
             Some(q) => Self {
                 kind: SortKind::Measured(q),
+                // identifier/data folding, never shown
+                // ast-grep-ignore: no-case-in-view
                 lowercase: value.display().to_lowercase(),
             },
             None => match value {
                 ParamValue::Number(n) if !n.is_nan() => Self {
                     kind: SortKind::Number(*n),
+                    // identifier/data folding, never shown
+                    // ast-grep-ignore: no-case-in-view
                     lowercase: value.display().to_lowercase(),
                 },
                 other => Self::from_cell(&other.display()),

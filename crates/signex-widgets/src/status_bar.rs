@@ -3,7 +3,8 @@
 //! Supports text, key-value labels, and on/off indicators. Sections can be
 //! clickable. All colors from `ThemeTokens`.
 
-use iced::widget::{Row, button, container, row, space, text};
+use crate::{button, raw, text};
+use iced::widget::{Row, container, row, space};
 use iced::{Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -63,7 +64,7 @@ pub fn status_bar<'a>(
     let border_c = theme_ext::border_color(tokens);
     let success_c = theme_ext::success_color(tokens);
 
-    let sep = || -> Element<'a, StatusBarMsg> { text("|").size(10).color(border_c).boxed() };
+    let sep = || -> Element<'a, StatusBarMsg> { text(raw("|")).size(10).color(border_c).boxed() };
 
     // Build left sections
     let mut left_row: Row<Element<'a, StatusBarMsg>> =
@@ -136,12 +137,12 @@ fn render_section<'a>(
     success_color: iced::Color,
 ) -> Element<'a, StatusBarMsg> {
     let content: Element<'a, StatusBarMsg> = match &section.content {
-        StatusContent::Text(s) => text(s.clone()).size(11).color(text_color).boxed(),
+        StatusContent::Text(s) => text(raw(s.clone())).size(11).color(text_color).boxed(),
 
         StatusContent::Label { key, value } => row![
-            text(key.clone()).size(11).color(muted_color),
-            text(": ").size(11).color(muted_color),
-            text(value.clone()).size(11).color(text_color),
+            text(raw(key.clone())).size(11).color(muted_color),
+            text(raw(": ")).size(11).color(muted_color),
+            text(raw(value.clone())).size(11).color(text_color),
         ]
         .spacing(0)
         .align_y(iced::Alignment::Center)
@@ -154,9 +155,9 @@ fn render_section<'a>(
                 ("○", muted_color)
             };
             row![
-                text(dot).size(11).color(dot_color),
-                text(" ").size(11),
-                text(label.clone()).size(11).color(text_color),
+                text(raw(dot)).size(11).color(dot_color),
+                text(raw(" ")).size(11),
+                text(raw(label.clone())).size(11).color(text_color),
             ]
             .spacing(0)
             .align_y(iced::Alignment::Center)

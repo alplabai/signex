@@ -124,8 +124,8 @@ impl Signex {
 
     /// Run the command `command` with `args` as every GUI surface runs it,
     /// and say what happened. On an app that was not booted headless (no
-    /// config root override, native dialogs, or launches not refused)
-    /// nothing runs: [`CommandOutcome::NotHeadless`].
+    /// config root override, native dialogs, launches not refused, or git
+    /// commits not skipped) nothing runs: [`CommandOutcome::NotHeadless`].
     pub fn dispatch_command_headless(
         &mut self,
         command: &AppCommandId,
@@ -134,6 +134,7 @@ impl Signex {
         if !crate::config_root::is_override_active()
             || self.headless_answers().is_none()
             || self.ui_state.io.opener != crate::io_ports::Opener::Refuse
+            || self.ui_state.io.git != crate::io_ports::GitCommits::Skip
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
@@ -146,6 +147,20 @@ impl Signex {
             (
                 CommandOutcome::Disabled {
                     reason: format!("`{}` needs the operand `{name}`", command.as_str()),
+                },
+                Task::none(),
+            )
+        } else if crate::app::command::headless_needs_path(command)
+            && args.operand("path").is_none()
+        {
+            // A headless caller names its document; the active one is a GUI
+            // notion and never the fallback.
+            (
+                CommandOutcome::Disabled {
+                    reason: format!(
+                        "`{}` needs the operand `path` when run headless",
+                        command.as_str()
+                    ),
                 },
                 Task::none(),
             )

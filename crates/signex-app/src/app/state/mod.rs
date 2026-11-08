@@ -19,12 +19,12 @@ mod keymap_recorder;
 pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod navigator_job;
-pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
+mod pcb_board;
 mod pcb_ratsnest;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -231,6 +231,11 @@ pub use signex_types::schematic::AnnotateOrder;
 pub struct ProjectId(u32);
 
 impl ProjectId {
+    /// The id as an engine pick marker carries it.
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+
     /// A fixed id for a test that has no `DocumentState` to mint one from.
     #[cfg(test)]
     pub(crate) const fn test_id(n: u32) -> Self {
@@ -461,9 +466,6 @@ pub struct DocumentState {
     /// Project tab state per loaded project (#1202): selected section and
     /// the General history. Outlives the tab, dropped with the project.
     pub project_tabs: std::collections::HashMap<ProjectId, crate::app::ProjectTabState>,
-    /// Net-class picks made from a sheet's Properties panel, keyed by that
-    /// sheet, so Ctrl+Z on it can interleave them with its engine edits (#1220).
-    pub net_class_picks: std::collections::HashMap<PathBuf, net_class_picks::NetClassPickSteps>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
@@ -487,6 +489,8 @@ pub struct DocumentState {
     /// The current board revision per PCB path; a PCB save completion only
     /// marks clean while it still matches.
     pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
+    /// The boards of PCB tabs closed while dirty; see `state/pcb_board.rs`.
+    pub(crate) parked_pcb_boards: std::collections::HashMap<PathBuf, signex_types::pcb::PcbBoard>,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:

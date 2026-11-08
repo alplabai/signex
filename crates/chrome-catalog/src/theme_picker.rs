@@ -1,6 +1,7 @@
-use iced::widget::{Row, container, text};
+use iced::widget::{Row, container};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_widgets::{raw, text};
 
 use crate::catalog::Message;
 use crate::theme;
@@ -10,7 +11,7 @@ pub(crate) fn view<'a>(selected_theme: ThemeId, tokens: &ThemeTokens) -> Element
     let toolbar_bg = theme::color(tokens.toolbar_bg);
     let text_color = theme::color(tokens.text);
     let mut pills: Row<Element<'a, Message>> = Row::new().spacing(6);
-    pills = pills.push(text("Theme:").size(11).color(text_color).boxed());
+    pills = pills.push(text(raw("Theme:")).size(11).color(text_color).boxed());
     for &theme_id in ThemeId::BUILTINS {
         pills = pills.push(theme_pill::view(
             theme_id,

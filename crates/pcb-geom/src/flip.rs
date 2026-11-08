@@ -5,7 +5,7 @@ use signex_types::pcb::Footprint;
 
 /// Flip `footprint` to the other face about its own y axis.
 ///
-/// The footprint, its pads and its graphics swap their sided layers
+/// The footprint, its pads, graphics and property texts swap their sided layers
 /// (top <-> bottom); a layer this build does not know is left alone. Local
 /// coordinates are untouched: the world transform mirrors them. Rotation
 /// becomes `-rotation` (mod 360), which keeps every pad where a physical
@@ -18,6 +18,13 @@ pub fn flip_footprint(footprint: &mut Footprint) {
     }
     for graphic in &mut footprint.graphics {
         flip_layer(&mut graphic.layer);
+    }
+    for layer in footprint
+        .properties
+        .iter_mut()
+        .filter_map(|property| property.layer.as_mut())
+    {
+        flip_layer(layer);
     }
     // 0.0 - 0.0 keeps +0; rem_euclid maps -x into [0, 360).
     footprint.rotation = (-footprint.rotation).rem_euclid(360.0);
@@ -49,6 +56,7 @@ mod tests {
             layers: vec![layer.into(), "Unknown.Layer".into()],
             net: None,
             roundrect_ratio: 0.0,
+            net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         };
@@ -64,6 +72,7 @@ mod tests {
             pads: vec![pad],
             graphics: Vec::new(),
             properties: Vec::new(),
+            schematic_link: None,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         }
@@ -80,6 +89,33 @@ mod tests {
         flip_footprint(&mut fp);
         assert_eq!(fp.layer, "TopCopper");
         assert_eq!(fp.rotation, 30.0);
+    }
+
+    #[test]
+    fn flip_swaps_property_layers() {
+        use signex_types::property::PcbProperty;
+        let property = |layer: Option<&str>| PcbProperty {
+            key: "Reference".into(),
+            value: "R1".into(),
+            position: Some(Point::new(0.5, -1.0)),
+            rotation: 0.0,
+            layer: layer.map(String::from),
+            font_size: None,
+            hidden: false,
+        };
+        let mut fp = footprint(0.0, "TopCopper");
+        fp.properties = vec![
+            property(Some("TopSilkscreen")),
+            property(Some("Unknown.Layer")),
+            property(None),
+        ];
+        flip_footprint(&mut fp);
+        assert_eq!(fp.properties[0].layer.as_deref(), Some("BottomSilkscreen"));
+        assert_eq!(fp.properties[1].layer.as_deref(), Some("Unknown.Layer"));
+        assert_eq!(fp.properties[2].layer, None);
+        assert_eq!(fp.properties[0].position, Some(Point::new(0.5, -1.0)));
+        flip_footprint(&mut fp);
+        assert_eq!(fp.properties[0].layer.as_deref(), Some("TopSilkscreen"));
     }
 
     #[test]

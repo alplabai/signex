@@ -33,6 +33,7 @@ pub mod native_menu;
 pub mod net_nav;
 pub mod parameter_manager;
 pub mod paste;
+mod pcb_parking;
 pub mod pcb_select;
 pub mod placed_part;
 pub mod placement_session;

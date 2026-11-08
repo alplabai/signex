@@ -88,7 +88,7 @@ impl Signex {
                     color: Some(muted_c),
                 });
         let palette_input = text_input(
-            "Search files, symbols, commands…",
+            raw("Search files, symbols, commands…"),
             // A palette owned by an undocked window types in that window.
             if self.ui_state.command_palette.window.is_none() {
                 self.ui_state.command_palette.query.clone()
@@ -209,7 +209,7 @@ impl Signex {
         let menu_w = if self.native_menu.hides_in_window_menu() {
             0.0
         } else {
-            crate::menu_bar::approx_menu_bar_width()
+            crate::menu_bar::approx_menu_bar_width(&self.ui_state.i18n)
         };
         crate::app::view::chrome_search_bar_geometry(
             self.ui_state.window_size.0,
@@ -584,7 +584,12 @@ mod layout_tests {
         let texts = lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0));
 
         let label = find(&texts, RESET).bounds;
-        let one_line = natural::<()>(iced::widget::text(RESET).size(TS.body).boxed(), RESET);
+        let one_line = natural::<()>(
+            signex_widgets::text(signex_widgets::raw(RESET))
+                .size(TS.body)
+                .boxed(),
+            RESET,
+        );
         assert!(
             label.height <= one_line.height + 0.5,
             "the button label wraps: {label:?}, one line is {one_line:?}"

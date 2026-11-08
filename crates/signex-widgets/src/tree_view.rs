@@ -11,7 +11,8 @@
 
 use std::sync::OnceLock;
 
-use iced::widget::{Column, Row, Space, button, container, mouse_area, scrollable, svg, text};
+use crate::{button, raw, text};
+use iced::widget::{Column, Row, Space, container, mouse_area, scrollable, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -176,6 +177,8 @@ impl TreeIcon {
     /// family regardless of whether the underlying file is native or
     /// Standard. Unknown extensions fall back to `File`.
     pub fn for_path(filename: &str) -> Self {
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         let lower = filename.to_ascii_lowercase();
         if let Some(ext) = lower.rsplit('.').next() {
             match ext {
@@ -550,7 +553,7 @@ fn render_node(
     // Accented root nodes (active project in a multi-project workspace)
     // render bold so the user can scan the workspace at a glance; inner
     // depths ignore the flag.
-    let mut label = text(node.label.clone())
+    let mut label = text(raw(node.label.clone()))
         .size(m.font)
         .color(txt_c)
         .line_height(iced::widget::text::LineHeight::Relative(1.0))
@@ -567,7 +570,7 @@ fn render_node(
     if let Some(badge) = &node.badge {
         r = r.push(iced::widget::space::horizontal().boxed());
         r = r.push(
-            text(badge.clone())
+            text(raw(badge.clone()))
                 .size(m.badge)
                 .color(badge_c)
                 .wrapping(iced::widget::text::Wrapping::None)
@@ -686,7 +689,7 @@ fn render_node(
             let empty_c = Color::from_rgba(muted.r, muted.g, muted.b, 0.3);
             col = col.push(
                 container(
-                    text("(empty)")
+                    text(raw("(empty)"))
                         .size(m.empty)
                         .color(empty_c)
                         .wrapping(iced::widget::text::Wrapping::None),

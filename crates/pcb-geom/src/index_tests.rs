@@ -19,6 +19,7 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -37,6 +38,7 @@ fn footprint(uuid: Uuid, x: f64, y: f64, rotation: f64, layer: &str, pads: Vec<P
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
+        schematic_link: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -316,6 +318,20 @@ fn extreme_query_inputs_do_not_overflow() {
         index
             .hit_point(PointNm::new(i64::MAX, i64::MAX), i64::MAX)
             .is_empty()
+    );
+    let everything = RectNm::new(
+        PointNm::new(i64::MIN, i64::MIN),
+        PointNm::new(i64::MAX, i64::MAX),
+    );
+    assert!(
+        index
+            .hit_rect(&everything, RectSelect::Touching)
+            .contains(&TRACK)
+    );
+    assert!(
+        index
+            .hit_rect(&everything, RectSelect::Inside)
+            .contains(&TRACK)
     );
 }
 

@@ -6,8 +6,9 @@
 //! Guide / Other) plus the v0.16.4 role sub-forms (Pour / Keepout /
 //! Cutout) and the v0.16.3 Pad placement defaults form.
 
-use iced::widget::{Column, container, row, scrollable, text};
+use iced::widget::{Column, container, row, scrollable};
 use iced::{Color, Element, Length, Widget};
+use signex_widgets::{raw, text};
 
 use super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -81,15 +82,15 @@ pub(super) fn view_footprint_editor_properties<'a>(
     };
 
     let mut header_row = row![
-        text(&fp.footprint_name).size(TS.label).color(primary),
-        text("·").size(TS.label).color(muted),
-        text(mode_label).size(TS.body).color(muted),
+        text(raw(&fp.footprint_name)).size(TS.label).color(primary),
+        text(raw("·")).size(TS.label).color(muted),
+        text(raw(mode_label)).size(TS.body).color(muted),
     ]
     .spacing(6)
     .align_y(iced::Alignment::Center);
     if let Some(tag) = multi_select_tag {
-        header_row = header_row.push(text("·").size(TS.label).color(muted).boxed());
-        header_row = header_row.push(text(tag).size(TS.body).color(accent_c).boxed());
+        header_row = header_row.push(text(raw("·")).size(TS.label).color(muted).boxed());
+        header_row = header_row.push(text(raw(tag)).size(TS.body).color(accent_c).boxed());
     }
 
     col = col.push(
@@ -152,10 +153,14 @@ pub(super) fn view_footprint_editor_properties<'a>(
             let pad_idx = pad.idx;
             col = col.push(
                 container(
-                    iced::widget::button(text("Edit in Sketch ▸").size(TS.caption).color(primary))
-                        .padding([SP.s, 10.0])
-                        .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
-                        .style(iced::widget::button::primary),
+                    signex_widgets::button(
+                        text(raw("Edit in Sketch ▸"))
+                            .size(TS.caption)
+                            .color(primary),
+                    )
+                    .padding([SP.s, 10.0])
+                    .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
+                    .style(iced::widget::button::primary),
                 )
                 .padding([6.0, SP.m])
                 .width(Length::Fill)
@@ -264,7 +269,7 @@ fn render_fp_settings_and_hint<'a>(
             FootprintModeKind::View3d => "3D View — use the 3D preview pane to inspect the body.",
         };
         col = col.push(
-            container(text(hint).size(TS.caption).color(muted))
+            container(text(raw(hint)).size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
                 .width(Length::Fill)
                 .boxed(),

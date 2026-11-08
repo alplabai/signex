@@ -34,11 +34,12 @@
 //! canvas (Stack overlay layer) so it doesn't steal vertical space
 //! from the drawing area.
 
-use iced::widget::{Space, container, text, text_input};
+use iced::widget::{Space, container};
 use iced::{Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text, text_input};
 
 use crate::app::FootprintDocument;
 use crate::icons;
@@ -543,7 +544,7 @@ fn build_dimension_input<'a>(
     let selection = crate::styles::tokens::selection_tint(tokens);
     let value: String = editor.state.dimension_input.clone();
 
-    let input = text_input("0.0", value)
+    let input = text_input(raw("0.0"), value)
         .size(TS.body)
         .padding(iced::Padding::new(SP.xs))
         .width(Length::Fixed(58.0))
@@ -566,7 +567,7 @@ fn build_dimension_input<'a>(
 
     container(
         iced::widget::row![
-            text("mm").size(TS.caption).color(muted),
+            text(raw("mm")).size(TS.caption).color(muted),
             Space::new().width(Length::Fixed(SP.s)),
             input,
         ]

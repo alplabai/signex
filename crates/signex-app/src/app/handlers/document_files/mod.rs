@@ -51,7 +51,7 @@ mod save_as_project;
 mod save_as_project_tests;
 mod save_async;
 #[cfg(test)]
-mod save_async_tests;
+pub(crate) mod save_async_tests;
 #[cfg(test)]
 mod save_fold_tests;
 mod spelling;

@@ -46,6 +46,11 @@ impl UnknownFields {
         self.0.insert(key.to_string(), value);
     }
 
+    /// The captured keys and their raw values.
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (&String, &toml::Value)> {
+        self.0.iter()
+    }
+
     /// Whether `key` was captured.
     pub fn contains_key(&self, key: &str) -> bool {
         self.0.contains_key(key)
@@ -125,6 +130,10 @@ pub struct BoardUnknown {
     /// Keys inside `[stackup]`.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub stackup: UnknownFields,
+    /// Entries of `[stackup.display_names]` this build does not own: a token
+    /// that names no layer, or a value that is not a string.
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub stackup_display_names: UnknownFields,
     /// Keys inside `[nets]`.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
     pub nets: UnknownFields,
@@ -152,6 +161,7 @@ impl BoardUnknown {
     pub fn is_empty(&self) -> bool {
         self.manifest.is_empty()
             && self.stackup.is_empty()
+            && self.stackup_display_names.is_empty()
             && self.nets.is_empty()
             && self.extras.is_empty()
             && self.extras_root.is_empty()

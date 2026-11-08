@@ -1,8 +1,9 @@
 //! v0.18.14 — Snap Options chrome — the 3-segment toggle row
 //! (All Layers / Current Layer / Off).
 
-use iced::widget::{Column, container, row, text};
+use iced::widget::{Column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::{raw, text};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -33,8 +34,8 @@ pub(super) fn render_snapping_mode_row<'a>(
     let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
     let mk_pill =
         move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
-            iced::widget::button(
-                text(label)
+            signex_widgets::button(
+                text(raw(label))
                     .size(TS.caption)
                     .color(if active { primary } else { muted })
                     .align_x(iced::alignment::Horizontal::Center),
@@ -66,7 +67,7 @@ pub(super) fn render_snapping_mode_row<'a>(
             .boxed()
         };
     col = col.push(
-        container(text("Snap layers").size(TS.caption).color(muted))
+        container(text(raw("Snap layers")).size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
             .boxed(),

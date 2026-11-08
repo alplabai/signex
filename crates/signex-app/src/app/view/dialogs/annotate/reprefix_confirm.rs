@@ -2,8 +2,9 @@
 //! the parts that stay, and Confirm / Cancel.
 
 use super::*;
-use iced::widget::{Space, column, container, text};
+use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget};
+use signex_widgets::{raw, text};
 
 use super::super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
 use crate::styles::{
@@ -54,11 +55,11 @@ impl Signex {
         let mut lines: Vec<Element<'_, Message>> = confirm
             .change_lines
             .iter()
-            .map(|line| text(line.clone()).size(TS.body).color(text_c).boxed())
+            .map(|line| text(raw(line.clone())).size(TS.body).color(text_c).boxed())
             .collect();
         if confirm.more > 0 {
             lines.push(
-                text(format!("+{} more", confirm.more))
+                text(raw(format!("+{} more", confirm.more)))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
@@ -66,7 +67,7 @@ impl Signex {
         }
         let mut skips = column![].spacing(SP.xs);
         for line in &confirm.skip_lines {
-            skips = skips.push(text(line.clone()).size(TS.body).color(text_muted));
+            skips = skips.push(text(raw(line.clone())).size(TS.body).color(text_muted));
         }
 
         let body = column![

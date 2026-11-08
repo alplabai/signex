@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use super::{parse_pcb_layer, pcb_layer_token};
-use crate::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer, UserLayer};
+use crate::pcb_layer::{CopperLayer, InnerCopper, MechanicalLayer, PcbLayer, TechnicalLayer};
 
 #[test]
 fn every_layer_round_trips_through_its_token() {
@@ -39,8 +39,14 @@ fn names_already_on_disk_keep_their_meaning() {
             PcbLayer::Technical(TechnicalLayer::SilkscreenBottom),
         ),
         ("TopFab", PcbLayer::Technical(TechnicalLayer::FabTop)),
-        ("User.1", PcbLayer::User(UserLayer::new(1).unwrap())),
-        ("User.6", PcbLayer::User(UserLayer::new(6).unwrap())),
+        (
+            "Mechanical1",
+            PcbLayer::Mechanical(MechanicalLayer::new(1).unwrap()),
+        ),
+        (
+            "Mechanical32",
+            PcbLayer::Mechanical(MechanicalLayer::new(32).unwrap()),
+        ),
     ];
     for (token, layer) in cases {
         assert_eq!(parse_pcb_layer(token), Some(layer), "{token}");
@@ -62,15 +68,33 @@ fn unknown_and_non_canonical_names_are_not_typed() {
         "Inner+1Copper",
         "InnerCopper",
         "Inner256Copper",
+        "User.1",
+        "User.6",
         "User.0",
         "User.7",
-        "User.01",
-        "User.",
         "User1",
-        "Mechanical13",
+        "Mechanical",
+        "Mechanical0",
+        "Mechanical01",
+        "Mechanical+1",
+        "Mechanical33",
+        "Mechanical256",
+        "mechanical1",
         "TopCopper,BottomCopper",
     ] {
         assert_eq!(parse_pcb_layer(token), None, "{token:?}");
+    }
+}
+
+#[test]
+fn mechanical_layers_are_board_wide_and_do_not_flip() {
+    let all: Vec<_> = PcbLayer::all()
+        .filter(|l| matches!(l, PcbLayer::Mechanical(_)))
+        .collect();
+    assert_eq!(all.len(), 32);
+    for layer in all {
+        assert_eq!(layer.side(), None, "{layer:?}");
+        assert_eq!(layer.flipped(), layer, "{layer:?}");
     }
 }
 
@@ -81,19 +105,19 @@ fn accessors_keep_unknown_names_as_strings() {
         start: crate::pcb::Point { x: 0.0, y: 0.0 },
         end: crate::pcb::Point { x: 1.0, y: 0.0 },
         width: 0.25,
-        layer: "Mechanical13".into(),
+        layer: "Mechanical33".into(),
         net: 0,
         unknown_columns: Default::default(),
     };
     assert_eq!(segment.pcb_layer(), None);
-    assert_eq!(segment.layer, "Mechanical13");
+    assert_eq!(segment.layer, "Mechanical33");
 
     let via = crate::pcb::Via {
         uuid: uuid::Uuid::nil(),
         position: crate::pcb::Point { x: 0.0, y: 0.0 },
         diameter: 0.6,
         drill: 0.3,
-        layers: vec!["TopCopper".into(), "Mechanical13".into()],
+        layers: vec!["TopCopper".into(), "Mechanical33".into()],
         net: 0,
         via_type: crate::pcb::ViaType::Through,
         unknown_columns: Default::default(),

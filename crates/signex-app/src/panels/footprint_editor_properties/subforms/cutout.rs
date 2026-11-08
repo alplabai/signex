@@ -1,7 +1,8 @@
 //! BoardCutout role sub-form. Split from `subforms.rs`.
 
-use iced::widget::{Column, container, row, text, text_input};
+use iced::widget::{Column, container, row};
 use iced::{Color, Element, Length, Widget as _};
+use signex_widgets::{raw, text, text_input};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -25,21 +26,25 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
         return col;
     };
     col = col.push(
-        container(text("Cutout properties").size(TS.caption).color(primary))
-            .padding([SP.s, SP.m])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text(raw("Cutout properties"))
+                .size(TS.caption)
+                .color(primary),
+        )
+        .padding([SP.s, SP.m])
+        .width(Length::Fill)
+        .boxed(),
     );
 
     let radius_buf = c.edge_radius_expr.clone().unwrap_or_default();
     col = col.push(
         container(
             row![
-                text("Edge radius")
+                text(raw("Edge radius"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text_input("(sharp)", radius_buf)
+                text_input(raw("(sharp)"), radius_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
                     .style(crate::panels::footprint_editor_properties::fp_field_style(

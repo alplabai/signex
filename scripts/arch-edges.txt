@@ -12,6 +12,7 @@ signex-app -> signex-erc
 signex-app -> signex-erc-dsl
 signex-app -> signex-gfx
 signex-app -> signex-history
+signex-app -> signex-i18n
 signex-app -> signex-library
 signex-app -> signex-net
 signex-app -> signex-output
@@ -23,6 +24,9 @@ signex-bake -> signex-library
 signex-bake -> signex-sketch
 signex-bake -> signex-types
 signex-bom -> signex-types
+signex-cli -> signex-app
+signex-cli -> signex-types
+signex-engine -> pcb-geom
 signex-engine -> signex-history
 signex-engine -> signex-net
 signex-engine -> signex-types
@@ -43,4 +47,5 @@ signex-renderer -> signex-3d-model-importer
 signex-renderer -> signex-gfx
 signex-renderer -> signex-types
 signex-sketch -> signex-types
+signex-widgets -> signex-i18n
 signex-widgets -> signex-types

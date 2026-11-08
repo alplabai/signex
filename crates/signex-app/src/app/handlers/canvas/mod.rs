@@ -27,6 +27,7 @@ mod measure_tool;
 mod move_pick;
 mod place_drawing;
 mod place_label;
+pub(crate) use place_label::GLOBAL_PORT_SHAPE;
 mod place_point;
 mod place_text;
 mod place_wire;
@@ -36,7 +37,7 @@ mod shape_tool_tests;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
 #[cfg(test)]
-mod placement_tests;
+pub(crate) mod placement_tests;
 mod status_activity;
 mod status_readout;
 mod sync_sheet_pins;
@@ -52,7 +53,7 @@ mod wire_undo_tests;
 /// Read the shape width + fill defaults out of the current
 /// pre_placement slot (TAB-configured) so shape tools pick up the
 /// user's Width/Fill edits when committing the next click.
-fn pre_placement_shape(
+pub(crate) fn pre_placement_shape(
     doc: &super::super::state::DocumentState,
 ) -> (f64, signex_types::schematic::FillType) {
     // An unset width is written as the project's shape default (#2026), so
@@ -362,7 +363,10 @@ impl Signex {
         }
         // A dirty engine parked without a tab holds unsaved edits: reattach
         // it rather than replace it with the on-disk sheet (#1135).
-        if self.path_is_owned_by_open_document(path) {
+        // Only an engine: a parked board is no sheet to attach.
+        if self.document_state.engines.contains_key(path)
+            && self.document_state.is_document_dirty(path)
+        {
             let title = path
                 .file_stem()
                 .map(|stem| stem.to_string_lossy().to_string())

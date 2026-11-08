@@ -19,6 +19,9 @@ mod operand_handlers;
 mod operands;
 mod outcome;
 #[cfg(test)]
+mod placement_operand_tests;
+mod placement_operands;
+#[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 
@@ -27,6 +30,7 @@ pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
+pub(crate) use operand_handlers::headless_needs_path;
 pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;
@@ -55,7 +59,18 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        self.dispatch_command_reporting(command, args, window).1
+        let (outcome, task) = self.dispatch_command_reporting(command, args, window);
+        // Only the missing-operand refusal is said here; every other command
+        // reports (or stays silent) exactly as before.
+        if let CommandOutcome::Disabled { reason } = outcome
+            && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
+        {
+            crate::diagnostics::log_info(format!(
+                "Command: {} did nothing: {reason}",
+                command.as_str()
+            ));
+        }
+        task
     }
 
     /// A menu row's command, from the window `window` (`None`: the main one).
@@ -147,6 +162,13 @@ impl Signex {
             }
             self.step_undo_target(&target, undo);
             return (CommandOutcome::Ran, Task::none());
+        }
+        // A command whose surface is another widget does nothing without its
+        // operands, and says why: it never opens or focuses that widget.
+        if !args.has_operands()
+            && let Some(reason) = operand_handlers::needs_operands_reason(command)
+        {
+            return (CommandOutcome::disabled(reason), Task::none());
         }
         // Close Document follows the window the stroke came from (#1787).
         if command.as_str() == "close_active_document"

@@ -54,7 +54,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
     // ── Header ──
     col = col.push(
-        container(text(elem_type.to_owned()).size(TS.body).color(primary))
+        container(text(raw(elem_type.to_owned())).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -138,7 +138,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     col = col.push(Space::new().height(8.0).boxed());
     col = col.push(thin_sep(border_c));
     col = col.push(
-        container(text("1 object selected").size(TS.caption).color(muted))
+        container(text(raw("1 object selected")).size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .boxed(),
     );

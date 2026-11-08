@@ -2,8 +2,9 @@
 //! symbol whose file does not exist yet. A confirm-class dialog: it opens in
 //! its own window and locks the main window (docs/DETACHED_MODALS.md).
 
-use iced::widget::{Space, column, container, row, text, text_input};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_widgets::{raw, text, text_input};
 
 use super::widgets::modal_title_header;
 use super::*;
@@ -54,14 +55,14 @@ impl Signex {
             Some(rel) => format!("{}/", rel.display()),
             None => full_folder.clone(),
         };
-        let field = text_input("sheet.snxsch", &confirm.path_text)
+        let field = text_input(raw("sheet.snxsch"), &confirm.path_text)
             .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))
             .on_submit(create.clone())
             .padding([6, 8])
             .size(TS.label)
             .width(Length::Fill);
         let note: Element<'_, Message> = match &confirm.error {
-            Some(error) => text(error.clone())
+            Some(error) => text(raw(error.clone()))
                 .size(TS.body)
                 .color(crate::styles::tokens::danger(tokens))
                 .boxed(),
@@ -99,11 +100,11 @@ impl Signex {
                             ),
                             tokens,
                         ),
-                        iced::widget::tooltip(
-                            text(format!("Relative to {folder}"))
+                        signex_widgets::tooltip(
+                            text(raw(format!("Relative to {folder}")))
                                 .size(TS.caption)
                                 .color(text_muted),
-                            text(full_folder).size(TS.caption),
+                            text(raw(full_folder)).size(TS.caption),
                             iced::widget::tooltip::Position::Bottom,
                         ),
                         row![

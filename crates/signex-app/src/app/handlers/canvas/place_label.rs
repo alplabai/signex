@@ -5,6 +5,9 @@ use signex_types::schematic::{HAlign, Label, LabelType, Point, VAlign};
 
 use super::super::super::*;
 
+/// The pin direction a Port (global label) is armed with, and a CLI run uses.
+pub(crate) const GLOBAL_PORT_SHAPE: &str = "bidirectional";
+
 /// A label to place: its kind and text, and the look the pre-placement form
 /// and the project defaults set.
 #[derive(Debug, Clone, PartialEq)]

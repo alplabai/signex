@@ -164,6 +164,7 @@ mod tests {
             pads: Vec::new(),
             graphics: Vec::new(),
             properties: Vec::new(),
+            schematic_link: None,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         }
@@ -181,6 +182,7 @@ mod tests {
             layers: Vec::new(),
             net: None,
             roundrect_ratio: 0.0,
+            net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         }
