@@ -13,7 +13,7 @@ impl Signex {
     /// library footprint not read at the current library version is queued
     /// for [`Self::start_footprint_card_reads`]. `None` when the selection
     /// is not one placed part or the part holds no footprint.
-    pub(crate) fn selected_footprint_card(&mut self) -> Option<FootprintCardView> {
+    pub(crate) fn resolve_footprint_card(&mut self) -> Option<FootprintCardView> {
         let ctx = &self.document_state.panel_ctx;
         if ctx.selected_kind != Some(signex_types::schematic::SelectedKind::Symbol) {
             return None;
@@ -47,10 +47,7 @@ impl Signex {
         let held = symbol.footprint.trim();
         let mut reference = self.bound_footprint_of(symbol);
         let listed = reference.and_then(|r| self.library.footprint_name(&r));
-        if listed
-            .as_deref()
-            .is_some_and(|name| !held.is_empty() && held != name)
-        {
+        if reference.is_some_and(|r| self.footprint_typed_over(symbol, &r)) {
             reference = None;
         }
         let name = if held.is_empty() {
@@ -66,14 +63,30 @@ impl Signex {
     /// queued reads.
     pub(crate) fn refresh_footprint_card(&mut self) -> Task<Message> {
         let version = self.library.data_version;
-        let stale = self
-            .document_state
-            .panel_ctx
-            .footprint_card
-            .as_ref()
-            .is_some_and(|card| card.version != version);
-        if stale {
-            self.document_state.panel_ctx.footprint_card = self.selected_footprint_card();
+        let is_stale = |ctx: &crate::panels::PanelContext| {
+            ctx.footprint_card
+                .as_ref()
+                .is_some_and(|card| card.version != version)
+        };
+        if is_stale(&self.document_state.panel_ctx) {
+            self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
+        }
+        // An undocked window keeps its own card; re-resolve it against its
+        // own selection. Inside a window's swap the main slot is that window.
+        if self.interaction_state.acting_window.is_none() {
+            let stale: Vec<iced::window::Id> = self
+                .document_state
+                .window_panel_ctx
+                .iter()
+                .filter(|(window, ctx)| is_stale(ctx) && self.is_document_window(**window))
+                .map(|(window, _)| *window)
+                .collect();
+            for window in stale {
+                drop(self.run_in_window(window, true, |app| {
+                    app.document_state.panel_ctx.footprint_card = app.resolve_footprint_card();
+                    Task::none()
+                }));
+            }
         }
         self.start_footprint_card_reads()
     }
@@ -87,9 +100,21 @@ impl Signex {
                 self.finish_footprint_card_load(key, Err("its library is not open".to_string()));
                 continue;
             };
+            // Behind every write of this library started so far, so the read
+            // never sees a file half-way through a rewrite (#893).
+            let root = self
+                .library
+                .open_libraries
+                .iter()
+                .find(|lib| lib.library_id == key.footprint.library_id)
+                .map(|lib| lib.root.clone());
+            let turn = root.map(|root| self.library.writes.read_turn(&root));
             reads.push(Task::perform(
                 async move {
                     tokio::task::spawn_blocking(move || {
+                        if let Some(turn) = turn {
+                            turn.wait();
+                        }
                         adapter
                             .get_footprint(key.footprint.uuid)
                             .map(|footprint| Arc::new(FootprintCardFacts::of(&footprint)))

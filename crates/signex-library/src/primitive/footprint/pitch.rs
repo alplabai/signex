@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use super::{Footprint, PadKind};
 
-/// Pads sharing a row or column within this many µm line up.
+/// Pad coordinates are rounded to this many µm; pads in the same bucket share a row or column.
 const ROW_TOLERANCE_UM: f64 = 1.0;
 /// A row needs this many pads before its spacing reads as a pitch: two pads
 /// are a span (a chip resistor), not a pitch.

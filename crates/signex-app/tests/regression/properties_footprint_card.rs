@@ -123,3 +123,82 @@ fn a_name_typed_over_the_binding_is_not_the_library_footprint() {
     assert_eq!(shown.key, None);
     assert!(matches!(shown.status, FootprintCardStatus::Unlinked));
 }
+
+/// #114 review: the footprint read goes behind the library's writes, like
+/// every other off-thread library read (#893).
+#[test]
+fn the_footprint_read_waits_for_a_write_in_progress() {
+    let mut app = app_with_stock();
+    let key = key_of(&app, "STOCK-R");
+    select(&mut app, &key);
+    place_selected(&mut app, &key);
+    select_first(&mut app);
+    let holds: Vec<_> = app
+        .library
+        .open_libraries
+        .iter()
+        .map(|lib| lib.root.clone())
+        .collect::<Vec<_>>()
+        .iter()
+        .map(|root| app.library.writes.turn(root))
+        .collect();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        drop(holds);
+    });
+    let started = std::time::Instant::now();
+    refresh_selection(&mut app);
+    release.join().expect("the write ends");
+    assert!(
+        started.elapsed() >= std::time::Duration::from_millis(300),
+        "the read ran while a write was in progress"
+    );
+    assert!(matches!(card(&app).status, FootprintCardStatus::Ready(_)));
+}
+
+/// #114 review: an undocked window's card follows the library data version
+/// like the main window's.
+#[test]
+fn an_undocked_windows_card_is_read_again_when_the_library_data_moves() {
+    let (mut app, _) = placed_resistor();
+    use signex_app::app::WindowMsg;
+    let tab = app.document_state.active_tab;
+    let path = app.document_state.tabs[tab].path.clone();
+    app.ui_state.main_window_id = Some(iced::window::Id::unique());
+    let _ = app.update(Message::Window(WindowMsg::UndockTab(tab)));
+    let window = *app.ui_state.windows.keys().next().expect("undocked window");
+    let _ = app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window,
+    }));
+    let selected = doc(&app).symbols[0].uuid;
+    app.interaction_state
+        .canvases
+        .get_mut(&window)
+        .expect("the window's canvas")
+        .selected = vec![signex_types::schematic::SelectedItem::new(
+        selected,
+        signex_types::schematic::SelectedKind::Symbol,
+    )];
+    // A context built now reads the window's selection.
+    app.document_state.window_panel_ctx.remove(&window);
+    let version = app.library.data_version + 1;
+    app.library.touch_data();
+    refresh_selection(&mut app);
+    let shown = app.document_state.window_panel_ctx[&window]
+        .footprint_card
+        .as_ref()
+        .expect("the window shows a footprint card");
+    assert_eq!(shown.version, version);
+    assert!(matches!(shown.status, FootprintCardStatus::Ready(_)));
+
+    // A save moves the version again: the window's card is resolved anew.
+    app.library.touch_data();
+    refresh_selection(&mut app);
+    let shown = app.document_state.window_panel_ctx[&window]
+        .footprint_card
+        .as_ref()
+        .expect("the window still shows a footprint card");
+    assert_eq!(shown.version, app.library.data_version);
+    assert!(matches!(shown.status, FootprintCardStatus::Ready(_)));
+}

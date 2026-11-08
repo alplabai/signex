@@ -52,23 +52,32 @@ impl Signex {
                 label: signex_library::NO_LONGER_OFFERED_LABEL.to_string(),
                 selected: true,
             }),
-            (Some(at), Some(reference)) => {
-                // Only a name the listing knows can be told apart from the
-                // part's own text.
-                let named = self.library.footprint_name(&reference);
+            (Some(at), Some(reference)) if self.footprint_typed_over(symbol, &reference) => {
                 let held = symbol.footprint.trim();
-                if named.is_some_and(|name| !held.is_empty() && held != name) {
-                    items[at].selected = false;
-                    items.push(FootprintChoiceItem {
-                        binding: String::new(),
-                        label: format!("{held} (edited)"),
-                        selected: true,
-                    });
-                }
+                items[at].selected = false;
+                items.push(FootprintChoiceItem {
+                    binding: String::new(),
+                    label: format!("{held} (edited)"),
+                    selected: true,
+                });
             }
             _ => {}
         }
         items
+    }
+
+    /// Whether the part's own footprint text was typed over the footprint
+    /// `reference` names. Only a name the listing knows can be told apart
+    /// from the part's own text.
+    pub(crate) fn footprint_typed_over(
+        &self,
+        symbol: &signex_types::schematic::Symbol,
+        reference: &PrimitiveRef,
+    ) -> bool {
+        let held = symbol.footprint.trim();
+        self.library
+            .footprint_name(reference)
+            .is_some_and(|name| !held.is_empty() && held != name)
     }
 
     /// The library footprint the placed part is built with: the binding in
