@@ -15,25 +15,6 @@ use iced::widget::{Column, Row, Space, button, container, mouse_area, scrollable
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
-// ─── SVG Chevron Icons (cached handles) ──────────────────────
-
-const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
-const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
-
-fn chevron_right_handle() -> svg::Handle {
-    static HANDLE: OnceLock<svg::Handle> = OnceLock::new();
-    HANDLE
-        .get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
-        .clone()
-}
-
-fn chevron_down_handle() -> svg::Handle {
-    static HANDLE: OnceLock<svg::Handle> = OnceLock::new();
-    HANDLE
-        .get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
-        .clone()
-}
-
 use crate::theme_ext;
 
 mod style;
@@ -362,7 +343,6 @@ const INDENT_PER_DEPTH: f32 = 12.0; // Altium: ~12px per depth at compact densit
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
 const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
 const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon (Altium parity)
-const CHEVRON_W: f32 = 8.0; // triangle column — half-step smaller to match smaller icon
 const ICON_SZ: f32 = 12.0; // Chamfered SVG silhouettes — Altium parity at compact density
 /// Default row label size; the metrics below are tuned for it and scale
 /// with `TreeView::text_size` relative to it.
@@ -406,7 +386,7 @@ impl Metrics {
             badge: BADGE_SZ * k,
             empty: EMPTY_SZ * k,
             indent: INDENT_PER_DEPTH * k,
-            chevron: CHEVRON_W * k,
+            chevron: crate::chevron::side(font),
             icon: ICON_SZ * k,
             pad_v: f32::from(PAD_V) * k,
             style: None,
@@ -562,20 +542,7 @@ fn render_node(
 
     // Chevron — SVG icon (Unicode triangles render as colored emoji on Windows)
     if is_expandable {
-        let handle = if node.expanded {
-            chevron_down_handle()
-        } else {
-            chevron_right_handle()
-        };
-        r = r.push(
-            svg(handle)
-                .width(m.chevron)
-                .height(m.chevron)
-                .style(move |_: &Theme, _| svg::Style {
-                    color: Some(chrome_c),
-                })
-                .boxed(),
-        );
+        r = r.push(crate::chevron::chevron(node.expanded, m.font, chrome_c).boxed());
     } else {
         r = r.push(Space::new().width(m.chevron).boxed());
     }
@@ -895,6 +862,7 @@ mod tests {
         assert_eq!(view.text_size, 12.0);
         assert_eq!(m.font, 12.0);
         assert!(m.badge < m.font && m.icon > ICON_SZ);
+        assert_eq!(m.chevron, crate::chevron::side(m.font), "tree rows use the shared chevron box");
     }
 
     fn key(parts: &[&str]) -> TreeKey {

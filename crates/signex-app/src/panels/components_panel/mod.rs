@@ -57,19 +57,6 @@ pub(crate) const DRAG_THRESHOLD: f32 = HINT_TEXT_SIZE;
 /// "N more — refine search" row so a huge library cannot stall the view.
 const MAX_ROWS_PER_LIBRARY: usize = 200;
 
-const SVG_CHEVRON_RIGHT: &[u8] =
-    br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
-const SVG_CHEVRON_DOWN: &[u8] =
-    br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
-
-fn chevron(open: bool) -> svg::Handle {
-    if open {
-        svg::Handle::from_memory(SVG_CHEVRON_DOWN)
-    } else {
-        svg::Handle::from_memory(SVG_CHEVRON_RIGHT)
-    }
-}
-
 /// Render the Components Panel. Returns a `LibraryMessage`-typed
 /// element; the dock host wraps it in `DockMessage::Library` to route
 /// through the existing library dispatcher.
@@ -263,7 +250,7 @@ fn view_section<'a>(
     // ── Section header ───────────────────────────────────────────
     // Toggle button (chevron + label + count) on the left, optional
     // "+ Add Library…" button on the right for Installed/Global.
-    let chev = svg(chevron(!collapsed)).width(10).height(10);
+    let chev = signex_widgets::chevron::chevron(!collapsed, SECTION_HEADER_TEXT_SIZE, text_c);
     let header_label = format!("{}  ({count})", src.label());
     let header_btn = button(
         row![

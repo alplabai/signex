@@ -307,16 +307,8 @@ fn graphite_section_header<'a>(
     tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
     let ink = resolve(tokens).ink4;
-    let chevron = if is_collapsed {
-        super::widgets::chevron_right()
-    } else {
-        super::widgets::chevron_down()
-    };
     let label = row![
-        svg(chevron)
-            .width(10)
-            .height(10)
-            .style(move |_: &Theme, _| iced::widget::svg::Style { color: Some(ink) }),
+        signex_widgets::chevron::chevron(!is_collapsed, TS.section, ink),
         text(title.to_uppercase()).size(TS.section).color(ink),
     ]
     .spacing(6)

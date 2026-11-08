@@ -22,7 +22,7 @@ const FILTER_HEIGHT: f32 = 28.0;
 /// Gap around the filter field and at the right edge of every row.
 pub(super) const EDGE: f32 = 10.0;
 /// Side of the section chevron.
-const CHEVRON: f32 = 12.0;
+const CHEVRON: f32 = signex_widgets::chevron::side(TS.body);
 /// Gap between the chevron, the label and the count pill.
 const CHEVRON_GAP: f32 = 6.0;
 /// Left inset of library headers and empty states: under the section label.
@@ -30,8 +30,6 @@ pub(super) const LIBRARY_INSET: f32 = EDGE + CHEVRON + CHEVRON_GAP;
 /// Left inset of a component row: one step in from its library.
 pub(super) const ROW_INSET: f32 = LIBRARY_INSET + 12.0;
 
-const CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path d="M4.5 2.75L7.75 6L4.5 9.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
-const CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path d="M2.75 4.5L6 7.75L9.25 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
 const SEARCH_GLYPH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.25" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M9.25 9.25L12.5 12.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>"#;
 
 /// The weight-600 face of the UI font.
@@ -103,15 +101,7 @@ pub(super) fn section_header<'a>(
     let r = resolve(tokens);
     let ink = ti(tokens.text);
     let hover = hover_overlay(tokens);
-    let chevron = glyph(
-        if collapsed {
-            CHEVRON_RIGHT
-        } else {
-            CHEVRON_DOWN
-        },
-        CHEVRON,
-        r.ink3,
-    );
+    let chevron = signex_widgets::chevron::chevron(!collapsed, TS.body, r.ink3);
     let title = row![
         chevron.boxed(),
         text(label)
@@ -216,4 +206,15 @@ pub(super) fn separator(tokens: &ThemeTokens) -> Color {
 /// A thin spacer row under the last line of a section body.
 pub(super) fn section_gap<'a>() -> Element<'a, LibraryMessage> {
     Space::new().height(4.0).boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn section_chevron_box_is_the_shared_one_for_the_body_size() {
+        assert_eq!(CHEVRON, signex_widgets::chevron::side(TS.body));
+        assert_eq!(LIBRARY_INSET, EDGE + CHEVRON + CHEVRON_GAP);
+    }
 }

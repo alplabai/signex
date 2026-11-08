@@ -11,21 +11,6 @@ const SP: Spacing = Spacing::DEFAULT;
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-// SVG chevrons (same as tree_view for consistency)
-const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
-const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
-
-pub(super) fn chevron_right() -> svg::Handle {
-    static H: OnceLock<svg::Handle> = OnceLock::new();
-    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
-        .clone()
-}
-pub(super) fn chevron_down() -> svg::Handle {
-    static H: OnceLock<svg::Handle> = OnceLock::new();
-    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
-        .clone()
-}
-
 pub fn shape_icon_handle(
     elem_type: &str,
     theme: signex_types::theme::ThemeId,
@@ -52,11 +37,6 @@ pub fn collapsible_section_header<'a>(
     border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let is_collapsed = collapsed.contains(key);
-    let chevron_handle = if is_collapsed {
-        chevron_right()
-    } else {
-        chevron_down()
-    };
     let key_owned = key.to_string();
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
@@ -65,12 +45,7 @@ pub fn collapsible_section_header<'a>(
         iced::widget::button(
             container(
                 row![
-                    svg(chevron_handle)
-                        .width(10)
-                        .height(10)
-                        .style(move |_: &Theme, _| iced::widget::svg::Style {
-                            color: Some(header_color),
-                        }),
+                    signex_widgets::chevron::chevron(!is_collapsed, TS.label, header_color),
                     text(title.to_string()).size(TS.label).color(header_color),
                 ]
                 .spacing(6)
