@@ -731,6 +731,8 @@ fn after_a_repaired_duplicate_is_saved_and_closed_each_id_names_its_own_file() {
     write_sheet_file(&top, uid(SHEET));
     write_sheet_file(&sub, uid(SHEET));
     let mut app = app_with_project(dir.path());
+    // The heads are read at project open, before any tab: both say the shared id.
+    app.read_wanted_document_headers_now();
     open_tab(&mut app, &top);
     open_tab(&mut app, &sub);
     let _ = headless(&mut app, "list_documents", &[]);
