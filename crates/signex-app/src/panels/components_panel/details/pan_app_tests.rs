@@ -43,6 +43,16 @@ fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
     }
 }
 
+/// Dock layouts these tests produce go nowhere: the per-process prefs file
+/// they would land in is read back by every other test's `Signex::new`.
+struct DiscardLayouts;
+
+impl crate::dock::DockLayoutStore for DiscardLayouts {
+    fn write(&self, _layout: &crate::dock::DockLayoutSnapshot) -> Result<(), String> {
+        Ok(())
+    }
+}
+
 fn send(app: &mut Signex, message: Message) {
     TaskDriver::new()
         .send(app, message)
@@ -58,6 +68,10 @@ fn app_with_details(
     side: PanelPosition,
 ) -> (Signex, tempfile::TempDir, ComponentsPanelRowKey) {
     let (mut app, _boot) = Signex::new();
+    app.document_state.dock_layout_sync = crate::dock::DockLayoutSync::new(
+        std::sync::Arc::new(DiscardLayouts),
+        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+    );
     app.ui_state.first_run_tour_open = false;
     app.ui_state.window_size = (WINDOW.width, WINDOW.height);
     app.ui_state.theme_id = theme;
