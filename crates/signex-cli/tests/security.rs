@@ -4,7 +4,9 @@
 mod support;
 
 use serde_json::{Value, json};
-use support::{Live, fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
+#[cfg(unix)]
+use support::Live;
+use support::{fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
 
 fn refusal(out: &support::Output, index: usize) -> &str {
     assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
@@ -248,9 +250,16 @@ fn allow_and_save_grant_exactly_the_capability_they_name() {
     );
     assert!(fx.dir.join("copy.snxsch").is_file(), "the copy was written");
     assert!(
-        refusal(&out, 2).contains("refused in a headless run")
-            && refusal(&out, 2).contains("exists; give"),
+        refusal(&out, 2).contains("a file dialog was refused"),
         "an existing file is not replaced without overwrite=true: {}",
+        out.stdout
+    );
+    // The details are in the Messages log, not parsed from it.
+    assert!(
+        out.lines[2]["messages"]
+            .to_string()
+            .contains("exists; give"),
+        "{}",
         out.stdout
     );
     assert_eq!(
@@ -281,29 +290,28 @@ fn a_projects_library_list_never_widens_the_roots() {
     std::fs::create_dir_all(&library).unwrap();
     std::fs::write(library.join("library.toml"), "x").unwrap();
     std::fs::copy(&fx.sheet, library.join("in-library.snxsch")).unwrap();
-    let mut listed = vec![
+    // A link to the outside folder, where a test can make one (unix).
+    let link = link_to(&other, &fx.dir.join("lib-link"));
+    let listed: Vec<std::path::PathBuf> = [
         fx.dir.join(".."),
         std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR),
         library.clone(),
-    ];
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(&other, fx.dir.join("lib-link")).unwrap();
-        listed.push(fx.dir.join("lib-link"));
-    }
+    ]
+    .into_iter()
+    .chain(link.clone())
+    .collect();
     let refs: Vec<&std::path::Path> = listed.iter().map(|p| p.as_path()).collect();
     list_libraries(&fx, &refs);
     let project = fx.project.to_str().unwrap();
 
-    let mut attempts = vec![
+    let attempts: Vec<std::path::PathBuf> = [
         root.join("sibling.snxsch"),
         library.join("in-library.snxsch"),
-    ];
-    #[cfg(unix)]
-    {
-        attempts.push(fx.dir.join("lib-link").join("outside.snxsch"));
-        attempts.push(other.join("outside.snxsch"));
-    }
+        other.join("outside.snxsch"),
+    ]
+    .into_iter()
+    .chain(link.map(|link| link.join("outside.snxsch")))
+    .collect();
     for target in attempts {
         let out = run_cli(&["run", project], jsonl(&[open(&target)]));
         assert!(
@@ -314,6 +322,18 @@ fn a_projects_library_list_never_widens_the_roots() {
             out.stdout
         );
     }
+}
+
+/// A symbolic link `link` to `target`, on a platform where a test can make one.
+#[cfg(unix)]
+fn link_to(target: &std::path::Path, link: &std::path::Path) -> Option<std::path::PathBuf> {
+    std::os::unix::fs::symlink(target, link).unwrap();
+    Some(link.to_path_buf())
+}
+
+#[cfg(not(unix))]
+fn link_to(_target: &std::path::Path, _link: &std::path::Path) -> Option<std::path::PathBuf> {
+    None
 }
 
 /// Replace `path` by a link to a copy of it that lives in `elsewhere`.
@@ -388,4 +408,38 @@ fn a_save_refuses_a_project_file_that_became_a_link() {
     );
     assert_eq!(std::fs::read(&outside).unwrap(), before);
     live.finish();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_new_project_into_a_folder_that_is_a_link_to_outside_is_refused() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_allowed_guard, allowed) = temp_root();
+    let (_outside_guard, outside) = temp_root();
+    let outside_dir = outside.join("empty");
+    std::fs::create_dir(&outside_dir).unwrap();
+    std::os::unix::fs::symlink(&outside_dir, allowed.join("x")).unwrap();
+
+    let out = run_cli(
+        &[
+            "run",
+            fx.project.to_str().unwrap(),
+            "--save",
+            "--allow-path",
+            allowed.to_str().unwrap(),
+        ],
+        jsonl(&[json!({"id": "new_document", "args": {"path": allowed.join("x.snxprj")}})]),
+    );
+
+    assert!(
+        refusal(&out, 0).contains("the folder it creates beside it"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        std::fs::read_dir(&outside_dir).unwrap().count(),
+        0,
+        "nothing was created through the link"
+    );
 }

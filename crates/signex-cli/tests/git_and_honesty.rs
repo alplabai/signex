@@ -6,7 +6,9 @@ mod support;
 use std::path::Path;
 
 use serde_json::json;
-use support::{Fixture, enable_git, fixture, jsonl, run_cli, run_cli_env, snapshot, temp_root};
+#[cfg(unix)]
+use support::run_cli_env;
+use support::{Fixture, enable_git, fixture, jsonl, run_cli, snapshot, temp_root};
 
 fn refusal(out: &support::Output, index: usize) -> &str {
     assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);

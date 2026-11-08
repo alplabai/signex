@@ -71,8 +71,9 @@ is enforced before the app sees a command.
 - **Path confinement.** Every path argument is resolved first (symlinks
   followed, `..` removed) and must then sit inside the project folder, unless
   its folder is named with `--allow-path`. The folder is the one that holds
-  the project file, fixed when the run starts; it may not be the home folder
-  or one above it (`run ~/x.snxsch` is refused). What the project file lists
+  the project file, fixed when the run starts; it may not be a filesystem
+  root (`/`, `C:\`, `\\?\C:\`, a UNC share root, or a link to one), the home
+  folder or one above it (`run ~/x.snxsch` is refused). What the project file lists
   (libraries, sheets) never adds a folder. A dangling link is refused. The
   resolved path is what the app receives, and it is resolved and compared
   again right before the command is handed over. A write target is never a

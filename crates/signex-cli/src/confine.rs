@@ -98,10 +98,15 @@ mod tests {
         let sibling = other.file_name().unwrap().to_owned();
         let up = root.join("..").join(&sibling).join("x");
         assert!(confine(&up, &roots).is_err());
-        // The folder is not there, so there is nothing to resolve `..` against.
+        // The folder is not there. Unix cannot resolve `..` against it and says
+        // so; Windows folds `..` into the path text before it looks, so the path
+        // resolves one folder up and is refused as outside. Either way it is out.
         let missing = root.join("nothing").join("..").join("..").join("x");
         let err = confine(&missing, &roots).unwrap_err();
-        assert!(err.contains("cannot be resolved"), "{err}");
+        assert!(
+            err.contains("cannot be resolved") || err.contains("outside the project"),
+            "{err}"
+        );
     }
 
     #[test]

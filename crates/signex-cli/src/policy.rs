@@ -79,9 +79,14 @@ impl Policy {
     /// check and the app's own open or write is out of scope (docs/CLI.md).
     pub fn recheck(&self, approved: &Approved, roots: &[PathBuf]) -> Result<(), String> {
         let allowed = self.allowed(roots);
+        let writes = capability_of(approved.meta).writes_files();
         for (name, text) in &approved.operands {
             if !is_path_operand(approved.meta, name) {
                 continue;
+            }
+            if writes {
+                check_derived_folder(Path::new(text), &allowed)
+                    .map_err(|why| format!("operand `{name}`: {why}"))?;
             }
             let now = confine(Path::new(text), &allowed)
                 .map_err(|why| format!("operand `{name}`: {why}"))?;
@@ -132,6 +137,7 @@ impl Policy {
         };
         if writes {
             refuse_link(&joined)?;
+            check_derived_folder(&joined, allowed)?;
         }
         let resolved = confine(&joined, allowed)?;
         // A file that is not there yet is a write target; only a read is sized.
@@ -151,6 +157,19 @@ impl Policy {
             .map(str::to_string)
             .ok_or_else(|| format!("{} is not valid UTF-8", resolved.display()))
     }
+}
+
+/// `new_document path=<dir>/x.snxprj` also creates the folder `<dir>/x`, and
+/// writes into it: that folder is a write target too, so it may not be a link
+/// to somewhere else.
+fn check_derived_folder(target: &Path, allowed: &[PathBuf]) -> Result<(), String> {
+    let folder = target.with_extension("");
+    if folder == target {
+        return Ok(());
+    }
+    refuse_link(&folder)
+        .and_then(|()| confine(&folder, allowed).map(|_| ()))
+        .map_err(|why| format!("the folder it creates beside it: {why}"))
 }
 
 fn is_path_operand(meta: &CommandMetadata, name: &str) -> bool {
@@ -434,6 +453,27 @@ mod tests {
             let err = all.check_write_targets(&[link], roots).unwrap_err();
             assert!(err.contains("writing through a link is refused"), "{err}");
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_folder_a_new_project_creates_may_not_be_a_link_and_a_read_does_not_care() {
+        let fx = fixture();
+        let outside = fixture();
+        let all = policy(&Capability::ALL);
+        let roots = std::slice::from_ref(&fx.root);
+        std::os::unix::fs::symlink(&outside.root, fx.root.join("x")).unwrap();
+        let err = authorize(&all, &fx, &request("new_document", &["path=x.snxprj"])).unwrap_err();
+        assert!(err.contains("the folder it creates beside it"), "{err}");
+        // A read of `x.snxprj` has no folder to create.
+        assert!(authorize(&all, &fx, &request("open_document", &["path=x.snxprj"])).is_ok());
+
+        // Approved while `y` was free, then `y` became a link: the recheck says so.
+        let approved = authorize(&all, &fx, &request("new_document", &["path=y.snxprj"])).unwrap();
+        assert!(all.recheck(&approved, roots).is_ok());
+        std::os::unix::fs::symlink(&outside.root, fx.root.join("y")).unwrap();
+        let err = all.recheck(&approved, roots).unwrap_err();
+        assert!(err.contains("the folder it creates beside it"), "{err}");
     }
 
     #[test]

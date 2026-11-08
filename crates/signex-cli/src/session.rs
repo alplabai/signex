@@ -9,6 +9,7 @@ use serde_json::Value;
 use signex_app::app::Signex;
 use signex_app::diagnostics;
 use signex_app::headless::{CommandArgs, CommandOutcome, OperandValue};
+use signex_app::io_ports::HeadlessAnswers;
 use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
@@ -92,7 +93,11 @@ impl Session {
     pub fn execute(&mut self, seq: u64, request: &Request, raw: &str) -> ResultLine {
         let log_mark = diagnostics::newest_entry_id();
         let before = self.snapshot();
+        let windows_before = self.driver.dropped_window_actions();
+        let dialogs_before = self.dialog_refusals();
         let (status, reason, data) = self.run(request);
+        let windows_dropped = self.driver.dropped_window_actions() > windows_before;
+        let dialog_refused = self.dialog_refusals() > dialogs_before;
         let messages: Vec<MessageLine> = diagnostics::entries_since(log_mark)
             .entries
             .into_iter()
@@ -101,20 +106,8 @@ impl Session {
                 message: entry.message,
             })
             .collect();
-        // A command whose only effect was a window the driver dropped, or a
-        // dialog the answers could not satisfy, still reports `Ran`; the
-        // refusal is only in the log.
-        let (status, reason) = match (status, needs_window(&messages), dialog_refusal(&messages)) {
-            (Status::Ran, true, _) => (
-                Status::Refused,
-                Some(format!(
-                    "`{}` needs a window, which a headless run does not have",
-                    request.id
-                )),
-            ),
-            (Status::Ran, false, Some(why)) => (Status::Refused, Some(why)),
-            (status, _, _) => (status, reason),
-        };
+        let (status, reason) =
+            honest_status(status, reason, &request.id, windows_dropped, dialog_refused);
         let changed = changed_between(&before, &self.snapshot());
         self.audit(seq, raw, status, reason.as_deref());
         ResultLine {
@@ -183,6 +176,13 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
+    }
+
+    /// File dialogs refused so far in this session.
+    fn dialog_refusals(&self) -> u64 {
+        self.app
+            .headless_answers()
+            .map_or(0, HeadlessAnswers::refusals)
     }
 
     /// Where a save can land without an operand: the active document, every
@@ -309,30 +309,34 @@ fn changed_between(before: &Snapshot, after: &Snapshot) -> Vec<String> {
         .collect()
 }
 
-/// What the app's file dialog logs when a headless answer is missing, not
-/// absolute, or would replace a file without `overwrite=true`
-/// (`io_ports::picker`). Pinned by the end-to-end test.
-const DIALOG_REFUSED: &str = "refused in a headless run";
-
-/// The first message that says a dialog was refused.
-fn dialog_refusal(messages: &[MessageLine]) -> Option<String> {
-    messages
-        .iter()
-        .find(|line| line.message.contains(DIALOG_REFUSED))
-        .map(|line| line.message.clone())
-}
-
-/// What the task driver logs for a window action it cannot perform
-/// (`task_driver::dropped`). Pinned by the end-to-end test.
-const DROPPED_ACTION: &str = "dropped an iced action";
-const WINDOW_KIND: &str = "kind=\"window\"";
-
-/// Whether the command asked for a window that was dropped: its effect was
-/// only that window.
-fn needs_window(messages: &[MessageLine]) -> bool {
-    messages
-        .iter()
-        .any(|line| line.message.contains(DROPPED_ACTION) && line.message.contains(WINDOW_KIND))
+/// A command whose only effect was a window the task driver dropped, or a
+/// file dialog the answers could not satisfy, still reports `Ran`. Both are
+/// counted by the app (`TaskDriver::dropped_window_actions`,
+/// `HeadlessAnswers::refusals`), so the decision never reads log text.
+fn honest_status(
+    status: Status,
+    reason: Option<String>,
+    id: &str,
+    windows_dropped: bool,
+    dialog_refused: bool,
+) -> (Status, Option<String>) {
+    match (status, windows_dropped, dialog_refused) {
+        (Status::Ran, true, _) => (
+            Status::Refused,
+            Some(format!(
+                "`{id}` needs a window, which a headless run does not have"
+            )),
+        ),
+        (Status::Ran, false, true) => (
+            Status::Refused,
+            Some(
+                "a file dialog was refused: it had no usable answer, or would replace a file \
+                 without overwrite=true (see messages)"
+                    .into(),
+            ),
+        ),
+        (status, _, _) => (status, reason),
+    }
 }
 
 #[cfg(test)]
@@ -365,38 +369,35 @@ mod tests {
     }
 
     #[test]
-    fn a_dropped_window_action_is_found_and_a_dropped_widget_operation_is_not() {
-        let line = |message: &str| MessageLine {
-            level: "WARN",
-            message: message.to_string(),
+    fn a_ran_command_with_a_dropped_window_or_a_refused_dialog_is_refused_and_nothing_else_changes()
+    {
+        let honest = |status, windows, dialogs| {
+            honest_status(status, Some("why".into()), "x", windows, dialogs)
         };
-        let widget = line(
-            "dropped an iced action a headless run does not perform kind=\"widget operation\"",
-        );
-        let window = line("dropped an iced action a headless run does not perform kind=\"window\"");
-        assert!(!needs_window(std::slice::from_ref(&widget)));
-        assert!(!needs_window(&[line(
-            "kind=\"window\" but nothing was dropped"
-        )]));
-        assert!(needs_window(&[widget, window]));
-    }
-
-    #[test]
-    fn a_refused_dialog_in_the_log_is_found_and_other_messages_are_not() {
-        let line = |message: &str| MessageLine {
-            level: "WARN",
-            message: message.to_string(),
-        };
-        let quiet = [line("Opened a.snxsch"), line("Skipped 1 locked object(s)")];
-        assert_eq!(dialog_refusal(&quiet), None);
-        let refused = [
-            line("fine"),
-            line("File dialog: refused in a headless run; give the `path` argument"),
-        ];
+        let (status, reason) = honest(Status::Ran, true, false);
+        assert_eq!(status, Status::Refused);
         assert_eq!(
-            dialog_refusal(&refused).as_deref(),
-            Some("File dialog: refused in a headless run; give the `path` argument")
+            reason.as_deref(),
+            Some("`x` needs a window, which a headless run does not have")
         );
+        let (status, reason) = honest(Status::Ran, false, true);
+        assert_eq!(status, Status::Refused);
+        assert!(reason.unwrap().contains("a file dialog was refused"));
+        // A window wins over a dialog; neither signal leaves `ran` alone.
+        assert!(
+            honest(Status::Ran, true, true)
+                .1
+                .unwrap()
+                .contains("needs a window")
+        );
+        assert_eq!(
+            honest(Status::Ran, false, false),
+            (Status::Ran, Some("why".into()))
+        );
+        // A command that was already refused or failed keeps its own reason.
+        for status in [Status::Refused, Status::Failed] {
+            assert_eq!(honest(status, true, true), (status, Some("why".into())));
+        }
     }
 
     #[test]

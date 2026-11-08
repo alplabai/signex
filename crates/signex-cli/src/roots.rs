@@ -5,18 +5,33 @@
 
 use std::path::{Path, PathBuf};
 
-/// `project_dir` as the root, unless it is `home` or a folder above it: a
-/// project file kept loose in the home folder (`signex-cli run ~/x.snxsch`)
-/// would otherwise make the whole home folder writable.
+use crate::confine::canonical;
+
+/// `project_dir` as the root, unless it is a filesystem root, `home` or a
+/// folder above it: a project file kept loose in the home folder
+/// (`signex-cli run ~/x.snxsch`) or at the top of a drive would otherwise make
+/// the whole home folder or drive writable.
 pub fn project_root(project_dir: &Path, home: Option<&Path>) -> Result<Vec<PathBuf>, String> {
-    if home.is_some_and(|home| home.starts_with(project_dir)) {
+    // The path as given and as it resolves (a link to `/` is `/`).
+    let resolved = canonical(project_dir).unwrap_or_else(|_| project_dir.to_path_buf());
+    let too_broad = [project_dir, resolved.as_path()]
+        .into_iter()
+        .any(|dir| is_filesystem_root(dir) || home.is_some_and(|home| home.starts_with(dir)));
+    if too_broad {
         return Err(format!(
-            "{} is the home folder or one above it, which is too broad to be the project's folder; \
-             move the project into its own folder",
+            "{} is a filesystem root, the home folder or one above it, which is too broad to be \
+             the project's folder; move the project into its own folder",
             project_dir.display()
         ));
     }
     Ok(vec![project_dir.to_path_buf()])
+}
+
+/// Every root form: `/`, `C:\`, `\\?\C:\`, a UNC share root (`\\server\share\`)
+/// have no parent; a path that is not absolute (`\` or `C:` on Windows, or a
+/// relative one) is not a folder this can vouch for.
+fn is_filesystem_root(dir: &Path) -> bool {
+    !dir.is_absolute() || dir.parent().is_none()
 }
 
 #[cfg(test)]
@@ -54,6 +69,47 @@ mod tests {
         ] {
             let err = project_root(&broad, Some(&home)).unwrap_err();
             assert!(err.contains("too broad"), "{}: {err}", broad.display());
+        }
+    }
+
+    #[test]
+    fn a_filesystem_root_is_refused_even_with_no_home_known() {
+        let root = Path::new(std::path::MAIN_SEPARATOR_STR);
+        let err = project_root(root, None).unwrap_err();
+        assert!(err.contains("filesystem root"), "{err}");
+        let err = project_root(Path::new("relative/folder"), None).unwrap_err();
+        assert!(err.contains("too broad"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_that_resolves_to_a_filesystem_root_is_refused() {
+        let (_guard, base) = temp();
+        let link = base.join("to-root");
+        std::os::unix::fs::symlink("/", &link).unwrap();
+        let err = project_root(&link, None).unwrap_err();
+        assert!(err.contains("too broad"), "{err}");
+    }
+
+    /// The root forms Windows has: a drive root, the verbatim form, a UNC
+    /// share root, the drive-relative `\` and `C:`.
+    #[cfg(windows)]
+    #[test]
+    fn every_windows_root_form_is_refused() {
+        for form in [
+            r"\",
+            r"C:\",
+            r"C:",
+            r"\\?\C:\",
+            r"\\server\share\",
+            r"\\?\UNC\server\share\",
+        ] {
+            let err = project_root(Path::new(form), None).unwrap_err();
+            assert!(err.contains("too broad"), "{form}: {err}");
+        }
+        // A folder on a drive is fine, and so is a UNC folder below a share.
+        for form in [r"C:\projects\demo", r"\\server\share\projects\demo"] {
+            assert!(project_root(Path::new(form), None).is_ok(), "{form}");
         }
     }
 
