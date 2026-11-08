@@ -96,8 +96,9 @@ impl Signex {
         ))
     }
 
-    /// Snapshot the active PCB tab's board and return the task that writes
-    /// it atomically to its `.snxpcb`. `Ok(None)` means there is nothing to
+    /// Snapshot the board of the PCB at `path` (its tab's, or the one parked
+    /// when its dirty tab closed) and return the task that writes it
+    /// atomically to its `.snxpcb`. `Ok(None)` means there is nothing to
     /// write: a clean tab must not rewrite the open-time snapshot over a file
     /// another tool or a git operation changed, and a board opened read-only
     /// (newer minor) is refused with an error. The completion routes through the
@@ -121,12 +122,9 @@ impl Signex {
     ) -> Result<Option<Task<Message>>> {
         self.refuse_save_while_path_op(&path)?;
         self.refuse_while_project_moves(&path, "save")?;
-        let tab = self
-            .document_state
-            .tabs
-            .iter()
-            .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
-            .with_context(|| format!("no open PCB at {}", path.display()))?;
+        if !self.document_state.holds_pcb(&path) {
+            anyhow::bail!("no open PCB at {}", path.display());
+        }
         if !self.document_state.is_document_dirty(&path) {
             return Ok(None);
         }
@@ -136,17 +134,13 @@ impl Signex {
             .get(&path)
             .copied()
             .unwrap_or(0);
-        let board = tab
-            .cached_document
-            .as_ref()
-            .and_then(|doc| doc.as_pcb())
-            .with_context(|| {
-                format!(
-                    "{} could not be re-read after a History restore, so the board in memory \
+        let board = self.document_state.pcb_board(&path).with_context(|| {
+            format!(
+                "{} could not be re-read after a History restore, so the board in memory \
                      is stale; close and reopen the tab (saving now would undo the restore)",
-                    path.display()
-                )
-            })?;
+                path.display()
+            )
+        })?;
         if board.unknown.newer_minor_source.is_some() {
             anyhow::bail!(
                 "{} opened read-only (newer format) — not saved",

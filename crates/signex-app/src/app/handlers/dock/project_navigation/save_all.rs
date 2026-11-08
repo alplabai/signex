@@ -75,6 +75,8 @@ impl Signex {
     /// it backs:
     ///
     /// * a live schematic **engine** → an off-thread schematic save;
+    /// * a **PCB** tab, or a board parked when its dirty tab closed → an
+    ///   off-thread board save;
     /// * an open **symbol/footprint primitive editor** → an off-thread
     ///   container save;
     /// * the project's own **`.snxprj`** → an off-thread project save, which
@@ -98,7 +100,8 @@ impl Signex {
                 self.save_primitive_tab_at(path).map(Some)
             }
             Some(DocumentKey::Project(_)) => self.save_project_at_path(path).map(Some),
-            Some(DocumentKey::Pcb(_) | DocumentKey::Row(_)) | None => anyhow::bail!(
+            Some(DocumentKey::Pcb(_)) => self.begin_pcb_save(path.to_path_buf()),
+            Some(DocumentKey::Row(_)) | None => anyhow::bail!(
                 "no open editor, engine, or project backs this file — it can't be saved automatically"
             ),
         }

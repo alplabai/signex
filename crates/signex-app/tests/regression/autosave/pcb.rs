@@ -1,12 +1,18 @@
 //! #1185 — autosave and recovery for PCB tabs.
 //!
 //! Real files, the real sidecar writer and the real recovery prompt: a board
-//! autosaved by one run is offered, restored or discarded by the next.
+//! autosaved by one run is offered, restored or discarded by the next. A
+//! dirty board whose tab closes is parked, so quit, Save All and a reopen
+//! still find it (#2149).
 
 use std::path::{Path, PathBuf};
 
-use signex_app::app::{FileMsg, Message, Signex, TabDocument};
+use signex_app::app::{
+    ContextMenuMsg, FileMsg, Message, ProjectCloseChoice, ProjectMsg, Signex, TabContextAction,
+    TabDocument, WindowMsg,
+};
 use signex_app::autosave::{AutosaveMsg, RecoveryChoice, sidecar};
+use signex_app::menu_bar::MenuMessage;
 use signex_types::pcb::PcbBoard;
 
 use super::complete;
@@ -287,4 +293,116 @@ fn restore_keeps_the_id_of_the_open_board() {
         tab.cached_document.as_ref().unwrap().as_pcb().unwrap().uuid,
         live
     );
+}
+
+/// Close the first tab the way the user does (its close button).
+fn close_first_tab(app: &mut Signex) {
+    let close = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(0),
+    )));
+    complete(app, close);
+}
+
+/// Send `message` and run what it starts in the runtime's order, so a Save
+/// All settles after its writes land.
+fn send(app: &mut Signex, message: Message) {
+    crate::settle_support::settle(app, message);
+}
+
+fn thickness_on_disk(doc: &Path) -> f64 {
+    let text = std::fs::read_to_string(doc).unwrap();
+    signex_types::format::SnxPcb::parse(&text)
+        .unwrap()
+        .board
+        .thickness
+}
+
+/// The next run restored the copy, then the user closed the board's tab.
+fn restored_then_closed() -> (Fixture, Signex, Vec<u8>) {
+    let (f, mut next, on_disk) = next_run();
+    answer(&mut next, RecoveryChoice::Restore);
+    close_first_tab(&mut next);
+    assert!(next.document_state.tabs.is_empty());
+    (f, next, on_disk)
+}
+
+#[test]
+fn a_restored_board_closed_from_its_tab_keeps_its_edits_and_copy() {
+    let (f, mut next, on_disk) = restored_then_closed();
+    assert!(
+        is_dirty(&next, &f.doc),
+        "the close parks the restored edits"
+    );
+    assert!(sidecar_of(&f).exists(), "the recovery copy is not swept");
+    assert_eq!(std::fs::read(&f.doc).unwrap(), on_disk);
+
+    let _ = next.update(Message::Window(WindowMsg::CloseMainWindow));
+    let prompt = next
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("quit prompts for the parked board");
+    assert!(prompt.dirty_paths.contains(&f.doc));
+}
+
+#[test]
+fn reopening_a_parked_board_shows_its_unsaved_edits() {
+    let (f, mut next, on_disk) = restored_then_closed();
+    send(
+        &mut next,
+        Message::File(FileMsg::Opened(Some(f.doc.clone()))),
+    );
+    assert_eq!(thickness_in_tab(&next, &f.doc), EDITED_THICKNESS);
+    assert!(is_dirty(&next, &f.doc));
+    assert_eq!(std::fs::read(&f.doc).unwrap(), on_disk);
+}
+
+#[test]
+fn save_all_writes_a_parked_board() {
+    let (f, mut next, _) = restored_then_closed();
+    send(&mut next, Message::Menu(MenuMessage::SaveAll));
+    assert_eq!(thickness_on_disk(&f.doc), EDITED_THICKNESS);
+    assert!(!is_dirty(&next, &f.doc));
+    assert!(!sidecar_of(&f).exists(), "a saved board needs no copy");
+    assert!(next.document_state.error_notice.is_none());
+}
+
+#[test]
+fn save_all_writes_a_dirty_board_in_its_tab() {
+    let mut f = fixture();
+    edit(&mut f.app, &f.doc.clone());
+    send(&mut f.app, Message::Menu(MenuMessage::SaveAll));
+    assert_eq!(thickness_on_disk(&f.doc), EDITED_THICKNESS);
+    assert!(!is_dirty(&f.app, &f.doc));
+    assert!(f.app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn quit_save_all_writes_a_parked_board() {
+    let (f, mut next, _) = restored_then_closed();
+    let _ = next.update(Message::Window(WindowMsg::CloseMainWindow));
+    assert!(next.ui_state.app_quit_confirm.is_some());
+    send(
+        &mut next,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
+    assert_eq!(thickness_on_disk(&f.doc), EDITED_THICKNESS);
+    assert!(!is_dirty(&next, &f.doc));
+    assert!(next.document_state.error_notice.is_none());
+}
+
+#[test]
+fn quit_discard_all_drops_a_parked_board_and_its_recovery_copy() {
+    let (f, mut next, on_disk) = restored_then_closed();
+    assert!(sidecar_of(&f).exists());
+    let _ = next.update(Message::Window(WindowMsg::CloseMainWindow));
+    assert!(next.ui_state.app_quit_confirm.is_some());
+    let quit = next.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    let mut driver = signex_app::task_driver::TaskDriver::new();
+    driver.settle(&mut next, quit).expect("quit settled");
+    assert!(driver.has_exited(), "the quit went through");
+    assert!(!sidecar_of(&f).exists(), "the discard removes the copy");
+    assert_eq!(std::fs::read(&f.doc).unwrap(), on_disk, "nothing written");
 }
