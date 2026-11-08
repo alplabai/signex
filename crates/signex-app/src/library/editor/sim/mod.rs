@@ -19,7 +19,7 @@ use iced::{Element, Length};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text, text_input};
+use signex_widgets::{TextEditorPlaceholder, raw, text, text_input};
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
@@ -184,7 +184,7 @@ pub fn view<'a>(
     let deck: Element<'a, LibraryMessage> = if let Some(content) = state.sim_body.as_ref() {
         let deck_address = address.clone();
         text_editor(content)
-            .placeholder(".SUBCKT NAME 1 2 3 4\n  …\n.ENDS")
+            .placeholder_label(raw(".SUBCKT NAME 1 2 3 4\n  …\n.ENDS"))
             .padding(SP.m)
             .size(TS.body)
             .height(Length::Fixed(TS.body * DECK_LINES))

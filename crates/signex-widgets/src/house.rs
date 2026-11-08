@@ -1,4 +1,5 @@
-//! House `text`, `text_input`, `checkbox`, `button` and `tooltip` (#2056).
+//! House `text`, `text_input`, `checkbox`, `button`, `tooltip` and the other
+//! widgets that show text (#2056); the extras are in `house_extra.rs`.
 //!
 //! They return the iced widget types, so every builder method keeps working.
 //! What changes is the text: a label is a [`Label`], and the content of a

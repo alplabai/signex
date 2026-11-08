@@ -1,4 +1,4 @@
-use crate::{button, raw, text};
+use crate::{PickListPlaceholder, button, raw, text};
 use chrono::{Datelike, Local};
 use iced::widget::{column, container, pick_list, row};
 use iced::{Alignment, Background, Border, Element, Length, Widget};
@@ -211,7 +211,7 @@ impl RkmEncoder {
                         ToString::to_string
                     )
                     .on_select(RkmEncoderMessage::TemperatureCoefficientChanged)
-                    .placeholder("Not specified")
+                    .placeholder_label(raw("Not specified"))
                     .width(165),
                 ),
                 labeled(
@@ -219,7 +219,7 @@ impl RkmEncoder {
                     "Rated power",
                     pick_list(self.rated_power, RatedPower::ALL, ToString::to_string)
                         .on_select(RkmEncoderMessage::RatedPowerChanged)
-                        .placeholder("Not specified")
+                        .placeholder_label(raw("Not specified"))
                         .width(135),
                 ),
                 button(text(raw("Clear optional fields")))
@@ -241,7 +241,7 @@ impl RkmEncoder {
                     ToString::to_string
                 )
                 .on_select(RkmEncoderMessage::ProductionDateCycleChanged)
-                .placeholder("Not specified")
+                .placeholder_label(raw("Not specified"))
                 .width(150),
             ),
             labeled(
@@ -253,7 +253,7 @@ impl RkmEncoder {
                     ToString::to_string
                 )
                 .on_select(RkmEncoderMessage::ProductionYearChanged)
-                .placeholder("Not specified")
+                .placeholder_label(raw("Not specified"))
                 .width(130),
             ),
             labeled(
@@ -265,7 +265,7 @@ impl RkmEncoder {
                     ToString::to_string
                 )
                 .on_select(RkmEncoderMessage::ProductionMonthChanged)
-                .placeholder("Not specified")
+                .placeholder_label(raw("Not specified"))
                 .width(145),
             ),
             button(text(raw("Clear production date")))

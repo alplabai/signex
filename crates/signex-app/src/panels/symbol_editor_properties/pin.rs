@@ -2,7 +2,7 @@
 
 use iced::widget::{Column, column, container, row};
 use iced::{Color, Element, Length, Widget};
-use signex_widgets::{raw, text};
+use signex_widgets::{PickListPlaceholder, raw, text};
 
 use super::super::{NumericDraft, NumericFieldKey, PanelMsg, SymbolPinSummary, numeric_input};
 use crate::styles::{Spacing, TypeScale};
@@ -151,7 +151,7 @@ pub(super) fn view_pin_selection<'a>(
         electrical_options.to_vec(),
         |(label, _): &(&'static str, signex_library::PinDirection)| label.to_string(),
     )
-    .placeholder(pin.electrical.clone())
+    .placeholder_label(raw(pin.electrical.clone()))
     .on_select(
         move |(_, value): (&'static str, signex_library::PinDirection)| {
             PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
@@ -230,7 +230,7 @@ pub(super) fn view_pin_selection<'a>(
         orientation_options.to_vec(),
         |(label, _): &(&'static str, signex_library::PinOrientation)| label.to_string(),
     )
-    .placeholder(pin.orientation.clone())
+    .placeholder_label(raw(pin.orientation.clone()))
     .on_select(
         move |(_, value): (&'static str, signex_library::PinOrientation)| {
             PanelMsg::SymEditorSetPinOrientation { pin_idx, value }

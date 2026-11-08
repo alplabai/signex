@@ -9,7 +9,7 @@ use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemp
 use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text, text_input};
+use signex_widgets::{PickListPlaceholder, raw, text, text_input};
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::{
@@ -107,7 +107,7 @@ pub fn view<'a>(
             let send = send.clone();
             move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
         })
-        .placeholder("Select class…")
+        .placeholder_label(raw("Select class…"))
         .padding(6)
         .text_size(12);
 
@@ -124,7 +124,7 @@ pub fn view<'a>(
         let send = send.clone();
         move |pick: LifecyclePick| send(BrowserEditMsg::SetState(pick.0))
     })
-    .placeholder("Select lifecycle…")
+    .placeholder_label(raw("Select lifecycle…"))
     .padding(6)
     .text_size(12);
 

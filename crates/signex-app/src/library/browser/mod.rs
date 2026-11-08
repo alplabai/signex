@@ -14,7 +14,7 @@ use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{ComponentRow, LifecycleState, RowId};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{button, raw, text, text_input};
+use signex_widgets::{PickListPlaceholder, button, raw, text, text_input};
 
 use super::messages::LibraryMessage;
 use super::range_filter::range_filter_bar;

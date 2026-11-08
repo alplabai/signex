@@ -43,7 +43,7 @@ pub(super) fn view_header<'a>(
             filter: f,
         },
     )
-    .placeholder("Lifecycle")
+    .placeholder_label(raw("Lifecycle"))
     .padding(SP.s)
     .text_size(BROWSER_TEXT_SIZE);
 

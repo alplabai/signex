@@ -10,7 +10,7 @@ use signex_library::RangeOp;
 use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{button, raw, text, text_input};
+use signex_widgets::{PickListPlaceholder, button, raw, text, text_input};
 
 use super::draft::{BoundDraft, RangeFilterDraft, RangeFilters};
 use crate::library::messages::{RangeBound, RangeFilterMsg};
@@ -74,7 +74,7 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
                         unit: c.unit,
                     })
                 })
-                .placeholder("Add range filter…")
+                .placeholder_label(raw("Add range filter…"))
                 .padding(SP.s)
                 .text_size(TS.body)
                 .boxed(),

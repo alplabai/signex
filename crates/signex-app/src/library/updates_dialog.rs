@@ -37,13 +37,13 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, column, container, radio, row};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
 use signex_library::RowId;
 use signex_types::schematic::StampField;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{checkbox, raw, text};
+use signex_widgets::{checkbox, radio, raw, text};
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
@@ -437,10 +437,16 @@ fn render_conflict<'a>(
             .size(TS.body)
             .color(muted)
             .width(Length::Fill),
-            radio("Keep mine", Choice::KeepMine, Some(conflict.choice), pick).text_size(TS.body),
+            radio(
+                raw("Keep mine"),
+                Choice::KeepMine,
+                Some(conflict.choice),
+                pick
+            )
+            .text_size(TS.body),
             Space::new().width(12),
             radio(
-                "Use library value",
+                raw("Use library value"),
                 Choice::UseLibrary,
                 Some(conflict.choice),
                 pick

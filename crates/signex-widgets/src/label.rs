@@ -35,6 +35,12 @@ impl<'a> IntoFragment<'a> for Label<'a> {
     }
 }
 
+impl Label<'_> {
+    pub(crate) fn into_string(self) -> String {
+        self.0.into_owned()
+    }
+}
+
 /// The escape hatch for text that is neither a catalog message nor user
 /// content: a literal or a `format!` the area migrations (#2057-#2062) have
 /// not reached yet. `scripts/check_raw_labels.sh` counts the call sites and

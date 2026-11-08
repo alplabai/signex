@@ -375,7 +375,7 @@ impl Signex {
                           this: signex_output::ColourMode,
                           current: signex_output::ColourMode,
                           on: fn(signex_output::ColourMode) -> Message| {
-            iced::widget::radio(label, this, Some(current), on)
+            signex_widgets::radio(signex_widgets::raw(label), this, Some(current), on)
                 .text_size(11)
                 .size(TS.heading)
         };

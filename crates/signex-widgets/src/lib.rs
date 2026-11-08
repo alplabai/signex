@@ -6,6 +6,7 @@
 pub mod active_bar;
 pub mod history_pane;
 mod house;
+mod house_extra;
 pub mod icon_button;
 mod label;
 pub mod passive_calculator;
@@ -22,6 +23,10 @@ pub use active_bar::dropdown as active_bar_dropdown;
 
 pub use history_pane::{HistoryEntry, history_pane};
 pub use house::{CheckboxLabel, Content, button, checkbox, text, text_input, tooltip};
+pub use house_extra::{
+    PickListPlaceholder, TextEditorPlaceholder, TogglerLabel, combo_box, radio, rich_text, span,
+    toggler,
+};
 pub use label::{Label, raw};
 
 // The iced modules behind the house functions of the same name, so
