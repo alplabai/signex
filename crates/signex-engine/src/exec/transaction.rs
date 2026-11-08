@@ -18,6 +18,9 @@ pub(crate) struct Transaction {
     patch: Option<PatchPair>,
     /// A command inside the transaction failed, so only a rollback may end it.
     failed: bool,
+    /// Notices already raised when it began: a rollback drops the rest.
+    warnings: usize,
+    unkept_pins: usize,
 }
 
 impl Transaction {
@@ -53,6 +56,8 @@ impl Engine {
             mark: self.revision_mark(),
             patch: None,
             failed: false,
+            warnings: self.warnings.len(),
+            unkept_pins: self.unkept_pins.len(),
         });
         self.history_suppressed = true;
         Ok(())
@@ -113,6 +118,9 @@ impl Engine {
         self.document = tx.before;
         self.restore_revision(tx.mark);
         self.bump_connectivity_revision();
+        // Notices about edits that never happened are not shown.
+        self.warnings.truncate(tx.warnings);
+        self.unkept_pins.truncate(tx.unkept_pins);
     }
 
     /// A batch run while a transaction is open: its commands join the
@@ -177,6 +185,50 @@ mod tests {
         engine.undo().unwrap();
         assert_eq!(engine.document().no_connects.len(), 0);
         assert!(!engine.can_undo());
+    }
+
+    /// The entry's patch is the union of every command's, and its semantic
+    /// widens when the kinds differ: Undo of the entry repaints all of them.
+    #[test]
+    fn the_entry_of_a_mixed_transaction_carries_the_union_of_its_patches() {
+        let mut engine = engine();
+        engine.begin_transaction().unwrap();
+        engine.execute(place()).unwrap();
+        engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".to_string(),
+            })
+            .unwrap();
+        engine.commit_transaction(None).unwrap();
+        let pair = engine.history.undo_steps()[0].edit().patch_pair;
+        assert_eq!(
+            pair.document,
+            DocumentPatch::NO_CONNECTS | DocumentPatch::PAPER
+        );
+        assert_eq!(pair.semantic, SemanticPatch::DocumentReplaced);
+        let undone = engine.undo().unwrap().unwrap();
+        assert_eq!(undone.document, pair.document);
+
+        engine.begin_transaction().unwrap();
+        engine.execute(place()).unwrap();
+        engine.execute(place()).unwrap();
+        engine.commit_transaction(None).unwrap();
+        let pair = engine.history.undo_steps()[0].edit().patch_pair;
+        assert_eq!(pair.semantic, SemanticPatch::ObjectPlaced);
+    }
+
+    /// The commands inside each bump the revision; the transaction is one edit,
+    /// so the revision before it is the base a render cache may copy from.
+    #[test]
+    fn a_committed_transaction_is_one_edit_for_the_base_revision() {
+        let mut engine = engine();
+        let before = engine.revision();
+        engine.begin_transaction().unwrap();
+        engine.execute(place()).unwrap();
+        engine.execute(place()).unwrap();
+        engine.commit_transaction(None).unwrap();
+        assert_eq!(engine.base_revision(), before);
+        assert_ne!(engine.revision(), before);
     }
 
     #[test]

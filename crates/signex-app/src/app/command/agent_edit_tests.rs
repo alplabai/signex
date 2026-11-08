@@ -142,6 +142,17 @@ fn app_at_work() -> Signex {
     app
 }
 
+/// [`app_at_work`] with nothing in the middle: a wire selected and the wire
+/// tool, no drawing and no move armed.
+fn app_idle() -> Signex {
+    let mut app = app_at_work();
+    let canvas = app.interaction_state.active_canvas_mut();
+    canvas.wire_preview.clear();
+    canvas.drawing_mode = false;
+    app.ui_state.move_pick = None;
+    app
+}
+
 #[test]
 fn one_undo_reverts_exactly_the_batch() {
     let mut app = app_at_work();
@@ -341,6 +352,18 @@ fn an_agent_batch_leaves_the_persons_interaction_snapshot_byte_equal() {
                 clears
             );
         }
+    }
+}
+
+/// A revert of a step on the person's own sheet waits while they draw or have
+/// a move armed, so it is checked with them idle: the rest of what they hold
+/// (selection, tool, panels) is untouched by it.
+#[test]
+fn revert_leaves_the_persons_interaction_snapshot_byte_equal() {
+    for file in ["b.snxsch", "a.snxsch"] {
+        let mut app = app_idle();
+        let before = interaction_snapshot(&app);
+        applied(&mut app, file, three_edits());
         let group = app.document_state.engines[&path(file)]
             .next_undo_group()
             .unwrap()
@@ -459,7 +482,7 @@ fn the_batch_shows_live_on_the_active_canvas_and_every_undocked_window() {
 
 #[test]
 fn revert_acts_only_while_the_group_is_the_newest_step_and_never_on_a_persons_step() {
-    let mut app = app_at_work();
+    let mut app = app_idle();
     fixture::activate(&mut app, &path("a.snxsch"));
     let clean = state(&app, "a.snxsch");
     let group = applied(&mut app, "a.snxsch", three_edits())["group"]
@@ -665,7 +688,7 @@ fn a_read_only_sheet_is_refused_before_anything_runs() {
 
 #[test]
 fn revert_waits_while_the_person_is_drawing_on_that_sheet() {
-    let mut app = app_at_work();
+    let mut app = app_idle();
     let group = applied(&mut app, "b.snxsch", three_edits())["group"]
         .as_u64()
         .unwrap();
@@ -720,5 +743,248 @@ fn a_rolled_back_edit_is_never_left_on_the_persons_canvas() {
     assert!(
         shown.snapshot().net_colors.is_empty(),
         "the canvas shows a colour the sheet no longer has"
+    );
+}
+
+/// A wire edit snaps against the sheet it edits, not the person's: 0.5 mm from
+/// the end of a wire of the target sheet, a click lands on that end.
+#[test]
+fn a_wire_edit_snaps_to_the_target_sheets_hotspots() {
+    let mut app = app_idle();
+    assert!(app.ui_state.snap_hotspots);
+    assert!(matches!(
+        apply(
+            &mut app,
+            "a.snxsch",
+            json!([{"id": "place_wire", "args": {"start": [50, 50], "end": [60, 50]}}])
+        ),
+        CommandOutcome::Answered(_)
+    ));
+    let outcome = apply(
+        &mut app,
+        "a.snxsch",
+        json!([{"id": "place_wire", "args": {"start": [60, 50.5], "end": [70, 50.5]}}]),
+    );
+    let reason = refusal(outcome);
+    assert!(reason.contains("not where a click lands"), "{reason}");
+}
+
+/// The drawing flag is global; the person's wire preview lives in the slot of
+/// the window they draw in, which may be an undocked one.
+#[test]
+fn revert_waits_while_the_person_draws_in_an_undocked_window() {
+    let mut app = app_idle();
+    let group = applied(
+        &mut app,
+        "a.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [20, 20]}}]),
+    )["group"]
+        .as_u64()
+        .unwrap();
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: path("a.snxsch"),
+            title: "a".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    slot.drawing_mode = true;
+    slot.wire_preview = vec![Point::new(20.0, 20.0)];
+    app.interaction_state.canvases.insert(window, slot);
+    app.interaction_state.wire_drawing = true;
+    let before = state(&app, "a.snxsch");
+    let reason = refusal(revert(&mut app, "a.snxsch", group));
+    assert!(reason.contains("drawing"), "{reason}");
+    assert_eq!(state(&app, "a.snxsch"), before);
+}
+
+/// Reverting the label the person is typing into would throw their text away
+/// on submit.
+#[test]
+fn revert_waits_while_the_person_types_into_an_item_of_the_sheet() {
+    let mut app = app_idle();
+    let answer = applied(
+        &mut app,
+        "b.snxsch",
+        json!([{"id": "place_net_label", "args": {"at": [24, 24], "text": "AGENT"}}]),
+    );
+    let group = answer["group"].as_u64().unwrap();
+    let label = app.document_state.engines[&path("b.snxsch")]
+        .document()
+        .labels
+        .iter()
+        .find(|l| l.text == "AGENT")
+        .unwrap()
+        .uuid;
+    app.interaction_state.editing_text = Some(crate::app::TextEditState {
+        uuid: label,
+        kind: SelectedKind::Label,
+        text: "PERSON".into(),
+        original_text: "AGENT".into(),
+        world_x: 24.0,
+        world_y: 24.0,
+        sheet: Some(path("b.snxsch")),
+        placement: None,
+    });
+    let before = state(&app, "b.snxsch");
+    let reason = refusal(revert(&mut app, "b.snxsch", group));
+    assert!(reason.contains("typing"), "{reason}");
+    assert_eq!(state(&app, "b.snxsch"), before);
+    app.interaction_state.editing_text = None;
+    assert!(matches!(
+        revert(&mut app, "b.snxsch", group),
+        CommandOutcome::Answered(_)
+    ));
+}
+
+/// A move armed on the sheet the main window shows is not cut under; one on
+/// another sheet is not the person's business here.
+#[test]
+fn revert_waits_while_the_person_has_a_move_armed_on_that_sheet() {
+    let mut app = app_idle();
+    let on_b = applied(&mut app, "b.snxsch", three_edits())["group"]
+        .as_u64()
+        .unwrap();
+    let on_a = applied(&mut app, "a.snxsch", three_edits())["group"]
+        .as_u64()
+        .unwrap();
+    app.ui_state.move_pick = Some(crate::canvas::MovePick::Selection);
+    let before = state(&app, "b.snxsch");
+    let reason = refusal(revert(&mut app, "b.snxsch", on_b));
+    assert!(reason.contains("move armed"), "{reason}");
+    assert_eq!(state(&app, "b.snxsch"), before);
+    assert!(matches!(
+        revert(&mut app, "a.snxsch", on_a),
+        CommandOutcome::Answered(_)
+    ));
+}
+
+/// The default font is the project's of the sheet the edit lands on, not of
+/// the sheet the person has open.
+#[test]
+fn a_placed_text_takes_the_target_projects_font() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+    use signex_types::schematic::SchematicSheet;
+    let dir = std::env::temp_dir().join(format!("signex-2178-{}", uuid::Uuid::now_v7()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
+    let root = dir.join("root.snxsch");
+    open_with(&mut app.document_state, &root, SchematicSheet::default());
+    app.document_state.active_path = Some(root.clone());
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(crate::app::Message::Project(crate::app::ProjectMsg::Tab(
+        crate::app::ProjectTabMsg::SchematicDefaultFontEdited {
+            project_id,
+            text: "Roboto".into(),
+        },
+    )));
+    assert_eq!(
+        app.document_state.placed_font_family().as_deref(),
+        Some("Roboto")
+    );
+    app.document_state.projects[0]
+        .data
+        .schematic_defaults
+        .text_size_pt = Some(20.0);
+    let project_text_mm = app
+        .document_state
+        .active_schematic_defaults()
+        .placed_text_mm();
+    // The person works on a loose sheet outside the project.
+    let loose =
+        std::env::temp_dir().join(format!("signex-2178-loose-{}.snxsch", uuid::Uuid::now_v7()));
+    open_with(&mut app.document_state, &loose, SchematicSheet::default());
+    app.document_state.active_path = Some(loose);
+    assert_eq!(app.document_state.placed_font_family(), None);
+    let loose_text_mm = app
+        .document_state
+        .active_schematic_defaults()
+        .placed_text_mm();
+    assert_ne!(loose_text_mm, project_text_mm);
+    let revision = app.document_state.engines[&root].revision();
+    let outcome = run(
+        &mut app,
+        "apply_edits",
+        &[
+            format!("document={}", root.display()),
+            format!("expect_revision={revision}"),
+            format!(
+                "edits={}",
+                json!([{"id": "place_text", "args": {"at": [12.7, 12.7], "text": "T"}}])
+            ),
+        ],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    let doc = app.document_state.engines[&root].document();
+    assert_eq!(doc.text_notes[0].font_family.as_deref(), Some("Roboto"));
+    assert_eq!(doc.text_notes[0].font_size, project_text_mm);
+}
+
+/// The person's Undo of an agent step of mixed kinds repaints every kind.
+#[test]
+fn undo_of_a_mixed_agent_step_repaints_every_kind() {
+    let mut app = app_idle();
+    app.refresh_panel_ctx();
+    applied(
+        &mut app,
+        "b.snxsch",
+        json!([
+            {"id": "place_junction", "args": {"at": [20, 20]}},
+            {"id": "place_net_label", "args": {"at": [24, 24], "text": "AGENT"}},
+        ]),
+    );
+    let shown = |app: &Signex| {
+        let snap = app
+            .interaction_state
+            .canvas
+            .render_cache
+            .as_ref()
+            .unwrap()
+            .snapshot();
+        (snap.junctions.len(), snap.labels.len())
+    };
+    let doc = |app: &Signex| {
+        let d = app.document_state.engines[&path("b.snxsch")].document();
+        (d.junctions.len(), d.labels.len())
+    };
+    assert_eq!(shown(&app), doc(&app));
+    assert!(app.apply_engine_undo(true));
+    assert_eq!(
+        shown(&app),
+        doc(&app),
+        "the canvas shows what the sheet holds"
+    );
+}
+
+/// Engine notices of edits that are rolled back never reach Messages; the
+/// refusal does.
+#[test]
+fn a_rolled_back_list_reports_only_its_refusal() {
+    let mut app = app_idle();
+    let mark = crate::diagnostics::newest_entry_id();
+    let reason = refusal(apply(
+        &mut app,
+        "b.snxsch",
+        json!([
+            {"id": "place_junction", "args": {"at": [20, 20]}},
+            {"id": "place_wire", "args": {"start": [5, 5], "end": [5, 5]}},
+        ]),
+    ));
+    assert!(reason.contains("Nothing was applied"), "{reason}");
+    let said: Vec<String> = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|entry| entry.message)
+        .collect();
+    assert!(
+        // The label this list would have had; the log is shared with the
+        // tests running beside this one.
+        said.iter()
+            .all(|m| !m.contains("Agent: place_junction, place_wire")),
+        "nothing says an edit was applied: {said:?}"
     );
 }

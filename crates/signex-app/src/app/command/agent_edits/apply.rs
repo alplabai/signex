@@ -187,6 +187,8 @@ fn run_all(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], label: 
             return refused(format!("{error}. Nothing was applied"));
         }
     };
+    // The notices the edits raised were held until now: they are real.
+    Signex::report_engine_warnings(engine);
     let revision = engine.revision();
     let count = edits.len();
     let answer = if committed.changed {

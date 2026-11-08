@@ -47,8 +47,13 @@ Two commands, both with capability `edit` in `signex-cli`:
   edit rolls the sheet, its history and its revisions back, so the dirty flag
   is what it was.
 - The answer is `{changed, revision, group, label, edits}`. `changed: false`
-  (an empty list, or edits that changed nothing) records no step and keeps the
-  person's redo; a refusal is `Disabled`, never a bare `Ran`.
+  comes only from an empty list: it records no step and keeps the person's
+  redo. An edit that changes nothing (a junction already there, a net already
+  that colour) is refused by its handler like any other, so it refuses the
+  whole list; a refusal is `Disabled`, never a bare `Ran`.
+- Engine notices an edit raises (`Engine::take_warnings`) are held while the
+  transaction is open and shown after the commit; a rollback drops them, so
+  Messages never reports a pin or a net of an edit that did not happen.
 - After the list: dirtiness is re-derived from history for that path, every
   slot that shows the sheet (the active canvas, undocked windows) is redrawn,
   and selected wires the list removed leave the selection. The person's
@@ -70,7 +75,10 @@ Two commands, both with capability `edit` in `signex-cli`:
     marker with no group, so it counts as a later step;
   - the person undid a step and can redo it: that redo would restore a
     snapshot that still holds the agent's edits;
-  - the person is drawing on the sheet;
+  - the person is in the middle of something on the sheet, in the main window
+    or an undocked one (`Signex::person_busy_on`): drawing (any slot showing
+    the sheet has a drawing mode, wire preview, arc, polyline or shape
+    anchor), typing into an item of the sheet, or a move armed (`move_pick`);
   - the group is not one an agent made in this session.
   A reverted step does not land on the redo stack.
 - The headless `undo document=..` of #2172 still exists; on an agent's step it
@@ -90,5 +98,8 @@ the answer in `data` and the sheet in `changed`.
   replace does) are not offered; a placement has no `document` operand yet.
 - `assign_net_class`, annotation and other project-wide data are not edits;
   that needs a decision on how project data joins a sheet's undo step.
+- A click-click move that is already floating is widget-local state the app
+  cannot see; `revert` cannot refuse for it. It ends when its selection is
+  edited (`float_is_stale`), as for any edit of those items.
 - A person's redo is ended by an agent edit, as by any edit.
 - The grid check on a placement point reads the person's snap settings.

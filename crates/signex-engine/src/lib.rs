@@ -354,11 +354,19 @@ impl Engine {
 
     /// The pins the last commands could not keep connected (drained).
     pub fn take_unkept_pins(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.unkept_pins)
     }
 
-    /// Drain the notices raised since the last call.
+    /// Drain the notices raised since the last call. While a transaction is
+    /// open they are held: they are shown after its commit, and dropped by its
+    /// rollback.
     pub fn take_warnings(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.warnings)
     }
 

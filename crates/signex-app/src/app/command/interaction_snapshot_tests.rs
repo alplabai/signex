@@ -20,7 +20,9 @@ pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
         "active_path={:?}\nactive_tab={}\nactive_project={:?}\ntabs={tabs:?}\nfocused_window={:?}\n\
          tool={:?}\nselected={:?}\nmove_epoch={}\nediting_text={:?}\nwire_preview={:?}\n\
          drawing_mode={}\npalette={:?}\npending_net_color={:?}\nmove_pick={:?}\n\
-         wire_drawing={}\narc={:?}\npolyline={:?}\nshape_anchor={:?}",
+         wire_drawing={}\narc={:?}\npolyline={:?}\nshape_anchor={:?}\n\
+         pending_port={:?}\ndraw_mode={:?}\npre_placement={:?}\npanel_list_open={}\n\
+         dock_tab_drag={:?}\ndock_floating={}\ndock_drop_preview={:?}\ndock_menu_open={}",
         docs.active_path,
         docs.active_tab,
         docs.active_project,
@@ -38,5 +40,13 @@ pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
         app.interaction_state.arc_points,
         app.interaction_state.polyline_points,
         app.interaction_state.shape_anchor,
+        app.interaction_state.pending_port,
+        app.interaction_state.draw_mode,
+        docs.panel_ctx.pre_placement,
+        app.ui_state.panel_list_open,
+        docs.dock.tab_drag,
+        docs.dock.floating.len(),
+        docs.dock.drop_preview,
+        docs.dock.tab_menu.is_some(),
     )
 }

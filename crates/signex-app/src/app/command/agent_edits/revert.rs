@@ -61,9 +61,10 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
             group.get()
         ));
     }
-    // The wire a person is drawing is anchored to what is there now.
-    if app.is_drawing_on(&path) {
-        return refused("the person is drawing on this sheet; try again when the wire is done");
+    // What the person is drawing, typing into or moving is anchored to items
+    // of the sheet as it is now.
+    if let Some(reason) = app.person_busy_on(&path) {
+        return refused(reason);
     }
     let Some(engine) = app.document_state.engines.get_mut(&path) else {
         return refused(format!("{name} is not loaded"));

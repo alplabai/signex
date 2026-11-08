@@ -321,7 +321,7 @@ impl Signex {
 
     /// Whether the open inline text edit targets an object of the engine at
     /// `path`.
-    fn text_edit_targets_sheet_at(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn text_edit_targets_sheet_at(&self, path: &std::path::Path) -> bool {
         use signex_types::schematic::SelectedKind;
         let (Some(edit), Some(engine)) = (
             self.interaction_state.editing_text.as_ref(),

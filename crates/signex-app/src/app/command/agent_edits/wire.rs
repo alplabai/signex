@@ -29,7 +29,9 @@ pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
         Value::String(text) => Ok(text.clone()),
         Value::Bool(flag) => Ok(flag.to_string()),
         Value::Number(number) => Ok(number.to_string()),
-        Value::Array(items) if items.iter().all(Value::is_object) => Ok(value.to_string()),
+        Value::Array(items) if name == "edits" && items.iter().all(Value::is_object) => {
+            Ok(value.to_string())
+        }
         Value::Array(point) => match point.as_slice() {
             [Value::Number(x), Value::Number(y)] => Ok(format!("{x},{y}")),
             _ => Err(format!("operand `{name}` must be [x, y] when it is a list")),
@@ -172,6 +174,19 @@ mod tests {
         assert_eq!(edits[0].operands, [("at".into(), "5.08,0".into())]);
         assert_eq!(edits[2].operands, []);
         assert_eq!(parse_edit_list(&edit_list_text(&edits)).unwrap(), edits);
+    }
+
+    /// The list-of-objects form belongs to `edits` alone: any other operand
+    /// keeps the old point rule, `[]` included.
+    #[test]
+    fn only_the_edits_operand_takes_a_list_of_objects() {
+        let list = json!([{"id": "place_junction"}]);
+        assert!(operand_text("edits", &list).is_ok());
+        assert_eq!(operand_text("edits", &json!([])).unwrap(), "[]");
+        for value in [json!([]), list] {
+            let error = operand_text("at", &value).unwrap_err();
+            assert_eq!(error, "operand `at` must be [x, y] when it is a list");
+        }
     }
 
     #[test]

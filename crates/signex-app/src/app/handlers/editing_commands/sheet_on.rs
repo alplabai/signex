@@ -134,4 +134,39 @@ impl Signex {
                 || !interaction.polyline_points.is_empty()
                 || interaction.shape_anchor.is_some())
     }
+
+    /// What the person is in the middle of on the sheet at `path`, in the main
+    /// window or an undocked one, that an agent's `revert` must not cut under:
+    /// drawing, typing into an item of the sheet, or a move armed (#2178).
+    pub(crate) fn person_busy_on(&self, path: &Path) -> Option<&'static str> {
+        let windows = &self.ui_state.windows;
+        let undocked = self.interaction_state.canvases.iter().filter(|(id, _)| {
+            matches!(
+                windows.get(id),
+                Some(crate::app::state::WindowKind::UndockedTab { path: shown, .. })
+                    if shown == path
+            )
+        });
+        let main_shows = self.document_state.active_path.as_deref() == Some(path);
+        let slots = undocked
+            .map(|(_, slot)| slot)
+            .chain(main_shows.then_some(&self.interaction_state.canvas));
+        let drawing = |slot: &crate::canvas::CanvasSlot| {
+            slot.drawing_mode
+                || !slot.wire_preview.is_empty()
+                || !slot.arc_points.is_empty()
+                || !slot.polyline_points.is_empty()
+                || slot.shape_anchor.is_some()
+        };
+        if self.is_drawing_on(path) || slots.into_iter().any(drawing) {
+            return Some("the person is drawing on this sheet; try again when the wire is done");
+        }
+        if self.text_edit_targets_sheet_at(path) {
+            return Some("the person is typing into an item of this sheet; try again when done");
+        }
+        if main_shows && self.ui_state.move_pick.is_some() {
+            return Some("the person has a move armed on this sheet; try again when it is done");
+        }
+        None
+    }
 }
