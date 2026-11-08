@@ -562,11 +562,11 @@ fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
 /// The Copy to Library footer is one right-aligned row: Cancel, then the
 /// one primary action (it was split, the primary at the far left), and the
 /// window leaves no empty band between the body and the footer, on Graphite
-/// (with its title bar) and on a legacy theme.
+/// (with its title bar), in both built-in Graphite themes.
 #[test]
 fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
     use signex_types::theme::ThemeId;
-    for theme_id in [ThemeId::GraphiteLight] {
+    for &theme_id in ThemeId::BUILTINS {
         let (mut app, _main) = test_app();
         app.ui_state.theme_id = theme_id;
         app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
