@@ -39,6 +39,7 @@ signex-net -> signex-types
 signex-output -> signex-bom
 signex-output -> signex-types
 signex-renderer -> signex-3d-model-importer
+signex-renderer -> pcb-geom
 signex-renderer -> signex-gfx
 signex-renderer -> signex-types
 signex-sketch -> signex-types
