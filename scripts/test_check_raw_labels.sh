@@ -121,6 +121,34 @@ mod tests { fn t() { column!["in a test module"]; } }'
 put "$t" crates/signex-app/src/y_tests.rs 'fn t() { column!["in a tests file"]; }'
 expect macro_elements_that_are_not_bare_literals pass "$t"
 
+t="$(new_tree test_mod_declaration_does_not_stop_the_scan)"
+put "$t" crates/signex-app/src/x.rs 'mod a;
+#[cfg(test)]
+mod a_tests;
+fn v() { column!["LEAK"]; }'
+expect test_mod_declaration_does_not_stop_the_scan fail "$t"
+
+t="$(new_tree url_in_string_is_not_a_comment)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column!["https://x.example"]; }'
+expect url_in_string_is_not_a_comment fail "$t"
+
+t="$(new_tree block_comment_before_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![/* c */ "X"]; }'
+expect block_comment_before_literal fail "$t"
+
+t="$(new_tree raw_string_element)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![r"X"]; }'
+expect raw_string_element fail "$t"
+
+t="$(new_tree hashed_raw_string_element)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { row![a(), r#"X "q" ]"#]; }'
+expect hashed_raw_string_element fail "$t"
+
+t="$(new_tree comments_and_raw_strings_that_are_not_elements 0)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![/* "X" */ a(), // "Y"
+b(r"x").y(), c(r#"]"#)]; }'
+expect comments_and_raw_strings_that_are_not_elements pass "$t"
+
 # --generate rewrites the baseline so a grown tree passes again.
 t="$(new_tree generate_relocks)"
 put "$t" crates/signex-app/src/x.rs 'fn v() { text(raw("a")); }'
