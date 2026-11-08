@@ -58,6 +58,12 @@ impl PcbSelectionState {
         std::mem::take(&mut self.report)
     }
 
+    /// Build the index now, if this revision has none, so what it refuses
+    /// reaches [`Self::take_report`] without a probe having to ask first.
+    pub fn build_index(&mut self, board: &PcbBoard) {
+        self.ensure_index(board);
+    }
+
     /// Esc: drop selection and hover. Whether either held anything.
     pub fn clear(&mut self) -> bool {
         let cleared = self.selection.clear();
@@ -300,6 +306,18 @@ mod tests {
         state.sync(None, 2);
         state.hover_at(&broken, Point::new(1.0, 1.0), 0.1);
         assert_eq!(state.take_report().len(), 1);
+    }
+
+    #[test]
+    fn building_the_index_reports_a_refused_item_with_no_probe() {
+        let mut broken = board();
+        broken.vias[0].position = Point::new(f64::NAN, 0.0);
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        state.build_index(&broken);
+        state.build_index(&broken);
+        assert_eq!(state.take_report().len(), 1);
+        assert_eq!(state.index_builds(), 1);
     }
 
     #[test]

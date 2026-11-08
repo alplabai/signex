@@ -1,7 +1,7 @@
 //! The ratsnest: the shortest unrouted connections that would join a
 //! net's pads (#2192).
 //!
-//! Copper that already touches (a track end on a pad, a via on a track)
+//! Copper that already touches (a track across a pad, a via on a track)
 //! forms an island. Per net, the islands that hold pads are joined by a
 //! minimum spanning forest. The answer is a pure function of the board and
 //! is the same on every run: integer nm throughout, sorted output.
@@ -12,10 +12,10 @@ use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard, ViaType};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
-use crate::index::{BoardIndex, ItemRef, track_shape, via_shape};
+use crate::index::{BoardIndex, ItemRef, RectSelect, track_shape, via_shape};
 use crate::mst::{Edge, euclidean_mst, spanning_forest};
 use crate::shape::Shape;
-use crate::transform::{Side, pad_world_center};
+use crate::transform::{Side, pad_shape, pad_world_center};
 use crate::union_find::UnionFind;
 use crate::units::PointNm;
 
@@ -39,8 +39,8 @@ struct Node {
     net: u32,
     /// Bit `n` set: the copper layer with [`layer_bit`] `n`.
     layers: u32,
-    /// Points that join other copper, each with a reach in nm.
-    probes: Vec<(PointNm, i64)>,
+    /// The item's copper; it joins any same-net copper it overlaps.
+    shape: Shape,
     /// Set for a pad: its centre, where a ratsnest line ends.
     pad_center: Option<PointNm>,
 }
@@ -58,12 +58,14 @@ pub fn ratsnest(board: &PcbBoard) -> Vec<RatLine> {
         nodes.iter().enumerate().map(|(i, n)| (n.item, i)).collect();
     let mut islands = UnionFind::new(nodes.len());
     for (i, node) in nodes.iter().enumerate() {
-        for &(p, reach) in &node.probes {
-            for hit in index.hit_point(p, reach) {
-                let Some(&j) = slot.get(&hit) else { continue };
-                if nodes[j].net == node.net && nodes[j].layers & node.layers != 0 {
-                    islands.union(i, j);
-                }
+        for hit in index.hit_rect(&node.shape.aabb(), RectSelect::Touching) {
+            let Some(&j) = slot.get(&hit) else { continue };
+            let other = &nodes[j];
+            if other.net == node.net
+                && other.layers & node.layers != 0
+                && node.shape.overlaps(&other.shape)
+            {
+                islands.union(i, j);
             }
         }
     }
@@ -158,7 +160,9 @@ fn collect_nodes(board: &PcbBoard) -> Vec<Node> {
             let Some(net) = pad.net.as_ref().map(|n| n.number).filter(|&n| n != 0) else {
                 continue;
             };
-            let Ok(center) = pad_world_center(footprint, pad) else {
+            let (Ok(center), Ok(shape)) =
+                (pad_world_center(footprint, pad), pad_shape(footprint, pad))
+            else {
                 continue;
             };
             nodes.push(Node {
@@ -168,7 +172,7 @@ fn collect_nodes(board: &PcbBoard) -> Vec<Node> {
                 },
                 net,
                 layers: pad_layers(footprint, pad),
-                probes: vec![(center, 0)],
+                shape,
                 pad_center: Some(center),
             });
         }
@@ -178,12 +182,12 @@ fn collect_nodes(board: &PcbBoard) -> Vec<Node> {
         if segment.net == 0 || layers == 0 {
             continue;
         }
-        if let Ok(Shape::Capsule { a, b, radius }) = track_shape(segment) {
+        if let Ok(shape) = track_shape(segment) {
             nodes.push(Node {
                 item: ItemRef::Track(segment.uuid),
                 net: segment.net,
                 layers,
-                probes: vec![(a, radius), (b, radius)],
+                shape,
                 pad_center: None,
             });
         }
@@ -196,12 +200,12 @@ fn collect_nodes(board: &PcbBoard) -> Vec<Node> {
             ViaType::Through => u32::MAX,
             ViaType::Blind | ViaType::Micro => span_mask(via.layers.iter().map(String::as_str)),
         };
-        if let (Ok(Shape::Disc { center, .. }), true) = (via_shape(via), layers != 0) {
+        if let (Ok(shape), true) = (via_shape(via), layers != 0) {
             nodes.push(Node {
                 item: ItemRef::Via(via.uuid),
                 net: via.net,
                 layers,
-                probes: vec![(center, 0)],
+                shape,
                 pad_center: None,
             });
         }

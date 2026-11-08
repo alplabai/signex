@@ -13,18 +13,27 @@ crate would be the "kept in step" pair ADR-0005 bans.
 
 ## Rules
 
-- Copper joins when a track end (within the track's half width), a via
-  centre or a pad centre lies on other copper of the same net, on a shared
-  copper layer. Through-hole pads and through vias reach every layer;
-  blind and micro vias the layers between the ones they name.
+- Copper joins when its shape overlaps (touching counts) other copper of
+  the same net, on a shared copper layer. Pads, tracks and vias all join
+  by shape: a track across a pad joins it, and two overlapping pads join,
+  with no end or centre inside the other. A pad is its real outline
+  as `pad_shape` gives it (round-rect, trapezoid and custom pads are their
+  bounding rectangle); an oval
+  ellipse is read as a 32-point polygon, so it is under-read by its
+  sagitta (about 0.5% of the radius). Through-hole pads and through vias
+  reach every layer; blind and micro vias the layers between the ones they
+  name.
 - Per net, each connected group of copper holding a pad is an island. Up to
   about 4 million pad pairs across the islands (counted in pairs, so a big
   mostly-routed net with a stray pad stays exact) the islands join at their
   closest pads (Kruskal, `spanning_forest`); beyond that each island is one
   representative pad and the join is `euclidean_mst`.
 - Net 0 is no net. Pads with no net are ignored.
-- Not modelled yet: zone fills (a pad inside a same-net pour still gets a
-  line) and two tracks that cross without an end on the other.
+- Not modelled: zone fills (a pad inside a same-net pour still gets a
+  line); drill holes (a through-hole pad is solid copper, so a track
+  through its hole counts as touching); and the clearance a track needs
+  to a pad of another net (that is DRC). Two tracks that cross, or a track
+  that crosses a via, do join: they are copper overlapping copper.
 
 ## Cost
 

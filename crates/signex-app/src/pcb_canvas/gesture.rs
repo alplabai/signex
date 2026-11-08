@@ -10,7 +10,7 @@ use pcb_geom::ClickMode;
 use signex_types::pcb::Point;
 
 use super::{PcbCanvas, PcbCanvasMsg};
-use crate::app::Message;
+use crate::app::{ContextMenuMsg, Message};
 
 /// A press that moves farther than this (px) is a box, not a click.
 const DRAG_THRESHOLD_PX: f32 = 4.0;
@@ -45,7 +45,13 @@ impl Gesture {
                 self.drop_press(canvas);
                 let pos = cursor.position_in(bounds)?;
                 self.press = Some(pos);
-                Some(canvas::Action::capture())
+                // The canvas captures the press, so the app-wide listener
+                // never sees it: close an open context menu here, whether
+                // or not the press later ends in a release.
+                Some(
+                    canvas::Action::publish(Message::ContextMenu(ContextMenuMsg::Close))
+                        .and_capture(),
+                )
             }
             Event::Mouse(mouse::Event::CursorLeft) => {
                 self.press?;

@@ -236,7 +236,7 @@ fn nets_are_independent_and_sorted_by_net() {
         "TopCopper",
         vec![
             pad(1, 0.0, 0.0, 2, "TopCopper"),
-            pad(2, 1.0, 0.0, 2, "TopCopper"),
+            pad(2, 3.0, 0.0, 2, "TopCopper"),
             pad(3, 0.0, 9.0, 1, "TopCopper"),
             pad(4, 4.0, 9.0, 1, "TopCopper"),
         ],
@@ -251,7 +251,13 @@ fn the_result_does_not_depend_on_item_order() {
     let pads: Vec<Pad> = (0..12)
         .map(|i| {
             let n = i as f64;
-            pad(i + 1, (n * 7.0) % 13.0, (n * 5.0) % 11.0, 1, "TopCopper")
+            pad(
+                i + 1,
+                (n * 7.0) % 13.0 * 3.0,
+                (n * 5.0) % 11.0 * 3.0,
+                1,
+                "TopCopper",
+            )
         })
         .collect();
     let mut reversed = pads.clone();
@@ -329,4 +335,91 @@ fn past_the_pair_limit_islands_fall_back_to_one_pad_each() {
     let groups = [island(0), island(10_000)];
     assert!(cross_island_pairs(&groups) > EXACT_PAIR_LIMIT);
     assert_eq!(join_islands(&groups).len(), 1);
+}
+
+#[test]
+fn a_track_crossing_a_pad_joins_it_without_an_end_or_the_centre_on_it() {
+    // The track runs along y = 0 past the pad at (5, 0.3): its copper
+    // (y -0.2..0.8) is crossed, its centre is 0.3 mm from the track.
+    let fp = footprint(
+        1,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 5.0, 0.3, 1, "TopCopper"),
+            pad(3, 12.0, 0.0, 1, "TopCopper"),
+        ],
+    );
+    let wire = track(1, (0.0, 0.0), (8.0, 0.0), 1, "TopCopper");
+    let lines = ratsnest(&board(vec![fp], vec![wire], vec![]));
+    // Pads 1 and 2 are one island; only the gap to pad 3 is left.
+    assert_eq!(
+        lines,
+        vec![line(1, PointNm::new(5 * MM, 300_000), at(12, 0))]
+    );
+}
+
+#[test]
+fn a_track_passing_beside_a_pad_does_not_join_it() {
+    let fp = footprint(
+        1,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 5.0, 1.0, 1, "TopCopper"),
+        ],
+    );
+    // Pad 2 spans y 0.5..1.5; the track (half width 0.125) tops out at 0.125.
+    let wire = track(1, (0.0, 0.0), (8.0, 0.0), 1, "TopCopper");
+    assert_eq!(ratsnest(&board(vec![fp], vec![wire], vec![])).len(), 1);
+}
+
+#[test]
+fn overlapping_same_net_pads_join_without_a_centre_inside_the_other() {
+    let fp = footprint(
+        1,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 0.8, 0.0, 1, "TopCopper"),
+        ],
+    );
+    assert!(ratsnest(&board(vec![fp], vec![], vec![])).is_empty());
+}
+
+#[test]
+fn overlapping_pads_of_another_net_or_layer_stay_apart() {
+    let other_net = footprint(
+        1,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 0.8, 0.0, 2, "TopCopper"),
+            pad(3, 5.0, 0.0, 2, "TopCopper"),
+        ],
+    );
+    assert_eq!(ratsnest(&board(vec![other_net], vec![], vec![])).len(), 1);
+    let other_layer = footprint(
+        2,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 0.8, 0.0, 1, "BottomCopper"),
+        ],
+    );
+    assert_eq!(ratsnest(&board(vec![other_layer], vec![], vec![])).len(), 1);
+}
+
+#[test]
+fn pads_that_stop_short_of_touching_stay_apart() {
+    // 1 mm squares 1.2 mm apart leave a 0.2 mm gap.
+    let fp = footprint(
+        1,
+        "TopCopper",
+        vec![
+            pad(1, 0.0, 0.0, 1, "TopCopper"),
+            pad(2, 1.2, 0.0, 1, "TopCopper"),
+        ],
+    );
+    assert_eq!(ratsnest(&board(vec![fp], vec![], vec![])).len(), 1);
 }

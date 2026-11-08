@@ -35,6 +35,7 @@ impl Rig {
         let action = canvas::Program::update(&self.canvas, &mut self.state, &event, BOUNDS, cursor);
         match action?.into_inner().0? {
             Message::PcbCanvas(msg) => Some(msg),
+            Message::ContextMenu(ContextMenuMsg::Close) => None,
             other => panic!("unexpected message {other:?}"),
         }
     }
@@ -221,4 +222,22 @@ fn leaving_the_window_or_a_new_press_drops_a_stale_press() {
     assert!(rig.canvas.marquee.get().is_none());
     let msg = rig.release(30.0, 30.0).expect("a click");
     assert!(matches!(msg, PcbCanvasMsg::Clicked { .. }));
+}
+
+#[test]
+fn a_press_closes_an_open_context_menu_even_if_it_never_releases() {
+    let mut rig = rig();
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let action =
+        canvas::Program::update(&rig.canvas, &mut rig.state, &press, BOUNDS, at(10.0, 10.0))
+            .expect("a press inside the canvas is handled");
+    assert!(matches!(
+        action.into_inner().0,
+        Some(Message::ContextMenu(ContextMenuMsg::Close))
+    ));
+    // The press ends by leaving the window: nothing else is published.
+    assert!(
+        rig.send(Event::Mouse(mouse::Event::CursorLeft), at(10.0, 10.0))
+            .is_none()
+    );
 }

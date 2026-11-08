@@ -72,6 +72,9 @@ impl Signex {
         if self.active_pcb().is_none() {
             self.interaction_state.pcb_selection.sync(None, 0);
         }
+        // Build the index now: a refused pad is reported to the Messages
+        // panel once per board revision, not only when the pointer moves.
+        self.with_pcb_selection(|sel, board| sel.build_index(board));
         self.refresh_pcb_highlight();
     }
 

@@ -17,6 +17,7 @@ mod ratsnest;
 mod rect;
 mod selection;
 mod shape;
+mod shape_overlap;
 mod transform;
 mod union_find;
 mod units;
