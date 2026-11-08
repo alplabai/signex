@@ -357,6 +357,19 @@ impl Signex {
                             .panel_ctx
                             .selection_info
                             .push(("Library Older Version".into(), older.to_string()));
+                        // "Only this one" has nothing to do for an instance
+                        // that already draws with the current version.
+                        let this_current = doc
+                            .symbols
+                            .iter()
+                            .find(|s| s.uuid == details.selected_uuid)
+                            .is_some_and(|s| !drift.is_stale_body(&path, s.body_key()));
+                        if this_current {
+                            self.document_state
+                                .panel_ctx
+                                .selection_info
+                                .push(("Library This One Current".into(), "Yes".into()));
+                        }
                     }
                 }
                 if drift.is_missing(&path, &lib_id) {

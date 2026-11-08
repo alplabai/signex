@@ -45,6 +45,9 @@ macro_rules! define_ids {
 define_ids! {
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
+    PROPERTIES_LIBRARY_OLDER_INSTANCES = "properties-library-older-instances";
+    PROPERTIES_LIBRARY_ONLY_THIS_ONE = "properties-library-only-this-one";
+    PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP = "properties-library-only-this-one-tip";
 }
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,

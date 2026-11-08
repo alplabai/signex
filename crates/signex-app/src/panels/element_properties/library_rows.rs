@@ -94,6 +94,9 @@ pub(super) struct LibraryStatus {
     /// Placed instances of the part on the sheet that draw with an older
     /// version of the library symbol (0: unknown or none).
     pub(super) older_instances: usize,
+    /// The selected instance already draws with the current version, so
+    /// "Only this one" has nothing to do for it.
+    pub(super) this_one_current: bool,
     pub(super) missing: bool,
 }
 
@@ -106,10 +109,12 @@ pub(super) fn push_library_rows<'a>(
     id: uuid::Uuid,
     library_name: &str,
     status: LibraryStatus,
+    i18n: &signex_i18n::I18n,
     muted: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Column<Element<'a, PanelMsg>> {
+    use signex_i18n::{ids, t};
     if !library_name.is_empty() {
         c = c.push(form_input_row(
             "Library",
@@ -122,6 +127,7 @@ pub(super) fn push_library_rows<'a>(
     let LibraryStatus {
         drifted,
         older_instances,
+        this_one_current,
         missing,
     } = status;
     if missing {
@@ -141,41 +147,44 @@ pub(super) fn push_library_rows<'a>(
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
         let only_this = signex_widgets::button(
-            signex_widgets::text(signex_widgets::raw("Only this one")).size(TS.body),
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE)).size(TS.body),
         )
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibraryOnly(id));
         let note = match older_instances {
-            0 => "Library: out of date".to_string(),
-            1 => "Library: 1 instance uses an older version".to_string(),
-            n => format!("Library: {n} instances use an older version"),
+            0 => signex_widgets::text(signex_widgets::raw("Library: out of date")),
+            n => signex_widgets::text(
+                t!(i18n, ids::PROPERTIES_LIBRARY_OLDER_INSTANCES, "count" => n),
+            ),
         };
-        c = c.push(
-            iced::widget::row![
-                signex_widgets::text(signex_widgets::raw(note))
-                    .size(TS.body)
-                    .color(muted),
-                signex_widgets::tooltip(
-                    update,
-                    signex_widgets::text(signex_widgets::raw(
-                        "Updates every instance of this part on the sheet"
-                    ))
-                    .size(TS.body),
-                    iced::widget::tooltip::Position::Bottom,
-                ),
+        let mut actions = iced::widget::row![
+            note.size(TS.body).color(muted),
+            signex_widgets::tooltip(
+                update,
+                signex_widgets::text(signex_widgets::raw(
+                    "Updates every instance of this part on the sheet"
+                ))
+                .size(TS.body),
+                iced::widget::tooltip::Position::Bottom,
+            ),
+        ];
+        if !this_one_current {
+            actions = actions.push(
                 signex_widgets::tooltip(
                     only_this,
-                    signex_widgets::text(signex_widgets::raw(
-                        "Updates only this part; the others keep their version"
-                    ))
-                    .size(TS.body),
+                    signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP))
+                        .size(TS.body),
                     iced::widget::tooltip::Position::Bottom,
-                ),
-            ]
-            .spacing(SP.m)
-            .padding([SP.xs, SP.m])
-            .align_y(iced::Alignment::Center)
-            .boxed(),
+                )
+                .boxed(),
+            );
+        }
+        c = c.push(
+            actions
+                .spacing(SP.m)
+                .padding([SP.xs, SP.m])
+                .align_y(iced::Alignment::Center)
+                .boxed(),
         );
     }
     c

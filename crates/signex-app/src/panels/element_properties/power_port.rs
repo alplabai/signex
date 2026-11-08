@@ -34,6 +34,7 @@ pub(super) fn push_power_port_sections<'a>(
     let library_status = LibraryStatus {
         drifted: library_drifted,
         older_instances: get("Library Older Version").parse().unwrap_or(0),
+        this_one_current: get("Library This One Current") == "Yes",
         missing: get("Library Status") == "Symbol missing",
     };
     let rotation_deg = rotation_degrees(&rotation_str);
@@ -129,6 +130,7 @@ pub(super) fn push_power_port_sections<'a>(
                     id,
                     &library_name,
                     library_status,
+                    &ctx.i18n,
                     muted,
                     input_bg,
                     input_bdr,

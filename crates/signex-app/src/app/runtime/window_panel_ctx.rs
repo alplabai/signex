@@ -18,6 +18,7 @@ impl PanelContext {
         self.canvas_colors = main.canvas_colors;
         self.device_px_per_logical_px = main.device_px_per_logical_px;
         self.theme_id = main.theme_id;
+        self.i18n = std::sync::Arc::clone(&main.i18n);
         self.unit = main.unit;
         self.grid_visible = main.grid_visible;
         self.snap_enabled = main.snap_enabled;
