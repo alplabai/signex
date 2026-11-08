@@ -52,7 +52,7 @@ pub(super) fn push_body_row<'a>(
     c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     state: &str,
-    muted: Color,
+    muted: impl Into<LabelInk>,
     input_bg: Color,
     input_bdr: Color,
 ) -> Column<Element<'a, PanelMsg>> {

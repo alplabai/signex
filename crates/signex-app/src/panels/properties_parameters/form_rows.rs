@@ -63,7 +63,7 @@ pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> El
 pub fn form_input_row<'a, M: 'a>(
     label: &str,
     value: &str,
-    label_c: Color,
+    label_c: impl Into<LabelInk>,
     input_bg: Color,
     input_border: Color,
 ) -> Element<'a, M> {
@@ -186,7 +186,7 @@ pub fn form_pick_row<'a, T>(
     options: Vec<T>,
     selected: T,
     on_change: impl Fn(T) -> PanelMsg + 'a,
-    label_c: Color,
+    label_c: impl Into<LabelInk>,
 ) -> Element<'a, PanelMsg>
 where
     T: Clone + Eq + std::fmt::Display + 'static,
@@ -215,12 +215,13 @@ pub fn form_check_row<'a>(
     label: &str,
     checked: bool,
     msg: PanelMsg,
-    label_c: Color,
+    label_c: impl Into<LabelInk>,
     surface: Color,
 ) -> Element<'a, PanelMsg> {
+    let ink: LabelInk = label_c.into();
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label.to_string(), ink),
             row![
                 iced::widget::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
@@ -229,7 +230,7 @@ pub fn form_check_row<'a>(
                     .style(form_look::checkbox_style),
                 text(if checked { "On" } else { "Off" })
                     .size(TS.body)
-                    .color(check_state_color(checked, label_c, surface)),
+                    .color(check_state_color(checked, ink.color, surface)),
             ]
             .spacing(SP.m)
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
@@ -503,7 +504,7 @@ pub fn canvas_font_popup<'a>(
 pub fn form_edit_row<'a>(
     label: &str,
     value: &str,
-    label_c: Color,
+    label_c: impl Into<LabelInk>,
     on_input: impl Fn(String) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
     container(

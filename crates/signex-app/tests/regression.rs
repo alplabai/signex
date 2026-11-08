@@ -420,6 +420,9 @@ mod numeric_drafts;
 mod paste_on_cursor;
 #[path = "regression/placement_session.rs"]
 mod placement_session;
+// #114 — the Properties FOOTPRINT card of a placed part.
+#[path = "regression/properties_footprint_card.rs"]
+mod properties_footprint_card;
 #[path = "regression/reprefix_standard.rs"]
 mod reprefix_standard;
 

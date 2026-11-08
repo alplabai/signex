@@ -4,6 +4,7 @@ mod body_style_info;
 mod designators;
 #[cfg(test)]
 pub(crate) mod designators_tests;
+mod footprint_card;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
@@ -99,6 +100,7 @@ impl Signex {
         self.sync_component_tab_titles();
         let class_styles = self.refresh_net_class_styles();
         let net_nav = self.refresh_net_nav();
+        let footprint_card = self.refresh_footprint_card();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
         self.sync_window_panel_ctx_shared();
@@ -139,6 +141,7 @@ impl Signex {
             library_tabs,
             class_styles,
             net_nav,
+            footprint_card,
         ])
     }
 
@@ -264,6 +267,7 @@ impl Signex {
         self.document_state.panel_ctx.selection_info.clear();
         self.document_state.panel_ctx.symbol_choices.clear();
         self.document_state.panel_ctx.footprint_choices.clear();
+        self.document_state.panel_ctx.footprint_card = None;
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
@@ -425,6 +429,7 @@ impl Signex {
                     .cloned();
             }
         }
+        self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
     }
 
     /// Canvas colours for a given theme id — the one derivation shared by

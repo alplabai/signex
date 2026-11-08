@@ -556,6 +556,13 @@ pub enum LibraryMessage {
         generation: u64,
         result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
     },
+    /// The off-thread read of the selected placed part's footprint for its
+    /// Properties FOOTPRINT card finished. A read for a key nothing waits
+    /// for any more is dropped.
+    PropertiesFootprintCardLoaded {
+        key: crate::panels::FootprintCardKey,
+        result: Result<std::sync::Arc<crate::panels::FootprintCardFacts>, String>,
+    },
     /// A footprint was picked in the details view of the selected row
     /// (#1234): the details preview shows it and Place builds the part with it.
     ComponentsPanelFootprintPicked(signex_library::primitive::PrimitiveRef),
