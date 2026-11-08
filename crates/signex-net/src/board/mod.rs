@@ -18,8 +18,8 @@ pub use key::{PadLinkKey, ReferencePad, ReferencePadKey};
 
 use std::collections::{HashMap, HashSet};
 
-use signex_types::net::{NetId, Netlist, Terminal};
 use numbering::{PadRef, number_nets};
+use signex_types::net::{NetId, Netlist, Terminal};
 use signex_types::pcb::{PadNet, PcbBoard};
 use uuid::Uuid;
 

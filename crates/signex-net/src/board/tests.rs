@@ -242,7 +242,11 @@ fn the_inverse_edit_restores_the_board() {
     let inverse = assign_pad_nets(&netlist, &pcb, &ReferencePadKey)
         .edit
         .apply(&mut pcb);
-    assert_eq!(pad_net(&pcb, "R3", "1"), Some(&old), "R3 is not in the schematic");
+    assert_eq!(
+        pad_net(&pcb, "R3", "1"),
+        Some(&old),
+        "R3 is not in the schematic"
+    );
     assert!(pad_net(&pcb, "R1", "1").is_some());
 
     inverse.apply(&mut pcb);
@@ -498,7 +502,10 @@ fn copper_keeps_its_net_when_the_netlist_renumbers() {
 
     assert_eq!(pad_net(&pcb, "R1", "2"), Some(&mid), "number and name kept");
     assert_eq!(pad_net(&pcb, "R2", "1"), Some(&mid));
-    assert_eq!(copper, (pcb.segments.clone(), pcb.vias.clone(), pcb.zones.clone()));
+    assert_eq!(
+        copper,
+        (pcb.segments.clone(), pcb.vias.clone(), pcb.zones.clone())
+    );
     let rows = net_rows(&pcb);
     assert_eq!(rows.iter().filter(|(n, _)| *n == mid.number).count(), 1);
     assert!(rows.contains(&(mid.number, "N$2".to_string())));
@@ -577,10 +584,14 @@ fn a_keyless_pad_and_an_unknown_footprint_keep_their_nets_and_are_reported() {
     let h1 = pcb.footprints[2].uuid;
 
     let assignment = assign_pad_nets(&netlist, &pcb, &ReferencePadKey);
-    assert!(assignment.issues.contains(&PadNetIssue::PadWithoutTerminal {
-        footprint: hole.0,
-        pad: hole.1
-    }));
+    assert!(
+        assignment
+            .issues
+            .contains(&PadNetIssue::PadWithoutTerminal {
+                footprint: hole.0,
+                pad: hole.1
+            })
+    );
     assert!(
         assignment
             .issues
