@@ -217,7 +217,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
 /// `dismiss_layer`) was necessary but not sufficient: most overlays build
 /// neither. Preferences, for one, renders its body directly. So the
 /// guard is applied in `collect_overlays` instead, where every overlay
-/// passes through exactly once no matter how its builder is written.
+/// passes through exactly once no matter how its builder is written, except
+/// the ids that guard their own hit areas (see the arm below).
 ///
 /// Exhaustive on purpose: a new overlay has to say whether the wheel
 /// stops at it.

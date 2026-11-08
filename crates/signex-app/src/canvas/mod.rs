@@ -32,6 +32,7 @@ mod special_strings;
 mod surface;
 #[cfg(test)]
 mod tool_click_tests;
+mod wheel;
 pub mod zoom_pill;
 
 use gpu_mount::ContentMode;
@@ -45,6 +46,7 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::{Camera, ScrollIntent};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
+pub use wheel::{WheelKeys, WheelMode, wheel_intent};
 mod move_connections;
 pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
 pub use move_pick::MovePick;
@@ -567,6 +569,8 @@ pub struct CanvasViewPrefs<'a> {
     pub zoom_step: f32,
     /// "Two-finger scroll pans": a pixel-delta scroll pans instead of zooming.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel": zoom (default) or scroll the view.
+    pub wheel_mode: WheelMode,
     /// Preview rubber-banded wires while a selection floats (mirrors the
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
@@ -993,6 +997,7 @@ mod tests {
             auto_focus: false,
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: WheelMode::Zoom,
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             current_tool: crate::app::Tool::Select,

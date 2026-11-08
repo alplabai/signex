@@ -17,6 +17,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const TRACKPAD_PAN_HELP: &str = "When on, a two-finger trackpad scroll pans the schematic, PCB, symbol and footprint canvases instead of zooming them. Pinching and Ctrl/Cmd + scroll still zoom, and a mouse wheel notch still zooms. Off by default.";
 
+const WHEEL_MODE_HELP: &str = "Zoom: the mouse wheel zooms the canvas. Scroll: the wheel and a two-finger scroll pan vertically, Shift + wheel pans horizontally, and Ctrl/Cmd + wheel or a pinch zooms. Default: Zoom.";
+
 const REMEMBER_GEOMETRY_HELP: &str = "When on, Signex reopens the main window at the size and position it had when you last closed it. Off by default.";
 
 pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
@@ -31,6 +33,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
         draft_trackpad_pan,
+        draft_wheel_mode,
         draft_remember_window_geometry,
         draft_ui_scale_percent,
         draft_window_controls_placement,
@@ -485,6 +488,28 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             iced::widget::checkbox(draft_trackpad_pan)
                 .size(TS.heading)
                 .on_toggle(PrefMsg::DraftTrackpadPan),
+        ]
+        .align_y(iced::Alignment::Center)
+        .boxed(),
+    );
+    col = col.push(Space::new().height(14).boxed());
+    col = col.push(
+        row![
+            column![
+                text("Mouse wheel").size(TS.label).style(text_primary),
+                text(WHEEL_MODE_HELP).size(TS.caption).style(text_muted),
+            ]
+            .spacing(3)
+            .width(320),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                Some(draft_wheel_mode),
+                crate::canvas::WheelMode::ALL,
+                |v: &crate::canvas::WheelMode| v.to_string(),
+            )
+            .on_select(PrefMsg::DraftWheelMode)
+            .text_size(12)
+            .width(120),
         ]
         .align_y(iced::Alignment::Center)
         .boxed(),

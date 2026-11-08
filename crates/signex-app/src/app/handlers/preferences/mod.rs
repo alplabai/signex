@@ -111,6 +111,7 @@ impl Signex {
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
         self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
+        self.ui_state.preferences_draft_wheel_mode = self.ui_state.wheel_mode;
         self.ui_state.preferences_draft_remember_window_geometry =
             self.ui_state.remember_window_geometry;
         self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
@@ -326,6 +327,7 @@ impl Signex {
                 self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
                 self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
                 self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;
+                self.ui_state.wheel_mode = self.ui_state.preferences_draft_wheel_mode;
                 self.ui_state.remember_window_geometry =
                     self.ui_state.preferences_draft_remember_window_geometry;
                 self.ui_state.drag_direction_select =
@@ -541,6 +543,10 @@ impl Signex {
             }
             PrefMsg::DraftTrackpadPan(enabled) => {
                 self.ui_state.preferences_draft_trackpad_pan = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftWheelMode(mode) => {
+                self.ui_state.preferences_draft_wheel_mode = mode;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftRememberWindowGeometry(enabled) => {

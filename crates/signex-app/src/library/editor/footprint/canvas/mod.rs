@@ -269,6 +269,8 @@ pub struct FootprintCanvas<'a> {
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference (pixel-delta scroll pans, not zooms).
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {

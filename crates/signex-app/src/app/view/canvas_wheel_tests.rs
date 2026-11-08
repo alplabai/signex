@@ -167,3 +167,86 @@ fn the_canvas_beside_the_bar_takes_the_wheel() {
     assert!(moved_view(&messages), "the bar's row took the wheel");
     assert!(camera(&app).2 > before.2);
 }
+
+fn scroll_mode_events(
+    app: &mut Signex,
+    main: iced::window::Id,
+    mods: Modifiers,
+    delta: ScrollDelta,
+) {
+    app.ui_state.wheel_mode = crate::canvas::WheelMode::Scroll;
+    let at = canvas_centre(app);
+    let messages = messages_for_events(
+        app.view(main),
+        WINDOW,
+        at,
+        &[
+            iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)),
+            wheel(delta),
+        ],
+    );
+    assert!(moved_view(&messages), "{delta:?} never reached the canvas");
+}
+
+/// "Mouse wheel: Scroll": a plain wheel notch pans vertically.
+#[test]
+fn in_scroll_mode_the_wheel_pans_vertically() {
+    let (mut app, main) = app();
+    let before = camera(&app);
+    scroll_mode_events(
+        &mut app,
+        main,
+        Modifiers::empty(),
+        ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    );
+    let after = camera(&app);
+    assert_eq!(after.2, before.2, "a pan keeps the zoom");
+    assert_eq!(after.0, before.0, "no sideways move");
+    assert_ne!(after.1, before.1, "no vertical pan");
+}
+
+/// A two-finger scroll pans in scroll mode without "Two-finger scroll pans".
+#[test]
+fn in_scroll_mode_a_two_finger_scroll_pans() {
+    let (mut app, main) = app();
+    assert!(!app.ui_state.trackpad_pan);
+    let before = camera(&app);
+    scroll_mode_events(
+        &mut app,
+        main,
+        Modifiers::empty(),
+        ScrollDelta::Pixels { x: 0.0, y: -30.0 },
+    );
+    let after = camera(&app);
+    assert_eq!(after.2, before.2);
+    assert_ne!(after.1, before.1);
+}
+
+#[test]
+fn in_scroll_mode_shift_wheel_pans_horizontally() {
+    let (mut app, main) = app();
+    let before = camera(&app);
+    scroll_mode_events(
+        &mut app,
+        main,
+        Modifiers::SHIFT,
+        ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    );
+    let after = camera(&app);
+    assert_eq!(after.2, before.2);
+    assert_ne!(after.0, before.0, "no sideways pan");
+    assert_eq!(after.1, before.1, "no vertical move");
+}
+
+#[test]
+fn in_scroll_mode_ctrl_wheel_zooms() {
+    let (mut app, main) = app();
+    let before = camera(&app);
+    scroll_mode_events(
+        &mut app,
+        main,
+        Modifiers::CTRL,
+        ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    );
+    assert!(camera(&app).2 > before.2);
+}

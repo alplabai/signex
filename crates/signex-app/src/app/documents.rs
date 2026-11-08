@@ -300,6 +300,8 @@ pub struct SymbolDocument {
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference, synced with `zoom_step`.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
     /// outside the canvas. Per-tab — tracking the cursor is
@@ -430,6 +432,7 @@ impl SymbolDocument {
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
             trackpad_pan: false,
+            wheel_mode: Default::default(),
             cursor_mm: None,
             pending_view: None,
             selection_filter: Default::default(),
@@ -532,6 +535,8 @@ pub struct FootprintDocument {
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference, synced with `zoom_step`.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
     dirty: bool,
@@ -678,6 +683,7 @@ impl FootprintDocument {
             canvas_cache: iced::widget::canvas::Cache::default(),
             zoom_step: default_zoom_step(),
             trackpad_pan: false,
+            wheel_mode: Default::default(),
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,

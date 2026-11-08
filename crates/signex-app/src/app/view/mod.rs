@@ -807,7 +807,9 @@ impl Signex {
             // builders wrap their card in neither `wrap_modal` nor
             // `dismiss_layer` (Preferences renders its body directly), so
             // a guard placed in those two helpers alone missed them.
-            // Every overlay passes through this loop exactly once.
+            // Every overlay passes through this loop exactly once, except the
+            // three Active Bar ids, which guard their own bar inside their
+            // builders (`swallows_scroll` is false for them).
             //
             // `mouse_area` captures the wheel only where the cursor is
             // over the wrapped element, and only wheel events — clicks
@@ -832,6 +834,8 @@ impl Signex {
 
 #[cfg(test)]
 mod canvas_wheel_tests;
+#[cfg(test)]
+mod editor_bar_wheel_tests;
 #[cfg(test)]
 mod overlay_paint_tests;
 
