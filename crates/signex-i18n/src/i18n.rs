@@ -68,12 +68,14 @@ impl I18n {
     /// [`Self::dropped_locale`] for the caller to report; `pref` stays as
     /// chosen, so saving Preferences does not erase it.
     pub fn new(pref: &LanguagePref) -> Self {
-        let dropped = match pref {
-            LanguagePref::Locale(tag) if !locale::is_available(tag) => Some(tag.clone()),
-            _ => None,
-        };
         let requested = locale::requested(pref);
         let tag = locale::negotiate(&requested);
+        let dropped = match pref {
+            LanguagePref::Locale(saved) if locale::is_dropped(&requested, tag) => {
+                Some(saved.clone())
+            }
+            _ => None,
+        };
         if let Some(first) = requested.first().filter(|l| l.to_string() != tag) {
             log::debug!("No {first} messages; using {tag}");
         }

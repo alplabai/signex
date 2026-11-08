@@ -19,8 +19,8 @@ pub(crate) fn log_dropped_language(i18n: &I18n) {
 impl Signex {
     /// Switch the language now and persist it. Menus read the new `I18n` from
     /// the next frame; the native menu rebuilds on its next sync because its
-    /// inputs hold the instance. The Preferences picker calls this; no
-    /// restart. A no-op when the language is already in force.
+    /// inputs hold the instance. The future Preferences picker will call
+    /// this; no restart. A no-op when the language is already in force.
     pub(crate) fn set_language(&mut self, pref: LanguagePref) -> Task<Message> {
         if pref == *self.ui_state.i18n.pref() {
             return Task::none();

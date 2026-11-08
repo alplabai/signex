@@ -59,7 +59,10 @@ pub(crate) fn requested(pref: &LanguagePref) -> Vec<LanguageIdentifier> {
     }
 }
 
-/// Whether `tag` is a locale this build has, spelled exactly as listed.
-pub(crate) fn is_available(tag: &str) -> bool {
-    AVAILABLE.contains(&tag)
+/// Whether a request fell back to `en-US` with no catalog in its language:
+/// `tr-TR` did, `en-GB` did not (it is English), and a tag that does not
+/// parse counts as lost. Decided from the negotiation result, so case and
+/// script variants of an available locale are not lost.
+pub(crate) fn is_dropped(requested: &[LanguageIdentifier], resolved: &str) -> bool {
+    resolved == EN_US && requested.first().is_none_or(|first| first.language != "en")
 }

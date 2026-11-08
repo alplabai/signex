@@ -41,6 +41,28 @@ fn an_unknown_saved_locale_keeps_its_pref_and_renders_in_en_us() {
 }
 
 #[test]
+fn a_case_or_script_variant_of_an_available_language_is_not_dropped() {
+    for tag in ["en-xa", "EN-xa", "en-Latn-XA"] {
+        let variant = i18n(tag);
+        assert_eq!(variant.dropped_locale(), None, "{tag}");
+        assert_eq!(variant.locale(), EN_XA, "{tag}");
+        assert_eq!(variant.pref(), &LanguagePref::Locale(tag.into()));
+    }
+}
+
+#[test]
+fn another_english_renders_en_us_and_is_not_reported_as_lost() {
+    let british = i18n("en-GB");
+    assert_eq!(british.locale(), EN_US);
+    assert_eq!(british.dropped_locale(), None);
+}
+
+#[test]
+fn an_unparseable_saved_tag_is_dropped() {
+    assert_eq!(i18n("not a tag").dropped_locale(), Some("not a tag"));
+}
+
+#[test]
 fn the_picker_shows_a_saved_tag_the_list_does_not_have() {
     let lost = i18n("tr-TR");
     let row = lost.option_for(&lost.pref().clone());
