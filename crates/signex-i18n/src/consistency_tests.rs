@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement, Resource};
 use fluent_syntax::parser;
 
-use crate::catalog::{AVAILABLE, EN_US};
+use crate::catalog::{AVAILABLE, EN_US, EN_US_SOURCES};
 use crate::ids;
+use crate::{I18n, LanguagePref};
 
 /// message id -> the variables its pattern (and its attributes) read.
 type Messages = BTreeMap<String, BTreeSet<String>>;
@@ -165,4 +166,43 @@ fn every_locale_on_disk_parses_and_its_variables_are_in_the_source() {
             );
         }
     }
+}
+
+#[test]
+fn every_id_renders_from_the_embedded_en_us_catalog() {
+    let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
+    for id in ids::ALL {
+        let text = i18n.message(*id, &[]).to_string();
+        assert_ne!(
+            text,
+            id.as_str(),
+            "{} is not in the embedded catalog",
+            id.as_str()
+        );
+    }
+    assert_eq!(i18n.emitted_for_test(), 0, "an id fell back or is missing");
+}
+
+#[test]
+fn every_en_us_file_on_disk_is_embedded() {
+    let dir = locales_dir().join(EN_US);
+    let mut on_disk = 0;
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|ext| ext != "ftl") {
+            continue;
+        }
+        on_disk += 1;
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            EN_US_SOURCES.contains(&text.as_str()),
+            "{} is not listed in EN_US_SOURCES",
+            path.display()
+        );
+    }
+    assert_eq!(
+        on_disk,
+        EN_US_SOURCES.len(),
+        "EN_US_SOURCES lists a file twice or one that is gone"
+    );
 }
