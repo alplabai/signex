@@ -368,11 +368,12 @@ fn quit_discard_all_drops_a_parked_board_and_its_recovery_copy() {
     assert!(sidecar_of(&f).exists());
     let _ = next.update(Message::Window(WindowMsg::CloseMainWindow));
     assert!(next.ui_state.app_quit_confirm.is_some());
-    send(
-        &mut next,
-        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::DiscardAll)),
-    );
+    let quit = next.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    let mut driver = signex_app::task_driver::TaskDriver::new();
+    driver.settle(&mut next, quit).expect("quit settled");
+    assert!(driver.has_exited(), "the quit went through");
     assert!(!sidecar_of(&f).exists(), "the discard removes the copy");
-    assert!(!is_dirty(&next, &f.doc));
     assert_eq!(std::fs::read(&f.doc).unwrap(), on_disk, "nothing written");
 }

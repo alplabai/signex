@@ -294,23 +294,7 @@ fn a_parked_board_is_kept_by_the_close_scan_and_prompts_at_quit() {
     app.document_state.tabs.clear();
     app.document_state.park_pcb_board(
         t.path.clone(),
-        signex_types::pcb::PcbBoard {
-            unknown: Default::default(),
-            uuid: uuid::Uuid::nil(),
-            version: 1,
-            generator: "signex-test".into(),
-            thickness: 1.6,
-            outline: vec![],
-            layers: vec![],
-            setup: None,
-            nets: vec![],
-            footprints: vec![],
-            segments: vec![],
-            vias: vec![],
-            zones: vec![],
-            graphics: vec![],
-            texts: vec![],
-        },
+        crate::app::handlers::document_files::save_async_tests::empty_board(),
     );
     let refs = app.document_state.sheet_ref_inputs().resolve(|_| true);
     let scan = app.document_state.close_scan(

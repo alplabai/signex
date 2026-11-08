@@ -537,7 +537,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
     assert_eq!(log.lines().count(), 3, "two revisions plus the restore");
 }
 
-pub(super) fn empty_board() -> signex_types::pcb::PcbBoard {
+pub(crate) fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
