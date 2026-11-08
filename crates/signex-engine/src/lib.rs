@@ -282,7 +282,8 @@ impl MovePreview {
         if engine.execute(command).is_err() {
             return (self.sheet.clone(), held);
         }
-        (engine.document().clone(), held)
+        // The engine is spent: hand its sheet over instead of copying it.
+        (std::mem::take(&mut engine.document), held)
     }
 }
 
