@@ -6,8 +6,9 @@
 //! library profile). It is generic over the message type, so each caller maps
 //! a click to its own message and none of them forks the layout (#1608).
 
-use iced::widget::{Column, Space, button, column, container, row, text};
+use iced::widget::{Column, Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 use signex_erc::{PinAxis, RuleKind, Severity};
 
@@ -53,11 +54,11 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
     // Per-rule severity grid: one row per built-in rule x 4 severities.
     let mut rule_rows: Column<Element<'static, M>> = column![
         row![
-            text("Rule")
+            text(raw("Rule"))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(3)),
-            text("Severity")
+            text(raw("Severity"))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
@@ -77,7 +78,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
         };
         rule_rows = rule_rows.push(
             row![
-                text(label)
+                text(raw(label))
                     .size(TS.body)
                     .color(text_c)
                     .width(Length::FillPortion(3)),
@@ -99,8 +100,8 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
         ..container::Style::default()
     };
     let rules_pane = column![
-        text("Severity per rule").size(TS.body).color(text_c),
-        text("Click a cell to change.")
+        text(raw("Severity per rule")).size(TS.body).color(text_c),
+        text(raw("Click a cell to change."))
             .size(TS.caption)
             .color(text_muted),
         Space::new().height(8),
@@ -113,8 +114,10 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
     .width(Length::FillPortion(3));
 
     let matrix_pane = column![
-        text("Pin Connection Matrix").size(TS.body).color(text_c),
-        text("Click a cell to cycle severity.")
+        text(raw("Pin Connection Matrix"))
+            .size(TS.body)
+            .color(text_c),
+        text(raw("Click a cell to cycle severity."))
             .size(TS.caption)
             .color(text_muted),
         Space::new().height(8),
@@ -151,20 +154,22 @@ fn severity_segmented<M: Clone + 'static>(
             Color::from_rgba(1.0, 1.0, 1.0, 0.03)
         };
         let fg = if selected { Color::WHITE } else { text_muted };
-        button(container(text(label.to_string()).size(TS.caption).color(fg)).padding([3.0, 8.0]))
-            .on_press_maybe(editable.then(|| on_severity(rule, value)))
-            .style(move |_: &Theme, _| button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                text_color: fg,
-                ..button::Style::default()
-            })
-            .boxed()
+        button(
+            container(text(raw(label.to_string())).size(TS.caption).color(fg)).padding([3.0, 8.0]),
+        )
+        .on_press_maybe(editable.then(|| on_severity(rule, value)))
+        .style(move |_: &Theme, _| button::Style {
+            background: Some(Background::Color(bg)),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+                ..Border::default()
+            },
+            text_color: fg,
+            ..button::Style::default()
+        })
+        .boxed()
     };
     let off = seg("Off", Severity::Off, Color::from_rgb(0.35, 0.36, 0.42));
     if rule.is_on_off_only() {
@@ -214,7 +219,7 @@ fn pin_matrix_view<M: Clone + 'static>(
             Severity::Off => (Color::from_rgba(0.25, 0.70, 0.30, 0.35), "\u{00B7}"),
         };
         button(
-            container(text(ch.to_string()).size(TS.label).color(text_c))
+            container(text(raw(ch.to_string())).size(TS.label).color(text_c))
                 .width(CELL_W)
                 .height(CELL_H)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -237,21 +242,29 @@ fn pin_matrix_view<M: Clone + 'static>(
     };
 
     let header_label = |label: &str| -> Element<'static, M> {
-        container(text(label.to_string()).size(TS.caption).color(text_muted))
-            .width(ROW_HEADER_W)
-            .height(CELL_H)
-            .align_x(iced::alignment::Horizontal::Right)
-            .align_y(iced::alignment::Vertical::Center)
-            .padding([0.0, 6.0])
-            .boxed()
+        container(
+            text(raw(label.to_string()))
+                .size(TS.caption)
+                .color(text_muted),
+        )
+        .width(ROW_HEADER_W)
+        .height(CELL_H)
+        .align_x(iced::alignment::Horizontal::Right)
+        .align_y(iced::alignment::Vertical::Center)
+        .padding([0.0, 6.0])
+        .boxed()
     };
     let col_label = |label: &str| -> Element<'static, M> {
-        container(text(label.to_string()).size(TS.caption).color(text_muted))
-            .width(CELL_W)
-            .height(COL_HEADER_H)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
-            .boxed()
+        container(
+            text(raw(label.to_string()))
+                .size(TS.caption)
+                .color(text_muted),
+        )
+        .width(CELL_W)
+        .height(COL_HEADER_H)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
+        .boxed()
     };
 
     let mut header: iced::widget::Row<Element<'static, M>> =

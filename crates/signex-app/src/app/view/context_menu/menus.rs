@@ -80,7 +80,8 @@ impl Signex {
     /// standard 1mil…2.5mm ladder; clicking a row sends
     /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
     pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
-        use iced::widget::{Widget as _, button, column, container, text};
+        use iced::widget::{Widget as _, column, container};
+        use signex_widgets::{button, raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let primary = signex_widgets::theme_ext::text_primary(tokens);
         let muted = signex_widgets::theme_ext::text_secondary(tokens);
@@ -125,7 +126,7 @@ impl Signex {
             let row_label = *label;
             let row_step = *step_mm;
             let btn = button(
-                container(text(row_label).size(TS.body).color(lbl_color))
+                container(text(raw(row_label)).size(TS.body).color(lbl_color))
                     .padding([SP.s, SP.l])
                     .width(iced::Length::Fill),
             )

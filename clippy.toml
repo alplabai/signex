@@ -8,7 +8,39 @@
 # `io_ports/native.rs` and a few named tool spawns carry an `allow` with a
 # reason. `allow-invalid` where a path may not resolve in every build.
 # scripts/check_io_ports.sh is the second layer.
+#
+# UI text goes through the house widgets in `signex_widgets` (#2056): their
+# labels are a `Localized`, a `UserText` or `raw("…")`, so no literal skips the
+# message catalog unnoticed. Only `signex-widgets/src/house.rs` calls the iced
+# functions, under an `allow` with a reason; scripts/check_raw_labels.sh counts
+# the `raw` call sites and the count must equal the baseline (lower it with
+# `--generate` in the same change). Clippy cannot ban a
+# trait impl (`Text::from("X")`, `"X".into()`) or a `&str` used as a widget:
+# the ast-grep rule no-raw-literal-widget and the macro check in that script
+# cover those.
 disallowed-methods = [
+    { path = "iced::widget::text", reason = "use signex_widgets::text, which takes a Localized, a UserText or raw(\"…\") (#2056)" },
+    { path = "iced::widget::button", reason = "use signex_widgets::button, whose content is a widget built from signex_widgets::text (#2056)" },
+    { path = "iced::widget::text_input", reason = "use signex_widgets::text_input, which takes a Localized, a UserText or raw(\"…\") placeholder (#2056)" },
+    { path = "iced::widget::checkbox", reason = "use signex_widgets::checkbox and CheckboxLabel::labelled (#2056)" },
+    { path = "iced::widget::tooltip", reason = "use signex_widgets::tooltip, whose tip is a widget built from signex_widgets::text (#2056)" },
+    { path = "iced::advanced::widget::text::Text::new", reason = "use signex_widgets::text (#2056)" },
+    { path = "iced::widget::Button::new", reason = "use signex_widgets::button (#2056)" },
+    { path = "iced::widget::TextInput::new", reason = "use signex_widgets::text_input (#2056)" },
+    { path = "iced::widget::Checkbox::new", reason = "use signex_widgets::checkbox (#2056)" },
+    { path = "iced::widget::Checkbox::label", reason = "use signex_widgets::CheckboxLabel::labelled (#2056)" },
+    { path = "iced::widget::Tooltip::new", reason = "use signex_widgets::tooltip (#2056)" },
+    { path = "iced::widget::value", reason = "use signex_widgets::text, which takes a Localized, a UserText or raw(\"…\") (#2056)" },
+    { path = "iced::widget::span", reason = "use signex_widgets::span, which takes a Localized, a UserText or raw(\"…\") (#2056)" },
+    { path = "iced::widget::rich_text", reason = "use signex_widgets::rich_text, whose spans come from signex_widgets::span (#2056)" },
+    { path = "iced::widget::toggler", reason = "use signex_widgets::toggler and TogglerLabel::labelled (#2056)" },
+    { path = "iced::widget::radio", reason = "use signex_widgets::radio, whose label is a Localized, a UserText or raw(\"…\") (#2056)" },
+    { path = "iced::widget::combo_box", reason = "use signex_widgets::combo_box, whose placeholder is a Localized, a UserText or raw(\"…\") (#2056)" },
+    { path = "iced::widget::Toggler::label", reason = "use signex_widgets::TogglerLabel::labelled (#2056)" },
+    { path = "iced::widget::PickList::placeholder", reason = "use signex_widgets::PickListPlaceholder::placeholder_label (#2056)" },
+    { path = "iced::widget::ComboBox::new", reason = "use signex_widgets::combo_box (#2056)" },
+    { path = "iced::widget::TextEditor::placeholder", reason = "use signex_widgets::TextEditorPlaceholder::placeholder_label (#2056)" },
+    { path = "iced::widget::Radio::new", reason = "use signex_widgets::radio (#2056)" },
     { path = "uuid::Uuid::new_v4", reason = "ids are UUID v7: use Uuid::now_v7 (CONTRIBUTING.md, \"Object ids\")", allow-invalid = true },
     { path = "std::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931); a needed tool spawn carries an allow with its reason" },
     { path = "tokio::process::Command::new", reason = "launch through crate::io_ports::Opener (#1931)", allow-invalid = true },

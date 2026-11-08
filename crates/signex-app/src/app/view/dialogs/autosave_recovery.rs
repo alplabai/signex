@@ -4,8 +4,9 @@
 //! loads anything.
 
 use super::*;
-use iced::widget::{column, container, text};
+use iced::widget::{column, container};
 use iced::{Element, Length, Widget};
+use signex_widgets::{raw, text};
 
 use super::widgets::modal_title_header;
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
@@ -76,10 +77,10 @@ impl Signex {
         .spacing(SP.m);
         if offer.older_than_file {
             body = body.push(
-                text(format!(
+                text(raw(format!(
                     "{name} was saved after this copy was written. Restore replaces that \
                      newer saved work in the editor with the older copy."
-                ))
+                )))
                 .size(TS.body)
                 .color(crate::styles::ti(tokens.warning))
                 .boxed(),

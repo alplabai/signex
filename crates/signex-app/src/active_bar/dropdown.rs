@@ -6,10 +6,11 @@
 //! `DropdownItem` at build time, so no render-time selection guard is
 //! needed here.
 
-use iced::widget::{Space, button, column, container, row, svg, text};
+use iced::widget::{Space, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
+use signex_widgets::{button, raw, text};
 
 use crate::icons as ic;
 use crate::styles;
@@ -569,7 +570,7 @@ fn net_color_entries(
             button(
                 row![
                     swatch_slot,
-                    text(label.to_string())
+                    text(raw(label.to_string()))
                         .size(TS.title)
                         .color(ac.text)
                         .wrapping(iced::widget::text::Wrapping::None),
@@ -678,11 +679,11 @@ fn filter_entry(
         let inactive_bg = chip_off_bg;
         let text_on = text_primary;
         let text_off = chip_off_text;
-        button(text(label.to_string()).size(TS.body).color(if enabled {
-            text_on
-        } else {
-            text_off
-        }))
+        button(
+            text(raw(label.to_string()))
+                .size(TS.body)
+                .color(if enabled { text_on } else { text_off }),
+        )
         .padding([SP.s, 10.0])
         .on_press(ActiveBarMsg::ToggleFilter(filter))
         .style(move |_: &Theme, status: button::Status| {
@@ -709,11 +710,11 @@ fn filter_entry(
     let all_active_bg = chip_on_bg;
     let all_inactive_bg = chip_off_bg;
     let all_text_off = chip_off_text;
-    let all_toggle = button(text(all_label.to_string()).size(TS.body).color(if all_on {
-        text_primary
-    } else {
-        all_text_off
-    }))
+    let all_toggle = button(
+        text(raw(all_label.to_string()))
+            .size(TS.body)
+            .color(if all_on { text_primary } else { all_text_off }),
+    )
     .padding([SP.s, SP.l])
     .on_press(ActiveBarMsg::ToggleAllFilters)
     .style(move |_: &Theme, status: button::Status| {
@@ -749,7 +750,7 @@ fn filter_entry(
         } else {
             preset.name.clone()
         };
-        let preset_btn = button(text(label).size(TS.body).color(text_primary))
+        let preset_btn = button(text(raw(label)).size(TS.body).color(text_primary))
             .padding([SP.s, 10.0])
             .on_press(ActiveBarMsg::ApplyCustomFilter(idx))
             .style(move |_: &Theme, status: button::Status| {

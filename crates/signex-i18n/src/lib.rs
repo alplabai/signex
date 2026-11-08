@@ -22,7 +22,7 @@ pub use locale::LanguagePref;
 pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 
 /// Every message id, defined together with the [`ids::ALL`] list so a new
-/// id cannot be left out of the consistency tests. This is the only place
+/// id cannot be left out of the consistency tests. This is the only non-test place
 /// `MessageId::new` is called (it is crate-private).
 macro_rules! define_ids {
     ($($name:ident = $id:literal;)+) => {

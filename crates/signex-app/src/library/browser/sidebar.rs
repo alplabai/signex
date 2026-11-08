@@ -41,7 +41,7 @@ pub(super) fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(text("Tables").size(TS.body).color(muted))
+        container(text(raw("Tables")).size(TS.body).color(muted))
             .padding(iced::Padding {
                 top: 0.0,
                 right: 8.0,
@@ -66,20 +66,24 @@ pub(super) fn view_table_sidebar<'a>(
     // "table is not empty (N rows)").
     if let Some(err) = browser.delete_error.as_ref() {
         let library_for_dismiss = lib_pb.clone();
-        let dismiss = button(text("×").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
-            .padding([0, 6])
-            .on_press(LibraryMessage::BrowserDismissDeleteError {
-                library_path: library_for_dismiss,
-            })
-            .style(|_: &Theme, _| iced::widget::button::Style {
-                background: None,
-                text_color: iced::Color::WHITE,
-                border: Border::default(),
-                ..iced::widget::button::Style::default()
-            });
+        let dismiss = button(
+            text(raw("×"))
+                .size(BROWSER_TEXT_SIZE)
+                .color(iced::Color::WHITE),
+        )
+        .padding([0, 6])
+        .on_press(LibraryMessage::BrowserDismissDeleteError {
+            library_path: library_for_dismiss,
+        })
+        .style(|_: &Theme, _| iced::widget::button::Style {
+            background: None,
+            text_color: iced::Color::WHITE,
+            border: Border::default(),
+            ..iced::widget::button::Style::default()
+        });
         let banner = container(
             row![
-                text(err.clone())
+                text(raw(err.clone()))
                     .size(BROWSER_TEXT_SIZE)
                     .color(iced::Color::WHITE)
                     .width(Length::Fill),
@@ -121,7 +125,7 @@ pub(super) fn view_table_sidebar<'a>(
             let library_for_input = lib_pb.clone();
             let library_for_confirm = lib_pb.clone();
             let library_for_cancel = lib_pb.clone();
-            let name_input = text_input("table_name", buffer)
+            let name_input = text_input(raw("table_name"), buffer)
                 .on_input(move |s| LibraryMessage::BrowserSetRenameName {
                     library_path: library_for_input.clone(),
                     value: s,
@@ -131,25 +135,29 @@ pub(super) fn view_table_sidebar<'a>(
                 })
                 .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text("✓").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
-                .padding([SP.s, SP.m])
-                .on_press(LibraryMessage::BrowserConfirmRenameTable {
-                    library_path: library_for_confirm,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 2.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                });
-            let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
+            let confirm = button(
+                text(raw("✓"))
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(iced::Color::WHITE),
+            )
+            .padding([SP.s, SP.m])
+            .on_press(LibraryMessage::BrowserConfirmRenameTable {
+                library_path: library_for_confirm,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.18, 0.36, 0.58,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    width: 0.0,
+                    radius: 2.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
+            let cancel = button(text(raw("×")).size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserCancelRenameTable {
                     library_path: library_for_cancel,
@@ -174,7 +182,7 @@ pub(super) fn view_table_sidebar<'a>(
             .padding([SP.s, SP.m]);
             if let Some(err) = browser.rename_error.as_ref() {
                 form = form.push(
-                    text(err.clone())
+                    text(raw(err.clone()))
                         .size(BROWSER_TEXT_SIZE)
                         .color(iced::Color::from_rgb(0.85, 0.3, 0.3))
                         .boxed(),
@@ -185,11 +193,11 @@ pub(super) fn view_table_sidebar<'a>(
         }
 
         let row_label = row![
-            text((*name).clone())
+            text(raw((*name).clone()))
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c)
                 .width(Length::Fill),
-            text(format!("{count}"))
+            text(raw(format!("{count}")))
                 .size(BROWSER_TEXT_SIZE)
                 .color(muted),
         ]
@@ -237,7 +245,7 @@ pub(super) fn view_table_sidebar<'a>(
         // resulting Conflict error surfaces in the banner above.
         let library_for_del = lib_pb.clone();
         let table_for_del = (*name).clone();
-        let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
+        let delete_btn = button(text(raw("×")).size(BROWSER_TEXT_SIZE + 1.0).color(muted))
             .padding([3.0, SP.m])
             .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserDeleteTable {
                 library_path: library_for_del,
@@ -272,7 +280,7 @@ pub(super) fn view_table_sidebar<'a>(
         // form above.
         let library_for_rename = lib_pb.clone();
         let table_for_rename = (*name).clone();
-        let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
+        let rename_btn = button(text(raw("\u{270E}")).size(BROWSER_TEXT_SIZE).color(muted))
             .padding([3, 6])
             .on_press_maybe(
                 (!read_only).then(|| LibraryMessage::BrowserBeginRenameTable {
@@ -317,7 +325,7 @@ pub(super) fn view_table_sidebar<'a>(
             let library_for_input = lib_pb.clone();
             let library_for_confirm = lib_pb.clone();
             let library_for_cancel = lib_pb.clone();
-            let name_input = text_input("new_table_name", &draft.name)
+            let name_input = text_input(raw("new_table_name"), &draft.name)
                 .on_input(move |s| LibraryMessage::BrowserSetNewTableName {
                     library_path: library_for_input.clone(),
                     value: s,
@@ -328,7 +336,7 @@ pub(super) fn view_table_sidebar<'a>(
                 .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
             let confirm = button(
-                text("Create")
+                text(raw("Create"))
                     .size(BROWSER_TEXT_SIZE)
                     .color(iced::Color::WHITE),
             )
@@ -349,7 +357,7 @@ pub(super) fn view_table_sidebar<'a>(
                 },
                 ..iced::widget::button::Style::default()
             });
-            let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
+            let cancel = button(text(raw("Cancel")).size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([SP.s, 10.0])
                 .on_press(LibraryMessage::BrowserCancelAddTable {
                     library_path: library_for_cancel,
@@ -375,7 +383,7 @@ pub(super) fn view_table_sidebar<'a>(
             .padding([6.0, SP.l]);
             if let Some(err) = draft.error.as_ref() {
                 form = form.push(
-                    text(err.clone())
+                    text(raw(err.clone()))
                         .size(BROWSER_TEXT_SIZE)
                         .color(iced::Color::from_rgb(0.85, 0.3, 0.3))
                         .boxed(),
@@ -386,11 +394,11 @@ pub(super) fn view_table_sidebar<'a>(
         None => {
             let library_for_begin = lib_pb.clone();
             container(
-                button(text("+ Class").size(BROWSER_TEXT_SIZE).color(if read_only {
-                    muted
-                } else {
-                    text_c
-                }))
+                button(
+                    text(raw("+ Class"))
+                        .size(BROWSER_TEXT_SIZE)
+                        .color(if read_only { muted } else { text_c }),
+                )
                 .padding([SP.s, 10.0])
                 .width(Length::Fill)
                 .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserBeginAddTable {

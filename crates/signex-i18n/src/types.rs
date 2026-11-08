@@ -83,6 +83,15 @@ pub struct LocalNumber(pub f64);
 /// ```compile_fail,E0599
 /// let _ = signex_i18n::Arg::Number(1.27);
 /// ```
+///
+/// The same setup compiles once the number is wrapped, so the two failures
+/// above are not caused by a renamed id or constructor:
+///
+/// ```
+/// use signex_i18n::{I18n, LocalNumber, ids, t};
+/// let i18n = I18n::en_us();
+/// let _ = t!(i18n, ids::MENU_FILE, "value" => LocalNumber(1.27));
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Arg(pub(crate) ArgKind);
 

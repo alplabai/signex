@@ -1,5 +1,6 @@
+use crate::{PickListPlaceholder, button, raw, text};
 use chrono::{Datelike, Local};
-use iced::widget::{button, column, container, pick_list, row, text};
+use iced::widget::{column, container, pick_list, row};
 use iced::{Alignment, Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -184,7 +185,7 @@ impl RkmEncoder {
                 .on_select(RkmEncoderMessage::PrefixChanged)
                 .width(100),
             ),
-            text(self.prefix.unit(self.kind))
+            text(raw(self.prefix.unit(self.kind)))
                 .size(14)
                 .color(token_color(tokens.text_secondary)),
             labeled(
@@ -210,7 +211,7 @@ impl RkmEncoder {
                         ToString::to_string
                     )
                     .on_select(RkmEncoderMessage::TemperatureCoefficientChanged)
-                    .placeholder("Not specified")
+                    .placeholder_label(raw("Not specified"))
                     .width(165),
                 ),
                 labeled(
@@ -218,10 +219,10 @@ impl RkmEncoder {
                     "Rated power",
                     pick_list(self.rated_power, RatedPower::ALL, ToString::to_string)
                         .on_select(RkmEncoderMessage::RatedPowerChanged)
-                        .placeholder("Not specified")
+                        .placeholder_label(raw("Not specified"))
                         .width(135),
                 ),
-                button(text("Clear optional fields"))
+                button(text(raw("Clear optional fields")))
                     .padding([9, 14])
                     .on_press(RkmEncoderMessage::ClearResistorOptionalFields),
             ]
@@ -240,7 +241,7 @@ impl RkmEncoder {
                     ToString::to_string
                 )
                 .on_select(RkmEncoderMessage::ProductionDateCycleChanged)
-                .placeholder("Not specified")
+                .placeholder_label(raw("Not specified"))
                 .width(150),
             ),
             labeled(
@@ -252,7 +253,7 @@ impl RkmEncoder {
                     ToString::to_string
                 )
                 .on_select(RkmEncoderMessage::ProductionYearChanged)
-                .placeholder("Not specified")
+                .placeholder_label(raw("Not specified"))
                 .width(130),
             ),
             labeled(
@@ -264,10 +265,10 @@ impl RkmEncoder {
                     ToString::to_string
                 )
                 .on_select(RkmEncoderMessage::ProductionMonthChanged)
-                .placeholder("Not specified")
+                .placeholder_label(raw("Not specified"))
                 .width(145),
             ),
-            button(text("Clear production date"))
+            button(text(raw("Clear production date")))
                 .padding([9, 14])
                 .on_press(RkmEncoderMessage::ClearProductionDate),
         ]
@@ -314,10 +315,12 @@ impl RkmEncoder {
             || self.production_month.is_some()
         {
             output = output.push(
-                text("Select a production-date cycle, year, and month to generate the code.")
-                    .size(12)
-                    .color(token_color(tokens.text_secondary))
-                    .boxed(),
+                text(raw(
+                    "Select a production-date cycle, year, and month to generate the code.",
+                ))
+                .size(12)
+                .color(token_color(tokens.text_secondary))
+                .boxed(),
             );
         }
         output = output.push(color_codes);

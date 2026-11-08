@@ -182,6 +182,26 @@ impl I18n {
     pub(crate) fn emitted_for_test(&self) -> usize {
         self.emitted.load(std::sync::atomic::Ordering::Relaxed)
     }
+
+    /// How many ids fell back or are missing; a format problem (a message
+    /// rendered without its arguments) is not a lookup problem (tests).
+    #[cfg(test)]
+    pub(crate) fn lookup_problems_for_test(&self) -> usize {
+        let reported = self.reported.lock().unwrap_or_else(PoisonError::into_inner);
+        reported
+            .iter()
+            .filter(|(problem, _)| *problem != Problem::BadFormat)
+            .count()
+    }
+
+    /// An en-US instance over explicit sources (tests).
+    #[cfg(test)]
+    pub(crate) fn en_us_from_sources_for_test(sources: &[&str]) -> Self {
+        let mut i18n = Self::new(&LanguagePref::Locale(EN_US.to_owned()));
+        i18n.primary = bundle::build_from(EN_US, sources);
+        i18n.fallback = bundle::build_from(EN_US, sources);
+        i18n
+    }
 }
 
 fn language_name_id(tag: &str) -> String {

@@ -62,7 +62,7 @@ pub fn collapsible_section_header<'a>(
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     col = col.push(Widget::boxed(
-        iced::widget::button(
+        signex_widgets::button(
             container(
                 row![
                     svg(chevron_handle)
@@ -71,7 +71,9 @@ pub fn collapsible_section_header<'a>(
                         .style(move |_: &Theme, _| iced::widget::svg::Style {
                             color: Some(header_color),
                         }),
-                    text(title.to_string()).size(TS.label).color(header_color),
+                    text(raw(title.to_string()))
+                        .size(TS.label)
+                        .color(header_color),
                 ]
                 .spacing(6)
                 .align_y(iced::Alignment::Center),
@@ -128,8 +130,11 @@ pub fn prop_kv_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(key.to_string()).size(TS.body).color(key_c).width(84),
-            text(value.to_string()).size(TS.body).color(val_c),
+            text(raw(key.to_string()))
+                .size(TS.body)
+                .color(key_c)
+                .width(84),
+            text(raw(value.to_string())).size(TS.body).color(val_c),
         ]
         .spacing(SP.s),
     )
@@ -141,7 +146,7 @@ pub fn prop_kv_row<'a>(
 pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
     // user-visible: migrate to the #2063 casemap
     // ast-grep-ignore: no-case-in-view
-    text(title.to_uppercase())
+    text(raw(title.to_uppercase()))
         .size(TS.caption)
         .color(theme_ext::text_secondary(tokens))
 }
@@ -149,7 +154,7 @@ pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Tex
 pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
     // Use a cached static string instead of allocating on every render
     const SEP: &str = "──────────────────────────────";
-    text(SEP)
+    text(raw(SEP))
         .size(TS.micro)
         .color(theme_ext::border_color(tokens))
 }
@@ -159,10 +164,10 @@ pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a,
         column![
             section_title(title, &ctx.tokens),
             separator(&ctx.tokens),
-            text(crate::active_bar::PLANNED_TOOLTIP)
+            text(raw(crate::active_bar::PLANNED_TOOLTIP))
                 .size(TS.caption)
                 .color(theme_ext::text_primary(&ctx.tokens)),
-            text(desc.to_string())
+            text(raw(desc.to_string()))
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
@@ -185,15 +190,15 @@ pub fn part_tree_row<'a>(
     bg_active: Color,
 ) -> Element<'a, PanelMsg> {
     let label_color = if is_active { primary } else { muted };
-    iced::widget::button(
+    signex_widgets::button(
         row![
             // Tree-expander indent: 18 px gutter + a faint glyph so
             // the part rows visually nest under the symbol.
-            text("\u{2514}")
+            text(raw("\u{2514}"))
                 .size(TS.body)
                 .color(muted)
                 .width(Length::Fixed(18.0)),
-            text(label.to_string())
+            text(raw(label.to_string()))
                 .size(TS.body)
                 .color(label_color)
                 .width(Length::Fill),
@@ -242,7 +247,7 @@ fn property_label_sized<'a, M: 'a>(
     portion: u16,
 ) -> Element<'a, M> {
     container(
-        text(label.into())
+        text(raw(label.into()))
             .size(size)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::Word),
@@ -278,10 +283,11 @@ pub fn shape_fill_row<'a>(
     muted: Color,
     _border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    use iced::widget::{button, row, text};
+    use iced::widget::row;
     use signex_types::schematic::FillType;
+    use signex_widgets::{button, raw, text};
     let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        button(text(label).size(TS.body))
+        button(text(raw(label)).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
@@ -306,7 +312,7 @@ pub fn shape_fill_row<'a>(
             .boxed()
     };
     row![
-        text("Fill")
+        text(raw("Fill"))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),

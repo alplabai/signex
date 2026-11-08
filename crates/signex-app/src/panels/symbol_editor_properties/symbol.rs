@@ -1,7 +1,8 @@
 //! Symbol-level (nothing-selected) Properties rows + local-colour swatches.
 
-use iced::widget::{Column, Widget, container, row, text};
+use iced::widget::{Column, Widget, container, row};
 use iced::{Color, Element, Length};
+use signex_widgets::{raw, text};
 
 use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
 use crate::styles::{Spacing, TypeScale};
@@ -74,11 +75,11 @@ pub(super) fn view_symbol_selection<'a>(
      -> Element<'a, PanelMsg> {
         container(
             row![
-                text(label)
+                text(raw(label))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(2)),
-                iced::widget::text_input(placeholder, value)
+                signex_widgets::text_input(signex_widgets::raw(placeholder), value)
                     .padding([SP.xs, SP.s])
                     .size(TS.body)
                     .on_input(on_input)
@@ -95,7 +96,7 @@ pub(super) fn view_symbol_selection<'a>(
     // ── ▾ Symbol ──
     col = col.push(super::super::thin_sep(border_c));
     col = col.push(
-        container(text("Symbol").size(TS.body).color(primary))
+        container(text(raw("Symbol")).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .boxed(),
     );
@@ -140,17 +141,17 @@ pub(super) fn view_symbol_selection<'a>(
     // ── ▾ Graphical ──
     col = col.push(super::super::thin_sep(border_c));
     col = col.push(
-        container(text("Graphical").size(TS.body).color(primary))
+        container(text(raw("Graphical")).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .boxed(),
     );
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
-            text("Mirrored")
+            text(raw("Mirrored"))
                 .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::checkbox(sym.symbol_mirrored)
+            signex_widgets::checkbox(sym.symbol_mirrored)
                 .size(TS.heading)
                 .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),
         ]
@@ -165,7 +166,7 @@ pub(super) fn view_symbol_selection<'a>(
     // ── Local Colors (Fills / Lines / Pins) ──
     col = col.push(super::super::thin_sep(border_c));
     col = col.push(
-        container(text("Local Colors").size(TS.body).color(primary))
+        container(text(raw("Local Colors")).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .boxed(),
     );

@@ -316,9 +316,11 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.project_tree.is_empty() {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         column![
-            text("No project open").size(TS.body).color(muted),
-            text("").size(TS.micro),
-            text("File > Open to begin").size(TS.caption).color(muted),
+            text(raw("No project open")).size(TS.body).color(muted),
+            text(raw("")).size(TS.micro),
+            text(raw("File > Open to begin"))
+                .size(TS.caption)
+                .color(muted),
         ]
         .spacing(SP.xs)
         .padding(6)
@@ -360,7 +362,7 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // sheet — it does not depend on which sheet is focused.
     if ctx.navigator.tree.is_empty() {
         col = col.push(
-            text("No project")
+            text(raw("No project"))
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens))
                 .boxed(),
