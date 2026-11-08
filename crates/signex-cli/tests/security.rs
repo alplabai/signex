@@ -632,10 +632,131 @@ fn a_save_as_by_id_also_checks_the_project_file_it_re_points() {
     assert!(
         saved["reason"]
             .as_str()
-            .is_some_and(|r| r.contains("demo.snxprj is a symbolic link")),
+            .is_some_and(|r| r.contains("also writes the project file")
+                && r.contains("demo.snxprj is a symbolic link")),
         "{saved}"
     );
     assert!(!copy.exists(), "nothing was written");
     assert_eq!(std::fs::read(&outside).unwrap(), before);
+    live.finish();
+}
+
+/// Lists a project that also names `extra` (a file in its folder), and says
+/// what a query made of it.
+fn list_with_reference(
+    root: &std::path::Path,
+    extra: &str,
+    prepare: impl Fn(&std::path::Path),
+) -> support::Output {
+    let fx = fixture(root);
+    prepare(&fx.sheet.with_file_name(extra));
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Extra".into(),
+        filename: extra.into(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+    run_cli(
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
+        jsonl(&[
+            json!({"id": "list_documents"}),
+            json!({"id": "find_items", "args": {"designator": "R1"}}),
+        ]),
+    )
+}
+
+/// A project-referenced sheet over the size cap is not read by a query.
+#[test]
+fn a_referenced_sheet_over_the_size_cap_is_not_read_by_a_query() {
+    let (_guard, root) = temp_root();
+    let out = list_with_reference(&root, "big.snxsch", |path| {
+        let file = std::fs::File::create(path).unwrap();
+        file.set_len(signex_app::headless::MAX_FILE_BYTES + 1)
+            .unwrap();
+    });
+    for line in &out.lines {
+        assert_eq!(line["status"], "answered", "{}", out.stdout);
+    }
+    assert!(
+        out.lines[1]["messages"]
+            .to_string()
+            .contains("is larger than"),
+        "the refusal is in Messages: {}",
+        out.stdout
+    );
+}
+
+/// A FIFO named like a sheet does not hang a query.
+#[cfg(unix)]
+#[test]
+fn a_referenced_fifo_does_not_hang_a_query() {
+    let (_guard, root) = temp_root();
+    let out = list_with_reference(&root, "pipe.snxsch", |path| {
+        let made = std::process::Command::new("mkfifo")
+            .arg(path)
+            .status()
+            .unwrap();
+        assert!(made.success());
+    });
+    for line in &out.lines {
+        assert_eq!(line["status"], "answered", "{}", out.stdout);
+    }
+    assert!(
+        out.lines[1]["messages"]
+            .to_string()
+            .contains("not a regular file"),
+        "{}",
+        out.stdout
+    );
+}
+
+fn write_sheet_with_id(template: &std::path::Path, path: &std::path::Path, id: uuid::Uuid) {
+    let mut engine = signex_engine::Engine::open(template).expect("sheet");
+    engine.reassign_document_id(id);
+    std::fs::write(path, engine.serialize().expect("encode")).unwrap();
+}
+
+/// The head of a sheet the app has not opened is read again when the file
+/// changes on disk (a `git checkout` during a long run), not served stale.
+#[test]
+fn a_changed_head_is_read_again_by_the_next_listing() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let extra = fx.sheet.with_file_name("Extra.snxsch");
+    let (first, second) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+    write_sheet_with_id(&fx.sheet, &extra, first);
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Extra".into(),
+        filename: "Extra.snxsch".into(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+    let mut live = Live::start(&["run", fx.project.to_str().unwrap(), "--keep-going"]);
+    let id_of = |listing: &Value| {
+        listing["data"]["documents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["path"] == extra.display().to_string())
+            .map(|d| d["id"].clone())
+            .expect("listed")
+    };
+
+    let before = live.send(&json!({"id": "list_documents"}));
+    assert_eq!(id_of(&before), json!(first.to_string()));
+    // A file system with a coarse clock must see a different time.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_sheet_with_id(&fx.sheet, &extra, second);
+    let after = live.send(&json!({"id": "list_documents"}));
+
+    assert_eq!(id_of(&after), json!(second.to_string()), "{after}");
     live.finish();
 }

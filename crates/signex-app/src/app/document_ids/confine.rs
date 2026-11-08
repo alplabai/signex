@@ -30,6 +30,29 @@ pub(super) fn inside_project(project: &LoadedProject, path: &Path) -> Result<(),
     ))
 }
 
+/// Why `path` may not be read: not a regular file (a FIFO or device would
+/// hang the read) or larger than [`crate::headless::MAX_FILE_BYTES`]. A file
+/// that is not there is no leak.
+fn readable_file(path: &Path) -> Result<(), String> {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return Ok(());
+    };
+    if !meta.is_file() {
+        return Err(format!(
+            "{} is not a regular file; a headless run does not read it",
+            path.display()
+        ));
+    }
+    if meta.len() > crate::headless::MAX_FILE_BYTES {
+        return Err(format!(
+            "{} is larger than {} bytes; a headless run does not read it",
+            path.display(),
+            crate::headless::MAX_FILE_BYTES
+        ));
+    }
+    Ok(())
+}
+
 impl Signex {
     /// Whether a query may read `path`, a file `project` references. Always in
     /// a GUI session; in a headless one only inside the project folder. A
@@ -38,7 +61,7 @@ impl Signex {
         if self.headless_answers().is_none() {
             return true;
         }
-        match inside_project(project, path) {
+        match inside_project(project, path).and_then(|()| readable_file(path)) {
             Ok(()) => true,
             Err(reason) => {
                 crate::diagnostics::log_warning(reason);

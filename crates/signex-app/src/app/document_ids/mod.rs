@@ -71,12 +71,16 @@ impl DocumentIds {
         self.headers.get(path).map(|record| record.id)
     }
 
-    /// Whether `path` needs its head read: never read, or read and holding
-    /// no id (a file written since may hold one now).
+    /// Whether `path` needs its head read: never read, read and holding no
+    /// id (a file written since may hold one now), or changed on disk since
+    /// (one stat; a file whose time cannot be read keeps its head).
     pub(crate) fn header_wanted(&self, path: &std::path::Path) -> bool {
-        self.headers
-            .get(path)
-            .is_none_or(|record| record.id.is_none())
+        self.headers.get(path).is_none_or(|record| {
+            record.id.is_none()
+                || std::fs::metadata(path)
+                    .and_then(|meta| meta.modified())
+                    .is_ok_and(|now| record.modified != Some(now))
+        })
     }
 
     pub(crate) fn set_header(

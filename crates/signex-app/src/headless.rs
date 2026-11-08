@@ -26,6 +26,10 @@ use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, Picker};
 use crate::keymap::AppCommandId;
 
+/// The largest file a headless run reads for a query without being named it:
+/// the runner's default file size cap.
+pub const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+
 /// Why [`Signex::boot_headless`] refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

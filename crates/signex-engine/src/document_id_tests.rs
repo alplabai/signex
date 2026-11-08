@@ -57,3 +57,39 @@ fn a_copy_is_encoded_under_a_new_id_and_the_document_keeps_its_own() {
         Some(Uuid::from_u128(7))
     );
 }
+
+fn edited_then_reassigned() -> Engine {
+    let mut engine = engine();
+    let junction = signex_types::schematic::Junction {
+        uuid: Uuid::now_v7(),
+        ..Default::default()
+    };
+    assert!(
+        engine
+            .execute(Command::PlaceJunction { junction })
+            .unwrap()
+            .changed
+    );
+    engine.reassign_document_id(Uuid::from_u128(8));
+    engine
+}
+
+#[test]
+fn undo_after_a_reassignment_keeps_the_new_id() {
+    let mut engine = edited_then_reassigned();
+    engine.undo().unwrap();
+    assert_eq!(engine.document().uuid, Uuid::from_u128(8));
+}
+
+#[test]
+fn redo_after_a_reassignment_keeps_the_new_id() {
+    let mut engine = edited_then_reassigned();
+    engine.undo().unwrap();
+    engine.redo().unwrap();
+    assert_eq!(engine.document().uuid, Uuid::from_u128(8));
+    // And the other way round: the id moved while the edit sits on redo.
+    engine.undo().unwrap();
+    engine.reassign_document_id(Uuid::from_u128(9));
+    engine.redo().unwrap();
+    assert_eq!(engine.document().uuid, Uuid::from_u128(9));
+}

@@ -315,6 +315,11 @@ impl Signex {
                 file_label(&path)
             );
         }
+        // Onto its own file it is a plain save: no new document, so the id
+        // stays (#2172).
+        if path == from_path {
+            return self.begin_schematic_save_unchecked(path);
+        }
         // The tab keeps its old path and title until the write succeeds.
         self.begin_schematic_save(path, Some(from_path.to_path_buf()))
     }

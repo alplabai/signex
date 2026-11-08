@@ -167,12 +167,10 @@ impl Session {
             let targets = if named.is_empty() {
                 self.implicit_write_targets()
             } else {
-                let as_copy = approved.command.as_str() == "save_document_as";
-                let side: Vec<PathBuf> = named
-                    .iter()
-                    .flat_map(|path| self.app.save_side_writes(path, as_copy))
-                    .collect();
-                named.into_iter().chain(side).collect()
+                if let Err(reason) = self.check_side_writes(approved.command.as_str(), &named) {
+                    return (Status::Refused, Some(reason), None);
+                }
+                named
             };
             if let Err(reason) = self.policy.check_write_targets(&targets, &self.roots) {
                 return (Status::Refused, Some(reason), None);
@@ -221,6 +219,28 @@ impl Session {
             paths.push(path);
         }
         Ok(paths)
+    }
+
+    /// The files saving the `named` documents writes besides them, each
+    /// checked as a write target; a refusal names the file and its part.
+    fn check_side_writes(&self, command: &str, named: &[PathBuf]) -> Result<(), String> {
+        let as_copy = command == "save_document_as";
+        for side in named
+            .iter()
+            .flat_map(|path| self.app.save_side_writes(path, as_copy))
+        {
+            let part = match side.extension().and_then(|e| e.to_str()) {
+                Some("snxprj") => "project file",
+                Some("snxsch") => "sibling sheet",
+                _ => "library file",
+            };
+            self.policy
+                .check_write_targets(std::slice::from_ref(&side), &self.roots)
+                .map_err(|why| {
+                    format!("{command} also writes the {part} {}: {why}", side.display())
+                })?;
+        }
+        Ok(())
     }
 
     /// File dialogs refused so far in this session.

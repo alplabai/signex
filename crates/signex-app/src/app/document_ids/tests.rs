@@ -435,7 +435,11 @@ fn an_unreadable_sheet_is_named_and_the_read_is_refused() {
     let command = crate::keymap::AppCommandId::new("read_document").unwrap();
     let args = crate::app::command::CommandArgs::parse_operands(
         &command,
-        &[&format!("document={}", uid(SHEET + 1))],
+        // By path: the file changed on disk, so its old id is no longer read.
+        &[&format!(
+            "document={}",
+            dir.path().join("Sub.snxsch").display()
+        )],
     )
     .unwrap();
     let outcome = app.run_query_headless(&command, &args).unwrap().0;
@@ -840,4 +844,21 @@ fn a_query_is_refused_in_the_gui_and_not_a_palette_row() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn a_head_is_wanted_again_when_its_file_changed_on_disk() {
+    let dir = temp_dir();
+    let file = dir.path().join("Extra.snxsch");
+    std::fs::write(&file, "x").unwrap();
+    let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+    let mut ids = crate::app::document_ids::DocumentIds::default();
+    ids.set_header(file.clone(), DocumentId::from_uuid(uid(1)), Some(modified));
+    assert!(
+        !ids.header_wanted(&file),
+        "an unchanged file keeps its head"
+    );
+    let earlier = modified - std::time::Duration::from_secs(5);
+    ids.set_header(file.clone(), DocumentId::from_uuid(uid(1)), Some(earlier));
+    assert!(ids.header_wanted(&file), "a changed file is read again");
 }

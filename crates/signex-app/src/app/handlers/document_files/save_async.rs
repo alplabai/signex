@@ -262,7 +262,13 @@ impl Signex {
                 self.record_real_path_of(&path);
                 let owner = self.waiver_owner_of(&from);
                 project_write = self.apply_saved_as(&from, path.clone(), revision);
-                self.adopt_saved_copy_id(&path, &saved, owner);
+                // Only when the tab was re-keyed onto the copy; a Save As
+                // that bailed leaves the document, and the id, as they were.
+                let rekeyed = self.document_state.engines.contains_key(&path)
+                    && !self.document_state.engines.contains_key(&from);
+                if rekeyed {
+                    self.adopt_saved_copy_id(&path, &saved, owner);
+                }
             }
         }
         self.warn_unwritten_spellings(&outcome_path);

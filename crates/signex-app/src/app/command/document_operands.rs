@@ -256,7 +256,9 @@ pub(super) fn save_as(app: &mut Signex, args: &CommandArgs) -> Ran {
 }
 
 /// `close_active_document document=..`: close that document's tab, as its
-/// close button does. The active tab stays the same document.
+/// close button does. Closing another tab leaves the active one as it was;
+/// closing the active one moves the active tab to a neighbour, as that button
+/// does (a headless run opens a document and closes it by name).
 pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
     let entry = match named(app, args) {
         Ok(entry) => entry,

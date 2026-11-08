@@ -20,7 +20,7 @@ impl Default for Limits {
         Self {
             max_line_bytes: 64 * 1024,
             max_commands: 10_000,
-            max_file_bytes: 64 * 1024 * 1024,
+            max_file_bytes: signex_app::headless::MAX_FILE_BYTES,
         }
     }
 }

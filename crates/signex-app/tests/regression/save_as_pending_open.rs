@@ -599,18 +599,10 @@ fn a_dropped_duplicate_open_activates_the_owning_tab() {
     assert_eq!(tab_count(&app, &owned), 1);
 }
 
-/// #2172: a net-level ERC waiver names its sheet by document id. A Save As
-/// gives the copy a new id and the project follows the copy, so the waiver
-/// moves with it: the finding it accepted stays accepted.
-#[test]
-fn a_save_as_moves_the_projects_net_waivers_to_the_copys_id() {
+/// A project in `dir` listing `A.snxsch`, with a net waiver on sheet `old`
+/// and one on `other`.
+fn push_waiver_project(app: &mut Signex, dir: &Path, old: uuid::Uuid, other: uuid::Uuid) {
     use signex_types::project::{ErcWaiver, ProjectData, ProjectRules, SheetEntry};
-    let _ = signex_app::diagnostics::init_logging();
-    let tmp = TempDir::new().expect("tempdir");
-    let a = tmp.path().join("A.snxsch");
-    let copy = tmp.path().join("Copy.snxsch");
-    let (mut app, _boot) = Signex::new();
-    let old = open_active(&mut app, &a, uuid::Uuid::now_v7());
     let waiver = |net: &str, sheet: uuid::Uuid| ErcWaiver {
         rule_id: "builtin::single_pin_net".into(),
         objects: vec![format!("net:{net}@{sheet}")],
@@ -619,18 +611,17 @@ fn a_save_as_moves_the_projects_net_waivers_to_the_copys_id() {
         author: "A".into(),
         ..Default::default()
     };
-    let other_sheet = uuid::Uuid::now_v7();
     let id = app.document_state.mint_project_id();
     app.document_state
         .projects
         .push(signex_app::app::LoadedProject {
             id,
-            path: tmp.path().join("P.snxprj"),
+            path: dir.join("P.snxprj"),
             data: ProjectData {
                 document_id: None,
                 description: None,
                 name: "P".into(),
-                dir: tmp.path().to_string_lossy().into_owned(),
+                dir: dir.to_string_lossy().into_owned(),
                 schematic_root: Some("A.snxsch".into()),
                 pcb_file: None,
                 sheets: vec![SheetEntry {
@@ -647,7 +638,7 @@ fn a_save_as_moves_the_projects_net_waivers_to_the_copys_id() {
                 enable_git: false,
                 net_classes: Vec::new(),
                 rules: Some(ProjectRules {
-                    erc_waivers: vec![waiver("SENSE", old), waiver("OTHER", other_sheet)],
+                    erc_waivers: vec![waiver("SENSE", old), waiver("OTHER", other)],
                     ..Default::default()
                 }),
                 annotation: None,
@@ -660,6 +651,34 @@ fn a_save_as_moves_the_projects_net_waivers_to_the_copys_id() {
             case_probed: false,
             case_decided: false,
         });
+}
+
+/// The objects of the project's two waivers, in order.
+fn waiver_objects(app: &Signex) -> Vec<Vec<String>> {
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_ref()
+        .expect("rules")
+        .erc_waivers
+        .iter()
+        .map(|w| w.objects.clone())
+        .collect()
+}
+
+/// #2172: a net-level ERC waiver names its sheet by document id. A Save As
+/// gives the copy a new id and the project follows the copy, so the waiver
+/// moves with it: the finding it accepted stays accepted.
+#[test]
+fn a_save_as_moves_the_projects_net_waivers_to_the_copys_id() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("A.snxsch");
+    let copy = tmp.path().join("Copy.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let old = open_active(&mut app, &a, uuid::Uuid::now_v7());
+    let other_sheet = uuid::Uuid::now_v7();
+    push_waiver_project(&mut app, tmp.path(), old, other_sheet);
 
     crate::settle_support::settle(
         &mut app,
@@ -690,4 +709,117 @@ fn a_save_as_moves_the_projects_net_waivers_to_the_copys_id() {
             .is_document_dirty(&tmp.path().join("P.snxprj")),
         "the project holds a change to save"
     );
+}
+
+fn header_id(path: &Path) -> uuid::Uuid {
+    let bytes = std::fs::read(path).expect("read the file");
+    signex_types::format::document_id_in_header("snxsch", &bytes)
+        .expect("the file names its document")
+        .as_uuid()
+}
+
+/// #2172: a Save As re-keys the sheet to a new id; undoing an edit made before
+/// it restores the sheet's content, not its old id, so the next save writes
+/// the copy under the id the project's waivers follow.
+#[test]
+fn undo_after_a_save_as_keeps_the_copys_id_on_the_next_save() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("A.snxsch");
+    let copy = tmp.path().join("Copy.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let old = open_active(&mut app, &a, uuid::Uuid::now_v7());
+    let other = uuid::Uuid::now_v7();
+    push_waiver_project(&mut app, tmp.path(), old, other);
+    let edit = app
+        .document_state
+        .engines
+        .get_mut(&a)
+        .expect("engine")
+        .execute(signex_engine::Command::PlaceJunction {
+            junction: signex_types::schematic::Junction {
+                uuid: uuid::Uuid::now_v7(),
+                ..Default::default()
+            },
+        })
+        .expect("edit");
+    assert!(edit.changed);
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::SaveAs {
+            from_path: a.clone(),
+            to_path: copy.clone(),
+        }),
+    );
+    let new = app.document_state.engines[&copy].document().uuid;
+    assert_ne!(new, old);
+
+    crate::settle_support::settle(&mut app, Message::Edit(EditMsg::Undo));
+    assert_eq!(app.document_state.engines[&copy].document().uuid, new);
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
+
+    assert_eq!(header_id(&copy), new, "the copy keeps its own id on disk");
+    assert_eq!(
+        waiver_objects(&app)[0],
+        vec![format!("net:SENSE@{new}")],
+        "the waiver still matches"
+    );
+}
+
+/// #2172: a Save As onto the document's own file is a plain save; no new
+/// document, so the id and the waivers stay.
+#[test]
+fn a_save_as_onto_its_own_file_keeps_the_id() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("A.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let id = open_active(&mut app, &a, uuid::Uuid::now_v7());
+    push_waiver_project(&mut app, tmp.path(), id, uuid::Uuid::now_v7());
+
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::SaveAs {
+            from_path: a.clone(),
+            to_path: a.clone(),
+        }),
+    );
+
+    assert_eq!(app.document_state.engines[&a].document().uuid, id);
+    assert_eq!(header_id(&a), id, "the file keeps the id");
+    assert_eq!(waiver_objects(&app)[0], vec![format!("net:SENSE@{id}")]);
+}
+
+/// #2172: a Save As whose tab could not be re-keyed (another document took
+/// the target while the write ran) leaves that document's id and the waivers
+/// as they were.
+#[test]
+fn a_save_as_that_could_not_re_key_adopts_no_id() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("A.snxsch");
+    let target = tmp.path().join("T.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let old = open_active(&mut app, &a, uuid::Uuid::now_v7());
+    push_waiver_project(&mut app, tmp.path(), old, uuid::Uuid::now_v7());
+    let task = app.update(Message::File(FileMsg::SaveAs {
+        from_path: a.clone(),
+        to_path: target.clone(),
+    }));
+    // While the write runs another document takes the target.
+    let rival = sheet_with(Vec::new());
+    let rival_id = rival.uuid;
+    app.document_state.engines.insert(
+        target.clone(),
+        signex_engine::Engine::new(rival).expect("engine"),
+    );
+    crate::settle_support::settle_task(&mut app, task);
+
+    assert_eq!(
+        app.document_state.engines[&target].document().uuid,
+        rival_id,
+        "the other document keeps its id"
+    );
+    assert_eq!(app.document_state.engines[&a].document().uuid, old);
+    assert_eq!(waiver_objects(&app)[0], vec![format!("net:SENSE@{old}")]);
 }
