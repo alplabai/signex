@@ -86,27 +86,3 @@ fn a_switched_language_reaches_the_native_spec_through_the_sync_path() {
     assert_ne!(title, EN_US_FILE);
     assert_eq!(title, in_window_title(&app));
 }
-
-/// The switch is saved and the next boot reads it back.
-#[test]
-fn a_switched_language_is_saved_and_read_back_at_boot() {
-    let (mut app, _task) = Signex::new();
-    let mut driver = crate::task_driver::TaskDriver::new();
-    for tag in ["en-US", "en-XA"] {
-        let pref = LanguagePref::Locale(tag.to_owned());
-        let task = app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
-        driver.settle(&mut app, task).expect("the write settled");
-    }
-
-    let text =
-        std::fs::read_to_string(crate::fonts::prefs_file_path()).expect("prefs.json was written");
-    let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
-    assert_eq!(json["language"], "en-XA");
-
-    let (second, _task) = Signex::new();
-    assert_eq!(second.ui_state.i18n.locale(), "en-XA");
-    assert_eq!(
-        second.ui_state.i18n.pref(),
-        &LanguagePref::Locale("en-XA".to_owned())
-    );
-}

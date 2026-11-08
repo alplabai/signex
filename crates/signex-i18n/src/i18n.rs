@@ -63,10 +63,12 @@ static EN_US_SHARED: LazyLock<std::sync::Arc<I18n>> =
     LazyLock::new(|| std::sync::Arc::new(I18n::new(&LanguagePref::Locale(EN_US.to_owned()))));
 
 impl I18n {
-    /// The locale `pref` resolves to. An explicit locale this build does not
-    /// have renders in the best fallback and is named by
-    /// [`Self::dropped_locale`] for the caller to report; `pref` stays as
-    /// chosen, so saving Preferences does not erase it.
+    /// The locale `pref` resolves to. An explicit non-English request that
+    /// fell back to en-US, or a tag that does not parse, is named by
+    /// [`Self::dropped_locale`] for the caller to report. An English variant
+    /// (`en`, `en-GB`) renders en-US unreported, and a case or script variant
+    /// of an available language (`en-xa`, `en-Latn-XA`) is not reported
+    /// either. `pref` stays as chosen, so saving Preferences does not erase it.
     pub fn new(pref: &LanguagePref) -> Self {
         let requested = locale::requested(pref);
         let tag = locale::negotiate(&requested);
