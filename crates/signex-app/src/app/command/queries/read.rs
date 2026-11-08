@@ -7,10 +7,10 @@
 use serde_json::{Map, Value, json};
 
 use super::{Answer, text_operand};
+use crate::app::Signex;
 use crate::app::command::CommandArgs;
 use crate::app::document::DocumentKey;
 use crate::app::document_ids::DocumentKind;
-use crate::app::{Signex, TabDocument};
 
 /// Elements returned when the call names no `limit`.
 const DEFAULT_LIMIT: usize = 500;
@@ -220,13 +220,7 @@ impl Signex {
                 )
             }
             Some(DocumentKey::Pcb(path)) => {
-                let board = docs
-                    .tabs
-                    .iter()
-                    .find(|tab| &tab.path == path)
-                    .and_then(|tab| tab.cached_document.as_ref())
-                    .map(|TabDocument::Pcb(board)| board)
-                    .ok_or("the board is not loaded")?;
+                let board = docs.pcb_board(path).ok_or("the board is not loaded")?;
                 (
                     serde_json::to_value(board).map_err(|e| e.to_string())?,
                     BOARD_ARRAYS,

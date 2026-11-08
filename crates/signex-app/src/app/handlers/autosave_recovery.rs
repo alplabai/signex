@@ -373,14 +373,8 @@ impl Signex {
                 }
             }
             RestoredDocument::Pcb(board) => {
-                let live = docs
-                    .tabs
-                    .iter()
-                    .find(|tab| tab.path == path)
-                    .and_then(|tab| tab.cached_document.as_ref())
-                    .map(|crate::app::TabDocument::Pcb(live)| live.uuid);
-                if let Some(uuid) = live {
-                    board.uuid = uuid;
+                if let Some(live) = docs.pcb_board(path) {
+                    board.uuid = live.uuid;
                 }
             }
             RestoredDocument::Project(data) => {

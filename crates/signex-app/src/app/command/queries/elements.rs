@@ -5,9 +5,9 @@ use serde_json::{Value, json};
 use signex_types::pcb::PcbBoard;
 
 use super::sheet_view::{Element, sheet_elements};
+use crate::app::Signex;
 use crate::app::document::DocumentKey;
 use crate::app::document_ids::{DocumentEntry, DocumentKind};
-use crate::app::{Signex, TabDocument};
 
 /// An element and where it lives.
 pub(super) struct Located {
@@ -106,12 +106,7 @@ impl Signex {
                     .engines
                     .get(path)
                     .map(|engine| sheet_elements(engine.document())),
-                (Some(DocumentKey::Pcb(path)), _) => docs
-                    .tabs
-                    .iter()
-                    .find(|tab| &tab.path == path)
-                    .and_then(|tab| tab.cached_document.as_ref())
-                    .map(|TabDocument::Pcb(board)| pcb_elements(board)),
+                (Some(DocumentKey::Pcb(path)), _) => docs.pcb_board(path).map(pcb_elements),
                 (None, DocumentKind::Schematic | DocumentKind::Pcb) => {
                     unloaded.push(entry);
                     continue;

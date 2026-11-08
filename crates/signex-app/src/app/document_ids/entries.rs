@@ -186,6 +186,18 @@ impl Signex {
                 ));
             }
         }
+        // A board parked by its closed dirty tab is still a loaded, dirty
+        // document: it holds the unsaved edits (#2149).
+        for (path, board) in &docs.parked_pcb_boards {
+            entries.push(self.entry_of_held(
+                DocumentKey::Pcb(path.clone()),
+                DocumentId::from_uuid(board.uuid),
+                DocumentKind::Pcb,
+                Some(path.clone()),
+                file_stem(path),
+                board.unknown.newer_minor_source.is_some(),
+            ));
+        }
         for (path, editor) in &docs.symbol_editors {
             entries.push(self.entry_of_held(
                 DocumentKey::Symbol(path.clone()),

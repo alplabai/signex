@@ -984,3 +984,142 @@ fn a_parked_dirty_sheet_keeps_its_id_against_a_copy_opened_later() {
         "Messages says so"
     );
 }
+
+fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
+    signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: id,
+        version: 1,
+        generator: "t".into(),
+        thickness,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    }
+}
+
+/// A board open in a tab, edited (thickness 2.4) and parked by closing its
+/// dirty tab (#2149).
+fn parked_board(app: &mut Signex, path: &Path, id: uuid::Uuid) {
+    app.open_pcb_tab(path.to_path_buf(), "Board".into(), board_with(id, 1.6));
+    let tab = app
+        .document_state
+        .tabs
+        .iter_mut()
+        .find(|t| t.path == path)
+        .unwrap();
+    tab.cached_document = Some(crate::app::TabDocument::Pcb(board_with(id, 2.4)));
+    app.document_state.mark_document_dirty(path);
+    let index = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == path)
+        .unwrap();
+    let _ = app.close_tab_parking_dirty(index);
+    assert!(app.document_state.parked_pcb_boards.contains_key(path));
+}
+
+#[test]
+fn a_parked_board_is_listed_loaded_and_dirty_and_read_with_its_unsaved_edits() {
+    let dir = temp_dir();
+    let mut app = app_with_project(dir.path());
+    let board = dir.path().join("Board.snxpcb");
+    parked_board(&mut app, &board, uid(900));
+
+    let listed = headless(&mut app, "list_documents", &[]);
+    let entry = listed["documents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["kind"] == "pcb")
+        .expect("the board is listed");
+    assert_eq!(entry["loaded"], true, "{entry}");
+    assert_eq!(entry["dirty"], true, "{entry}");
+    assert_eq!(entry["id"], uid(900).to_string());
+
+    let read = headless(
+        &mut app,
+        "read_document",
+        &[&format!("document={}", uid(900))],
+    );
+    assert_eq!(read["header"]["thickness"], 2.4, "the unsaved edit: {read}");
+}
+
+#[test]
+fn a_copy_opened_while_a_board_is_parked_does_not_take_its_id() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = temp_dir();
+    let mut app = app_with_project(dir.path());
+    let (a, b) = (
+        dir.path().join("Board.snxpcb"),
+        dir.path().join("Copy.snxpcb"),
+    );
+    parked_board(&mut app, &a, uid(900));
+
+    app.open_pcb_tab(b.clone(), "Copy".into(), board_with(uid(900), 1.6));
+
+    assert_eq!(app.document_state.parked_pcb_boards[&a].uuid, uid(900));
+    let copy = app
+        .document_state
+        .pcb_board(&b)
+        .expect("the copy is open")
+        .uuid;
+    assert_ne!(copy, uid(900), "the copy was given a new id");
+    assert!(app.attach_parked_pcb_tab(a.clone(), "Board".into()));
+    assert_eq!(app.document_state.pcb_board(&a).unwrap().uuid, uid(900));
+}
+
+#[test]
+fn saving_a_parked_board_by_its_id_writes_the_unsaved_edits() {
+    let dir = temp_dir();
+    let mut app = app_with_project(dir.path());
+    let board = dir.path().join("Board.snxpcb");
+    parked_board(&mut app, &board, uid(900));
+
+    run_by_document(
+        &mut app,
+        "save_document",
+        &[&format!("document={}", uid(900))],
+    );
+
+    let text = std::fs::read_to_string(&board).expect("the board was written");
+    let saved = signex_types::format::SnxPcb::parse(&text).unwrap().board;
+    assert_eq!(saved.thickness, 2.4);
+    assert!(
+        app.document_state.parked_pcb_boards.is_empty(),
+        "a save lets the parked board go"
+    );
+}
+
+#[test]
+fn a_parked_board_that_repeats_an_id_is_given_a_new_one() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = temp_dir();
+    let mut app = app_with_project(dir.path());
+    let (first, parked) = (
+        dir.path().join("First.snxpcb"),
+        dir.path().join("Board.snxpcb"),
+    );
+    app.open_pcb_tab(first.clone(), "First".into(), board_with(uid(901), 1.6));
+    parked_board(&mut app, &parked, uid(902));
+    // The parked board comes to hold the id of the board seen before it.
+    app.document_state
+        .parked_pcb_boards
+        .get_mut(&parked)
+        .unwrap()
+        .uuid = uid(901);
+
+    let repaired = app.reconcile_document_ids();
+
+    assert_eq!(repaired.len(), 1, "{repaired:?}");
+    assert_ne!(app.document_state.parked_pcb_boards[&parked].uuid, uid(901));
+    assert_eq!(app.document_state.pcb_board(&first).unwrap().uuid, uid(901));
+}

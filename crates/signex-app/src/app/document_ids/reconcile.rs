@@ -139,6 +139,9 @@ impl Signex {
                         board.uuid = id.as_uuid();
                     }
                 }
+                if let Some(board) = docs.parked_pcb_boards.get_mut(path) {
+                    board.uuid = id.as_uuid();
+                }
             }
             DocumentKey::Symbol(path) => {
                 if let Some(editor) = docs.symbol_editors.get_mut(path) {
