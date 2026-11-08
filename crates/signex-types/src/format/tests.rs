@@ -979,3 +979,34 @@ fn an_old_form_sheet_upgrades_on_load_and_saves_in_the_new_form() {
         new
     );
 }
+
+#[test]
+fn the_shared_resolver_gives_each_instance_the_version_it_draws_with() {
+    // ERC, the netlist and the output writers all read a placed symbol's body
+    // through `resolve_lib_symbol`.
+    let mut sheet = empty_sheet();
+    let (v1, v2) = (lib_body("L:A", "one"), lib_body("L:A", "two"));
+    let keys = [
+        sheet.embed_body(v1.clone()).unwrap(),
+        sheet.embed_body(v2.clone()).unwrap(),
+    ];
+    for (n, key) in keys.iter().enumerate() {
+        let mut sym = sample_symbol();
+        sym.lib_id = "L:A".into();
+        sym.body_ref = key.clone();
+        sheet.symbols.push(sym);
+        assert_eq!(n + 1, sheet.symbols.len());
+    }
+    let bodies: Vec<_> = sheet
+        .symbols
+        .iter()
+        .map(|s| {
+            sheet
+                .resolve_lib_symbol(s)
+                .expect("body")
+                .description
+                .clone()
+        })
+        .collect();
+    assert_eq!(bodies, ["one", "two"]);
+}
