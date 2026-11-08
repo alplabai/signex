@@ -24,13 +24,14 @@ This repository contains the Signex desktop editor codebase.
 The repository exists to build one product family from one shared foundation:
 
 - **Signex Community** — the open desktop EDA editor
-- **Signex Pro** — the commercial edition that adds Signal AI and live
-  collaboration
+- **Signex Pro** — the commercial edition that adds hosted Signex AI and the
+  Generator (Team adds collaboration; Enterprise adds SSO, a self-hosted AI
+  gateway and data agreements)
 
 The core rule is simple:
 
-**There is one editor core and one primary codebase. Community and Pro are not
-separate products implemented in separate repositories.**
+**There is one editor core, and it lives here. Pro is built from a separate
+private workspace that depends on this core; it is not a fork of it.**
 
 This matters for three reasons:
 
@@ -92,9 +93,12 @@ services for normal editing workflows.
 Signex Pro is built on top of the same core and adds capabilities that require
 commercial infrastructure or proprietary integration, especially:
 
-- Signal AI
-- Live collaboration
-- Team-oriented cloud workflows
+- Signex AI and the Generator, run through Signex's hosted service (Pro)
+- Live collaboration (Team)
+- SSO, a self-hosted AI gateway and data agreements (Enterprise)
+
+The plugin system and the headless CLI are Community, not Pro. Customer
+designs are never used for AI training unless the customer opts in.
 
 Pro-specific integrations should remain separable from the editor core so that:
 
