@@ -13,7 +13,8 @@
 # labels are a `Localized`, a `UserText` or `raw("…")`, so no literal skips the
 # message catalog unnoticed. Only `signex-widgets/src/house.rs` calls the iced
 # functions, under an `allow` with a reason; scripts/check_raw_labels.sh counts
-# the `raw` call sites and the count may only go down. Clippy cannot ban a
+# the `raw` call sites and the count must equal the baseline (lower it with
+# `--generate` in the same change). Clippy cannot ban a
 # trait impl (`Text::from("X")`, `"X".into()`) or a `&str` used as a widget:
 # the ast-grep rule no-raw-literal-widget and the macro check in that script
 # cover those.

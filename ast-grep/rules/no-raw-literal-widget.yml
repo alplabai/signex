@@ -37,11 +37,24 @@ rule:
             - kind: call_expression
             - has:
                 field: function
-                regex: '(^|::)(container|scrollable|mouse_area|button)$|(^|::)(Element|Text)::from$|(^|::)UserText::new$'
+                regex: '(^|::)(container|scrollable|mouse_area|button|center|center_x|center_y|right|bottom|float|pin|sensor|opaque)$|(^|::)(Element|Text|Span)::from$|(^|::)(Container|Scrollable|MouseArea)::new$|(^|::)UserText::new$'
             - has:
                 field: arguments
                 has:
                   nthChild: 1
+                  kind: string_literal
+        # hover(base, top) takes a widget in both arguments.
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)hover$'
+            - has:
+                field: arguments
+                has:
+                  any:
+                    - nthChild: 1
+                    - nthChild: 2
                   kind: string_literal
         # The tip of a tooltip is its second argument.
         - all:
