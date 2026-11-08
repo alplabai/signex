@@ -5390,6 +5390,7 @@ name = "signex-engine"
 version = "26.11.0-rc.1"
 dependencies = [
  "anyhow",
+ "pcb-geom",
  "serde",
  "serde_json",
  "signex-erc",

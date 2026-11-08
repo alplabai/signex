@@ -2,7 +2,7 @@ use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
 use super::error::BoardCommandError;
-use super::footprint;
+use super::footprint::{self, FootprintFace};
 use super::items::{self, BoardItemId, RemovedItem};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
@@ -12,13 +12,20 @@ pub enum BoardCommand {
     MoveFootprint { footprint: Uuid, to: Point },
     /// Set the footprint's rotation about its origin to `degrees`.
     Rotate { footprint: Uuid, degrees: f64 },
-    /// Move the footprint to the other side of the board: its layer and its
-    /// pads' and graphics' sided layers swap, and its rotation is negated.
-    /// Local geometry is untouched; the x mirror is applied when the
-    /// footprint is placed on the board (ADR-0005). A flip is its own
-    /// inverse. The caller enforces `Footprint::locked` for move, rotate
-    /// and flip.
+    /// Move the footprint to the other side of the board with
+    /// `pcb_geom::flip_footprint` (ADR-0005 §8): sided layers of the
+    /// footprint, pads, graphics and properties swap and the rotation is
+    /// stored as `(-rotation) mod 360`. Local geometry is untouched. The
+    /// inverse is a [`BoardCommand::RestoreFace`], so undo is exact. The
+    /// caller enforces `Footprint::locked` for move, rotate and flip.
     Flip { footprint: Uuid },
+    /// Put back the rotation and sided layers a flip replaced; the inverse
+    /// of [`BoardCommand::Flip`]. Refused if the footprint's pad, graphic
+    /// or property count changed since the face was taken.
+    RestoreFace {
+        footprint: Uuid,
+        face: FootprintFace,
+    },
     /// Replace the board outline polygon.
     SetBoardOutline { outline: Vec<Point> },
     /// Remove the named items.
@@ -65,6 +72,10 @@ impl BoardCommand {
                 degrees,
             } => footprint::rotate_to(board, id, degrees),
             Self::Flip { footprint: id } => footprint::flip(board, id),
+            Self::RestoreFace {
+                footprint: id,
+                face,
+            } => footprint::restore_face(board, id, face),
             Self::SetBoardOutline { outline } => set_outline(board, outline),
             Self::DeleteItems { items: ids } => items::delete(board, &ids),
             Self::RestoreItems { items: removed } => items::restore(board, removed),

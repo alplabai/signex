@@ -1,6 +1,7 @@
 //! Move, rotate and flip one footprint. Pads, graphics and property texts
 //! are stored in the footprint's local frame, so none of the three rewrites
-//! them. Lock state is the caller's check, not this module's.
+//! their positions. The flip itself is `pcb_geom::flip_footprint`. Lock state
+//! is the caller's check, not this module's.
 
 use signex_types::pcb::{Footprint, PcbBoard, Point};
 use uuid::Uuid;
@@ -8,7 +9,6 @@ use uuid::Uuid;
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
 use super::items::BoardItemId;
-use super::layer_side::swap_side_in_place;
 
 fn find(board: &mut PcbBoard, id: Uuid) -> Result<&mut Footprint, BoardCommandError> {
     board
@@ -65,38 +65,79 @@ pub(super) fn rotate_to(
 
 pub(super) fn flip(board: &mut PcbBoard, id: Uuid) -> Result<Applied, BoardCommandError> {
     let fp = find(board, id)?;
-    flip_footprint(fp);
+    let before = FootprintFace::of(fp);
+    pcb_geom::flip_footprint(fp);
     Ok(Applied {
-        inverse: BoardCommand::Flip { footprint: id },
+        inverse: BoardCommand::RestoreFace {
+            footprint: id,
+            face: before,
+        },
         patch: patch(BoardPatchKind::FootprintFlipped, id),
     })
 }
 
-/// Flip `fp` to the other side. Pads, graphics and properties keep their
-/// library-local geometry (ADR-0005); only sided layers swap and the
-/// rotation is negated, which with the placement-time x mirror gives
-/// M·R(θ)·l + o. Negation is exact, so two flips restore every bit.
-///
-/// Property positions are read as footprint-local like pads, so they stay
-/// untouched too. Unknown pad columns pass through unchanged.
-fn flip_footprint(fp: &mut Footprint) {
-    swap_side_in_place(&mut fp.layer);
-    fp.rotation = negate_keeping_zero(fp.rotation);
-    for pad in &mut fp.pads {
-        pad.layers.iter_mut().for_each(swap_side_in_place);
+pub(super) fn restore_face(
+    board: &mut PcbBoard,
+    id: Uuid,
+    face: FootprintFace,
+) -> Result<Applied, BoardCommandError> {
+    let fp = find(board, id)?;
+    if !face.fits(fp) {
+        return Err(BoardCommandError::FaceMismatch(id));
     }
-    for graphic in &mut fp.graphics {
-        swap_side_in_place(&mut graphic.layer);
-    }
-    for property in &mut fp.properties {
-        if let Some(layer) = property.layer.as_mut() {
-            swap_side_in_place(layer);
-        }
-    }
+    let current = FootprintFace::of(fp);
+    face.write(fp);
+    Ok(Applied {
+        inverse: BoardCommand::RestoreFace {
+            footprint: id,
+            face: current,
+        },
+        patch: patch(BoardPatchKind::FootprintFlipped, id),
+    })
 }
 
-/// Negate, keeping a zero as it is so a value at 0 does not read back
-/// as -0. Still an involution: 0.0 and -0.0 each map to themselves.
-fn negate_keeping_zero(value: f64) -> f64 {
-    if value == 0.0 { value } else { -value }
+/// The side-dependent state of a footprint: its rotation and every sided
+/// layer name. A flip stores the state it replaced, so undo puts back the
+/// exact rotation and layers instead of flipping again.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FootprintFace {
+    layer: String,
+    rotation: f64,
+    pad_layers: Vec<Vec<String>>,
+    graphic_layers: Vec<String>,
+    property_layers: Vec<Option<String>>,
+}
+
+impl FootprintFace {
+    fn of(fp: &Footprint) -> Self {
+        Self {
+            layer: fp.layer.clone(),
+            rotation: fp.rotation,
+            pad_layers: fp.pads.iter().map(|p| p.layers.clone()).collect(),
+            graphic_layers: fp.graphics.iter().map(|g| g.layer.clone()).collect(),
+            property_layers: fp.properties.iter().map(|p| p.layer.clone()).collect(),
+        }
+    }
+
+    /// Whether the footprint still has the pads, graphics and properties
+    /// this face was taken from.
+    fn fits(&self, fp: &Footprint) -> bool {
+        self.pad_layers.len() == fp.pads.len()
+            && self.graphic_layers.len() == fp.graphics.len()
+            && self.property_layers.len() == fp.properties.len()
+    }
+
+    fn write(self, fp: &mut Footprint) {
+        fp.layer = self.layer;
+        fp.rotation = self.rotation;
+        for (pad, layers) in fp.pads.iter_mut().zip(self.pad_layers) {
+            pad.layers = layers;
+        }
+        for (graphic, layer) in fp.graphics.iter_mut().zip(self.graphic_layers) {
+            graphic.layer = layer;
+        }
+        for (property, layer) in fp.properties.iter_mut().zip(self.property_layers) {
+            property.layer = layer;
+        }
+    }
 }

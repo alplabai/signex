@@ -317,6 +317,20 @@ fn extreme_query_inputs_do_not_overflow() {
             .hit_point(PointNm::new(i64::MAX, i64::MAX), i64::MAX)
             .is_empty()
     );
+    let everything = RectNm::new(
+        PointNm::new(i64::MIN, i64::MIN),
+        PointNm::new(i64::MAX, i64::MAX),
+    );
+    assert!(
+        index
+            .hit_rect(&everything, RectSelect::Touching)
+            .contains(&TRACK)
+    );
+    assert!(
+        index
+            .hit_rect(&everything, RectSelect::Inside)
+            .contains(&TRACK)
+    );
 }
 
 #[test]

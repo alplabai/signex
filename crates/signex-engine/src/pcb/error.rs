@@ -22,6 +22,8 @@ pub enum BoardCommandError {
     },
     #[error("two restored items claim index {index} of the same list")]
     DuplicateRestoreIndex { index: usize },
+    #[error("footprint {0} no longer has the pads, graphics and properties the face was taken from")]
+    FaceMismatch(Uuid),
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
 }

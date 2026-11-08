@@ -1,4 +1,6 @@
+use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::BoardSide;
 use uuid::Uuid;
 
 use super::*;
@@ -298,7 +300,8 @@ fn random_edit_sequences_unwind_to_the_original_board() {
 /// World point of a footprint-local point (ADR-0005): mirror local x on the
 /// bottom side, rotate counter-clockwise by the rotation, translate.
 fn world(fp: &signex_types::pcb::Footprint, local: Point) -> (f64, f64) {
-    let x = if fp.layer == "BottomCopper" {
+    let bottom = parse_pcb_layer(&fp.layer).and_then(|l| l.side()) == Some(BoardSide::Bottom);
+    let x = if bottom {
         -local.x
     } else {
         local.x
@@ -321,7 +324,7 @@ fn flip_swaps_sides_and_keeps_local_geometry() {
     .unwrap();
     let fp = &b.footprints[0];
     assert_eq!(fp.layer, "BottomCopper");
-    assert_eq!(fp.rotation, -33.333333333333336);
+    assert_eq!(fp.rotation, (-33.333333333333336_f64).rem_euclid(360.0));
     assert_eq!(fp.position, before.position);
     assert_eq!(fp.pads[0].position, before.pads[0].position);
     assert_eq!(fp.pads[1].position, before.pads[1].position);
@@ -494,6 +497,48 @@ fn restore_refuses_a_gap_or_a_shared_index() {
     assert_eq!(snapshot(&b), before);
 }
 
+fn flipped_name(name: &str) -> String {
+    parse_pcb_layer(name).map_or_else(|| name.to_owned(), |l| pcb_layer_token(l.flipped()))
+}
+
+#[test]
+fn flip_inverse_restores_rotation_and_layers_exactly() {
+    for rotation in [0.1, 359.9, 33.333333333333336, -0.0, 0.0, 720.5, -90.0] {
+        let mut b = board();
+        b.footprints[0].rotation = rotation;
+        let before = snapshot(&b);
+        let applied = BoardCommand::Flip {
+            footprint: id(FP_A),
+        }
+        .apply(&mut b)
+        .unwrap();
+        applied.inverse.apply(&mut b).unwrap();
+        assert_eq!(snapshot(&b), before, "{rotation}");
+        assert_eq!(
+            b.footprints[0].rotation.to_bits(),
+            rotation.to_bits(),
+            "{rotation}"
+        );
+    }
+}
+
+#[test]
+fn restore_face_refuses_a_footprint_that_changed_shape() {
+    let mut b = board();
+    let applied = BoardCommand::Flip {
+        footprint: id(FP_A),
+    }
+    .apply(&mut b)
+    .unwrap();
+    b.footprints[0].pads.pop();
+    let before = snapshot(&b);
+    assert_eq!(
+        applied.inverse.apply(&mut b),
+        Err(BoardCommandError::FaceMismatch(id(FP_A)))
+    );
+    assert_eq!(snapshot(&b), before);
+}
+
 #[test]
 fn layer_names_swap_by_side() {
     for (name, swapped) in [
@@ -506,7 +551,7 @@ fn layer_names_swap_by_side() {
         ("Mechanical 1", "Mechanical 1"),
         ("", ""),
     ] {
-        assert_eq!(opposite_side_name(name), swapped);
-        assert_eq!(opposite_side_name(swapped), name);
+        assert_eq!(flipped_name(name), swapped);
+        assert_eq!(flipped_name(swapped), name);
     }
 }

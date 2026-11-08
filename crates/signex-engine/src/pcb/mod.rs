@@ -13,12 +13,11 @@ mod command;
 mod error;
 mod footprint;
 mod items;
-mod layer_side;
 
 #[cfg(test)]
 mod tests;
 
 pub use command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 pub use error::BoardCommandError;
+pub use footprint::FootprintFace;
 pub use items::{BoardItem, BoardItemId, RemovedItem};
-pub use layer_side::{opposite_side, opposite_side_name};
