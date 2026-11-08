@@ -190,7 +190,7 @@ impl Signex {
             .then(|| crate::app::command::missing_headless_operand(command))
             .flatten();
         let opening = crate::app::command::answers_with_the_new_document(command)
-            .then(|| self.open_snapshot());
+            .then(|| self.open_snapshot(&args));
         let result = if let Some(answered) = self.run_query_headless(command, &args) {
             answered
         } else if let Some(name) = missing {

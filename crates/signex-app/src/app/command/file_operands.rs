@@ -32,7 +32,6 @@ pub(super) fn open(app: &mut Signex, args: &CommandArgs) -> Ran {
         Ok(path) => path,
         Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
     };
-    app.document_state.open_requested = Some(path.clone());
     outcome(app.open_path_reported(path))
 }
 

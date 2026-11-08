@@ -616,7 +616,6 @@ impl Signex {
                 active_git_repos: std::collections::HashSet::new(),
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
-                open_requested: None,
                 pending_restores: Default::default(),
                 pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
                 dir_case: Default::default(),

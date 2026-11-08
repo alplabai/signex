@@ -62,7 +62,7 @@ fn run_with_operand(app: &mut Signex, name: &str, path: &Path, extra: &[&str]) -
     operands.extend(extra.iter().map(|e| e.to_string()));
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
     let args = CommandArgs::parse_operands(&id, &refs).expect("operands");
-    let snapshot = app.open_snapshot();
+    let snapshot = app.open_snapshot(&args);
     let (outcome, task) = app.run_operands(&id, &args);
     match outcome {
         CommandOutcome::Ran => app.settle_and_answer_new_document(&id, snapshot, task).0,
@@ -129,6 +129,26 @@ fn open_document_with_a_path_opens_what_the_dialog_route_opens() {
     let (docs, active) = open_set(&by_operand);
     assert!(docs.iter().any(|(path, _)| path.as_ref() == Some(&sheet)));
     assert_eq!(open_set(&by_dialog), (docs, active));
+}
+
+/// A dialog answer left over from an earlier command never names the document
+/// an operand run opened.
+#[test]
+fn the_path_operand_wins_over_a_leftover_dialog_answer() {
+    let _serial = serial();
+    let dir = dir();
+    let (a, b) = (dir.path().join("a.snxsch"), dir.path().join("b.snxsch"));
+    write_schematic(&a);
+    write_schematic(&b);
+    let (mut app, answers) = headless_app();
+    answers.replace_all([("path".to_string(), a.display().to_string())]);
+
+    let outcome = run_with_operand(&mut app, "open_document", &b, &[]);
+
+    let CommandOutcome::Answered(answer) = outcome else {
+        panic!("open_document did not answer: {outcome:?}");
+    };
+    assert_eq!(answer["path"], b.display().to_string(), "{answer}");
 }
 
 #[test]
