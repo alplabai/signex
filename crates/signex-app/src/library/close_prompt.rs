@@ -45,6 +45,15 @@ pub(crate) fn dirty_path_label(
     }
 }
 
+/// The intro's title and secondary text; the window height follows their
+/// wrapped line counts (`app/handlers/modal_sizing.rs`).
+pub(crate) fn intro_texts(library_name: &str, drafts: usize) -> (&'static str, String) {
+    (
+        "Save the drafts before closing?",
+        format!("'{library_name}' has {drafts} unsaved draft(s). What would you like to do?"),
+    )
+}
+
 pub fn view<'a>(
     state: &'a LibraryState,
     confirm: &'a CloseLibraryConfirmState,
@@ -62,16 +71,11 @@ pub fn view<'a>(
         tokens,
     );
 
-    let summary = dialog_intro(
-        DialogIcon::Warn,
-        "Save the drafts before closing?",
-        Some(format!(
-            "'{}' has {} unsaved draft(s). What would you like to do?",
-            confirm.library_name,
-            confirm.dirty_editors.len() + confirm.dirty_paths.len()
-        )),
-        tokens,
+    let (intro_title, intro_text) = intro_texts(
+        &confirm.library_name,
+        confirm.dirty_editors.len() + confirm.dirty_paths.len(),
     );
+    let summary = dialog_intro(DialogIcon::Warn, intro_title, Some(intro_text), tokens);
 
     // List of dirty drafts by display_internal_pn. We look each one
     // up in `state.editors` (keyed by `EditorAddress`) so the modal

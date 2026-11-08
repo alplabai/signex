@@ -352,6 +352,15 @@ pub fn view<'a>(
     .boxed()
 }
 
+/// The delete confirm's intro title and secondary text; the window height
+/// follows their wrapped line counts (`app/handlers/modal_sizing.rs`).
+pub(crate) fn delete_intro_texts(internal_pn: &str, table: &str) -> (String, String) {
+    (
+        format!("Delete {internal_pn}?"),
+        format!("Delete row {internal_pn} from {table}? This cannot be undone from the UI."),
+    )
+}
+
 /// Delete-row confirm modal — sibling overlay launched from the
 /// Library Browser action row's Delete Selected button.
 pub fn view_delete_confirm<'a>(
@@ -362,16 +371,13 @@ pub fn view_delete_confirm<'a>(
 ) -> Element<'a, LibraryMessage> {
     let header = header_title_only("Delete Component?", windowed, tokens);
 
-    let msg_label = format!(
-        "Delete row {} from {}? This cannot be undone from the UI.",
-        confirm.internal_pn, confirm.table,
-    );
+    let (intro_title, msg_label) = delete_intro_texts(&confirm.internal_pn, &confirm.table);
 
     // As tall as its text: the footer follows it, with no empty band.
     let body = container(
         column![dialog_intro(
             DialogIcon::Warn,
-            format!("Delete {}?", confirm.internal_pn),
+            intro_title,
             Some(msg_label),
             tokens,
         )]

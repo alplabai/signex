@@ -52,12 +52,12 @@ fn header_strip<'a>(
     windowed: bool,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    // In its own OS window the native title bar carries the title and the
+    // In its own OS window the window's title bar carries the title and the
     // close: the slot stays empty (docs/DETACHED_MODALS.md).
     let ts = TypeScale::default();
     if windowed {
         // A note (the library or file the dialog acts on) is not in the
-        // native title, so it stays, as a muted line above the body.
+        // window title, so it stays, as a muted line above the body.
         return match end {
             HeaderEnd::Note(note) => container(
                 text(note)
@@ -80,7 +80,7 @@ fn header_strip<'a>(
             subtitle,
             None,
             close,
-            crate::app::view::dialogs::DIALOG_TITLE_BAR_H,
+            crate::app::view::dialogs::DIALOG_HEADER_H,
             tokens,
         );
     }

@@ -231,7 +231,7 @@ impl Signex {
     }
 
     fn detach_browser_modal(&mut self, modal: ModalId, path: std::path::PathBuf) -> Task<Message> {
-        let (settings, borderless) = self.dialog_window_settings(modal);
+        let (settings, borderless) = self.dialog_window_settings_of(modal, Some(&path));
         let size = settings.size;
         let (id, open_task) = iced::window::open(settings);
         self.note_dialog_window(id, borderless);

@@ -23,8 +23,19 @@ impl Signex {
 
     /// The size `modal`'s window should have: its content, plus the title
     /// bar when the window draws its own.
+    #[cfg(test)]
     pub(crate) fn dialog_window_size(&self, modal: ModalId, borderless: bool) -> Size {
-        let content = self.modal_window_size(modal);
+        self.dialog_window_size_of(modal, None, borderless)
+    }
+
+    /// [`Self::dialog_window_size`] for the window of the browser at `owner`.
+    pub(crate) fn dialog_window_size_of(
+        &self,
+        modal: ModalId,
+        owner: Option<&std::path::Path>,
+        borderless: bool,
+    ) -> Size {
+        let content = self.modal_window_size_of(modal, owner);
         if !borderless {
             return content;
         }
@@ -35,8 +46,17 @@ impl Signex {
 
     /// Settings of a new window for `modal`, and whether it is borderless.
     pub(crate) fn dialog_window_settings(&self, modal: ModalId) -> (iced::window::Settings, bool) {
+        self.dialog_window_settings_of(modal, None)
+    }
+
+    /// [`Self::dialog_window_settings`] for the window of the browser at `owner`.
+    pub(crate) fn dialog_window_settings_of(
+        &self,
+        modal: ModalId,
+        owner: Option<&std::path::Path>,
+    ) -> (iced::window::Settings, bool) {
         let borderless = self.dialog_windows_borderless();
-        let size = self.dialog_window_size(modal, borderless);
+        let size = self.dialog_window_size_of(modal, owner, borderless);
         let mut settings = crate::app::handlers::erc::modal_window_settings(modal, size);
         settings.decorations = !borderless;
         settings.icon = crate::app::bootstrap::bundled_window_icon();

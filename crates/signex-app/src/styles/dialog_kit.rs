@@ -134,6 +134,7 @@ pub fn dialog_button<'a, M: Clone + 'a>(
         .color(color)
         .width(Length::Fill)
         .height(Length::Fill)
+        .wrapping(iced::widget::text::Wrapping::None)
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center);
     let btn = button(face)

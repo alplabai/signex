@@ -476,7 +476,7 @@ impl Signex {
             super::super::super::state::ModalId::SelectionFilterCustom,
         );
 
-        // A real checkbox per kind; the label toggles it too.
+        // A real checkbox per kind; the whole row toggles it too.
         let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
             let toggle = Message::SelectionFilter(SelectionFilterMsg::ToggleCustomKind(kind));
             let check = iced::widget::checkbox(on)
@@ -486,14 +486,16 @@ impl Signex {
                     let toggle = toggle.clone();
                     move |_| toggle.clone()
                 });
-            let name = iced::widget::mouse_area(
-                text(label).size(TS.body).color(text_c).width(Length::Fill),
-            )
-            .on_press(toggle);
-            container(row![check, Space::new().width(SP.m), name].align_y(iced::Alignment::Center))
+            let name = text(label).size(TS.body).color(text_c).width(Length::Fill);
+            iced::widget::mouse_area(
+                container(
+                    row![check, Space::new().width(SP.m), name].align_y(iced::Alignment::Center),
+                )
                 .padding([SP.s, SP.m])
-                .width(Length::Fill)
-                .boxed()
+                .width(Length::Fill),
+            )
+            .on_press(toggle)
+            .boxed()
         };
 
         let body = column![

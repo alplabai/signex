@@ -3,6 +3,8 @@
 //! Graphite only; other themes keep their message line (the header there
 //! already names the dialog).
 
+use std::sync::LazyLock;
+
 use iced::widget::{Row, column, container, svg, text};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
@@ -41,6 +43,17 @@ impl DialogIcon {
     }
 
     /// The 24 x 24 stroke glyph, drawn in the tile's ink.
+    fn index(self) -> usize {
+        match self {
+            Self::Info => 0,
+            Self::Warn => 1,
+            Self::Error => 2,
+            Self::Library => 3,
+            Self::File => 4,
+            Self::Settings => 5,
+        }
+    }
+
     fn glyph(self) -> &'static [u8] {
         match self {
             Self::Info => GLYPH_INFO,
@@ -60,6 +73,19 @@ const GLYPH_LIBRARY: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBo
 const GLYPH_FILE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>"##;
 const GLYPH_SETTINGS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>"##;
 
+/// The six glyphs parsed once, in [`DialogIcon::index`] order.
+static GLYPHS: LazyLock<[svg::Handle; 6]> = LazyLock::new(|| {
+    [
+        DialogIcon::Info,
+        DialogIcon::Warn,
+        DialogIcon::Error,
+        DialogIcon::Library,
+        DialogIcon::File,
+        DialogIcon::Settings,
+    ]
+    .map(|icon| svg::Handle::from_memory(icon.glyph()))
+});
+
 /// Side of the icon tile (28 px at the 11 px base).
 pub const DIALOG_ICON_TILE: f32 = chrome_px(28.0 * 11.0 / 12.0);
 
@@ -68,7 +94,7 @@ pub fn dialog_icon_tile<'a, M: 'a>(icon: DialogIcon, tokens: &ThemeTokens) -> El
     let (fill, ink) = pill_colors(tokens, icon.tone());
     let glyph = DIALOG_ICON_TILE * 15.0 / 28.0;
     container(
-        svg(svg::Handle::from_memory(icon.glyph()))
+        svg(GLYPHS[icon.index()].clone())
             .width(Length::Fixed(glyph))
             .height(Length::Fixed(glyph))
             .style(move |_: &Theme, _| svg::Style { color: Some(ink) }),
