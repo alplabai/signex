@@ -122,6 +122,9 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     );
     assert_eq!(outcome, CommandOutcome::Ran);
     assert_eq!(colours(&app, "a.snxsch"), 3);
+    // Undo is enabled by the active tab's history, which a board has none of.
+    assert_eq!(run(&mut app, "undo", &[&by_id(A)]), CommandOutcome::Ran);
+    assert_eq!(colours(&app, "a.snxsch"), 0);
 }
 
 #[test]

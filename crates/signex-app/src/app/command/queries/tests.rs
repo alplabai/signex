@@ -394,6 +394,16 @@ fn find_by_text_value_and_kind() {
 }
 
 #[test]
+fn a_net_with_two_names_is_called_by_the_smallest() {
+    let mut sheet = sheet(SHEET);
+    sheet.labels.push(label(99, "ALT", (10.0, 10.0)));
+    assert_eq!(
+        super::sheet_view::net_name_of_wire(&sheet, uid(WIRE_B)).as_deref(),
+        Some("ALT")
+    );
+}
+
+#[test]
 fn find_without_an_element_filter_finds_documents() {
     let mut app = app_with(&[("a.snxsch", SHEET), ("power.snxsch", SHEET + 1)]);
     let found = answer(&mut app, "find", &["name=power"]);

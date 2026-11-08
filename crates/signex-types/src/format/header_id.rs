@@ -75,6 +75,15 @@ mod tests {
     }
 
     #[test]
+    fn only_the_head_is_parsed_so_a_body_that_is_not_toml_does_not_hide_the_id() {
+        let file = format!("schematic_id = \"{ID}\"\n[wires]\ncontent = = = not toml\n");
+        assert_eq!(
+            document_id_in_header("snxsch", file.as_bytes()),
+            Some(ID.parse().unwrap())
+        );
+    }
+
+    #[test]
     fn a_key_after_the_first_table_is_not_the_documents() {
         let file = format!("format = \"snxsch/1\"\n[extras]\nschematic_id = \"{ID}\"\n");
         assert_eq!(document_id_in_header("snxsch", file.as_bytes()), None);
