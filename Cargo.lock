@@ -5792,7 +5792,6 @@ dependencies = [
  "icu_list",
  "icu_locale_core",
  "icu_provider",
- "icu_time",
  "intl-memoizer",
  "log",
  "sys-locale",

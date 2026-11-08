@@ -20,7 +20,6 @@ icu_decimal = { version = "~2.2", features = ["ryu"] }
 icu_list = "~2.2"
 icu_locale_core = "~2.2"
 icu_provider = "~2.2"
-icu_time = "~2.2"
 intl-memoizer = "0.5"
 log = "0.4"
 sys-locale = "0.3"
