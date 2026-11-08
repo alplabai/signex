@@ -7,7 +7,7 @@ use iced::{Element, Length, Widget};
 
 use super::widgets::modal_title_header;
 use super::*;
-use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer};
 
 impl Signex {
     pub(in crate::app::view) fn view_create_child_sheet_confirm(&self) -> Element<'_, Message> {
@@ -55,6 +55,7 @@ impl Signex {
             None => full_folder.clone(),
         };
         let field = text_input("sheet.snxsch", &confirm.path_text)
+            .style(crate::panels::form_look::text_input_style)
             .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))
             .on_submit(create.clone())
             .padding([6, 8])
@@ -92,11 +93,13 @@ impl Signex {
                 header,
                 dialog_body(
                     column![
-                        dialog_message(
-                            format!(
+                        crate::styles::dialog_intro(
+                            crate::styles::DialogIcon::File,
+                            format!("Create a file for sheet '{}'", confirm.name),
+                            Some(format!(
                                 "Sheet '{}' has no file yet. Where should it be created?",
                                 confirm.name
-                            ),
+                            )),
                             tokens,
                         ),
                         iced::widget::tooltip(
@@ -122,7 +125,7 @@ impl Signex {
                     .spacing(SP.m),
                 ),
                 dialog_footer(vec![
-                    dialog_button("Later", DialogButtonKind::Secondary, Some(later), tokens),
+                    dialog_button("Later", DialogButtonKind::Cancel, Some(later), tokens),
                     confirm_button,
                 ]),
             ]

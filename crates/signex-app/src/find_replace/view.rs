@@ -42,23 +42,30 @@ fn build<'a>(
         "Find"
     };
 
-    let header = container(
-        row![
-            text(title).size(TS.heading).color(text_primary),
-            Space::new().width(Length::Fill),
-            button(text("Close").size(TS.body).color(text_secondary))
-                .on_press(FindReplaceMsg::Close)
-                .style(crate::styles::menu_item(tokens)),
-        ]
-        .align_y(iced::Alignment::Center)
-        .spacing(SP.m),
-    )
-    .padding([10, 14])
-    .style(crate::styles::toolbar_strip(tokens));
+    // Graphite: the shared dialog header (title, neutral close).
+    let header: Element<'a, FindReplaceMsg> = if crate::styles::is_graphite(tokens) {
+        crate::app::view::dialogs::modal_title_header(title, FindReplaceMsg::Close, tokens)
+    } else {
+        container(
+            row![
+                text(title).size(TS.heading).color(text_primary),
+                Space::new().width(Length::Fill),
+                button(text("Close").size(TS.body).color(text_secondary))
+                    .on_press(FindReplaceMsg::Close)
+                    .style(crate::styles::menu_item(tokens)),
+            ]
+            .align_y(iced::Alignment::Center)
+            .spacing(SP.m),
+        )
+        .padding([10, 14])
+        .style(crate::styles::toolbar_strip(tokens))
+        .boxed()
+    };
 
     let query_row = row![
         text("Find").size(TS.body).color(text_secondary).width(80),
         text_input("Search text", &state.query)
+            .style(crate::panels::form_look::text_input_style)
             .on_input(FindReplaceMsg::QueryChanged)
             .padding([6.0, SP.m])
             .size(TS.label)
@@ -94,6 +101,7 @@ fn build<'a>(
                     .color(text_secondary)
                     .width(80),
                 text_input("Replacement text", &state.replacement)
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(FindReplaceMsg::ReplacementChanged)
                     .padding([6.0, SP.m])
                     .size(TS.label)
@@ -236,7 +244,7 @@ fn build<'a>(
     let header: Element<'a, FindReplaceMsg> = if windowed {
         Space::new().height(0).boxed()
     } else {
-        header.boxed()
+        header
     };
     let (dialog_w, dialog_h) = if windowed {
         (Length::Fill, Length::Fill)
@@ -254,7 +262,14 @@ fn build<'a>(
         .width(dialog_w)
         .height(dialog_h),
     )
-    .style(crate::styles::context_menu(tokens));
+    .style({
+        let card: Box<dyn Fn(&Theme) -> container::Style> = if crate::styles::is_graphite(tokens) {
+            Box::new(crate::styles::modal_card(tokens))
+        } else {
+            Box::new(crate::styles::context_menu(tokens))
+        };
+        move |theme: &Theme| card(theme)
+    });
     if windowed {
         return dialog.boxed();
     }

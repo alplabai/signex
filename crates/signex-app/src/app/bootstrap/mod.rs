@@ -4,7 +4,7 @@ use super::*;
 /// [`iced::window::Icon`]. When `has_bundled_icon` isn't set (i.e. the PNG
 /// hasn't been generated yet) this returns `None` and the window opens with
 /// the platform default icon.
-fn bundled_window_icon() -> Option<iced::window::Icon> {
+pub(in crate::app) fn bundled_window_icon() -> Option<iced::window::Icon> {
     #[cfg(has_bundled_icon)]
     {
         let bytes: &[u8] = include_bytes!("../../../assets/brand/generated/signex-256.png");

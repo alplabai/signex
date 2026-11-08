@@ -82,6 +82,26 @@ pub(crate) fn graphite_header<'a, M: Clone + 'a>(
     height: f32,
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, M> {
+    graphite_header_closing(
+        title,
+        subtitle,
+        trailing,
+        Some(on_close),
+        height,
+        theme_tokens,
+    )
+}
+
+/// [`graphite_header`] whose close button is left out when `on_close` is
+/// `None` (a dialog that must be answered).
+pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
+    title: impl Into<String>,
+    subtitle: Option<String>,
+    trailing: Option<Element<'a, M>>,
+    on_close: Option<M>,
+    height: f32,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
     let mut line = row![
         text(title.into())
@@ -98,7 +118,9 @@ pub(crate) fn graphite_header<'a, M: Clone + 'a>(
     if let Some(extra) = trailing {
         line = line.push(extra);
     }
-    line = line.push(neutral_close_button(theme_tokens, on_close));
+    if let Some(on_close) = on_close {
+        line = line.push(neutral_close_button(theme_tokens, on_close));
+    }
     let (paper, rule, corner) = (
         ti(theme_tokens.paper),
         r.line_soft,

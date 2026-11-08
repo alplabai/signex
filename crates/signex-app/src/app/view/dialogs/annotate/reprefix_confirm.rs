@@ -6,9 +6,7 @@ use iced::widget::{Space, column, container, text};
 use iced::{Element, Length, Widget};
 
 use super::super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
-use crate::styles::{
-    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_list, dialog_message,
-};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_list};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -70,7 +68,12 @@ impl Signex {
         }
 
         let body = column![
-            dialog_message(confirm.headline.clone(), tokens),
+            crate::styles::dialog_intro(
+                crate::styles::DialogIcon::Warn,
+                "Change designator prefixes?",
+                Some(confirm.headline.clone()),
+                tokens,
+            ),
             container(dialog_list(lines, tokens)).height(Length::Fixed(220.0)),
             skips,
         ]
@@ -82,7 +85,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
                         tokens,
                     ),

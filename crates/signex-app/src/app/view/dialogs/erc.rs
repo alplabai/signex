@@ -44,13 +44,9 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let subtitle = self
-            .document_state
-            .active_document_project()
-            .map_or_else(|| "Machine rules".to_string(), |p| p.data.name.clone());
         let header_content: Element<'_, Message> = super::graphite::titled_header(
             "Electrical Rules Check",
-            Some(subtitle),
+            self.detached_modal_subtitle(crate::app::state::ModalId::ErcDialog),
             Message::Erc(ErcMsg::CloseDialog),
             tokens,
         );
@@ -151,12 +147,17 @@ impl Signex {
             extras,
             vec![
                 dialog_button(
+                    "Close",
+                    DialogButtonKind::Cancel,
+                    Some(Message::Erc(ErcMsg::CloseDialog)),
+                    tokens,
+                ),
+                dialog_button(
                     "Run ERC",
                     DialogButtonKind::Primary,
                     Some(Message::Erc(ErcMsg::Run)),
                     tokens,
                 ),
-                secondary("Close", Some(Message::Erc(ErcMsg::CloseDialog))),
             ],
         );
 
@@ -261,7 +262,7 @@ impl Signex {
             ),
             dialog_button(
                 "Cancel",
-                DialogButtonKind::Secondary,
+                DialogButtonKind::Cancel,
                 Some(Message::Erc(ErcMsg::ProfileUpdateCancelled)),
                 tokens,
             ),
@@ -333,8 +334,11 @@ impl Signex {
         } else {
             let submit = || Message::Erc(ErcMsg::ProfileSaveSubmitted);
             let editable = !dialog.busy;
-            let mut name_input = text_input("Profile name", &dialog.name).size(TS.body);
+            let mut name_input = text_input("Profile name", &dialog.name)
+                .style(crate::panels::form_look::text_input_style)
+                .size(TS.body);
             let mut version_input = text_input("Version", &dialog.version)
+                .style(crate::panels::form_look::text_input_style)
                 .size(TS.body)
                 .width(90);
             if editable {
@@ -374,7 +378,7 @@ impl Signex {
                     ),
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
                         tokens,
                     ),

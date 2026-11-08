@@ -16,11 +16,11 @@ use iced::widget::{Space, column, container, text};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
-use crate::styles::{Spacing, TypeScale, dialog_body, dialog_list, dialog_message};
+use crate::styles::{DialogIcon, Spacing, TypeScale, dialog_body, dialog_intro, dialog_list};
 use signex_widgets::theme_ext;
 
 use super::messages::{CloseLibraryChoice, LibraryMessage};
-use super::modal_chrome::{danger_btn, footer_strip, header, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, danger_btn, footer_strip, header, primary_btn};
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
 /// How a confirm modal names an unsaved file: relative to its library's
@@ -45,6 +45,15 @@ pub(crate) fn dirty_path_label(
     }
 }
 
+/// The intro's title and secondary text; the window height follows their
+/// wrapped line counts (`app/handlers/modal_sizing.rs`).
+pub(crate) fn intro_texts(library_name: &str, drafts: usize) -> (&'static str, String) {
+    (
+        "Save the drafts before closing?",
+        format!("'{library_name}' has {drafts} unsaved draft(s). What would you like to do?"),
+    )
+}
+
 pub fn view<'a>(
     state: &'a LibraryState,
     confirm: &'a CloseLibraryConfirmState,
@@ -62,14 +71,11 @@ pub fn view<'a>(
         tokens,
     );
 
-    let summary = dialog_message(
-        format!(
-            "'{}' has {} unsaved draft(s). What would you like to do?",
-            confirm.library_name,
-            confirm.dirty_editors.len() + confirm.dirty_paths.len()
-        ),
-        tokens,
+    let (intro_title, intro_text) = intro_texts(
+        &confirm.library_name,
+        confirm.dirty_editors.len() + confirm.dirty_paths.len(),
     );
+    let summary = dialog_intro(DialogIcon::Warn, intro_title, Some(intro_text), tokens);
 
     // List of dirty drafts by display_internal_pn. We look each one
     // up in `state.editors` (keyed by `EditorAddress`) so the modal
@@ -107,7 +113,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::Cancel),
                 tokens,
@@ -126,16 +132,23 @@ pub fn view<'a>(
         tokens,
     );
 
+    // As tall as the content in the main window; in its own window (sized
+    // to the content) the footer stays at the bottom.
+    let mut card = column![header, body];
+    if windowed {
+        card = card.push(Space::new().height(Length::Fill).boxed());
+    }
     container(
-        column![header, body, Space::new().height(Length::Fill), footer]
+        card.push(footer)
             .width(super::card_len(
                 windowed,
                 super::modal_chrome::CLOSE_PROMPT_W,
             ))
-            .height(super::card_len(
-                windowed,
-                super::modal_chrome::CLOSE_PROMPT_H,
-            )),
+            .height(if windowed {
+                Length::Fill
+            } else {
+                Length::Shrink
+            }),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

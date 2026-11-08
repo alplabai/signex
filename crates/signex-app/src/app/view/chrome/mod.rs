@@ -287,7 +287,7 @@ impl Signex {
         dialog
     }
 
-    pub(super) fn view_detached_modal(
+    pub(in crate::app::view) fn view_detached_modal(
         &self,
         window: iced::window::Id,
         modal: super::state::ModalId,
@@ -376,6 +376,14 @@ impl Signex {
     /// coordinates (Active Bar, text edit, net-colour picker) stay
     /// correct without a +EDGE correction everywhere.
     pub(super) fn resize_edges_overlay<'a>() -> Element<'a, Message> {
+        Self::resize_edges_overlay_with(|d| Message::Window(WindowMsg::StartMainWindowResize(d)))
+    }
+
+    /// [`Self::resize_edges_overlay`] sending `on_edge(direction)`, for a
+    /// borderless window other than the main one.
+    pub(in crate::app::view) fn resize_edges_overlay_with<'a>(
+        on_edge: impl Fn(iced::window::Direction) -> Message + Copy + 'a,
+    ) -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};
         use iced::window::Direction;
@@ -391,7 +399,7 @@ impl Signex {
                 (Length::Fixed(EDGE), Length::Fill)
             };
             mouse_area(Space::new().width(w).height(h))
-                .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
+                .on_press(on_edge(direction))
                 .interaction(cursor)
                 .boxed()
         };
@@ -402,7 +410,7 @@ impl Signex {
                     .width(Length::Fixed(EDGE))
                     .height(Length::Fixed(EDGE)),
             )
-            .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
+            .on_press(on_edge(direction))
             .interaction(cursor)
             .boxed()
         };

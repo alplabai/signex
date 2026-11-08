@@ -22,7 +22,10 @@ mod header;
 mod project;
 mod rule_editor;
 mod sizes;
+mod title_bar;
+pub(crate) use header::DIALOG_HEADER_H;
 pub(crate) use rule_editor::{RuleEditor, rule_editor};
+pub(crate) use title_bar::DIALOG_TITLE_BAR_H;
 mod widgets;
 
 // ── Modal chrome — single source of truth ───────────────────────────
@@ -62,7 +65,9 @@ pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
 /// Hover background for the close-X (Windows-native destructive red).
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
-pub(crate) use header::{PREFERENCES_HEADER_H, graphite_header, scrim_style};
+pub(crate) use header::{
+    PREFERENCES_HEADER_H, graphite_header, graphite_header_closing, scrim_style,
+};
 pub(crate) use widgets::{close_x_button, modal_title_header, os_title_bar_slot};
 pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size, wrap_modal};
 

@@ -18,7 +18,6 @@ use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_
 /// Fixed widths of the Library modals that size themselves (the others
 /// take the picker / dialog default). One home so a resize is one edit.
 pub(crate) const CLOSE_PROMPT_W: f32 = 520.0;
-pub(crate) const CLOSE_PROMPT_H: f32 = 380.0;
 pub(crate) const CREATE_OPTIONS_W: f32 = 480.0;
 pub(crate) const DOCUMENT_OPTIONS_W: f32 = 460.0;
 pub(crate) const EDIT_ROW_W: f32 = 720.0;
@@ -53,12 +52,12 @@ fn header_strip<'a>(
     windowed: bool,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    // In its own OS window the native title bar carries the title and the
+    // In its own OS window the window's title bar carries the title and the
     // close: the slot stays empty (docs/DETACHED_MODALS.md).
     let ts = TypeScale::default();
     if windowed {
         // A note (the library or file the dialog acts on) is not in the
-        // native title, so it stays, as a muted line above the body.
+        // window title, so it stays, as a muted line above the body.
         return match end {
             HeaderEnd::Note(note) => container(
                 text(note)
@@ -69,6 +68,21 @@ fn header_strip<'a>(
             .boxed(),
             HeaderEnd::Nothing | HeaderEnd::Close(_) => Space::new().height(0).boxed(),
         };
+    }
+    if crate::styles::is_graphite(tokens) {
+        let (subtitle, close) = match end {
+            HeaderEnd::Nothing => (None, None),
+            HeaderEnd::Close(message) => (None, Some(message)),
+            HeaderEnd::Note(note) => (Some(note), None),
+        };
+        return crate::app::view::dialogs::graphite_header_closing(
+            title.to_string(),
+            subtitle,
+            None,
+            close,
+            crate::app::view::dialogs::DIALOG_HEADER_H,
+            tokens,
+        );
     }
     let mut line = row![
         text(title.to_string())
@@ -135,6 +149,16 @@ pub(crate) fn secondary_btn<'a>(
     dialog_button(label, DialogButtonKind::Secondary, Some(message), tokens)
 }
 
+/// The dismissing footer action (Cancel): Ghost on Graphite, bordered
+/// elsewhere. It goes first in the right-aligned button row.
+pub(crate) fn cancel_btn<'a>(
+    label: &str,
+    message: LibraryMessage,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    dialog_button(label, DialogButtonKind::Cancel, Some(message), tokens)
+}
+
 /// Accent-filled primary footer action.
 pub(crate) fn primary_btn<'a>(
     label: &str,
@@ -198,7 +222,8 @@ mod tests {
                 let _ = header_with_note("Title", "note".into(), windowed, &tokens);
                 let _ = header_title_only("Title", windowed, &tokens);
             }
-            let _ = secondary_btn("Cancel", LibraryMessage::ClosePicker, &tokens);
+            let _ = secondary_btn("Skip", LibraryMessage::ClosePicker, &tokens);
+            let _ = cancel_btn("Cancel", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn("OK", LibraryMessage::ClosePicker, &tokens);
             let _ = primary_btn_if("OK", LibraryMessage::ClosePicker, false, &tokens);
             let _ = danger_btn("Delete", LibraryMessage::ClosePicker, &tokens);

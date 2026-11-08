@@ -235,6 +235,9 @@ pub struct UiState {
     /// Which library browser opened each per-browser dialog window (edit row,
     /// delete confirm): the window reads and answers for THAT browser.
     pub library_modal_owners: std::collections::HashMap<iced::window::Id, std::path::PathBuf>,
+    /// Dialog windows opened without the OS frame: they draw the Graphite
+    /// title bar (and resize edges) themselves.
+    pub borderless_dialog_windows: std::collections::HashSet<iced::window::Id>,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.

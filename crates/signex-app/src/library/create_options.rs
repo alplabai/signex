@@ -20,7 +20,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{footer_strip, header_with_note, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn};
 use super::state::LibraryCreateOptionsState;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -48,6 +48,7 @@ pub fn view<'a>(
     // library lives on disk as plain files; opting in runs `git init`
     // at the parent directory and stages an initial commit.
     let git_check: Element<'a, LibraryMessage> = checkbox(state.enable_git)
+        .style(crate::panels::form_look::checkbox_style)
         .size(TS.heading)
         .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleGit)
         .boxed();
@@ -78,12 +79,16 @@ pub fn view<'a>(
     // Greyed out otherwise (no `on_toggle` so the checkbox is inert).
     let lfs_check: Element<'a, LibraryMessage> = if state.enable_git {
         checkbox(state.use_lfs)
+            .style(crate::panels::form_look::checkbox_style)
             .size(TS.heading)
             .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleLfs)
             .boxed()
     } else {
         // Inert checkbox — same footprint, can't be clicked.
-        checkbox(false).size(TS.heading).boxed()
+        checkbox(false)
+            .style(crate::panels::form_look::checkbox_style)
+            .size(TS.heading)
+            .boxed()
     };
 
     let lfs_text_color = if state.enable_git { text_c } else { muted };
@@ -126,7 +131,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn("Cancel", LibraryMessage::LibraryCreateOptionsCancel, tokens),
+            cancel_btn("Cancel", LibraryMessage::LibraryCreateOptionsCancel, tokens),
             primary_btn(
                 "Create Library",
                 LibraryMessage::LibraryCreateOptionsConfirm,

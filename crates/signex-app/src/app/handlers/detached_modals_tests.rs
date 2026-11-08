@@ -16,6 +16,12 @@ fn test_app() -> (Signex, iced::window::Id) {
     (app, main)
 }
 
+/// The size the window `id` showing `modal` opens at: the content plus the
+/// title bar a borderless dialog window draws itself.
+fn window_size(app: &Signex, id: iced::window::Id, modal: ModalId) -> iced::Size {
+    app.dialog_window_size(modal, app.dialog_window_is_borderless(id))
+}
+
 /// Put `modal` in its open state, the way its open site does.
 fn open(app: &mut Signex, modal: ModalId) {
     let ui = &mut app.ui_state;
@@ -481,7 +487,7 @@ fn content_bottom(modal: ModalId) -> (f32, f32) {
     open(&mut app, modal);
     let _ = app.sync_detached_modals();
     let id = window_of(&app, modal).expect("window");
-    let size = app.modal_window_size(modal);
+    let size = window_size(&app, id, modal);
     let texts = lay_out_texts(app.view(id), size);
     let bottom = texts
         .iter()
@@ -528,13 +534,14 @@ fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
     let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
     let size = app.modal_window_size(ModalId::LibraryStockCopy);
     let list_case = crate::app::handlers::erc::modal_size(ModalId::LibraryStockCopy);
+    let window = window_size(&app, id, ModalId::LibraryStockCopy);
     assert!(
         size.height < list_case.height * app.ui_state.ui_scale,
         "empty list: {} is shorter than the list case {}",
         size.height,
         list_case.height
     );
-    let texts = lay_out_texts(app.view(id), size);
+    let texts = lay_out_texts(app.view(id), window);
     let hint = texts
         .iter()
         .find(|t| t.text.contains("No writable library"))
@@ -552,6 +559,56 @@ fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
     );
 }
 
+/// The Copy to Library footer is one right-aligned row: Cancel, then the
+/// one primary action (it was split, the primary at the far left), and the
+/// window leaves no empty band between the body and the footer, on Graphite
+/// (with its title bar) and on a legacy theme.
+#[test]
+fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
+    use signex_types::theme::ThemeId;
+    for theme_id in [ThemeId::GraphiteLight, ThemeId::Signex] {
+        let (mut app, _main) = test_app();
+        app.ui_state.theme_id = theme_id;
+        app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+        open(&mut app, ModalId::LibraryStockCopy);
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
+        let window = window_size(&app, id, ModalId::LibraryStockCopy);
+        let texts = lay_out_texts(app.view(id), window);
+        let find = |label: &str| {
+            texts
+                .iter()
+                .find(|t| t.text == label)
+                .unwrap_or_else(|| panic!("{theme_id:?}: {label}"))
+                .bounds
+        };
+        let cancel = find("Cancel");
+        let new_library = find("New Library\u{2026}");
+        assert!(
+            cancel.x + cancel.width < new_library.x,
+            "{theme_id:?}: Cancel comes first"
+        );
+        assert!(
+            (cancel.y - new_library.y).abs() < 1.0,
+            "{theme_id:?}: one row"
+        );
+        assert!(
+            window.width / 2.0 < cancel.x,
+            "{theme_id:?}: the footer is right-aligned, Cancel at {}",
+            cancel.x
+        );
+        let hint = texts
+            .iter()
+            .find(|t| t.text.contains("No writable library"))
+            .expect("the empty-list hint");
+        let gap = cancel.y - (hint.bounds.y + hint.bounds.height);
+        assert!(
+            (0.0..=48.0).contains(&gap),
+            "{theme_id:?}: {gap} px between the hint and the footer"
+        );
+    }
+}
+
 /// Copy to Library with no writable library grows by one note line for each
 /// note shown (an unavailable previous library, an error), and the notes
 /// stay above the footer.
@@ -567,7 +624,10 @@ fn copy_to_library_notes_each_add_a_line_and_stay_above_the_footer() {
         let _ = app.sync_detached_modals();
         let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
         let size = app.modal_window_size(ModalId::LibraryStockCopy);
-        let texts = lay_out_texts(app.view(id), size);
+        let texts = lay_out_texts(
+            app.view(id),
+            window_size(&app, id, ModalId::LibraryStockCopy),
+        );
         let footer_top = texts
             .iter()
             .filter(|t| t.text == "Cancel")
@@ -624,7 +684,7 @@ fn a_list_dialog_is_sized_to_its_rows_and_caps_at_a_scrolling_list() {
     // Both fit their windows, without a big empty area.
     for rows in [2, 30] {
         let (app, id) = quit_with_rows(rows);
-        let size = app.modal_window_size(ModalId::AppQuitConfirm);
+        let size = window_size(&app, id, ModalId::AppQuitConfirm);
         let texts = lay_out_texts(app.view(id), size);
         let visible_bottom = texts
             .iter()
@@ -715,7 +775,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
             open(&mut app, modal);
             let _ = app.sync_detached_modals();
             let id = window_of(&app, modal).expect("window");
-            let size = app.modal_window_size(modal);
+            let size = window_size(&app, id, modal);
             let root = crate::layout_probe::root_size(app.view(id), size);
             assert_eq!(
                 (root.width, root.height),
@@ -787,7 +847,8 @@ fn at_a_larger_interface_scale_fixed_dialogs_still_show_their_footer() {
         );
         // iced lays the window out at (window / scale): that is the room the
         // footer has, and it must all be inside it.
-        let layout = iced::Size::new(size.width / 1.5, size.height / 1.5);
+        let window = window_size(&app, id, modal);
+        let layout = iced::Size::new(window.width / 1.5, window.height / 1.5);
         let bottom = lay_out_texts(app.view(id), layout)
             .iter()
             .filter(|t| !t.text.starts_with("sheet"))

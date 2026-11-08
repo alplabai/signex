@@ -11,6 +11,9 @@ mod detached_confirm_tests;
 #[cfg(test)]
 mod detached_library_tests;
 pub mod detached_modals;
+#[cfg(test)]
+mod detached_wrap_tests;
+mod dialog_window;
 pub mod dock;
 pub mod document_files;
 mod document_identity;
@@ -20,6 +23,7 @@ pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
 pub mod find_similar;
+mod intro_wrap;
 pub mod library_drift;
 pub mod library_footprint_choice;
 pub mod library_place;

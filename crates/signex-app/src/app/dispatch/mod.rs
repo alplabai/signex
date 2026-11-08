@@ -503,6 +503,13 @@ impl Signex {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
+            WindowMsg::DialogTitleBarPressed(id) => crate::chrome::start_window_drag(id),
+            WindowMsg::DialogEdgePressed(id, direction) => {
+                crate::chrome::start_window_resize(id, direction)
+            }
+            WindowMsg::DialogCloseClicked(id) => {
+                self.update(Message::Window(WindowMsg::WindowCloseRequested(id)))
+            }
             WindowMsg::MinimizeMainWindow => match self.ui_state.main_window_id {
                 Some(id) => iced::window::minimize(id, true),
                 None => Task::none(),

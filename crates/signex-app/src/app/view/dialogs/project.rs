@@ -10,7 +10,10 @@ use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length};
 
 use super::widgets::modal_title_header;
-use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
+use crate::styles::{
+    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer, dialog_intro,
+    dialog_message,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -81,8 +84,9 @@ impl Signex {
         };
 
         let mut body: iced::widget::Column<Element<'_, Message>> = column![
-            dialog_message(prompt, tokens),
+            dialog_intro(DialogIcon::File, prompt, None, tokens),
             text_input(placeholder, &st.buffer)
+                .style(crate::panels::form_look::text_input_style)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
                 .on_submit(Message::Rename(RenameMsg::Submit))
                 .size(TS.label)
@@ -102,7 +106,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Rename(RenameMsg::Close)),
                         tokens
                     ),
@@ -179,6 +183,7 @@ impl Signex {
             );
             for (idx, item) in st.items.iter().enumerate() {
                 let cb: Element<'_, Message> = checkbox(item.tracked)
+                    .style(crate::panels::form_look::checkbox_style)
                     .size(TS.title)
                     .on_toggle(move |_| {
                         Message::EnableVersionControl(EnableVersionControlMsg::ToggleItem(idx))
@@ -201,6 +206,7 @@ impl Signex {
         }
 
         let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
+            .style(crate::panels::form_look::checkbox_style)
             .size(TS.heading)
             .on_toggle(|_| Message::EnableVersionControl(EnableVersionControlMsg::ToggleLfs))
             .boxed();
@@ -219,8 +225,20 @@ impl Signex {
         ]
         .align_y(iced::Alignment::Start);
 
+        // Graphite opens with the shell's intro: what gets a repository, then
+        // why; other themes keep the summary line above the message.
         let mut body_col: iced::widget::Column<Element<'_, Message>> =
-            column![summary, intro].spacing(10);
+            if crate::styles::is_graphite(tokens) {
+                column![dialog_intro(
+                    DialogIcon::File,
+                    format!("{summary_label}: {}", st.project_name),
+                    Some(st.intro_text.clone()),
+                    tokens,
+                )]
+                .spacing(10)
+            } else {
+                column![summary, intro].spacing(10)
+            };
         if !st.items.is_empty() {
             body_col = body_col.push(Space::new().height(2).boxed());
             body_col = body_col.push(items_col.boxed());
@@ -251,7 +269,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::EnableVersionControl(
                             EnableVersionControlMsg::Close
                         )),
@@ -317,6 +335,7 @@ impl Signex {
         ) -> Element<'a, Message> {
             use iced::widget::text_input;
             text_input(placeholder, value)
+                .style(crate::panels::form_look::text_input_style)
                 .size(TS.label)
                 .padding(6)
                 .width(Length::Fixed(140.0))
@@ -330,7 +349,7 @@ impl Signex {
         let mk_display_row =
             |label: &'static str, current: Gd, setter: fn(Gd) -> Message| -> Element<'_, Message> {
                 let seg = move |label: &'static str, target: Gd, active: bool| {
-                    grid_segment(label, active, setter(target), text_c, border_c)
+                    grid_segment(label, active, setter(target), text_c, border_c, tokens)
                 };
                 row![
                     container(text(label).size(TS.body).color(text_muted))
@@ -346,7 +365,7 @@ impl Signex {
         let mk_mult_row = |current: u32| -> Element<'_, Message> {
             let seg = move |label: &'static str, target: u32, active: bool| {
                 let msg = Message::GridProperties(GridPropertiesMsg::SetMultiplier(target));
-                grid_segment(label, active, msg, text_c, border_c)
+                grid_segment(label, active, msg, text_c, border_c, tokens)
             };
             row![
                 container(text("Multiplier").size(TS.body).color(text_muted))
@@ -387,6 +406,13 @@ impl Signex {
             .color(text_muted),
         ]
         .spacing(10);
+        let body = with_graphite_intro(
+            DialogIcon::Settings,
+            "Grid step and display",
+            body,
+            10.0,
+            tokens,
+        );
 
         let dialog = container(
             column![
@@ -395,7 +421,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::GridProperties(GridPropertiesMsg::Close)),
                         tokens
                     ),
@@ -450,37 +476,25 @@ impl Signex {
             super::super::super::state::ModalId::SelectionFilterCustom,
         );
 
+        // A real checkbox per kind; the whole row toggles it too.
         let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
-            let glyph = if on { "[x]" } else { "[ ]" };
-            iced::widget::button(
-                row![
-                    text(format!("{glyph}  {label}"))
-                        .size(TS.body)
-                        .color(text_c)
-                        .width(Length::Fill),
-                ]
-                .align_y(iced::Alignment::Center),
+            let toggle = Message::SelectionFilter(SelectionFilterMsg::ToggleCustomKind(kind));
+            let check = iced::widget::checkbox(on)
+                .style(crate::panels::form_look::checkbox_style)
+                .size(TS.title)
+                .on_toggle({
+                    let toggle = toggle.clone();
+                    move |_| toggle.clone()
+                });
+            let name = text(label).size(TS.body).color(text_c).width(Length::Fill);
+            iced::widget::mouse_area(
+                container(
+                    row![check, Space::new().width(SP.m), name].align_y(iced::Alignment::Center),
+                )
+                .padding([SP.s, SP.m])
+                .width(Length::Fill),
             )
-            .padding([SP.s, SP.m])
-            .width(Length::Fill)
-            .on_press(Message::SelectionFilter(
-                SelectionFilterMsg::ToggleCustomKind(kind),
-            ))
-            .style(move |_: &iced::Theme, status| iced::widget::button::Style {
-                background: match status {
-                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
-                    )),
-                    _ => Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                },
-                border: iced::Border {
-                    width: 0.0,
-                    radius: 0.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                    ..iced::Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            })
+            .on_press(toggle)
             .boxed()
         };
 
@@ -502,6 +516,8 @@ impl Signex {
             mk_row("Texts", K::Texts, st.texts),
         ]
         .spacing(SP.s);
+        let body =
+            with_graphite_intro(DialogIcon::Settings, "Selectable kinds", body, SP.s, tokens);
 
         let dialog = container(
             column![
@@ -510,7 +526,7 @@ impl Signex {
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom)),
                         tokens
                     ),
@@ -533,6 +549,23 @@ impl Signex {
     }
 }
 
+/// `body` under the shell's title-only intro on Graphite; unchanged on
+/// other themes, whose header already names the dialog.
+fn with_graphite_intro<'a>(
+    icon: DialogIcon,
+    title: &'static str,
+    body: iced::widget::Column<Element<'a, Message>>,
+    gap: f32,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, Message> {
+    if !crate::styles::is_graphite(tokens) {
+        return body.boxed();
+    }
+    column![dialog_intro(icon, title, None, tokens), body]
+        .spacing(gap)
+        .boxed()
+}
+
 /// One segment button of the Grid Properties display and multiplier rows:
 /// tinted while `active`.
 fn grid_segment<'a>(
@@ -541,11 +574,14 @@ fn grid_segment<'a>(
     on_press: Message,
     text_c: iced::Color,
     border_c: iced::Color,
+    tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {
-    let bg = if active {
-        iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
-    } else {
-        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+    // Graphite: the soft accent on the field fill, as the form segments.
+    let bg = match (crate::styles::is_graphite(tokens), active) {
+        (true, true) => crate::styles::tokens::resolve(tokens).accent_soft,
+        (true, false) => crate::styles::tokens::resolve(tokens).field,
+        (false, true) => iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20),
+        (false, false) => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
     };
     iced::widget::button(text(label).size(TS.caption).color(text_c))
         .padding([3, 10])

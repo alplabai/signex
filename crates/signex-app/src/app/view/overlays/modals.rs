@@ -329,19 +329,17 @@ impl Signex {
         .then(|| self.view_erc_dialog())
     }
 
-    /// The dim backdrop the in-window library cards sit on.
-    fn library_scrim<'a>(card: Element<'a, Message>) -> Element<'a, Message> {
+    /// The backdrop the in-window library cards sit on: the themed dialog
+    /// scrim, as under every other in-window dialog.
+    fn library_scrim<'a>(&self, card: Element<'a, Message>) -> Element<'a, Message> {
         container(card)
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)
             .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            })
+            .style(crate::app::view::dialogs::scrim_style(
+                &self.document_state.panel_ctx.tokens,
+            ))
             .boxed()
     }
 
@@ -500,7 +498,7 @@ impl Signex {
             return None;
         }
         self.library_dialog_card(modal, None)
-            .map(Self::library_scrim)
+            .map(|card| self.library_scrim(card))
     }
 
     pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
@@ -511,7 +509,7 @@ impl Signex {
     /// window of its own) is painted.
     pub(in crate::app::view) fn edit_row_modal_overlay(&self) -> Vec<Element<'_, Message>> {
         self.library_dialog_card(crate::app::state::ModalId::LibraryEditRow, None)
-            .map(Self::library_scrim)
+            .map(|card| self.library_scrim(card))
             .into_iter()
             .collect()
     }
@@ -519,7 +517,7 @@ impl Signex {
     /// Delete Selected confirm modal; same rule as the edit modal.
     pub(in crate::app::view) fn delete_confirm_overlay(&self) -> Option<Element<'_, Message>> {
         self.library_dialog_card(crate::app::state::ModalId::LibraryDeleteConfirm, None)
-            .map(Self::library_scrim)
+            .map(|card| self.library_scrim(card))
     }
 
     pub(in crate::app::view) fn primitive_picker_overlay(&self) -> Option<Element<'_, Message>> {
