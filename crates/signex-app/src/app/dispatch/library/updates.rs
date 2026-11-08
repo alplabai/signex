@@ -789,9 +789,6 @@ impl Signex {
             Ok(result) => {
                 if result.changed {
                     if record_history {
-                        // A recorded edit ends the net colour redo branch,
-                        // as in the mutation gateway.
-                        self.ui_state.net_color_redo.remove(sheet);
                         self.document_state.mark_history_edit_dirty(sheet);
                     } else {
                         self.document_state.mark_document_dirty(sheet);

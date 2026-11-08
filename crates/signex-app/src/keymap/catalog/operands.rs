@@ -17,6 +17,8 @@ pub enum OperandKind {
     Path,
     /// `true` or `false`.
     Bool,
+    /// An opaque colour, `#rrggbb` (the leading `#` is optional).
+    Color,
 }
 
 impl OperandKind {
@@ -27,6 +29,7 @@ impl OperandKind {
             Self::Text => "text",
             Self::Path => "path",
             Self::Bool => "bool",
+            Self::Color => "color",
         }
     }
 
@@ -35,7 +38,7 @@ impl OperandKind {
         match self {
             Self::Point => Some("mm"),
             Self::Angle => Some("deg"),
-            Self::Text | Self::Path | Self::Bool => None,
+            Self::Text | Self::Path | Self::Bool | Self::Color => None,
         }
     }
 }
@@ -61,9 +64,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("rotation", OperandKind::Angle),
     ("text", OperandKind::Text),
     ("net_name", OperandKind::Text),
+    ("class", OperandKind::Text),
     ("lib_id", OperandKind::Text),
     ("path", OperandKind::Path),
     ("overwrite", OperandKind::Bool),
+    ("color", OperandKind::Color),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -113,6 +118,23 @@ pub const SAVE_PATH: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("overwrite", OperandKind::Bool),
 ];
+
+/// Colour the net under a point on the open sheet (or on the one at `path`).
+pub const COLOR_NET: &[Operand] = &[
+    required("at", OperandKind::Point),
+    required("color", OperandKind::Color),
+    optional("path", OperandKind::Path),
+];
+/// Put a net, by its name in the project netlist, in a class of the project
+/// the open sheet (or the one at `path`) belongs to; no `class` takes it out
+/// of its listed class.
+pub const ASSIGN_NET_CLASS: &[Operand] = &[
+    required("net_name", OperandKind::Text),
+    optional("class", OperandKind::Text),
+    optional("path", OperandKind::Path),
+];
+/// An open document to act on, instead of every one.
+pub const DOCUMENT: &[Operand] = &[optional("path", OperandKind::Path)];
 
 /// The golden column: `name:kind` with `/unit`, `?` when optional, comma
 /// separated; `-` when the command takes none.

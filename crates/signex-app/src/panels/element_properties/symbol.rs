@@ -231,7 +231,7 @@ pub(super) fn push_symbol_sections<'a>(
                     if section_params.is_empty() {
                         c = c.push(
                             container(
-                                text("No custom parameters".to_string())
+                                text(raw("No custom parameters".to_string()))
                                     .size(TS.body)
                                     .color(muted),
                             )

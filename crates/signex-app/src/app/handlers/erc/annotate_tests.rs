@@ -434,10 +434,7 @@ fn annotate_drops_a_recovery_copy_this_run_wrote() {
     let (mut app, dir, recovery, child_path) =
         child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
     // This run's autosave tick wrote the copy: the write began and landed.
-    let stamp = crate::autosave::DocStamp {
-        revision: 1,
-        net_color_revision: 0,
-    };
+    let stamp = crate::autosave::DocStamp { revision: 1 };
     app.document_state.autosave.begin(&child_path);
     app.document_state.autosave.finish(&child_path, stamp, true);
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);

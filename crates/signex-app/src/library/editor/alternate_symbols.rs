@@ -5,10 +5,11 @@
 //! header that opens the symbol picker. A refused add shows its reason
 //! under the table; so do label problems that save would refuse.
 
-use iced::widget::{Column, Widget, column, text, text_input};
+use iced::widget::{Column, Widget, column};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text, text_input};
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, PrimitivePickerTarget};
@@ -67,7 +68,12 @@ pub fn view<'a>(
         .map(ToString::to_string)
         .collect();
     for problem in state.alternate_error.iter().chain(issues.iter()) {
-        col = col.push(text(problem.clone()).size(TS.body).color(warning).boxed());
+        col = col.push(
+            text(raw(problem.clone()))
+                .size(TS.body)
+                .color(warning)
+                .boxed(),
+        );
     }
     col.boxed()
 }
@@ -90,7 +96,7 @@ fn alternate_row<'a>(
         }
     };
     let on_label = event.clone();
-    let label = text_input("Label (e.g. IEC)", &alt.label)
+    let label = text_input(raw("Label (e.g. IEC)"), &alt.label)
         .padding([SP.s, SP.m])
         .size(TS.label)
         .width(Length::Fill)
@@ -119,7 +125,7 @@ fn alternate_row<'a>(
         vec![
             (label.boxed(), COLUMNS[0]),
             (
-                text(format!("symbol {short}"))
+                text(raw(format!("symbol {short}")))
                     .size(TS.body)
                     .color(muted)
                     .boxed(),

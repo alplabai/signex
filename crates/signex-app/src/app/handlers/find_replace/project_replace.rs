@@ -374,7 +374,6 @@ impl Signex {
             }
             if active.as_deref() == Some(done.path.as_path()) {
                 active_invalidation = done.invalidation;
-                self.ui_state.net_color_redo.remove(&done.path);
             } else {
                 // Recorded in the sheet's history: undo back to the save
                 // point clears the mark.
@@ -423,8 +422,6 @@ impl Signex {
             Ok(engine) => {
                 self.document_state
                     .insert_engine(path.to_path_buf(), engine);
-                self.adopt_net_colors_of(path);
-                self.clear_net_color_steps(path);
                 true
             }
             Err(error) => {
@@ -441,7 +438,6 @@ impl Signex {
     /// the path for the rest of the session and shadow a later open.
     fn drop_unchanged_tabless(&mut self, path: &Path, tabless: bool) {
         if tabless {
-            self.forget_net_colors_of(path);
             self.document_state.remove_engine(path);
         }
     }

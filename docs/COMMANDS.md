@@ -138,12 +138,14 @@ shrink.
 | `align_vertical_centers` | Align vertical centers | modify | — | — |
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
+| `assign_net_class` | Assign net to class | design | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
 | `change_component` | Change the selected part's component | edit | — | — |
 | `clear_all_net_colors` | Clear all net colors | view | — | — |
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
+| `color_net` | Color net | view | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |

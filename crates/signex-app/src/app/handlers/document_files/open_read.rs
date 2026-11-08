@@ -94,12 +94,13 @@ impl Signex {
             );
             return Task::none();
         }
-        // A tab, or a dirty engine parked without one (a sheet-reference
+        // A tab, or a dirty engine or board parked without one (a sheet-reference
         // rewrite loaded it while this read ran), already owns the file:
         // installing the read would replace its edits with disk content.
         if self.is_open_result_superseded(&request.path, &result) {
             if let Ok(document) = &result
-                && let LoadedDocument::Schematic { title, .. } = document.as_ref()
+                && let LoadedDocument::Schematic { title, .. } | LoadedDocument::Pcb { title, .. } =
+                    document.as_ref()
             {
                 self.attach_parked_tab_for_superseded_open(&request.path, title.clone());
                 self.activate_tab_for_path(&request.path);

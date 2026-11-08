@@ -9,11 +9,12 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{button, container, image, row, text};
+use iced::widget::{container, image, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::styles;
@@ -288,6 +289,8 @@ pub struct MenuContext<'a> {
     /// Panels open somewhere (docked, floating or detached): the View
     /// menu's panel rows show a check mark for these (#103).
     pub(crate) open_panels: Vec<crate::panels::PanelKind>,
+    /// The locale the menu titles render in (#2055).
+    pub i18n: std::sync::Arc<signex_i18n::I18n>,
 }
 
 impl Default for MenuContext<'_> {
@@ -299,6 +302,7 @@ impl Default for MenuContext<'_> {
             active_keymap: None,
             recent_projects: &[],
             open_panels: Vec::new(),
+            i18n: signex_i18n::I18n::en_us(),
         }
     }
 }
@@ -324,7 +328,7 @@ const MENU_CHEVRON_SIZE: f32 = crate::styles::chrome_px(18.0);
 /// `root_btn`) plus the chrome's left padding. Used by the chrome
 /// to clamp the centered search bar so it can't slide under the
 /// menu items on narrow windows.
-pub fn approx_menu_bar_width() -> f32 {
+pub fn approx_menu_bar_width(i18n: &signex_i18n::I18n) -> f32 {
     // `root_btn` uses `padding([7, 6])` → 12 px horizontal per button.
     const PER_BTN_PADDING: f32 = 12.0;
     // Approx pixels per character at MENU_LABEL_SIZE (12 pt sans-serif).
@@ -334,7 +338,7 @@ pub fn approx_menu_bar_width() -> f32 {
     const CHROME_LEFT_PAD: f32 = 8.0;
     // Gap between wordmark and the first menu root button.
     const WORDMARK_TO_MENU_GAP: f32 = 8.0;
-    let labels_total: f32 = model::ROOT_TITLES
+    let labels_total: f32 = model::root_titles(i18n)
         .iter()
         .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
         .sum();
@@ -459,7 +463,7 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let hover_bg = mc.hover;
     let border = mc.border;
     let text_c = mc.text;
-    let btn = button(text(label).size(MENU_LABEL_SIZE).color(text_c))
+    let btn = button(text(raw(label)).size(MENU_LABEL_SIZE).color(text_c))
         // Tight horizontal padding so the highlight box hugs the label —
         // Altium's root buttons don't extend far past their text. A wide
         // highlight pushes the dropdown's anchor (iced_aw uses the
@@ -494,9 +498,9 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
 fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let label = label.to_owned();
     let r = row![
-        text(label).size(MENU_LABEL_SIZE).color(mc.text),
+        text(raw(label)).size(MENU_LABEL_SIZE).color(mc.text),
         iced::widget::Space::new().width(Length::Fill),
-        text("›".to_string())
+        text(raw("›".to_string()))
             .size(MENU_CHEVRON_SIZE)
             .color(mc.text_muted),
     ]
@@ -555,7 +559,7 @@ fn menu_item_btn(
     // so the labels of a group line up.
     let mark = checked.map(|on| {
         iced::advanced::Widget::_boxed(
-            text(if on { "\u{2713}" } else { "" })
+            text(raw(if on { "\u{2713}" } else { "" }))
                 .size(MENU_LABEL_SIZE)
                 .color(text_c)
                 .width(Length::Fixed(14.0)),
@@ -569,7 +573,7 @@ fn menu_item_btn(
         r = r.push(mark);
     }
     r = r.push(iced::advanced::Widget::_boxed(
-        text(label)
+        text(raw(label))
             .size(MENU_LABEL_SIZE)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
@@ -580,7 +584,7 @@ fn menu_item_btn(
             iced::widget::Space::new().width(Length::Fill),
         ));
         r = r.push(iced::advanced::Widget::_boxed(
-            text(sc)
+            text(raw(sc))
                 .size(MENU_SHORTCUT_SIZE)
                 .color(mc.text_muted)
                 .wrapping(iced::widget::text::Wrapping::None),

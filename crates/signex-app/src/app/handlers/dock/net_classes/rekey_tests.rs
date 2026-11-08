@@ -7,6 +7,7 @@ use signex_types::net_class::NetClass;
 use signex_types::theme::Color;
 
 use crate::app::Signex;
+use crate::app::handlers::editing_commands::net_color_driver::{colour_of, paint};
 use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
 use crate::app::path_ops::settle_task;
 use crate::panels::NetClassMsg;
@@ -31,11 +32,10 @@ fn fixture(dir: &Path) -> (Signex, PathBuf) {
     (app, root)
 }
 
-/// Colour the sheet's wire the way a net flood does: record, then override.
+/// Colour the sheet's wire the way a net flood does.
 fn flood_red(app: &mut Signex, path: &Path) -> uuid::Uuid {
     let wire = app.document_state.engines[path].document().wires[0].uuid;
-    assert!(app.record_net_color_undo());
-    app.ui_state.wire_color_overrides.insert(wire, RED);
+    paint(app, &[wire], RED);
     wire
 }
 
@@ -72,7 +72,7 @@ fn net_colour_undo_survives_a_rename() {
     app.handle_undo_requested();
 
     assert!(
-        !app.ui_state.wire_color_overrides.contains_key(&wire),
+        !colour_of(&app, wire).is_some(),
         "Undo restores the colour from before the flood"
     );
 }
@@ -83,12 +83,12 @@ fn net_colour_redo_survives_a_rename() {
     let (mut app, root) = fixture(dir.path());
     let wire = flood_red(&mut app, &root);
     app.handle_undo_requested();
-    assert!(!app.ui_state.wire_color_overrides.contains_key(&wire));
+    assert!(!colour_of(&app, wire).is_some());
 
     app.rekey_document(&root, &dir.path().join("renamed.snxsch"));
     app.handle_redo_requested();
 
-    assert_eq!(app.ui_state.wire_color_overrides.get(&wire), Some(&RED));
+    assert_eq!(colour_of(&app, wire).as_ref(), Some(&RED));
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn net_colour_undo_survives_save_as() {
     save_as(&mut app, &root, dir.path().join("copy.snxsch"));
     app.handle_undo_requested();
 
-    assert!(!app.ui_state.wire_color_overrides.contains_key(&wire));
+    assert!(!colour_of(&app, wire).is_some());
 }
 
 #[test]

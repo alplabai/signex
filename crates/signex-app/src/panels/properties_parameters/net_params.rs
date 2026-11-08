@@ -24,11 +24,11 @@ pub fn net_numeric_row<'a>(
     container(
         row![
             property_label(label.to_string(), label_c),
-            iced::widget::checkbox(false)
+            signex_widgets::checkbox(false)
                 .on_toggle(|_| PanelMsg::Noop)
                 .size(TS.label)
                 .spacing(SP.s),
-            container(text(value.to_string()).size(TS.body).color(label_c),)
+            container(text(raw(value.to_string())).size(TS.body).color(label_c),)
                 .padding([3, 6])
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
@@ -41,7 +41,7 @@ pub fn net_numeric_row<'a>(
                     },
                     ..container::Style::default()
                 }),
-            text(unit.to_string()).size(TS.caption).color(label_c),
+            text(raw(unit.to_string())).size(TS.caption).color(label_c),
         ]
         .spacing(6.0)
         .align_y(iced::Alignment::Center),
@@ -61,8 +61,8 @@ pub fn net_params_tabs<'a>(
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
-        iced::widget::button(
-            text(label.to_string())
+        signex_widgets::button(
+            text(raw(label.to_string()))
                 .size(TS.body)
                 .color(if active { fg_active } else { fg_inactive })
                 .align_x(iced::alignment::Horizontal::Center),
@@ -109,11 +109,11 @@ pub fn net_params_tabs<'a>(
 pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, PanelMsg> {
     container(
         row![
-            text("Name".to_string())
+            text(raw("Name".to_string()))
                 .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(2)),
-            text("Value".to_string())
+            text(raw("Value".to_string()))
                 .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(3)),
@@ -141,7 +141,7 @@ pub fn empty_section_row<'a>(
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     container(
-        container(text(label.to_string()).size(TS.caption).color(label_c))
+        container(text(raw(label.to_string())).size(TS.caption).color(label_c))
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
     )
@@ -166,7 +166,7 @@ pub fn net_params_add_bar<'a>(
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
-        iced::widget::button(text(label.to_string()).size(TS.caption).color(label_c))
+        signex_widgets::button(text(raw(label.to_string())).size(TS.caption).color(label_c))
             .padding([SP.s, SP.m])
             .on_press(PanelMsg::Noop)
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -185,8 +185,8 @@ pub fn net_params_add_bar<'a>(
     container(
         row![
             Space::new().width(Length::Fill),
-            iced::widget::button(
-                text("Add \u{25BE}".to_string())
+            signex_widgets::button(
+                text(raw("Add \u{25BE}".to_string()))
                     .size(TS.body)
                     .color(Color::WHITE)
             )
@@ -248,7 +248,7 @@ pub fn justification_grid(
                 .style(move |_: &Theme, _| iced::widget::svg::Style {
                     color: Some(if active { fg_active } else { fg_inactive }),
                 });
-        iced::widget::button(
+        signex_widgets::button(
             container(svg_widget)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -415,7 +415,7 @@ pub fn preplacement_justification_grid(
                 .style(move |_: &Theme, _| iced::widget::svg::Style {
                     color: Some(if active { fg_active } else { fg_inactive }),
                 });
-        iced::widget::button(
+        signex_widgets::button(
             container(svg_widget)
                 .width(Length::Fill)
                 .height(Length::Fill)

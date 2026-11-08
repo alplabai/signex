@@ -112,7 +112,7 @@ impl Signex {
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let label = container(
-            iced::widget::text(pn)
+            signex_widgets::text(signex_widgets::raw(pn))
                 .size(TS.caption)
                 .color(signex_widgets::theme_ext::text_primary(tokens)),
         )
@@ -174,7 +174,7 @@ mod tests {
         for label in ["Place", "Edit Component"] {
             let alone = natural::<()>(
                 // The size the dropdown draws its labels at.
-                iced::widget::text(label)
+                signex_widgets::text(signex_widgets::raw(label))
                     .size(signex_widgets::active_bar::dropdown::LABEL_SIZE)
                     .wrapping(iced::widget::text::Wrapping::None)
                     .boxed(),

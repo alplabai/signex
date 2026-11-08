@@ -1,10 +1,11 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
 use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
-use iced::widget::{Row, button, container, mouse_area, row, scrollable, text, tooltip};
+use iced::widget::{Row, container, mouse_area, row, scrollable};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
+use signex_widgets::{button, raw, text, tooltip};
 
 use crate::app::{Document, DocumentKey, TabInfo};
 use crate::styles::{self, Spacing, TypeScale};
@@ -156,14 +157,14 @@ pub fn view<'a>(
         let is_read_only = read_only_paths.contains(&tab.path);
         if is_read_only {
             content = content.push(
-                text(READ_ONLY_LABEL)
+                text(raw(READ_ONLY_LABEL))
                     .size(TAB_FONT_SIZE)
                     .color(styles::ti(tokens.text_secondary))
                     .boxed(),
             );
         }
         let close_x = button(
-            container(text(CLOSE_GLYPH).size(CLOSE_GLYPH_SIZE).line_height(
+            container(text(raw(CLOSE_GLYPH)).size(CLOSE_GLYPH_SIZE).line_height(
                 iced::widget::text::LineHeight::Absolute(CLOSE_HIT_SIZE.into()),
             ))
             .width(CLOSE_HIT_SIZE)
@@ -176,7 +177,7 @@ pub fn view<'a>(
         .on_press(TabMessage::CloseClicked(i));
         let inner = container(
             content
-                .push(text(label).size(TAB_FONT_SIZE).color(text_c).boxed())
+                .push(text(raw(label)).size(TAB_FONT_SIZE).color(text_c).boxed())
                 .push(close_x.boxed()),
         )
         .padding([SP.s, 10.0]);
@@ -201,7 +202,7 @@ pub fn view<'a>(
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
                 Some(tip) => tooltip(
                     tab_el,
-                    container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
+                    container(text(raw(tip)).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
                     tooltip::Position::Bottom,
                 )
                 .style(styles::context_menu(tokens))

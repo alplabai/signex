@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::format::{BoardUnknown, UnknownColumns, UnknownFields};
+use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
+use crate::pcb_layer::PcbLayer;
 use crate::property::PcbProperty;
+use crate::schematic::InstancePath;
 
 pub use crate::schematic::Point;
 
@@ -102,6 +104,21 @@ pub struct LayerDef {
     pub id: u8,
     pub name: String,
     pub layer_type: String,
+    /// User-editable name shown for a mechanical layer; empty when unset.
+    /// Saved in the optional `[stackup.display_names]` table, keyed by layer name.
+    #[serde(default)]
+    pub display_name: String,
+}
+
+impl LayerDef {
+    /// The name to show: the display name when set, else the layer name.
+    pub fn display_label(&self) -> &str {
+        if self.display_name.is_empty() {
+            &self.name
+        } else {
+            &self.display_name
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +195,10 @@ pub struct Pad {
     pub net: Option<PadNet>,
     #[serde(default)]
     pub roundrect_ratio: f64,
+    /// The net was set by hand and the schematic never changes it.
+    /// Saved in the optional `net_locked` pad column.
+    #[serde(default)]
+    pub net_locked: bool,
     /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
     /// does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -223,6 +244,28 @@ pub struct FpGraphic {
 // Footprint
 // ---------------------------------------------------------------------------
 
+/// The placed schematic part a footprint belongs to: the sheet occurrence it
+/// sits on plus the UUIDs of every unit of the part (a multi-unit part is
+/// several symbol instances that share a designator). Unlike a designator,
+/// neither changes when the schematic is re-annotated. Saved in the optional
+/// `sch_link` footprint column. See ADR-0005 section 11.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SymbolLink {
+    pub sheet: InstancePath,
+    /// Unit symbol UUIDs, sorted and without repeats; build with [`Self::new`].
+    pub units: Vec<Uuid>,
+}
+
+impl SymbolLink {
+    /// A link to the part made of `units` on `sheet`.
+    pub fn new(sheet: InstancePath, units: impl IntoIterator<Item = Uuid>) -> Self {
+        let mut units: Vec<Uuid> = units.into_iter().collect();
+        units.sort_unstable();
+        units.dedup();
+        Self { sheet, units }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Footprint {
     pub uuid: Uuid,
@@ -245,6 +288,10 @@ pub struct Footprint {
     pub graphics: Vec<FpGraphic>,
     #[serde(default)]
     pub properties: Vec<PcbProperty>,
+    /// The schematic symbol this footprint is the board side of; `None` for
+    /// a footprint placed by hand or on a board saved before the link.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schematic_link: Option<SymbolLink>,
     /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
     /// this build does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -442,3 +489,44 @@ impl PcbBoard {
         std::mem::take(&mut self.unknown.load_repairs)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Typed layer accessors (#2173)
+// ---------------------------------------------------------------------------
+
+// Typed views of the layer strings. `None` is a name this build does not
+// know; the field keeps it as written, so a save re-emits it unchanged.
+macro_rules! impl_pcb_layer {
+    ($($ty:ty => $field:ident),+ $(,)?) => {
+        $(impl $ty {
+            /// The typed layer, or `None` for a name this build does not know.
+            pub fn pcb_layer(&self) -> Option<PcbLayer> {
+                parse_pcb_layer(&self.$field)
+            }
+        })+
+    };
+}
+
+macro_rules! impl_pcb_layers {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl $ty {
+            /// The typed layers in order; `None` for a name this build does
+            /// not know.
+            pub fn pcb_layers(&self) -> impl Iterator<Item = Option<PcbLayer>> + '_ {
+                self.layers.iter().map(|name| parse_pcb_layer(name))
+            }
+        })+
+    };
+}
+
+impl_pcb_layer!(
+    LayerDef => name,
+    FpGraphic => layer,
+    Footprint => layer,
+    Segment => layer,
+    Zone => layer,
+    BoardGraphic => layer,
+    BoardText => layer,
+);
+
+impl_pcb_layers!(Pad, Via);

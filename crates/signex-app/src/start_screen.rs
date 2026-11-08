@@ -14,9 +14,10 @@
 
 use std::path::{Path, PathBuf};
 
-use iced::widget::{Space, button, column, container, scrollable, text};
+use iced::widget::{Space, column, container, scrollable};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::app::Message;
 use crate::menu_bar::MenuMessage;
@@ -113,7 +114,7 @@ fn recent_section<'a>(
         return None;
     }
     let mut list = column![
-        text("Recent")
+        text(raw("Recent"))
             .size(BASE * 0.9)
             .color(styles::ti(tokens.text_secondary))
     ]
@@ -122,7 +123,7 @@ fn recent_section<'a>(
     for path in shown {
         list = list.push(
             button(
-                text(recent_label(path))
+                text(raw(recent_label(path)))
                     .size(BASE)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -156,7 +157,7 @@ pub fn view<'a>(
         }
         actions = actions.push(
             button(
-                text(action.label(open_shortcut))
+                text(raw(action.label(open_shortcut)))
                     .size(BASE)
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -170,8 +171,8 @@ pub fn view<'a>(
     }
 
     let mut content = column![
-        text("Signex").size(BASE * 2.5).color(text_primary),
-        text(format!("Version {}", env!("CARGO_PKG_VERSION")))
+        text(raw("Signex")).size(BASE * 2.5).color(text_primary),
+        text(raw(format!("Version {}", env!("CARGO_PKG_VERSION"))))
             .size(BASE * 0.9)
             .color(text_secondary),
         Space::new().height(BASE * 1.5),
@@ -195,10 +196,10 @@ pub fn view<'a>(
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
     let text_secondary = styles::ti(tokens.text_secondary);
     let content = column![
-        text("No document selected")
+        text(raw("No document selected"))
             .size(BASE * 1.15)
             .color(text_secondary),
-        text("Choose a schematic or PCB from the project tree")
+        text(raw("Choose a schematic or PCB from the project tree"))
             .size(BASE * 0.9)
             .color(text_secondary),
     ]
@@ -300,7 +301,7 @@ mod tests {
             for label in &labels {
                 let bounds = find(&texts, label).bounds;
                 let natural = crate::layout_probe::natural::<()>(
-                    text(label.clone()).size(BASE).boxed(),
+                    text(raw(label.clone())).size(BASE).boxed(),
                     label,
                 );
                 assert!(

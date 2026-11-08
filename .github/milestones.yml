@@ -157,10 +157,10 @@
   state: open
   aliases: ["v1.4.1 — Design References & Annotations"]
 
-- title: "Measurements & Signal AI Integration"
-  description: "#measurement() function, measurement timeline, attachments, stale detection, Signal AI notebook read/write (Pro)."
+- title: "Measurements & Signex AI Integration"
+  description: "#measurement() function, measurement timeline, attachments, stale detection, Signex AI notebook read/write (Pro)."
   state: open
-  aliases: ["v1.4.2 — Measurements & Signal AI Integration"]
+  aliases: ["v1.4.2 — Measurements & Signal AI Integration", "Measurements & Signal AI Integration"]
 
 - title: "Computational Layer"
   description: "#python() calculation cells, embedded CPython via pyo3, schematic-value bridge, inline plots, sandboxed execution, slim installer variant."
@@ -178,7 +178,7 @@
   aliases: ["v1.5.1 — Schematic Linking & Power Tree"]
 
 - title: "AI Design"
-  description: "Gate: schematic and PCB design with Signal AI as assistant and generator, PCB layout from the schematic, routing."
+  description: "Gate: schematic and PCB design with Signex AI as assistant and generator, PCB layout from the schematic, routing."
   state: open
 
 - title: "PCB Layout"
@@ -187,21 +187,21 @@
   aliases: ["v2.0.0 — PCB Viewer", "PCB Viewer"]
 
 - title: "Chat & Context"
-  description: "Signal panel (streaming chat, markdown), design context for schematic and board, session history, API gateway client, Pro feature gate."
+  description: "Signex AI panel (streaming chat, markdown), design context for schematic and board, session history, client for the hosted AI service."
   state: open
   aliases: ["v3.1.0 — Chat & Context"]
 
 - title: "Edit & Analysis Tools"
-  description: "Signal AI Assistant mode: undoable tools over the Command Registry for schematic and board, ERC / DRC checks, reviewable fix suggestions."
+  description: "Signex AI Assistant mode: undoable tools over the Command Registry for schematic and board, ERC / DRC checks, reviewable fix suggestions."
   state: open
   aliases: ["v3.2.0 — Edit & Analysis Tools"]
 
 - title: "Generator: Schematic"
-  description: "Signal AI Generator mode: written specification to architecture, parts and an ERC-clean schematic, each stage a reviewable change list."
+  description: "Signex AI Generator mode: written specification to architecture, parts and an ERC-clean schematic, each stage a reviewable change list."
   state: open
 
 - title: "Generator: Board"
-  description: "Signal AI Generator mode: board created from the schematic, outline, placement, routing, DRC-clean, as a reviewable change list."
+  description: "Signex AI Generator mode: board created from the schematic, outline, placement, routing, DRC-clean, as a reviewable change list."
   state: open
 
 - title: "PCB Routing"
@@ -373,7 +373,7 @@
   aliases: ["v2.7.3 — Simulation Overlay Bake-In"]
 
 - title: "Pro Release"
-  description: "Signal AI + plugin system + collaboration. Pro subscription unlocks the AI copilot and live co-editing."
+  description: "Pro: hosted Signex AI and the Generator, subscription with included AI credits. Team: live collaboration."
   state: open
   aliases: ["v3.0.0 — Pro Release"]
 
@@ -511,6 +511,6 @@
   aliases: ["v5.4.0 — Compliance & Obsolescence"]
 
 - title: "PLM-Aware AI"
-  description: "Speculative — PLM-aware Signal AI design review with supply-chain analysis, reusable testbench library (.snxsim templates) in the PLM."
+  description: "Speculative — PLM-aware Signex AI design review with supply-chain analysis, reusable testbench library (.snxsim templates) in the PLM."
   state: open
   aliases: ["v5.4.1 — PLM-Aware AI"]

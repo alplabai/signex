@@ -74,7 +74,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
-        use iced::widget::text;
+        use signex_widgets::{raw, text};
 
         if self.interaction_state.editing_text.is_some() {
             return None;
@@ -137,12 +137,12 @@ impl Signex {
         let fill_or_shrink = if at_cap { Length::Fill } else { Length::Shrink };
         let field = |label: &'static str, value: String| -> Element<'_, Message> {
             iced::widget::row![
-                text(label)
+                text(raw(label))
                     .font(canvas_font)
                     .size(TS.body)
                     .color(muted_c)
                     .width(label_w),
-                text(value)
+                text(raw(value))
                     .font(canvas_font)
                     .size(TS.label)
                     .color(text_c)
@@ -188,8 +188,9 @@ impl Signex {
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
         use crate::app::command_palette::{CommandSource, MAX_RESULTS};
-        use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
+        use iced::widget::{Space, column, container, row, scrollable};
         use iced::{Alignment, Background, Border, Color};
+        use signex_widgets::{button, raw, text, text_input};
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -224,12 +225,12 @@ impl Signex {
                 CommandSource::File => "File",
             };
             let label_col = column![
-                text(entry.label.clone()).size(TS.label).color(text_c),
-                text(if entry.detail.is_empty() {
+                text(raw(entry.label.clone())).size(TS.label).color(text_c),
+                text(raw(if entry.detail.is_empty() {
                     String::new()
                 } else {
                     entry.detail.clone()
-                })
+                }))
                 .size(TS.caption)
                 .color(muted_c),
             ]
@@ -237,7 +238,7 @@ impl Signex {
             .width(Length::Fill);
             let row_inner = row![
                 label_col,
-                text(source_label).size(TS.caption).color(muted_c),
+                text(raw(source_label)).size(TS.caption).color(muted_c),
             ]
             .spacing(10)
             .align_y(Alignment::Center);
@@ -274,7 +275,7 @@ impl Signex {
         }
 
         let body: Element<'_, Message> = if total == 0 {
-            container(text("No results").size(TS.label).color(muted_c))
+            container(text(raw("No results")).size(TS.label).color(muted_c))
                 .padding([SP.l, 14.0])
                 .width(Length::Fill)
                 .boxed()
@@ -286,10 +287,10 @@ impl Signex {
         // Footer when there are more matches than we render.
         let footer: Element<'_, Message> = if total > MAX_RESULTS {
             container(
-                text(format!(
+                text(raw(format!(
                     "{} more results — refine query",
                     total - MAX_RESULTS
-                ))
+                )))
                 .size(TS.caption)
                 .color(muted_c),
             )
@@ -315,7 +316,7 @@ impl Signex {
         let input: Element<'_, Message> = if let Some(window) = self.ui_state.command_palette.window
         {
             text_input(
-                "Search files, symbols, commands…",
+                raw("Search files, symbols, commands…"),
                 &self.ui_state.command_palette.query,
             )
             .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())

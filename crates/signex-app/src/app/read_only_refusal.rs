@@ -164,22 +164,33 @@ mod tests {
         let sheet = read_only(wire_sheet());
         let wire = sheet.wires[0].uuid;
         let (mut app, _main) = app_on(sheet);
-        assert!(!app.record_net_color_undo());
+        let colour = signex_types::theme::Color::new(9, 0, 0, 255);
+        let (outcome, _) = app.commit_net_colors(&[wire], colour);
+        assert_eq!(
+            outcome,
+            crate::app::mutation_gateway::CommandOutcome::Failed
+        );
         assert!(!is_dirty(&app), "no colour step, no dirty mark");
-        assert!(app.ui_state.net_color_undo.is_empty());
-        assert!(!app.ui_state.wire_color_overrides.contains_key(&wire));
+        let engine = app.document_state.active_engine().expect("engine");
+        assert!(!engine.can_undo());
+        assert!(engine.document().net_colors.is_empty());
     }
 
     #[test]
     fn clear_all_net_colors_keeps_read_only_sheet_colours() {
-        let sheet = read_only(wire_sheet());
+        let mut sheet = read_only(wire_sheet());
         let wire = sheet.wires[0].uuid;
-        let (mut app, _main) = app_on(sheet);
         let colour = signex_types::theme::Color::new(9, 0, 0, 255);
-        app.ui_state.wire_color_overrides.insert(wire, colour);
-        app.clear_all_net_colors_undoably();
-        assert_eq!(app.ui_state.wire_color_overrides.get(&wire), Some(&colour));
-        assert!(app.ui_state.net_color_undo.is_empty());
+        sheet.net_colors.insert(wire, colour);
+        let (mut app, _main) = app_on(sheet);
+        assert_eq!(
+            app.clear_net_colors(None).kept_read_only,
+            1,
+            "one sheet kept its colours"
+        );
+        let engine = app.document_state.active_engine().expect("engine");
+        assert_eq!(engine.document().net_colors.get(&wire), Some(&colour));
+        assert!(!engine.can_undo());
         assert!(!is_dirty(&app));
     }
 }

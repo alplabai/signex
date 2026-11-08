@@ -4,9 +4,10 @@
 //!
 //! Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.2 ("Hotkey discoverability").
 
-use iced::widget::{Column, Space, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
@@ -98,9 +99,9 @@ fn build<'a>(
     // because it's what users scan for; Shortcut on the right.
     let column_header = container(
         row![
-            text("Action").size(TS.caption).color(text_secondary),
+            text(raw("Action")).size(TS.caption).color(text_secondary),
             Space::new().width(Length::Fill),
-            text("Shortcut")
+            text(raw("Shortcut"))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(Length::Fixed(KEY_COL_W)),
@@ -126,7 +127,9 @@ fn build<'a>(
 
         body = body.push(
             container(
-                text(title_case(category).to_uppercase())
+                // user-visible: migrate to the #2063 casemap
+                // ast-grep-ignore: no-case-in-view
+                text(raw(title_case(category).to_uppercase()))
                     .size(TS.caption)
                     .color(text_secondary),
             )
@@ -143,9 +146,9 @@ fn build<'a>(
         let mut section_col: Column<Element<'a, Message>> = Column::new().spacing(0);
         for (idx, (label, trigger)) in section_shortcuts.iter().enumerate() {
             let row_el: Element<'a, Message> = row![
-                text(label.clone()).size(TS.body).color(text_primary),
+                text(raw(label.clone())).size(TS.body).color(text_primary),
                 Space::new().width(Length::Fill),
-                text(trigger.clone())
+                text(raw(trigger.clone()))
                     .size(TS.body)
                     .color(text_primary)
                     .width(Length::Fixed(KEY_COL_W)),
@@ -209,6 +212,7 @@ fn title_case(value: &str) -> String {
         .map(|part| {
             let mut chars = part.chars();
             match chars.next() {
+                // user-visible: migrate to the #2063 casemap (inside format!, which the case lint cannot see)
                 Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
                 None => String::new(),
             }

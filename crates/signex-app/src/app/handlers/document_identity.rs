@@ -1,7 +1,8 @@
 //! The one re-key gate (#661): when a document's path changes, every record
 //! keyed by the old path moves to the new one here, so no record is orphaned.
 //! Rename goes through [`Signex::rekey_document`]; Save As has its own flow
-//! steps and shares [`Signex::rekey_path_keyed_records`].
+//! steps. Net colours and net-class pick markers live on the sheet's engine,
+//! so they need no re-key.
 
 use crate::app::Signex;
 
@@ -90,43 +91,13 @@ impl Signex {
                 .pcb_revisions
                 .insert(new_path.to_path_buf(), revision);
         }
-        self.rekey_path_keyed_records(old_path, new_path);
+        self.document_state
+            .rekey_parked_pcb_board(old_path, new_path);
         self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the
         // placement no longer reaches this file.
         self.document_state.tab_placements.forget(old_path);
         self.rekey_undocked_windows(old_path, new_path);
-    }
-
-    /// The records that live beside a document's undo timeline and are read
-    /// through its path: net-colour undo/redo, net-class pick history, the
-    /// colour revision. Without the move, Ctrl+Z after a rename or Save As
-    /// finds nothing.
-    pub(crate) fn rekey_path_keyed_records(
-        &mut self,
-        old_path: &std::path::Path,
-        new_path: &std::path::Path,
-    ) {
-        if let Some(count) = self.ui_state.net_color_revision.remove(old_path) {
-            self.ui_state
-                .net_color_revision
-                .insert(new_path.to_path_buf(), count);
-        }
-        if let Some(steps) = self.ui_state.net_color_undo.remove(old_path) {
-            self.ui_state
-                .net_color_undo
-                .insert(new_path.to_path_buf(), steps);
-        }
-        if let Some(steps) = self.ui_state.net_color_redo.remove(old_path) {
-            self.ui_state
-                .net_color_redo
-                .insert(new_path.to_path_buf(), steps);
-        }
-        if let Some(picks) = self.document_state.net_class_picks.remove(old_path) {
-            self.document_state
-                .net_class_picks
-                .insert(new_path.to_path_buf(), picks);
-        }
     }
 }

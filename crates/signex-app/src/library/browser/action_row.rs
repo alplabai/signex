@@ -40,7 +40,7 @@ pub(super) fn view_action_row<'a>(
     let library_for_add = lib_pb.clone();
     let table_for_add = Some(table.to_string());
     let add_btn = button(
-        text("Add Component")
+        text(raw("Add Component"))
             .size(BROWSER_HEADER_SIZE)
             .color(iced::Color::WHITE),
     )
@@ -71,39 +71,47 @@ pub(super) fn view_action_row<'a>(
     // action row is the entry point.
     let edit_btn: Element<'a, LibraryMessage> =
         if let Some(open_edit) = edit_details_message(library_path, table, selected, read_only) {
-            button(text("Edit Details").size(BROWSER_HEADER_SIZE).color(text_c))
-                .padding([SP.xs, SP.m])
-                .on_press(open_edit)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    text_color: text_c,
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                })
-                .boxed()
+            button(
+                text(raw("Edit Details"))
+                    .size(BROWSER_HEADER_SIZE)
+                    .color(text_c),
+            )
+            .padding([SP.xs, SP.m])
+            .on_press(open_edit)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                text_color: text_c,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .boxed()
         } else {
-            container(text("Edit Details").size(BROWSER_HEADER_SIZE).color(muted))
-                .padding([SP.xs, SP.m])
-                .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    ))),
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                        ..Border::default()
-                    },
-                    ..Default::default()
-                })
-                .boxed()
+            container(
+                text(raw("Edit Details"))
+                    .size(BROWSER_HEADER_SIZE)
+                    .color(muted),
+            )
+            .padding([SP.xs, SP.m])
+            .style(move |_: &Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.02,
+                ))),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                    ..Border::default()
+                },
+                ..Default::default()
+            })
+            .boxed()
         };
 
     let delete_btn: Element<'a, LibraryMessage> = if let Some(row_id) = selected
@@ -112,7 +120,7 @@ pub(super) fn view_action_row<'a>(
         let library_for_del = lib_pb.clone();
         let table_for_del = table.to_string();
         button(
-            text("Delete Selected")
+            text(raw("Delete Selected"))
                 .size(BROWSER_HEADER_SIZE)
                 .color(text_c),
         )
@@ -139,7 +147,7 @@ pub(super) fn view_action_row<'a>(
     } else {
         // Greyed-out placeholder when no row is selected.
         container(
-            text("Delete Selected")
+            text(raw("Delete Selected"))
                 .size(BROWSER_HEADER_SIZE)
                 .color(muted),
         )
@@ -170,7 +178,7 @@ pub(super) fn view_action_row<'a>(
     .align_y(iced::Alignment::Center);
     if read_only {
         actions = actions.push(Space::new().width(SP.m).boxed()).push(
-            text("This library ships with Signex and is not editable.")
+            text(raw("This library ships with Signex and is not editable."))
                 .size(BROWSER_HEADER_SIZE)
                 .color(muted)
                 .boxed(),

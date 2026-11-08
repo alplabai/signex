@@ -301,7 +301,6 @@ impl Signex {
                 .cloned()
                 .collect();
             for path in sweep {
-                self.forget_net_colors_of(&path);
                 self.document_state.remove_engine(&path);
                 self.document_state
                     .document_saves
@@ -350,7 +349,6 @@ impl Signex {
         });
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
-        self.forget_net_class_picks_of(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
@@ -543,10 +541,7 @@ impl Signex {
         }
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             let written = engine
-                .save_with_extents(
-                    &self.ui_state.wire_color_overrides,
-                    crate::schematic_runtime::text_width::live_extent_measure(),
-                )
+                .save_with_extents(crate::schematic_runtime::text_width::live_extent_measure())
                 .with_context(|| format!("save schematic {}", path.display()))?;
             self.record_disk_baseline(path, crate::persist::ContentHash::of(&written));
             // This save never reaches the async completion that removes
@@ -708,7 +703,6 @@ impl Signex {
     /// symbol / footprint editor and tab. The one discard both Discard All
     /// prompts (Close Project, Close Library) run per file.
     pub(crate) fn discard_document_draft(&mut self, path: &std::path::Path) -> Task<Message> {
-        self.forget_net_colors_of(path);
         self.document_state
             .document_saves
             .forget_where(|p| p == path);

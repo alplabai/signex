@@ -12,9 +12,10 @@
 //! token, so a tab switch in flight discards any pending result).
 
 use chrono::Utc;
-use iced::widget::{Column, button, column, container, text};
+use iced::widget::{Column, column, container};
 use iced::{Border, Color, Element, Length, Theme, Widget};
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text};
 
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -188,7 +189,7 @@ fn message_card<'a, M: 'a>(
     border_c: iced::Color,
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
-    container(text(msg.into()).size(TS.label).color(muted))
+    container(text(raw(msg.into())).size(TS.label).color(muted))
         .padding([6.0, SP.m])
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {
@@ -222,11 +223,11 @@ fn commit_card<'a>(
     bg: Option<iced::Background>,
 ) -> Element<'a, PanelMsg> {
     let header = iced::widget::row![
-        text(entry.author_name.clone())
+        text(raw(entry.author_name.clone()))
             .size(TS.label)
             .color(primary),
         iced::widget::Space::new().width(Length::Fill),
-        text(format_relative_simple(entry.time, now))
+        text(raw(format_relative_simple(entry.time, now)))
             .size(TS.body)
             .color(muted),
     ]
@@ -237,7 +238,7 @@ fn commit_card<'a>(
     } else {
         "Restore this version"
     };
-    let restore_btn = button(text(restore_label).size(TS.caption).color(muted))
+    let restore_btn = button(text(raw(restore_label)).size(TS.caption).color(muted))
         .padding([SP.xs, 6.0])
         .on_press(PanelMsg::HistoryRestoreClicked {
             sha: entry.sha.clone(),
@@ -255,14 +256,14 @@ fn commit_card<'a>(
         });
 
     let mut footer = iced::widget::row![
-        text(short_sha(&entry.sha)).size(TS.body).color(muted),
+        text(raw(short_sha(&entry.sha))).size(TS.body).color(muted),
         iced::widget::Space::new().width(Length::Fill),
     ]
     .align_y(iced::Alignment::Center)
     .spacing(SP.m);
     if confirming {
         footer = footer.push(
-            button(text("Cancel").size(TS.caption).color(muted))
+            button(text(raw("Cancel")).size(TS.caption).color(muted))
                 .padding([SP.xs, 6.0])
                 .on_press(PanelMsg::HistoryRestoreCancelled)
                 .style(move |_t: &Theme, _| iced::widget::button::Style {
@@ -283,7 +284,9 @@ fn commit_card<'a>(
 
     let card_inner = column![
         header,
-        text(entry.subject.clone()).size(TS.title).color(primary),
+        text(raw(entry.subject.clone()))
+            .size(TS.title)
+            .color(primary),
         footer,
     ]
     .spacing(SP.xs);
@@ -349,8 +352,8 @@ fn working_tree_card<'a, M: 'a>(
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
     let inner = column![
-        text("Working tree").size(TS.label).color(primary),
-        text("Uncommitted changes").size(TS.body).color(muted),
+        text(raw("Working tree")).size(TS.label).color(primary),
+        text(raw("Uncommitted changes")).size(TS.body).color(muted),
     ]
     .spacing(SP.xs);
     container(inner)

@@ -739,14 +739,9 @@ impl<'a> SchematicCanvas<'a> {
                 return;
             }
             let (gx, gy) = self.ghost_delta(dx, dy);
-            state.ghost.refresh_with(
-                snap,
-                cache.revision(),
-                &self.selected,
-                gx,
-                gy,
-                self.prefs.wire_color_overrides,
-            );
+            state
+                .ghost
+                .refresh_with(snap, cache.revision(), &self.selected, gx, gy);
             if let Some(held) = state.ghost.take_unreported_held() {
                 crate::diagnostics::log_locked_holds(&held);
             }

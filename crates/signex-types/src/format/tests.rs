@@ -273,14 +273,17 @@ fn show_serialised_pcb_for_inspection() {
             id: 0,
             name: "TopCopper".into(),
             layer_type: "copper".into(),
+            display_name: String::new(),
         },
         crate::pcb::LayerDef {
             id: 1,
             name: "BottomCopper".into(),
             layer_type: "copper".into(),
+            display_name: String::new(),
         },
     ];
     board.footprints.push(Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
@@ -435,6 +438,7 @@ fn snxpcb_round_trip_with_data() {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        net_locked: false,
     };
     let pad2 = Pad {
         unknown_columns: Default::default(),
@@ -452,9 +456,11 @@ fn snxpcb_round_trip_with_data() {
             name: "GND".into(),
         }),
         roundrect_ratio: 0.25,
+        net_locked: false,
     };
 
     let footprint = Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),

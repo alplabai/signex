@@ -8,8 +8,8 @@ use crate::app::Signex;
 use crate::styles::ti;
 use crate::styles::tokens::{MIN_TEXT_CONTRAST, UNREADABLE_CONTRAST, contrast_ratio};
 use iced::Color;
-use iced::widget::button;
 use signex_types::theme::{ThemeId, theme_tokens};
+use signex_widgets::button;
 
 const LIGHT: ThemeId = ThemeId::SolarizedLight;
 

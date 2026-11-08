@@ -224,8 +224,10 @@ pub(super) fn plain_board() -> PcbBoard {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        net_locked: false,
     };
     let footprint = Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(FP_UUID).unwrap(),

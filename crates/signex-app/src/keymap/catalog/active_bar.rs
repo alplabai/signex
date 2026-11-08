@@ -552,13 +552,36 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "color_net",
+        category: "view",
+        label: "Color net",
+        menu_label: Some("Custom Color..."),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::COLOR_NET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "clear_all_net_colors",
         category: "view",
         label: "Clear all net colors",
         menu_label: Some("Clear All Net Colors"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::MUTATES,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "assign_net_class",
+        category: "design",
+        label: "Assign net to class",
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::ASSIGN_NET_CLASS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

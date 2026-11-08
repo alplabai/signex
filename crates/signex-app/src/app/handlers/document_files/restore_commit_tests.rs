@@ -788,13 +788,10 @@ fn a_net_colour_change_on_a_dirty_schematic_during_a_restore_is_kept() {
     let messages = click_restore(&mut app, &sha);
     assert_eq!(messages.len(), 1);
     let wire = uuid::Uuid::now_v7();
-    app.record_net_color_undo();
-    app.ui_state
-        .wire_color_overrides
-        .insert(wire, signex_types::theme::Color::new(9, 0, 0, 255));
-    app.mark_net_colors_dirty(&path);
+    use crate::app::handlers::editing_commands::net_color_driver as colours;
+    colours::paint(&mut app, &[wire], colours::color(9));
     finish_restore(&mut app, messages);
-    assert!(app.ui_state.wire_color_overrides.contains_key(&wire));
+    assert!(colours::colour_of(&app, wire).is_some());
     assert!(app.document_state.engines.contains_key(&path));
     assert!(app.document_state.pending_git_commits.is_empty());
     assert!(restore_card(&app).contains("was edited while its restore"));

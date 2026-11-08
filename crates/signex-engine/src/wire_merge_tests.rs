@@ -562,7 +562,9 @@ fn wires_of_different_net_colours_are_not_folded_and_equal_ones_are() {
         let mut colors = std::collections::HashMap::new();
         colors.extend(first.map(|c| (a, c)));
         colors.extend(second.map(|c| (b.uuid, c)));
-        engine.set_wire_colors(colors);
+        engine
+            .execute(Command::SetNetColors { colors })
+            .expect("colours");
         place(&mut engine, b);
         assert_eq!(
             engine.document().wires.len() == 1,

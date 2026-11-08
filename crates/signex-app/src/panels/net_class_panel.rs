@@ -191,7 +191,7 @@ pub fn view_net_classes_section<'a>(
             if !panel.available {
                 return c.push(
                     container(
-                        text("Open a project to define net classes.")
+                        text(raw("Open a project to define net classes."))
                             .size(TS.body)
                             .color(muted),
                     )
@@ -201,8 +201,10 @@ pub fn view_net_classes_section<'a>(
             }
             let wrap = |m: NetClassMsg| PanelMsg::NetClass(m);
 
-            let undo = iced::widget::button(text("Undo").size(TS.caption)).padding([3.0, SP.m]);
-            let redo = iced::widget::button(text("Redo").size(TS.caption)).padding([3.0, SP.m]);
+            let undo =
+                signex_widgets::button(text(raw("Undo")).size(TS.caption)).padding([3.0, SP.m]);
+            let redo =
+                signex_widgets::button(text(raw("Redo")).size(TS.caption)).padding([3.0, SP.m]);
             let undo = if panel.can_undo {
                 undo.on_press(wrap(NetClassMsg::Undo))
             } else {
@@ -216,7 +218,7 @@ pub fn view_net_classes_section<'a>(
             c = c.push(
                 container(
                     row![
-                        iced::widget::button(text("+ Add Class").size(TS.caption))
+                        signex_widgets::button(text(raw("+ Add Class")).size(TS.caption))
                             .padding([3.0, SP.m])
                             .on_press(wrap(NetClassMsg::Add)),
                         undo,
@@ -230,7 +232,7 @@ pub fn view_net_classes_section<'a>(
             if panel.classes.is_empty() {
                 return c.push(
                     container(
-                        text("No net classes. A net in no class draws as before.")
+                        text(raw("No net classes. A net in no class draws as before."))
                             .size(TS.body)
                             .color(muted),
                     )
@@ -242,7 +244,7 @@ pub fn view_net_classes_section<'a>(
             let selected = panel.selected.min(panel.classes.len() - 1);
             let mut list = Column::new().spacing(SP.xs);
             for (idx, class) in panel.classes.iter().enumerate() {
-                let btn = iced::widget::button(text(class.name.clone()).size(TS.body))
+                let btn = signex_widgets::button(text(raw(class.name.clone())).size(TS.body))
                     .padding([SP.xs, SP.m])
                     .width(Length::Fill)
                     .on_press(wrap(NetClassMsg::Select(idx)));
@@ -258,7 +260,7 @@ pub fn view_net_classes_section<'a>(
             c = c.push(container(list).padding([SP.xs, SP.m]).boxed());
             c = c.push(
                 container(
-                    text("The first matching class wins; reorder to change it.")
+                    text(raw("The first matching class wins; reorder to change it."))
                         .size(TS.caption)
                         .color(muted),
                 )
@@ -268,16 +270,16 @@ pub fn view_net_classes_section<'a>(
             c = c.push(
                 container(
                     row![
-                        iced::widget::button(text("Move Up").size(TS.caption))
+                        signex_widgets::button(text(raw("Move Up")).size(TS.caption))
                             .padding([3.0, SP.m])
                             .on_press_maybe((selected > 0).then(|| wrap(NetClassMsg::MoveUp))),
-                        iced::widget::button(text("Move Down").size(TS.caption))
+                        signex_widgets::button(text(raw("Move Down")).size(TS.caption))
                             .padding([3.0, SP.m])
                             .on_press_maybe(
                                 (selected + 1 < panel.classes.len())
                                     .then(|| wrap(NetClassMsg::MoveDown))
                             ),
-                        iced::widget::button(text("Delete").size(TS.caption))
+                        signex_widgets::button(text(raw("Delete")).size(TS.caption))
                             .padding([3.0, SP.m])
                             .on_press(wrap(NetClassMsg::RemoveSelected)),
                     ]
@@ -330,7 +332,7 @@ pub fn view_net_classes_section<'a>(
             if let Some(notice) = &panel.notice {
                 c = c.push(
                     container(
-                        text(notice.clone())
+                        text(raw(notice.clone()))
                             .size(TS.caption)
                             .color(theme_ext::warning_color(&ctx.tokens)),
                     )
@@ -354,7 +356,7 @@ fn commit_row<'a>(
     container(
         row![
             widgets::property_label(label.to_string(), label_c),
-            iced::widget::text_input(hint.to_string(), value.to_string())
+            signex_widgets::text_input(signex_widgets::raw(hint.to_string()), value.to_string())
                 .on_input(move |s| PanelMsg::NetClass(NetClassMsg::Draft(field, s)))
                 .on_submit(PanelMsg::NetClass(NetClassMsg::Commit(field)))
                 .size(TS.body)

@@ -3,9 +3,9 @@
 use super::buttons::{accent_button, outline_button, subtle_button};
 use super::ti;
 use super::tokens::*;
-use iced::widget::button;
 use iced::{Background, Color, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_widgets::button;
 
 fn builtin_tokens() -> Vec<(ThemeId, ThemeTokens)> {
     ThemeId::BUILTINS

@@ -54,7 +54,10 @@ impl Signex {
             tab.default_drafts.clear();
         });
         document.rules_history.remove(&id);
-        document.net_class_history.remove(&id);
+        document
+            .net_class_history
+            .entry(id)
+            .and_modify(signex_engine::NetClassHistory::restart);
         document.mark_document_dirty(path);
         self.clear_schematic_content_caches();
         self.refresh_panel_ctx();

@@ -2,13 +2,14 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{Column, Space, button, container, row, scrollable, svg, text};
+use iced::widget::{Column, Space, container, row, scrollable, svg};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
+use signex_widgets::{button, raw, text};
 use std::sync::OnceLock;
 
 pub mod components_panel;
@@ -263,7 +264,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
-        PanelKind::Signal => view_stub("Signal AI", "Pro feature — AI design review", ctx),
+        PanelKind::Signal => view_stub("Signex AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),

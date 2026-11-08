@@ -111,6 +111,8 @@ impl BrowserViewCache {
         let rows: &[ComponentRow] = lib.tables.get(table).map(Vec::as_slice).unwrap_or(&[]);
 
         let names = PrimitiveNames::of(lib);
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         let needle = browser.search.trim().to_lowercase();
         let lifecycle_filter = browser.lifecycle_filter;
         let class_filter = browser.class_filter.as_deref();

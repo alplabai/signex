@@ -23,7 +23,7 @@ fn power_class() -> NetClass {
 /// A parent with a child sheet, and the child open and active with a local
 /// label `LOCAL` on a wire, selected. Returns the app, the label's uuid and
 /// the child wire's uuid.
-fn child_label_selected(dir: &str) -> (Signex, Uuid, Uuid) {
+pub(super) fn child_label_selected(dir: &str) -> (Signex, Uuid, Uuid) {
     child_label_selected_with(dir, |_| {})
 }
 
@@ -51,7 +51,7 @@ fn child_label_selected_with(
     (app, label, wire)
 }
 
-fn assign(app: &mut Signex, project: ProjectId, net: &str, class: &str) {
+pub(super) fn assign(app: &mut Signex, project: ProjectId, net: &str, class: &str) {
     let msg = NetClassMsg::AssignNet {
         project,
         net: net.to_string(),

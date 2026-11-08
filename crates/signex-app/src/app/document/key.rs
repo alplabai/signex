@@ -20,12 +20,15 @@ pub(crate) enum DocumentKey {
 
 impl DocumentState {
     /// The document the file at `path` is held as, by the precedence Save
-    /// All routes by: a live engine, then a symbol or footprint editor, then
-    /// an open project's own `.snxprj`. A file nothing holds, a PCB and a
-    /// library manifest included, has no key.
+    /// All routes by: a live engine, then a PCB tab or parked board, then a
+    /// symbol or footprint editor, then an open project's own `.snxprj`. A
+    /// file nothing holds, a library manifest included, has no key.
     pub(crate) fn document_key_for_path(&self, path: &Path) -> Option<DocumentKey> {
         if self.engines.contains_key(path) {
             return Some(DocumentKey::Schematic(path.to_path_buf()));
+        }
+        if self.holds_pcb(path) {
+            return Some(DocumentKey::Pcb(path.to_path_buf()));
         }
         if self.symbol_editors.contains_key(path) {
             return Some(DocumentKey::Symbol(path.to_path_buf()));

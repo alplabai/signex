@@ -320,6 +320,8 @@ Each crate maps to an `area:` label (auto-applied to PRs by path — see
 | `signex-renderer` / `signex-gfx` | Canvas draw routines + GPU rendering. | `rendering` |
 | `signex-3d-model-importer` | 3D model (glTF/STEP) import. | `3d` |
 | `signex-widgets` / `chrome-catalog` | Custom Iced widgets + chrome catalog. | `widgets` |
+| `signex-cli` | Headless command runner (`signex-cli`): JSON Lines in, one result line out; the security rules for agent input. See [docs/CLI.md](docs/CLI.md). | `app` |
+| `signex-i18n` | UI message catalogs and locale-aware formatting. No area label of its own yet; use `app`. | `app` |
 | `signex-app` | Main binary — Iced app, panels, dock, menus, canvas, Active Bar, and the footprint/symbol/library editors. | `app`, `footprint-editor`, `symbol-editor`, `schematic`, `pcb` |
 
 **Rule:** `signex-types` has zero rendering dependencies. If you need to draw
@@ -335,7 +337,7 @@ synced automatically on merge to `trunk`. Five families plus a few signal labels
 |---|---|---|
 | `type:` | Kind of change — `feature`, `bug`, `refactor`, `docs`, `ci`, `chore`, `test`, `performance` | Author / triager |
 | `area:` | Subsystem touched — `sketch`, `footprint-editor`, `library`, … | **Auto** (path labeler) |
-| `tier:` | The scope gate from [docs/ROADMAP.md](docs/ROADMAP.md) §4 — `p0` (required for the Community Preview), `p1` (Advanced Schematic through PCB Viewer), `p2` (PCB Routing through Pro Release), `p3` (after the Pro Release, Signal AI Core onward) | Triager |
+| `tier:` | The scope gate from [docs/ROADMAP.md](docs/ROADMAP.md) §4 — `p0` (required for the Community Preview), `p1` (Advanced Schematic through PCB Viewer), `p2` (PCB Routing through Pro Release), `p3` (after the Pro Release, Signex AI Core onward) | Triager |
 | `priority:` | `critical` / `high` / `medium` / `low` | Triager |
 | `status:` | `needs-triage`, `in-progress`, `blocked`, `needs-review`, `on-hold` | Whoever moves it |
 
@@ -480,14 +482,16 @@ that feature back on, so the lint is the real guard.)
 - **An id is not a secret.** Tokens, nonces and OAuth state come from a CSPRNG
   (the `oauth2` crate's own generators), not from a UUID.
 
-## Contributor License Agreement
+## Contribution terms
 
-By submitting a pull request, you agree that your contribution is licensed under
-the same [Apache-2.0 license](LICENSE) as the rest of the project.
+Today, contributions are accepted under the [Apache-2.0 license](LICENSE)
+(inbound = outbound): by submitting a pull request, you license your
+contribution under the same terms as the rest of the project. The licence
+self-declaration in the pull request template and the license-guard checks
+described below apply to every pull request.
 
-We require this so that the project can maintain a consistent license and offer
-Signex Pro under a separate commercial license without needing to re-negotiate
-with every contributor.
+A Contributor License Agreement is planned. Once it is published, a bot will
+ask for it on each pull request and enforce it.
 
 ## License compliance for contributions
 
@@ -557,8 +561,8 @@ MIT, BSD, ISC, Zlib, Unlicense, CC0, and Apache-2.0 are fine. Anything on
 neither list: ask.
 
 **Why "no resale" is fatal here in particular.** Signex Community is
-Apache-2.0 and free; **Signex Pro is a paid commercial edition built from
-this same tree**. A field-of-use restriction on any code in `crates/` would
+Apache-2.0 and free; **Signex Pro is a paid commercial edition built on top
+of this tree** from a separate private workspace. A field-of-use restriction on any code in `crates/` would
 be violated the day Pro ships, and would break the Apache-2.0 surface we
 promise every downstream redistributor and embedder. Plenty of projects
 could live with a non-commercial clause. We cannot. That's a property of

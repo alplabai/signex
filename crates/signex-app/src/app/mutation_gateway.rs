@@ -63,6 +63,9 @@ impl Signex {
         if patch.contains(signex_engine::DocumentPatch::PAPER) {
             invalidation |= RenderInvalidation::PAPER;
         }
+        if patch.contains(signex_engine::DocumentPatch::NET_COLORS) {
+            invalidation |= RenderInvalidation::NET_COLORS;
+        }
         // The sheet default font is inherited by every kind of text.
         if patch.contains(signex_engine::DocumentPatch::FONT_FAMILY) {
             invalidation |= RenderInvalidation::SYMBOLS
@@ -101,18 +104,14 @@ impl Signex {
     }
 
     /// The active engine, ready for an edit: refused when the sheet is
-    /// read-only or there is none, and told the net colours so a merge keeps
-    /// wires of different colours apart.
+    /// read-only or there is none.
     fn prepare_active_engine(&mut self) -> Result<&mut signex_engine::Engine, String> {
         if let Some(reason) = self.refuse_if_active_read_only() {
             return Err(reason);
         }
-        let colors = self.ui_state.wire_color_overrides.clone();
-        let Some(engine) = self.document_state.active_engine_mut() else {
-            return Err("There is no active schematic.".to_string());
-        };
-        engine.set_wire_colors(colors);
-        Ok(engine)
+        self.document_state
+            .active_engine_mut()
+            .ok_or_else(|| "There is no active schematic.".to_string())
     }
 
     pub(crate) fn apply_engine_commands(
@@ -187,7 +186,6 @@ impl Signex {
             update_selection_info,
         );
         if changed {
-            self.clear_active_net_color_redo();
             (CommandOutcome::Changed, None)
         } else {
             (CommandOutcome::Unchanged, None)
@@ -311,9 +309,6 @@ impl Signex {
             clear_overlay_cache,
             update_selection_info,
         );
-        if changed {
-            self.clear_active_net_color_redo();
-        }
         let outcome = if failed.is_some() {
             CommandOutcome::Failed
         } else if changed {
@@ -322,13 +317,6 @@ impl Signex {
             CommandOutcome::Unchanged
         };
         (outcome, failed)
-    }
-
-    fn clear_active_net_color_redo(&mut self) {
-        if let Some(path) = self.document_state.active_path.clone() {
-            self.ui_state.net_color_redo.remove(&path);
-            self.clear_net_class_pick_redo(&path);
-        }
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -343,8 +331,6 @@ impl Signex {
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
-        // Any history-recording edit ends the colour redo branch.
-        self.clear_active_net_color_redo();
         self.document_state.note_sheet_edit();
         self.sync_active_history_dirty()
     }
@@ -443,7 +429,11 @@ impl Signex {
             return false;
         }
 
-        self.document_state.note_sheet_edit();
+        // A colour changes how the sheet is shown, never what ERC finds.
+        let display_only = invalidation == crate::schematic_runtime::RenderInvalidation::NET_COLORS;
+        if !display_only {
+            self.document_state.note_sheet_edit();
+        }
         if !self.sync_active_history_dirty() {
             return false;
         }
@@ -467,7 +457,9 @@ impl Signex {
                 .clear_overlay_cache();
         }
         self.prune_selected_wires();
-        self.refresh_erc_after_edit();
+        if !display_only {
+            self.refresh_erc_after_edit();
+        }
         if update_selection_info {
             self.update_selection_info();
         }

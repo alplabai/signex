@@ -45,6 +45,11 @@
     "category": "design"
   },
   {
+    "id": "assign_net_class",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "autoplace_fields",
     "group": "General",
     "category": "edit"
@@ -113,6 +118,11 @@
     "id": "close_active_document",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "color_net",
+    "group": "Schematic",
+    "category": "view"
   },
   {
     "id": "copy",

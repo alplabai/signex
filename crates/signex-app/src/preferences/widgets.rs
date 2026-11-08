@@ -7,8 +7,9 @@
 //! motion out of the former single-file `preferences` module.
 
 use super::*;
-use iced::widget::{Space, button, column, container, text};
+use iced::widget::{Space, column, container};
 use iced::{Background, Border, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -109,7 +110,9 @@ pub(super) fn success_button_style(theme: &Theme, status: button::Status) -> but
 
 pub(super) fn section_title<'a>(title: &str) -> Element<'a, PrefMsg> {
     column![
-        text(title.to_owned()).size(TS.title).style(text_primary),
+        text(raw(title.to_owned()))
+            .size(TS.title)
+            .style(text_primary),
         container(Space::new())
             .width(Length::Fill)
             .height(1)

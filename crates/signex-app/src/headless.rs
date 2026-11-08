@@ -124,8 +124,8 @@ impl Signex {
 
     /// Run the command `command` with `args` as every GUI surface runs it,
     /// and say what happened. On an app that was not booted headless (no
-    /// config root override, native dialogs, or launches not refused)
-    /// nothing runs: [`CommandOutcome::NotHeadless`].
+    /// config root override, native dialogs, launches not refused, or git
+    /// commits not skipped) nothing runs: [`CommandOutcome::NotHeadless`].
     pub fn dispatch_command_headless(
         &mut self,
         command: &AppCommandId,
@@ -134,21 +134,41 @@ impl Signex {
         if !crate::config_root::is_override_active()
             || self.headless_answers().is_none()
             || self.ui_state.io.opener != crate::io_ports::Opener::Refuse
+            || self.ui_state.io.git != crate::io_ports::GitCommits::Skip
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
-        // shortcut: operands are parsed (#1934) but no handler reads them yet;
-        // refuse instead of arming the tool and reporting success. Drop this
-        // when the placement commands build their edit from operands.
-        if args.has_operands() {
-            return (
+        // Operands run only through the command's own operand handler; one
+        // without a handler is refused, never run as if it had none (#2155).
+        let missing = (!args.has_operands())
+            .then(|| crate::app::command::missing_headless_operand(command))
+            .flatten();
+        let result = if let Some(name) = missing {
+            (
                 CommandOutcome::Disabled {
-                    reason: "operands are declared but not run yet (#1934)".to_string(),
+                    reason: format!("`{}` needs the operand `{name}`", command.as_str()),
                 },
                 Task::none(),
-            );
-        }
-        let result = self.dispatch_command_reporting(command, args, None);
+            )
+        } else if crate::app::command::headless_needs_path(command)
+            && args.operand("path").is_none()
+        {
+            // A headless caller names its document; the active one is a GUI
+            // notion and never the fallback.
+            (
+                CommandOutcome::Disabled {
+                    reason: format!(
+                        "`{}` needs the operand `path` when run headless",
+                        command.as_str()
+                    ),
+                },
+                Task::none(),
+            )
+        } else if args.has_operands() {
+            self.run_operands(command, &args)
+        } else {
+            self.dispatch_command_reporting(command, args, None)
+        };
         // No `update` runs here, so a history the command created gets its
         // depth now.
         self.sync_undo_depth();

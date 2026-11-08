@@ -3,8 +3,9 @@
 //! One row per constraint, in the theme's danger colour. A click selects the
 //! row's focus entity; hovering isolates the constraint's glyph on the canvas.
 
-use iced::widget::{button, container, mouse_area, text};
+use iced::widget::{container, mouse_area};
 use iced::{Background, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 use super::super::{OverConstraintSummary, PanelMsg, RejectedConflictSummary};
 use crate::styles::{Spacing, TypeScale};
@@ -54,7 +55,7 @@ pub fn conflict_rows(
 }
 
 fn danger_text(label: String) -> iced::widget::Text<'static, Theme> {
-    text(label)
+    text(raw(label))
         .size(TS.caption)
         .style(|theme: &Theme| iced::widget::text::Style {
             color: Some(theme.palette().danger.base.color),

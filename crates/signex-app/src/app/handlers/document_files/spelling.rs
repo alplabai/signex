@@ -20,7 +20,7 @@ use crate::app::state::scope::path_key_with;
 
 impl Signex {
     /// The spelling a document, an in-flight open or a parked dirty engine
-    /// already holds for the file `path` names, `path` itself when that is
+    /// or board already holds for the file `path` names, `path` itself when that is
     /// the held spelling, `None` when no document holds the file.
     pub(crate) fn held_spelling(&self, path: &Path) -> Option<PathBuf> {
         let fold = self.identity_fold_for(path);
@@ -40,6 +40,8 @@ impl Signex {
             // save refusal.
             .chain(document_state.pending_restores.paths())
             .chain(parked_dirty)
+            // A board parked when its dirty tab closed holds its file too.
+            .chain(document_state.parked_pcb_boards.keys())
             .find(|held| path_key_with(held, fold) == key)
             .cloned()
     }

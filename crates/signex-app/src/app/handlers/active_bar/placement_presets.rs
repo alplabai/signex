@@ -56,11 +56,11 @@ impl Signex {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
                     signex_types::schematic::LabelType::Global,
-                    "bidirectional".to_string(),
+                    crate::app::handlers::canvas::GLOBAL_PORT_SHAPE.to_string(),
                 ));
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
-                        shape: "bidirectional".to_string(),
+                        shape: crate::app::handlers::canvas::GLOBAL_PORT_SHAPE.to_string(),
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
                         ..signex_types::schematic::Label::new(
@@ -183,23 +183,7 @@ impl Signex {
                 crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
-                // #631 — clearing `ui_state` is the whole operation now;
-                // the canvas reads that map through `CanvasViewPrefs`
-                // instead of keeping a cleared-in-parallel copy. #1005 —
-                // each sheet keeps its own undo step for what this removes.
-                let kept = self.clear_all_net_colors_undoably();
-                self.ui_state.pending_net_color = None;
-                self.interaction_state.active_canvas_mut().pending_net_color = None;
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                if kept == 0 {
-                    crate::diagnostics::log_info("Cleared all net-color overrides");
-                } else {
-                    crate::diagnostics::log_info(format!(
-                        "Cleared net-color overrides, except on {kept} read-only sheet(s)"
-                    ));
-                }
+                self.run_clear_all_net_colors(None);
             }
             _ => {}
         }

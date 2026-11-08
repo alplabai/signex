@@ -143,6 +143,10 @@ impl Signex {
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
+        let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+            &crate::fonts::read_language_pref_from(prefs),
+        ));
+        crate::app::handlers::preferences::language::log_dropped_language(&i18n);
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
@@ -323,6 +327,7 @@ impl Signex {
                 preferences_draft_net_hover_enabled: net_hover_enabled,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
+                i18n,
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
@@ -443,12 +448,8 @@ impl Signex {
                 reprefix_window_close_pending: false,
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
-                wire_color_overrides: std::collections::HashMap::new(),
                 net_class_styles: Default::default(),
                 lasso_polygon: None,
-                net_color_undo: Default::default(),
-                net_color_revision: Default::default(),
-                net_color_redo: Default::default(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
             },
@@ -490,13 +491,13 @@ impl Signex {
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
                 project_tabs: std::collections::HashMap::new(),
-                net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 documents_epoch: 0,
                 designator_cache: Default::default(),
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
+                parked_pcb_boards: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
                 window_panel_ctx: std::collections::HashMap::new(),
                 window_panel_ctx_keys: std::collections::HashMap::new(),

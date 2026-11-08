@@ -1,103 +1,21 @@
 //! #102 — Ctrl+Z / Ctrl+Y interleave net-colour floods and engine edits in
-//! true chronological order.
+//! true chronological order (#661: colours are engine steps, so the engine
+//! timeline alone orders them).
 
-use super::super::super::*;
-use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind, Symbol};
+use super::net_color_driver::*;
+use crate::app::Signex;
+use signex_types::schematic::{SelectedItem, SelectedKind};
+use std::path::{Path, PathBuf};
 
-fn color(r: u8) -> signex_types::theme::Color {
-    signex_types::theme::Color {
-        r,
-        g: 0,
-        b: 0,
-        a: 255,
-    }
+const A: &str = "undo-order.snxsch";
+const B: &str = "b.snxsch";
+
+fn app_with_sheet_a() -> (Signex, PathBuf) {
+    app_with_sheet(A)
 }
 
-fn app_with_symbol() -> (Signex, uuid::Uuid) {
-    let (mut app, _task) = Signex::new();
-    let id = add_doc(&mut app, "undo-order.snxsch");
-    (app, id)
-}
-
-/// Open a one-symbol schematic tab and make it the active document.
-fn add_doc(app: &mut Signex, name: &str) -> uuid::Uuid {
-    let id = uuid::Uuid::now_v7();
-    let path = std::path::PathBuf::from(name);
-    let sheet = SchematicSheet {
-        uuid: uuid::Uuid::now_v7(),
-        paper_size: "A4".to_string(),
-        symbols: vec![Symbol {
-            uuid: id,
-            lib_id: "Device:R".to_string(),
-            reference: "R1".to_string(),
-            ..Default::default()
-        }],
-        junctions: vec![signex_types::schematic::Junction {
-            uuid: uuid::Uuid::now_v7(),
-            ..Default::default()
-        }],
-        wires: vec![signex_types::schematic::Wire {
-            uuid: uuid::Uuid::now_v7(),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-    app.document_state.engines.insert(
-        path.clone(),
-        signex_engine::Engine::new(sheet).expect("engine"),
-    );
-    app.document_state.tabs.push(crate::app::TabInfo {
-        title: name.to_string(),
-        path: path.clone(),
-        cached_document: None,
-        project_id: None,
-        kind: crate::app::TabKind::Schematic,
-    });
-    app.document_state.active_tab = app.document_state.tabs.len() - 1;
-    app.document_state.active_path = Some(path);
-    id
-}
-
-/// The uuid of the active document's fixture wire.
-fn wire_of(app: &Signex) -> uuid::Uuid {
-    app.document_state
-        .active_engine()
-        .expect("engine")
-        .document()
-        .wires[0]
-        .uuid
-}
-
-/// The uuid of the active document's fixture junction.
-fn junction_of(app: &Signex) -> uuid::Uuid {
-    app.document_state
-        .active_engine()
-        .expect("engine")
-        .document()
-        .junctions[0]
-        .uuid
-}
-
-fn activate(app: &mut Signex, name: &str) {
-    let path = std::path::PathBuf::from(name);
-    app.document_state.active_tab = app
-        .document_state
-        .tabs
-        .iter()
-        .position(|t| t.path == path)
-        .expect("tab");
-    app.document_state.active_path = Some(path);
-}
-
-fn active_steps(
-    steps: &std::collections::HashMap<std::path::PathBuf, Vec<crate::app::state::NetColorStep>>,
-    app: &Signex,
-) -> usize {
-    app.document_state
-        .active_path
-        .as_ref()
-        .and_then(|p| steps.get(p))
-        .map_or(0, Vec::len)
+fn junction_of(app: &Signex, path: &Path) -> uuid::Uuid {
+    app.document_state.engines[path].document().junctions[0].uuid
 }
 
 fn move_symbol(app: &mut Signex, id: uuid::Uuid) {
@@ -114,12 +32,8 @@ fn move_symbol(app: &mut Signex, id: uuid::Uuid) {
     assert!(moved, "fixture: the move must change the document");
 }
 
-fn symbol_x(app: &Signex) -> f64 {
-    app.document_state
-        .active_engine()
-        .expect("engine")
-        .document()
-        .symbols[0]
+fn symbol_x(app: &Signex, path: &Path) -> f64 {
+    app.document_state.engines[path].document().symbols[0]
         .position
         .x
 }
@@ -128,225 +42,185 @@ fn symbol_x(app: &Signex) -> f64 {
 /// the colour second; Ctrl+Y replays them in the opposite order.
 #[test]
 fn undo_and_redo_follow_chronological_order() {
-    let (mut app, id) = app_with_symbol();
-    let wire = wire_of(&app);
-    let start = symbol_x(&app);
+    let (mut app, path) = app_with_sheet_a();
+    let (wire, id) = (wire_of(&app, &path), symbol_of(&app, &path));
+    let start = symbol_x(&app, &path);
 
-    app.record_net_color_undo();
-    app.ui_state.wire_color_overrides.insert(wire, color(9));
+    paint(&mut app, &[wire], color(9));
     move_symbol(&mut app, id);
 
     app.handle_undo_requested();
-    assert_eq!(symbol_x(&app), start, "first undo reverts the newer move");
-    assert!(app.ui_state.wire_color_overrides.contains_key(&wire));
+    assert_eq!(
+        symbol_x(&app, &path),
+        start,
+        "first undo reverts the newer move"
+    );
+    assert!(colour_of(&app, wire).is_some());
 
     app.handle_undo_requested();
-    assert!(
-        app.ui_state.wire_color_overrides.is_empty(),
+    assert_eq!(
+        colour_of(&app, wire),
+        None,
         "second undo reverts the colour"
     );
 
     app.handle_redo_requested();
-    assert!(
-        app.ui_state.wire_color_overrides.contains_key(&wire),
-        "redo replays the colour first"
-    );
-    assert_eq!(symbol_x(&app), start);
+    assert!(colour_of(&app, wire).is_some(), "redo replays the colour");
+    assert_eq!(symbol_x(&app, &path), start);
 
     app.handle_redo_requested();
-    assert_eq!(symbol_x(&app), start + 10.0, "then the move");
+    assert_eq!(symbol_x(&app, &path), start + 10.0, "then the move");
 }
 
 /// A new engine edit ends the colour redo branch.
 #[test]
 fn a_new_engine_edit_clears_colour_redo() {
-    let (mut app, id) = app_with_symbol();
-    app.record_net_color_undo();
-    app.ui_state
-        .wire_color_overrides
-        .insert(wire_of(&app), color(1));
+    let (mut app, path) = app_with_sheet_a();
+    let (wire, id) = (wire_of(&app, &path), symbol_of(&app, &path));
+    paint(&mut app, &[wire], color(1));
     app.handle_undo_requested();
-    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
+    assert!(app.document_state.engines[&path].can_redo());
 
     move_symbol(&mut app, id);
-    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 0);
+    assert!(!app.document_state.engines[&path].can_redo());
+    app.handle_redo_requested();
+    assert_eq!(colour_of(&app, wire), None, "the colour is gone for good");
 }
 
 /// A colour on A is untouched by Ctrl+Z in B; switching back undoes it.
 #[test]
 fn colour_steps_belong_to_their_own_document() {
-    let (mut app, _a_sym) = app_with_symbol();
-    let b_sym = add_doc(&mut app, "b.snxsch");
-    activate(&mut app, "undo-order.snxsch");
-    let wire = wire_of(&app);
-    app.record_net_color_undo();
-    app.ui_state.wire_color_overrides.insert(wire, color(9));
+    let (mut app, a) = app_with_sheet_a();
+    let b = PathBuf::from(B);
+    add_sheet(&mut app, &b);
+    activate(&mut app, &a);
+    let wire = wire_of(&app, &a);
+    paint(&mut app, &[wire], color(9));
 
-    activate(&mut app, "b.snxsch");
-    move_symbol(&mut app, b_sym);
+    activate(&mut app, &b);
+    let b_symbol = symbol_of(&app, &b);
+    move_symbol(&mut app, b_symbol);
     app.handle_undo_requested();
-    assert_eq!(symbol_x(&app), 0.0, "B's own edit is undone");
-    assert!(
-        app.ui_state.wire_color_overrides.contains_key(&wire),
-        "A's colour is not touched from B"
-    );
+    assert_eq!(symbol_x(&app, &b), 0.0, "B's own edit is undone");
+    assert!(colour_of(&app, wire).is_some(), "A's colour is untouched");
     app.handle_undo_requested();
-    assert!(app.ui_state.wire_color_overrides.contains_key(&wire));
+    assert!(colour_of(&app, wire).is_some());
 
-    activate(&mut app, "undo-order.snxsch");
+    activate(&mut app, &a);
     app.handle_undo_requested();
-    assert!(app.ui_state.wire_color_overrides.is_empty());
+    assert_eq!(colour_of(&app, wire), None);
 }
 
 /// Redo availability and effect are per document.
 #[test]
 fn colour_redo_is_enabled_only_for_its_document() {
-    let (mut app, _a_sym) = app_with_symbol();
-    add_doc(&mut app, "b.snxsch");
-    activate(&mut app, "undo-order.snxsch");
-    app.record_net_color_undo();
-    app.ui_state
-        .wire_color_overrides
-        .insert(wire_of(&app), color(1));
+    let (mut app, a) = app_with_sheet_a();
+    let b = PathBuf::from(B);
+    add_sheet(&mut app, &b);
+    activate(&mut app, &a);
+    let wire = wire_of(&app, &a);
+    paint(&mut app, &[wire], color(1));
     app.handle_undo_requested();
-    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
+    assert!(app.document_state.engines[&a].can_redo());
 
-    activate(&mut app, "b.snxsch");
-    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 0);
+    activate(&mut app, &b);
+    assert!(!app.document_state.engines[&b].can_redo());
     app.handle_redo_requested();
-    assert!(app.ui_state.wire_color_overrides.is_empty(), "no-op on B");
+    assert_eq!(colour_of(&app, wire), None, "no-op on B");
 }
 
 /// Replacing a document's engine drops that document's colour steps only.
 #[test]
 fn reload_clears_that_documents_colour_steps() {
-    let (mut app, _a_sym) = app_with_symbol();
-    add_doc(&mut app, "b.snxsch");
-    activate(&mut app, "undo-order.snxsch");
-    app.record_net_color_undo();
-    activate(&mut app, "b.snxsch");
-    app.record_net_color_undo();
+    let (mut app, a) = app_with_sheet_a();
+    let b = PathBuf::from(B);
+    add_sheet(&mut app, &b);
+    let (wire_a, wire_b) = (wire_of(&app, &a), wire_of(&app, &b));
+    paint_on(&mut app, &a, &[wire_a], color(1));
+    paint_on(&mut app, &b, &[wire_b], color(2));
 
-    app.clear_net_color_steps(std::path::Path::new("undo-order.snxsch"));
-    assert!(
-        !app.ui_state
-            .net_color_undo
-            .contains_key(std::path::Path::new("undo-order.snxsch"))
-    );
-    assert_eq!(active_steps(&app.ui_state.net_color_undo, &app), 1);
-}
+    assert!(app.install_schematic_at(&a, fixture_sheet()));
 
-/// Annotate records engine history outside the gateway; it must still end
-/// the colour redo branch.
-#[test]
-fn annotate_style_dirty_marking_clears_colour_redo() {
-    let (mut app, _id) = app_with_symbol();
-    app.record_net_color_undo();
-    app.ui_state
-        .wire_color_overrides
-        .insert(wire_of(&app), color(1));
-    app.handle_undo_requested();
-    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 1);
-
-    app.mark_active_document_dirty();
-    assert_eq!(active_steps(&app.ui_state.net_color_redo, &app), 0);
+    assert!(!app.document_state.engines[&a].can_undo());
+    assert!(app.document_state.engines[&b].can_undo());
 }
 
 /// #1005 — colour on A, colour on B, Ctrl+Z in A reverts only A's colour.
 #[test]
 fn undo_on_one_sheet_keeps_another_sheets_colour() {
-    let (mut app, _a_sym) = app_with_symbol();
-    let wire_a = wire_of(&app);
-    app.record_net_color_undo();
-    app.ui_state.wire_color_overrides.insert(wire_a, color(1));
+    let (mut app, a) = app_with_sheet_a();
+    let wire_a = wire_of(&app, &a);
+    paint(&mut app, &[wire_a], color(1));
 
-    add_doc(&mut app, "b.snxsch");
-    let wire_b = wire_of(&app);
-    app.record_net_color_undo();
-    app.ui_state.wire_color_overrides.insert(wire_b, color(2));
+    let b = PathBuf::from(B);
+    add_sheet(&mut app, &b);
+    let wire_b = wire_of(&app, &b);
+    paint(&mut app, &[wire_b], color(2));
 
-    activate(&mut app, "undo-order.snxsch");
+    activate(&mut app, &a);
     app.handle_undo_requested();
-    assert!(!app.ui_state.wire_color_overrides.contains_key(&wire_a));
-    assert_eq!(
-        app.ui_state.wire_color_overrides.get(&wire_b),
-        Some(&color(2))
-    );
+    assert_eq!(colour_of(&app, wire_a), None);
+    assert_eq!(colour_of(&app, wire_b), Some(color(2)));
 
     app.handle_redo_requested();
-    assert_eq!(
-        app.ui_state.wire_color_overrides.get(&wire_a),
-        Some(&color(1))
-    );
-    assert_eq!(
-        app.ui_state.wire_color_overrides.get(&wire_b),
-        Some(&color(2))
-    );
+    assert_eq!(colour_of(&app, wire_a), Some(color(1)));
+    assert_eq!(colour_of(&app, wire_b), Some(color(2)));
 }
 
-/// Junction colours belong to their sheet too: undo removes them, so the
-/// clear-net-colour pen then finds nothing to record.
+/// Junction colours belong to their sheet too: one flood is one step for the
+/// wire and the junction.
 #[test]
 fn undo_takes_the_floods_junction_colour_with_it() {
-    let (mut app, _sym) = app_with_symbol();
-    let (wire, junction) = (wire_of(&app), junction_of(&app));
-    app.record_net_color_undo();
-    app.ui_state.wire_color_overrides.insert(wire, color(1));
-    app.ui_state.wire_color_overrides.insert(junction, color(1));
+    let (mut app, path) = app_with_sheet_a();
+    let (wire, junction) = (wire_of(&app, &path), junction_of(&app, &path));
+    paint(&mut app, &[wire, junction], color(1));
 
     app.handle_undo_requested();
-    assert!(app.ui_state.wire_color_overrides.is_empty());
-    assert_eq!(active_steps(&app.ui_state.net_color_undo, &app), 0);
-    assert!(app.active_sheet_net_colors().is_empty(), "no phantom diff");
+    assert_eq!(colour_of(&app, wire), None);
+    assert_eq!(colour_of(&app, junction), None);
+    assert!(!app.document_state.engines[&path].can_undo());
 
     app.handle_redo_requested();
-    assert_eq!(app.ui_state.wire_color_overrides.len(), 2);
+    assert_eq!(colour_of(&app, wire), Some(color(1)));
+    assert_eq!(colour_of(&app, junction), Some(color(1)));
 }
 
 /// Clear All wipes every sheet, but each sheet's Ctrl+Z restores its own.
 #[test]
 fn clear_all_is_global_and_undoes_per_sheet() {
-    let (mut app, _a_sym) = app_with_symbol();
-    let wire_a = wire_of(&app);
-    app.ui_state.wire_color_overrides.insert(wire_a, color(1));
-    add_doc(&mut app, "b.snxsch");
-    let wire_b = wire_of(&app);
-    app.ui_state.wire_color_overrides.insert(wire_b, color(2));
+    let (mut app, a) = app_with_sheet_a();
+    let b = PathBuf::from(B);
+    add_sheet(&mut app, &b);
+    let (wire_a, wire_b) = (wire_of(&app, &a), wire_of(&app, &b));
+    paint_on(&mut app, &a, &[wire_a], color(1));
+    paint_on(&mut app, &b, &[wire_b], color(2));
 
-    app.clear_all_net_colors_undoably();
-    assert!(app.ui_state.wire_color_overrides.is_empty());
+    app.clear_net_colors(None);
+    assert_eq!(colour_of(&app, wire_a), None);
+    assert_eq!(colour_of(&app, wire_b), None);
 
-    activate(&mut app, "undo-order.snxsch");
+    activate(&mut app, &a);
     app.handle_undo_requested();
-    assert_eq!(
-        app.ui_state.wire_color_overrides.get(&wire_a),
-        Some(&color(1))
-    );
-    assert!(!app.ui_state.wire_color_overrides.contains_key(&wire_b));
+    assert_eq!(colour_of(&app, wire_a), Some(color(1)));
+    assert_eq!(colour_of(&app, wire_b), None);
 
-    activate(&mut app, "b.snxsch");
+    activate(&mut app, &b);
     app.handle_undo_requested();
-    assert_eq!(
-        app.ui_state.wire_color_overrides.get(&wire_b),
-        Some(&color(2))
-    );
+    assert_eq!(colour_of(&app, wire_b), Some(color(2)));
 }
 
-/// Closing a sheet drops its colours from the app-wide map.
+/// Closing a sheet drops its colours with its engine.
 #[test]
 fn closing_a_sheet_drops_its_colours() {
-    let (mut app, _a_sym) = app_with_symbol();
-    let wire_a = wire_of(&app);
-    let junction_a = junction_of(&app);
-    app.ui_state.wire_color_overrides.insert(wire_a, color(1));
-    app.ui_state
-        .wire_color_overrides
-        .insert(junction_a, color(1));
-    add_doc(&mut app, "b.snxsch");
-    let wire_b = wire_of(&app);
-    app.ui_state.wire_color_overrides.insert(wire_b, color(2));
+    let (mut app, a) = app_with_sheet_a();
+    let b = PathBuf::from(B);
+    add_sheet(&mut app, &b);
+    let (wire_a, wire_b) = (wire_of(&app, &a), wire_of(&app, &b));
+    paint_on(&mut app, &a, &[wire_a], color(1));
+    paint_on(&mut app, &b, &[wire_b], color(2));
 
-    app.forget_net_colors_of(std::path::Path::new("undo-order.snxsch"));
-    assert_eq!(app.ui_state.wire_color_overrides.len(), 1);
-    assert!(app.ui_state.wire_color_overrides.contains_key(&wire_b));
+    app.document_state.remove_engine(&a);
+
+    assert_eq!(colour_of(&app, wire_a), None);
+    assert_eq!(colour_of(&app, wire_b), Some(color(2)));
 }

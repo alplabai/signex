@@ -379,3 +379,38 @@ fn redo_names_a_sheet_closed_after_the_undo() {
         "Annotate redone on open sheets but not on child.snxsch: closed since the annotate"
     ));
 }
+
+/// A DEAD net-class pick marker (its class edit is already undone, here: no
+/// such project) is no later edit: it is passed and the project-wide undo
+/// goes ahead with no "edited after" refusal (#661). A live one blocks; see
+/// `pick_undo_tests`.
+#[test]
+fn a_dead_pick_marker_on_the_other_sheet_does_not_block_the_project_wide_undo() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut p = project(AnnotateUndo::Project);
+    annotate(&mut p.app);
+    let after = annotated_pair(&p);
+    p.app
+        .document_state
+        .engines
+        .get_mut(&p.child)
+        .unwrap()
+        .record_class_pick(signex_engine::ClassPickMarker {
+            project: 1,
+            step: 1,
+        });
+
+    assert_ne!(
+        after,
+        (
+            vec!["U?".into(), "C?".into()],
+            vec!["U?".into(), "R?".into()]
+        )
+    );
+
+    undo(&mut p.app);
+
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
+    assert_eq!(refs(&p.app, &p.child), ["U?", "R?"]);
+    assert!(!warned("Cannot undo the project-wide annotate"));
+}
