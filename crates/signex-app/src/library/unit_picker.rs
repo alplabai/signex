@@ -9,6 +9,7 @@
 use iced::Element;
 use iced::widget::{Widget, pick_list};
 use signex_types::quantity::Unit;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// One entry: a standard unit, or `None` for "no unit" (a plain value).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,6 +57,7 @@ pub(crate) fn unit_picker<'a, M: Clone + 'a>(
         unit_choices(allow_none),
         UnitChoice::to_string,
     )
+    .graphite()
     .on_select(move |c: UnitChoice| on_pick(c.0.map(|u| u.token().to_string()).unwrap_or_default()))
     .text_size(text_size)
     .padding([3, 6])

@@ -15,6 +15,7 @@
 
 use iced::widget::{Column, Widget as _, container, pick_list, row, text, text_input};
 use iced::{Color, Length};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
@@ -285,10 +286,10 @@ where
         row![
             text(label).size(TS.caption).color(muted).width(fw.0),
             pick_list(Some(selected), options, |t: &T| t.to_string())
+                .graphite()
                 .on_select(on_change)
                 .text_size(10)
                 .padding([3.0, SP.m])
-                .style(crate::panels::form_look::pick_list_style)
                 .width(fw.1),
         ]
         .spacing(6)

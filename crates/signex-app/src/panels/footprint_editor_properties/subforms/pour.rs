@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, Widget, container, pick_list, row, text, text_input};
 use iced::{Color, Element, Length};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -61,6 +62,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         signex_sketch::attr::PourFillType::ALL,
         |v: &signex_sketch::attr::PourFillType| v.to_string(),
     )
+    .graphite()
     .on_select(move |v| PanelMsg::FpEditorSetPourFillType { id, value: v })
     .text_size(10)
     .padding([3.0, SP.m]);

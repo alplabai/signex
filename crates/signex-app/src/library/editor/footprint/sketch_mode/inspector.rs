@@ -22,6 +22,7 @@ use iced::{
     widget::{Space, column, container, pick_list, row, scrollable, text, text_input},
 };
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 
 use crate::app::FootprintDocument;
@@ -274,6 +275,7 @@ fn view_role<'a>(
     );
 
     let dropdown = pick_list(Some(current), RoleTag::ALL, |r: &RoleTag| r.to_string())
+        .graphite()
         .on_select(move |new_role| LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetRole { id, role: new_role }),

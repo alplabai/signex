@@ -1,3 +1,4 @@
+use crate::dropdown_style::GraphiteDropdown;
 use iced::widget::{column, container, pick_list, row};
 use iced::{Alignment, Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
@@ -71,6 +72,7 @@ impl<'a> ComponentCard<'a> {
                 11.0,
                 "Tolerance",
                 pick_list(Some(tolerance), Tolerance::ALL, Tolerance::to_string)
+                    .graphite()
                     .on_select(move |tolerance| ComponentCardMessage::ToleranceChanged {
                         index,
                         tolerance,

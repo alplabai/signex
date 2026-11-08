@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, column, container, row, text};
 use iced::{Color, Element, Length, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::super::{NumericDraft, NumericFieldKey, PanelMsg, SymbolPinSummary, numeric_input};
 use crate::styles::{Spacing, TypeScale};
@@ -44,6 +45,7 @@ fn view_pin_symbol_picker<'a>(
         options.to_vec(),
         |(label, _): &(&'static str, K)| label.to_string(),
     )
+    .graphite()
     .on_select(
         move |(_, value): (&'static str, K)| PanelMsg::SymEditorSetPinSymbol {
             pin_idx,
@@ -150,6 +152,7 @@ pub(super) fn view_pin_selection<'a>(
         electrical_options.to_vec(),
         |(label, _): &(&'static str, signex_library::PinDirection)| label.to_string(),
     )
+    .graphite()
     .placeholder(pin.electrical.clone())
     .on_select(
         move |(_, value): (&'static str, signex_library::PinDirection)| {
@@ -229,6 +232,7 @@ pub(super) fn view_pin_selection<'a>(
         orientation_options.to_vec(),
         |(label, _): &(&'static str, signex_library::PinOrientation)| label.to_string(),
     )
+    .graphite()
     .placeholder(pin.orientation.clone())
     .on_select(
         move |(_, value): (&'static str, signex_library::PinOrientation)| {

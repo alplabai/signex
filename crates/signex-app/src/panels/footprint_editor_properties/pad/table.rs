@@ -6,6 +6,7 @@
 
 use iced::widget::{Widget, container, pick_list, text, text_input};
 use iced::{Color, Length, Theme};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::super::super::{PanelMsg, PanelPalette};
 use super::form::{
@@ -121,6 +122,7 @@ where
     T: Clone + Eq + std::fmt::Display + 'static,
 {
     pick_list(Some(selected), options, |t: &T| t.to_string())
+        .graphite()
         .on_select(on_change)
         .text_size(10)
         .padding([SP.xs, 6.0])

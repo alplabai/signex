@@ -1,5 +1,6 @@
 use iced::widget::{Column, container, pick_list, row, text};
 use iced::{Element, Length, Widget as _};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -220,6 +221,7 @@ pub(super) fn view_selection<'a>(
                 use crate::library::messages::RoleTag;
                 let current = fp.selected_sketch_role;
                 let dropdown = pick_list(Some(current), RoleTag::ALL, |r: &RoleTag| r.to_string())
+                    .graphite()
                     .on_select(move |new_role| PanelMsg::FpEditorSetRole { id, role: new_role })
                     .text_size(11)
                     .padding([3.0, SP.m])

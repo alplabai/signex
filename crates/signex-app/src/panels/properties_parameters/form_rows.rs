@@ -8,6 +8,7 @@ use super::super::*;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use crate::panels::form_look;
 
@@ -25,6 +26,7 @@ fn text_on(bg: Color) -> Color {
 
 /// Colour of the On/Off word beside a checkbox drawn on `surface`: the
 /// readable text colour for "On", the muted label colour for "Off".
+#[cfg(test)]
 pub(crate) fn check_state_color(checked: bool, label_c: Color, surface: Color) -> Color {
     if checked {
         text_on(surface)
@@ -139,9 +141,9 @@ pub fn form_mm_edit_row<'a>(
     value: f32,
     draft: Option<&str>,
     edge: PaperEdge,
-    label_c: Color,
-    input_bg: Color,
-    input_border: Color,
+    label_c: impl Into<LabelInk>,
+    _input_bg: Color,
+    _input_border: Color,
 ) -> Element<'a, PanelMsg> {
     let text_value = draft.map_or_else(|| format!("{value:.1}"), str::to_string);
     container(
@@ -153,24 +155,7 @@ pub fn form_mm_edit_row<'a>(
                 .size(TS.body)
                 .padding([3, 6])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(move |theme: &Theme, status| {
-                    form_look::text_input_or(
-                        theme,
-                        status,
-                        iced::widget::text_input::Style {
-                            background: Background::Color(input_bg),
-                            border: Border {
-                                width: 1.0,
-                                radius: 2.0.into(),
-                                color: input_border,
-                                ..Border::default()
-                            },
-                            placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                            value: text_on(input_bg),
-                            selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
-                        },
-                    )
-                }),
+                .style(form_look::text_input_style),
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center),
@@ -195,10 +180,10 @@ where
         row![
             property_label(label.to_string(), label_c),
             iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
+                .graphite()
                 .on_select(on_change)
                 .text_size(11)
                 .padding([SP.xs, 6.0])
-                .style(form_look::pick_list_style)
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
@@ -209,30 +194,25 @@ where
     .boxed()
 }
 
-/// Checkbox form row. `surface` is the colour the row is drawn on (the
-/// panel's `panel_bg`); the "On" word picks its colour against it.
+/// Checkbox form row: label, then the checkbox.
 pub fn form_check_row<'a>(
     label: &str,
     checked: bool,
     msg: PanelMsg,
     label_c: impl Into<LabelInk>,
-    surface: Color,
+    _surface: Color,
 ) -> Element<'a, PanelMsg> {
     let ink: LabelInk = label_c.into();
     container(
         row![
             property_label(label.to_string(), ink),
-            row![
+            container(
                 iced::widget::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
                     .size(TS.heading)
                     .spacing(SP.s)
                     .style(form_look::checkbox_style),
-                text(if checked { "On" } else { "Off" })
-                    .size(TS.body)
-                    .color(check_state_color(checked, ink.color, surface)),
-            ]
-            .spacing(SP.m)
+            )
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
@@ -256,7 +236,7 @@ pub fn form_grid_row(
     unit: Unit,
     has_checkbox: bool,
     on_size: impl Fn(f32) -> PanelMsg + 'static,
-    label_c: Color,
+    label_c: impl Into<LabelInk>,
     active: bool,
     on_toggle: PanelMsg,
 ) -> Element<'static, PanelMsg> {
@@ -275,6 +255,7 @@ pub fn form_grid_row(
         .map(|(_, lbl)| *lbl);
 
     let pick = iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
+        .graphite()
         .on_select(move |lbl: &'static str| {
             // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
             let mm = GRID_SIZE_LABELS
@@ -287,7 +268,6 @@ pub fn form_grid_row(
             on_size(mm)
         })
         .text_size(11)
-        .style(form_look::pick_list_style)
         .width(Length::Fill);
 
     let label_widget = property_label(label.to_string(), label_c);
@@ -329,16 +309,13 @@ pub fn form_check_row_shortcut<'a>(
     value: bool,
     on_toggle: PanelMsg,
     shortcut: &'a str,
-    label_c: Color,
+    label_c: impl Into<LabelInk>,
 ) -> Element<'a, PanelMsg> {
+    let label_c: LabelInk = label_c.into();
     let shortcut_owned = shortcut.to_string();
     container(
         row![
-            text(label.to_string())
-                .size(TS.body)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::Word),
+            property_label(label.to_string(), label_c),
             row![
                 iced::widget::checkbox(value)
                     .on_toggle(move |_| on_toggle.clone())
@@ -348,7 +325,7 @@ pub fn form_check_row_shortcut<'a>(
                 Space::new().width(Length::Fill),
                 text(shortcut_owned)
                     .size(TS.caption)
-                    .color(label_c)
+                    .color(label_c.color)
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
             .spacing(SP.s)
@@ -369,36 +346,18 @@ pub fn form_font_link_row<'a>(
     current_size_px: f32,
     _bold: bool,
     _italic: bool,
-    label_c: Color,
+    label_c: impl Into<LabelInk>,
 ) -> Element<'a, PanelMsg> {
     let summary = format!("{current_family}, {:.0}px", current_size_px);
 
     container(
         row![
             property_label(label, label_c),
-            iced::widget::button(
-                text(summary)
-                    .size(TS.body)
-                    .color(Color::from_rgb(0.35, 0.7, 1.0))
-                    .width(Length::Fill),
-            )
-            .on_press(PanelMsg::OpenCanvasFontPopup)
-            .padding([1, 0])
-            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-            .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let underline = matches!(status, iced::widget::button::Status::Hovered);
-                iced::widget::button::Style {
-                    background: None,
-                    text_color: if underline {
-                        Color::from_rgb(0.55, 0.82, 1.0)
-                    } else {
-                        Color::from_rgb(0.35, 0.7, 1.0)
-                    },
-                    border: Border::default(),
-                    shadow: iced::Shadow::default(),
-                    ..Default::default()
-                }
-            }),
+            iced::widget::button(text(summary).size(TS.body).width(Length::Fill))
+                .on_press(PanelMsg::OpenCanvasFontPopup)
+                .padding([SP.xs, 6.0])
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+                .style(form_look::value_field_button),
         ]
         .spacing(SP.s)
         .width(Length::Fill)
@@ -424,9 +383,9 @@ pub fn canvas_font_popup<'a>(
         families.as_slice(),
         |f: &String| f.clone(),
     )
+    .graphite()
     .on_select(PanelMsg::SetCanvasFont)
     .text_size(11)
-    .style(form_look::pick_list_style)
     .width(Length::Fill);
 
     let size_input = NumberInput::new(&current_size_px, 6.0..=36.0, PanelMsg::SetCanvasFontSize)
@@ -525,12 +484,24 @@ pub fn form_edit_row<'a>(
     .boxed()
 }
 
-/// Standalone label row (no value, used before segmented controls).
+/// Subsection label: muted caption with room above, no divider.
 pub fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
-    container(text(label.to_string()).size(TS.body).color(label_c))
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .boxed()
+    container(
+        text(label.to_string())
+            .size(TS.caption)
+            .style(move |theme: &Theme| iced::widget::text::Style {
+                color: Some(form_look::FormLook::of(theme).map_or(label_c, |l| l.ink3)),
+                ..Default::default()
+            }),
+    )
+    .padding(iced::Padding {
+        top: 14.0,
+        right: SP.m,
+        bottom: 4.0,
+        left: SP.m,
+    })
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// Altium-style B/I/U/T (Bold / Italic / Underline / Strikethrough) row.

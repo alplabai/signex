@@ -10,6 +10,7 @@ use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeId;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -129,6 +130,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                         families.as_slice(),
                         |s: &String| s.clone(),
                     )
+                    .graphite()
                     .on_select(PrefMsg::DraftFont)
                     .text_size(12)
                     .width(200)
@@ -171,6 +173,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             iced::widget::pick_list(Some(draft_grid_style), GridStyle::ALL, |v: &GridStyle| {
                 v.to_string()
             })
+            .graphite()
             .on_select(PrefMsg::DraftGridStyle)
             .text_size(12)
             .width(200),
@@ -268,6 +271,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 crate::canvas::grid::GRID_SIZE_LABELS,
                 |lbl: &&'static str| lbl.to_string(),
             )
+            .graphite()
             .on_select(|lbl: &'static str| {
                 let mm = crate::canvas::grid::GRID_SIZES_MM
                     .iter()
@@ -300,6 +304,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 GridStyle::ALL,
                 |v: &GridStyle| v.to_string(),
             )
+            .graphite()
             .on_select(PrefMsg::DraftSymbolGridStyle)
             .text_size(12)
             .width(200),
@@ -323,7 +328,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 Some(draft_symbol_pin_selection),
                 PinSelectionMode::ALL,
                 |v: &PinSelectionMode| v.to_string(),
-            )
+            ).graphite()
             .on_select(PrefMsg::DraftSymbolPinSelection)
             .text_size(12)
             .width(200),
@@ -437,6 +442,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 crate::canvas::WheelMode::ALL,
                 |v: &crate::canvas::WheelMode| v.to_string(),
             )
+            .graphite()
             .on_select(PrefMsg::DraftWheelMode)
             .text_size(12)
             .width(120),
@@ -579,6 +585,7 @@ fn window_controls_row<'a>(
             crate::chrome::controls::WindowControlsPlacement::ALL,
             |v: &crate::chrome::controls::WindowControlsPlacement| v.to_string(),
         )
+        .graphite()
         .on_select(PrefMsg::DraftWindowControlsPlacement)
         .text_size(12)
         .width(200),

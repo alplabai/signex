@@ -3,11 +3,11 @@
 //! Legacy themes never reach these helpers.
 
 use super::{PrefMsg, PrefNav, SP, TS};
-use crate::styles::{self, Radii, ti, tokens};
-use iced::overlay::menu;
+use crate::styles::{self, ti, tokens};
 use iced::widget::{container, pick_list, scrollable, text_input};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// The page name on Graphite: the mock's wording for the pages it names.
 pub(super) fn graphite_label(item: PrefNav) -> &'static str {
@@ -58,46 +58,14 @@ pub(super) fn nav_search<'a>(query: &'a str, t: &ThemeTokens) -> Element<'a, Pre
 pub(super) fn font_pick_list<'a>(
     current: String,
     families: &'a [String],
-    t: &ThemeTokens,
+    _t: &ThemeTokens,
 ) -> Element<'a, PrefMsg> {
-    let r = tokens::resolve(t);
-    let (field, ink, ink3) = (r.field, ti(t.text), r.ink3);
-    let (line, accent, raised) = (ti(t.border), ti(t.accent), r.raised);
-    let (selected, radius) = (ti(t.selection), Radii::GRAPHITE.control);
     pick_list(Some(current), families, |s: &String| s.clone())
+        .graphite()
         .on_select(PrefMsg::DraftFont)
         .text_size(TS.label)
         .padding([SP.s, SP.m])
         .width(200)
-        .style(move |_: &Theme, status| pick_list::Style {
-            text_color: ink,
-            placeholder_color: ink3,
-            handle_color: ink3,
-            background: Background::Color(field),
-            border: Border {
-                width: 1.0,
-                color: if matches!(status, pick_list::Status::Opened { .. }) {
-                    accent
-                } else {
-                    line
-                },
-                radius: radius.into(),
-                ..Border::default()
-            },
-        })
-        .menu_style(move |_: &Theme| menu::Style {
-            background: Background::Color(raised),
-            border: Border {
-                width: 1.0,
-                color: line,
-                radius: radius.into(),
-                ..Border::default()
-            },
-            text_color: ink,
-            selected_text_color: ink,
-            selected_background: Background::Color(selected),
-            shadow: Default::default(),
-        })
         .boxed()
 }
 

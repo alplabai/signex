@@ -12,6 +12,7 @@
 use iced::widget::{button, column, container, pick_list, row, text};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
@@ -61,7 +62,7 @@ pub fn view<'a>(
         SheetColor::ALL.to_vec(),
         |c: &SheetColor| c.to_string(),
     )
-    .style(crate::panels::form_look::pick_list_style)
+    .graphite()
     .on_select(LibraryMessage::DocumentOptionsSetSheetColor)
     .padding([sp.xs, sp.s])
     .text_size(ts.body)

@@ -10,7 +10,7 @@ use super::*;
 use crate::styles::tokens::resolve;
 use crate::styles::{TypeScale, is_graphite, ti};
 use iced::Widget;
-use iced::widget::{button, checkbox, pick_list, scrollable, text_input};
+use iced::widget::{button, checkbox, scrollable, text_input};
 use signex_types::theme::{ThemeId, theme_tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -122,31 +122,6 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
     match FormLook::of(theme) {
         Some(l) => graphite_text_input(l, status),
         None => text_input::default(theme, status),
-    }
-}
-
-/// `pick_list` style for a form dropdown: Graphite, else the stock style.
-pub(crate) fn pick_list_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
-    let base = pick_list::default(theme, status);
-    let Some(l) = FormLook::of(theme) else {
-        return base;
-    };
-    let border = match status {
-        pick_list::Status::Opened { .. } => l.accent,
-        pick_list::Status::Hovered => l.line_strong,
-        _ => l.line,
-    };
-    pick_list::Style {
-        text_color: l.ink,
-        placeholder_color: l.ink4,
-        handle_color: l.ink3,
-        background: Background::Color(l.field),
-        border: Border {
-            width: 1.0,
-            radius: PROPERTY_FIELD_RADIUS.into(),
-            color: border,
-            ..Border::default()
-        },
     }
 }
 
@@ -274,6 +249,26 @@ pub(crate) fn option_tile(
             style.border.color = l.accent;
         }
         style
+    }
+}
+
+/// A value shown as a field that opens something when pressed (the canvas
+/// font): field fill, hairline, ink text; the hairline strengthens on hover.
+pub(crate) fn value_field_button(theme: &Theme, status: button::Status) -> button::Style {
+    let Some(l) = FormLook::of(theme) else {
+        return button::text(theme, status);
+    };
+    let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+    button::Style {
+        background: Some(Background::Color(l.field)),
+        text_color: l.ink,
+        border: Border {
+            width: 1.0,
+            radius: PROPERTY_FIELD_RADIUS.into(),
+            color: if hovered { l.line_strong } else { l.line },
+            ..Border::default()
+        },
+        ..button::Style::default()
     }
 }
 

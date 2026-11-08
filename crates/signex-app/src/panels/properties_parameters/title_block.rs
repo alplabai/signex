@@ -81,10 +81,11 @@ pub struct TitleBlockDraft {
 /// The Title Block collapsible section for the active sheet.
 pub fn view_title_block_section<'a>(
     ctx: &'a PanelContext,
-    muted: Color,
+    _muted: Color,
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
+    let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
     ctx.collapsible(
         "prop_title_block",
         "Title Block",
@@ -122,7 +123,7 @@ pub fn view_title_block_section<'a>(
                 c = c.push(
                     container(
                         row![
-                            property_label(label, muted),
+                            property_label(label, LabelInk::for_tokens(muted, &ctx.tokens)),
                             iced::widget::text_input(
                                 project_value.clone().unwrap_or_default(),
                                 value.clone()
@@ -131,6 +132,7 @@ pub fn view_title_block_section<'a>(
                             .on_submit(PanelMsg::CommitTitleBlockField(field))
                             .size(TS.body)
                             .padding(SP.s)
+                            .style(crate::panels::form_look::text_input_style)
                             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
                         ]
                         .spacing(SP.m)

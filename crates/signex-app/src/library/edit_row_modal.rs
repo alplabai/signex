@@ -10,6 +10,7 @@ use iced::{Element, Length};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
 use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
@@ -105,7 +106,7 @@ pub fn view<'a>(
         .find(|p| p.key == edit.draft.class.as_str())
         .cloned();
     let class_picker = pick_list(selected_class, class_picks, ClassPick::to_string)
-        .style(crate::panels::form_look::pick_list_style)
+        .graphite()
         .on_select({
             let send = send.clone();
             move |pick: ClassPick| send(BrowserEditMsg::SetClass(ComponentClass::new(pick.key)))
@@ -123,7 +124,7 @@ pub fn view<'a>(
         LIFECYCLE_OPTIONS.to_vec(),
         LifecyclePick::to_string,
     )
-    .style(crate::panels::form_look::pick_list_style)
+    .graphite()
     .on_select({
         let send = send.clone();
         move |pick: LifecyclePick| send(BrowserEditMsg::SetState(pick.0))

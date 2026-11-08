@@ -862,7 +862,11 @@ mod tests {
         assert_eq!(view.text_size, 12.0);
         assert_eq!(m.font, 12.0);
         assert!(m.badge < m.font && m.icon > ICON_SZ);
-        assert_eq!(m.chevron, crate::chevron::side(m.font), "tree rows use the shared chevron box");
+        assert_eq!(
+            m.chevron,
+            crate::chevron::side(m.font),
+            "tree rows use the shared chevron box"
+        );
     }
 
     fn key(parts: &[&str]) -> TreeKey {

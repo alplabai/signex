@@ -11,6 +11,7 @@ use iced::{Border, Element, Length, Theme};
 use iced_aw::NumberInput;
 use signex_library::{Body3D, BodyShape};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
@@ -57,6 +58,7 @@ pub fn view<'a>(
     ];
     let shape_addr = address.clone();
     let shape_picker = pick_list(Some(ShapePick(body.shape)), opts, ShapePick::to_string)
+        .graphite()
         .on_select(move |ShapePick(s)| LibraryMessage::EditorEvent {
             library_path: shape_addr.library_path.clone(),
             table: shape_addr.table.clone(),
