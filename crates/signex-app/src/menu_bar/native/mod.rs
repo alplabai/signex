@@ -91,6 +91,21 @@ pub(crate) struct NativeBuild {
     pub actions: ActionMap,
 }
 
+/// The native bar `inputs` describe: the model for that window state and
+/// language, built. Compiled on every OS; the macOS sync applies the result.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // the macOS sync is its only non-test caller
+pub(crate) fn build_for(inputs: &MenuInputs) -> NativeBuild {
+    let ctx = super::MenuContext {
+        commands: inputs.commands(),
+        recent_projects: inputs.recent(),
+        open_panels: inputs.open_panels().to_vec(),
+        active_keymap: inputs.keymap(),
+        i18n: inputs.i18n(),
+        ..super::MenuContext::default()
+    };
+    build(&super::model::menu_bar_model(&ctx), inputs.locked())
+}
+
 /// Build the native bar for `model`. Pure: the same model gives the same
 /// spec and map.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sync calls it outside tests

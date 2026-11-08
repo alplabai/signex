@@ -288,6 +288,8 @@ pub struct MenuContext<'a> {
     /// Panels open somewhere (docked, floating or detached): the View
     /// menu's panel rows show a check mark for these (#103).
     pub(crate) open_panels: Vec<crate::panels::PanelKind>,
+    /// The locale the menu titles render in (#2055).
+    pub i18n: std::sync::Arc<signex_i18n::I18n>,
 }
 
 impl Default for MenuContext<'_> {
@@ -299,6 +301,7 @@ impl Default for MenuContext<'_> {
             active_keymap: None,
             recent_projects: &[],
             open_panels: Vec::new(),
+            i18n: signex_i18n::I18n::en_us(),
         }
     }
 }
