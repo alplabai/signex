@@ -3,7 +3,7 @@ use super::*;
 use crate::build_netlist;
 use crate::fixtures::{empty_sheet, label, pt, wire};
 use signex_types::net::Net;
-use signex_types::pcb::{Footprint, Pad, PadShape, PadType};
+use signex_types::pcb::{Footprint, NetDef, Pad, PadShape, PadType};
 use signex_types::schematic::{
     InstancePath, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, SchematicSheet,
     Symbol,
