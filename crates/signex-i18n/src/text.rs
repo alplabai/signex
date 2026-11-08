@@ -19,6 +19,12 @@ impl I18n {
     /// A search folds BOTH the query and the haystack with this one fold,
     /// then compares: `fold(query)` is a substring of `fold(haystack)`.
     /// The result is for comparing, never for showing.
+    ///
+    /// A full fold can change the length (`ß` becomes `ss`, `İ` becomes
+    /// `i̇` under `en`), so a match position in the folded string does not
+    /// map back to the original: do not use it to highlight. Under `en`,
+    /// `istanbul` does not match `İstanbul`, which is correct Unicode
+    /// folding (`İ` folds to `i` plus a combining dot).
     pub fn fold_for_search(&self, text: &str) -> String {
         let mapper = CaseMapper::new();
         if self.is_turkic() {
