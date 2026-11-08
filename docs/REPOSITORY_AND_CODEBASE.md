@@ -133,6 +133,7 @@ signex/
 │   ├── signex-output/              # PDF / netlist / BOM export (+ signex-bom)
 │   ├── signex-renderer/            # domain types → render primitives (+ signex-gfx)
 │   ├── signex-library/             # .snxlib library model (+ signex-library-server)
+│   ├── pcb-geom/                   # integer-nm board geometry: R-tree, hit-test, MST (reads signex-types)
 │   ├── signex-widgets/             # reusable iced widgets
 │   └── signex-3d-model-importer/   # STEP / WRL importer
 └── docs/
@@ -308,8 +309,9 @@ The most likely additions are:
 - `signex-sketch` — 2D parametric sketch mode for footprint editor + PCB
   outline (v0.13+; see `docs/internal/SKETCH_MODE_PLAN.md`)
 - `signex-drc` — PCB design rule check engine (PCB Viewer and later)
-- `pcb-geom` — geometry primitives for PCB (polygon offset, R-tree,
-  Delaunay, boolean ops) shared by router, DRC, and render. Added with the PCB Viewer.
+- `pcb-geom` — *(landed, #2174)* integer-nm board geometry: R-tree, hit-test,
+  union-find, spanning tree, pad world transform. Polygon offset, Delaunay and
+  boolean ops are not part of it yet.
 - `pcb-router` — interactive router (walkaround, shove, diff pair,
   tuning, pour). Added with PCB Routing. See `internal/docs/PCB_ROUTER_PLAN.md`.
 

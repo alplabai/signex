@@ -160,6 +160,36 @@ impl TechnicalLayer {
         }
     }
 
+    /// The same layer on the opposite face; board-wide layers stay put.
+    pub fn flipped(self) -> Self {
+        use TechnicalLayer as T;
+        match self {
+            T::SilkscreenTop => T::SilkscreenBottom,
+            T::SilkscreenBottom => T::SilkscreenTop,
+            T::SolderMaskTop => T::SolderMaskBottom,
+            T::SolderMaskBottom => T::SolderMaskTop,
+            T::PasteTop => T::PasteBottom,
+            T::PasteBottom => T::PasteTop,
+            T::AdhesiveTop => T::AdhesiveBottom,
+            T::AdhesiveBottom => T::AdhesiveTop,
+            T::FabTop => T::FabBottom,
+            T::FabBottom => T::FabTop,
+            T::AssemblyTop => T::AssemblyBottom,
+            T::AssemblyBottom => T::AssemblyTop,
+            T::CourtyardTop => T::CourtyardBottom,
+            T::CourtyardBottom => T::CourtyardTop,
+            T::Body3dTop => T::Body3dBottom,
+            T::Body3dBottom => T::Body3dTop,
+            T::KeepoutTop => T::KeepoutBottom,
+            T::KeepoutBottom => T::KeepoutTop,
+            T::FiducialTop => T::FiducialBottom,
+            T::FiducialBottom => T::FiducialTop,
+            T::DesignatorTop => T::DesignatorBottom,
+            T::DesignatorBottom => T::DesignatorTop,
+            other => other,
+        }
+    }
+
     /// Drawing-only layers that never reach manufacturing output.
     pub fn is_documentation(self) -> bool {
         matches!(
@@ -215,6 +245,17 @@ impl PcbLayer {
         match self {
             Self::Copper(c) => Some(c),
             _ => None,
+        }
+    }
+
+    /// The same layer on the opposite face: top and bottom copper swap,
+    /// sided technical layers swap, inner copper and user layers stay.
+    pub fn flipped(self) -> Self {
+        match self {
+            Self::Copper(CopperLayer::Top) => Self::Copper(CopperLayer::Bottom),
+            Self::Copper(CopperLayer::Bottom) => Self::Copper(CopperLayer::Top),
+            Self::Technical(t) => Self::Technical(t.flipped()),
+            other => other,
         }
     }
 
@@ -294,6 +335,21 @@ mod tests {
                 .filter(|t| t.is_documentation())
                 .count(),
             5
+        );
+    }
+
+    #[test]
+    fn flipped_swaps_sides_and_is_an_involution() {
+        for l in PcbLayer::all() {
+            assert_eq!(l.flipped().flipped(), l, "{l:?}");
+            match l.side() {
+                Some(side) => assert_ne!(l.flipped().side(), Some(side), "{l:?}"),
+                None => assert_eq!(l.flipped(), l, "{l:?}"),
+            }
+        }
+        assert_eq!(
+            PcbLayer::Copper(CopperLayer::Top).flipped(),
+            PcbLayer::Copper(CopperLayer::Bottom)
         );
     }
 }
