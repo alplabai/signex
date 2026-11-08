@@ -9,7 +9,7 @@ use crate::panels::PanelKind;
 pub const GRAPHITE_BOTTOM_HEIGHT: f32 = 208.0;
 
 /// Fresh layout: Projects, Components and Navigator on the left, Properties
-/// and Signal on the right, Messages, ERC and History at the bottom. Library
+/// and Signex AI on the right, Messages, ERC and History at the bottom. Library
 /// opens on demand (View menu, Library menu) into its default home.
 pub fn graphite_first_run() -> DockArea {
     let mut dock = DockArea::new();
@@ -18,7 +18,7 @@ pub fn graphite_first_run() -> DockArea {
         (PanelPosition::Left, PanelKind::Components),
         (PanelPosition::Left, PanelKind::Navigator),
         (PanelPosition::Right, PanelKind::Properties),
-        (PanelPosition::Right, PanelKind::Signal),
+        (PanelPosition::Right, PanelKind::SignexAi),
         (PanelPosition::Bottom, PanelKind::Messages),
         (PanelPosition::Bottom, PanelKind::Erc),
         (PanelPosition::Bottom, PanelKind::History),

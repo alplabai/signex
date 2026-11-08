@@ -57,7 +57,7 @@ View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
 View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
-View/Signal	item	Signal	-	-	OpenSignalPanel	11111111	always
+View/Signex AI	item	Signex AI	-	-	OpenSignexAiPanel	11111111	always
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/---	separator	-	-	-	-	-	-

@@ -236,7 +236,7 @@ fn select_signal(app: &mut Signex) {
             .dock
             .panel_kinds(pos)
             .iter()
-            .position(|k| *k == PanelKind::Signal)
+            .position(|k| *k == PanelKind::SignexAi)
         {
             let _ = app.update(Message::Dock(DockMessage::SelectTab(pos, i)));
             return;

@@ -144,7 +144,7 @@ pub enum PanelKind {
     Filter,
     Erc,
     Messages,
-    Signal,
+    SignexAi,
     Drc,
     LayerStack,
     NetClasses,
@@ -198,7 +198,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::SchList,
     PanelKind::Erc,
     PanelKind::Messages,
-    PanelKind::Signal,
+    PanelKind::SignexAi,
     PanelKind::Drc,
     PanelKind::BomStudio,
     PanelKind::Favorites,
@@ -228,7 +228,7 @@ impl PanelKind {
                 | PanelKind::Erc
                 | PanelKind::SchFilter
                 | PanelKind::SchList
-                | PanelKind::Signal
+                | PanelKind::SignexAi
                 | PanelKind::Drc
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
@@ -251,7 +251,7 @@ impl PanelKind {
             PanelKind::Filter => "Filter",
             PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
-            PanelKind::Signal => "Signal",
+            PanelKind::SignexAi => "Signex AI",
             PanelKind::Drc => "DRC",
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::NetClasses => "Net Classes",
@@ -296,10 +296,10 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
-        PanelKind::Signal if crate::styles::is_graphite(&ctx.tokens) => {
+        PanelKind::SignexAi if crate::styles::is_graphite(&ctx.tokens) => {
             return signal::view(ctx);
         }
-        PanelKind::Signal => view_stub("Signal AI", "Pro feature — AI design review", ctx),
+        PanelKind::SignexAi => view_stub("Signex AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),

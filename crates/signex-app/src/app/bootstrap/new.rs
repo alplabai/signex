@@ -82,7 +82,7 @@ impl Signex {
         let (first_run_tour_open, tour_boot) = first_run_tour_boot(prefs);
         // Default panel layout — restored from disk if a previous
         // session persisted one, otherwise seeded with the Altium-ish
-        // defaults: Projects + Components + Signal on the left,
+        // defaults: Projects + Components + Signex AI on the left,
         // Properties + Messages on the right, ERC on the bottom
         // (user's request — bottom is reserved for future log tails).
         // A fresh Graphite layout opens with the short Messages dock; a saved
@@ -105,7 +105,7 @@ impl Signex {
                     PanelKind::Projects,
                     PanelKind::Components,
                     PanelKind::Library,
-                    PanelKind::Signal,
+                    PanelKind::SignexAi,
                     PanelKind::Properties,
                     PanelKind::Messages,
                     PanelKind::Erc,

@@ -6,7 +6,7 @@
 
 const EXPECTED: &[&str] = &[
     "PanelKind::Filter",
-    "PanelKind::Signal",
+    "PanelKind::SignexAi",
     "PanelKind::Drc",
     "PanelKind::LayerStack",
     "PanelKind::NetClasses",

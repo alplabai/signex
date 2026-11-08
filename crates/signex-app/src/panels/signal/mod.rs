@@ -1,4 +1,4 @@
-//! Signal panel: the AI Design shell. The layout is real; every action that
+//! Signex AI panel: the AI Design shell. The layout is real; every action that
 //! needs the AI backend is a disabled control with a tooltip.
 
 mod state;
@@ -7,7 +7,7 @@ mod view;
 pub use state::{SignalMode, SignalMsg};
 pub use view::view;
 
-/// Tooltip of every Signal / Start control that has no backend yet.
+/// Tooltip of every Signex AI / Start control that has no backend yet.
 pub const COMING_SOON: &str = "Coming in AI Design";
 
 /// Wrap a disabled stub in the "Coming in AI Design" tooltip.

@@ -13,7 +13,7 @@ const PANEL_ROWS: [(&str, PanelKind); 7] = [
     ("Properties", PanelKind::Properties),
     ("ERC", PanelKind::Erc),
     ("Messages", PanelKind::Messages),
-    ("Signal", PanelKind::Signal),
+    ("Signex AI", PanelKind::SignexAi),
 ];
 
 pub(crate) fn context(app: &Signex) -> MenuContext<'static> {

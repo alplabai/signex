@@ -179,7 +179,7 @@ pub enum MenuMessage {
     OpenProjectOptions,
     OpenErcPanel,
     OpenMessagesPanel,
-    OpenSignalPanel,
+    OpenSignexAiPanel,
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     /// Place ▸ No Connect — the no-connect tool.
@@ -256,7 +256,7 @@ impl MenuMessage {
                 | Self::OpenPropertiesPanel
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel
-                | Self::OpenSignalPanel
+                | Self::OpenSignexAiPanel
         )
     }
 }
