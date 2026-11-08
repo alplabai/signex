@@ -83,14 +83,18 @@ fn add_dangling_wire(sheet: &Path) {
 /// A new sheet is stamped with a fresh random `schematic_id`; masked so the
 /// rest of the file is compared.
 fn mask_schematic_id(bytes: Vec<u8>) -> Vec<u8> {
-    String::from_utf8_lossy(&bytes)
-        .lines()
+    // Only the value changes; every line ending and the final newline stay
+    // as written, so a CRLF/LF difference between runs still shows.
+    let text = String::from_utf8_lossy(&bytes);
+    text.split_inclusive('\n')
         .map(|line| match line.starts_with("schematic_id = ") {
-            true => "schematic_id = \"<random>\"",
-            false => line,
+            true => {
+                let ending = &line[line.trim_end_matches(['\r', '\n']).len()..];
+                format!("schematic_id = \"<random>\"{ending}")
+            }
+            false => line.to_owned(),
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect::<String>()
         .into_bytes()
 }
 
@@ -108,6 +112,10 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
         &LanguagePref::Locale(tag.into()),
         "the language switched"
     );
+    // The locale in force, so a negotiation fallback cannot make the
+    // en-XA run compare en-US with en-US.
+    let in_force = if tag == "tr-TR" { "en-US" } else { tag };
+    assert_eq!(app.ui_state.i18n.locale(), in_force, "the active locale");
 
     // Same absolute path in every run, so a path inside a file cannot differ.
     if work.exists() {
