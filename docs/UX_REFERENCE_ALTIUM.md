@@ -79,7 +79,7 @@ Each panel has a name, a default dock position, and a context filter.
 | Net Inspector  | Right        | PCB        | Per-net length, via count, status        |
 | Layer Stack    | Right        | PCB        | Layer visibility, color, active layer    |
 | Messages       | Bottom       | Both       | ERC violations, compiler output          |
-| Signal (AI)    | Bottom       | Both       | Signal AI chat (Pro only)                |
+| Signex AI      | Bottom       | Both       | Signex AI chat (Pro only)                |
 | Output Jobs    | Bottom       | Schematic  | Export job queue and status              |
 | DRC            | Bottom       | PCB        | Design rule check violations             |
 | Cross Section  | Bottom       | PCB        | Board cross-section visualization        |
@@ -98,7 +98,7 @@ On first launch (no saved layout):
 
 - **Left dock:** Projects (active tab), Components
 - **Right dock:** Properties (active tab)
-- **Bottom dock:** Messages (active tab), Signal (Pro only)
+- **Bottom dock:** Messages (active tab), Signex AI (Pro only)
 - **Center:** Empty canvas with welcome screen or last-opened project
 
 ---
@@ -210,7 +210,7 @@ during zoom. This is the single most important detail for zoom to feel natural.
 | Shift+Ctrl+G       | Toggle grid visibility              | Both       |
 | F5                 | Toggle net color override           | Both       |
 | F11                | Toggle Properties panel             | Both       |
-| Ctrl+Shift+A       | Open Signal AI panel (Pro)          | Both       |
+| Ctrl+Shift+A       | Open Signex AI panel (Pro)          | Both       |
 | Shift+F            | Find Similar Objects                | Both       |
 
 ### 4.5. Nudge
@@ -660,7 +660,7 @@ palette. All wires, labels, and junctions belonging to the same net are drawn
 in the same color. Pressing F5 again disables the override and returns to
 theme colors.
 
-### 14.3. Signal AI Panel (Pro)
+### 14.3. Signex AI Panel (Pro)
 
 A chat panel in the bottom dock that provides AI-assisted design feedback. See
 `PRODUCT_AND_EDITIONS.md` for capabilities. The panel follows standard bottom-

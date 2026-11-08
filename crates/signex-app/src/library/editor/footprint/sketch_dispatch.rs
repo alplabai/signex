@@ -10,7 +10,7 @@
 //!   without spinning up an iced runtime.
 //! - The solver is always live. v0.22 stripped the previous
 //!   auto-pause hysteresis: a "paused" state was confusing for both
-//!   users and the downstream Signal AI agent reading solver state.
+//!   users and the downstream Signex AI agent reading solver state.
 //!   A solve is bounded by one work budget; a large sketch can exhaust
 //!   it, and that is reported, not hidden.
 //! - All `SketchError` cases — including an exhausted work budget — propagate as

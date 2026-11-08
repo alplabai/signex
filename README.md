@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/graphite/schematic-dark.webp">
-    <img src="assets/screenshots/graphite/schematic-light.webp" alt="Signex schematic editor in the Graphite interface, with the Signal AI panel" width="900">
+    <img src="assets/screenshots/graphite/schematic-light.webp" alt="Signex schematic editor in the Graphite interface, with the Signex AI panel" width="900">
   </picture>
   <br>
   <em>Design preview: Graphite, the next Signex interface, coming in the next release. <a href="#graphite-the-next-interface-design-preview">More previews</a> &middot; <a href="#screenshots">the app today</a></em>
@@ -59,13 +59,19 @@ converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a siblin
 approximate or skip; review that list before you fabricate an imported
 board.
 
-**Two editions from one codebase:**
+**Editions:**
 
-- **Signex Community** (Apache-2.0, free forever) — the schematic editor
-  today; PCB layout and routing follow in AI Design, then manufacturing output in the Community Release (see the [roadmap](docs/ROADMAP.md))
-- **Signex Pro** (subscription, planned for the Pro Release) — adds Signal AI
-  (Claude-powered design copilot), plugins, real-time collaboration, and
-  Signex 365 cloud PLM
+- **Signex Community** (Apache-2.0, free, offline forever) — the full editor:
+  schematic today, then PCB layout, routing and DRC (see the
+  [roadmap](docs/ROADMAP.md)), plus the plugin system and the headless CLI
+- **Signex Pro** (subscription with included AI credits) — Signex AI (AI
+  design assistant, Pro) and the Generator, served by Signex's hosted service
+- **Signex Team** — collaboration
+- **Signex Enterprise** — SSO, a self-hosted AI gateway, data agreements
+
+Pro is built from a separate private workspace on top of this one; nothing in
+Community is locked or gated, and Community shows no upgrade prompts. Customer
+designs are never used for AI training unless the customer opts in.
 
 > **Status:** Early development. **v1.0.0-rc.1** (2026-10-29), the first
 > release candidate of the **Community Preview** (schematic-only), is the
@@ -158,10 +164,10 @@ board.
 | Plan | Milestone |
 |---|---|
 | **Community Preview** | Schematic-only release |
-| **AI Design** | PCB layout from the schematic, routing, and Signal AI as assistant and generator for schematic and board |
+| **AI Design** | PCB layout from the schematic, routing, and Signex AI as assistant and generator for schematic and board |
 | **Community Release** | Manufacturing output (Gerber, drill, ODB++) |
 | **3D Viewer → High-Speed Design** | 3D Viewer, Advanced PCB, High-Speed Design |
-| **Pro Release** | Licensing and billing, plugins, collaboration |
+| **Pro Release** | Licensing and billing for Signex AI, collaboration |
 | **Simulation** | Unified simulation view with SPICE, EM, thermal |
 | **Signex 365** | Cloud PLM |
 
@@ -190,16 +196,16 @@ board.
 ### Graphite: the next interface (design preview)
 
 The next Signex interface, Graphite, in its light and dark themes. These are
-design previews: Graphite, the Signal AI panel (Assistant and Generator) and
+design previews: Graphite, the Signex AI panel (Assistant and Generator) and
 PCB layout are in development for the AI Design gate
 ([roadmap](docs/ROADMAP.md)); the screenshots above this section show the
 app as it ships today, apart from the design preview at the top of this page.
 
 <p align="center">
-  <img src="assets/screenshots/graphite/schematic-light.webp" alt="Schematic editor with the Signal AI panel, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/schematic-dark.webp" alt="Schematic editor with the Signal AI panel, Graphite Dark" width="400">
+  <img src="assets/screenshots/graphite/schematic-light.webp" alt="Schematic editor with the Signex AI panel, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/schematic-dark.webp" alt="Schematic editor with the Signex AI panel, Graphite Dark" width="400">
   <br>
-  <em>Schematic editor: Projects, Properties and Messages docks, the Active Bar, and Signal AI</em>
+  <em>Schematic editor: Projects, Properties and Messages docks, the Active Bar, and Signex AI</em>
 </p>
 
 <details>
@@ -401,10 +407,10 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
 | Command Registry & Symbol Units | 1.0.0-rc.1 | Done (test follow-up #1727 ships in the next release) |
 | **Community Preview** — schematic-only editor | **Gate** | `v1.0.0-rc.1` shipped 2026-10-29 (last SemVer tag); next release is CalVer |
-| **AI Design** — PCB layout from the schematic, routing, Signal AI assistant and generator | **Gate** | Next after the Community Preview |
+| **AI Design** — PCB layout from the schematic, routing, Signex AI assistant and generator | **Gate** | Next after the Community Preview |
 | **Community Release** — manufacturing output; full schematic + PCB editor | **Gate** | |
 | 3D Viewer, Advanced PCB, High-Speed Design | Planned | |
-| **Pro Release** — licensing and billing, plugins, collaboration | **Gate** | |
+| **Pro Release** — licensing and billing for Signex AI, collaboration | **Gate** | |
 | Simulation — SPICE, EM, thermal, simulation wizards | Planned | |
 | **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **Gate** | |
 
@@ -465,4 +471,7 @@ file formats with structure derived from their GPL-3.0 source. The two
 projects are distributed independently. See [docs/LICENSING.md](docs/LICENSING.md)
 for the full rationale and the audit trail behind the two-repo split.
 
-Copyright 2026 [Alp Lab AI](https://github.com/alplabai)
+Copyright 2026 [Alp Lab AB](https://github.com/alplabai)
+
+Signex™ and Signex AI™ are trademarks of Alp Lab AB. The Apache-2.0 licence
+does not grant rights to use them; forks must use a different name.
