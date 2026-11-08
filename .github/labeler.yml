@@ -104,6 +104,7 @@
 "area: app":
   - changed-files:
       - any-glob-to-any-file:
+          - "crates/signex-cli/**"
           - "crates/signex-app/src/app/**"
           - "crates/signex-app/src/app.rs"
           - "crates/signex-app/src/main.rs"

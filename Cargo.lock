@@ -5377,6 +5377,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-cli"
+version = "26.11.0-rc.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "signex-app",
+ "signex-engine",
+ "signex-types",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "signex-engine"
 version = "26.11.0-rc.1"
 dependencies = [

@@ -1,0 +1,31 @@
+[package]
+name = "signex-cli"
+description = "Signex headless command runner: JSON Lines in, one result line out per command (#1923)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "signex_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "signex-cli"
+path = "src/main.rs"
+
+[dependencies]
+signex-app = { path = "../signex-app" }
+signex-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+# The throwaway config root every run works under.
+tempfile = "3"
+
+[dev-dependencies]
+# Seeds fixture projects on disk for the end-to-end tests.
+signex-engine.workspace = true
+
+[lints]
+workspace = true

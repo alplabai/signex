@@ -21,6 +21,8 @@ signex-bake -> signex-library
 signex-bake -> signex-sketch
 signex-bake -> signex-types
 signex-bom -> signex-types
+signex-cli -> signex-app
+signex-cli -> signex-types
 signex-engine -> signex-history
 signex-engine -> signex-net
 signex-engine -> signex-types
