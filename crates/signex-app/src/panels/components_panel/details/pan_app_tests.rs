@@ -520,7 +520,8 @@ fn the_previews_pan_one_to_one_in_a_scrolled_details_pane() {
             let details = |live: &mut Live| {
                 scrollables(live)
                     .into_iter()
-                    .filter(|(b, _)| b.x >= right.x)
+                    // Not the dock's thin horizontal tab strip.
+                    .filter(|(b, _)| b.x >= right.x && b.height > 100.0)
                     .max_by(|a, b| a.0.y.total_cmp(&b.0.y))
                     .expect("the details pane")
             };
@@ -578,14 +579,23 @@ fn render_components_panel_shots() {
         let (mut live, key) = start(theme, PanelPosition::Right);
         open_editor(&mut live.app, &key);
         let at = Point::new(WINDOW.width / 2.0, 10.0);
-        let (_, frames) = drive_with(&mut live, &[moved(at)], true);
-        image::save_buffer(
-            dir.join(format!("components-{theme:?}.png")),
-            &frames[0],
-            WINDOW.width as u32,
-            WINDOW.height as u32,
-            image::ColorType::Rgba8,
-        )
-        .expect("write png");
+        let save = |live: &mut Live, name: &str| {
+            let (_, frames) = drive_with(live, &[moved(at)], true);
+            image::save_buffer(
+                dir.join(format!("{name}-{theme:?}.png")),
+                &frames[0],
+                WINDOW.width as u32,
+                WINDOW.height as u32,
+                image::ColorType::Rgba8,
+            )
+            .expect("write png");
+        };
+        save(&mut live, "components");
+        // The empty sections folded, so the Stock rows and the selection show.
+        let panel = &mut live.app.library.components_panel;
+        panel.collapsed_project = true;
+        panel.collapsed_installed = true;
+        panel.collapsed_global = true;
+        save(&mut live, "components-rows");
     }
 }
