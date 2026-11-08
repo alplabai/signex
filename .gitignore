@@ -171,3 +171,6 @@ CLAUDE.md
 
 # Advisory write-lock sidecar of a library; never commit
 .*.signex-writelock
+
+# merge-tool backups (mergiraf solve, git mergetool)
+*.orig
