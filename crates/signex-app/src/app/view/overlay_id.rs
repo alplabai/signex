@@ -49,6 +49,8 @@ pub(crate) enum OverlayId {
     // Editor-surface chrome.
     PlacementPaused,
     SchematicActiveBar,
+    /// The Graphite zoom pill over the schematic canvas.
+    CanvasZoomPill,
     FootprintActiveBar,
     FootprintContextMenu,
     FootprintMoveBy,
@@ -124,7 +126,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 58] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -132,6 +134,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
     OverlayId::NetColorCustom,
     OverlayId::PlacementPaused,
     OverlayId::SchematicActiveBar,
+    OverlayId::CanvasZoomPill,
     OverlayId::FootprintActiveBar,
     OverlayId::FootprintContextMenu,
     OverlayId::FootprintMoveBy,
@@ -227,6 +230,10 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // user aims at. Capturing there would kill wheel-zoom over the
         // canvas whenever a tooltip happened to be showing.
         OverlayId::HoverTooltip | OverlayId::ComponentsRowDragLabel => false,
+        // Its layer is window-sized (the pill is placed by `Translate`), so a
+        // guard around the layer would swallow every wheel in the window:
+        // no panel would scroll. The pill guards its own bounds instead.
+        OverlayId::CanvasZoomPill => false,
 
         // Everything else paints a surface over the canvas. Scrolling on
         // it — or past the end of its own scrollable — must not reach
@@ -369,9 +376,11 @@ impl Signex {
             OverlayId::NetColorCustom => layers.extend(self.net_color_custom_overlay()),
             OverlayId::PlacementPaused => layers.extend(self.placement_paused_overlay(window_id)),
             OverlayId::SchematicActiveBar => layers.extend(scoped_to_window(
-                self.schematic_active_bar_overlay(window_id)
-                    .into_iter()
-                    .chain(self.canvas_zoom_pill_overlay(window_id)),
+                self.schematic_active_bar_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
+            OverlayId::CanvasZoomPill => layers.extend(scoped_to_window(
+                self.canvas_zoom_pill_overlay(window_id),
                 self.overlay_owner(window_id),
             )),
             OverlayId::FootprintActiveBar => {

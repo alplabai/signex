@@ -48,6 +48,11 @@ impl Signex {
             Message::Menu(MenuMessage::ZoomIn),
             Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll),
         );
+        // The wheel stops at the pill itself (its layer is window-sized and
+        // not guarded, see `overlay_id::swallows_scroll`).
+        let pill = iced::widget::mouse_area(pill)
+            .on_scroll(|_| Message::noop())
+            .boxed();
         Some(super::super::translate::Translate::new(pill, at).boxed())
     }
 }
