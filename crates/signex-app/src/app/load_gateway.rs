@@ -507,6 +507,9 @@ impl Signex {
         // next view tick.
         self.scan_library_updates_for_open_schematic(scan_path);
         self.library.drift.check_pending = true;
+        // A copied file that repeats an id is told and repaired as it opens,
+        // not when an agent first asks (#2172).
+        self.reconcile_document_ids();
     }
 
     /// Reattach a tab to a schematic engine that's already parked in
@@ -564,6 +567,7 @@ impl Signex {
             // The file on disk still holds what was repaired (#1886).
             self.document_state.mark_document_dirty(&dirty_path);
         }
+        self.reconcile_document_ids();
     }
 
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {

@@ -151,6 +151,14 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
             "Nothing to redo"
         });
     }
+    // A wire or arc in progress on the active sheet is anchored to what is
+    // there; stepping the sheet under it would leave it on an undone segment
+    // (#1831). The person's drawing is not the agent's to cancel.
+    if let DocumentKey::Schematic(path) = &key
+        && app.is_drawing_on(path)
+    {
+        return refused("the person is drawing on this sheet; try again when the wire is done");
+    }
     match &key {
         DocumentKey::Schematic(path) => match app.step_sheet_on(path, undo) {
             Ok(true) => ran(Task::none()),

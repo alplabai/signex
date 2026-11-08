@@ -247,6 +247,9 @@ impl Signex {
             return Task::none();
         }
         self.document_state.document_saves.clear_failure(&path);
+        // The file now holds a new head (a new id after a Save As): the one
+        // read before this write no longer describes it (#2172).
+        self.document_state.document_ids.forget_header(&path);
         self.note_written_baseline(&path, &saved);
         // The real file is now at least as new as any recovery copy of
         // the document it was saved from (or over).
@@ -260,8 +263,9 @@ impl Signex {
                     .document_saves
                     .forget_disk_records(&from);
                 self.record_real_path_of(&path);
+                let owner = self.waiver_owner_of(&from);
                 project_write = self.apply_saved_as(&from, path.clone(), revision);
-                self.adopt_saved_copy_id(&path, &saved);
+                self.adopt_saved_copy_id(&path, &saved, owner);
             }
         }
         self.warn_unwritten_spellings(&outcome_path);
@@ -282,12 +286,24 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
         saved: &crate::app::state::CommitBytes,
+        owner: Option<crate::app::state::ProjectId>,
     ) {
         let Some(id) = signex_types::format::document_id_in_header("snxsch", &saved.bytes) else {
             return;
         };
-        if let Some(engine) = self.document_state.engines.get_mut(path) {
-            engine.reassign_document_id(id.as_uuid());
+        let Some(engine) = self.document_state.engines.get_mut(path) else {
+            return;
+        };
+        let old = engine.document().uuid;
+        engine.reassign_document_id(id.as_uuid());
+        // The project follows the copy; its net waivers name the sheet by id.
+        if !old.is_nil() {
+            self.follow_waivers(
+                owner,
+                old,
+                id.as_uuid(),
+                crate::app::document_ids::Follow::Move,
+            );
         }
     }
 

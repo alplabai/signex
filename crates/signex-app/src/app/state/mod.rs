@@ -1076,6 +1076,8 @@ impl DocumentState {
     /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
     pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
         self.note_documents_changed();
+        // The head read before it was open may be older than what it saved.
+        self.document_ids.forget_header(path);
         self.engines.remove(path)
     }
 

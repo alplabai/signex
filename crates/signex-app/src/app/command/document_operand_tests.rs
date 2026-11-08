@@ -465,3 +465,46 @@ fn a_headless_run_that_names_no_document_is_asked_for_one() {
         assert_eq!(missing, Some("document"), "{name}");
     }
 }
+
+/// The person is drawing a wire on the sheet an agent steps: refused with the
+/// reason, nothing undone and the buffer kept; on a sheet the person is not on
+/// the step runs as before.
+#[test]
+fn undo_by_id_is_refused_while_the_person_draws_on_that_sheet() {
+    let mut app = app_at_work();
+    run(
+        &mut app,
+        "color_net",
+        &["at=5,0", "color=#336699", &by_id(B)],
+    );
+    app.interaction_state.wire_drawing = true;
+    app.interaction_state.wire_points = vec![signex_types::schematic::Point::new(1.0, 2.0)];
+    let drawing = interaction_snapshot(&app);
+    let before = colours(&app, "b.snxsch");
+
+    let reason = refusal(&mut app, "undo", &[&by_id(B)]);
+    assert!(
+        reason.contains("the person is drawing on this sheet"),
+        "{reason}"
+    );
+    assert_eq!(colours(&app, "b.snxsch"), before, "nothing was undone");
+    assert_eq!(interaction_snapshot(&app), drawing, "the buffer is kept");
+    let redo = refusal(&mut app, "redo", &[&by_id(B)]);
+    assert!(
+        redo.contains("drawing") || redo.contains("Nothing to redo"),
+        "{redo}"
+    );
+
+    // Another sheet is not the one being drawn on.
+    run(
+        &mut app,
+        "color_net",
+        &["at=5,0", "color=#336699", &by_id(A)],
+    );
+    assert_eq!(run(&mut app, "undo", &[&by_id(A)]), CommandOutcome::Ran);
+    // Done drawing: the sheet takes its step.
+    app.interaction_state.wire_drawing = false;
+    app.interaction_state.wire_points.clear();
+    assert_eq!(run(&mut app, "undo", &[&by_id(B)]), CommandOutcome::Ran);
+    assert_eq!(colours(&app, "b.snxsch"), 0);
+}

@@ -44,8 +44,7 @@ pub(crate) fn core_to_message(command: &AppCommandId, args: &CommandArgs) -> Opt
 /// The counterpart to [`core_to_message`] for callers that are asking a
 /// question rather than dispatching. A query must not narrate.
 pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
-    super::queries::answers_without_operands(command)
-        || resolve(command, &CommandArgs::none()).is_some()
+    resolve(command, &CommandArgs::none()).is_some()
 }
 
 /// The resolution itself. Pure: no logging, no side effects, so both

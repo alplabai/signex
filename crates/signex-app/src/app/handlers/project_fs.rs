@@ -41,6 +41,12 @@ impl Signex {
         for line in finish.repaired {
             crate::diagnostics::log_warning(line);
         }
+        // A closed sheet changed outside Signex (a `git pull`, a copy): the
+        // id read from its head before no longer describes it (#2172).
+        let probe = &self.document_state.project_fs.facts;
+        self.document_state
+            .document_ids
+            .forget_changed_headers(|path| probe.modified(path));
         if finish.changed {
             self.refresh_panel_ctx();
         }

@@ -34,11 +34,14 @@ impl Signex {
         if !query_command_ids().any(|query| query == command.as_str()) {
             return None;
         }
+        self.read_wanted_document_headers_now();
         let installed = self.install_for_query(command, args);
         let answered = self.run_query(command, args);
         for path in installed {
             self.document_state.document_ids.end_transient(&path);
-            self.document_state.remove_engine(&path);
+            // Not `remove_engine`: that moves `documents_epoch`, which cancels
+            // a person's running Annotate, Replace All or project read.
+            self.document_state.engines.remove(&path);
         }
         answered
     }
@@ -85,7 +88,8 @@ impl Signex {
                     self.document_state
                         .document_ids
                         .begin_transient(path.clone());
-                    self.document_state.insert_engine(path.clone(), engine);
+                    // Not `insert_engine`: that moves `documents_epoch` (see the drop below).
+                    self.document_state.engines.insert(path.clone(), engine);
                     installed.push(path);
                 }
                 Err(reason) => crate::diagnostics::log_warning(format!(

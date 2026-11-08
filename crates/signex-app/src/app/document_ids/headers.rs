@@ -22,6 +22,8 @@ const HEAD_BYTES: u64 = 64 * 1024;
 pub struct HeaderRead {
     pub path: PathBuf,
     pub id: Option<DocumentId>,
+    /// The file's modification time when the head was read.
+    pub modified: Option<std::time::SystemTime>,
 }
 
 /// The id at the head of the file at `path`; `None` for a file that is
@@ -54,6 +56,9 @@ fn spawn_reads(project_id: ProjectId, paths: Vec<PathBuf>) -> Task<Message> {
                     .into_iter()
                     .map(|path| HeaderRead {
                         id: read_header_id(&path),
+                        modified: std::fs::metadata(&path)
+                            .and_then(|meta| meta.modified())
+                            .ok(),
                         path,
                     })
                     .collect::<Vec<_>>()
@@ -78,7 +83,7 @@ impl Signex {
             .into_iter()
             .map(|(path, _)| path)
             .filter(|path| !docs.engines.contains_key(path))
-            .filter(|path| docs.document_ids.header(path).is_none())
+            .filter(|path| docs.document_ids.header_wanted(path))
             .collect();
         spawn_reads(id, paths)
     }
@@ -105,8 +110,35 @@ impl Signex {
         for read in reads {
             self.document_state
                 .document_ids
-                .set_header(read.path, read.id);
+                .set_header(read.path, read.id, read.modified);
         }
         Task::none()
+    }
+}
+
+impl Signex {
+    /// Read, now, the heads that are wanted (never read, holding no id, or
+    /// forgotten after a write or a close). For the headless entry, whose
+    /// answer must name what the files hold at the time it is given; a GUI
+    /// reads them on a worker ([`Self::read_missing_document_headers`]).
+    pub(crate) fn read_wanted_document_headers_now(&mut self) {
+        let docs = &self.document_state;
+        let wanted: Vec<PathBuf> = docs
+            .projects
+            .iter()
+            .flat_map(|project| referenced_files(project))
+            .map(|(path, _)| path)
+            .filter(|path| !docs.engines.contains_key(path))
+            .filter(|path| docs.document_ids.header_wanted(path))
+            .collect();
+        for path in wanted {
+            let id = read_header_id(&path);
+            let modified = std::fs::metadata(&path)
+                .and_then(|meta| meta.modified())
+                .ok();
+            self.document_state
+                .document_ids
+                .set_header(path, id, modified);
+        }
     }
 }

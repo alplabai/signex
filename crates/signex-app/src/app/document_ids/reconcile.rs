@@ -85,9 +85,17 @@ impl Signex {
         let docs = &mut self.document_state;
         match key {
             DocumentKey::Schematic(path) => {
-                if let Some(engine) = docs.engines.get_mut(path) {
+                let old = docs.engines.get_mut(path).map(|engine| {
+                    let old = engine.document().uuid;
                     engine.reassign_document_id(id.as_uuid());
+                    old
+                });
+                // Net waivers name their sheet by id: they move with it.
+                if let Some(old) = old.filter(|old| !old.is_nil()) {
+                    let owner = self.waiver_owner_of(path);
+                    self.follow_waivers(owner, old, id.as_uuid(), super::waivers::Follow::Copy);
                 }
+                return;
             }
             DocumentKey::Pcb(path) => {
                 for tab in docs.tabs.iter_mut().filter(|tab| &tab.path == path) {

@@ -110,3 +110,16 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 }
+
+impl Signex {
+    /// Whether a wire, bus, arc, polyline or shape is being drawn on the
+    /// sheet at `path`, which the main window shows.
+    pub(crate) fn is_drawing_on(&self, path: &Path) -> bool {
+        let interaction = &self.interaction_state;
+        self.document_state.active_path.as_deref() == Some(path)
+            && (interaction.wire_drawing
+                || !interaction.arc_points.is_empty()
+                || !interaction.polyline_points.is_empty()
+                || interaction.shape_anchor.is_some())
+    }
+}

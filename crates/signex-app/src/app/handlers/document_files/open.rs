@@ -393,6 +393,7 @@ impl Signex {
         // Every sheet and the board the project names is listed with its id
         // without a tab: the ids are read from the file heads (#2172).
         let headers = self.read_missing_document_headers(id);
+        self.reconcile_document_ids();
         Ok((id, iced::Task::batch([mount_task, drift, headers])))
     }
 

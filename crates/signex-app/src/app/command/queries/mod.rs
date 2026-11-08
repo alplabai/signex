@@ -37,11 +37,9 @@ pub(crate) fn query_command_ids() -> impl Iterator<Item = &'static str> {
     QUERY_IDS.iter().copied()
 }
 
-/// Is `command` a query a person can run from the palette: one that needs no
-/// operand. The rest name a document or an id, which only a caller with
-/// operands can give.
-pub(crate) fn answers_without_operands(command: &AppCommandId) -> bool {
-    command.as_str() == "list_documents"
+/// Is `command` one of the query commands?
+pub(crate) fn is_query(command: &AppCommandId) -> bool {
+    query_command_ids().any(|query| query == command.as_str())
 }
 
 /// What running a query did: the answer or the reason it was refused.

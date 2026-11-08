@@ -598,3 +598,96 @@ fn a_dropped_duplicate_open_activates_the_owning_tab() {
     );
     assert_eq!(tab_count(&app, &owned), 1);
 }
+
+/// #2172: a net-level ERC waiver names its sheet by document id. A Save As
+/// gives the copy a new id and the project follows the copy, so the waiver
+/// moves with it: the finding it accepted stays accepted.
+#[test]
+fn a_save_as_moves_the_projects_net_waivers_to_the_copys_id() {
+    use signex_types::project::{ErcWaiver, ProjectData, ProjectRules, SheetEntry};
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let a = tmp.path().join("A.snxsch");
+    let copy = tmp.path().join("Copy.snxsch");
+    let (mut app, _boot) = Signex::new();
+    let old = open_active(&mut app, &a, uuid::Uuid::now_v7());
+    let waiver = |net: &str, sheet: uuid::Uuid| ErcWaiver {
+        rule_id: "builtin::single_pin_net".into(),
+        objects: vec![format!("net:{net}@{sheet}")],
+        fingerprint: "f".into(),
+        reason: "test point".into(),
+        author: "A".into(),
+        ..Default::default()
+    };
+    let other_sheet = uuid::Uuid::now_v7();
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id,
+            path: tmp.path().join("P.snxprj"),
+            data: ProjectData {
+                document_id: None,
+                description: None,
+                name: "P".into(),
+                dir: tmp.path().to_string_lossy().into_owned(),
+                schematic_root: Some("A.snxsch".into()),
+                pcb_file: None,
+                sheets: vec![SheetEntry {
+                    name: "A".into(),
+                    filename: "A.snxsch".into(),
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                    unknown: Default::default(),
+                }],
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: Some(ProjectRules {
+                    erc_waivers: vec![waiver("SENSE", old), waiver("OTHER", other_sheet)],
+                    ..Default::default()
+                }),
+                annotation: None,
+                schematic_defaults: Default::default(),
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+
+    crate::settle_support::settle(
+        &mut app,
+        Message::File(FileMsg::SaveAs {
+            from_path: a.clone(),
+            to_path: copy.clone(),
+        }),
+    );
+
+    let new = app.document_state.engines[&copy].document().uuid;
+    assert_ne!(new, old, "Save As is a new document");
+    let rules = app.document_state.projects[0]
+        .data
+        .rules
+        .clone()
+        .expect("rules");
+    assert_eq!(
+        rules.erc_waivers[0].objects,
+        vec![format!("net:SENSE@{new}")]
+    );
+    assert_eq!(
+        rules.erc_waivers[1].objects,
+        vec![format!("net:OTHER@{other_sheet}")],
+        "another sheet's waiver stays"
+    );
+    assert!(
+        app.document_state
+            .is_document_dirty(&tmp.path().join("P.snxprj")),
+        "the project holds a change to save"
+    );
+}

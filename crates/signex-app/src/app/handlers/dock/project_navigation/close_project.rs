@@ -323,10 +323,16 @@ impl Signex {
             self.document_state
                 .instance_note_scopes
                 .remove(&closed_path);
+            // Only this project's own files: another open project may list a
+            // file in the same folder.
+            let own: Vec<_> = crate::app::document_ids::referenced_files(closed)
+                .into_iter()
+                .map(|(path, _)| path)
+                .collect();
             self.document_state.forget_project_saved_state(&closed_path);
-            if let Some(dir) = closed_path.parent() {
-                self.document_state.document_ids.forget_headers_under(dir);
-            }
+            self.document_state
+                .document_ids
+                .forget_headers_of(own.iter().map(|p| p.as_path()));
         }
 
         // A pricing walk keeps running: closing a project does not unmount its

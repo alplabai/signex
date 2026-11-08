@@ -128,9 +128,17 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
-        // A query answers with data and acts on no window (#2172).
-        if let Some(answered) = self.run_query(command, &args) {
-            return answered;
+        // A query answers an agent or the CLI with data; no GUI surface shows
+        // that answer, so a palette, key or menu call is refused rather than
+        // reported as run (#2172).
+        if queries::is_query(command) {
+            return (
+                CommandOutcome::disabled(format!(
+                    "`{}` is for agents and the CLI: it answers with data",
+                    command.as_str()
+                )),
+                Task::none(),
+            );
         }
         // Undo / Redo typed in an undocked tab step that window's document
         // and are gated by its history, not the main window's active tab

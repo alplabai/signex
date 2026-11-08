@@ -13,17 +13,27 @@ mod reconcile;
 mod target;
 #[cfg(test)]
 mod tests;
+mod waivers;
+pub(crate) use waivers::Follow;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use signex_types::document_id::DocumentId;
 
+pub(crate) use entries::referenced_files;
 pub(crate) use entries::{DocumentEntry, DocumentKind};
 pub use headers::HeaderRead;
 pub use target::DocumentTarget;
 
 use crate::app::document::DocumentKey;
+
+/// One cached head: the id read and the file's modification time then.
+#[derive(Debug, Clone, Copy)]
+struct HeaderRecord {
+    id: Option<DocumentId>,
+    modified: Option<std::time::SystemTime>,
+}
 
 /// What the app keeps about document ids besides the documents themselves.
 ///
@@ -35,7 +45,7 @@ use crate::app::document::DocumentKey;
 pub struct DocumentIds {
     /// The id at the head of each project-referenced file that is not
     /// loaded; `None` when the file has none or could not be read.
-    headers: HashMap<PathBuf, Option<DocumentId>>,
+    headers: HashMap<PathBuf, HeaderRecord>,
     seen: HashMap<DocumentKey, u64>,
     next_seen: u64,
     /// Sheets a headless query loaded only to answer and drops afterwards:
@@ -57,18 +67,53 @@ impl DocumentIds {
     }
 
     pub(crate) fn header(&self, path: &std::path::Path) -> Option<Option<DocumentId>> {
-        self.headers.get(path).copied()
+        self.headers.get(path).map(|record| record.id)
     }
 
-    pub(crate) fn set_header(&mut self, path: PathBuf, id: Option<DocumentId>) {
-        self.headers.insert(path, id);
+    /// Whether `path` needs its head read: never read, or read and holding
+    /// no id (a file written since may hold one now).
+    pub(crate) fn header_wanted(&self, path: &std::path::Path) -> bool {
+        self.headers
+            .get(path)
+            .is_none_or(|record| record.id.is_none())
     }
 
-    /// Forget the header ids of files under `dir` (the project closed).
-    pub(crate) fn forget_headers_under(&mut self, dir: &std::path::Path) {
-        self.headers.retain(|path, _| !path.starts_with(dir));
+    pub(crate) fn set_header(
+        &mut self,
+        path: PathBuf,
+        id: Option<DocumentId>,
+        modified: Option<std::time::SystemTime>,
+    ) {
+        self.headers.insert(path, HeaderRecord { id, modified });
     }
 
+    /// The cached head of `path` no longer describes the file (it was
+    /// written, its tab closed, or it changed on disk): read it again.
+    pub(crate) fn forget_header(&mut self, path: &std::path::Path) {
+        self.headers.remove(path);
+    }
+
+    /// Forget the heads of exactly these files (their project closed).
+    pub(crate) fn forget_headers_of<'a>(
+        &mut self,
+        paths: impl IntoIterator<Item = &'a std::path::Path>,
+    ) {
+        for path in paths {
+            self.headers.remove(path);
+        }
+    }
+
+    /// Forget every head whose file's modification time `modified_of` knows
+    /// and finds different from the one the head was read at.
+    pub(crate) fn forget_changed_headers(
+        &mut self,
+        modified_of: impl Fn(&std::path::Path) -> Option<std::time::SystemTime>,
+    ) {
+        self.headers.retain(|path, record| match modified_of(path) {
+            Some(now) => record.modified == Some(now),
+            None => true,
+        });
+    }
     /// The first-seen order of `key`, assigned on first sight.
     pub(crate) fn seen_order(&mut self, key: &DocumentKey) -> u64 {
         if let Some(order) = self.seen.get(key) {

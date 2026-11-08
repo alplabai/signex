@@ -295,7 +295,7 @@ fn project_ref(project: &LoadedProject) -> ProjectRef {
 
 /// The files `project` names: its root sheet, its sheet list and its board,
 /// resolved against the project folder.
-pub(super) fn referenced_files(project: &LoadedProject) -> Vec<(PathBuf, DocumentKind)> {
+pub(crate) fn referenced_files(project: &LoadedProject) -> Vec<(PathBuf, DocumentKind)> {
     let dir = project.dir();
     let data = &project.data;
     let sheets = data

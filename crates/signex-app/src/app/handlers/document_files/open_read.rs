@@ -107,7 +107,13 @@ impl Signex {
             return Task::none();
         }
         match result {
-            Ok(document) => self.install_loaded_document(request.path, *document),
+            Ok(document) => {
+                let task = self.install_loaded_document(request.path, *document);
+                // A copied file that repeats an id is told and repaired as it
+                // opens, not when an agent first asks (#2172).
+                self.reconcile_document_ids();
+                task
+            }
             Err(failure) => {
                 // No silent no-op: a descent into a missing child offers to
                 // create the file (#1275).
