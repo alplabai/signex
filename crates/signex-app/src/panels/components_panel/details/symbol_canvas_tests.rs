@@ -30,7 +30,7 @@ fn the_preview_is_a_placed_symbol_the_canvas_can_draw() {
     let scene = build_schematic_scene(
         &sheet,
         &transform,
-        &canvas_colors(ThemeId::Signex),
+        &canvas_colors(ThemeId::GraphiteLight),
         Rectangle::with_size(size),
         None,
         SceneOverrides::default(),
@@ -133,7 +133,7 @@ const DOTS: SheetGrid = SheetGrid {
 fn program(lib: LibSymbol, grid: SheetGrid) -> SymbolSheetPreview {
     SymbolSheetPreview {
         lib,
-        colors: canvas_colors(ThemeId::Signex),
+        colors: canvas_colors(ThemeId::GraphiteLight),
         grid,
         device_px_per_logical_px: UNSCALED,
         zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
@@ -143,7 +143,7 @@ fn program(lib: LibSymbol, grid: SheetGrid) -> SymbolSheetPreview {
 #[test]
 fn the_first_draw_and_any_change_rebuild_but_the_same_symbol_does_not() {
     let lib = body_symbol();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let mut shown = None;
     assert!(
         take_rebuild(&mut shown, &(lib.clone(), colors, DOTS)),
@@ -165,7 +165,7 @@ fn the_first_draw_and_any_change_rebuild_but_the_same_symbol_does_not() {
         "settled again"
     );
 
-    let dark = canvas_colors(ThemeId::SolarizedLight);
+    let dark = canvas_colors(ThemeId::GraphiteDark);
     assert_ne!(colors, dark, "the two themes must differ");
     assert!(
         take_rebuild(&mut shown, &(other.clone(), dark, DOTS)),

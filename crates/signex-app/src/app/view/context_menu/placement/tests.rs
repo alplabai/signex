@@ -95,7 +95,7 @@ fn plain_card(tokens: &signex_types::theme::ThemeTokens) -> Element<'_, Message>
 /// window clamps to its own size.
 #[test]
 fn a_menu_opens_at_the_cursor_and_clamps_only_at_its_own_windows_edge() {
-    for id in [ThemeId::GraphiteLight, ThemeId::Signex] {
+    for id in [ThemeId::GraphiteLight] {
         let tokens = theme_tokens(id);
         let metrics = MenuMetrics::of(&tokens);
         let card_h = 3.0 * metrics.item_height(false) + 2.0 * metrics.panel_pad;
@@ -301,7 +301,7 @@ fn rows_and_launchers_lay_out_at_the_metrics_row_height() {
     let icon = iced::widget::svg::Handle::from_memory(
         br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>"#.as_slice(),
     );
-    for id in [ThemeId::Signex, ThemeId::GraphiteDark] {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let tokens = theme_tokens(id);
         let metrics = MenuMetrics::of(&tokens);
         for has_icons in [false, true] {

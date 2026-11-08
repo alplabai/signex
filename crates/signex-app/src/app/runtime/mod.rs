@@ -435,34 +435,15 @@ impl Signex {
     /// Canvas colours for a given theme id — the one derivation shared by
     /// `update_canvas_theme` (pushes them into the PCB canvas) and
     /// [`Self::canvas_view_prefs`] (hands them to the schematic `Program`
-    /// each frame). `Custom` reads the loaded
-    /// custom theme and falls back to Signex when none is loaded.
+    /// each frame).
     pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
-        if id == ThemeId::Custom {
-            self.ui_state
-                .custom_theme
-                .as_ref()
-                .map(|custom_theme| custom_theme.canvas)
-                .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
-        } else {
-            signex_types::theme::canvas_colors(id)
-        }
+        signex_types::theme::canvas_colors(id)
     }
 
-    /// UI chrome tokens for a given theme id. `Custom` reads the loaded
-    /// custom theme and falls back to Signex when none is loaded — the
-    /// token twin of [`Self::canvas_colors_for`], so a panel refresh
-    /// cannot reset a Custom theme to defaults (#110).
+    /// UI chrome tokens for a given theme id — the token twin of
+    /// [`Self::canvas_colors_for`].
     pub(crate) fn tokens_for(&self, id: ThemeId) -> signex_types::theme::ThemeTokens {
-        if id == ThemeId::Custom {
-            self.ui_state
-                .custom_theme
-                .as_ref()
-                .map(|custom_theme| custom_theme.tokens)
-                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-        } else {
-            signex_types::theme::theme_tokens(id)
-        }
+        signex_types::theme::theme_tokens(id)
     }
 
     /// Panel tokens and icon-tint theme for the effective theme: the
@@ -710,11 +691,7 @@ mod tests {
         // Arrange
         let (mut app, _t) = Signex::new();
         let committed = app.ui_state.theme_id;
-        let other = if committed == ThemeId::Nord {
-            ThemeId::SolarizedLight
-        } else {
-            ThemeId::Nord
-        };
+        let other = committed.light_dark_counterpart();
 
         // Act
         app.ui_state.preferences_draft_theme = other;

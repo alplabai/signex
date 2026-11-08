@@ -387,7 +387,7 @@ mod label_tests {
 
     #[test]
     fn legacy_labels_keep_the_fill_portion_column() {
-        let ink = LabelInk::for_tokens(Color::BLACK, &theme_tokens(ThemeId::Signex));
+        let ink = LabelInk::for_tokens(Color::BLACK, &crate::styles::legacy_tokens_fixture());
         assert_eq!(ink, LabelInk::from(Color::BLACK));
         assert_eq!(ink.width, Length::FillPortion(PROPERTY_LABEL_PORTION));
     }

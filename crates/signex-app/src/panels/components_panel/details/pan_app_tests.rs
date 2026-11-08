@@ -20,11 +20,7 @@ use crate::panels::PanelKind;
 use crate::task_driver::TaskDriver;
 
 const WINDOW: Size = Size::new(1440.0, 1400.0);
-const THEMES: [ThemeId; 3] = [
-    ThemeId::Signex,
-    ThemeId::GraphiteLight,
-    ThemeId::GraphiteDark,
-];
+const THEMES: [ThemeId; 2] = [ThemeId::GraphiteLight, ThemeId::GraphiteDark];
 
 fn stock_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library/Stock.snxlib")

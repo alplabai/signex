@@ -131,8 +131,7 @@ mod tests {
     #[test]
     fn a_legacy_theme_keeps_the_native_dialog_frame() {
         let (mut app, _task) = Signex::new();
-        app.document_state.panel_ctx.tokens =
-            signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        app.document_state.panel_ctx.tokens = crate::styles::legacy_tokens_fixture();
         assert!(!app.dialog_windows_borderless());
         let (settings, borderless) = app.dialog_window_settings(ModalId::About);
         assert!(settings.decorations && !borderless);

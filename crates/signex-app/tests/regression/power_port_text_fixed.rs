@@ -47,7 +47,7 @@ fn drawn_text_at(sheet: &SchematicSheet) -> [f32; 2] {
         scale: 1.0,
         device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark);
     let bounds = Rectangle::new(ScreenPoint::ORIGIN, Size::new(800.0, 600.0));
     let snap =
         build_renderer_snapshot(sheet, &transform, &colors, bounds, None, Default::default());

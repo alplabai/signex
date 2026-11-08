@@ -11,11 +11,7 @@ use crate::styles::tokens::{
 };
 use iced::Color;
 use iced::widget::button;
-use signex_types::theme::{ThemeId, theme_tokens};
-
-/// The built-in whose accent and selection fill are the same colour, which
-/// is what the accent-on-accent label tests below pin.
-const SOLARIZED: ThemeId = ThemeId::SolarizedLight;
+use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 
 /// A theme is light when its panel is light, whatever its name.
 fn is_light(id: ThemeId) -> bool {
@@ -58,13 +54,37 @@ fn selected_segment_text_is_readable_on_every_light_theme() {
     }
 }
 
-/// Solarized only: its accent equals its selection fill, which is the
-/// collision this label rule exists for.
+/// The retired Solarized Light tokens and the iced theme they drew with: the
+/// light palette whose accent equals its selection fill, the collision the
+/// label rules below exist for. No shipped theme has it any more, but the
+/// rules stay, so they are pinned on these inputs.
+fn collision_tokens() -> ThemeTokens {
+    let c = |hex: &str| signex_types::theme::Color::from_hex(hex);
+    ThemeTokens {
+        bg: c("#FDF6E3"),
+        paper: c("#EEE8D5"),
+        text: c("#657B83"),
+        text_secondary: c("#93A1A1"),
+        accent: c("#268BD2"),
+        border: c("#93A1A1"),
+        panel_bg: c("#FDF6E3"),
+        toolbar_bg: c("#EEE8D5"),
+        statusbar_bg: c("#EEE8D5"),
+        selection: c("#268BD2"),
+        hover: c("#EEE8D5"),
+        error: c("#DC322F"),
+        warning: c("#CB4B16"),
+        success: c("#859900"),
+        extended: signex_types::theme::ExtendedTokens::NONE,
+    }
+}
+
 #[test]
-fn add_filter_label_is_readable_on_solarized_light() {
-    let tokens = theme_tokens(SOLARIZED);
+fn add_filter_label_is_readable_on_the_accent_selection_collision() {
+    let tokens = collision_tokens();
+    assert_eq!(tokens.accent, tokens.selection, "fixture precondition");
     let p = PanelPalette::from_tokens(&tokens);
-    let theme = Signex::id_to_iced_theme(SOLARIZED, None);
+    let theme = iced::Theme::Light;
     for status in [
         button::Status::Active,
         button::Status::Hovered,
@@ -84,7 +104,7 @@ fn checkbox_state_word_is_readable_on_every_light_theme() {
     for id in light_themes() {
         let tokens = theme_tokens(id);
         let p = PanelPalette::from_tokens(&tokens);
-        let theme = Signex::id_to_iced_theme(id, None);
+        let theme = Signex::id_to_iced_theme(id);
         let surfaces = [ti(tokens.panel_bg), theme.palette().background.base.color];
         for surface in surfaces {
             assert_readable(
@@ -110,7 +130,6 @@ fn selected_erc_row_text_is_readable_on_every_light_theme() {
 #[test]
 fn the_light_and_dark_sets_split_the_builtins() {
     assert!(light_themes().any(|id| id == ThemeId::GraphiteLight));
-    assert!(light_themes().any(|id| id == SOLARIZED));
     assert!(dark_themes().any(|id| id == ThemeId::GraphiteDark));
     assert_eq!(
         light_themes().count() + dark_themes().count(),
@@ -141,7 +160,7 @@ fn dark_themes_keep_every_label_that_was_visible() {
     for id in dark_themes() {
         let tokens = theme_tokens(id);
         let p = PanelPalette::from_tokens(&tokens);
-        let theme = Signex::id_to_iced_theme(id, None);
+        let theme = Signex::id_to_iced_theme(id);
         let surface = theme.palette().background.base.color;
 
         assert_unchanged_unless_lost(
@@ -187,9 +206,9 @@ fn dark_themes_keep_every_label_that_was_visible() {
 }
 
 #[test]
-fn focused_erc_severity_letter_is_readable_on_solarized_light() {
+fn focused_erc_severity_letter_is_readable_on_the_accent_selection_collision() {
     use signex_widgets::theme_ext;
-    let tokens = theme_tokens(SOLARIZED);
+    let tokens = collision_tokens();
     let fill = ti(tokens.selection);
     for (name, colour) in [
         ("E", theme_ext::error_color(&tokens)),
@@ -209,7 +228,7 @@ fn focused_erc_severity_letter_is_readable_on_solarized_light() {
 fn add_filter_label_never_flips_between_states_on_any_builtin() {
     for &id in ThemeId::BUILTINS {
         let p = PanelPalette::from_tokens(&theme_tokens(id));
-        let theme = Signex::id_to_iced_theme(id, None);
+        let theme = Signex::id_to_iced_theme(id);
         let resting = add_filter_button_style(&theme, button::Status::Active, p.primary);
         for status in [button::Status::Hovered, button::Status::Pressed] {
             let style = add_filter_button_style(&theme, status, p.primary);
@@ -223,7 +242,7 @@ fn on_label_reads_on_the_panel_background_of_every_builtin() {
     for &id in ThemeId::BUILTINS {
         let tokens = theme_tokens(id);
         let p = PanelPalette::from_tokens(&tokens);
-        let theme = Signex::id_to_iced_theme(id, None);
+        let theme = Signex::id_to_iced_theme(id);
         let on = check_state_color(true, p.muted, theme.palette().background.base.color);
         let panel = ti(tokens.panel_bg);
         assert!(
@@ -261,7 +280,7 @@ fn white_on_accent_segments_are_unchanged_on_every_builtin() {
 fn dark_add_filter_label_is_unchanged_in_every_button_state() {
     for id in dark_themes() {
         let p = PanelPalette::from_tokens(&theme_tokens(id));
-        let theme = Signex::id_to_iced_theme(id, None);
+        let theme = Signex::id_to_iced_theme(id);
         let resting = add_filter_button_style(&theme, button::Status::Active, p.primary);
         let fill = solid(resting.background);
         if contrast_ratio(p.primary, fill) < UNREADABLE_CONTRAST {

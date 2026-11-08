@@ -11,8 +11,21 @@ use super::ti;
 use super::tokens::resolve;
 
 /// Whether `tokens` belong to a Graphite theme (it sets extended tokens).
+/// Every theme is Graphite now; the `false` branches stay until the
+/// cleanup in `docs/DECISIONS.md` ("Graphite-only themes").
 pub fn is_graphite(tokens: &ThemeTokens) -> bool {
     !tokens.extended.is_empty()
+}
+
+/// Tokens with no extended set: no theme produces them any more, but they
+/// still drive the non-Graphite branches, so tests pin those branches with
+/// this fixture until the branches are removed.
+#[cfg(test)]
+pub(crate) fn legacy_tokens_fixture() -> ThemeTokens {
+    ThemeTokens {
+        extended: signex_types::theme::ExtendedTokens::NONE,
+        ..signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark)
+    }
 }
 
 /// Shadow of a floating surface. Graphite: offset (0, 6), blur 20, the

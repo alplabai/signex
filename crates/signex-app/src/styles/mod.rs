@@ -18,6 +18,8 @@ pub mod radii;
 pub mod tokens;
 pub mod typography;
 
+#[cfg(test)]
+pub(crate) use graphite::legacy_tokens_fixture;
 pub use graphite::{
     PillTone, card, field, floating_shadow, is_graphite, key_cap, pill, pill_colors,
     resize_handle_edge, section_label,

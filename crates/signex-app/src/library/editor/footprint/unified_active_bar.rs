@@ -297,10 +297,11 @@ mod tests {
     #[test]
     fn menu_triggers_are_located_by_message_not_by_index() {
         use crate::library::editor::footprint::state::EditorMode;
-        use signex_types::theme::{ThemeId, theme_tokens};
+        use signex_types::theme::ThemeId;
 
-        let tid = ThemeId::Signex;
-        let tokens = theme_tokens(tid);
+        // The legacy metrics the BAR_PADDING / BTN_SIZE pins describe.
+        let tid = ThemeId::DEFAULT;
+        let tokens = crate::styles::legacy_tokens_fixture();
 
         let sketch = editor_in(EditorMode::Sketch);
         let items = bar_items(&sketch, tid, &tokens);
@@ -345,10 +346,11 @@ mod tests {
     fn bar_width_counts_every_slot_including_the_custom_one() {
         use crate::library::editor::footprint::sketch_mode::active_bar::DIM_INPUT_W;
         use crate::library::editor::footprint::state::EditorMode;
-        use signex_types::theme::{ThemeId, theme_tokens};
+        use signex_types::theme::ThemeId;
 
-        let tid = ThemeId::Signex;
-        let tokens = theme_tokens(tid);
+        // The legacy metrics the BAR_PADDING / BTN_SIZE pins describe.
+        let tid = ThemeId::DEFAULT;
+        let tokens = crate::styles::legacy_tokens_fixture();
         let editor = editor_in(EditorMode::Sketch);
         let items = bar_items(&editor, tid, &tokens);
 

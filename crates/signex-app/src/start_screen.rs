@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn recent_section_is_absent_without_entries_and_present_with_them() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = crate::styles::legacy_tokens_fixture();
         let empty = lay_out_texts(view(&tokens, "Ctrl+O", &[], &[]), SMALL_WINDOW);
         assert!(empty.iter().all(|t| t.text != "Recent"));
 
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn labels_stay_on_one_line_and_inside_a_small_window() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = crate::styles::legacy_tokens_fixture();
         let recent = paths(MAX_START_RECENT + 2);
         let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent, &[]), SMALL_WINDOW);
         let one_line = BASE * 2.0;
@@ -297,7 +297,7 @@ mod tests {
     /// short window only because it sits in a `scrollable`.
     #[test]
     fn every_button_label_fits_at_small_window_sizes() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = crate::styles::legacy_tokens_fixture();
         let recent = paths(MAX_START_RECENT + 2);
         let mut labels: Vec<String> = Action::ALL
             .iter()

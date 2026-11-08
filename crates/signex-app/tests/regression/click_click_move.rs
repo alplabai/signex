@@ -403,7 +403,7 @@ fn deliver(
     at: iced::Point,
     with_ghost: bool,
 ) -> Option<Message> {
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let overrides = HashMap::new();
     let class_styles = HashMap::new();
     let message = {

@@ -1,5 +1,13 @@
 use super::*;
-use signex_types::theme::{ThemeId, theme_tokens};
+use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
+
+/// Tokens with no extended set: the unskinned look `Skin::of` and
+/// `MenuMetrics::of` fall back to. No built-in theme is unskinned.
+fn unskinned() -> ThemeTokens {
+    let mut tokens = theme_tokens(ThemeId::GraphiteLight);
+    tokens.extended = signex_types::theme::ExtendedTokens::NONE;
+    tokens
+}
 
 #[test]
 fn a_legacy_enabled_icon_keeps_its_own_colours() {
@@ -26,7 +34,7 @@ fn graphite_icons_are_monochrome_and_legacy_icons_keep_their_colours() {
         icon_style(false, graphite.muted, Some(ink)).color,
         Some(ink)
     );
-    assert_eq!(Look::of(&theme_tokens(ThemeId::Signex)).icon_ink, None);
+    assert_eq!(Look::of(&unskinned()).icon_ink, None);
 }
 
 /// The fork's `Shrink` compresses contents to their minimum, which
@@ -34,7 +42,7 @@ fn graphite_icons_are_monochrome_and_legacy_icons_keep_their_colours() {
 /// content with `Fit` (#2043).
 #[test]
 fn panel_without_a_width_hint_fits_its_content() {
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
     let entries = vec![DropdownEntry::Item(DropdownItem::new("Place", ()))];
     let panel = view(entries, &tokens, None);
     use iced::advanced::Widget as _;
@@ -49,7 +57,7 @@ fn labelled(label: &str) -> Vec<DropdownEntry<()>> {
 /// longer label, and held at the cap (#2100).
 #[test]
 fn a_fitted_menu_is_narrower_than_the_cap_and_grows_with_its_label() {
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
     let short = fitted_width(&labelled("Copy"), &tokens, 260.0, "");
     let long = fitted_width(&labelled("Copy Designator And Value"), &tokens, 260.0, "");
     assert!(short < 260.0 && short < long, "{short} {long}");
@@ -114,10 +122,7 @@ fn graphite_rows_are_28_px_with_dense_type() {
     assert!((12.5..=13.0).contains(&m.label_size), "{}", m.label_size);
     assert_eq!(m.icon_size, 16.0);
     assert!(m.mono_shortcut);
-    assert_eq!(
-        MenuMetrics::of(&theme_tokens(ThemeId::Signex)),
-        MenuMetrics::LEGACY
-    );
+    assert_eq!(MenuMetrics::of(&unskinned()), MenuMetrics::LEGACY);
 }
 
 /// The open launcher's top is the sum of the rows above it, from the card

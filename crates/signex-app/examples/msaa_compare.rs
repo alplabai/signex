@@ -146,8 +146,8 @@ fn main() {
         };
         eprintln!("adapter: {adapter}");
         for (theme, theme_name) in [
-            (ThemeId::Signex, "dark"),
-            (ThemeId::SolarizedLight, "light"),
+            (ThemeId::GraphiteDark, "dark"),
+            (ThemeId::GraphiteLight, "light"),
         ] {
             let mut app = sample_app(theme, &mut renderer);
             for (zoom, percent) in [("fit", 0.0), ("200pct", 200.0), ("max", 1.0e9)] {

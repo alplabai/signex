@@ -566,7 +566,7 @@ fn copy_to_library_without_a_writable_library_is_sized_to_its_content() {
 #[test]
 fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
     use signex_types::theme::ThemeId;
-    for theme_id in [ThemeId::GraphiteLight, ThemeId::Signex] {
+    for theme_id in [ThemeId::GraphiteLight] {
         let (mut app, _main) = test_app();
         app.ui_state.theme_id = theme_id;
         app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
@@ -762,12 +762,12 @@ fn dialog_windows_are_titled_without_an_application_suffix_and_drawn_flat() {
 }
 
 /// Every dialog window is covered edge to edge by its body, and the
-/// window's own background is the active theme's dialog surface, in a dark
-/// theme and in Solarized Light and after switching between them.
+/// window's own background is the active theme's dialog surface, in Graphite
+/// Dark and in Graphite Light and after switching between them.
 #[test]
 fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
     use signex_types::theme::ThemeId;
-    for theme_id in [ThemeId::CatppuccinMocha, ThemeId::SolarizedLight] {
+    for theme_id in [ThemeId::GraphiteDark, ThemeId::GraphiteLight] {
         for modal in testable() {
             let (mut app, _main) = test_app();
             app.ui_state.theme_id = theme_id;

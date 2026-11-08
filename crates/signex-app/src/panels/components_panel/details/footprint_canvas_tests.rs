@@ -625,5 +625,11 @@ fn theme_tokens_pick_the_preview_palette_only_on_graphite() {
         palette(ThemeId::GraphiteDark),
         Some(LayerPalette::PreviewDark)
     );
-    assert_eq!(palette(ThemeId::Signex), None);
+    assert_eq!(
+        FootprintPreview::new(&model)
+            .with_theme_tokens(&crate::styles::legacy_tokens_fixture())
+            .graphite
+            .map(|(_, p)| p),
+        None
+    );
 }

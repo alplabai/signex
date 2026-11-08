@@ -31,7 +31,7 @@ use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
 
-const TID: ThemeId = ThemeId::CatppuccinMocha;
+const TID: ThemeId = ThemeId::GraphiteDark;
 
 /// Rows that run no catalog command, with the reason each stays local.
 /// A row not listed here and carrying no command id fails the walk.

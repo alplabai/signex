@@ -495,7 +495,8 @@ fn gpu_stack_draws_the_sheet_and_matches_the_cpu_replay() {
     // Wire: exact colour only where the rasteriser is the reference one.
     let (wx, wy) = world(12.5, 5.0);
     if gpu.is_lavapipe {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         let got = stack.px(wx, wy);
         let want = to_u8(colors.wire);
         assert!(
@@ -589,7 +590,7 @@ fn layers_split_the_work_with_no_overlap() {
     let clear_rgb = [CLEAR.r, CLEAR.g, CLEAR.b].map(|c| (c * 255.0).round() as u8);
 
     // The backdrop paints paper everywhere and no content.
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let paper = to_u8(colors.paper);
     for (x, y) in [
         (wx(12.5), wy(5.0)),
@@ -858,7 +859,7 @@ fn the_selection_highlight_draws_above_the_gpu_content() {
     };
     let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look);
     let changed = selected.changed_vs(&plain, (0, 0, WIDTH, HEIGHT));
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let want = to_u8(colors.selection);
     // An outline pixel reads the theme's selection colour (edge pixels blend
     // with the sheet, so the best of them is the one to compare).
@@ -941,7 +942,8 @@ fn a_hidpi_window_puts_the_wire_at_twice_the_pixel() {
         "wire spans {min_x}..{max_x}, not 2x {start}..{end}"
     );
     if gpu.is_lavapipe {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         let got = stack.px(wx * 2, wy * 2);
         let want = to_u8(colors.wire);
         assert!(

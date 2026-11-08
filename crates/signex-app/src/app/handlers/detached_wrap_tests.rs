@@ -62,7 +62,7 @@ fn window_of(app: &Signex, modal: ModalId) -> iced::window::Id {
 
 #[test]
 fn a_long_library_name_keeps_the_close_prompt_footer_in_its_window() {
-    for theme_id in [ThemeId::GraphiteLight, ThemeId::Signex] {
+    for theme_id in [ThemeId::GraphiteLight] {
         let mut app = app_on(theme_id);
         app.library.close_library_confirm = Some(crate::library::state::CloseLibraryConfirmState {
             library_path: "l.snxlib".into(),
@@ -83,7 +83,7 @@ fn a_long_library_name_keeps_the_close_prompt_footer_in_its_window() {
 
 #[test]
 fn a_long_part_number_and_table_keep_the_delete_confirm_footer_in_its_window() {
-    for theme_id in [ThemeId::GraphiteLight, ThemeId::Signex] {
+    for theme_id in [ThemeId::GraphiteLight] {
         let mut app = app_on(theme_id);
         let path = PathBuf::from("/libs/a.snxlib");
         let mut browser = crate::library::state::LibraryBrowserState::new(path.clone());
@@ -122,7 +122,7 @@ fn a_short_name_leaves_the_close_and_delete_windows_at_their_base_height() {
 
 #[test]
 fn a_long_component_label_keeps_the_copy_to_library_footer_in_its_window() {
-    for theme_id in [ThemeId::GraphiteLight, ThemeId::Signex] {
+    for theme_id in [ThemeId::GraphiteLight] {
         let mut app = app_on(theme_id);
         app.library.stock_copy = Some(crate::library::stock_copy::StockCopyState {
             source: "/stock/symbols/R.snxsym".into(),

@@ -127,7 +127,7 @@ fn colors() -> CanvasColors {
         b: 0,
         a: 255,
     };
-    let mut colors = canvas_colors(ThemeId::Signex);
+    let mut colors = canvas_colors(ThemeId::GraphiteLight);
     colors.wire = c(1);
     colors.bus = c(2);
     colors.body = c(3);

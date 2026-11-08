@@ -144,7 +144,7 @@ fn a_filled_drawing_circle_has_separate_fill_and_stroke_colours() {
     let centre = world(15.0, 12.0);
     let rim = world(18.0, 12.0);
 
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let fill = to_u8(colors.body_fill);
     for (name, layer) in [("GPU", Layer::Stack), ("CPU", Layer::Cpu)] {
         let frame = frame_of(&mut gpu, layer, &sheet);
@@ -232,7 +232,7 @@ fn the_backdrop_shows_the_grid_over_the_paper() {
     );
 
     // The sheet starts at OFFSET, so pixels from 40 on are well on the paper.
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let paper = to_u8(colors.paper);
     let mut off_paper = 0;
     for y in 40..HEIGHT - 20 {

@@ -885,7 +885,7 @@ mod tests {
 
     #[test]
     fn text_size_defaults_to_the_compact_tree_size_and_is_overridable() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let roots = tree();
         let view = TreeView::new(&roots, &tokens);
         assert_eq!(view.text_size, 10.5);

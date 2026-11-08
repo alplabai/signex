@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn legacy_tokens_have_no_graphite_ink() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = crate::styles::legacy_tokens_fixture();
         assert!(ink_for(&tokens).is_none());
     }
 

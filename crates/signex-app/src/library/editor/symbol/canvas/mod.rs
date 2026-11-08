@@ -568,7 +568,7 @@ impl<'a> SymbolCanvas<'a> {
         SchematicRenderer::build_scene(
             &snapshot,
             &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-                signex_types::theme::ThemeId::Signex,
+                signex_types::theme::ThemeId::GraphiteLight,
             )),
             DirtyFlags::LINES
                 | DirtyFlags::CIRCLES
