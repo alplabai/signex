@@ -740,3 +740,55 @@ fn a_marker_pass_that_drops_the_save_point_updates_the_tab_mark() {
     assert!(!at_save, "fixture: the pass drops the save point");
     assert_eq!(sheet_dirty(&app), !at_save, "the tab says so too");
 }
+
+/// A group step that passes a dead marker on a member sheet's full stack and
+/// is then refused still leaves that sheet's tab mark equal to its engine.
+#[test]
+fn a_group_pass_that_drops_a_sheets_save_point_updates_its_tab_mark() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _symbol) = app_with_sheet();
+    let a = app.document_state.active_path.clone().unwrap();
+    let b = open_second_sheet(&mut app);
+    let group = app.mint_undo_group();
+    for path in [&a, &b] {
+        let wire = signex_types::schematic::Wire {
+            uuid: uuid::Uuid::now_v7(),
+            ..Default::default()
+        };
+        app.document_state
+            .engines
+            .get_mut(path)
+            .unwrap()
+            .execute_batch_grouped(
+                [signex_engine::Command::PlaceWireSegment { wire }],
+                Some(group),
+            )
+            .unwrap();
+    }
+    app.set_undo_group_sheets(
+        group,
+        crate::app::UndoGroupSheets {
+            live: vec![a.clone(), b.clone()],
+            ..Default::default()
+        },
+    );
+    activate(&mut app, &a);
+    assert!(app.undo_active_sheet(), "the group is undone on both");
+    activate(&mut app, &b);
+    save_sheet(&mut app);
+    for net in ["GND", "VCC", "NET3"] {
+        pick(&mut app, net, Some("Power"));
+    }
+    assert!(app.undo_active_sheet() && app.undo_active_sheet());
+    panel(&mut app, NetClassMsg::Redo); // the top redo marker is dead now
+    app.set_undo_depth(1);
+    assert!(!sheet_dirty(&app));
+
+    activate(&mut app, &a);
+    app.redo_active_sheet(); // passes B's dead marker onto its full stack
+
+    activate(&mut app, &b);
+    let at_save = app.document_state.engines[&b].is_at_save_point();
+    assert!(!at_save, "fixture: the pass drops B's save point");
+    assert_eq!(sheet_dirty(&app), !at_save, "B's tab says so too");
+}

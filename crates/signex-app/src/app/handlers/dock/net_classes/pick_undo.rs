@@ -119,6 +119,8 @@ impl crate::app::Signex {
                 engine.pass_dead_class_pick(undoing);
             }
         }
+        // A pass can push the saved step off a full stack.
+        self.document_state.sync_history_dirty(path);
     }
 
     /// Revert (`undoing`) or re-apply the class-table step `marker` names.
