@@ -321,6 +321,7 @@ Each crate maps to an `area:` label (auto-applied to PRs by path — see
 | `signex-3d-model-importer` | 3D model (glTF/STEP) import. | `3d` |
 | `signex-widgets` / `chrome-catalog` | Custom Iced widgets + chrome catalog. | `widgets` |
 | `signex-cli` | Headless command runner (`signex-cli`): JSON Lines in, one result line out; the security rules for agent input. See [docs/CLI.md](docs/CLI.md). | `app` |
+| `signex-i18n` | UI message catalogs and locale-aware formatting. No area label of its own yet; use `app`. | `app` |
 | `signex-app` | Main binary — Iced app, panels, dock, menus, canvas, Active Bar, and the footprint/symbol/library editors. | `app`, `footprint-editor`, `symbol-editor`, `schematic`, `pcb` |
 
 **Rule:** `signex-types` has zero rendering dependencies. If you need to draw

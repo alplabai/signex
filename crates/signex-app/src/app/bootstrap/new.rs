@@ -143,6 +143,10 @@ impl Signex {
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
+        let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+            &crate::fonts::read_language_pref_from(prefs),
+        ));
+        crate::app::handlers::preferences::language::log_dropped_language(&i18n);
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
@@ -323,6 +327,7 @@ impl Signex {
                 preferences_draft_net_hover_enabled: net_hover_enabled,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
+                i18n,
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,

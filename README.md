@@ -255,6 +255,7 @@ signex/
 │   ├── signex-renderer/       # Domain types → render primitives (+ signex-gfx wgpu pipelines)
 │   ├── signex-library/        # .snxlib component library — port/adapter model (+ signex-library-server)
 │   ├── signex-widgets/        # Reusable iced widgets (tree view, active bar, previews)
+│   ├── signex-i18n/           # UI message catalogs (Fluent) and locale-aware formatting
 │   └── signex-3d-model-importer/  # STEP / WRL importer for 3D body attach
 └── Cargo.toml
 ```

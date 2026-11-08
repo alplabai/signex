@@ -1,0 +1,23 @@
+[package]
+name = "signex-i18n"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+description = "Message catalogs and locale-aware formatting for the Signex UI"
+
+[dependencies]
+fluent-bundle = "0.16"
+fluent-langneg = "0.13"
+fluent-pseudo = "0.3"
+icu_decimal = { version = "~2.2", features = ["ryu"] }
+icu_locale_core = "~2.2"
+intl-memoizer = "0.5"
+log = "0.4"
+sys-locale = "0.3"
+unic-langid = "0.9"
+
+[lints]
+workspace = true

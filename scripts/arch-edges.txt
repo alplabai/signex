@@ -10,6 +10,7 @@ signex-app -> signex-erc
 signex-app -> signex-erc-dsl
 signex-app -> signex-gfx
 signex-app -> signex-history
+signex-app -> signex-i18n
 signex-app -> signex-library
 signex-app -> signex-net
 signex-app -> signex-output
