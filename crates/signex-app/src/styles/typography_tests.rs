@@ -284,3 +284,32 @@ fn line_height_is_the_frameworks_default() {
     let framework = LineHeight::default().to_absolute(Pixels(1.0)).0;
     assert_eq!(super::typography::LINE_HEIGHT, framework);
 }
+
+/// No expand/collapse header draws a text arrow; they all use the shared
+/// stroke chevron. Sort arrows, the sub-menu `›`, breadcrumbs and menu
+/// paths are not collapse chevrons and stay.
+#[test]
+fn no_expand_collapse_header_draws_a_text_chevron() {
+    const PINNED: &[&str] = &[
+        "library/panel.rs",
+        "library/editor/footprint/context_menu.rs",
+        "panels/components_panel/look.rs",
+    ];
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for rel in PINNED {
+        let text = std::fs::read_to_string(src.join(rel)).expect("source file");
+        let code: String = text
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for glyph in [
+            "\u{25B8}", "\u{25BE}", "\u{25B6}", "\u{25BC}", "\u{25BA}", "\u{2304}",
+        ] {
+            assert!(
+                !code.contains(glyph),
+                "{rel} draws the text chevron {glyph}"
+            );
+        }
+    }
+}

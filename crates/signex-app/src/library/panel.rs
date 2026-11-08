@@ -2,7 +2,7 @@
 //!
 //! The per-library row grid lives in the main-window Library Browser
 //! tab (see [`crate::library::browser`]). Here each open library is a
-//! row whose ▸ expands it to list its tables and, under each, its
+//! row whose chevron expands it to list its tables and, under each, its
 //! components (#1895): one click highlights a component, a double click opens it. `[Open]` opens the
 //! library's browser tab.
 //!
@@ -51,7 +51,8 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     let search = text_input("Search libraries…", &state.panel_search)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::PanelSearchChanged(s)))
         .padding(LIB_PANEL_ROW_PADDING)
-        .size(LIB_PANEL_TEXT_SIZE);
+        .size(LIB_PANEL_TEXT_SIZE)
+        .style(crate::panels::form_look::text_input_style);
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![]
         .spacing(SP.xs)
@@ -122,25 +123,30 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     .boxed()
 }
 
-/// One library row: the ▸ / ▾ toggle, the name and row count, and Open.
+/// One library row: the chevron toggle, the name and row-count pill, and Open.
 fn library_row<'a>(
     lib: &'a super::state::OpenLibrary,
     expanded: bool,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
+    let chevron = signex_widgets::chevron::chevron(
+        expanded,
+        LIB_PANEL_TEXT_SIZE,
+        crate::styles::tokens::resolve(tokens).ink3,
+    );
+    let rows_pill = crate::library::editor::kit::toned_pill(
+        format!("{} rows", lib.total_rows()),
+        crate::styles::PillTone::Neutral,
+        tokens,
+    );
     let toggle = button(
         row![
-            text(if expanded { "▾" } else { "▸" })
+            chevron,
+            text(format!("{}.snxlib", lib.display_name))
                 .size(LIB_PANEL_TEXT_SIZE)
                 .color(text_c),
-            text(format!(
-                "{}.snxlib  ({} rows)",
-                lib.display_name,
-                lib.total_rows()
-            ))
-            .size(LIB_PANEL_TEXT_SIZE)
-            .color(text_c),
+            rows_pill,
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center),
@@ -151,14 +157,13 @@ fn library_row<'a>(
         lib.root.clone(),
     )))
     .style(crate::styles::subtle_button(tokens));
-    let open = button(
-        text("Open")
-            .size(LIB_PANEL_TEXT_SIZE)
-            .color(crate::styles::tokens::on_accent(tokens)),
-    )
-    .padding([SP.xs, SP.m])
-    .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
-    .style(crate::styles::accent_button(tokens));
+    let open = button(text("Open").size(LIB_PANEL_TEXT_SIZE).color(text_c))
+        .padding([SP.xs, SP.m])
+        .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
+        .style(|theme: &Theme, status| {
+            crate::panels::form_look::ghost_button(theme, status)
+                .unwrap_or_else(|| button::secondary(theme, status))
+        });
     row![toggle, open]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
