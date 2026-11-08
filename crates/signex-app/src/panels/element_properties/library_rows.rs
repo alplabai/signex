@@ -134,17 +134,15 @@ pub(super) fn push_library_rows<'a>(
     } = status;
     if missing {
         c = c.push(
-            signex_widgets::text(signex_widgets::raw(
-                "Library: symbol missing (sheet keeps its embedded copy)",
-            ))
-            .size(TS.body)
-            .color(muted)
-            .boxed(),
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_SYMBOL_MISSING))
+                .size(TS.body)
+                .color(muted)
+                .boxed(),
         );
     }
     if drifted {
         let update = signex_widgets::button(
-            signex_widgets::text(signex_widgets::raw("Update from library")).size(TS.body),
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE)).size(TS.body),
         )
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
@@ -154,7 +152,7 @@ pub(super) fn push_library_rows<'a>(
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibraryOnly(id));
         let note = match older_instances {
-            0 => signex_widgets::text(signex_widgets::raw("Library: out of date")),
+            0 => signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_OUT_OF_DATE)),
             n => signex_widgets::text(
                 t!(i18n, ids::PROPERTIES_LIBRARY_OLDER_INSTANCES, "count" => n),
             ),
@@ -163,10 +161,7 @@ pub(super) fn push_library_rows<'a>(
             note.size(TS.body).color(muted),
             signex_widgets::tooltip(
                 update,
-                signex_widgets::text(signex_widgets::raw(
-                    "Updates every instance of this part on the sheet"
-                ))
-                .size(TS.body),
+                signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE_TIP)).size(TS.body),
                 iced::widget::tooltip::Position::Bottom,
             ),
         ];

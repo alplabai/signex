@@ -45,6 +45,10 @@ macro_rules! define_ids {
 define_ids! {
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
+    PROPERTIES_LIBRARY_OUT_OF_DATE = "properties-library-out-of-date";
+    PROPERTIES_LIBRARY_SYMBOL_MISSING = "properties-library-symbol-missing";
+    PROPERTIES_LIBRARY_UPDATE = "properties-library-update";
+    PROPERTIES_LIBRARY_UPDATE_TIP = "properties-library-update-tip";
     PROPERTIES_LIBRARY_OLDER_INSTANCES = "properties-library-older-instances";
     PROPERTIES_LIBRARY_ONLY_THIS_ONE = "properties-library-only-this-one";
     PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP = "properties-library-only-this-one-tip";

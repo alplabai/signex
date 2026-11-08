@@ -14,3 +14,16 @@ properties-library-older-instances =
         [one] Library: { $count } instance uses an older version
        *[other] Library: { $count } instances use an older version
     }
+
+# Note beside the Update buttons when the library symbol changed but the sheet
+# cannot say how many instances are behind.
+properties-library-out-of-date = Library: out of date
+
+# Shown when the placed part's library symbol no longer exists in its library.
+properties-library-symbol-missing = Library: symbol missing (sheet keeps its embedded copy)
+
+# Button: replace the part's embedded drawing with the library's current one.
+properties-library-update = Update from library
+
+# Tooltip of the "Update from library" button.
+properties-library-update-tip = Updates every instance of this part on the sheet
