@@ -141,7 +141,9 @@ impl PcbSnapshot {
 }
 
 mod emit;
+mod ratsnest;
 use emit::*;
+pub use ratsnest::ratsnest_inputs;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcbSliceFamily {

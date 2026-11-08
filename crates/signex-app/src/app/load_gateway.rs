@@ -424,10 +424,31 @@ impl Signex {
         Some(canvas)
     }
 
+    /// The active tab's path and board revision: what the ratsnest cache
+    /// is keyed by.
+    fn active_pcb_ratsnest_key(&self) -> Option<super::state::RatsnestKey> {
+        let path = &self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?
+            .path;
+        let revision = *self.document_state.pcb_revisions.get(path)?;
+        Some((path.clone(), revision))
+    }
+
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        let renderer_snapshot = self
-            .active_pcb()
-            .map(signex_renderer::pcb::PcbSnapshot::from_board);
+        // The ratsnest is recomputed only when the board's revision moved.
+        let ratsnest_key = self.active_pcb_ratsnest_key();
+        let board_path = self.active_tab_path().unwrap_or_default();
+        let mut ratsnest = std::mem::take(&mut self.interaction_state.pcb_ratsnest);
+        let renderer_snapshot = self.active_pcb().map(|board| {
+            ratsnest.refresh(ratsnest_key, board);
+            ratsnest.apply(
+                &board_path,
+                signex_renderer::pcb::PcbSnapshot::from_board(board),
+            )
+        });
+        self.interaction_state.pcb_ratsnest = ratsnest;
 
         // An undocked window showing the same tab draws the same board
         // (#494). Its camera stays its own.

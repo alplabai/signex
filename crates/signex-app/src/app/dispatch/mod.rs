@@ -17,6 +17,7 @@ pub(crate) mod library;
 #[cfg(test)]
 mod net_color_tests;
 mod overlay;
+mod pcb;
 pub(in crate::app) use overlay::dismiss_first_run_tour_task;
 #[cfg(test)]
 mod prefs_async_tests;
@@ -115,6 +116,7 @@ impl Signex {
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
             Message::PcbCanvas(msg) => self.dispatch_pcb_canvas_message(msg),
+            Message::Pcb(msg) => self.dispatch_pcb_message(msg),
         }
     }
 

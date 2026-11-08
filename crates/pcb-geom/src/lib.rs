@@ -13,6 +13,7 @@
 mod flip;
 mod index;
 mod mst;
+mod ratsnest;
 mod rect;
 mod selection;
 mod shape;
@@ -23,6 +24,7 @@ mod units;
 pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
+pub use ratsnest::{RatLine, ratsnest};
 pub use rect::RectNm;
 pub use selection::{ClickMode, Selection, marquee_mode, marquee_select, pick};
 pub use shape::Shape;

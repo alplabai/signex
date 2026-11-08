@@ -127,6 +127,9 @@ pub enum Message {
     /// PCB canvas pointer events: hover, click, box select (#2191).
     /// Routed to `dispatch_pcb_canvas_message`.
     PcbCanvas(crate::pcb_canvas::PcbCanvasMsg),
+    /// PCB board-view events, e.g. showing or hiding a net's ratsnest
+    /// (ADR-0001 D3). Routed to `dispatch_pcb_message`.
+    Pcb(PcbMsg),
     /// Export subsystem message family — namespaced (ADR-0001 D3).
     /// PDF / netlist / BOM export lifecycle plus the export-error
     /// modal dismiss. Routed to `dispatch_export_message`.
@@ -159,11 +162,13 @@ impl Message {
 mod dialogs;
 mod messages;
 mod net_nav;
+mod pcb;
 mod state;
 
 pub use dialogs::*;
 pub use messages::*;
 pub use net_nav::NetNavMsg;
+pub use pcb::PcbMsg;
 pub use state::*;
 
 #[cfg(test)]
