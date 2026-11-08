@@ -395,16 +395,6 @@ impl Signex {
     ) {
         // The file is gone: a replace that read it earlier must not bring it back.
         self.document_state.note_document_written_behind_engines();
-        let dead: Vec<_> = self
-            .document_state
-            .engines
-            .keys()
-            .filter(|p| gone(p))
-            .cloned()
-            .collect();
-        for path in &dead {
-            self.forget_net_class_picks_on(path);
-        }
         let doc = &mut self.document_state;
         let discarded = doc
             .dirty_document_paths()

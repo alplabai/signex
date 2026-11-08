@@ -187,6 +187,10 @@ impl Signex {
         let mut history_gone = Vec::new();
         let mut closed = Vec::new();
         for path in sheets {
+            // A pick whose class edit was already undone is no later edit.
+            // Passing it stays even if the group step is then refused: it
+            // only moves that sheet's dead markers.
+            self.pass_dead_class_picks(&path, direction == StepDirection::Undo);
             let Some(engine) = self.document_state.engines.get(&path) else {
                 // A redo owes nothing to a sheet the undo did not revert.
                 if direction == StepDirection::Undo || recorded.undone.contains(&path) {
@@ -216,8 +220,8 @@ impl Signex {
             let names = file_names(&blocked);
             let message = match direction {
                 StepDirection::Undo => format!(
-                    "Cannot undo the project-wide {noun}: {names} was edited after it. \
-                     Undo the newer edit on {names} first."
+                    "Cannot undo the project-wide {noun}: {names} has a later step (an edit or a \
+                     net-class pick). Undo the newer edit on {names} first."
                 ),
                 StepDirection::Redo => format!(
                     "Cannot redo the project-wide {noun}: {names} was edited after the \
@@ -273,7 +277,7 @@ impl Signex {
                     // has nothing to save; redo marks it dirty again.
                     let back_at_disk = direction == StepDirection::Undo
                         && recorded.parked.contains(path)
-                        && !engine.can_undo()
+                        && !engine.has_document_step(true)
                         // A save of the re-prefixed bytes may still be landing;
                         // its `mark_saved` refuses on the revision mismatch, so
                         // clearing the mark now would lose this undo on disk.
@@ -284,7 +288,6 @@ impl Signex {
                         // the file; drop it so the next use re-reads the disk.
                         // Redo is then refused whole (`dropped`).
                         self.document_state.clear_document_dirty(path);
-                        self.forget_net_class_picks_on(path);
                         self.document_state.engines.remove(path);
                         dropped_now.push(path.clone());
                     } else {

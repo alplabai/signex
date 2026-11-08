@@ -466,7 +466,6 @@ impl Signex {
             let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
             self.document_state.insert_engine(parent.clone(), engine);
-            self.forget_net_class_picks_on(parent);
         }
         let Some(engine) = self.document_state.engines.get_mut(parent) else {
             return Err("no engine".to_string());
@@ -480,7 +479,6 @@ impl Signex {
         // An engine loaded only to be edited, left clean and tabless, would
         // own the path for the rest of the session and shadow a later open.
         if loaded_here && !matches!(&result, Ok(done) if done.changed) {
-            self.forget_net_class_picks_on(parent);
             self.document_state.remove_engine(parent);
         }
         let result = result?;
