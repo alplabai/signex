@@ -14,6 +14,7 @@ mod pan_app_tests;
 
 use iced::widget::{Column, Space, column, container, pick_list, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use crate::library::editor::footprint::canvas::PreviewFootprint;
 use signex_library::primitive::PrimitiveRef;
@@ -286,12 +287,12 @@ pub(crate) fn view<'a>(
             pick_list(shown.clone(), choices, |choice: &FootprintChoice| {
                 choice.to_string()
             })
+            .graphite()
             .on_select(|choice: FootprintChoice| {
                 LibraryMessage::ComponentsPanelFootprintPicked(choice.reference)
             })
             .text_size(ROW_TEXT_SIZE)
             .width(Length::Fill)
-            .style(crate::panels::form_look::pick_list_style)
             .boxed(),
         );
     } else if let Some(fp) = &d.footprint {

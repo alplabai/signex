@@ -1,32 +1,25 @@
-//! Components Panel — Stage 9 of `v0.9-snxlib-as-file-plan.md`.
+//! Components Panel: one flat list of every mounted library.
 //!
-//! The panel surfaces every mounted library through three collapsible
-//! sections, classified by mount source:
+//! Each library row carries its expand chevron, its name, a source badge
+//! (STOCK / PROJECT / INSTALLED / GLOBAL) and its component count; expanding
+//! it lists its components. Source chips under the search box (All, then
+//! each source that has a library, with its library count) filter the list.
+//! One "+ Add" button in the header opens a Project / Installed / Global
+//! menu whose items run the existing add-library command per source (maintainer
+//! decision of 2026-11-08, docs/DECISIONS.md).
 //!
-//! 1. **Project** — auto-mounted from the active workspace's
-//!    `Project.libraries` (existing flow, see
-//!    [`crate::library::commands::auto_mount_project_libraries`]).
-//! 2. **Installed** — session-scoped, opened via the "+ Add Library…"
-//!    button on the Installed section header. Wiped on app close.
-//! 3. **Global** — persisted across launches via
-//!    `<config_dir>/signex/global_libraries.toml`. Loaded at startup by
-//!    [`global_prefs::load`] and mounted off the UI thread.
+//! List order is Stock, Project, Installed, Global; inside a source, mount
+//! order. All sources read the same `LibraryState::open_libraries`;
+//! `LibraryState::mount_source_for` classifies each library at view time
+//! (Project wins over a library that is also globally mounted).
 //!
-//! All three sources read from the same `LibraryState::open_libraries`
-//! Vec — `LibraryState::mount_source_for` does the bucketing at view
-//! time. The bucketing avoids double-rendering a library that's both
-//! a project library and globally mounted (Project wins).
-//!
-//! Stage 9 ships scaffold + data model + simple substring filter on
-//! `mpn` / `manufacturer` / `internal_pn` / library name. The rich
-//! search syntax (`mpn:LM317 lifecycle:preferred rated_power_mw>=500`,
-//! plan §5) and the ghost-component drag-to-place are polish work for
-//! a later stage.
+//! Search is a case-insensitive substring filter over `mpn` /
+//! `manufacturer` / `internal_pn` / library name.
 
 use std::path::PathBuf;
 
-use iced::widget::{Column, Space, button, column, container, row, text, text_input};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use iced::widget::{Column, Space, button, column, container, row, text};
+use iced::{Background, Color, Element, Length, Theme, Widget};
 
 use signex_library::ComponentRow;
 use signex_types::theme::ThemeTokens;
@@ -71,38 +64,9 @@ pub(crate) fn view<'a>(
     tokens: &'a ThemeTokens,
     grid: details::symbol_canvas::SheetGrid,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let graphite = crate::styles::is_graphite(tokens);
-    let border_c = if graphite {
-        look::separator(tokens)
-    } else {
-        theme_ext::border_color(tokens)
-    };
-
-    // ── Header: filter input ─────────────────────────────────────
-    let filter_row = if graphite {
-        look::filter_field(&state.components_panel.filter, tokens)
-    } else {
-        let filter = text_input("Filter components…", &state.components_panel.filter)
-            .on_input(LibraryMessage::ComponentsPanelSetFilter)
-            .padding(SP.s)
-            .size(PANEL_TEXT_SIZE);
-        container(filter).padding([SP.s, 6.0]).boxed()
-    };
-
-    // ── Three collapsible source sections ────────────────────────
-    let mut col: Column<Element<'a, LibraryMessage>> =
-        column![].spacing(0).width(Length::Fill).push(filter_row);
-    if !state.id_clash_notices.is_empty() {
-        col = col.push(id_clash_notices(state, tokens));
-    }
-
     // Derive Project library paths from the panel context. Each
     // `ProjectPanelInfo.libraries[].root` is the absolute, resolved
     // `.snxlib` path the loader handed off to the auto-mount step.
-    // Bucket every mounted library up-front so view_section
-    // doesn't have to borrow back into the per-call Vec
-    // `project_paths` (which can't live for the panel's `'a`).
     let project_libs = ProjectLibraries::of(
         &ctx.projects
             .iter()
@@ -114,53 +78,53 @@ pub(crate) fn view<'a>(
         .iter()
         .flat_map(|p| p.libraries.iter().map(|l| l.root.clone()))
         .collect();
-    let mut bucketed: [Vec<&'a OpenLibrary>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
-    for lib in &state.open_libraries {
-        let src = state.mount_source_for(&lib.root, &project_paths);
-        let idx = match src {
-            ComponentsMountSource::Project => 0,
-            ComponentsMountSource::Installed => 1,
-            ComponentsMountSource::Global => 2,
-            ComponentsMountSource::Stock => 3,
-        };
-        bucketed[idx].push(lib);
-    }
-    drop(project_paths);
+    let libraries = listed_libraries(state, &project_paths);
+    let counts = SourceCounts::of(&libraries);
+    let panel = &state.components_panel;
+    let selected = counts.effective(panel.source_filter);
 
-    for (i, src) in ComponentsMountSource::ORDER.iter().enumerate() {
-        col = col.push(view_section(
-            *src,
-            state,
-            &bucketed[i],
-            project_libs,
+    // ── Header: search + "+ Add", its menu, the source chips ─────
+    let mut col: Column<Element<'a, LibraryMessage>> = column![]
+        .spacing(0)
+        .width(Length::Fill)
+        .push(look::header_row(
+            look::filter_field(&panel.filter, tokens),
             tokens,
         ));
-        col = col.push(thin_sep(border_c));
+    if panel.add_menu_open {
+        col = col.push(look::add_menu(tokens));
+    }
+    col = col.push(look::chip_row(source_chips(&counts, selected, tokens)));
+    col = col.push(Space::new().height(6.0).boxed());
+    col = col.push(thin_sep(look::separator(tokens)));
+    if !state.id_clash_notices.is_empty() {
+        col = col.push(id_clash_notices(state, tokens));
     }
 
-    // Empty state — every section is empty AND no libraries mounted
-    const NOTHING_MOUNTED: &str = "No libraries mounted. Use \"+ Add Library…\" or open a project.";
-    if state.open_libraries.is_empty() && graphite {
-        col = col.push(look::empty_line(NOTHING_MOUNTED, tokens));
-    } else if state.open_libraries.is_empty() {
-        col = col.push(
-            container(text(NOTHING_MOUNTED).size(PANEL_TEXT_SIZE).color(muted))
-                .padding([10.0, SP.m])
-                .boxed(),
-        );
+    // ── One flat list: Stock, Project, Installed, Global ─────────
+    let needle = panel.filter.trim().to_lowercase();
+    let mut shown = 0;
+    for (source, lib) in &libraries {
+        if selected.is_some_and(|s| s != *source) {
+            continue;
+        }
+        shown += 1;
+        col = col.push(view_library_block(lib, *source, panel, &needle, tokens));
+    }
+    if shown == 0 {
+        let message = match selected {
+            Some(source) => empty_source_text(source, project_libs),
+            None => NOTHING_MOUNTED,
+        };
+        col = col.push(look::empty_line(message, tokens));
     }
 
     // List (fixed height) | draggable divider | details (the rest).
-    let divider_look: Box<dyn Fn(&Theme) -> container::Style> = if graphite {
-        Box::new(crate::styles::resize_handle_edge(tokens, false))
-    } else {
-        Box::new(crate::styles::resize_handle(tokens))
-    };
     let divider = iced::widget::mouse_area(
         container(Space::new())
             .height(split::HANDLE_HEIGHT)
             .width(Length::Fill)
-            .style(divider_look),
+            .style(crate::styles::resize_handle_edge(tokens, false)),
     )
     .interaction(iced::mouse::Interaction::ResizingVertically)
     .on_press(LibraryMessage::ComponentsPanelSplitDragStarted);
@@ -170,11 +134,11 @@ pub(crate) fn view<'a>(
             crate::panels::panel_scrollable(col.boxed())
                 .style(crate::panels::form_look::scrollbar_style),
         )
-        .height(state.components_panel.list_height)
+        .height(panel.list_height)
         .width(Length::Fill),
         divider,
         container(details::view(
-            &state.components_panel,
+            panel,
             tokens,
             &ctx.canvas_colors,
             grid,
@@ -187,6 +151,104 @@ pub(crate) fn view<'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .boxed()
+}
+
+/// What the list says when nothing is mounted.
+const NOTHING_MOUNTED: &str = "No libraries mounted. Use \"+ Add\" or open a project.";
+
+/// Every mounted library with its source, in list order: Stock, Project,
+/// Installed, Global; within a source, in mount order.
+fn listed_libraries<'a>(
+    state: &'a LibraryState,
+    project_paths: &[PathBuf],
+) -> Vec<(ComponentsMountSource, &'a OpenLibrary)> {
+    let mut listed: Vec<(ComponentsMountSource, &'a OpenLibrary)> = state
+        .open_libraries
+        .iter()
+        .map(|lib| (state.mount_source_for(&lib.root, project_paths), lib))
+        .collect();
+    // Stable: mount order survives inside a source.
+    listed.sort_by_key(|(source, _)| {
+        ComponentsMountSource::ORDER
+            .iter()
+            .position(|s| s == source)
+            .unwrap_or(usize::MAX)
+    });
+    listed
+}
+
+/// Library count per source, for the chips.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SourceCounts {
+    all: usize,
+    per_source: [usize; 4],
+}
+
+impl SourceCounts {
+    fn of(libraries: &[(ComponentsMountSource, &OpenLibrary)]) -> Self {
+        let mut per_source = [0; 4];
+        for (source, _) in libraries {
+            per_source[Self::slot(*source)] += 1;
+        }
+        Self {
+            all: libraries.len(),
+            per_source,
+        }
+    }
+
+    fn slot(source: ComponentsMountSource) -> usize {
+        ComponentsMountSource::ORDER
+            .iter()
+            .position(|s| *s == source)
+            .unwrap_or(0)
+    }
+
+    fn of_source(&self, source: ComponentsMountSource) -> usize {
+        self.per_source[Self::slot(source)]
+    }
+
+    /// The chip choice that applies: a source with no library left falls
+    /// back to All.
+    fn effective(&self, chosen: Option<ComponentsMountSource>) -> Option<ComponentsMountSource> {
+        chosen.filter(|s| self.of_source(*s) > 0)
+    }
+
+    /// Chips to draw: All always, then each source that has a library.
+    fn chips(&self) -> Vec<Option<ComponentsMountSource>> {
+        std::iter::once(None)
+            .chain(
+                ComponentsMountSource::ORDER
+                    .iter()
+                    .copied()
+                    .filter(|s| self.of_source(*s) > 0)
+                    .map(Some),
+            )
+            .collect()
+    }
+}
+
+fn source_chips<'a>(
+    counts: &SourceCounts,
+    selected: Option<ComponentsMountSource>,
+    tokens: &ThemeTokens,
+) -> Vec<Element<'a, LibraryMessage>> {
+    counts
+        .chips()
+        .into_iter()
+        .map(|chip| {
+            let (label, count) = match chip {
+                None => ("All", counts.all),
+                Some(source) => (source.label(), counts.of_source(source)),
+            };
+            look::source_chip(
+                label,
+                count,
+                chip == selected,
+                LibraryMessage::ComponentsPanelSourceFilterChanged(chip),
+                tokens,
+            )
+        })
+        .collect()
 }
 
 /// Non-modal list of libraries refused or closed for sharing a library id
@@ -215,148 +277,6 @@ fn id_clash_notices<'a>(
         .boxed()
 }
 
-/// Render a single mount-source section with its collapsible header,
-/// the `+ Add Library…` action (Installed/Global only), and a
-/// per-library list of components matching the filter.
-fn view_section<'a>(
-    src: ComponentsMountSource,
-    state: &'a LibraryState,
-    libs_for_source: &[&'a OpenLibrary],
-    project_libs: ProjectLibraries,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let hover_c = crate::styles::ti(tokens.hover);
-
-    let collapsed = section_collapsed(state, src);
-
-    let count = libs_for_source.len();
-    let adds_libraries = matches!(
-        src,
-        ComponentsMountSource::Installed | ComponentsMountSource::Global
-    );
-    if crate::styles::is_graphite(tokens) {
-        let header = look::section_header(
-            src.label(),
-            count,
-            collapsed,
-            LibraryMessage::ComponentsPanelToggleSection(src),
-            adds_libraries.then_some(LibraryMessage::ComponentsPanelAddLibrary(src)),
-            tokens,
-        );
-        return section_body(src, state, libs_for_source, project_libs, tokens, header);
-    }
-
-    // ── Section header ───────────────────────────────────────────
-    // Toggle button (chevron + label + count) on the left, optional
-    // "+ Add Library…" button on the right for Installed/Global.
-    let chev = signex_widgets::chevron::chevron(!collapsed, SECTION_HEADER_TEXT_SIZE, text_c);
-    let header_label = format!("{}  ({count})", src.label());
-    let header_btn = button(
-        row![
-            chev,
-            Space::new().width(6),
-            text(header_label)
-                .size(SECTION_HEADER_TEXT_SIZE)
-                .color(text_c),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([6.0, SP.m])
-    .width(Length::Fill)
-    .on_press(LibraryMessage::ComponentsPanelToggleSection(src))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            text_color: text_c,
-            border: Border::default(),
-            ..iced::widget::button::Style::default()
-        }
-    });
-
-    let mut header_row = row![header_btn].spacing(0).align_y(iced::Alignment::Center);
-
-    if adds_libraries {
-        let add_btn = button(text("+ Add Library…").size(ROW_TEXT_SIZE).color(text_c))
-            .padding([SP.xs, SP.m])
-            .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
-            .style(crate::styles::menu_item(tokens));
-        header_row = header_row.push(container(add_btn).padding([0, 6]).boxed());
-    }
-
-    section_body(
-        src,
-        state,
-        libs_for_source,
-        project_libs,
-        tokens,
-        header_row.boxed(),
-    )
-}
-
-/// `header` over the section's libraries (or its empty state) while the
-/// section is expanded.
-fn section_body<'a>(
-    src: ComponentsMountSource,
-    state: &'a LibraryState,
-    libs_for_source: &[&'a OpenLibrary],
-    project_libs: ProjectLibraries,
-    tokens: &'a ThemeTokens,
-    header: Element<'a, LibraryMessage>,
-) -> Element<'a, LibraryMessage> {
-    let graphite = crate::styles::is_graphite(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    let border_c = theme_ext::border_color(tokens);
-    let section_col: Column<Element<'a, LibraryMessage>> = column![header].spacing(0);
-    if section_collapsed(state, src) {
-        return section_col.boxed();
-    }
-    if libs_for_source.is_empty() {
-        let empty_msg = empty_section_text(src, project_libs);
-        let line = if graphite {
-            look::empty_line(empty_msg, tokens)
-        } else {
-            container(text(empty_msg).size(HINT_TEXT_SIZE).color(muted))
-                .padding([6.0, SP.xl])
-                .boxed()
-        };
-        return section_col.push(line).boxed();
-    }
-    let needle = state.components_panel.filter.trim().to_lowercase();
-    let mut section_col = section_col;
-    for lib in libs_for_source.iter().copied() {
-        section_col = section_col.push(view_library_block(
-            lib,
-            &state.components_panel,
-            &needle,
-            tokens,
-        ));
-        // Graphite separates sections only; libraries share their section.
-        if !graphite {
-            section_col = section_col.push(thin_sep(border_c));
-        }
-    }
-    if graphite {
-        section_col = section_col.push(look::section_gap());
-    }
-    section_col.boxed()
-}
-
-/// Whether `src`'s section is collapsed.
-fn section_collapsed(state: &LibraryState, src: ComponentsMountSource) -> bool {
-    let panel = &state.components_panel;
-    match src {
-        ComponentsMountSource::Project => panel.collapsed_project,
-        ComponentsMountSource::Installed => panel.collapsed_installed,
-        ComponentsMountSource::Global => panel.collapsed_global,
-        ComponentsMountSource::Stock => panel.collapsed_stock,
-    }
-}
-
 /// What the workspace says about project libraries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ProjectLibraries {
@@ -380,9 +300,9 @@ impl ProjectLibraries {
     }
 }
 
-/// What an empty section says. The Project section tells apart no project,
+/// What an empty source says. Project tells apart no project,
 /// a project without libraries and a project whose libraries are not mounted.
-fn empty_section_text(src: ComponentsMountSource, project: ProjectLibraries) -> &'static str {
+fn empty_source_text(src: ComponentsMountSource, project: ProjectLibraries) -> &'static str {
     match src {
         ComponentsMountSource::Project => match project {
             ProjectLibraries::NoProject => {
@@ -415,62 +335,35 @@ fn component_row_label(internal_pn: &str, mpn: &str) -> String {
     }
 }
 
-/// Render one mounted library inside its source section: a small
-/// header row with the library name + a row count, then a flat list
-/// of every component matching the panel-wide filter.
+/// Render one mounted library: its chevron row (name, source badge,
+/// component count), then, while expanded, every component matching the
+/// panel-wide filter.
 fn view_library_block<'a>(
     lib: &'a OpenLibrary,
+    source: ComponentsMountSource,
     panel: &'a crate::library::state::ComponentsPanelState,
     needle: &str,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let graphite = crate::styles::is_graphite(tokens);
     let text_c = theme_ext::text_primary(tokens);
-    let muted = if graphite {
-        crate::styles::tokens::resolve(tokens).ink4
-    } else {
-        theme_ext::text_secondary(tokens)
-    };
+    let muted = crate::styles::tokens::resolve(tokens).ink4;
     // Graphite selects with the neutral selected token, not the accent wash.
-    let tint = if graphite {
-        crate::styles::ti(tokens.selection)
-    } else {
-        crate::styles::tokens::selection_tint(tokens)
-    };
+    let tint = crate::styles::ti(tokens.selection);
     let hover = crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Hover);
-    let row_look = if graphite {
-        RowLook::graphite()
-    } else {
-        RowLook::LEGACY
-    };
+    let row_look = RowLook::graphite();
 
+    let collapsed = panel.collapsed_libraries.contains(&lib.root);
     let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(0);
-
-    // Library header — name + (rows) badge.
-    if graphite {
-        col = col.push(look::library_header(
-            lib.display_name.clone(),
-            lib.total_rows(),
-            tokens,
-        ));
-    } else {
-        col = col.push(
-            container(
-                row![
-                    text(lib.display_name.clone())
-                        .size(PANEL_TEXT_SIZE)
-                        .color(text_c)
-                        .width(Length::Fill),
-                    text(format!("({})", lib.total_rows()))
-                        .size(HINT_TEXT_SIZE)
-                        .color(muted),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([SP.s, SP.xl])
-            .boxed(),
-        );
+    col = col.push(look::library_header(
+        lib.root.clone(),
+        lib.display_name.clone(),
+        source,
+        lib.total_rows(),
+        collapsed,
+        tokens,
+    ));
+    if collapsed {
+        return col.boxed();
     }
 
     // Rows come from the cache `update` keeps current (lowercase keys and
@@ -531,30 +424,22 @@ fn view_library_block<'a>(
 /// Height, inset and part-number face of a Components panel row.
 #[derive(Debug, Clone, Copy)]
 struct RowLook {
-    /// `None` sizes the row to its text.
-    height: Option<f32>,
-    /// Left inset (also the right one of a legacy row).
+    height: f32,
+    /// Left inset.
     inset: f32,
-    /// Right inset of a fixed-height row.
+    /// Right inset.
     right: f32,
-    /// Face of the part number; `None` is the UI font.
-    part_font: Option<iced::Font>,
+    /// Face of the part number.
+    part_font: iced::Font,
 }
 
 impl RowLook {
-    const LEGACY: Self = Self {
-        height: None,
-        inset: 28.0,
-        right: 28.0,
-        part_font: None,
-    };
-
     fn graphite() -> Self {
         Self {
-            height: Some(look::ROW_HEIGHT),
+            height: look::ROW_HEIGHT,
             inset: look::ROW_INSET,
             right: look::EDGE,
-            part_font: Some(look::mono()),
+            part_font: look::mono(),
         }
     }
 }
@@ -587,14 +472,12 @@ fn view_row_button<'a>(
     let label_left = component_row_label(row_data.internal_pn.as_str(), &row_data.primary_mpn.mpn);
     let label_right = row_data.primary_mpn.manufacturer.clone();
 
-    let mut part = text(label_left)
+    let part = text(label_left)
         .size(ROW_TEXT_SIZE)
         .color(text_c)
         .width(Length::FillPortion(3))
-        .wrapping(iced::widget::text::Wrapping::None);
-    if let Some(font) = row_look.part_font {
-        part = part.font(font);
-    }
+        .wrapping(iced::widget::text::Wrapping::None)
+        .font(row_look.part_font);
     let content = container(
         row![
             part,
@@ -605,24 +488,16 @@ fn view_row_button<'a>(
                 .wrapping(iced::widget::text::Wrapping::None),
         ]
         .spacing(SP.s)
-        .align_y(if row_look.height.is_some() {
-            iced::Alignment::Center
-        } else {
-            iced::Alignment::Start
-        }),
+        .align_y(iced::Alignment::Center),
     )
-    .width(Length::Fill);
-    let content = match row_look.height {
-        Some(h) => content
-            .padding(iced::Padding {
-                left: row_look.inset,
-                right: row_look.right,
-                ..iced::Padding::ZERO
-            })
-            .height(h)
-            .center_y(h),
-        None => content.padding([SP.xs, row_look.inset]),
-    };
+    .width(Length::Fill)
+    .padding(iced::Padding {
+        left: row_look.inset,
+        right: row_look.right,
+        ..iced::Padding::ZERO
+    })
+    .height(row_look.height)
+    .center_y(row_look.height);
     // A press selects the row and arms a drag onto the schematic; a
     // right-click selects it and opens its menu. A row never opens a tab.
     let content = content.style(move |_: &Theme| container::Style {
@@ -732,6 +607,7 @@ mod tests {
         ) -> Element<'a, LibraryMessage> {
             view_library_block(
                 &state.open_libraries[0],
+                ComponentsMountSource::Stock,
                 &state.components_panel,
                 "",
                 tokens,
@@ -799,6 +675,7 @@ mod tests {
             let build = || {
                 view_library_block(
                     &state.open_libraries[0],
+                    ComponentsMountSource::Stock,
                     &state.components_panel,
                     "",
                     &tokens,
@@ -841,19 +718,15 @@ mod tests {
     }
 
     #[test]
-    fn mount_source_order_is_four_sections() {
-        assert_eq!(ComponentsMountSource::ORDER.len(), 4);
+    fn mount_sources_list_stock_first_then_project_installed_global() {
         assert_eq!(
-            ComponentsMountSource::ORDER[3],
-            ComponentsMountSource::Stock
-        );
-        assert_eq!(
-            ComponentsMountSource::ORDER[0],
-            ComponentsMountSource::Project
-        );
-        assert_eq!(
-            ComponentsMountSource::ORDER[2],
-            ComponentsMountSource::Global
+            ComponentsMountSource::ORDER,
+            &[
+                ComponentsMountSource::Stock,
+                ComponentsMountSource::Project,
+                ComponentsMountSource::Installed,
+                ComponentsMountSource::Global,
+            ]
         );
     }
 
@@ -885,7 +758,7 @@ mod tests {
                     tint: Color::BLACK,
                     hover: Color::BLACK,
                 },
-                RowLook::LEGACY,
+                RowLook::graphite(),
             )
         };
 
@@ -952,7 +825,7 @@ mod tests {
 
     #[test]
     fn the_project_section_tells_its_three_states_apart() {
-        let project = |state| empty_section_text(ComponentsMountSource::Project, state);
+        let project = |state| empty_source_text(ComponentsMountSource::Project, state);
         let none = project(ProjectLibraries::NoProject);
         let empty = project(ProjectLibraries::NoneDeclared);
         let unmounted = project(ProjectLibraries::DeclaredNotMounted);
@@ -984,8 +857,8 @@ mod tests {
             ComponentsMountSource::Stock,
         ] {
             assert_eq!(
-                empty_section_text(src, ProjectLibraries::NoneDeclared),
-                empty_section_text(src, ProjectLibraries::NoProject)
+                empty_source_text(src, ProjectLibraries::NoneDeclared),
+                empty_source_text(src, ProjectLibraries::NoProject)
             );
         }
     }
@@ -995,5 +868,146 @@ mod tests {
         assert_eq!(component_row_label("STOCK-R", ""), "STOCK-R");
         assert_eq!(component_row_label("STOCK-R", "  "), "STOCK-R");
         assert_eq!(component_row_label("R0805", "RC0805"), "R0805 — RC0805");
+    }
+
+    /// A state with a stock, a global and two installed libraries, mounted
+    /// in that scrambled order: global, installed A, stock, installed B.
+    fn four_libraries() -> LibraryState {
+        let mut state = LibraryState::default();
+        for name in ["g", "ia", "s", "ib"] {
+            let mut one = library_with(vec![fixture_row("PN", "", "Mfr")]);
+            let mut lib = one.open_libraries.remove(0);
+            lib.root = PathBuf::from(format!("/tmp/{name}.snxlib"));
+            lib.display_name = name.into();
+            state.open_libraries.push(lib);
+        }
+        state.stock_library_root = Some(PathBuf::from("/tmp/s.snxlib"));
+        state.installed_libraries = vec![
+            PathBuf::from("/tmp/ia.snxlib"),
+            PathBuf::from("/tmp/ib.snxlib"),
+        ];
+        state.global_libraries = vec![global_prefs::GlobalLibraryEntry {
+            path: PathBuf::from("/tmp/g.snxlib"),
+            remote: None,
+            auto_pull: None,
+        }];
+        state
+    }
+
+    fn names(listed: &[(ComponentsMountSource, &OpenLibrary)]) -> Vec<String> {
+        listed.iter().map(|(_, l)| l.display_name.clone()).collect()
+    }
+
+    /// One flat list, Stock first, then Project, Installed, Global; inside a
+    /// source, mount order.
+    #[test]
+    fn the_flat_list_orders_stock_then_project_installed_global() {
+        let state = four_libraries();
+        let listed = listed_libraries(&state, &[]);
+        assert_eq!(names(&listed), ["s", "ia", "ib", "g"]);
+        assert_eq!(listed[0].0, ComponentsMountSource::Stock);
+        assert_eq!(listed[3].0, ComponentsMountSource::Global);
+    }
+
+    /// "All" is always a chip; a source with no library has none.
+    #[test]
+    fn empty_source_chips_are_hidden_and_all_stays() {
+        let state = four_libraries();
+        let counts = SourceCounts::of(&listed_libraries(&state, &[]));
+        assert_eq!(
+            counts.chips(),
+            [
+                None,
+                Some(ComponentsMountSource::Stock),
+                Some(ComponentsMountSource::Installed),
+                Some(ComponentsMountSource::Global),
+            ],
+            "Project has no library, so no chip"
+        );
+        assert_eq!(counts.all, 4);
+        assert_eq!(counts.of_source(ComponentsMountSource::Installed), 2);
+
+        let nothing = SourceCounts::of(&[]);
+        assert_eq!(nothing.chips(), [None], "All shows even with no library");
+    }
+
+    /// A chip filters the list to its source, and a source that lost its
+    /// last library falls back to All instead of showing an empty list.
+    #[test]
+    fn a_source_chip_filters_the_list_and_an_emptied_one_falls_back_to_all() {
+        let state = four_libraries();
+        let listed = listed_libraries(&state, &[]);
+        let counts = SourceCounts::of(&listed);
+        let shown = |chip| {
+            let selected = counts.effective(chip);
+            names(
+                &listed
+                    .iter()
+                    .filter(|(s, _)| selected.is_none_or(|c| c == *s))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+        };
+        assert_eq!(shown(None), ["s", "ia", "ib", "g"]);
+        assert_eq!(shown(Some(ComponentsMountSource::Installed)), ["ia", "ib"]);
+        assert_eq!(shown(Some(ComponentsMountSource::Global)), ["g"]);
+        assert_eq!(
+            shown(Some(ComponentsMountSource::Project)),
+            ["s", "ia", "ib", "g"],
+            "Project has no library: the choice no longer applies"
+        );
+    }
+
+    /// The header "+ Add" menu offers Project, Installed and Global, each
+    /// the existing add-library command for that source.
+    #[test]
+    fn the_add_menu_offers_project_installed_and_global() {
+        assert_eq!(
+            ComponentsMountSource::ADDABLE,
+            &[
+                ComponentsMountSource::Project,
+                ComponentsMountSource::Installed,
+                ComponentsMountSource::Global,
+            ]
+        );
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let texts = crate::layout_probe::lay_out_texts(
+            look::add_menu(&tokens),
+            iced::Size::new(300.0, 300.0),
+        );
+        for source in ComponentsMountSource::ADDABLE {
+            crate::layout_probe::find(&texts, source.label());
+        }
+    }
+
+    /// A collapsed library keeps its row (name, badge, count) and drops its
+    /// components; expanded lists them.
+    #[test]
+    fn a_collapsed_library_hides_its_components_and_keeps_its_row() {
+        let mut state = library_with(vec![fixture_row("PN-A", "", "Mfr")]);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
+        let window = iced::Size::new(400.0, 200.0);
+        let probe = |state: &LibraryState| {
+            crate::layout_probe::lay_out_texts(
+                view_library_block(
+                    &state.open_libraries[0],
+                    ComponentsMountSource::Global,
+                    &state.components_panel,
+                    "",
+                    &tokens,
+                ),
+                window,
+            )
+        };
+        let open = probe(&state);
+        crate::layout_probe::find(&open, "PN-A");
+        crate::layout_probe::find(&open, "GLOBAL");
+
+        let root = state.open_libraries[0].root.clone();
+        state.components_panel.collapsed_libraries.insert(root);
+        let closed = probe(&state);
+        assert!(closed.iter().all(|t| t.text != "PN-A"));
+        crate::layout_probe::find(&closed, "one");
+        crate::layout_probe::find(&closed, "GLOBAL");
     }
 }

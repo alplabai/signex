@@ -146,17 +146,22 @@ zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
 from libraries.
 
-**Libraries.** The Components panel (**View ▸ Components**) lists mounted
-libraries in four sections: **Project**, **Installed**, **Global** and
-**Stock**. The **Stock** section is the library that ships with Signex. It is
-mounted on every launch; you do not add it, and its parts can be placed
-(34 component rows: resistors, capacitors, inductors, diodes, LEDs,
+**Libraries.** The Components panel (**View ▸ Components**) lists every
+mounted library in one list. Each row has an expand chevron, the library name,
+a badge for where it comes from (**STOCK**, **PROJECT**, **INSTALLED** or
+**GLOBAL**) and its component count; expanding it lists its components. The
+list runs Stock first, then Project, Installed and Global. Chips under the
+search box (**All** and each source that has a library, with its library
+count) narrow the list to one source. The **Stock** library ships with
+Signex. It is mounted on every launch; you do not add it, and its parts can be
+placed (34 component rows: resistors, capacitors, inductors, diodes, LEDs,
 transistors, connectors, 74HC logic and more). If the installer's copy cannot
-be found, the section says "Stock library not found. Reinstall Signex to
-restore the bundled parts." The **Installed** and **Global** sections have a
-**+ Add Library…** button, and **File ▸ Library ▸ Open Library…** mounts a
-`.snxlib` library. Type in **Filter components…** to narrow the list. Clicking
-a part row opens its Component Preview tab.
+be found, the list says "Stock library not found. Reinstall Signex to restore
+the bundled parts." when you pick the Stock chip. The **+ Add** button in the
+panel header asks where to add a library (**Project**, **Installed** or
+**Global**), and **File ▸ Library ▸ Open Library…** mounts a `.snxlib`
+library. Type in **Filter components…** to narrow the components. Clicking a
+part row opens its Component Preview tab.
 
 The stock library is read-only. Opening one of its **symbols** or
 **footprints** for editing does not open the original: the first time, a
