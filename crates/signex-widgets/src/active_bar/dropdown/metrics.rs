@@ -9,6 +9,13 @@ use super::{DropdownEntry, DropdownItem};
 /// Family the shortcut column draws in on the Graphite look.
 pub const MONO_FAMILY: &str = "JetBrains Mono";
 
+/// Size of a Graphite menu label: the menu bar roots, dropdown rows,
+/// flyouts and context menus all read this one token.
+pub const MENU_LABEL_SIZE: f32 = 12.0;
+/// Size of a Graphite menu shortcut hint, set in [`MONO_FAMILY`] and muted,
+/// on every menu surface.
+pub const MENU_SHORTCUT_SIZE: f32 = 11.0;
+
 /// Layout numbers of one menu look.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MenuMetrics {
@@ -85,8 +92,8 @@ impl MenuMetrics {
     /// monochrome icon column, a mono shortcut column and a chevron column,
     /// cards fitted between 200 and 320 px.
     pub const GRAPHITE: Self = Self {
-        label_size: 13.0,
-        shortcut_size: 11.5,
+        label_size: MENU_LABEL_SIZE,
+        shortcut_size: MENU_SHORTCUT_SIZE,
         mono_shortcut: true,
         header_size: 11.0,
         check_size: 13.0,
