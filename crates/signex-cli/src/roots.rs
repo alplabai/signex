@@ -37,7 +37,7 @@ mod tests {
         let home = base.join("users").join("me");
         assert_eq!(
             project_root(&project, Some(&home)).unwrap(),
-            [project.clone()]
+            std::slice::from_ref(&project)
         );
         assert_eq!(project_root(&project, None).unwrap(), [project]);
     }
