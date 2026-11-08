@@ -31,6 +31,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
+use signex_types::format::pcb_layer_token;
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 /// Bake every SilkAttr-tagged non-construction entity into an
@@ -61,8 +62,9 @@ pub fn bake_silk(
             PcbLayer::Technical(TechnicalLayer::SilkscreenBottom) => &mut *silk_b,
             other => {
                 warnings.push(format!(
-                    "entity {}: SilkAttr.layer = {:?} is not a silk layer; skipping bake (use TopSilk or BottomSilk)",
-                    entity.id, other
+                    "entity {}: SilkAttr.layer = {} is not a silk layer; skipping bake (use TopSilkscreen or BottomSilkscreen)",
+                    entity.id,
+                    pcb_layer_token(other)
                 ));
                 continue;
             }

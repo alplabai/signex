@@ -85,8 +85,11 @@ impl LocalGitAdapter {
         // `write_lock`). The cascade that follows takes the lock itself.
         let _write_lock = self.lock_for_write()?;
         let mut file = match fs::read(&abs_path) {
-            Ok(existing) => crate::primitive::FootprintFile::from_bytes(&existing)
-                .map_err(|e| LibraryError::Backend(format!("re-read .snxfpt: {e}")))?,
+            Ok(existing) => {
+                crate::primitive::FootprintFile::from_bytes(&existing).map_err(|e| {
+                    LibraryError::Backend(format!("re-read {}: {e}", abs_path.display()))
+                })?
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 crate::primitive::FootprintFile::from_footprint(fp.clone())
             }
