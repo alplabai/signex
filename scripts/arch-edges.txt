@@ -5,6 +5,7 @@ chrome-catalog -> signex-widgets
 pcb-geom -> signex-types
 signex-3d-model-importer -> signex-sketch
 signex-3d-model-importer -> signex-types
+signex-app -> pcb-geom
 signex-app -> signex-bake
 signex-app -> signex-engine
 signex-app -> signex-erc
@@ -37,6 +38,7 @@ signex-library-server -> signex-library
 signex-net -> signex-types
 signex-output -> signex-bom
 signex-output -> signex-types
+signex-renderer -> pcb-geom
 signex-renderer -> signex-3d-model-importer
 signex-renderer -> signex-gfx
 signex-renderer -> signex-types

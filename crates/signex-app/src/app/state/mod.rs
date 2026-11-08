@@ -25,6 +25,7 @@ pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
+mod pcb_ratsnest;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
@@ -52,6 +53,7 @@ pub use error_notice::{ErrorNotice, NoticeAction};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
+pub(crate) use pcb_ratsnest::RatsnestKey;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,

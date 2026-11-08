@@ -124,6 +124,9 @@ pub enum Message {
     /// Parameter Manager dialog family (ADR-0001 D3). Bulk parameter
     /// editor. Routed to `dispatch_parameter_manager_message`.
     ParameterManager(ParameterManagerMsg),
+    /// PCB board-view events, e.g. showing or hiding a net's ratsnest
+    /// (ADR-0001 D3). Routed to `dispatch_pcb_message`.
+    Pcb(PcbMsg),
     /// Export subsystem message family — namespaced (ADR-0001 D3).
     /// PDF / netlist / BOM export lifecycle plus the export-error
     /// modal dismiss. Routed to `dispatch_export_message`.
@@ -156,11 +159,13 @@ impl Message {
 mod dialogs;
 mod messages;
 mod net_nav;
+mod pcb;
 mod state;
 
 pub use dialogs::*;
 pub use messages::*;
 pub use net_nav::NetNavMsg;
+pub use pcb::PcbMsg;
 pub use state::*;
 
 #[cfg(test)]

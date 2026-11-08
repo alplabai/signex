@@ -13,6 +13,7 @@
 mod flip;
 mod index;
 mod mst;
+mod ratsnest;
 mod rect;
 mod shape;
 mod transform;
@@ -22,6 +23,7 @@ mod units;
 pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
+pub use ratsnest::{RatLine, ratsnest};
 pub use rect::RectNm;
 pub use shape::Shape;
 pub use transform::{Placement, Side, pad_shape, pad_world_center};
