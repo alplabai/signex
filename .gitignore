@@ -173,4 +173,4 @@ CLAUDE.md
 .*.signex-writelock
 
 # merge-tool backups (mergiraf solve, git mergetool)
-*.orig
+crates/**/*.orig

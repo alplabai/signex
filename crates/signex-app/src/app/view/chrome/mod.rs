@@ -89,6 +89,7 @@ impl Signex {
                 });
         let palette_input = text_input(
             raw("Search files, symbols, commands…"),
+            // A palette owned by an undocked window types in that window.
             if self.ui_state.command_palette.window.is_none() {
                 self.ui_state.command_palette.query.clone()
             } else {
