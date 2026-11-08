@@ -377,10 +377,8 @@ impl Signex {
                     .tabs
                     .iter()
                     .find(|tab| tab.path == path)
-                    .and_then(|tab| match &tab.cached_document {
-                        Some(crate::app::TabDocument::Pcb(live)) => Some(live.uuid),
-                        None => None,
-                    });
+                    .and_then(|tab| tab.cached_document.as_ref())
+                    .map(|crate::app::TabDocument::Pcb(live)| live.uuid);
                 if let Some(uuid) = live {
                     board.uuid = uuid;
                 }
