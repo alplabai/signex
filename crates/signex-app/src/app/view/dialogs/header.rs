@@ -6,9 +6,7 @@ use iced::widget::{Space, button, container, row, text};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
-use crate::styles::{
-    self, Radii, Spacing, TypeScale, chrome_px, ti, tokens,
-};
+use crate::styles::{self, Radii, Spacing, TypeScale, chrome_px, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;

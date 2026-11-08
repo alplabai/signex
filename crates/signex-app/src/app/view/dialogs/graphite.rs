@@ -7,9 +7,7 @@ use iced::widget::{Row, container, text};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
-use crate::styles::{
-    self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, tokens,
-};
+use crate::styles::{self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;

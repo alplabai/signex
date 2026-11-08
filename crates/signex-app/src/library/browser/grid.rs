@@ -55,9 +55,7 @@ pub(super) fn view_grid<'a>(
     let compact = layout::graphite_columns(columns);
     let columns = compact.as_slice();
     let slots = layout::slots(columns, true);
-    let fit = |s: String, w: f32| {
-        layout::ellipsize(s, w, BROWSER_TEXT_SIZE)
-    };
+    let fit = |s: String, w: f32| layout::ellipsize(s, w, BROWSER_TEXT_SIZE);
     let header_ink = look::header_ink(tokens);
     let header_fill = look::header_fill(tokens);
     let header_row = {

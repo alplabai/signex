@@ -10,8 +10,7 @@
 use std::collections::BTreeMap;
 
 use iced::widget::{
-    Column, Space, button, column, container, mouse_area, row, scrollable, text,
-    text_input,
+    Column, Space, button, column, container, mouse_area, row, scrollable, text, text_input,
 };
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{ComponentRow, LifecycleState, RowId};
