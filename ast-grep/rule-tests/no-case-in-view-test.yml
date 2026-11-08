@@ -11,3 +11,7 @@ invalid:
   - "fn view(s: &str) -> String { s.to_lowercase() }"
   - "fn view(s: &str) -> String { s.to_ascii_uppercase() }"
   - "fn view(s: &str) -> String { s.to_ascii_lowercase() }"
+  - "fn f(s: &str) -> String { s.chars().flat_map(char::to_uppercase).collect() }"
+  - "fn f(s: &[&str]) -> Vec<String> { s.iter().map(|x| str::to_lowercase(x)).collect() }"
+  - "const F: fn(&str) -> String = |s| s.to_uppercase();"
+  - "static NAMES: LazyLock<String> = LazyLock::new(|| \"a\".to_uppercase());"

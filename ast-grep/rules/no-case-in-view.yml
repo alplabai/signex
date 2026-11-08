@@ -1,7 +1,7 @@
 id: no-case-in-view
 language: rust
 severity: error
-message: "No to_uppercase/to_lowercase in view code: case rules depend on the language."
+message: "No to_uppercase/to_lowercase in label or view code: case rules depend on the language."
 note: |
   Upper- and lower-casing is locale-specific (Turkish maps i to İ and I to
   ı), so a hand-cased label is wrong in some UI language. Case display text
@@ -11,6 +11,14 @@ note: |
 files:
   - crates/signex-app/src/**/view/**/*.rs
   - crates/signex-app/src/**/views/**/*.rs
+  - crates/signex-app/src/panels/**/*.rs
+  - crates/signex-app/src/preferences/**/*.rs
+  - crates/signex-app/src/**/*modal*.rs
+  - crates/signex-app/src/library/browser/**/*.rs
+  - crates/signex-app/src/active_bar/**/*.rs
+  - crates/signex-app/src/menu_bar/**/*.rs
+  - crates/signex-widgets/src/**/*.rs
+  - crates/chrome-catalog/src/**/*.rs
 ignores:
   - "**/*_tests.rs"
   - "**/tests.rs"
@@ -22,9 +30,12 @@ rule:
         - pattern: $X.to_lowercase()
         - pattern: $X.to_ascii_uppercase()
         - pattern: $X.to_ascii_lowercase()
-    - inside:
-        stopBy: end
-        kind: function_item
+        - pattern: char::to_uppercase
+        - pattern: char::to_lowercase
+        - pattern: str::to_uppercase
+        - pattern: str::to_lowercase
+        - pattern: str::to_ascii_uppercase
+        - pattern: str::to_ascii_lowercase
     - not:
         inside:
           stopBy: end
