@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
 use crate::pcb_layer::PcbLayer;
 use crate::property::PcbProperty;
+use crate::schematic::InstancePath;
 
 pub use crate::schematic::Point;
 
@@ -104,7 +105,7 @@ pub struct LayerDef {
     pub name: String,
     pub layer_type: String,
     /// User-editable name shown for a mechanical layer; empty when unset.
-    /// Saved in the optional `[stackup] layer_display_names` list.
+    /// Saved in the optional `[stackup.display_names]` table, keyed by layer name.
     #[serde(default)]
     pub display_name: String,
 }
@@ -243,6 +244,16 @@ pub struct FpGraphic {
 // Footprint
 // ---------------------------------------------------------------------------
 
+/// The placed schematic symbol a footprint belongs to: the sheet occurrence it
+/// sits on plus the symbol's UUID. Unlike a designator, neither changes when
+/// the schematic is re-annotated. Saved in the optional `sch_link`
+/// footprint column.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SymbolLink {
+    pub sheet: InstancePath,
+    pub symbol: Uuid,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Footprint {
     pub uuid: Uuid,
@@ -265,6 +276,10 @@ pub struct Footprint {
     pub graphics: Vec<FpGraphic>,
     #[serde(default)]
     pub properties: Vec<PcbProperty>,
+    /// The schematic symbol this footprint is the board side of; `None` for
+    /// a footprint placed by hand or on a board saved before the link.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schematic_link: Option<SymbolLink>,
     /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
     /// this build does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]

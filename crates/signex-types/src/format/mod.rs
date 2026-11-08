@@ -40,6 +40,7 @@ mod pcb_footprints;
 mod pcb_rows;
 mod pcb_uuid_repair;
 mod sch_rows;
+mod stackup;
 mod text_extents_extras;
 mod text_size_repair;
 mod tsv;
@@ -167,8 +168,6 @@ pub enum FormatError {
     },
     #[error("stackup lists {types} layer_types for {layers} layers")]
     LayerTypesExceedLayers { layers: usize, types: usize },
-    #[error("stackup lists {names} layer_display_names for {layers} layers")]
-    LayerDisplayNamesExceedLayers { layers: usize, names: usize },
     #[error("stackup lists {ids} layer_ids for {layers} layers")]
     LayerIdsLengthMismatch { layers: usize, ids: usize },
     #[error("stackup layer_ids repeat id {id}; each layer needs a distinct id")]
@@ -761,25 +760,9 @@ impl SnxPcb {
             #[derive(Serialize)]
             struct StackupWrapper<'a> {
                 #[serde(skip_serializing_if = "Option::is_none")]
-                stackup: Option<StackBlock<'a>>,
+                stackup: Option<stackup::StackBlock<'a>>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 nets: Option<NetsBlock<'a>>,
-            }
-            #[derive(Serialize)]
-            struct StackBlock<'a> {
-                layers: Vec<String>,
-                #[serde(skip_serializing_if = "Vec::is_empty")]
-                layer_types: Vec<String>,
-                /// Parallel to `layers`; omitted when every id equals its index.
-                #[serde(skip_serializing_if = "Vec::is_empty")]
-                layer_ids: Vec<u8>,
-                /// Parallel to `layers`; omitted when every display name is empty.
-                #[serde(skip_serializing_if = "Vec::is_empty")]
-                layer_display_names: Vec<String>,
-                #[serde(skip_serializing_if = "Option::is_none")]
-                setup: Option<&'a crate::pcb::PcbSetup>,
-                #[serde(flatten)]
-                unknown: &'a UnknownFields,
             }
             #[derive(Serialize)]
             struct NetsBlock<'a> {
@@ -787,42 +770,7 @@ impl SnxPcb {
                 #[serde(flatten)]
                 unknown: &'a UnknownFields,
             }
-            let stackup = keep_stackup.then(|| StackBlock {
-                layers: self.board.layers.iter().map(|l| l.name.clone()).collect(),
-                // Parallel to `layers`; omitted when every type is empty.
-                layer_types: if self.board.layers.iter().any(|l| !l.layer_type.is_empty()) {
-                    self.board
-                        .layers
-                        .iter()
-                        .map(|l| l.layer_type.clone())
-                        .collect()
-                } else {
-                    Vec::new()
-                },
-                layer_ids: if self
-                    .board
-                    .layers
-                    .iter()
-                    .enumerate()
-                    .any(|(i, l)| usize::from(l.id) != i)
-                {
-                    self.board.layers.iter().map(|l| l.id).collect()
-                } else {
-                    Vec::new()
-                },
-                layer_display_names: if self.board.layers.iter().any(|l| !l.display_name.is_empty())
-                {
-                    self.board
-                        .layers
-                        .iter()
-                        .map(|l| l.display_name.clone())
-                        .collect()
-                } else {
-                    Vec::new()
-                },
-                setup: self.board.setup.as_ref(),
-                unknown: &self.board.unknown.stackup,
-            });
+            let stackup = keep_stackup.then(|| stackup::block(&self.board));
             let nets = keep_nets.then(|| NetsBlock {
                 entries: &self.board.nets,
                 unknown: &self.board.unknown.nets,
@@ -953,49 +901,7 @@ impl SnxPcb {
 
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
         let (layers, setup, stackup_unknown) = match raw.stackup {
-            Some(s) => {
-                if s.layer_types.len() > s.layers.len() {
-                    return Err(FormatError::LayerTypesExceedLayers {
-                        layers: s.layers.len(),
-                        types: s.layer_types.len(),
-                    });
-                }
-                let n_layers = s.layers.len();
-                // An absent list means positional ids; a present one must
-                // match the layer count and be duplicate-free, or the ids
-                // would be silently dropped on the next save.
-                if s.layer_display_names.len() > n_layers {
-                    return Err(FormatError::LayerDisplayNamesExceedLayers {
-                        layers: n_layers,
-                        names: s.layer_display_names.len(),
-                    });
-                }
-                if !s.layer_ids.is_empty() {
-                    if s.layer_ids.len() != n_layers {
-                        return Err(FormatError::LayerIdsLengthMismatch {
-                            layers: n_layers,
-                            ids: s.layer_ids.len(),
-                        });
-                    }
-                    let mut seen = std::collections::HashSet::new();
-                    if let Some(&id) = s.layer_ids.iter().find(|id| !seen.insert(**id)) {
-                        return Err(FormatError::DuplicateLayerId { id });
-                    }
-                }
-                let layers: Vec<crate::pcb::LayerDef> = s
-                    .layers
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, name)| crate::pcb::LayerDef {
-                        // Validated above: empty means positional.
-                        id: s.layer_ids.get(i).copied().unwrap_or(i as u8),
-                        name,
-                        layer_type: s.layer_types.get(i).cloned().unwrap_or_default(),
-                        display_name: s.layer_display_names.get(i).cloned().unwrap_or_default(),
-                    })
-                    .collect();
-                (layers, s.setup, s.unknown)
-            }
+            Some(s) => stackup::read(s)?,
             None => (Vec::new(), None, UnknownFields::default()),
         };
 
@@ -1065,7 +971,7 @@ struct PcbRaw {
     #[serde(default)]
     thickness: f64,
     #[serde(default)]
-    stackup: Option<StackRaw>,
+    stackup: Option<stackup::StackRaw>,
     #[serde(default)]
     nets: Option<NetsRaw>,
     #[serde(default)]
@@ -1082,26 +988,6 @@ struct PcbRaw {
     extras: Option<PcbExtrasRaw>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
-    #[serde(flatten)]
-    unknown: UnknownFields,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-struct StackRaw {
-    #[serde(default)]
-    layers: Vec<String>,
-    /// Parallel to `layers`; absent in 1.0 files.
-    #[serde(default)]
-    layer_types: Vec<String>,
-    /// Parallel to `layers`; absent when every id equals its index.
-    #[serde(default)]
-    layer_ids: Vec<u8>,
-    /// Parallel to `layers`; absent in files that predate display names.
-    #[serde(default)]
-    layer_display_names: Vec<String>,
-    #[serde(default)]
-    setup: Option<crate::pcb::PcbSetup>,
-    /// Foreign keys inside `[stackup]`.
     #[serde(flatten)]
     unknown: UnknownFields,
 }

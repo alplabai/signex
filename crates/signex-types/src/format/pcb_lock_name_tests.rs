@@ -1,10 +1,12 @@
-//! The optional `net_locked` pad column and the optional
-//! `[stackup] layer_display_names` list: written only when used, so a board
-//! that uses neither re-saves byte-identical and older files load unchanged.
+//! The optional `net_locked` pad column, the optional `sch_link` footprint
+//! column and the optional `[stackup.display_names]` table: written only
+//! when used, so a board that uses none re-saves byte-identical and older
+//! files load unchanged.
 
 use super::tests::empty_board;
 use super::*;
-use crate::pcb::{Footprint, LayerDef, Pad, PadShape, PadType, Point as PcbPoint};
+use crate::pcb::{Footprint, LayerDef, Pad, PadShape, PadType, Point as PcbPoint, SymbolLink};
+use crate::schematic::InstancePath;
 use uuid::Uuid;
 
 fn pad(n: u128, locked: bool) -> Pad {
@@ -43,6 +45,7 @@ fn board_with_pads(locked: &[bool]) -> PcbBoard {
             .collect(),
         graphics: Vec::new(),
         properties: Vec::new(),
+        schematic_link: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     });
@@ -108,7 +111,7 @@ fn mechanical_display_names_round_trip() {
         layer(2, "Mechanical2", ""),
     ];
     let text = SnxPcb::new(board).write_string().unwrap();
-    assert!(text.contains("layer_display_names"), "{text}");
+    assert!(text.contains("[stackup.display_names]"), "{text}");
     let parsed = SnxPcb::parse(&text).unwrap();
     let layers = &parsed.board.layers;
     assert_eq!(layers[1].display_name, "Board outline 2");
@@ -124,7 +127,7 @@ fn layers_without_display_names_write_no_key() {
     let mut board = empty_board();
     board.layers = vec![layer(0, "TopCopper", ""), layer(1, "Mechanical1", "")];
     let text = SnxPcb::new(board).write_string().unwrap();
-    assert!(!text.contains("layer_display_names"), "{text}");
+    assert!(!text.contains("display_names"), "{text}");
     let parsed = SnxPcb::parse(&text).unwrap();
     assert!(
         parsed
@@ -137,17 +140,108 @@ fn layers_without_display_names_write_no_key() {
 }
 
 #[test]
-fn more_display_names_than_layers_is_refused() {
+fn display_names_follow_their_layer_when_the_layer_list_is_reordered() {
     let mut board = empty_board();
-    board.layers = vec![layer(0, "Mechanical1", "A")];
-    let text = SnxPcb::new(board)
-        .write_string()
-        .unwrap()
-        .replace("[\"A\"]", "[\"A\", \"B\"]");
-    assert!(text.contains("\"B\""), "{text}");
-    let err = SnxPcb::parse(&text).unwrap_err();
-    assert!(
-        matches!(err, FormatError::LayerDisplayNamesExceedLayers { .. }),
-        "got {err:?}"
+    board.layers = vec![
+        layer(0, "TopCopper", ""),
+        layer(1, "Mechanical1", "Outline"),
+        layer(2, "Mechanical2", "Fab notes"),
+    ];
+    let text = SnxPcb::new(board).write_string().unwrap();
+    // An older build that dropped Mechanical1 and swapped the rest leaves
+    // the table untouched: names still land on their own layers.
+    let edited = text.replace(
+        "    \"TopCopper\",\n    \"Mechanical1\",\n    \"Mechanical2\",\n",
+        "    \"Mechanical2\",\n    \"TopCopper\",\n",
     );
+    assert_ne!(edited, text, "{text}");
+    let parsed = SnxPcb::parse(&edited).unwrap();
+    let names: Vec<_> = parsed
+        .board
+        .layers
+        .iter()
+        .map(|l| (l.name.as_str(), l.display_name.as_str()))
+        .collect();
+    assert_eq!(names, [("Mechanical2", "Fab notes"), ("TopCopper", "")]);
+}
+
+fn link(symbol: u128, chain: &[u128]) -> SymbolLink {
+    SymbolLink {
+        sheet: InstancePath::from_chain(chain.iter().map(|c| Uuid::from_u128(*c)).collect()),
+        symbol: Uuid::from_u128(symbol),
+    }
+}
+
+fn two_footprints(first: Option<SymbolLink>, second: Option<SymbolLink>) -> PcbBoard {
+    let mut board = board_with_pads(&[false]);
+    let mut other = board.footprints[0].clone();
+    other.uuid = Uuid::from_u128(2);
+    other.reference = "R2".into();
+    other.pads[0].uuid = Uuid::from_u128(0x200);
+    board.footprints[0].schematic_link = first;
+    other.schematic_link = second;
+    board.footprints.push(other);
+    board
+}
+
+#[test]
+fn unlinked_footprints_write_no_sch_link_column() {
+    let text = SnxPcb::new(two_footprints(None, None))
+        .write_string()
+        .unwrap();
+    assert!(!text.contains("sch_link"), "{text}");
+    assert_eq!(SnxPcb::parse(&text).unwrap().write_string().unwrap(), text);
+}
+
+#[test]
+fn a_footprint_link_round_trips_and_its_neighbour_stays_unlinked() {
+    let linked = link(0xa1, &[0xb1, 0xb2]);
+    let text = SnxPcb::new(two_footprints(Some(linked.clone()), None))
+        .write_string()
+        .unwrap();
+    assert!(text.contains("sch_link"), "{text}");
+    let parsed = SnxPcb::parse(&text).unwrap();
+    assert_eq!(parsed.board.footprints[0].schematic_link, Some(linked));
+    assert_eq!(parsed.board.footprints[1].schematic_link, None);
+    assert!(
+        parsed
+            .board
+            .footprints
+            .iter()
+            .all(|f| f.unknown_columns.is_empty()),
+        "the link column is read, not kept as a foreign cell"
+    );
+    assert_eq!(parsed.write_string().unwrap(), text);
+}
+
+#[test]
+fn a_root_sheet_link_and_a_nested_one_both_round_trip() {
+    let board = two_footprints(Some(link(0xa1, &[])), Some(link(0xa2, &[0xb1])));
+    let text = SnxPcb::new(board.clone()).write_string().unwrap();
+    let parsed = SnxPcb::parse(&text).unwrap();
+    assert_eq!(
+        parsed.board.footprints[0].schematic_link,
+        board.footprints[0].schematic_link
+    );
+    assert_eq!(
+        parsed.board.footprints[1].schematic_link,
+        board.footprints[1].schematic_link
+    );
+}
+
+#[test]
+fn an_unreadable_sch_link_cell_stays_a_foreign_cell() {
+    let text = SnxPcb::new(two_footprints(Some(link(0xa1, &[])), None))
+        .write_string()
+        .unwrap();
+    let broken = text.replace("@/", "@not-a-path");
+    assert_ne!(broken, text, "{text}");
+    let parsed = SnxPcb::parse(&broken).unwrap();
+    let fp = &parsed.board.footprints[0];
+    assert_eq!(fp.schematic_link, None);
+    assert_eq!(
+        fp.unknown_columns.get("sch_link"),
+        Some(&*format!("{}@not-a-path", Uuid::from_u128(0xa1)))
+    );
+    assert_eq!(parsed.write_string().unwrap(), broken);
 }

@@ -240,6 +240,7 @@ fn two_pad_part(
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
+        schematic_link: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

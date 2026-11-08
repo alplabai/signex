@@ -32,6 +32,15 @@ pub struct BoardNetEdit {
 }
 
 impl BoardNetEdit {
+    /// An edit that changes nothing: the board's own net table, no pads.
+    pub fn unchanged(board: &PcbBoard) -> Self {
+        BoardNetEdit {
+            nets: board.nets.clone(),
+            pads: Vec::new(),
+            zones: Vec::new(),
+        }
+    }
+
     /// Write the edit into `board` and return the edit that undoes it.
     ///
     /// A change whose footprint, pad or zone is no longer on the board is

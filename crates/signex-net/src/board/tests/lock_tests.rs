@@ -29,7 +29,7 @@ fn a_locked_matching_pad_is_untouched_across_a_renumbering_resync() {
         footprint("R1", &["1", "2"]),
         footprint("R2", &["1", "2"]),
     ]);
-    assign_pad_nets(&before, &pcb, &ReferencePadKey)
+    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_netlist(&before))
         .edit
         .apply(&mut pcb);
     let hand = PadNet {
@@ -41,7 +41,7 @@ fn a_locked_matching_pad_is_untouched_across_a_renumbering_resync() {
     assert!(locked_pad(&pcb, "R1", "2"));
     let mid = pad_net(&pcb, "R2", "1").cloned().expect("mid assigned");
 
-    let again = assign_pad_nets(&after, &pcb, &ReferencePadKey);
+    let again = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_netlist(&after));
     assert!(
         again
             .issues
@@ -84,27 +84,32 @@ fn a_pad_the_schematic_cannot_speak_for_locks_itself_and_the_inverse_unlocks() {
     });
     pcb.footprints[0].pads[2].net = Some(hand.clone()); // off the symbol
     pcb.footprints[0].pads[3].net = Some(hand.clone()); // no key
-    pcb.footprints[2].pads[0].net = Some(hand.clone()); // footprint not in schematic
+    pcb.footprints[2].pads[0].net = Some(hand.clone()); // footprint not in schematic: kept, not locked
     let before = pcb.clone();
 
-    let inverse = assign_pad_nets(&netlist, &pcb, &ReferencePadKey)
+    let inverse = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
         .edit
         .apply(&mut pcb);
     assert!(locked_pad(&pcb, "R1", "SH"));
     assert!(locked_pad(&pcb, "R1", ""));
-    assert!(locked_pad(&pcb, "H1", "1"));
+    assert!(
+        !locked_pad(&pcb, "H1", "1"),
+        "a footprint the schematic lacks is reported, not locked"
+    );
     assert!(!locked_pad(&pcb, "H1", "2"), "no net, nothing to lock");
     assert!(!locked_pad(&pcb, "R1", "1"), "schematic-driven pad");
     assert_eq!(pad_net(&pcb, "R1", "SH"), Some(&hand));
 
-    let second = assign_pad_nets(&netlist, &pcb, &ReferencePadKey);
+    let second = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
     assert!(second.edit.pads.is_empty(), "{:?}", second.edit.pads);
     let locked_issues = second
         .issues
         .iter()
         .filter(|i| matches!(i, PadNetIssue::PadNetLocked { .. }))
         .count();
-    assert_eq!(locked_issues, 3);
+    assert_eq!(locked_issues, 2);
+
+    assert_eq!(pad_net(&pcb, "H1", "1"), Some(&hand), "net kept");
 
     inverse.apply(&mut pcb);
     for fp in &before.footprints {
@@ -162,4 +167,189 @@ fn hand_assigning_a_net_sets_it_locks_the_pad_and_adds_the_net() {
     assert_eq!(pad_net(&pcb, "U1", "1"), None);
     assert!(!locked_pad(&pcb, "U1", "1"));
     assert!(pcb.nets.is_empty());
+}
+
+#[test]
+fn hand_assigning_to_a_missing_pad_changes_nothing_and_adds_no_net() {
+    let mut pcb = board(vec![footprint("U1", &["1"])]);
+    let (fp, pad) = ids(&pcb, "U1", "1");
+    let net = PadNet {
+        number: 5,
+        name: "VBUS".to_string(),
+    };
+    for (footprint, pad) in [(Uuid::now_v7(), pad), (fp, Uuid::now_v7())] {
+        let edit = assign_pad_net(&pcb, footprint, pad, net.clone());
+        assert!(edit.pads.is_empty() && edit.zones.is_empty());
+        let inverse = edit.apply(&mut pcb);
+        assert!(pcb.nets.is_empty(), "no NetDef for a pad that is not there");
+        assert!(inverse.pads.is_empty() && inverse.nets.is_empty());
+    }
+    let lock = set_pad_net_lock(&pcb, Uuid::now_v7(), pad, true);
+    assert!(lock.pads.is_empty() && lock.nets.is_empty());
+}
+
+#[test]
+fn hand_assigning_a_number_the_table_already_names_takes_the_tables_name() {
+    let mut pcb = board(vec![footprint("U1", &["1"])]);
+    pcb.nets.push(NetDef {
+        number: 5,
+        name: "VBUS".to_string(),
+    });
+    let (fp, pad) = ids(&pcb, "U1", "1");
+    let asked = PadNet {
+        number: 5,
+        name: "OTHER".to_string(),
+    };
+    assign_pad_net(&pcb, fp, pad, asked).apply(&mut pcb);
+    assert_eq!(
+        pad_net(&pcb, "U1", "1"),
+        Some(&PadNet {
+            number: 5,
+            name: "VBUS".to_string(),
+        })
+    );
+    assert_eq!(net_rows(&pcb), vec![(5, "VBUS".to_string())]);
+}
+
+#[test]
+fn unlocking_a_pad_keeps_its_net_lets_the_sync_set_it_and_undoes_exactly() {
+    let netlist = build_netlist(&divider_sheet());
+    let mut pcb = board(vec![
+        footprint("R1", &["1", "2"]),
+        footprint("R2", &["1", "2"]),
+    ]);
+    let (fp, pad) = ids(&pcb, "R1", "1");
+    let hand = PadNet {
+        number: 9,
+        name: "HAND".to_string(),
+    };
+    assign_pad_net(&pcb, fp, pad, hand.clone()).apply(&mut pcb);
+    let key = SymbolPadKey::for_netlist(&netlist);
+    assign_pad_nets(&netlist, &pcb, &key).edit.apply(&mut pcb);
+    assert_eq!(
+        pad_net(&pcb, "R1", "1"),
+        Some(&hand),
+        "locked pad untouched"
+    );
+
+    let locked_state = pcb.clone();
+    let unlock = set_pad_net_lock(&pcb, fp, pad, false);
+    let relock = unlock.apply(&mut pcb);
+    assert!(!locked_pad(&pcb, "R1", "1"));
+    assert_eq!(pad_net(&pcb, "R1", "1"), Some(&hand), "net kept");
+
+    let resync = assign_pad_nets(&netlist, &pcb, &key);
+    assert!(
+        !resync
+            .issues
+            .iter()
+            .any(|i| matches!(i, PadNetIssue::PadNetLocked { footprint, pad: p } if *footprint == fp && *p == pad))
+    );
+    let undo_sync = resync.edit.apply(&mut pcb);
+    assert_ne!(
+        pad_net(&pcb, "R1", "1"),
+        Some(&hand),
+        "schematic sets it now"
+    );
+
+    undo_sync.apply(&mut pcb);
+    relock.apply(&mut pcb);
+    assert_eq!(pcb.footprints, locked_state.footprints);
+    assert_eq!(net_rows(&pcb), net_rows(&locked_state));
+}
+
+#[test]
+fn locking_a_pad_by_hand_keeps_its_net_and_the_inverse_unlocks() {
+    let netlist = build_netlist(&divider_sheet());
+    let mut pcb = board(vec![
+        footprint("R1", &["1", "2"]),
+        footprint("R2", &["1", "2"]),
+    ]);
+    assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist))
+        .edit
+        .apply(&mut pcb);
+    let (fp, pad) = ids(&pcb, "R1", "2");
+    let net = pad_net(&pcb, "R1", "2").cloned();
+    let before = pcb.clone();
+    let inverse = set_pad_net_lock(&pcb, fp, pad, true).apply(&mut pcb);
+    assert!(locked_pad(&pcb, "R1", "2"));
+    assert_eq!(pad_net(&pcb, "R1", "2").cloned(), net);
+    inverse.apply(&mut pcb);
+    assert_eq!(pcb.footprints, before.footprints);
+}
+
+#[test]
+fn a_locked_pad_keeps_its_number_but_follows_a_rename_of_it() {
+    let before = Netlist {
+        nets: vec![net(
+            7,
+            "OLD",
+            vec![terminal("R1", "1"), terminal("R2", "1")],
+        )],
+    };
+    let after = Netlist {
+        nets: vec![net(
+            7,
+            "NEW",
+            vec![terminal("R1", "1"), terminal("R2", "1")],
+        )],
+    };
+    let mut pcb = board(vec![footprint("R1", &["1"]), footprint("R2", &["1"])]);
+    assign_pad_nets(&before, &pcb, &SymbolPadKey::for_netlist(&before))
+        .edit
+        .apply(&mut pcb);
+    let (fp, pad) = ids(&pcb, "R1", "1");
+    set_pad_net_lock(&pcb, fp, pad, true).apply(&mut pcb);
+    let old = PadNet {
+        number: 7,
+        name: "OLD".to_string(),
+    };
+    assert_eq!(pad_net(&pcb, "R1", "1"), Some(&old));
+
+    let inverse = assign_pad_nets(&after, &pcb, &SymbolPadKey::for_netlist(&after))
+        .edit
+        .apply(&mut pcb);
+    let new = PadNet {
+        number: 7,
+        name: "NEW".to_string(),
+    };
+    assert_eq!(
+        pad_net(&pcb, "R1", "1"),
+        Some(&new),
+        "same number, new name"
+    );
+    assert!(locked_pad(&pcb, "R1", "1"), "still locked");
+    assert_eq!(pad_net(&pcb, "R2", "1"), Some(&new));
+    assert_eq!(net_rows(&pcb), vec![(7, "NEW".to_string())]);
+
+    inverse.apply(&mut pcb);
+    assert_eq!(pad_net(&pcb, "R1", "1"), Some(&old));
+    assert!(locked_pad(&pcb, "R1", "1"));
+    assert_eq!(pad_net(&pcb, "R2", "1"), Some(&old));
+    assert_eq!(net_rows(&pcb), vec![(7, "OLD".to_string())]);
+}
+
+#[test]
+fn a_locked_pad_still_counts_for_a_designator_shared_by_two_footprints() {
+    let netlist = Netlist {
+        nets: vec![net(3, "SIG", vec![terminal("R1", "1")])],
+    };
+    let mut pcb = board(vec![footprint("R1", &["1"]), footprint("R1", &["1"])]);
+    let (fp, pad) = ids(&pcb, "R1", "1");
+    set_pad_net_lock(&pcb, fp, pad, true).apply(&mut pcb);
+
+    let assignment = assign_pad_nets(&netlist, &pcb, &SymbolPadKey::for_netlist(&netlist));
+    assert!(
+        assignment
+            .issues
+            .iter()
+            .any(|i| matches!(i, PadNetIssue::KeyOnSeveralFootprints { footprints, .. } if footprints.len() == 2)),
+        "{:?}",
+        assignment.issues
+    );
+    assert!(
+        assignment.edit.pads.is_empty(),
+        "neither footprint is assigned: {:?}",
+        assignment.edit.pads
+    );
 }

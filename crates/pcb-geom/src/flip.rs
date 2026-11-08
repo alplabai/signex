@@ -72,6 +72,7 @@ mod tests {
             pads: vec![pad],
             graphics: Vec::new(),
             properties: Vec::new(),
+            schematic_link: None,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         }

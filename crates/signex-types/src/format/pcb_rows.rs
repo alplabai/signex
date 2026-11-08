@@ -15,9 +15,11 @@ use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
 use crate::pcb::{
-    DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, Via, ViaType,
+    DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, SymbolLink,
+    Via, ViaType,
 };
 use crate::pcb_layer::{CopperLayer, InnerCopper, MechanicalLayer, PcbLayer, TechnicalLayer};
+use crate::schematic::InstancePath;
 use uuid::Uuid;
 
 /// Bulk row for one [`Footprint`] in the `[footprints]` block.
@@ -417,6 +419,7 @@ fn split_layers(s: &str) -> Vec<String> {
 pub(in crate::format) fn footprint_to_row(
     fp: &Footprint,
 ) -> Result<PcbFootprintRow, NonFiniteField> {
+    let unknown_columns = with_link_cell(fp.unknown_columns.clone(), fp.schematic_link.as_ref());
     Ok(PcbFootprintRow {
         uuid: fp.uuid,
         ref_des: fp.reference.clone(),
@@ -426,14 +429,15 @@ pub(in crate::format) fn footprint_to_row(
         rotation: fp.rotation,
         layer: fp.layer.clone(),
         value: fp.value.clone(),
-        unknown_columns: fp.unknown_columns.clone(),
+        unknown_columns,
     })
 }
 
 pub(in crate::format) fn row_to_footprint(
-    row: PcbFootprintRow,
+    mut row: PcbFootprintRow,
     extras: FootprintExtras,
 ) -> Footprint {
+    let schematic_link = take_link_cell(&mut row.unknown_columns);
     Footprint {
         uuid: row.uuid,
         reference: row.ref_des,
@@ -453,15 +457,56 @@ pub(in crate::format) fn row_to_footprint(
         pads: Vec::new(),
         graphics: extras.graphics,
         properties: extras.properties,
+        schematic_link,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
     }
 }
 
+/// Header of the optional `sch_link` footprint column: the footprint's
+/// schematic symbol as `<symbol uuid>@<sheet path>`, e.g.
+/// `0190...@/` for a root page or `0190...@/<sheet uuid>` for a child sheet
+/// occurrence. A foreign column like `net_locked`: absent when no footprint
+/// is linked, an empty cell for an unlinked footprint of a block that has
+/// linked ones.
+pub(in crate::format) const SCH_LINK_COLUMN: &str = "sch_link";
+
+fn with_link_cell(mut columns: UnknownColumns, link: Option<&SymbolLink>) -> UnknownColumns {
+    if let Some(link) = link {
+        columns.set(SCH_LINK_COLUMN, format!("{}@{}", link.symbol, link.sheet));
+    }
+    columns
+}
+
+/// An empty cell is "no link"; a cell this build cannot parse is not ours
+/// to read, so it stays a foreign cell and round-trips untouched.
+fn take_link_cell(columns: &mut UnknownColumns) -> Option<SymbolLink> {
+    let cell = columns.get(SCH_LINK_COLUMN)?;
+    if cell.is_empty() {
+        columns.take(SCH_LINK_COLUMN);
+        return None;
+    }
+    let (symbol, sheet) = cell.split_once('@')?;
+    let link = SymbolLink {
+        symbol: Uuid::parse_str(symbol).ok()?,
+        sheet: InstancePath::parse(sheet)?,
+    };
+    // Only a cell that writes back identically is ours.
+    if format!("{}@{}", link.symbol, link.sheet) != cell {
+        return None;
+    }
+    columns.take(SCH_LINK_COLUMN);
+    Some(link)
+}
+
 /// Header of the optional `net_locked` pad column. Like the schematic's
 /// `locked` column it is not a known column: it rides the foreign-column
-/// path, so a board with no locked pad has no such header and re-saves
-/// byte-identical, and a build that predates the lock keeps it.
+/// path. A board with no locked pad has no such header and re-saves
+/// byte-identical, and a build that predates the lock keeps it. When any pad
+/// is locked the header is written after the known columns, in first-seen
+/// order among the block's foreign columns (its position among the known
+/// ones is not kept), and every unlocked pad writes an empty cell. See
+/// `unknown_columns` for the contract.
 pub(in crate::format) const NET_LOCKED_COLUMN: &str = "net_locked";
 
 /// The cell a locked pad writes; every other pad of the block writes empty.

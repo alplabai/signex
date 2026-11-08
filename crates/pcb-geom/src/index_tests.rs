@@ -38,6 +38,7 @@ fn footprint(uuid: Uuid, x: f64, y: f64, rotation: f64, layer: &str, pads: Vec<P
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
+        schematic_link: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

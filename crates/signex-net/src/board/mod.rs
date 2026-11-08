@@ -1,13 +1,20 @@
 //! Schematic netlist → board nets: fills `PcbBoard.nets` and each pad's
 //! `PadNet` from the authoritative [`Netlist`] (ADR-0002 D7.3).
 //!
+//! A pad links to a schematic pin by (sheet path, symbol UUID, pad number),
+//! never by designator ([`SymbolPadKey`]). A footprint with no stored link
+//! is matched by its designator for that sync only and reported
+//! ([`PadNetIssue::FootprintNotLinked`]); see ADR-0005 section 11.
+//!
 //! The schematic is the source of truth for pads it links to, except a pad
-//! whose net is locked: that pad is never changed and is reported. Pads the
-//! schematic cannot speak for (no link key, a footprint it does not have, a
-//! key no symbol pin matches) keep their net and become locked, so the lock
-//! persists; ambiguous pads are left as they are and reported. Existing board net numbers are
-//! kept, so tracks, vias and zones keep their net. Assignment is pure; it
-//! returns a [`BoardNetEdit`] whose `apply` hands back the inverse edit.
+//! whose net is locked: that pad keeps its net number (a rename of that
+//! number follows) and is reported. A pad with no pad number, or one that
+//! matches no pin of its linked symbol, keeps its net and becomes locked, so
+//! the lock persists. A footprint whose link matches nothing in the
+//! schematic is reported and its pads are left as they are, not locked.
+//! Ambiguous pads are left as they are and reported. Existing board net
+//! numbers are kept, so tracks, vias and zones keep their net. Assignment is
+//! pure; it returns a [`BoardNetEdit`] whose `apply` hands back the inverse.
 
 mod assign;
 mod edit;
@@ -16,9 +23,9 @@ mod numbering;
 #[cfg(test)]
 mod tests;
 
-pub use assign::assign_pad_net;
+pub use assign::{assign_pad_net, set_pad_net_lock};
 pub use edit::{BoardNetEdit, PadNetChange, ZoneNetName};
-pub use key::{PadLinkKey, ReferencePad, ReferencePadKey};
+pub use key::{PadIdentity, PadLinkKey, SymbolPad, SymbolPadKey};
 
 use std::collections::{HashMap, HashSet};
 
@@ -45,14 +52,20 @@ pub enum PadNetIssue {
         terminal: Terminal,
         footprints: Vec<Uuid>,
     },
-    /// No pad of this footprint matches a schematic terminal; its pads keep
-    /// their nets.
+    /// No pad of this footprint matches a schematic terminal (its linked
+    /// symbol is not in the schematic); its pads keep their nets and are not
+    /// locked.
     FootprintNotInSchematic { footprint: Uuid },
-    /// The pad has no link key (unnumbered, or its footprint has no
-    /// reference); it keeps its net.
+    /// The footprint has no stored link to a schematic symbol. Sync matched
+    /// it by designator for this run only (boards made before the link, or
+    /// footprints placed by hand).
+    FootprintNotLinked { footprint: Uuid },
+    /// The pad has no pad number (or its footprint nothing to identify it
+    /// by); it keeps its net and locks.
     PadWithoutTerminal { footprint: Uuid, pad: Uuid },
-    /// The pad has a key, but no terminal of the schematic symbol matches it
-    /// (shield, mounting or exposed pad); it keeps its net.
+    /// The footprint is linked to a symbol, but no pin of that symbol has
+    /// the pad's number (shield, mounting or exposed pad); it keeps its net
+    /// and locks.
     PadNotOnSymbol { footprint: Uuid, pad: Uuid },
     /// No pad holds this board net any more, but tracks, vias or zones still
     /// use it; they stay on a net with no pads.
@@ -89,20 +102,20 @@ pub fn assign_pad_nets<K: PadLinkKey>(
     let mut issues = Vec::new();
     let (order, keyed) = key_terminals(netlist, key, &mut issues);
 
+    // Every pad with a key is grouped, locked ones included: a link shared
+    // by several footprints is a collision whether or not a pad is locked.
     let mut pads_of: HashMap<K::Key, Vec<PadRef>> = HashMap::new();
-    let mut locked_keys: HashSet<K::Key> = HashSet::new();
     let mut kept: HashSet<PadRef> = HashSet::new();
     for fp in &board.footprints {
         for pad in &fp.pads {
-            let pad_key = key.pad_key(fp, pad);
             if pad.net_locked {
                 kept.insert((fp.uuid, pad.uuid));
                 issues.push(PadNetIssue::PadNetLocked {
                     footprint: fp.uuid,
                     pad: pad.uuid,
                 });
-                locked_keys.extend(pad_key);
-            } else if let Some(k) = pad_key {
+            }
+            if let Some(k) = key.pad_key(fp, pad) {
                 pads_of.entry(k).or_default().push((fp.uuid, pad.uuid));
             }
         }
@@ -113,9 +126,6 @@ pub fn assign_pad_nets<K: PadLinkKey>(
         let group = &keyed[k];
         let (net, terminal) = group.first;
         let Some(pads) = pads_of.get(k) else {
-            if locked_keys.contains(k) {
-                continue;
-            }
             issues.push(PadNetIssue::TerminalWithoutPad {
                 net,
                 terminal: terminal.clone(),
@@ -134,9 +144,10 @@ pub fn assign_pad_nets<K: PadLinkKey>(
             });
             continue;
         }
+        let open: Vec<PadRef> = pads.iter().copied().filter(|p| !kept.contains(p)).collect();
         if group.nets.len() > 1 {
-            kept.extend(pads.iter().copied());
-            for &(footprint, pad) in pads {
+            kept.extend(open.iter().copied());
+            for &(footprint, pad) in &open {
                 issues.push(PadNetIssue::PadOnSeveralNets {
                     footprint,
                     pad,
@@ -145,7 +156,7 @@ pub fn assign_pad_nets<K: PadLinkKey>(
             }
             continue;
         }
-        for &pad in pads {
+        for pad in open {
             assigned.insert(pad, net);
         }
     }
@@ -180,11 +191,12 @@ pub fn assign_pad_nets<K: PadLinkKey>(
     }
 }
 
-/// Pads the schematic cannot speak for stay as they are, with an issue:
-/// pads with no link key, keyed pads on a linked footprint that match no
-/// terminal, and every pad of a footprint none of whose keys is a terminal.
-/// Returns those pads: the edit locks the ones that hold a net. A pad whose
-/// net is already locked is reported once, by the caller.
+/// Pads the schematic cannot speak for stay as they are, with an issue.
+/// Locked (`unspoken`, returned): pads with no pad number and, on a footprint
+/// that matches the schematic, pads matching no terminal. Only left alone,
+/// not locked: every pad of a footprint none of whose keys is a terminal
+/// (reported once as `FootprintNotInSchematic`). A pad whose net is already
+/// locked is reported once, by the caller.
 fn leave_unlinked_pads<K: PadLinkKey>(
     board: &PcbBoard,
     key: &K,
@@ -197,6 +209,9 @@ fn leave_unlinked_pads<K: PadLinkKey>(
         let keys: Vec<Option<K::Key>> = fp.pads.iter().map(|p| key.pad_key(fp, p)).collect();
         let linked = keys.iter().flatten().any(|k| keyed.contains_key(k));
         let has_key = keys.iter().any(Option::is_some);
+        if key.footprint_unlinked(fp) {
+            issues.push(PadNetIssue::FootprintNotLinked { footprint: fp.uuid });
+        }
         if !linked && has_key {
             issues.push(PadNetIssue::FootprintNotInSchematic { footprint: fp.uuid });
         }
@@ -204,22 +219,25 @@ fn leave_unlinked_pads<K: PadLinkKey>(
             if pad.net_locked {
                 continue;
             }
-            if k.is_none() {
+            let at = (fp.uuid, pad.uuid);
+            let Some(k) = k else {
                 issues.push(PadNetIssue::PadWithoutTerminal {
                     footprint: fp.uuid,
                     pad: pad.uuid,
                 });
-            }
-            let off_symbol = linked && k.as_ref().is_some_and(|k| !keyed.contains_key(k));
-            if off_symbol {
+                kept.insert(at);
+                unspoken.insert(at);
+                continue;
+            };
+            if !linked {
+                kept.insert(at);
+            } else if !keyed.contains_key(k) {
                 issues.push(PadNetIssue::PadNotOnSymbol {
                     footprint: fp.uuid,
                     pad: pad.uuid,
                 });
-            }
-            if !linked || k.is_none() || off_symbol {
-                kept.insert((fp.uuid, pad.uuid));
-                unspoken.insert((fp.uuid, pad.uuid));
+                kept.insert(at);
+                unspoken.insert(at);
             }
         }
     }

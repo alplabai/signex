@@ -164,6 +164,7 @@ mod tests {
             pads: Vec::new(),
             graphics: Vec::new(),
             properties: Vec::new(),
+            schematic_link: None,
             unknown: Default::default(),
             unknown_columns: Default::default(),
         }

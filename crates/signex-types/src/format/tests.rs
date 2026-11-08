@@ -283,6 +283,7 @@ fn show_serialised_pcb_for_inspection() {
         },
     ];
     board.footprints.push(Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
@@ -459,6 +460,7 @@ fn snxpcb_round_trip_with_data() {
     };
 
     let footprint = Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
