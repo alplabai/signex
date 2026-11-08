@@ -20,7 +20,7 @@ disallowed-methods = [
     { path = "iced::widget::text_input", reason = "use signex_widgets::text_input, which takes a Localized, a UserText or raw(\"…\") placeholder (#2056)" },
     { path = "iced::widget::checkbox", reason = "use signex_widgets::checkbox and CheckboxLabel::labelled (#2056)" },
     { path = "iced::widget::tooltip", reason = "use signex_widgets::tooltip, whose tip is a widget built from signex_widgets::text (#2056)" },
-    { path = "iced::widget::Text::new", reason = "use signex_widgets::text (#2056)" },
+    { path = "iced::advanced::widget::text::Text::new", reason = "use signex_widgets::text (#2056)" },
     { path = "iced::widget::Button::new", reason = "use signex_widgets::button (#2056)" },
     { path = "iced::widget::TextInput::new", reason = "use signex_widgets::text_input (#2056)" },
     { path = "iced::widget::Checkbox::new", reason = "use signex_widgets::checkbox (#2056)" },
