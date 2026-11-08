@@ -247,9 +247,6 @@ impl Signex {
             return Task::none();
         }
         self.document_state.document_saves.clear_failure(&path);
-        // The file now holds a new head (a new id after a Save As): the one
-        // read before this write no longer describes it (#2172).
-        self.document_state.document_ids.forget_header(&path);
         self.note_written_baseline(&path, &saved);
         // The real file is now at least as new as any recovery copy of
         // the document it was saved from (or over).
