@@ -231,7 +231,7 @@ impl Session {
         {
             let part = match side.extension().and_then(|e| e.to_str()) {
                 Some("snxprj") => "project file",
-                Some("snxsch") => "parent sheet",
+                Some("snxsch") => "project sheet",
                 _ => "library file",
             };
             self.policy

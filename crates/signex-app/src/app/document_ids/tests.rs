@@ -931,3 +931,56 @@ fn undo_and_redo_keep_a_footprint_files_live_id() {
     assert!(doc.redo());
     assert_eq!(doc.file.file_uuid, uid(10), "redo");
 }
+
+#[test]
+fn a_parked_dirty_sheet_keeps_its_id_against_a_copy_opened_later() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = temp_dir();
+    let (a, b) = (dir.path().join("a.snxsch"), dir.path().join("b.snxsch"));
+    write_sheet_file(&a, uid(SHEET));
+    write_sheet_file(&b, uid(SHEET));
+    let (mut app, _task) = Signex::new();
+    let mut driver = crate::task_driver::TaskDriver::new();
+    let mut open = |app: &mut Signex, path: &std::path::PathBuf| {
+        driver
+            .send(
+                app,
+                crate::app::Message::File(crate::app::FileMsg::Opened(Some(path.clone()))),
+            )
+            .unwrap();
+    };
+    open(&mut app, &a);
+    // An edit makes it dirty, so closing its tab parks the engine.
+    let junction = signex_types::schematic::Junction {
+        uuid: uid(500),
+        ..Default::default()
+    };
+    app.document_state
+        .engines
+        .get_mut(&a)
+        .unwrap()
+        .execute(signex_engine::Command::PlaceJunction { junction })
+        .unwrap();
+    app.document_state.mark_document_dirty(&a);
+    let index = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == a)
+        .unwrap();
+    let _ = app.close_tab_parking_dirty(index);
+    assert!(app.document_state.engines.contains_key(&a), "parked");
+    assert!(app.document_state.tabs.is_empty());
+
+    open(&mut app, &b);
+
+    assert_eq!(app.document_state.engines[&a].document().uuid, uid(SHEET));
+    let copy = app.document_state.engines[&b].document().uuid;
+    assert_ne!(copy, uid(SHEET), "the copy was given a new id");
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("b.snxsch") && e.message.contains("same document id")),
+        "Messages says so"
+    );
+}

@@ -769,10 +769,10 @@ fn a_changed_head_is_read_again_by_the_next_listing() {
 }
 
 /// A Save As may rewrite the project's other sheets that reference the one
-/// saved, so one of them that is a link out refuses it, named as a parent.
+/// saved, so a project sheet that is a link out refuses it, and is named.
 #[cfg(unix)]
 #[test]
-fn a_save_as_by_id_names_a_parent_sheet_that_is_a_link_out() {
+fn a_save_as_by_id_names_a_project_sheet_that_is_a_link_out() {
     let (_guard, root) = temp_root();
     let fx = fixture(&root);
     let (_other_guard, other) = temp_root();
@@ -809,7 +809,7 @@ fn a_save_as_by_id_names_a_parent_sheet_that_is_a_link_out() {
     assert!(
         saved["reason"]
             .as_str()
-            .is_some_and(|r| r.contains("also writes the parent sheet")),
+            .is_some_and(|r| r.contains("also writes the project sheet")),
         "{saved}"
     );
     assert!(!copy.exists());
