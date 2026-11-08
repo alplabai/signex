@@ -67,10 +67,10 @@ new document's `{id, path, kind}`.
 | `changed` | documents whose content or unsaved state differs after the command |
 
 `open_document` and `new_document` take a `path` (a new project's `.snxprj`)
-and do what the menu entry does after its dialog; a new project never replaces
-one, so its `overwrite` is accepted and ignored. A new project over an existing
-one is `failed` (the check runs on the worker), not `refused`. `save_document_as` takes `document`, `path` and
-`overwrite`: an existing target without `overwrite: true` is `refused`. An open
+and do what the menu entry does after its dialog. A `new_document` whose path
+already exists is `refused` without `overwrite: true`. `save_document_as` takes
+`document`, `path` and `overwrite`: an existing target without
+`overwrite: true` is `refused`. An open
 or new that makes nothing, with an error notice, is `failed` with that notice.
 A command with no operand that opens a dialog is `refused`, never `ran`, when
 the dialog cannot be answered.

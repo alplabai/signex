@@ -9,6 +9,7 @@ use iced::Task;
 
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::{Message, Signex};
+use crate::io_ports::replace_refusal;
 
 type Ran = (CommandOutcome, Task<Message>);
 
@@ -42,5 +43,12 @@ pub(super) fn new_project(app: &mut Signex, args: &CommandArgs) -> Ran {
         Ok(path) => path,
         Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
     };
+    // The headless dialog's rule: an existing file at the target is replaced
+    // only with `overwrite=true`; this is the refusal, before anything runs.
+    let may_replace = matches!(args.operand("overwrite"), Some(OperandValue::Bool(true)));
+    if let Some(reason) = replace_refusal(&path, may_replace) {
+        crate::diagnostics::log_warning(format!("New project refused: {reason}"));
+        return outcome(Err(reason));
+    }
     outcome(app.start_new_project(path))
 }

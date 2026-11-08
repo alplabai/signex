@@ -71,6 +71,18 @@ impl HeadlessAnswers {
     }
 }
 
+/// Why a save to `path` is refused without `overwrite=true`: the file is
+/// there. `symlink_metadata`, not `exists`: a dangling link is still replaced.
+/// The headless dialog and `new_document path=..` apply this one check.
+pub(crate) fn replace_refusal(path: &Path, may_replace: bool) -> Option<String> {
+    (std::fs::symlink_metadata(path).is_ok() && !may_replace).then(|| {
+        format!(
+            "{} exists; give `{OVERWRITE_ARG}=true` to replace it",
+            path.display()
+        )
+    })
+}
+
 impl Picker {
     /// A dialog with no title, filter, folder or name yet.
     pub fn dialog(&self) -> FileDialog {
@@ -163,11 +175,8 @@ impl FileDialog {
         let may_replace = taken.remove(OVERWRITE_ARG).as_deref() == Some("true");
         let path = self.headless_path(&mut taken)?;
         // `symlink_metadata`, not `exists`: a dangling link is still replaced.
-        if std::fs::symlink_metadata(&path).is_ok() && !may_replace {
-            return self.refuse(&format!(
-                "{} exists; give `{OVERWRITE_ARG}=true` to replace it",
-                path.display()
-            ));
+        if let Some(advice) = replace_refusal(&path, may_replace) {
+            return self.refuse(&advice);
         }
         Some(path)
     }

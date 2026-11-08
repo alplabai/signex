@@ -131,8 +131,7 @@ pub const POWER: &[Operand] = &[
 ];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
-/// A save dialog's answer; `overwrite` lets it replace an existing file. A new
-/// project accepts it and ignores it: an existing project is always refused.
+/// A save dialog's answer; `overwrite` lets it replace an existing file.
 pub const SAVE_PATH: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("overwrite", OperandKind::Bool),

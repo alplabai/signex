@@ -60,8 +60,10 @@ impl Signex {
     }
 
     /// Create the project at `path` as the New Project dialog's answer does.
-    /// A refusal known at once is logged, raised as the notice and returned;
-    /// one the worker finds comes back through `handle_new_project_written`.
+    /// A path that is not a project file is logged, raised as the notice and
+    /// returned. A second create for a path still being written is returned
+    /// only; one the worker refuses comes back through
+    /// `handle_new_project_written`.
     pub(crate) fn start_new_project(
         &mut self,
         path: PathBuf,

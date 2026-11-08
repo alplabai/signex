@@ -431,17 +431,17 @@ fn a_new_project_into_a_folder_that_is_a_link_to_outside_is_refused() {
     );
 }
 
-/// A new project over an existing one is refused by the app's worker, so the
-/// run reports it as `failed` with the app's reason, whatever `overwrite` says,
-/// and the first project is left as it was.
+/// `new_document` at a path that exists is `refused` unless `overwrite=true`
+/// (the headless dialog's rule), for a project file and a loose one alike; with
+/// `overwrite=true` the app's own refusal of an existing project is `failed`.
 #[test]
-fn a_new_project_over_an_existing_one_fails_and_leaves_it_alone() {
+fn a_new_project_where_a_file_exists_is_refused_without_overwrite() {
     let (_guard, root) = temp_root();
     let fx = fixture(&root);
     let (_allowed_guard, allowed) = temp_root();
-    let project = allowed.join("p.snxprj");
-    let new =
-        |extra: Value| json!({"id": "new_document", "args": {"path": project, "overwrite": extra}});
+    std::fs::write(allowed.join("Board.snxprj"), "loose").unwrap();
+    let made = allowed.join("p/p.snxprj");
+    let new = |path: &std::path::Path, overwrite: bool| json!({"id": "new_document", "args": {"path": path, "overwrite": overwrite}});
 
     let out = run_cli(
         &[
@@ -452,20 +452,26 @@ fn a_new_project_over_an_existing_one_fails_and_leaves_it_alone() {
             "--allow-path",
             allowed.to_str().unwrap(),
         ],
-        jsonl(&[new(json!(false)), new(json!(true))]),
+        jsonl(&[
+            new(&allowed.join("p.snxprj"), false),
+            new(&made, false),
+            new(&made, true),
+            new(&allowed.join("Board.snxprj"), false),
+        ]),
     );
 
     assert_eq!(out.lines[0]["status"], "answered", "{}", out.stdout);
-    assert_eq!(out.lines[1]["status"], "failed", "{}", out.stdout);
-    assert!(
-        out.lines[1]["reason"]
-            .as_str()
-            .unwrap()
-            .contains("already exists"),
-        "{}",
-        out.stdout
+    for index in [1, 3] {
+        assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
+        assert!(refusal(&out, index).contains("exists; give `overwrite=true`"));
+    }
+    assert_eq!(out.lines[2]["status"], "failed", "{}", out.stdout);
+    assert_eq!(
+        std::fs::read_to_string(allowed.join("Board.snxprj")).unwrap(),
+        "loose",
+        "the loose file is untouched"
     );
-    assert!(allowed.join("p/p.snxprj").is_file());
+    assert!(made.is_file());
 }
 
 fn sheet_id(path: &std::path::Path) -> String {
