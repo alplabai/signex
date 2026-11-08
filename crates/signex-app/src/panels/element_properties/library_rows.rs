@@ -89,7 +89,7 @@ pub(super) fn push_footprint_row<'a>(
 
 /// How the sheet's embedded copy compares with the library (#912, #1845).
 #[derive(Clone, Copy)]
-pub(super) struct LibraryStatus {
+pub(super) struct LibraryStatus<'a> {
     pub(super) drifted: bool,
     /// Placed instances of the part on the sheet that draw with an older
     /// version of the library symbol (0: unknown or none).
@@ -98,6 +98,8 @@ pub(super) struct LibraryStatus {
     /// "Only this one" has nothing to do for it.
     pub(super) this_one_current: bool,
     pub(super) missing: bool,
+    /// The UI language's catalog, for the labels these rows render.
+    pub(super) i18n: &'a signex_i18n::I18n,
 }
 
 /// Append the readable `Library` row and, when the sheet's embedded copy
@@ -108,8 +110,7 @@ pub(super) fn push_library_rows<'a>(
     mut c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     library_name: &str,
-    status: LibraryStatus,
-    i18n: &signex_i18n::I18n,
+    status: LibraryStatus<'_>,
     muted: Color,
     input_bg: Color,
     input_bdr: Color,
@@ -129,6 +130,7 @@ pub(super) fn push_library_rows<'a>(
         older_instances,
         this_one_current,
         missing,
+        i18n,
     } = status;
     if missing {
         c = c.push(
