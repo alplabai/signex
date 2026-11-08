@@ -14,6 +14,17 @@ pub fn selection_bounds(
         .reduce(|a, b| a.union(&b))
 }
 
+/// The box of each `selected` item, aligned with `selected`; `None` for an
+/// item the sheet no longer holds.
+pub fn selection_boxes(
+    snapshot: &SchematicRenderSnapshot,
+    selected: &[SelectedItem],
+    designators: &Designators,
+    widths: WireWidths<'_>,
+) -> Vec<Option<Aabb>> {
+    selected_aabbs(snapshot, selected, designators, widths)
+}
+
 /// Selection halo sizes in screen px (Graphite): box padding, corner radius
 /// and outline width.
 const HALO_PAD_PX: f32 = 6.0;
@@ -32,13 +43,24 @@ pub(super) fn selection_overlay_inputs(
     designators: &Designators,
     widths: WireWidths<'_>,
 ) -> OverlayInputs {
+    let boxes: Vec<Aabb> = selected_aabbs(snapshot, selected, designators, widths)
+        .into_iter()
+        .flatten()
+        .collect();
+    overlay_inputs_for_boxes(&boxes, transform, colors, graphite)
+}
+
+/// [`selection_overlay_inputs`] for boxes already found.
+pub(crate) fn overlay_inputs_for_boxes(
+    boxes: &[Aabb],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: Option<&crate::canvas::GraphiteCanvasInk>,
+) -> OverlayInputs {
     let stroke = to_iced(&colors.selection);
     let mut overlays = OverlayInputs::default();
 
-    for bbox in selected_aabbs(snapshot, selected, designators, widths)
-        .into_iter()
-        .flatten()
-    {
+    for bbox in boxes.iter().copied() {
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
         let max = transform.world_to_screen((bbox.max_x, bbox.max_y));
         let size = iced::Size::new((max.x - min.x).abs(), (max.y - min.y).abs());
@@ -120,6 +142,27 @@ pub fn draw_selection_overlay(
         designators,
         widths,
     );
+    draw_overlay_inputs(frame, overlays, transform, colors);
+}
+
+/// Draw the selection overlay of `boxes`.
+pub fn draw_selection_boxes(
+    frame: &mut canvas::Frame,
+    boxes: &[Aabb],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: Option<&crate::canvas::GraphiteCanvasInk>,
+) {
+    let overlays = overlay_inputs_for_boxes(boxes, transform, colors, graphite);
+    draw_overlay_inputs(frame, overlays, transform, colors);
+}
+
+fn draw_overlay_inputs(
+    frame: &mut canvas::Frame,
+    overlays: OverlayInputs,
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+) {
     if overlays.preview_lines.is_empty()
         && overlays.halos.is_empty()
         && overlays.ghost_polygons.is_empty()

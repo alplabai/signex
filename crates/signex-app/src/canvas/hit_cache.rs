@@ -7,18 +7,50 @@ use signex_types::schematic::{SchematicDefaults, SelectedItem};
 
 use super::CanvasSlot;
 
-/// Everything the index was built from. `revision` stands for the snapshot
-/// (an edit, undo or redo moves it) and `class_revision` for the net-class
-/// styles the wire widths read.
-struct HitKey {
+/// Everything an item box of the active sheet is computed from. `revision`
+/// stands for the snapshot (an edit, undo or redo moves it) and
+/// `class_revision` for the net-class styles the wire widths read.
+#[derive(Clone, PartialEq)]
+pub(super) struct SheetKey {
     revision: u64,
     class_revision: u64,
     defaults: SchematicDefaults,
     designators: Designators,
 }
 
+impl SheetKey {
+    pub(super) fn new(
+        revision: u64,
+        class_revision: u64,
+        defaults: SchematicDefaults,
+        designators: &Designators,
+    ) -> Self {
+        Self {
+            revision,
+            class_revision,
+            defaults,
+            designators: designators.clone(),
+        }
+    }
+
+    /// Whether this is the key of `new` with the same arguments, without
+    /// building one.
+    pub(super) fn matches(
+        &self,
+        revision: u64,
+        class_revision: u64,
+        defaults: &SchematicDefaults,
+        designators: &Designators,
+    ) -> bool {
+        self.revision == revision
+            && self.class_revision == class_revision
+            && self.defaults == *defaults
+            && self.designators == *designators
+    }
+}
+
 pub(super) struct HitCache {
-    key: HitKey,
+    key: SheetKey,
     index: HitIndex,
 }
 
@@ -47,19 +79,16 @@ impl CanvasSlot {
         }
         let mut slot = self.hit_cache.borrow_mut();
         let fresh = slot.as_ref().is_some_and(|c| {
-            c.key.revision == revision
-                && c.key.class_revision == class_revision
-                && c.key.defaults == widths.defaults
-                && c.key.designators == self.designators
+            c.key.matches(
+                revision,
+                class_revision,
+                &widths.defaults,
+                &self.designators,
+            )
         });
         if !fresh {
             *slot = Some(HitCache {
-                key: HitKey {
-                    revision,
-                    class_revision,
-                    defaults: widths.defaults,
-                    designators: self.designators.clone(),
-                },
+                key: SheetKey::new(revision, class_revision, widths.defaults, &self.designators),
                 index: HitIndex::build(snapshot, &self.designators, widths),
             });
         }
