@@ -7,7 +7,7 @@ use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget 
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{
-    self, MODAL_CORNER_RADIUS, Radii, Spacing, TypeScale, chrome_px, is_graphite, ti, tokens,
+    self, Radii, Spacing, TypeScale, chrome_px, ti, tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -18,14 +18,9 @@ pub(crate) const DIALOG_HEADER_H: f32 = chrome_px(44.0 * 11.0 / 12.0);
 /// Header height of the Preferences dialog (52 px at the default base).
 pub(crate) const PREFERENCES_HEADER_H: f32 = chrome_px(52.0 * 11.0 / 12.0);
 
-/// The one modal scrim: the theme's scrim token on Graphite, black at
-/// [`tokens::BACKDROP_ALPHA`] on every other theme.
+/// The one modal scrim: the theme's scrim token.
 pub(crate) fn dialog_scrim(theme_tokens: &ThemeTokens) -> Color {
-    if is_graphite(theme_tokens) {
-        tokens::resolve(theme_tokens).scrim
-    } else {
-        tokens::scrim(tokens::BACKDROP_ALPHA)
-    }
+    tokens::resolve(theme_tokens).scrim
 }
 
 /// Container style of a full-window scrim.
@@ -40,12 +35,8 @@ pub(crate) fn scrim_style(
 }
 
 /// Outer corner radius of a dialog card.
-pub(crate) fn dialog_corner(theme_tokens: &ThemeTokens) -> f32 {
-    if is_graphite(theme_tokens) {
-        Radii::GRAPHITE.dialog
-    } else {
-        MODAL_CORNER_RADIUS
-    }
+pub(crate) fn dialog_corner(_theme_tokens: &ThemeTokens) -> f32 {
+    Radii::GRAPHITE.dialog
 }
 
 /// Neutral close button: a quiet 28 px square with a cross, ghost hover.

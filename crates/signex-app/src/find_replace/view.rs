@@ -42,25 +42,9 @@ fn build<'a>(
         "Find"
     };
 
-    // Graphite: the shared dialog header (title, neutral close).
-    let header: Element<'a, FindReplaceMsg> = if crate::styles::is_graphite(tokens) {
-        crate::app::view::dialogs::modal_title_header(title, FindReplaceMsg::Close, tokens)
-    } else {
-        container(
-            row![
-                text(title).size(TS.heading).color(text_primary),
-                Space::new().width(Length::Fill),
-                button(text("Close").size(TS.body).color(text_secondary))
-                    .on_press(FindReplaceMsg::Close)
-                    .style(crate::styles::menu_item(tokens)),
-            ]
-            .align_y(iced::Alignment::Center)
-            .spacing(SP.m),
-        )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
-        .boxed()
-    };
+    // The shared dialog header (title, neutral close).
+    let header: Element<'a, FindReplaceMsg> =
+        crate::app::view::dialogs::modal_title_header(title, FindReplaceMsg::Close, tokens);
 
     let query_row = row![
         text("Find").size(TS.body).color(text_secondary).width(80),
@@ -262,14 +246,7 @@ fn build<'a>(
         .width(dialog_w)
         .height(dialog_h),
     )
-    .style({
-        let card: Box<dyn Fn(&Theme) -> container::Style> = if crate::styles::is_graphite(tokens) {
-            Box::new(crate::styles::modal_card(tokens))
-        } else {
-            Box::new(crate::styles::context_menu(tokens))
-        };
-        move |theme: &Theme| card(theme)
-    });
+    .style(crate::styles::modal_card(tokens));
     if windowed {
         return dialog.boxed();
     }

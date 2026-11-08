@@ -4,7 +4,7 @@
 //! visible `ComponentRow`, with the per-row lifecycle dot + tint.
 //! Extracted verbatim from the former single-file `browser` module.
 
-use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
+use super::columns::{ColumnKind, GridColumn};
 use super::keyed::keyed;
 use super::layout::{self, Slot};
 use super::look;
@@ -51,17 +51,12 @@ pub(super) fn view_grid<'a>(
     // Hoisted owned path — see comment in `view_table_sidebar`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
-    let graphite = crate::styles::is_graphite(tokens);
     // One slot list drives header and rows, so widths and order agree.
-    let compact = graphite.then(|| layout::graphite_columns(columns));
-    let columns = compact.as_deref().unwrap_or(columns);
-    let slots = layout::slots(columns, graphite);
+    let compact = layout::graphite_columns(columns);
+    let columns = compact.as_slice();
+    let slots = layout::slots(columns, true);
     let fit = |s: String, w: f32| {
-        if graphite {
-            layout::ellipsize(s, w, BROWSER_TEXT_SIZE)
-        } else {
-            s
-        }
+        layout::ellipsize(s, w, BROWSER_TEXT_SIZE)
     };
     let header_ink = look::header_ink(tokens);
     let header_fill = look::header_fill(tokens);
@@ -135,7 +130,7 @@ pub(super) fn view_grid<'a>(
         r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)).boxed());
         container(r)
             .padding([SP.xs, SP.s])
-            .height(Length::Fixed(look::header_height(tokens)))
+            .height(Length::Fixed(look::header_height()))
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(header_fill)),
                 border: Border {
@@ -193,11 +188,7 @@ pub(super) fn view_grid<'a>(
 
             // Lifecycle indicator dot — Stage 18. Sits in the
             // 16-px gutter mirrored on the header row.
-            let dot_color = if graphite {
-                crate::styles::pill_colors(tokens, look::lifecycle_tone(r.state)).1
-            } else {
-                lifecycle_dot_color(r.state)
-            };
+            let dot_color = crate::styles::pill_colors(tokens, look::lifecycle_tone(r.state)).1;
             let lifecycle_dot = container(Space::new())
                 .width(Length::Fixed(LIFECYCLE_DOT_SIZE))
                 .height(Length::Fixed(LIFECYCLE_DOT_SIZE))
@@ -266,13 +257,7 @@ pub(super) fn view_grid<'a>(
                     } else {
                         row_value.clone()
                     };
-                    let color = if r.released && !graphite {
-                        // Released rows lock-icon-amber so the gate
-                        // stands out at a glance.
-                        iced::Color::from_rgb(0.96, 0.78, 0.10)
-                    } else {
-                        theme_ext::text_secondary(tokens)
-                    };
+                    let color = theme_ext::text_secondary(tokens);
                     data_row = data_row.push(
                         container(
                             text(fit(label, c.width))
@@ -396,7 +381,7 @@ pub(super) fn view_grid<'a>(
                         container(
                             text(fit(row_value, c.width))
                                 .size(BROWSER_TEXT_SIZE)
-                                .font(look::cell_font(&c.kind, tokens))
+                                .font(look::cell_font(&c.kind))
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
@@ -470,13 +455,9 @@ pub(super) fn view_grid<'a>(
                         column: column_for_submit,
                     })
                     .padding([SP.xs, 6.0])
-                    .font(look::cell_font(&c.kind, tokens))
+                    .font(look::cell_font(&c.kind))
                     .size(BROWSER_TEXT_SIZE);
-                let input = if graphite {
-                    input.style(look::plain_cell_input(tokens))
-                } else {
-                    input
-                };
+                let input = input.style(look::plain_cell_input(tokens));
                 data_row = data_row.push(
                     container(input)
                         .padding([SP.xs, SP.xs])

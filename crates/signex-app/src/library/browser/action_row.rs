@@ -36,38 +36,9 @@ pub(super) fn view_action_row<'a>(
     let border = theme_ext::border_color(tokens);
     let control_bg = super::look::control_fill(tokens);
     let inert_bg = super::look::inert_fill(tokens);
-    let radius = super::look::control_radius(tokens);
-    let graphite = crate::styles::is_graphite(tokens);
+    let radius = super::look::control_radius();
     // Hoisted owned path — see comment in `view_table_sidebar`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
-
-    let library_for_add = lib_pb.clone();
-    let table_for_add = Some(table.to_string());
-    let add_btn = button(
-        text("Add Component")
-            .size(BROWSER_HEADER_SIZE)
-            .color(iced::Color::WHITE),
-    )
-    .padding([SP.xs, SP.m])
-    .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
-        library_path: library_for_add,
-        table: table_for_add,
-    }))
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(if read_only {
-            iced::Color::from_rgb(0.35, 0.35, 0.38)
-        } else {
-            iced::Color::from_rgb(0.00, 0.47, 0.84)
-        })),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            color: iced::Color::TRANSPARENT,
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
 
     // Edit Details opens the full-row Edit Component Details modal for
     // the selected row. Cells in the grid are text inputs that capture
@@ -155,20 +126,10 @@ pub(super) fn view_action_row<'a>(
         .boxed()
     };
 
-    // Graphite: Add Component is the header's primary button.
-    let mut actions = if graphite {
-        row![edit_btn, Space::new().width(SP.s), delete_btn]
-    } else {
-        row![
-            add_btn,
-            Space::new().width(SP.s),
-            edit_btn,
-            Space::new().width(SP.s),
-            delete_btn
-        ]
-    }
-    .spacing(0)
-    .align_y(iced::Alignment::Center);
+    // Add Component is the header's primary button.
+    let mut actions = row![edit_btn, Space::new().width(SP.s), delete_btn]
+        .spacing(0)
+        .align_y(iced::Alignment::Center);
     if read_only {
         actions = actions.push(Space::new().width(SP.m).boxed()).push(
             text("This library ships with Signex and is not editable.")

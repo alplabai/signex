@@ -35,7 +35,6 @@ pub(super) fn view_table_sidebar<'a>(
     let hover_bg = look::row_hover_fill(tokens);
     let wash_ink = look::ink_over_wash(tokens);
     let control_bg = look::control_fill(tokens);
-    let graphite = crate::styles::is_graphite(tokens);
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![]
         .spacing(SP.xs)
@@ -48,13 +47,11 @@ pub(super) fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(if graphite {
+        container(
             text("TABLES")
                 .size(TS.section)
-                .style(crate::styles::section_label(tokens))
-        } else {
-            text("Tables").size(TS.body).color(muted)
-        })
+                .style(crate::styles::section_label(tokens)),
+        )
         .padding(iced::Padding {
             top: 0.0,
             right: 8.0,
@@ -149,7 +146,7 @@ pub(super) fn view_table_sidebar<'a>(
                 .on_press(LibraryMessage::BrowserConfirmRenameTable {
                     library_path: library_for_confirm,
                 })
-                .style(look::confirm_style(tokens, 2.0));
+                .style(look::confirm_style(tokens));
             let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserCancelRenameTable {
@@ -328,7 +325,7 @@ pub(super) fn view_table_sidebar<'a>(
                 .on_press(LibraryMessage::BrowserConfirmAddTable {
                     library_path: library_for_confirm,
                 })
-                .style(look::confirm_style(tokens, 3.0));
+                .style(look::confirm_style(tokens));
             let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([SP.s, 10.0])
                 .on_press(LibraryMessage::BrowserCancelAddTable {

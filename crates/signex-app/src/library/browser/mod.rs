@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 
 use iced::widget::{
-    Column, Space, button, column, container, mouse_area, pick_list, row, scrollable, text,
+    Column, Space, button, column, container, mouse_area, row, scrollable, text,
     text_input,
 };
 use iced::{Border, Element, Length, Theme, Widget};
@@ -215,8 +215,7 @@ pub fn view<'a>(
     // of the children were fixed-width.
     // Graphite: a preview pane for the selected row sits to the right.
     let mut body: iced::widget::Row<Element<'a, LibraryMessage>> = row![left.boxed()].spacing(SP.m);
-    if crate::styles::is_graphite(tokens)
-        && let Some(selected) = browser.selected_row
+    if let Some(selected) = browser.selected_row
         && let Some(picked) = rows.iter().find(|r| RowId::from_uuid(r.row_id) == selected)
     {
         let names = names::PrimitiveNames::of(lib);
@@ -240,15 +239,9 @@ pub fn view<'a>(
     )
     .map(|bar| container(bar).padding([4, 10]).boxed());
 
-    // Graphite: the uncommitted banner lives in the sidebar footer.
-    let graphite = crate::styles::is_graphite(tokens);
-    let banner = view_uncommitted_banner(library_path, library_state, tokens);
-    let (banner, footer) = if graphite {
-        (Space::new().boxed(), Some(banner))
-    } else {
-        (banner, None)
-    };
-    let mut right = column![header, banner].spacing(0);
+    // The uncommitted banner lives in the sidebar footer.
+    let footer = view_uncommitted_banner(library_path, library_state, tokens);
+    let mut right = column![header, Space::new().boxed()].spacing(0);
     if let Some(bar) = range_bar {
         right = right.push(bar);
     }
@@ -271,20 +264,17 @@ pub fn view<'a>(
             background: Some(iced::Background::Color(border_c)),
             ..iced::widget::container::Style::default()
         });
-    let table_sidebar = match footer {
-        Some(footer) => column![
-            tree::view_libraries_tree(library_path, library_state, tokens),
-            container(table_sidebar).height(Length::Fill).boxed(),
-            container(footer)
-                .padding(SP.m)
-                .width(Length::Fixed(sidebar::SIDEBAR_W))
-                .boxed(),
-        ]
-        .width(Length::Shrink)
-        .height(Length::Fill)
-        .boxed(),
-        None => table_sidebar,
-    };
+    let table_sidebar = column![
+        tree::view_libraries_tree(library_path, library_state, tokens),
+        container(table_sidebar).height(Length::Fill).boxed(),
+        container(footer)
+            .padding(SP.m)
+            .width(Length::Fixed(sidebar::SIDEBAR_W))
+            .boxed(),
+    ]
+    .width(Length::Shrink)
+    .height(Length::Fill)
+    .boxed();
     row![table_sidebar, separator, right]
         .width(Length::Fill)
         .height(Length::Fill)
