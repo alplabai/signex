@@ -688,8 +688,11 @@ impl Signex {
 /// captures wherever its bounds are, so a positioner would take the wheel
 /// over the whole canvas.
 pub(super) fn scroll_guard<'a>(element: Element<'a, Message>) -> Element<'a, Message> {
+    // `Idle` makes the surface count as a hit for the `Stack`, which hands
+    // the layers below a levitating cursor: no hover reaches the canvas.
     iced::widget::mouse_area(element)
         .on_scroll(|_| Message::noop())
+        .interaction(iced::mouse::Interaction::Idle)
         .boxed()
 }
 

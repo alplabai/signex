@@ -22,6 +22,13 @@ const BOUNDS: Rectangle = Rectangle {
 /// A Graphite app showing a one-wire schematic in its main window, the wire
 /// selected and the canvas laid out at `BOUNDS`.
 pub(crate) fn graphite_app_with_selected_wire() -> (Signex, iced::window::Id) {
+    graphite_app_showing(|_| {})
+}
+
+/// [`graphite_app_with_selected_wire`] with `edit` applied to the sheet first.
+pub(crate) fn graphite_app_showing(
+    edit: impl FnOnce(&mut SchematicSheet),
+) -> (Signex, iced::window::Id) {
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     let main = iced::window::Id::unique();
@@ -39,11 +46,12 @@ pub(crate) fn graphite_app_with_selected_wire() -> (Signex, iced::window::Id) {
         locked: false,
     };
     let selected = SelectedItem::new(wire.uuid, SelectedKind::Wire);
-    let sheet = SchematicSheet {
+    let mut sheet = SchematicSheet {
         paper_size: "A4".to_string(),
         wires: vec![wire],
         ..Default::default()
     };
+    edit(&mut sheet);
     let path = std::path::PathBuf::from("halo-camera.snxsch");
     app.document_state.engines.insert(
         path.clone(),

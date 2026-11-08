@@ -76,6 +76,8 @@ pub struct CanvasState {
     pub zoom_modifier: bool,
     /// Whether Shift is currently held (for multi-select add).
     pub shift_held: bool,
+    /// The last cursor move landed on this canvas (not covered, not elsewhere).
+    pointer_inside: bool,
     /// Whether Alt is held (flips wire behaviour for a drag, #1266).
     pub alt_held: bool,
     /// Drag-to-select: start position in world coordinates.
@@ -871,6 +873,8 @@ pub enum CanvasEvent {
         zoom_pct: f64,
     },
     CursorMoved,
+    /// The pointer left the canvas, or an overlay now covers it: drop the hover.
+    CursorLeft,
     /// The user moved the view with the pointer: a wheel zoom or a pan drag.
     /// Handled like [`Self::CursorMoved`]; a separate event so the app can
     /// tell a deliberate gesture from a hover or a queued fit landing.

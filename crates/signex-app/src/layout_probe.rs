@@ -151,6 +151,31 @@ pub(crate) fn messages_for_events<M>(
     deliver(&mut element, &mut tree, &renderer, window, point, &events)
 }
 
+/// The messages the cursor publishes moving through `points` in order over
+/// one laid-out `element`, so a widget's state carries from one point to
+/// the next (a cursor that was inside and now is not).
+pub(crate) fn messages_for_moves<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    points: &[iced::Point],
+) -> Vec<M> {
+    let renderer = headless_renderer();
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    points
+        .iter()
+        .flat_map(|&at| {
+            let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: at });
+            deliver(&mut element, &mut tree, &renderer, window, at, &[moved])
+        })
+        .collect()
+}
+
 /// Deliver `events` with the cursor at `at` to a laid-out `element` and
 /// collect what it publishes.
 fn deliver<M>(

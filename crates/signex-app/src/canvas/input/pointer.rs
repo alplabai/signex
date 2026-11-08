@@ -383,6 +383,13 @@ impl SchematicCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
         self.drop_stale_float(state);
+        let inside = cursor.position_in(bounds).is_some();
+        let was_inside = std::mem::replace(&mut state.pointer_inside, inside);
+        if was_inside && !inside {
+            return Some(canvas::Action::publish(Message::CanvasEvent(
+                CanvasEvent::CursorLeft,
+            )));
+        }
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             // Pan if right/middle button held
             if state.panning {
