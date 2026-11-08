@@ -456,3 +456,59 @@ fn an_unloaded_board_is_read_from_its_file() {
     assert!(read["revision"].is_null());
     assert!(app.document_state.tabs.is_empty());
 }
+
+/// Symbol and footprint containers repeat a `file_uuid` when a file is copied
+/// outside Signex; the later editor is given a new id, in the file it would
+/// write, and the first keeps its own.
+#[test]
+fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = temp_dir();
+    let (mut app, _task) = Signex::new();
+    let symbol = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
+    let footprint =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+    for name in ["a.snxsym", "b.snxsym"] {
+        let path = dir.path().join(name);
+        app.document_state.symbol_editors.insert(
+            path.clone(),
+            crate::app::SymbolDocument::new(path.clone(), symbol.clone()),
+        );
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: name.into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::SymbolEditor(path),
+        });
+    }
+    for name in ["a.snxfpt", "b.snxfpt"] {
+        let path = dir.path().join(name);
+        app.document_state.footprint_editors.insert(
+            path.clone(),
+            crate::app::FootprintDocument::new(path.clone(), footprint.clone()),
+        );
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: name.into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::FootprintEditor(path),
+        });
+    }
+    let repaired = app.reconcile_document_ids();
+    assert_eq!(repaired.len(), 2, "{repaired:?}");
+    let docs = &app.document_state;
+    let sym = |n: &str| docs.symbol_editors[&dir.path().join(n)].file.file_uuid;
+    let fpt = |n: &str| docs.footprint_editors[&dir.path().join(n)].file.file_uuid;
+    assert_eq!(sym("a.snxsym"), symbol.file_uuid, "the first keeps it");
+    assert_ne!(sym("b.snxsym"), symbol.file_uuid);
+    assert_eq!(fpt("a.snxfpt"), footprint.file_uuid);
+    assert_ne!(fpt("b.snxfpt"), footprint.file_uuid);
+    let b = &docs.symbol_editors[&dir.path().join("b.snxsym")];
+    assert_eq!(
+        b.file.file_uuid, b.baseline.file_uuid,
+        "the repair is not an edit"
+    );
+    assert!(!b.is_dirty());
+}
