@@ -56,7 +56,7 @@
 //! crash between the two calls leaves NO file at the destination and
 //! a stranded `.tmp`, breaking the invariant. Don't reintroduce that.
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -82,6 +82,38 @@ pub(crate) fn tmp_path_for(path: &Path) -> io::Result<PathBuf> {
     s.push(format!(".{pid}-{n}.tmp"));
     tmp.set_file_name(s);
     Ok(tmp)
+}
+
+/// How many temp names a save tries before giving up (#2188).
+const MAX_TMP_ATTEMPTS: usize = 16;
+
+/// Create the temp file with `create_new`, which refuses any existing path,
+/// a planted symlink included (#2188). On `AlreadyExists` the next name from
+/// `next_name` is tried; after [`MAX_TMP_ATTEMPTS`] the save fails. An
+/// existing path is never opened.
+fn create_temp_with(
+    first: PathBuf,
+    mut next_name: impl FnMut() -> io::Result<PathBuf>,
+) -> io::Result<(File, PathBuf)> {
+    let mut tmp = first;
+    for attempt in 1..=MAX_TMP_ATTEMPTS {
+        match OpenOptions::new().write(true).create_new(true).open(&tmp) {
+            Ok(file) => return Ok((file, tmp)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                if attempt < MAX_TMP_ATTEMPTS {
+                    tmp = next_name()?;
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        format!(
+            "no free temporary file name next to {} after {MAX_TMP_ATTEMPTS} tries; nothing written",
+            tmp.display()
+        ),
+    ))
 }
 
 /// Give `tmp` the permissions of the regular file already at `path`, if any.
@@ -231,7 +263,7 @@ fn write_resolved(path: &Path, bytes: &[u8], create_parents: bool) -> io::Result
         }
     }
     refuse_read_only_target(path)?;
-    let tmp = tmp_path_for(path)?;
+    let first = tmp_path_for(path)?;
 
     // Write the temp file and fsync it before the rename, so its bytes
     // are durable at the point the rename makes them visible at `path`.
@@ -241,14 +273,13 @@ fn write_resolved(path: &Path, bytes: &[u8], create_parents: bool) -> io::Result
     // which the next write to the same target simply overwrote — a stranded
     // temp would never be reclaimed and repeated failures (a full or flaky
     // disk) would accumulate `<path>.<pid>-<n>.tmp` siblings unboundedly.
-    {
-        let mut file = File::create(&tmp)?;
-        if let Err(e) = file.write_all(bytes).and_then(|()| file.sync_all()) {
-            drop(file);
-            let _ = std::fs::remove_file(&tmp);
-            return Err(e);
-        }
+    let (mut file, tmp) = create_temp_with(first, || tmp_path_for(path))?;
+    if let Err(e) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
     }
+    drop(file);
     // A replaced file keeps its permissions (a 0600 file stays 0600).
     if let Err(e) = copy_existing_permissions(path, &tmp) {
         tracing::warn!(
@@ -390,6 +421,59 @@ mod tests {
         atomic_write(&path, &big).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), big);
         assert!(!has_stray_tmp(dir.path()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_planted_at_the_temp_name_is_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("victim.txt");
+        std::fs::write(&outside, b"victim").unwrap();
+        let path = dir.path().join("doc.snxsch");
+        std::fs::write(&path, b"old").unwrap();
+        // Plant links over the next temp names this process will pick.
+        let start = TMP_COUNTER.load(Ordering::Relaxed);
+        let pid = std::process::id();
+        for n in start..start + 8 {
+            let link = dir.path().join(format!("doc.snxsch.{pid}-{n}.tmp"));
+            std::os::unix::fs::symlink(&outside, &link).unwrap();
+        }
+
+        atomic_write(&path, b"new").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        assert_eq!(std::fs::read(&outside).unwrap(), b"victim");
+        assert!(
+            !std::fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "a planted link must not be renamed over the document"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn exhausting_the_temp_names_fails_and_leaves_the_document() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("victim.txt");
+        std::fs::write(&outside, b"victim").unwrap();
+        let path = dir.path().join("doc.snxsch");
+        std::fs::write(&path, b"old").unwrap();
+        let link = dir.path().join("doc.snxsch.stuck.tmp");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        let mut calls = 0;
+
+        let err = create_temp_with(link.clone(), || {
+            calls += 1;
+            Ok(link.clone())
+        })
+        .unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(calls, MAX_TMP_ATTEMPTS - 1);
+        assert_eq!(std::fs::read(&outside).unwrap(), b"victim");
+        assert_eq!(std::fs::read(&path).unwrap(), b"old");
     }
 
     #[test]
