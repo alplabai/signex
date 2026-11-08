@@ -13,7 +13,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
@@ -46,7 +46,7 @@ fn footprint_with_silk_line() -> (Footprint, SketchEntityId, SketchEntityId) {
             .push(Entity::new(b, plane, EntityKind::Point { x: 1.0, y }));
         let mut line = Entity::new(id, plane, EntityKind::Line { start: a, end: b });
         line.silk = silk.then_some(SilkAttr {
-            layer: SignexLayer::TopSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         });
         sketch.entities.push(line);
         id

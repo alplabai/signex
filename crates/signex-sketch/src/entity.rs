@@ -6,7 +6,7 @@ use crate::attr::{
 };
 use crate::id::SketchEntityId;
 use crate::plane::PlaneId;
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::PcbLayer;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Entity {
@@ -119,7 +119,7 @@ impl Entity {
     /// Whether a silk bake emits a graphic for this entity on `layer`: it is
     /// tagged for `layer`, not skipped, and is an edge (a Point has no
     /// renderable primitive). Shared by `bake_silk` and `tags_kind`.
-    pub fn bakes_silk_on(&self, layer: SignexLayer) -> bool {
+    pub fn bakes_silk_on(&self, layer: PcbLayer) -> bool {
         !self.bake_skipped()
             && !matches!(self.kind, EntityKind::Point { .. })
             && self.silk.as_ref().is_some_and(|a| a.layer == layer)

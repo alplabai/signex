@@ -6,7 +6,7 @@
 //! [`signex_library::primitive::footprint::Pad`] per entity.
 //!
 //! Layer-name strings are produced by
-//! [`signex_types::layer::SignexLayer::altium_label`] so the baked
+//! [`crate::layer_label::layer_label`] so the baked
 //! footprint matches the Altium-style label set ("Top Layer", "Top
 //! Solder", "Top Paste", …) used by the rest of the Signex PCB
 //! taxonomy.
@@ -55,9 +55,10 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
 use signex_sketch::unit::UnitFamily;
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use crate::eval_util::{eval_length, opt_eval_length, strip_eq_prefix};
+use crate::layer_label::layer_id;
 
 /// Bake every entity tagged with [`PadAttr`] into a [`LibPad`]. Adds
 /// human-readable warnings to `warnings` for v0.14+ features.
@@ -332,12 +333,6 @@ fn lib_kind(k: PadKind, _warnings: &mut Vec<String>, _pad_number: &str) -> LibPa
     }
 }
 
-/// Build a `LayerId` from a `SignexLayer`, using its Altium-style
-/// display label as the string-typed wrapper's content.
-fn signex_layer_id(l: SignexLayer) -> LayerId {
-    LayerId::new(l.altium_label())
-}
-
 /// Translate sketch ChamferedCorners into the lib mirror enum.
 fn map_corners(c: &SkChamferedCorners) -> LibChamferedCorners {
     LibChamferedCorners {
@@ -352,54 +347,54 @@ fn map_corners(c: &SkChamferedCorners) -> LibChamferedCorners {
 fn fiducial_layers(side: PadSide) -> Vec<LayerId> {
     match side {
         PadSide::Top => vec![
-            signex_layer_id(SignexLayer::TopCopper),
-            signex_layer_id(SignexLayer::TopSolderMask),
+            layer_id(PcbLayer::Copper(CopperLayer::Top)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)),
         ],
         PadSide::Bottom => vec![
-            signex_layer_id(SignexLayer::BottomCopper),
-            signex_layer_id(SignexLayer::BottomSolderMask),
+            layer_id(PcbLayer::Copper(CopperLayer::Bottom)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskBottom)),
         ],
         PadSide::All => vec![
-            signex_layer_id(SignexLayer::TopCopper),
-            signex_layer_id(SignexLayer::BottomCopper),
-            signex_layer_id(SignexLayer::TopSolderMask),
-            signex_layer_id(SignexLayer::BottomSolderMask),
+            layer_id(PcbLayer::Copper(CopperLayer::Top)),
+            layer_id(PcbLayer::Copper(CopperLayer::Bottom)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskBottom)),
         ],
     }
 }
 
 /// Layer set for a normal pad based on mounting style + copper side.
 ///
-/// Names produced by [`SignexLayer::altium_label`].
+/// Names produced by [`crate::layer_label::layer_label`].
 fn derive_layers(kind: PadKind, side: PadSide) -> Vec<LayerId> {
     match (kind, side) {
         (PadKind::Smd | PadKind::ConnectorPad, PadSide::Top) => vec![
-            signex_layer_id(SignexLayer::TopCopper),
-            signex_layer_id(SignexLayer::TopSolderMask),
-            signex_layer_id(SignexLayer::TopPaste),
+            layer_id(PcbLayer::Copper(CopperLayer::Top)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::PasteTop)),
         ],
         (PadKind::Smd | PadKind::ConnectorPad, PadSide::Bottom) => vec![
-            signex_layer_id(SignexLayer::BottomCopper),
-            signex_layer_id(SignexLayer::BottomSolderMask),
-            signex_layer_id(SignexLayer::BottomPaste),
+            layer_id(PcbLayer::Copper(CopperLayer::Bottom)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskBottom)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::PasteBottom)),
         ],
         (PadKind::Smd | PadKind::ConnectorPad, PadSide::All) => vec![
-            signex_layer_id(SignexLayer::TopCopper),
-            signex_layer_id(SignexLayer::BottomCopper),
-            signex_layer_id(SignexLayer::TopSolderMask),
-            signex_layer_id(SignexLayer::BottomSolderMask),
-            signex_layer_id(SignexLayer::TopPaste),
-            signex_layer_id(SignexLayer::BottomPaste),
+            layer_id(PcbLayer::Copper(CopperLayer::Top)),
+            layer_id(PcbLayer::Copper(CopperLayer::Bottom)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskBottom)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::PasteTop)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::PasteBottom)),
         ],
         (PadKind::Tht | PadKind::Castellated, _) => vec![
-            signex_layer_id(SignexLayer::TopCopper),
-            signex_layer_id(SignexLayer::BottomCopper),
-            signex_layer_id(SignexLayer::TopSolderMask),
-            signex_layer_id(SignexLayer::BottomSolderMask),
+            layer_id(PcbLayer::Copper(CopperLayer::Top)),
+            layer_id(PcbLayer::Copper(CopperLayer::Bottom)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskBottom)),
         ],
         (PadKind::NptHole, _) => vec![
-            signex_layer_id(SignexLayer::TopSolderMask),
-            signex_layer_id(SignexLayer::BottomSolderMask),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)),
+            layer_id(PcbLayer::Technical(TechnicalLayer::SolderMaskBottom)),
         ],
         // Fiducial is handled by `fiducial_layers` before this fn is
         // called; defending against future callers that might forget

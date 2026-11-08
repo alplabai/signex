@@ -22,6 +22,7 @@ pub mod error;
 pub mod expr;
 pub mod geom;
 pub mod id;
+mod layer_serde;
 pub mod parameter;
 pub mod plane;
 pub mod sketch;

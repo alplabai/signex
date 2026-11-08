@@ -6,8 +6,8 @@ use serde::Deserialize;
 use signex_library::primitive::footprint::{FootprintFile, FpGraphic, FpGraphicKind};
 use signex_sketch::id::SketchEntityId;
 
-/// Committed from trunk before #1718 (the stock polarised 0805). Never
-/// regenerate it: it stands for files already on users' disks.
+/// The stock polarised 0805 in its pre-#1718 shape (silk without markers),
+/// with its layer token rewritten for #2195.
 const PRE_1718: &str = include_str!("../fixtures/snxfpt/pre_1718_chip_0805_polarised.snxfpt");
 
 #[test]
