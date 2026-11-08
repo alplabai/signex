@@ -599,8 +599,6 @@ fn view_pre_placement<'a>(
                 "preplace_wire",
                 "Properties",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     Column::new()
                         .spacing(0)

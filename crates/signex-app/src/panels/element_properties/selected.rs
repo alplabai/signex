@@ -882,8 +882,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 "sel_wire_style",
                 "Style",
                 &ctx.collapsed_sections,
-                muted,
-                border_c,
                 move || {
                     Column::new()
                         .spacing(0)
