@@ -13,7 +13,7 @@ use super::{Action, recent_label, recent_message, visible_recent};
 use crate::app::Message;
 use crate::panels::signal::coming_soon;
 use crate::styles::{
-    self, ChromeMetrics, Radii, TypeScale, is_graphite, ti,
+    self, ChromeMetrics, Radii, TypeScale, ti,
     tokens::{hover_overlay, resolve},
 };
 
@@ -507,14 +507,13 @@ fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, M
         .boxed()
 }
 
-/// The Graphite start screen. Call only when [`is_graphite`] holds.
+/// The Graphite start screen.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     open_shortcut: &str,
     recent: &'a [PathBuf],
     libraries: &[super::LoadedLibrary],
 ) -> Element<'a, Message> {
-    debug_assert!(is_graphite(tokens));
     let open_shortcut = open_shortcut.to_owned();
     let libraries = libraries.to_vec();
     // This iced fork has no max-width; the main column takes the room left

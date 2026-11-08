@@ -6,9 +6,7 @@
 use super::graphite_fields::{graphite_label, nav_matches, nav_search};
 use super::{PrefMsg, PrefNav, PrefsView, SP, TS, build_content, build_prefs_file_banner};
 use crate::app::view::dialogs::{PREFERENCES_HEADER_H, graphite_header};
-use crate::styles::{
-    self, DialogButtonKind, PillTone, Radii, dialog_button, is_graphite, ti, tokens,
-};
+use crate::styles::{self, DialogButtonKind, PillTone, Radii, dialog_button, ti, tokens};
 use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
@@ -18,11 +16,6 @@ pub(super) const GRAPHITE_NAV_W: f32 = styles::chrome_px(236.0 * 11.0 / 12.0);
 /// Card size of the in-window dialog.
 pub(super) const GRAPHITE_DLG_W: f32 = 980.0;
 pub(super) const GRAPHITE_DLG_H: f32 = 680.0;
-
-/// Whether the dialog draws the Graphite shell.
-pub(super) fn is_graphite_shell(v: &PrefsView<'_>) -> bool {
-    is_graphite(v.panel_tokens)
-}
 
 fn hairline<'a>(t: &ThemeTokens) -> Element<'a, PrefMsg> {
     let line = tokens::resolve(t).line_soft;
