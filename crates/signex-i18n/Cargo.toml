@@ -10,17 +10,16 @@ description = "Message catalogs and locale-aware formatting for the Signex UI"
 
 [dependencies]
 chrono = { workspace = true }
-chrono-tz = { version = "0.10", default-features = false }
 fluent-bundle = "0.16"
 fluent-langneg = "0.13"
 fluent-pseudo = "0.3"
-iana-time-zone = "0.1"
 icu_casemap = "~2.2"
 icu_collator = "~2.2"
 icu_datetime = "~2.2"
 icu_decimal = { version = "~2.2", features = ["ryu"] }
 icu_list = "~2.2"
 icu_locale_core = "~2.2"
+icu_provider = "~2.2"
 icu_time = "~2.2"
 intl-memoizer = "0.5"
 log = "0.4"

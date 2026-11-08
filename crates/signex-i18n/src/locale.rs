@@ -1,6 +1,9 @@
 //! The Language setting and RFC 4647 lookup negotiation.
 
 use fluent_langneg::{NegotiationStrategy, negotiate_languages};
+use icu_list::provider::{ListAndV1, ListFormatterPatterns};
+use icu_locale_core::{DataLocale, Locale};
+use icu_provider::{DataIdentifierBorrowed, DataProvider, DataRequest};
 use unic_langid::LanguageIdentifier;
 
 use crate::catalog::{AVAILABLE, EN_US};
@@ -50,13 +53,48 @@ pub(crate) fn negotiate(requested: &[LanguageIdentifier]) -> &'static str {
 
 /// The tags `pref` asks for, most wanted first. Tags that do not parse are
 /// skipped.
-pub(crate) fn requested(pref: &LanguagePref) -> Vec<LanguageIdentifier> {
+pub(crate) fn requested(tags: &[String]) -> Vec<LanguageIdentifier> {
+    tags.iter().filter_map(|tag| tag.parse().ok()).collect()
+}
+
+/// The raw tags `pref` asks for, most wanted first, extensions intact.
+pub(crate) fn requested_tags(pref: &LanguagePref) -> Vec<String> {
     match pref {
-        LanguagePref::System => sys_locale::get_locales()
-            .filter_map(|tag| tag.parse().ok())
-            .collect(),
-        LanguagePref::Locale(tag) => tag.parse().into_iter().collect(),
+        LanguagePref::System => sys_locale::get_locales().collect(),
+        LanguagePref::Locale(tag) => vec![tag.clone()],
     }
+}
+
+/// The locale numbers, dates and lists follow: the first requested tag with
+/// its `-u-` extensions (`th-TH-u-ca-buddhist`), or `message_tag` when it
+/// does not parse or ICU has no data for its language.
+pub(crate) fn format_locale(tags: &[String], message_tag: &str) -> Locale {
+    tags.first()
+        .and_then(|tag| tag.parse::<Locale>().ok())
+        .filter(has_icu_data)
+        .or_else(|| message_tag.parse().ok())
+        .unwrap_or(icu_locale_core::locale!("en-US"))
+}
+
+/// Whether the compiled ICU data holds `locale`'s language. Compiled data
+/// falls back inside `load` and reports the locale it found; `und` means
+/// only the root answered. The probe is the list patterns, which every
+/// shipped language has: decimal and date data are stored only where they
+/// differ from the root, so `en` and `th` would look unknown there. It is
+/// the provider's own lookup, so it cannot disagree with the formatters.
+fn has_icu_data(locale: &Locale) -> bool {
+    let asked = DataLocale::from(locale);
+    let request = DataRequest {
+        id: DataIdentifierBorrowed::for_marker_attributes_and_locale(
+            ListFormatterPatterns::WIDE,
+            &asked,
+        ),
+        ..Default::default()
+    };
+    DataProvider::<ListAndV1>::load(&icu_list::provider::Baked, request).is_ok_and(|found| {
+        // No resolved locale means the asked one matched exactly.
+        !found.metadata.locale.unwrap_or(asked).is_unknown()
+    })
 }
 
 /// Whether a request fell back to `en-US` with no catalog in its language:

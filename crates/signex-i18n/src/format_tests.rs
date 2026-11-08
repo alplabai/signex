@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone, Utc};
 
+use crate::format::wall_clock;
 use crate::{DateLength, I18n, LanguagePref, ListKind, LocalNumber};
 
 fn i18n(tag: &str) -> I18n {
@@ -32,12 +33,6 @@ fn counts_group_in_the_locale() {
 #[test]
 fn a_non_finite_number_shows_as_rust_prints_it() {
     assert_eq!(i18n("de").number(LocalNumber(f64::NAN)), "NaN");
-}
-
-#[test]
-fn number_takes_local_number_not_a_bare_float() {
-    // The signature is the guard: `number(1.27_f64)` does not compile.
-    let _: fn(&I18n, LocalNumber) -> String = I18n::number;
 }
 
 #[test]
@@ -76,83 +71,126 @@ fn lists_join_with_the_locale_conjunction() {
     );
 }
 
-#[test]
-fn date_time_shows_the_zone_wall_clock() {
-    let at = utc(2025, 1, 15, 13, 9, 35);
-    let en = i18n("en-US");
-    let tr = i18n("tr-TR");
-    let istanbul = en.date_time_in(at, "Europe/Istanbul", DateLength::Medium);
-    assert!(istanbul.starts_with("Jan 15, 2025"), "{istanbul}");
-    assert!(istanbul.contains("4:09"), "{istanbul}");
-    let new_york = en.date_time_in(at, "America/New_York", DateLength::Medium);
-    assert!(new_york.contains("8:09"), "{new_york}");
-    assert_eq!(
-        tr.date_time_in(at, "Europe/Istanbul", DateLength::Medium),
-        "15 Oca 2025 16:09"
-    );
-    assert_eq!(
-        tr.date_in(at, "Europe/Istanbul", DateLength::Long),
-        "15 Ocak 2025"
-    );
-    assert_eq!(
-        en.date_in(at, "Europe/Istanbul", DateLength::Short),
-        "1/15/25"
-    );
+fn wall(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTime {
+    utc(y, mo, d, h, mi, s).naive_utc()
+}
+
+fn east(hours: i32) -> FixedOffset {
+    FixedOffset::east_opt(hours * 3600).unwrap()
 }
 
 #[test]
-fn a_date_crosses_midnight_with_the_zone() {
+fn a_wall_clock_formats_in_the_locale() {
+    let at = wall(2025, 1, 15, 16, 9, 35);
+    let en = i18n("en-US");
+    let tr = i18n("tr-TR");
+    let medium = en.show(at, DateLength::Medium, true);
+    assert!(medium.starts_with("Jan 15, 2025"), "{medium}");
+    assert!(medium.contains("4:09"), "{medium}");
+    assert_eq!(tr.show(at, DateLength::Medium, true), "15 Oca 2025 16:09");
+    assert_eq!(tr.show(at, DateLength::Long, false), "15 Ocak 2025");
+    assert_eq!(en.show(at, DateLength::Short, false), "1/15/25");
+}
+
+#[test]
+fn a_fixed_offset_moves_the_wall_clock_across_midnight() {
     let at = utc(2025, 1, 15, 23, 30, 0);
     let tr = i18n("tr-TR");
-    assert_eq!(tr.date_in(at, "UTC", DateLength::Medium), "15 Oca 2025");
-    assert_eq!(
-        tr.date_in(at, "Europe/Istanbul", DateLength::Medium),
-        "16 Oca 2025"
-    );
+    let same = tr.show(wall_clock(at, &Utc), DateLength::Medium, false);
+    let istanbul = tr.show(wall_clock(at, &east(3)), DateLength::Medium, false);
+    assert_eq!(same, "15 Oca 2025");
+    assert_eq!(istanbul, "16 Oca 2025");
 }
 
 #[test]
-fn an_unknown_zone_shows_utc_and_logs_once() {
-    let en = i18n("en-US");
-    let at = utc(2025, 1, 15, 13, 9, 35);
-    let utc_text = en.date_time_in(at, "UTC", DateLength::Medium);
-    assert_eq!(
-        en.date_time_in(at, "Not/AZone", DateLength::Medium),
-        utc_text
-    );
-    assert_eq!(en.date_time_in(at, "", DateLength::Medium), utc_text);
-    en.date_time_in(at, "Not/AZone", DateLength::Medium);
-    assert_eq!(
-        en.bad_zones.lock().unwrap().len(),
-        2,
-        "each bad id is kept once"
-    );
-}
-
-#[test]
-fn date_time_crosses_a_dst_boundary() {
+fn offsets_either_side_of_a_dst_change_give_the_wall_clock_either_side() {
     let en = i18n("en-US");
     // New York springs forward 2025-03-09 at 07:00 UTC: 01:59 EST, then 03:00 EDT.
-    let before = en.date_time_in(
-        utc(2025, 3, 9, 6, 59, 59),
-        "America/New_York",
-        DateLength::Medium,
-    );
-    let after = en.date_time_in(
-        utc(2025, 3, 9, 7, 0, 0),
-        "America/New_York",
-        DateLength::Medium,
-    );
-    assert!(before.contains("1:59"), "{before}");
-    assert!(after.contains("3:00"), "{after}");
+    let before = wall_clock(utc(2025, 3, 9, 6, 59, 59), &east(-5));
+    let after = wall_clock(utc(2025, 3, 9, 7, 0, 0), &east(-4));
+    assert!(en.show(before, DateLength::Medium, true).contains("1:59"));
+    assert!(en.show(after, DateLength::Medium, true).contains("3:00"));
 }
 
 #[test]
-fn the_os_zone_variants_do_not_panic() {
+fn the_os_variants_show_the_local_wall_clock() {
     let en = i18n("en-US");
     let at = utc(2025, 1, 15, 13, 9, 35);
-    assert!(!en.date_time(at, DateLength::Short).is_empty());
-    assert!(!en.date(at, DateLength::Long).is_empty());
+    let local = wall_clock(at, &Local);
+    assert_eq!(
+        en.date_time(at, DateLength::Short),
+        en.show(local, DateLength::Short, true)
+    );
+    assert_eq!(
+        en.date(at, DateLength::Long),
+        en.show(local, DateLength::Long, false)
+    );
+}
+
+#[test]
+fn a_date_outside_icu_range_falls_back_to_iso_and_warns_once() {
+    let en = i18n("en-US");
+    let far = NaiveDateTime::MAX;
+    let shown = en.show(far, DateLength::Short, false);
+    assert!(shown.contains('T'), "{shown}");
+    en.show(far, DateLength::Short, false);
+    assert_eq!(en.format_warned.lock().unwrap().len(), 1);
+}
+
+fn locale_of(tag: &str) -> String {
+    i18n(tag).format_locale().to_string()
+}
+
+#[test]
+fn the_formatting_locale_keeps_unicode_extensions() {
+    assert_eq!(locale_of("th-TH-u-ca-buddhist"), "th-TH-u-ca-buddhist");
+    assert_eq!(locale_of("en-US-u-nu-arab"), "en-US-u-nu-arab");
+    assert_eq!(locale_of("en-US-u-hc-h23"), "en-US-u-hc-h23");
+}
+
+#[test]
+fn extensions_change_the_calendar_digits_and_clock() {
+    let at = wall(2025, 1, 15, 16, 9, 35);
+    let thai = i18n("th-TH-u-ca-buddhist").show(at, DateLength::Long, false);
+    assert!(thai.contains("2568"), "{thai}");
+    let greg = i18n("th-TH-u-ca-gregory").show(at, DateLength::Long, false);
+    assert!(greg.contains("2025"), "{greg}");
+    let japanese = i18n("ja-JP-u-ca-japanese").show(at, DateLength::Long, false);
+    assert!(japanese.contains("令和7"), "{japanese}");
+    assert_eq!(
+        i18n("en-US-u-nu-arab").number(LocalNumber(1234.5)),
+        "١,٢٣٤.٥"
+    );
+    let h23 = i18n("en-US-u-hc-h23").show(at, DateLength::Medium, true);
+    assert!(h23.contains("16:09"), "{h23}");
+    assert!(!h23.contains("PM"), "{h23}");
+}
+
+#[test]
+fn a_language_without_icu_data_formats_as_the_message_locale() {
+    for tag in ["und", "xx-YY", "tlh"] {
+        let unknown = i18n(tag);
+        assert_eq!(unknown.format_locale().to_string(), "en-US", "{tag}");
+        assert_eq!(unknown.number(LocalNumber(1234.5)), "1,234.5", "{tag}");
+        assert_eq!(
+            unknown.list(&["a", "b", "c"], ListKind::And),
+            "a, b, and c",
+            "{tag}"
+        );
+        assert_eq!(
+            unknown.show(wall(2025, 1, 15, 16, 9, 35), DateLength::Short, false),
+            "1/15/25",
+            "{tag}"
+        );
+    }
+}
+
+#[test]
+fn counts_are_exact_for_every_i64() {
+    let en = i18n("en-US");
+    assert_eq!(en.count(i64::MAX), "9,223,372,036,854,775,807");
+    assert_eq!(en.count(i64::MIN), "-9,223,372,036,854,775,808");
+    assert_eq!(i18n("de").count(i64::MAX), "9.223.372.036.854.775.807");
 }
 
 #[test]
@@ -170,6 +208,16 @@ fn fold_is_plain_under_english() {
     let en = i18n("en-US");
     assert_eq!(en.fold_for_search("ISPARTA"), "isparta");
     assert_eq!(en.fold_for_search("Straße"), "strasse");
+}
+
+#[test]
+fn a_full_fold_changes_length_and_en_does_not_match_dotted_capital_i() {
+    let en = i18n("en-US");
+    assert_eq!(en.fold_for_search("ß").chars().count(), 2);
+    assert!(
+        !en.fold_for_search("İstanbul")
+            .contains(&en.fold_for_search("istanbul"))
+    );
 }
 
 #[test]
