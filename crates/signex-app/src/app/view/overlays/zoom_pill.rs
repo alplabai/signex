@@ -8,7 +8,6 @@ use iced::widget::Widget;
 use super::*;
 use crate::canvas::zoom_pill::{pill_size, view as pill};
 use crate::menu_bar::MenuMessage;
-use crate::styles::is_graphite;
 
 /// Gap between the pill and the canvas edges.
 const EDGE_GAP: f32 = 12.0;
@@ -23,15 +22,15 @@ pub(in crate::app::view) fn pill_origin(canvas: iced::Rectangle) -> (f32, f32) {
 }
 
 impl Signex {
-    /// The zoom pill over the main window's schematic canvas. Graphite
-    /// themes only; an undocked window has no known canvas rectangle and
-    /// the zoom messages act on the main canvas, so it gets none.
+    /// The zoom pill over the main window's schematic canvas. An undocked
+    /// window has no known canvas rectangle and the zoom messages act on
+    /// the main canvas, so it gets none.
     pub(in crate::app::view) fn canvas_zoom_pill_overlay(
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
         let tokens = &self.document_state.panel_ctx.tokens;
-        if !is_graphite(tokens) || self.ui_state.main_window_id != Some(window_id) {
+        if self.ui_state.main_window_id != Some(window_id) {
             return None;
         }
         self.document_state

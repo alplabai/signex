@@ -10,8 +10,7 @@ use iced::{Element, Length, Widget};
 use super::widgets::modal_title_header;
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
 use crate::styles::{
-    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split, dialog_hint,
-    dialog_message,
+    DialogButtonKind, dialog_body, dialog_button, dialog_footer_split, dialog_hint, dialog_message,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -86,7 +85,6 @@ impl Signex {
             tokens,
         ));
 
-        let graphite = crate::styles::is_graphite(tokens);
         let restore = dialog_button(
             "Restore",
             DialogButtonKind::Primary,
@@ -103,31 +101,18 @@ impl Signex {
             ))),
             tokens,
         );
-        // Graphite: Restore and Discard at the left, a quiet Decide later at
-        // the right; Esc keeps meaning Decide later.
-        let footer = if graphite {
-            dialog_footer_split(
-                vec![restore, discard],
-                vec![dialog_button(
-                    "Decide later",
-                    DialogButtonKind::Ghost,
-                    Some(later),
-                    tokens,
-                )],
-            )
-        } else {
-            dialog_footer(vec![
-                dialog_button(
-                    "Decide later",
-                    DialogButtonKind::Secondary,
-                    Some(later),
-                    tokens,
-                ),
-                discard,
-                restore,
-            ])
-        };
-        let body: Element<'_, Message> = if graphite {
+        // Restore and Discard at the left, a quiet Decide later at the
+        // right; Esc keeps meaning Decide later.
+        let footer = dialog_footer_split(
+            vec![restore, discard],
+            vec![dialog_button(
+                "Decide later",
+                DialogButtonKind::Ghost,
+                Some(later),
+                tokens,
+            )],
+        );
+        let body: Element<'_, Message> = {
             let r = crate::styles::tokens::resolve(tokens);
             let card = container(
                 row![
@@ -156,8 +141,6 @@ impl Signex {
             ]
             .spacing(SP.l)
             .boxed()
-        } else {
-            body.boxed()
         };
         let dialog = container(
             column![header, dialog_body(body), footer].width(if windowed {

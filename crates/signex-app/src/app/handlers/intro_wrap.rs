@@ -3,9 +3,7 @@
 //! The text is user data (a library name, a part number, a table), so the
 //! window follows its wrapped line count (docs/DETACHED_MODALS.md).
 
-use signex_types::theme::ThemeTokens;
-
-use crate::styles::{DIALOG_ICON_TILE, LINE_HEIGHT, Spacing, TypeScale, is_graphite};
+use crate::styles::{DIALOG_ICON_TILE, LINE_HEIGHT, Spacing, TypeScale};
 
 /// Average width of one character, in em. Deliberately a little wide so the
 /// count errs towards one line too many (a spare line of window) and never
@@ -35,22 +33,16 @@ fn extra(t: &Wrapped<'_>, size: f32, width: f32) -> f32 {
 
 /// Extra window height for a dialog intro (a title and a secondary text) in a
 /// card `card_w` wide whose body has `pad` px of padding on each side. The
-/// title only exists on Graphite, where the icon tile also narrows the column.
+/// icon tile narrows the column the title and the secondary text share.
 pub(super) fn intro_growth(
     card_w: f32,
     pad: f32,
     title: Wrapped<'_>,
     secondary: Wrapped<'_>,
-    tokens: &ThemeTokens,
 ) -> f32 {
     let ts = TypeScale::DEFAULT;
-    let mut width = card_w - 2.0 * pad;
-    let mut grow = 0.0;
-    if is_graphite(tokens) {
-        width -= DIALOG_ICON_TILE + Spacing::DEFAULT.m + 2.0;
-        grow += extra(&title, ts.title, width);
-    }
-    grow + extra(&secondary, ts.body, width)
+    let width = card_w - 2.0 * pad - (DIALOG_ICON_TILE + Spacing::DEFAULT.m + 2.0);
+    extra(&title, ts.title, width) + extra(&secondary, ts.body, width)
 }
 
 /// Extra window height for a one-line note that wraps (a caption line).

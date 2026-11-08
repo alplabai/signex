@@ -6,13 +6,8 @@
 //! code motion — no behaviour change.
 
 use super::*;
-use iced::widget::{Space, button, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
-
-use super::{
-    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_HEADER_HEIGHT,
-    MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
-};
+use iced::widget::{Space, container, row, text};
+use iced::{Background, Color, Element, Length, Theme};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -181,99 +176,24 @@ pub(crate) fn os_title_bar_slot<'a>() -> Element<'a, Message> {
     Space::new().height(0).boxed()
 }
 
-/// The close glyph drawn on a hit-sized canvas, so the svg widget (and its
-/// hover status) spans the whole button rather than just the X (46x28 = HIT_W x HIT_H).
-const CLOSE_X_GLYPH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" width="46" height="28" viewBox="0 0 46 28" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"><path d="M19.5 10.5l7 7M26.5 10.5l-7 7"/></svg>"##;
-
-/// Glyph colour of the modal close-X at rest: the theme's own text colour,
-/// so it reads on a light header as well as a dark one.
-fn close_glyph_color(theme: &Theme) -> Color {
-    theme.palette().background.base.text
-}
-
-/// On the red hover the glyph is white (as the main-window close), so a
-/// light theme never shows a dark X on red.
-fn close_glyph_color_for(theme: &Theme, hovered: bool) -> Color {
-    if hovered {
-        Color::WHITE
-    } else {
-        close_glyph_color(theme)
-    }
-}
-
-/// Compact X close button for borderless modal headers. Matches the
-/// main-window chrome close (`view/chrome/buttons.rs::windows_button`):
-/// no border, fully transparent at rest, Windows-native red bg on hover.
-/// Generic over the message type so Preferences uses it too.
-pub(crate) fn close_x_button<'a, M: Clone + 'a>(message: M) -> Element<'a, M> {
-    use iced::widget::svg;
-    button(
-        svg(svg::Handle::from_memory(CLOSE_X_GLYPH))
-            .width(MODAL_CLOSE_X_HIT_W)
-            .height(MODAL_CLOSE_X_HIT_H)
-            .style(|theme: &Theme, status| svg::Style {
-                color: Some(close_glyph_color_for(theme, status == svg::Status::Hovered)),
-            }),
-    )
-    .padding(0)
-    .on_press(message)
-    .style(move |_: &Theme, status: button::Status| {
-        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-        // Top-right radius matches the modal card's outer corner so
-        // the red hover background fills the rounded corner cleanly
-        // — same trick the OS chrome close uses on Windows 11.
-        let radius = iced::border::Radius::default().top_right(crate::styles::MODAL_CORNER_RADIUS);
-        button::Style {
-            background: if hovered {
-                Some(Background::Color(MODAL_CLOSE_X_HOVER))
-            } else {
-                None
-            },
-            border: Border {
-                radius,
-                ..Border::default()
-            },
-            text_color: Color::WHITE,
-            ..button::Style::default()
-        }
-    })
-    .boxed()
-}
-
 /// The title strip every app modal opens with: `title` on the left, the
 /// close-X sending `on_close` on the right, on the modal header strip. Pass
-/// it to [`Signex::modal_header`] (or `draggable_header`). Graphite themes
-/// get the 44 px header with the neutral close instead.
+/// it to [`Signex::modal_header`] (or `draggable_header`): the 44 px header
+/// with the neutral close.
 pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
     title: impl iced::widget::text::IntoFragment<'a>,
     on_close: M,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, M> {
-    if crate::styles::is_graphite(tokens) {
-        let title: String = title.into_fragment().into_owned();
-        return super::header::graphite_header(
-            title,
-            None,
-            None,
-            on_close,
-            super::header::DIALOG_HEADER_H,
-            tokens,
-        );
-    }
-    container(
-        row![
-            text(title)
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .color(crate::styles::ti(tokens.text)),
-            Space::new().width(Length::Fill),
-            close_x_button(on_close),
-        ]
-        .align_y(iced::Alignment::Center),
+    let title: String = title.into_fragment().into_owned();
+    super::header::graphite_header(
+        title,
+        None,
+        None,
+        on_close,
+        super::header::DIALOG_HEADER_H,
+        tokens,
     )
-    .padding(MODAL_HEADER_PADDING)
-    .height(MODAL_HEADER_HEIGHT)
-    .style(crate::styles::modal_header_strip(tokens))
-    .boxed()
 }
 
 /// Subtle section divider used inside the BOM modal's properties
@@ -295,34 +215,4 @@ pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> 
         ..container::Style::default()
     })
     .boxed()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_close_glyph_follows_the_theme_text_colour_on_light_and_dark() {
-        for theme in [Theme::Light, Theme::Dark] {
-            assert_eq!(
-                close_glyph_color(&theme),
-                theme.palette().background.base.text
-            );
-        }
-        assert_ne!(
-            close_glyph_color(&Theme::Light),
-            close_glyph_color(&Theme::Dark)
-        );
-    }
-
-    #[test]
-    fn the_close_glyph_is_white_on_the_red_hover_in_every_theme() {
-        for theme in [Theme::Light, Theme::Dark] {
-            assert_eq!(close_glyph_color_for(&theme, true), Color::WHITE);
-            assert_eq!(
-                close_glyph_color_for(&theme, false),
-                close_glyph_color(&theme)
-            );
-        }
-    }
 }

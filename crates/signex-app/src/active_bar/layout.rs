@@ -159,12 +159,8 @@ pub(crate) fn top_margin_for(m: &Metrics) -> f32 {
 
 /// Extra drop of the symbol editor's floating bar so it sits below the
 /// editor's own toolbar strip (one text line, button padding, strip padding
-/// and the column gap) instead of covering its centre controls. Graphite
-/// only; legacy themes keep the bar where it was.
-pub(crate) fn symbol_editor_bar_drop(tokens: &signex_types::theme::ThemeTokens) -> f32 {
-    if !crate::styles::is_graphite(tokens) {
-        return 0.0;
-    }
+/// and the column gap) instead of covering its centre controls.
+pub(crate) fn symbol_editor_bar_drop(_tokens: &signex_types::theme::ThemeTokens) -> f32 {
     let ts = crate::styles::TypeScale::DEFAULT;
     let sp = crate::styles::Spacing::DEFAULT;
     ts.body * crate::styles::LINE_HEIGHT + 2.0 * sp.s + 2.0 * sp.m + sp.s
