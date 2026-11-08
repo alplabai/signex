@@ -121,15 +121,40 @@ fn an_upgrade_never_overwrites_a_different_body_on_the_new_key() {
     assert_eq!(sheet.symbols[0].body_ref, "");
 }
 
-#[test]
-fn a_part_whose_units_use_two_versions_is_reported_once() {
+fn mixed(references: &[(&str, u32, &str)]) -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
-    let (v1, v2) = ("lib:r#00000001", "lib:r#00000002");
-    for (reference, unit, body) in [("U1", 1, v1), ("U1", 2, v2), ("U2", 1, v1), ("U2", 2, v1)] {
+    for &(reference, unit, body) in references {
         let mut sym = part("lib:r", body);
+        sym.uuid = uuid::Uuid::now_v7();
         sym.reference = reference.into();
         sym.unit = unit;
         sheet.symbols.push(sym);
     }
-    assert_eq!(sheet.mixed_version_parts(), ["U1"]);
+    sheet
+}
+
+fn all(sheet: &SchematicSheet) -> std::collections::HashSet<uuid::Uuid> {
+    sheet.symbols.iter().map(|s| s.uuid).collect()
+}
+
+#[test]
+fn a_part_whose_units_use_two_versions_is_reported_once() {
+    let (v1, v2) = ("lib:r#00000001", "lib:r#00000002");
+    let sheet = mixed(&[("U1", 1, v1), ("U1", 2, v2), ("U2", 1, v1), ("U2", 2, v1)]);
+    assert_eq!(sheet.mixed_version_parts_among(&all(&sheet)), ["U1"]);
+}
+
+#[test]
+fn only_parts_with_a_touched_unit_are_reported() {
+    let (v1, v2) = ("lib:r#00000001", "lib:r#00000002");
+    let sheet = mixed(&[("U1", 1, v1), ("U1", 2, v2), ("R1", 1, v1)]);
+    let touched = [sheet.symbols[2].uuid].into();
+    assert!(sheet.mixed_version_parts_among(&touched).is_empty());
+}
+
+#[test]
+fn unrelated_unannotated_units_are_not_a_part() {
+    let (v1, v2) = ("lib:r#00000001", "lib:r#00000002");
+    let sheet = mixed(&[("U?", 1, v1), ("U?", 2, v2)]);
+    assert!(sheet.mixed_version_parts_among(&all(&sheet)).is_empty());
 }

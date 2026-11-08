@@ -5,18 +5,52 @@
 use crate::app::Signex;
 
 impl Signex {
-    /// Warn once per part on the open sheets. Called when Annotate numbers
-    /// units into parts and when a placement lands, the two places a unit can
-    /// join a part of another version. Unopened sheets are not read.
-    pub(crate) fn warn_mixed_version_parts(&self) {
-        for (path, engine) in &self.document_state.engines {
-            for reference in engine.document().mixed_version_parts() {
+    /// Warn about the parts that contain one of `touched` (per sheet) and
+    /// whose units use different versions. Called with what a placement put
+    /// down and what Annotate renumbered, the two ways a unit can join a part
+    /// of another version, so an old mixed part is not reported again by an
+    /// unrelated edit. Only sheets with an open engine are read.
+    pub(crate) fn warn_mixed_version_parts(
+        &self,
+        touched: &std::collections::HashMap<
+            std::path::PathBuf,
+            std::collections::HashSet<uuid::Uuid>,
+        >,
+    ) {
+        for (path, ids) in touched {
+            let Some(engine) = self.document_state.engines.get(path) else {
+                continue;
+            };
+            for reference in engine.document().mixed_version_parts_among(ids) {
                 crate::diagnostics::log_warning(format!(
-                    "{reference} on {}: its units use different versions of the library symbol; \
-                     use Update from library to bring them together",
+                    "{reference} on {}: its units use different versions of the library symbol;                      use Update from library to bring them together",
                     path.display()
                 ));
             }
         }
+    }
+
+    /// After a numbering pass: warn about the parts that contain a symbol
+    /// whose designator the pass changed (`before` maps sheet -> uuid ->
+    /// designator), which is how Annotate joins `U?` units into one part.
+    pub(crate) fn warn_mixed_after_renumbering(
+        &self,
+        before: &std::collections::HashMap<
+            std::path::PathBuf,
+            std::collections::HashMap<uuid::Uuid, String>,
+        >,
+    ) {
+        let touched = before
+            .iter()
+            .filter_map(|(path, refs)| {
+                let engine = self.document_state.engines.get(path)?;
+                let ids: std::collections::HashSet<uuid::Uuid> = (engine.document().symbols.iter())
+                    .filter(|s| refs.get(&s.uuid).is_some_and(|old| *old != s.reference))
+                    .map(|s| s.uuid)
+                    .collect();
+                Some((path.clone(), ids))
+            })
+            .collect();
+        self.warn_mixed_version_parts(&touched);
     }
 }

@@ -170,19 +170,30 @@ impl SchematicSheet {
         Ok(key)
     }
 
-    /// The designators of the parts whose units draw with different body
-    /// versions, in sheet order. Such a part reads its pins and reference
-    /// letters per unit; Update from library brings the units together.
-    pub fn mixed_version_parts(&self) -> Vec<String> {
+    /// The designators of the parts that contain a `touched` symbol and whose
+    /// units draw with different body versions, in sheet order. An empty or
+    /// unannotated (`U?`) designator is never a part here, the same rule as
+    /// `placed_unit_ids`: unrelated `U?` units are not units of one part.
+    pub fn mixed_version_parts_among(
+        &self,
+        touched: &std::collections::HashSet<uuid::Uuid>,
+    ) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for part in super::group_into_parts(self.symbols.iter().map(Symbol::part_key)) {
+            let reference = self.symbols[part[0]].reference.trim();
+            if reference.is_empty() || reference.ends_with('?') {
+                continue;
+            }
+            if !part
+                .iter()
+                .any(|&i| touched.contains(&self.symbols[i].uuid))
+            {
+                continue;
+            }
             let mut keys = part.iter().map(|&i| self.symbols[i].body_key());
             let Some(first) = keys.next() else { continue };
-            if keys.any(|k| k != first) {
-                let reference = self.symbols[part[0]].reference.clone();
-                if !out.contains(&reference) {
-                    out.push(reference);
-                }
+            if keys.any(|k| k != first) && !out.iter().any(|r| r == reference) {
+                out.push(reference.to_owned());
             }
         }
         out
@@ -202,12 +213,14 @@ impl SchematicSheet {
     /// A body whose proper key is taken by a *different* body keeps its old
     /// key; nothing is overwritten.
     pub fn upgrade_unversioned_bodies(&mut self) {
-        let stale: Vec<String> = self
+        let mut stale: Vec<String> = self
             .lib_symbols
             .iter()
             .filter(|(key, body)| **key != body.body_ref())
             .map(|(key, _)| key.clone())
             .collect();
+        // Map order must not decide which of two colliding bodies moves first.
+        stale.sort();
         for key in stale {
             let Some(body) = self.lib_symbols.get(&key) else {
                 continue;
