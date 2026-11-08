@@ -88,6 +88,42 @@ fn color_net_by_id_colours_that_sheet_and_leaves_the_person_alone() {
     assert!(!app.document_state.is_document_dirty(&path("b.snxsch")));
 }
 
+/// The named sheet is enough: the active tab being a board (nothing a sheet
+/// command is enabled for) does not stop the command.
+#[test]
+fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
+    let mut app = app_with(&[("a.snxsch", A)]);
+    let board = signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: uid(500),
+        version: 1,
+        generator: "test".into(),
+        thickness: 1.6,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    };
+    app.open_pcb_tab(path("board.snxpcb"), "board".into(), board);
+    assert!(
+        app.document_state.active_path.is_none(),
+        "a board is active"
+    );
+    let outcome = run(
+        &mut app,
+        "color_net",
+        &["at=5,0", "color=#336699", &by_id(A)],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    assert_eq!(colours(&app, "a.snxsch"), 3);
+}
+
 #[test]
 fn color_net_by_path_does_the_same() {
     let mut by_id_app = app_at_work();
@@ -155,6 +191,10 @@ fn undo_and_redo_by_id_step_that_documents_history_only() {
         "color_net",
         &["at=5,0", "color=#336699", &by_id(A)],
     );
+    assert!(
+        app.document_state.is_document_dirty(&path("a.snxsch")),
+        "an edit"
+    );
     let before = interaction_snapshot(&app);
 
     assert_eq!(run(&mut app, "undo", &[&by_id(A)]), CommandOutcome::Ran);
@@ -168,6 +208,10 @@ fn undo_and_redo_by_id_step_that_documents_history_only() {
         CommandOutcome::Ran
     );
     assert_eq!(colours(&app, "a.snxsch"), 3);
+    assert!(
+        app.document_state.is_document_dirty(&path("a.snxsch")),
+        "redone, an edit again"
+    );
     assert_eq!(interaction_snapshot(&app), before);
 
     let nothing = refusal(&mut app, "redo", &[&by_id(A)]);
