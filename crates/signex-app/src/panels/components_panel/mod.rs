@@ -301,14 +301,12 @@ fn view_section<'a>(
                     .boxed(),
             );
         } else {
-            // identifier/data folding, never shown
-            // ast-grep-ignore: no-case-in-view
-            let needle = state.components_panel.filter.trim().to_lowercase();
+            let needle = state.components_panel.filter.trim();
             for lib in libs_for_source.iter().copied() {
                 section_col = section_col.push(view_library_block(
                     lib,
                     &state.components_panel,
-                    &needle,
+                    needle,
                     tokens,
                 ));
                 section_col = section_col.push(thin_sep(border_c));

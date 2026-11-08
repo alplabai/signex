@@ -30,12 +30,12 @@ rule:
         - pattern: $X.to_lowercase()
         - pattern: $X.to_ascii_uppercase()
         - pattern: $X.to_ascii_lowercase()
-        - pattern: char::to_uppercase
-        - pattern: char::to_lowercase
-        - pattern: str::to_uppercase
-        - pattern: str::to_lowercase
-        - pattern: str::to_ascii_uppercase
-        - pattern: str::to_ascii_lowercase
+        - pattern: $X.make_ascii_uppercase()
+        - pattern: $X.make_ascii_lowercase()
+        # A path to the method: `char::to_uppercase`, `u8::to_ascii_lowercase`,
+        # `std::primitive::str::to_lowercase`, `core::primitive::char::…`.
+        - kind: scoped_identifier
+          regex: '(^|::)(char|str|u8)::to_(ascii_)?(upper|lower)case$'
     - not:
         inside:
           stopBy: end
