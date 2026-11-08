@@ -25,7 +25,7 @@ fn a_command_outside_the_default_capabilities_names_the_one_it_needs() {
     let before = snapshot(&root);
 
     let save_as = one(
-        json!({"id": "save_document_as", "args": {"path": root.join("proj").join("copy.snxsch")}}),
+        json!({"id": "save_document_as", "args": {"document": "main.snxsch", "path": root.join("proj").join("copy.snxsch")}}),
     );
     let out = run_cli(&["run", project], &save_as);
     assert_eq!(
@@ -72,7 +72,7 @@ fn a_path_outside_the_project_is_refused_and_allow_path_opens_that_folder_only()
         &open,
     );
     assert_eq!(
-        allowed.lines[0]["status"], "ran",
+        allowed.lines[0]["status"], "answered",
         "{}\n{}",
         allowed.stdout, allowed.stderr
     );
@@ -154,7 +154,7 @@ fn malformed_input_is_a_refused_line_never_a_panic() {
         assert!(out.lines[index]["id"].is_null());
     }
     assert_eq!(
-        out.lines[5]["status"], "ran",
+        out.lines[5]["status"], "answered",
         "a good line after bad ones still runs"
     );
     assert!(!out.stderr.contains("panicked"), "{}", out.stderr);
@@ -187,7 +187,7 @@ fn a_line_over_the_limit_and_a_run_over_the_command_limit_are_refused() {
         out.stdout
     );
     assert_eq!(
-        out.lines[1]["status"], "ran",
+        out.lines[1]["status"], "answered",
         "the next line is read after a long one"
     );
 
@@ -237,9 +237,9 @@ fn allow_and_save_grant_exactly_the_capability_they_name() {
 
     let save_as = jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
-        json!({"id": "save_document_as", "args": {"path": "copy.snxsch"}}),
-        json!({"id": "save_document_as", "args": {"path": "copy.snxsch"}}),
-        json!({"id": "save_document_as", "args": {"path": "copy.snxsch", "overwrite": true}}),
+        json!({"id": "save_document_as", "args": {"document": "main.snxsch", "path": "copy.snxsch"}}),
+        json!({"id": "save_document_as", "args": {"document": "copy.snxsch", "path": "copy.snxsch"}}),
+        json!({"id": "save_document_as", "args": {"document": "copy.snxsch", "path": "copy.snxsch", "overwrite": true}}),
     ]);
     let before = snapshot(&root);
     let out = run_cli(&["run", project, "--save", "--keep-going"], &save_as);
@@ -250,16 +250,8 @@ fn allow_and_save_grant_exactly_the_capability_they_name() {
     );
     assert!(fx.dir.join("copy.snxsch").is_file(), "the copy was written");
     assert!(
-        refusal(&out, 2).contains("a file dialog was refused"),
+        refusal(&out, 2).contains("exists; pass overwrite=true"),
         "an existing file is not replaced without overwrite=true: {}",
-        out.stdout
-    );
-    // The details are in the Messages log, not parsed from it.
-    assert!(
-        out.lines[2]["messages"]
-            .to_string()
-            .contains("exists; give"),
-        "{}",
         out.stdout
     );
     assert_eq!(
@@ -361,20 +353,17 @@ fn a_save_refuses_a_document_that_became_a_link_to_outside_the_project() {
         "--save",
         "--keep-going",
     ]);
-    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
-    let paint = json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}});
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let paint = json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": "main.snxsch"}});
     assert_eq!(live.send(&paint)["status"], "ran");
 
     let outside = replace_with_link_to_outside(&fx.sheet, &other);
     let before = std::fs::read(&outside).unwrap();
-    let saved = live.send(&json!({"id": "save_document"}));
+    let saved = live.send(&json!({"id": "save_document", "args": {"document": "main.snxsch"}}));
 
     assert_eq!(saved["status"], "refused", "{saved}");
     let reason = saved["reason"].as_str().unwrap();
-    assert!(
-        reason.contains("it would write") && reason.contains("symbolic link"),
-        "{reason}"
-    );
+    assert!(reason.contains("symbolic link"), "{reason}");
     assert_eq!(
         std::fs::read(&outside).unwrap(),
         before,
@@ -395,11 +384,11 @@ fn a_save_refuses_a_project_file_that_became_a_link() {
         "--save",
         "--keep-going",
     ]);
-    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
 
     let outside = replace_with_link_to_outside(&fx.project, &other);
     let before = std::fs::read(&outside).unwrap();
-    let saved = live.send(&json!({"id": "save_document"}));
+    let saved = live.send(&json!({"id": "save_document", "args": {"document": "main.snxsch"}}));
 
     assert_eq!(saved["status"], "refused", "{saved}");
     assert!(

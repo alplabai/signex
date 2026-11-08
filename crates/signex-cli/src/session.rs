@@ -249,11 +249,19 @@ fn operands_for(approved: &Approved) -> Result<(CommandArgs, Vec<(String, String
         .collect();
     let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
     let args = CommandArgs::parse_operands(&approved.command, &refs).map_err(|e| e.to_string())?;
-    let is_dialog = approved
+    // A command that names its document takes its operands whole: `path` is
+    // then the target of `save_document_as`, not a dialog answer.
+    let names_document = approved
         .meta
         .operands
         .iter()
-        .any(|operand| operand.required && operand.kind == OperandKind::Path);
+        .any(|operand| operand.kind == OperandKind::Document);
+    let is_dialog = !names_document
+        && approved
+            .meta
+            .operands
+            .iter()
+            .any(|operand| operand.required && operand.kind == OperandKind::Path);
     if !is_dialog {
         return Ok((args, Vec::new()));
     }
@@ -291,7 +299,14 @@ fn verdict(
             )),
             None,
         ),
-        CommandOutcome::Disabled { reason } => (Status::Refused, Some(reason), None),
+        // A command that made nothing because the app said why in an error
+        // notice (an open of a missing file) failed; it was not refused.
+        CommandOutcome::Disabled { reason } => match notice {
+            Some(why) => (Status::Failed, Some(why), None),
+            None => (Status::Refused, Some(reason), None),
+        },
+        // A query ran: what it found is the result, never a bare `ran`.
+        CommandOutcome::Answered(value) => (Status::Answered, None, Some(value)),
         other => (
             Status::Failed,
             Some(format!("unexpected outcome {other:?}")),
@@ -428,6 +443,23 @@ mod tests {
             (disabled.0, disabled.1.as_deref()),
             (Status::Refused, Some("why"))
         );
+        // A refusal the app explained in an error notice (an open of a file
+        // that is not there) is a failure with that notice.
+        let noticed = verdict(
+            "x",
+            CommandOutcome::Disabled {
+                reason: "made no document".into(),
+            },
+            Some("Open failed: no file".into()),
+        );
+        assert_eq!(
+            (noticed.0, noticed.1.as_deref()),
+            (Status::Failed, Some("Open failed: no file"))
+        );
+        // A query's answer is the result: `answered` with `data`.
+        let answer = serde_json::json!({"count": 1});
+        let answered = verdict("x", CommandOutcome::Answered(answer.clone()), None);
+        assert_eq!(answered, (Status::Answered, None, Some(answer)));
         let not_headless = verdict("x", CommandOutcome::NotHeadless, None);
         assert_eq!(not_headless.0, Status::Failed);
     }

@@ -56,7 +56,7 @@ impl Policy {
             .operands
             .iter()
             .map(|(name, text)| {
-                if !is_path_operand(meta, name) {
+                if !is_path_operand(meta, name, text) {
                     return Ok((name.clone(), text.clone()));
                 }
                 let checked = self
@@ -81,7 +81,7 @@ impl Policy {
         let allowed = self.allowed(roots);
         let writes = capability_of(approved.meta).writes_files();
         for (name, text) in &approved.operands {
-            if !is_path_operand(approved.meta, name) {
+            if !is_path_operand(approved.meta, name, text) {
                 continue;
             }
             if writes {
@@ -172,10 +172,20 @@ fn check_derived_folder(target: &Path, allowed: &[PathBuf]) -> Result<(), String
         .map_err(|why| format!("the folder it creates beside it: {why}"))
 }
 
-fn is_path_operand(meta: &CommandMetadata, name: &str) -> bool {
+/// Whether the operand `name` with value `text` names a file: a path operand,
+/// or a `Document` operand given as a path. A document id is not a path, so
+/// it is never confined or joined to the project folder.
+fn is_path_operand(meta: &CommandMetadata, name: &str, text: &str) -> bool {
     meta.operands
         .iter()
-        .any(|operand| operand.name == name && operand.kind == OperandKind::Path)
+        .find(|operand| operand.name == name)
+        .is_some_and(|operand| match operand.kind {
+            OperandKind::Path => true,
+            OperandKind::Document => text
+                .parse::<signex_types::document_id::DocumentId>()
+                .is_err(),
+            _ => false,
+        })
 }
 
 /// A write goes to a real file: through a link it could land anywhere the
