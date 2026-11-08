@@ -19,10 +19,11 @@ use crate::transform::{Side, pad_world_center};
 use crate::union_find::UnionFind;
 use crate::units::PointNm;
 
-/// Up to this many pads, a net's islands are joined at their closest pads.
-/// Beyond it each island is reduced to one representative pad, which keeps
-/// the work quadratic in islands, not in pad pairs.
-const EXACT_PAD_LIMIT: usize = 256;
+/// Up to this many pad pairs across a net's islands, they are joined at
+/// their closest pads. Beyond it each island is reduced to one
+/// representative pad. Counted in pairs, not pads: a big mostly-routed net
+/// with a stray pad is few pairs and stays exact.
+const EXACT_PAIR_LIMIT: usize = 1 << 22;
 
 /// One unrouted connection of net `net`, `from <= to` in `(x, y)` order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -99,8 +100,7 @@ fn join_islands(groups: &[Vec<PointNm>]) -> Vec<(PointNm, PointNm)> {
     if groups.len() < 2 {
         return Vec::new();
     }
-    let pads: usize = groups.iter().map(Vec::len).sum();
-    if pads > EXACT_PAD_LIMIT {
+    if cross_island_pairs(groups) > EXACT_PAIR_LIMIT {
         let reps: Vec<PointNm> = groups.iter().map(|g| representative(g)).collect();
         return euclidean_mst(&reps)
             .into_iter()
@@ -125,6 +125,13 @@ fn join_islands(groups: &[Vec<PointNm>]) -> Vec<(PointNm, PointNm)> {
         .into_iter()
         .filter_map(|e| ends.get(&(e.a, e.b)).copied())
         .collect()
+}
+
+/// How many pad pairs lie in different islands: `(P^2 - sum n_i^2) / 2`.
+fn cross_island_pairs(groups: &[Vec<PointNm>]) -> usize {
+    let pads: usize = groups.iter().map(Vec::len).sum();
+    let same: usize = groups.iter().map(|g| g.len() * g.len()).sum();
+    pads.saturating_mul(pads).saturating_sub(same) / 2
 }
 
 /// The pad nearest the island's centroid, ties to the lower `(x, y)`.

@@ -18,9 +18,10 @@ crate would be the "kept in step" pair ADR-0005 bans.
   copper layer. Through-hole pads and through vias reach every layer;
   blind and micro vias the layers between the ones they name.
 - Per net, each connected group of copper holding a pad is an island. Up to
-  256 pads the islands join at their closest pads (Kruskal,
-  `spanning_forest`); beyond that each island is one representative pad and
-  the join is `euclidean_mst`.
+  about 4 million pad pairs across the islands (counted in pairs, so a big
+  mostly-routed net with a stray pad stays exact) the islands join at their
+  closest pads (Kruskal, `spanning_forest`); beyond that each island is one
+  representative pad and the join is `euclidean_mst`.
 - Net 0 is no net. Pads with no net are ignored.
 - Not modelled yet: zone fills (a pad inside a same-net pour still gets a
   line) and two tracks that cross without an end on the other.
@@ -35,8 +36,8 @@ print the figure with `--nocapture`.
 
 ## Showing and hiding
 
-`PcbRatsnest` (app `InteractionState.pcb_ratsnest`) holds the hidden nets.
+`PcbRatsnest` (app `InteractionState.pcb_ratsnest`) holds the hidden nets, per board path (net numbers are per board).
 `Message::Pcb(PcbMsg::RatsnestNetVisibilityToggled(net))` toggles one;
-there is no panel control yet. Drawing is the existing overlay in
+there is no panel control yet (follow-up: the nets panel is Graphite-owned). Drawing is the existing overlay in
 `signex-renderer` (`pcb/ratsnest.rs` converts lines to `RatsnestInput`;
 `pcb/emit.rs` draws them in `ColorSlot::Ratsnest`).

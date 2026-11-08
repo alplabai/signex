@@ -285,8 +285,8 @@ fn a_bottom_side_pad_ends_the_line_at_its_mirrored_centre() {
 }
 
 #[test]
-fn a_big_net_uses_one_representative_per_island() {
-    // 300 pads, each its own island: past EXACT_PAD_LIMIT.
+fn a_big_net_of_single_pad_islands_is_joined_exactly() {
+    // 300 pads, each its own island.
     let pads: Vec<Pad> = (0..300)
         .map(|i| pad(i + 1, i as f64 * 3.0, 0.0, 1, "TopCopper"))
         .collect();
@@ -297,4 +297,34 @@ fn a_big_net_uses_one_representative_per_island() {
     ));
     assert_eq!(lines.len(), 299);
     assert!(lines.iter().all(|l| l.to.x - l.from.x == 3 * MM));
+}
+
+#[test]
+fn a_stray_pad_joins_the_nearest_pad_of_a_big_routed_island() {
+    // 300 pads chained by tracks into one island, plus a stray pad past the
+    // last one: the line ends at the last pad, not at the island's centroid.
+    let mut pads: Vec<Pad> = (0..300)
+        .map(|i| pad(i + 1, i as f64 * 3.0, 0.0, 1, "TopCopper"))
+        .collect();
+    pads.push(pad(1000, 907.0, 0.0, 1, "TopCopper"));
+    let tracks: Vec<Segment> = (0..299)
+        .map(|i| {
+            let x = i as f64 * 3.0;
+            track(i + 1, (x, 0.0), (x + 3.0, 0.0), 1, "TopCopper")
+        })
+        .collect();
+    let lines = ratsnest(&board(
+        vec![footprint(1, "TopCopper", pads)],
+        tracks,
+        vec![],
+    ));
+    assert_eq!(lines, vec![line(1, at(897, 0), at(907, 0))]);
+}
+
+#[test]
+fn past_the_pair_limit_islands_fall_back_to_one_pad_each() {
+    let island = |x0: i64| -> Vec<PointNm> { (0..2100).map(|i| at(x0 + i, 0)).collect() };
+    let groups = [island(0), island(10_000)];
+    assert!(cross_island_pairs(&groups) > EXACT_PAIR_LIMIT);
+    assert_eq!(join_islands(&groups).len(), 1);
 }

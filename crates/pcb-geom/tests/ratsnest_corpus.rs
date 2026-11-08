@@ -77,7 +77,7 @@ fn ten_thousand_tracks() -> PcbBoard {
 }
 
 #[test]
-fn ten_thousand_tracks_take_well_under_a_second() {
+fn ten_thousand_tracks_are_joined_within_the_debug_budget() {
     let board = ten_thousand_tracks();
     assert_eq!(board.segments.len(), 10_000);
     let started = Instant::now();

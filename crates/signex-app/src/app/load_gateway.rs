@@ -437,10 +437,14 @@ impl Signex {
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
         // The ratsnest is recomputed only when the board's revision moved.
         let ratsnest_key = self.active_pcb_ratsnest_key();
+        let board_path = self.active_tab_path().unwrap_or_default();
         let mut ratsnest = std::mem::take(&mut self.interaction_state.pcb_ratsnest);
         let renderer_snapshot = self.active_pcb().map(|board| {
             ratsnest.refresh(ratsnest_key, board);
-            ratsnest.apply(signex_renderer::pcb::PcbSnapshot::from_board(board))
+            ratsnest.apply(
+                &board_path,
+                signex_renderer::pcb::PcbSnapshot::from_board(board),
+            )
         });
         self.interaction_state.pcb_ratsnest = ratsnest;
 

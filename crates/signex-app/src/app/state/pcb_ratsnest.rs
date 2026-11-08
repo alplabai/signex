@@ -3,8 +3,8 @@
 //!
 //! The lines come from `pcb-geom`; drawing them is `signex-renderer`'s.
 
-use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use pcb_geom::RatLine;
 use signex_renderer::pcb::PcbSnapshot;
@@ -17,7 +17,8 @@ pub(crate) type RatsnestKey = (PathBuf, u64);
 pub struct PcbRatsnest {
     key: Option<RatsnestKey>,
     lines: Vec<RatLine>,
-    hidden_nets: BTreeSet<u32>,
+    /// Hidden net numbers per board: a net number means nothing off its board.
+    hidden_nets: BTreeMap<PathBuf, BTreeSet<u32>>,
 }
 
 impl PcbRatsnest {
@@ -35,20 +36,28 @@ impl PcbRatsnest {
         &self.lines
     }
 
-    pub fn is_net_hidden(&self, net: u32) -> bool {
-        self.hidden_nets.contains(&net)
+    pub fn is_net_hidden(&self, board: &Path, net: u32) -> bool {
+        self.hidden_nets
+            .get(board)
+            .is_some_and(|nets| nets.contains(&net))
     }
 
-    /// Hide `net`'s lines, or show them again.
-    pub(crate) fn toggle_net(&mut self, net: u32) {
-        if !self.hidden_nets.remove(&net) {
-            self.hidden_nets.insert(net);
+    /// Hide `net`'s lines on `board`, or show them again.
+    pub(crate) fn toggle_net(&mut self, board: &Path, net: u32) {
+        let nets = self.hidden_nets.entry(board.to_path_buf()).or_default();
+        if !nets.remove(&net) {
+            nets.insert(net);
+        }
+        if nets.is_empty() {
+            self.hidden_nets.remove(board);
         }
     }
 
-    /// `snapshot` with the lines of every net that is not hidden.
-    pub(crate) fn apply(&self, snapshot: PcbSnapshot) -> PcbSnapshot {
-        snapshot.with_ratsnest(&self.lines, &self.hidden_nets)
+    /// `snapshot` with the lines of every net of `board` that is not hidden.
+    pub(crate) fn apply(&self, board: &Path, snapshot: PcbSnapshot) -> PcbSnapshot {
+        let none = BTreeSet::new();
+        let hidden = self.hidden_nets.get(board).unwrap_or(&none);
+        snapshot.with_ratsnest(&self.lines, hidden)
     }
 }
 
@@ -144,17 +153,31 @@ mod tests {
     fn a_hidden_net_drops_out_of_the_snapshot_and_comes_back() {
         let mut state = PcbRatsnest::default();
         state.refresh(key(1), &board(&[0.0, 5.0]));
-        assert_eq!(state.apply(PcbSnapshot::default()).ratsnest_lines.len(), 1);
-        state.toggle_net(1);
-        assert!(state.is_net_hidden(1));
+        let a = Path::new("a.snxpcb");
+        let b = Path::new("b.snxpcb");
+        assert_eq!(
+            state.apply(a, PcbSnapshot::default()).ratsnest_lines.len(),
+            1
+        );
+        state.toggle_net(a, 1);
+        assert!(state.is_net_hidden(a, 1));
         assert!(
             state
-                .apply(PcbSnapshot::default())
+                .apply(a, PcbSnapshot::default())
                 .ratsnest_lines
                 .is_empty()
         );
-        state.toggle_net(1);
-        assert!(!state.is_net_hidden(1));
-        assert_eq!(state.apply(PcbSnapshot::default()).ratsnest_lines.len(), 1);
+        // The same net number on another board is a different net.
+        assert!(!state.is_net_hidden(b, 1));
+        assert_eq!(
+            state.apply(b, PcbSnapshot::default()).ratsnest_lines.len(),
+            1
+        );
+        state.toggle_net(a, 1);
+        assert!(!state.is_net_hidden(a, 1));
+        assert_eq!(
+            state.apply(a, PcbSnapshot::default()).ratsnest_lines.len(),
+            1
+        );
     }
 }
