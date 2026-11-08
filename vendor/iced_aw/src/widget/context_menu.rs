@@ -356,8 +356,10 @@ mod tests {
 
         let size =
             Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::size(&context_menu);
-        assert_eq!(size.width, Length::Shrink);
-        assert_eq!(size.height, Length::Shrink);
+        // Text sizes itself to its content (`Length::Fit` in the pinned iced
+        // fork); the context menu reports the underlay's size unchanged.
+        assert_eq!(size.width, Length::Fit);
+        assert_eq!(size.height, Length::Fit);
     }
 
     #[test]
@@ -392,8 +394,10 @@ mod tests {
 
         let size =
             Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::size(&context_menu);
-        assert_eq!(size.width, Length::Shrink);
-        assert_eq!(size.height, Length::Shrink);
+        // Text sizes itself to its content (`Length::Fit` in the pinned iced
+        // fork); the context menu reports the underlay's size unchanged.
+        assert_eq!(size.width, Length::Fit);
+        assert_eq!(size.height, Length::Fit);
     }
 
     #[test]

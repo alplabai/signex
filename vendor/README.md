@@ -11,7 +11,9 @@ workspace dependency table in the root `Cargo.toml`.
 ## Scope of the checks
 
 `vendor/` sits outside the `license-guard` clean-room grep and the file-size gate; both only
-look at `crates/**`. Review changes here by hand.
+look at `crates/**`. Review changes here by hand. `iced_aw` is excluded from the workspace, so
+`--workspace` skips its tests; the `test · workspace` CI job runs them with
+`cargo nextest run -p iced_aw --profile ci` (#2206). Run `cargo test -p iced_aw --lib` locally.
 
 ## Fonts
 
