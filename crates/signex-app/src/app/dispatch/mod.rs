@@ -99,6 +99,15 @@ impl Signex {
                     ContextMenuMsg::Show(..) => self.dismiss_first_run_tour(),
                     _ => Task::none(),
                 };
+                // The menu takes the cursor: a card the canvas showed must go.
+                if matches!(
+                    msg,
+                    ContextMenuMsg::Show(..)
+                        | ContextMenuMsg::ShowProjectTree(_)
+                        | ContextMenuMsg::ShowTab(_)
+                ) {
+                    self.clear_canvas_hover();
+                }
                 Task::batch([dismissal, self.dispatch_context_menu_message(msg)])
             }
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),

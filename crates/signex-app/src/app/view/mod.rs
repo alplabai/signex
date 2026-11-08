@@ -780,6 +780,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Vec<Element<'a, Message>> {
         let mut layers = Vec::new();
+        let mut covered = false;
         for id in overlay_id::visible(self.has_blocking_modal()) {
             // The lock layer goes in where the dialogs start.
             if *id == overlay_id::OverlayId::Preferences
@@ -787,8 +788,14 @@ impl Signex {
             {
                 layers.push(layer);
             }
+            // The card follows the canvas hover; an overlay over the canvas
+            // takes the cursor, so none is shown while one is up.
+            if *id == overlay_id::OverlayId::HoverTooltip && covered {
+                continue;
+            }
             let first_new = layers.len();
             self.extend_overlay(&mut layers, *id, window_id);
+            covered |= layers.len() > first_new && overlay_id::covers_canvas_hover(*id);
             // #562 — stop the wheel here rather than let it reach the
             // canvas. Applied per overlay id, not per builder: most
             // builders wrap their card in neither `wrap_modal` nor
@@ -823,6 +830,8 @@ impl Signex {
 mod canvas_wheel_tests;
 #[cfg(test)]
 mod editor_bar_wheel_tests;
+#[cfg(test)]
+mod hover_through_tests;
 #[cfg(test)]
 mod overlay_paint_tests;
 

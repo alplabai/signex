@@ -302,6 +302,20 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
     }
 }
 
+/// Whether this overlay, once painted, takes the cursor off the canvas, so
+/// the hover card must not show. Surfaces only: not the paused-placement
+/// banner, the text editor, the dock drop preview or floating panels.
+pub(crate) fn covers_canvas_hover(id: OverlayId) -> bool {
+    swallows_scroll(id)
+        && !matches!(
+            id,
+            OverlayId::PlacementPaused
+                | OverlayId::TextEdit
+                | OverlayId::DockDragZone
+                | OverlayId::FloatingPanels
+        )
+}
+
 /// Tag the Active Bar and context-menu messages of overlay `layers` painted
 /// in the undocked window `owner`, so `update` runs them against the sheet
 /// that window shows (#1910). `None` (the main window) leaves them as is.

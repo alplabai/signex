@@ -217,6 +217,7 @@ impl Signex {
                     },
                 );
             }
+            CanvasEvent::CursorLeft => self.clear_canvas_hover(),
             CanvasEvent::CursorMoved | CanvasEvent::ViewMoved => {
                 // The sheet background (paper, grid, frame) follows the camera
                 // alone, so a hover keeps its cache; a pan or zoom drops it
