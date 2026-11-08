@@ -56,6 +56,7 @@ impl Signex {
             label,
         } = pass;
         let mut writes: Vec<PendingWrite> = Vec::new();
+        self.warn_mixed_version_parts();
         // Every sheet the counter must cover - cached tabs, unopened sheets
         // and the active engine alike - in the ONE order
         // `ordered_project_sheet_paths` defines. The preview walks the same

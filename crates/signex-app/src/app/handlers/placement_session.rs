@@ -223,6 +223,7 @@ impl Signex {
             self.report_place_failure("Nothing was placed; see the log for details.");
             return Task::none();
         }
+        self.warn_mixed_version_parts();
         self.after_placement_commit(reference.as_deref());
         Task::none()
     }

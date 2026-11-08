@@ -65,6 +65,9 @@ pub(super) enum SkipReason {
     RowAmbiguous,
     /// An instance entry gives some placement a different designator.
     RetargetedByInstance,
+    /// The part's units draw with versions of its library symbol that name
+    /// different reference letters, so no one letter is the part's own.
+    MixedVersions,
     /// The prefix is not one the system could have issued: the user edited it.
     UserEdited,
 }
@@ -82,6 +85,7 @@ impl SkipReason {
                 "whose library symbol is bound by rows that disagree on the prefix"
             }
             Self::RetargetedByInstance => "with a per-placement designator",
+            Self::MixedVersions => "whose units use versions with different reference letters",
             Self::UserEdited => "with a hand-edited prefix",
         }
     }
@@ -236,8 +240,19 @@ fn decide(input: &PlanInput<'_>, units: &[Member]) -> Decision {
     {
         return Decision::Skip(SkipReason::RetargetedByInstance);
     }
-    let lib_symbol = input.sheets[units[0].0].lib_symbols.get(first.body_key());
-    let symbol_letters = lib_symbol.map_or("", |l| l.reference.as_str());
+    // Each unit's own version names the letters; units of one part may draw
+    // with different versions (#2209), so read them all, never `units[0]`.
+    let mut letters = units.iter().map(|&(sheet, idx)| {
+        let s = &input.sheets[sheet].symbols[idx];
+        input.sheets[sheet]
+            .lib_symbols
+            .get(s.body_key())
+            .map_or("", |l| l.reference.as_str())
+    });
+    let symbol_letters = letters.next().unwrap_or("");
+    if letters.any(|other| other != symbol_letters) {
+        return Decision::Skip(SkipReason::MixedVersions);
+    }
     let current = alphabetic_prefix(&first.reference).to_ascii_uppercase();
     if !is_system_issued(&current, symbol_letters, facts) {
         return Decision::Skip(SkipReason::UserEdited);
@@ -517,6 +532,37 @@ mod tests {
             true,
         );
         assert_eq!(only_skip(&p), SkipReason::RowMissing);
+    }
+
+    #[test]
+    fn units_on_versions_with_different_letters_leave_the_part_alone() {
+        let letters = |reference: &str| {
+            let mut symbol = signex_library::primitive::Symbol::empty("D");
+            symbol.designator = reference.into();
+            symbol.to_lib_symbol("L:D")
+        };
+        let bodies = HashMap::from([
+            ("L:D#00000001".to_owned(), letters("D?")),
+            ("L:D#00000002".to_owned(), letters("X?")),
+        ]);
+        let (mut a, mut b) = (linked("V1", 1), linked("V1", 2));
+        a.body_ref = "L:D#00000001".into();
+        b.body_ref = "L:D#00000002".into();
+        let symbols = [a, b];
+        let sheets = [PlanSheet {
+            symbols: &symbols,
+            lib_symbols: &bodies,
+            read_only: false,
+        }];
+        let lookup = lookup_of(facts("diode", None));
+        let p = plan_reprefix(&PlanInput {
+            standard: DesignatorStandard::Ieee315,
+            sheets: &sheets,
+            lookup: &lookup,
+            locked: &HashSet::new(),
+            order: AnnotateOrder::default(),
+        });
+        assert_eq!(only_skip(&p), SkipReason::MixedVersions);
     }
 
     #[test]
