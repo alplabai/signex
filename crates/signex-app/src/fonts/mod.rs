@@ -939,3 +939,16 @@ mod designator_standard_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod chrome_mono_tests {
+    /// The menu card draws its shortcuts in the widgets crate's family; the
+    /// chrome font is the same face.
+    #[test]
+    fn the_menu_card_mono_family_is_the_chrome_mono_font() {
+        assert_eq!(
+            signex_widgets::active_bar_dropdown::MONO_FAMILY,
+            super::CHROME_MONO_FONT
+        );
+    }
+}

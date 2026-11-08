@@ -887,8 +887,11 @@ fn the_tree_root_menu_opened_near_the_bottom_edge_stays_inside_the_window() {
     let metrics =
         signex_widgets::active_bar_dropdown::MenuMetrics::of(&app.document_state.panel_ctx.tokens);
     let height = metrics.card_height(&rows).expect("plain rows");
+    let has_icons = rows
+        .iter()
+        .any(|e| matches!(e, DropdownEntry::Item(it) if it.icon.is_some()));
     assert!(
-        height > 6.0 * metrics.item_height(false),
+        height > 6.0 * metrics.item_height(false) + 2.0 * metrics.panel_pad,
         "the root menu is taller than the old six-row guess"
     );
     let row_labels: Vec<String> = rows
@@ -918,13 +921,18 @@ fn the_tree_root_menu_opened_near_the_bottom_edge_stays_inside_the_window() {
         );
         let top = crate::layout_probe::find(&texts, first).bounds;
         let bottom = crate::layout_probe::find(&texts, last).bounds;
+        // The card's bottom edge: the last row's lower edge plus the padding.
+        let card_bottom = bottom.y
+            + bottom.height / 2.0
+            + metrics.item_height(has_icons) / 2.0
+            + metrics.panel_pad;
         assert!(
             top.y >= 0.0,
             "opens above the window at {anchor_y}: {top:?}"
         );
         assert!(
-            bottom.y + bottom.height <= 700.0,
-            "the card runs past the bottom edge at {anchor_y}: {bottom:?}"
+            card_bottom <= 700.0 - super::super::placement::EDGE_MARGIN,
+            "the card runs past the bottom edge at {anchor_y}: bottom {card_bottom}"
         );
     }
 }

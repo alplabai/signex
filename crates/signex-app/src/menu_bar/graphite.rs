@@ -15,8 +15,9 @@ use crate::styles::TypeScale;
 
 /// Row metrics of a dropdown: the same card numbers as every context menu.
 const M: MenuMetrics = MenuMetrics::GRAPHITE;
-/// Width of the leading check-mark column of a toggle row.
-const MARK_WIDTH: f32 = 14.0;
+/// Width of the leading check-mark column of a toggle row: the width
+/// `MenuMetrics::fitted_width` reserves for it, so the card fits its rows.
+const MARK_WIDTH: f32 = M.check_size;
 /// Glyph of the submenu chevron.
 const CHEVRON: &str = "\u{203A}";
 

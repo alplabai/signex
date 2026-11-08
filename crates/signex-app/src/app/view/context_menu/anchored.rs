@@ -109,11 +109,15 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for AnchoredMenu<'_, 
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        // The flyout draws on top, so it sees an event first.
-        for (child, (child_layout, child_tree)) in self
+        // The flyout draws on top, so it sees an event first; while the
+        // pointer is on it the card under it must not see the pointer.
+        let mut cursor = cursor;
+        let last = self.children.len().saturating_sub(1);
+        for (i, (child, (child_layout, child_tree))) in self
             .children
             .iter_mut()
             .zip(layout.iter_mut(&mut tree.children))
+            .enumerate()
             .rev()
         {
             child.update(
@@ -127,6 +131,14 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for AnchoredMenu<'_, 
             );
             if shell.is_event_captured() {
                 return;
+            }
+            if i == last
+                && i > 0
+                && !cursor.is_levitating()
+                && child.mouse_interaction(child_tree, child_layout, cursor, viewport, renderer)
+                    != mouse::Interaction::None
+            {
+                cursor = cursor.levitate();
             }
         }
     }
@@ -161,6 +173,21 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for AnchoredMenu<'_, 
         viewport: &Rectangle,
     ) {
         use iced::advanced::Renderer as _;
+        // The pointer on the flyout is hidden from the card beneath it.
+        let card_cursor = match self.children.get(1).zip(layout.iter(&tree.children).nth(1)) {
+            Some((flyout, (flyout_layout, flyout_tree)))
+                if flyout.mouse_interaction(
+                    flyout_tree,
+                    flyout_layout,
+                    cursor,
+                    viewport,
+                    renderer,
+                ) != mouse::Interaction::None =>
+            {
+                cursor.levitate()
+            }
+            _ => cursor,
+        };
         for (i, (child, (child_layout, child_tree))) in self
             .children
             .iter()
@@ -176,7 +203,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for AnchoredMenu<'_, 
                     theme,
                     style,
                     child_layout,
-                    cursor,
+                    card_cursor,
                     viewport,
                 );
             } else {
