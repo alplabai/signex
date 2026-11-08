@@ -683,8 +683,6 @@ pub enum PanelMsg {
     EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.
     EditSymbolValueFontSizePt(uuid::Uuid, u32),
-    /// Change the lib_id of a symbol (used by power-port Style dropdown).
-    EditSymbolLibId(uuid::Uuid, String),
     /// Swap a power-port's style: change lib_id and preserve visual direction
     /// by setting rotation accordingly.
     EditPowerPortStyle {
