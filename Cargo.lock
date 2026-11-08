@@ -5720,6 +5720,7 @@ dependencies = [
  "signex-gfx",
  "signex-types",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]
