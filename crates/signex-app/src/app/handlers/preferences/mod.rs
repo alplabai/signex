@@ -246,8 +246,6 @@ impl Signex {
         // cache clear below repaints the PCB canvas so a discarded toggle
         // takes no effect.
         self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
-        // Revert the render inputs used for schematic live preview.
-        self.sync_panel_theme();
         // #630 — the schematic grid style previewed live, so push the
         // committed value back to every window's canvas.
         // #629 — the symbol grid style is the only one of the three
@@ -256,10 +254,10 @@ impl Signex {
         // through `LibraryDisplaySettings` when a library is opened, so
         // restoring their draft fields above is enough.
         self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
-        // `update_canvas_theme` re-derives the canvas colours from the saved
+        // `sync_theme` re-derives the canvas colours from the saved
         // theme, clears BOTH content caches (schematic + PCB) and every
         // schematic and PCB bg cache — don't clear them again here.
-        self.update_canvas_theme();
+        self.sync_theme();
     }
 
     /// Set the effective PCB GPU-render flag on every PCB canvas (#494).
@@ -356,8 +354,7 @@ impl Signex {
                 // The live-preview already pushed the draft into the widget;
                 // re-assert it so the saved and effective flags can't diverge.
                 self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
-                self.update_canvas_theme();
-                self.sync_panel_theme();
+                self.sync_theme();
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
                 // The live preview already pushed the draft onto the
                 // canvases; re-assert from the committed value so the
@@ -499,14 +496,13 @@ impl Signex {
             }
             PrefMsg::DraftTheme(id) => {
                 self.ui_state.preferences_draft_theme = id;
-                self.sync_panel_theme();
                 // Schematic canvas colours are derived from
                 // `preferences_draft_theme` every frame (#631), but the PCB
                 // canvases hold pushed colours and every canvas caches its
-                // paper, grid and content. `apply_canvas_theme` recolours
+                // paper, grid and content. `sync_theme` recolours
                 // the PCB canvases and drops the caches on every open
                 // canvas, docked or undocked (#1749).
-                self.apply_canvas_theme(id);
+                self.sync_theme();
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftFont(name) => {

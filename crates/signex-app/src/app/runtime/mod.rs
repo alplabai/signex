@@ -433,7 +433,7 @@ impl Signex {
     }
 
     /// Canvas colours for a given theme id — the one derivation shared by
-    /// `update_canvas_theme` (pushes them into the PCB canvas) and
+    /// `sync_theme` (pushes them into the PCB canvas) and
     /// [`Self::canvas_view_prefs`] (hands them to the schematic `Program`
     /// each frame).
     pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
@@ -541,16 +541,16 @@ impl Signex {
         }
     }
 
-    /// Repaint every canvas with the committed theme.
-    pub(crate) fn update_canvas_theme(&mut self) {
-        self.apply_canvas_theme(self.ui_state.theme_id);
-    }
-
-    /// Push `id`'s canvas colours onto every PCB canvas and drop the caches
-    /// of every PCB and schematic canvas, docked or undocked. Serves both
-    /// the committed theme and the Preferences draft preview (#1749).
-    pub(crate) fn apply_canvas_theme(&mut self, id: ThemeId) {
-        let colors = self.canvas_colors_for(id);
+    /// The one theme-change path: point the panel context, every PCB and
+    /// schematic canvas and every symbol / footprint editor canvas at the
+    /// effective theme (the Preferences draft while the dialog is open, the
+    /// saved theme after) and drop their caches. The Components-panel
+    /// previews compare the colours they were drawn with on each frame, so
+    /// they repaint from the refreshed panel context. Startup, the title-bar
+    /// toggle and every Preferences path call this and nothing else.
+    pub(crate) fn sync_theme(&mut self) {
+        self.sync_panel_theme();
+        let colors = self.canvas_colors_for(self.ui_state.effective_theme_id());
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.set_theme_colors(
                 crate::render_config::to_iced(&colors.background),
@@ -558,6 +558,12 @@ impl Signex {
             );
             canvas.canvas_colors = colors;
             canvas.clear_content_cache();
+        }
+        for editor in self.document_state.symbol_editors.values_mut() {
+            editor.canvas_cache.clear();
+        }
+        for editor in self.document_state.footprint_editors.values_mut() {
+            editor.canvas_cache.clear();
         }
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
             // The paper and grid live in the background layer, so a new
@@ -595,7 +601,7 @@ mod tests {
             .canvases
             .insert(win, crate::canvas::CanvasSlot::new());
 
-        app.update_canvas_theme();
+        app.sync_theme();
         // A theme change repaints the paper and grid too, not just the content.
         let slot = &app.interaction_state.canvases[&win];
         assert_eq!(slot.content_cache_clears, 1);
@@ -609,6 +615,42 @@ mod tests {
             color: None,
         }));
         assert_eq!(app.interaction_state.canvases[&win].content_cache_clears, 2);
+    }
+
+    /// The title-bar sun/moon button sends `ThemeChanged`; every surface —
+    /// schematic canvas, footprint preview, PCB canvas — must follow it in
+    /// both directions, not just the chrome.
+    #[test]
+    fn the_title_bar_toggle_repaints_every_canvas_and_preview() {
+        use signex_types::theme::{ThemeId, canvas_colors, theme_tokens};
+        let (mut app, _t) = Signex::new();
+        let _ = app.update(Message::Ui(UiMsg::ThemeChanged(ThemeId::GraphiteLight)));
+        let model = crate::library::editor::footprint::canvas::PreviewFootprint::build(
+            &signex_library::primitive::Footprint::empty("FX"),
+        );
+        let mut check = |app: &mut Signex, id: ThemeId| {
+            let _ = app.update(Message::Ui(UiMsg::ThemeChanged(id)));
+            let want = canvas_colors(id);
+            let prefs = app.canvas_view_prefs(iced::window::Id::unique());
+            assert_eq!(prefs.canvas_colors.background, want.background);
+            assert_eq!(prefs.canvas_colors.paper, want.paper);
+            assert_eq!(prefs.theme_bg, crate::render_config::to_iced(&want.background));
+            assert_eq!(prefs.theme_paper, crate::render_config::to_iced(&want.paper));
+            let pcb = &app.interaction_state.pcb_canvas;
+            assert_eq!(pcb.canvas_colors, want);
+            assert_eq!(pcb.theme_bg, crate::render_config::to_iced(&want.background));
+            assert_eq!(pcb.theme_grid, crate::render_config::to_iced(&want.grid));
+            let tokens = &app.document_state.panel_ctx.tokens;
+            assert_eq!(*tokens, theme_tokens(id));
+            assert_eq!(app.document_state.panel_ctx.canvas_colors, want);
+            crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(&model)
+                .with_theme_tokens(tokens)
+                .ground()
+        };
+        let dark = check(&mut app, ThemeId::GraphiteDark);
+        let light = check(&mut app, ThemeId::GraphiteLight);
+        assert!(dark.is_some() && light.is_some());
+        assert_ne!(dark, light, "footprint preview ground must follow the theme");
     }
 
     /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so

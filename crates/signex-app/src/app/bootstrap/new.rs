@@ -773,7 +773,7 @@ impl Signex {
         // The panel context above was seeded with Signex tokens; point it at the
         // saved theme before the first frame, so a Graphite first launch does not
         // draw one frame (and every dialog window) in the old palette.
-        app.sync_panel_theme();
+        app.sync_theme();
         (app, boot_task)
     }
 }
