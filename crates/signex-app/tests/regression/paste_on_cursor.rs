@@ -69,7 +69,7 @@ fn paste_into_other_sheet_registers_lib_symbol() {
     assert_eq!(sheet.symbols.len(), 1);
     let pasted = &sheet.symbols[0];
     assert!(
-        sheet.lib_symbols.contains_key(&pasted.lib_id),
+        sheet.body_of(pasted).is_some(),
         "the pasted part's body must exist on the target sheet"
     );
 }
@@ -259,7 +259,7 @@ fn cut_then_paste_still_works() {
     let back = &doc(&app).symbols;
     assert_eq!(back.len(), 1);
     assert_eq!(back[0].reference, original.reference);
-    assert!(doc(&app).lib_symbols.contains_key(&back[0].lib_id));
+    assert!(doc(&app).body_of(&back[0]).is_some());
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn paste_is_refused_on_a_newer_minor_sheet() {
 }
 
 #[test]
-fn a_body_conflict_warns_and_the_ghost_shows_the_sheets_copy() {
+fn a_pasted_body_that_differs_from_the_sheets_copy_is_its_own_version_and_the_ghost_shows_it() {
     let (mut app, other) = app_with_copied_part();
     let other_name = other.to_string_lossy().into_owned();
     let copied_body = app
@@ -320,7 +320,7 @@ fn a_body_conflict_warns_and_the_ghost_shows_the_sheets_copy() {
             && e.message
                 .contains("differs from the copy this sheet already holds")
     });
-    assert!(warned, "the conflict reaches the Messages panel");
+    assert!(!warned, "a differing body is a version, not a conflict");
     let session = app.interaction_state.placement.as_ref().expect("armed");
     let ghost_body = session
         .payload
@@ -329,8 +329,12 @@ fn a_body_conflict_warns_and_the_ghost_shows_the_sheets_copy() {
         .values()
         .next()
         .expect("body");
-    assert_eq!(ghost_body.pins.len(), sheets_body.pins.len());
-    assert!(copied_body.pins.len() > ghost_body.pins.len());
+    assert_eq!(ghost_body.pins.len(), copied_body.pins.len());
+    assert!(ghost_body.pins.len() > sheets_body.pins.len());
+    // The sheet's own copy is untouched by arming the paste.
+    let sheet = app.document_state.engines[&other].document();
+    assert_eq!(sheet.lib_symbols.len(), 1);
+    assert_eq!(sheet.lib_symbols.values().next(), Some(&sheets_body));
 }
 
 #[test]
@@ -434,7 +438,7 @@ fn duplicate_registers_the_body_offsets_by_5_08_and_is_one_undo_step() {
     let copy = &doc(&app).symbols[1];
     assert!((copy.position.x - (original.position.x + 5.08)).abs() < 1e-9);
     assert!((copy.position.y - (original.position.y + 5.08)).abs() < 1e-9);
-    assert!(doc(&app).lib_symbols.contains_key(&copy.lib_id));
+    assert!(doc(&app).body_of(copy).is_some());
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(
         doc(&app).symbols.len(),
@@ -540,7 +544,7 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
 
     let sheet = doc(&app);
     assert_eq!(sheet.symbols.len(), 1);
-    assert!(sheet.lib_symbols.contains_key(&sheet.symbols[0].lib_id));
+    assert!(sheet.body_of(&sheet.symbols[0]).is_some());
 }
 
 #[test]

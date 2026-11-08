@@ -53,6 +53,10 @@ pub struct DriftReport {
     /// Per sheet: the `lib_id`s whose embedded copy differs from the
     /// library's current symbol.
     pub sheets: Vec<(PathBuf, BTreeSet<String>)>,
+    /// Per sheet: the embedded body versions (`lib_symbols` keys) that differ
+    /// from the library's current symbol. A placed symbol is on an older
+    /// version when its `body_key` is among them.
+    pub stale_bodies: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` for every entry whose library is
     /// mounted and whose symbol was readable.
     pub names: HashMap<String, String>,
@@ -117,7 +121,10 @@ pub fn compute_drift(
     let mut removed: HashSet<String> = HashSet::new();
     for (sheet, entries) in sheets {
         let mut drifted = BTreeSet::new();
-        for (lib_id, embedded) in entries {
+        for (body_key, embedded) in entries {
+            // Entries are versions of a library symbol: judge each against
+            // the library's current one.
+            let lib_id = &signex_types::schematic::lib_id_of_body_ref(body_key).to_string();
             let Some((library_id, symbol_id)) = split_lib_id(lib_id) else {
                 continue;
             };
@@ -167,6 +174,11 @@ pub fn compute_drift(
             report.names.insert(lib_id.clone(), name.clone());
             if content_hash(fresh) != content_hash(embedded) {
                 drifted.insert(lib_id.clone());
+                report
+                    .stale_bodies
+                    .entry(sheet.clone())
+                    .or_default()
+                    .insert(body_key.clone());
             }
         }
         if let Some((_, placed)) = parts.iter().find(|(p, _)| p == sheet) {
@@ -327,6 +339,9 @@ pub struct ApplyInput {
     pub tracks_pending: bool,
     /// Per `lib_id`, the instances to stamp.
     pub wanted: Vec<(String, Vec<ApplyStamp>)>,
+    /// `Some`: move only the parts these symbols belong to ("Only this
+    /// one"); `None`: every instance of the library symbol on the sheet.
+    pub only: Option<Vec<Uuid>>,
 }
 
 /// Every instance of `lib_id` on `doc` that has a library row, as worker
@@ -410,6 +425,7 @@ pub fn apply_input(
         scan_failed: state.scan_failed,
         tracks_pending: true,
         wanted,
+        only: None,
     })
 }
 
@@ -458,6 +474,8 @@ pub struct SymbolsRead {
     /// The worker itself failed (panicked); logged on completion.
     pub problem: Option<String>,
     pub reads: Vec<SymbolRead>,
+    /// See [`ApplyInput::only`].
+    pub only: Option<Vec<Uuid>>,
 }
 
 impl SymbolsRead {
@@ -471,6 +489,7 @@ impl SymbolsRead {
             tracks_pending: input.tracks_pending,
             problem: Some(problem),
             reads: Vec::new(),
+            only: input.only.clone(),
         }
     }
 }
@@ -763,6 +782,7 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
         tracks_pending: input.tracks_pending,
         problem: None,
         reads,
+        only: input.only,
     }
 }
 
@@ -813,6 +833,9 @@ pub struct DriftState {
     pub generation: u64,
     /// Per sheet: the `lib_id`s whose embedded copy has drifted.
     pub drifted: HashMap<PathBuf, BTreeSet<String>>,
+    /// Per sheet: the embedded body versions (`lib_symbols` keys) older than
+    /// the library's current symbol; per-instance drift (#2209).
+    pub stale_bodies: HashMap<PathBuf, BTreeSet<String>>,
     /// Per sheet: the `lib_id`s whose library symbol was deleted (#1845).
     pub missing: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
@@ -826,6 +849,14 @@ pub struct DriftState {
 impl DriftState {
     pub fn is_drifted(&self, sheet: &Path, lib_id: &str) -> bool {
         self.drifted.get(sheet).is_some_and(|d| d.contains(lib_id))
+    }
+
+    /// Whether the placed symbol draws with an embedded version older than
+    /// the library's current one.
+    pub fn is_stale_body(&self, sheet: &Path, body_key: &str) -> bool {
+        self.stale_bodies
+            .get(sheet)
+            .is_some_and(|d| d.contains(body_key))
     }
 
     pub fn is_missing(&self, sheet: &Path, lib_id: &str) -> bool {

@@ -104,7 +104,7 @@ pub(crate) fn click_update(app: &mut Signex, id: Uuid) {
 
 pub(crate) fn pin_count(app: &Signex) -> usize {
     let sheet = doc(app);
-    sheet.lib_symbols[&sheet.symbols[0].lib_id].pins.len()
+    sheet.body_of(&sheet.symbols[0]).expect("body").pins.len()
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn update_is_refused_when_a_connected_pin_would_vanish() {
     let tip = {
         let sheet = doc(&app);
         let sym = &sheet.symbols[0];
-        let lib = &sheet.lib_symbols[&sym.lib_id];
+        let lib = &sheet.body_of(sym).expect("body");
         let pin1 = lib.pins.iter().find(|p| p.pin.number == "1").unwrap();
         SymbolTransform::from_symbol(sym).apply(pin1.pin.position)
     };

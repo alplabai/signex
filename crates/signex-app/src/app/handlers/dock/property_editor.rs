@@ -144,10 +144,24 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditSymbolLibId(uuid, new_lib) => {
+                // Draw with a body already embedded for that library symbol.
+                let body_ref = self
+                    .document_state
+                    .active_engine()
+                    .and_then(|e| {
+                        e.document()
+                            .lib_symbols
+                            .iter()
+                            .filter(|(_, body)| body.id == *new_lib)
+                            .map(|(key, _)| key.clone())
+                            .min()
+                    })
+                    .unwrap_or_default();
                 self.apply_engine_command(
                     signex_engine::Command::UpdateSymbolLibId {
                         symbol_id: *uuid,
                         lib_id: new_lib.clone(),
+                        body_ref,
                     },
                     true,
                     true,

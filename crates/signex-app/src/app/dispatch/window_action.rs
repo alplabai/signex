@@ -81,6 +81,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::MultiEdit(..)
                 | P::EditSymbolLibId(..)
                 | P::UpdateSymbolFromLibrary(_)
+                | P::UpdateSymbolFromLibraryOnly(_)
                 | P::PlacedPartAction(_)
                 | P::HistoryRestoreClicked { .. }
                 | P::HistoryRestoreCancelled

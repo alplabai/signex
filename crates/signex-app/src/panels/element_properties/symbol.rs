@@ -39,6 +39,7 @@ pub(super) fn push_symbol_sections<'a>(
     let library_drifted = get("Library Drift") == "Yes";
     let library_status = super::library_rows::LibraryStatus {
         drifted: library_drifted,
+        older_instances: get("Library Older Version").parse().unwrap_or(0),
         missing: get("Library Status") == "Symbol missing",
     };
     let body = get("Body Style");

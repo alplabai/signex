@@ -220,19 +220,14 @@ impl Signex {
             );
             return Task::none();
         }
-        // The copy the sheet already holds wins over the fresh one (as with
-        // placement), so it is the geometry the symbol would end up with.
-        let effective = doc
-            .lib_symbols
-            .get(&resolved.lib_id)
-            .unwrap_or(&resolved.lib_symbol);
-        let blockers = signex_engine::switch_blockers(doc, symbol_id, effective);
+        let blockers = signex_engine::switch_blockers(doc, symbol_id, &resolved.lib_symbol);
         if let Some(why) = switch_refusal(&blockers) {
             crate::diagnostics::log_warning(format!(
                 "{reference}: switching to {label} would {why}; not switched."
             ));
             return Task::none();
         }
+        let body_ref = resolved.lib_symbol.body_ref();
         let commands = vec![
             signex_engine::Command::RegisterLibSymbol {
                 lib_symbol: resolved.lib_symbol,
@@ -240,6 +235,7 @@ impl Signex {
             signex_engine::Command::UpdateSymbolLibId {
                 symbol_id,
                 lib_id: resolved.lib_id,
+                body_ref,
             },
         ];
         // An engine error is already logged by the gateway.

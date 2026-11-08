@@ -344,6 +344,20 @@ impl Signex {
                         .panel_ctx
                         .selection_info
                         .push(("Library Drift".into(), "Yes".into()));
+                    // Instances of this part on the older version (#2209): the
+                    // passive note beside the Update action.
+                    let doc = engine.document();
+                    let older = doc
+                        .symbols
+                        .iter()
+                        .filter(|s| s.lib_id == lib_id && drift.is_stale_body(&path, s.body_key()))
+                        .count();
+                    if older > 0 {
+                        self.document_state
+                            .panel_ctx
+                            .selection_info
+                            .push(("Library Older Version".into(), older.to_string()));
+                    }
                 }
                 if drift.is_missing(&path, &lib_id) {
                     self.document_state

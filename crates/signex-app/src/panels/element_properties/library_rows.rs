@@ -91,6 +91,9 @@ pub(super) fn push_footprint_row<'a>(
 #[derive(Clone, Copy)]
 pub(super) struct LibraryStatus {
     pub(super) drifted: bool,
+    /// Placed instances of the part on the sheet that draw with an older
+    /// version of the library symbol (0: unknown or none).
+    pub(super) older_instances: usize,
     pub(super) missing: bool,
 }
 
@@ -116,7 +119,11 @@ pub(super) fn push_library_rows<'a>(
             input_bdr,
         ));
     }
-    let LibraryStatus { drifted, missing } = status;
+    let LibraryStatus {
+        drifted,
+        older_instances,
+        missing,
+    } = status;
     if missing {
         c = c.push(
             signex_widgets::text(signex_widgets::raw(
@@ -133,15 +140,33 @@ pub(super) fn push_library_rows<'a>(
         )
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
+        let only_this = signex_widgets::button(
+            signex_widgets::text(signex_widgets::raw("Only this one")).size(TS.body),
+        )
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::UpdateSymbolFromLibraryOnly(id));
+        let note = match older_instances {
+            0 => "Library: out of date".to_string(),
+            1 => "Library: 1 instance uses an older version".to_string(),
+            n => format!("Library: {n} instances use an older version"),
+        };
         c = c.push(
             iced::widget::row![
-                signex_widgets::text(signex_widgets::raw("Library: out of date"))
+                signex_widgets::text(signex_widgets::raw(note))
                     .size(TS.body)
                     .color(muted),
                 signex_widgets::tooltip(
                     update,
                     signex_widgets::text(signex_widgets::raw(
                         "Updates every instance of this part on the sheet"
+                    ))
+                    .size(TS.body),
+                    iced::widget::tooltip::Position::Bottom,
+                ),
+                signex_widgets::tooltip(
+                    only_this,
+                    signex_widgets::text(signex_widgets::raw(
+                        "Updates only this part; the others keep their version"
                     ))
                     .size(TS.body),
                     iced::widget::tooltip::Position::Bottom,

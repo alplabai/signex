@@ -52,7 +52,7 @@ fn wire_pin_1(app: &mut Signex) {
     let tip = {
         let sheet = doc(app);
         let sym = &sheet.symbols[0];
-        let lib = &sheet.lib_symbols[&sym.lib_id];
+        let lib = &sheet.body_of(sym).expect("body");
         let pin1 = lib.pins.iter().find(|p| p.pin.number == "1").unwrap();
         SymbolTransform::from_symbol(sym).apply(pin1.pin.position)
     };
@@ -285,7 +285,7 @@ fn team_apply_syncs_canvas_and_dirty_flag() {
         .expect("canvas synced")
         .snapshot();
     assert_eq!(
-        snap.lib_symbols[&snap.symbols[0].lib_id].pins.len(),
+        snap.body_of(&snap.symbols[0]).expect("body").pins.len(),
         before + 1
     );
     assert!(
@@ -346,10 +346,12 @@ fn a_rebound_row_does_not_overwrite_the_placed_symbol_copy() {
     {
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
-        let old = d.symbols[0].lib_id.clone();
-        let copy = d.lib_symbols[&old].clone();
-        d.lib_symbols.insert(other.clone(), copy);
+        let mut copy = d.body_of(&d.symbols[0]).expect("body").clone();
+        copy.id = other.clone();
+        let key = copy.body_ref();
+        d.lib_symbols.insert(key.clone(), copy);
         d.symbols[0].lib_id = other.clone();
+        d.symbols[0].body_ref = key;
         engine.set_document(d);
     }
     let before = pin_count(&app);
@@ -606,7 +608,7 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
     apply_team_updates(&mut app);
     let parked = app.document_state.engines[&a].document();
     assert_eq!(
-        parked.lib_symbols[&parked.symbols[0].lib_id].pins.len(),
+        parked.body_of(&parked.symbols[0]).expect("body").pins.len(),
         before + 1
     );
     assert_eq!(parked.symbols[0].library_version, "1.2.3");
@@ -649,15 +651,17 @@ fn a_bound_sibling_on_the_same_row_does_not_leak_its_version() {
     {
         let engine = app.document_state.active_engine_mut().unwrap();
         let mut d = engine.document().clone();
-        let y_key = d.symbols[0].lib_id.clone();
-        let copy = d.lib_symbols[&y_key].clone();
-        d.lib_symbols.insert(x_key.clone(), copy);
+        let mut copy = d.body_of(&d.symbols[0]).expect("body").clone();
+        copy.id = x_key.clone();
+        let x_ref = copy.body_ref();
+        d.lib_symbols.insert(x_ref.clone(), copy);
         // U2: correctly bound to Y on the row. U1: X on the same row.
         let mut u2 = d.symbols[0].clone();
         u2.uuid = Uuid::now_v7();
         u2.reference = "U2".into();
         d.symbols.push(u2);
         d.symbols[0].lib_id = x_key.clone();
+        d.symbols[0].body_ref = x_ref;
         d.symbols[0].reference = "U1".into();
         d.symbols[0].library_version = "0.0.1".into();
         engine.set_document(d);

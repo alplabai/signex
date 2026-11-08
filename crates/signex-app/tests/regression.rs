@@ -384,6 +384,8 @@ mod library_symbol_delete_closed;
 mod library_symbol_drift;
 #[path = "regression/library_symbol_missing.rs"]
 mod library_symbol_missing;
+#[path = "regression/library_symbol_versions.rs"]
+mod library_symbol_versions;
 #[path = "regression/pin_text_on_sheet.rs"]
 mod pin_text_on_sheet;
 #[path = "regression/repeat_placement.rs"]

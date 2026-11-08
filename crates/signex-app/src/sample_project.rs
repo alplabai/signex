@@ -76,7 +76,7 @@ mod tests {
             .sheet;
         for symbol in &sheet.symbols {
             assert!(
-                sheet.lib_symbols.contains_key(&symbol.lib_id),
+                sheet.body_of(symbol).is_some(),
                 "{} needs its lib symbol embedded so no library has to be mounted",
                 symbol.lib_id
             );
@@ -126,7 +126,7 @@ mod tests {
             .iter()
             .filter_map(|sym| {
                 let parts = lower_placed_symbol(
-                    sheet.lib_symbols.get(&sym.lib_id),
+                    sheet.body_of(sym),
                     sym,
                     &signex_types::schematic::SchematicDefaults::BUILT_IN,
                 );

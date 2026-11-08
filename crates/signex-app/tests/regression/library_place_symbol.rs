@@ -353,10 +353,7 @@ fn terminal_pins(app: &Signex, unit: u32) -> Vec<String> {
     let mut sheet = doc(app).clone();
     sheet.symbols[0].unit = unit;
     let xform = SymbolTransform::from_symbol(&sheet.symbols[0]);
-    let lib = sheet
-        .lib_symbols
-        .get(&sheet.symbols[0].lib_id)
-        .expect("lib");
+    let lib = sheet.body_of(&sheet.symbols[0]).expect("lib");
     let tips: Vec<_> = lib
         .pins
         .iter()
@@ -387,10 +384,7 @@ fn placing_registers_one_lib_symbol_that_the_symbol_resolves() {
     assert_eq!(sheet.symbols.len(), 1);
     assert_eq!(sheet.lib_symbols.len(), 1);
     let placed = &sheet.symbols[0];
-    let lib = sheet
-        .lib_symbols
-        .get(&placed.lib_id)
-        .expect("lib_id resolves");
+    let lib = sheet.body_of(placed).expect("lib_id resolves");
     assert_eq!(lib.id, placed.lib_id);
     assert_eq!(placed.unit, 1);
     assert_eq!(placed.reference, "U1");
@@ -498,7 +492,7 @@ fn the_picker_message_places_end_to_end_with_no_io_in_update() {
 }
 
 #[test]
-fn replacing_after_the_library_symbol_changed_warns_and_keeps_the_sheet_copy() {
+fn a_changed_library_symbol_is_placed_as_a_new_version_and_existing_copies_stay_as_they_were() {
     let f = fixture();
     let mut app = app_with_library(&f);
     let first = resolve(&f, f.row_id).expect("resolves");
@@ -506,29 +500,32 @@ fn replacing_after_the_library_symbol_changed_warns_and_keeps_the_sheet_copy() {
     edited.lib_symbol.pins.clear();
     complete(&mut app, &f, "place-364.snxsch", Ok(first.clone()));
     click(&mut app, PLACE_AT);
-    let kept = doc(&app).lib_symbols.values().next().unwrap().pins.len();
-    assert!(kept > 0);
+    let kept = doc(&app)
+        .body_of(&doc(&app).symbols[0])
+        .expect("body")
+        .clone();
+    assert!(!kept.pins.is_empty());
 
-    // Identical content: no warning.
-    assert!(!warned(&mut app, &f, first));
-    // Edited content: warning, sheet still holds the original copy.
-    assert!(warned(&mut app, &f, edited));
-    assert_eq!(
-        doc(&app).lib_symbols.values().next().unwrap().pins.len(),
-        kept
+    // Identical content: the one embedded version is reused.
+    complete(&mut app, &f, "place-364.snxsch", Ok(first));
+    click(&mut app, PLACE_AT);
+    assert_eq!(doc(&app).lib_symbols.len(), 1);
+
+    // Edited content: a second version is embedded beside the first, the new
+    // part draws with it, and the parts already placed keep their copy.
+    complete(&mut app, &f, "place-364.snxsch", Ok(edited));
+    click(&mut app, PLACE_AT);
+    let sheet = doc(&app);
+    assert_eq!(sheet.lib_symbols.len(), 2);
+    assert_eq!(sheet.body_of(&sheet.symbols[0]), Some(&kept));
+    assert_eq!(sheet.body_of(&sheet.symbols[1]), Some(&kept));
+    assert!(
+        sheet
+            .body_of(&sheet.symbols[2])
+            .expect("body")
+            .pins
+            .is_empty()
     );
-}
-
-/// Place `resolved` and report whether the drift warning was logged.
-fn warned(app: &mut Signex, f: &Fixture, resolved: Box<ResolvedPlacement>) -> bool {
-    let _ = signex_app::diagnostics::init_logging();
-    let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
-    complete(app, f, "place-364.snxsch", Ok(resolved));
-    signex_app::diagnostics::recent_entries().iter().any(|e| {
-        e.id > before
-            && e.message.contains("keeps its existing copy")
-            && e.message.contains("Update from library")
-    })
 }
 
 #[test]
@@ -611,7 +608,7 @@ fn a_symbol_from_another_open_library_is_placed_keyed_on_its_library() {
     assert_eq!(sheet.symbols.len(), 1);
     let placed = &sheet.symbols[0];
     assert_eq!(placed.lib_id, format!("{}:{}", b.library_id, b.symbol_id));
-    assert!(sheet.lib_symbols.contains_key(&placed.lib_id));
+    assert!(sheet.body_of(placed).is_some());
     // Identity slots name the row's own library.
     assert_eq!(placed.library_id, Some(a.library_id));
     assert_eq!(placed.row_id, Some(a.row_id));
@@ -640,7 +637,9 @@ fn the_placement_survives_a_save_and_reload() {
 
     let key = format!("{}:{}", f.library_id, f.symbol_id);
     assert_eq!(reloaded.symbols[0].lib_id, key);
-    let lib = reloaded.lib_symbols.get(&key).expect("entry survives");
+    let lib = reloaded
+        .body_of(&reloaded.symbols[0])
+        .expect("entry survives");
     assert_eq!(lib.id, key);
     assert!(lib.pins.iter().any(|p| p.unit == 0), "Part Zero pin kept");
 }
@@ -690,7 +689,7 @@ fn a_library_power_port_places_as_a_power_port() {
     assert_eq!(b.reference, "#PWR2");
 
     // A wire from the pin tip makes a net the port names.
-    let lib = sheet.lib_symbols.get(&a.lib_id).expect("lib");
+    let lib = sheet.body_of(a).expect("lib");
     let tip = SymbolTransform::from_symbol(a).apply(lib.pins[0].pin.position);
     sheet.wires.push(Wire {
         uuid: Uuid::now_v7(),
@@ -749,7 +748,7 @@ fn two_wired_copies(f: &Fixture) -> SchematicSheet {
     sheet.symbols[1].position.y += 50.8;
     for i in 0..2 {
         let sym = sheet.symbols[i].clone();
-        let lib = sheet.lib_symbols.get(&sym.lib_id).expect("lib");
+        let lib = sheet.body_of(&sym).expect("lib");
         let tip = SymbolTransform::from_symbol(&sym).apply(lib.pins[0].pin.position);
         sheet.wires.push(Wire {
             uuid: Uuid::now_v7(),

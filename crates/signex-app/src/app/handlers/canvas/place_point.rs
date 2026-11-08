@@ -9,18 +9,13 @@ use super::super::super::*;
 impl Signex {
     /// Place the power port `net_name` drawn as library symbol `lib_id`.
     pub(crate) fn place_power_at(&mut self, at: Point, net_name: &str, lib_id: &str) -> bool {
-        // The sheet keeps an older entry for this style (register inserts
-        // only when absent): the text follows that one.
-        let held_entry = self
-            .document_state
-            .active_engine()
-            .and_then(|e| e.document().lib_symbols.get(lib_id).cloned())
-            .unwrap_or_else(|| signex_types::schematic::power_port_lib_symbol(lib_id));
+        let held_entry = signex_types::schematic::power_port_lib_symbol(lib_id);
         let sym = signex_types::schematic::Symbol {
             unknown_columns: Default::default(),
             unknown: Default::default(),
             uuid: uuid::Uuid::now_v7(),
             lib_id: lib_id.to_string(),
+            body_ref: String::new(),
             reference: "#PWR?".to_string(),
             value: net_name.to_string(),
             footprint: String::new(),

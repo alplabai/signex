@@ -274,7 +274,7 @@ impl Signex {
         }
         let reference = symbol.reference.trim();
         let may_have_units = symbol.unit > 1
-            || doc.lib_symbols.get(&symbol.lib_id).is_none_or(|lib| {
+            || doc.body_of(symbol).is_none_or(|lib| {
                 lib.pins.iter().any(|p| p.unit > 1) || lib.graphics.iter().any(|g| g.unit > 1)
             });
         if reference.is_empty() || reference.ends_with('?') || !may_have_units {

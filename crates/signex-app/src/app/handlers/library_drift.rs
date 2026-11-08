@@ -123,6 +123,9 @@ impl Signex {
         for rows in drift.drifted.values_mut().chain(drift.missing.values_mut()) {
             rows.retain(|lib_id| mounted(lib_id));
         }
+        for rows in drift.stale_bodies.values_mut() {
+            rows.retain(|key| mounted(signex_types::schematic::lib_id_of_body_ref(key)));
+        }
     }
 
     pub(crate) fn handle_library_drift_checked(&mut self, report: DriftReport) -> Task<Message> {
@@ -172,6 +175,9 @@ impl Signex {
             drifted.insert(sheet, entries);
         }
         self.library.drift.drifted = drifted;
+        let mut stale = report.stale_bodies;
+        stale.retain(|sheet, _| self.document_state.engines.contains_key(sheet));
+        self.library.drift.stale_bodies = stale;
         self.record_missing_symbols(report.missing, &report.unreadable);
         let mut names = report.names;
         keep_unreadable_names(&mut names, &self.library.drift.names, &report.unreadable);
@@ -232,7 +238,15 @@ impl Signex {
 
     /// Properties ▸ "Update from library" for the placed symbol `uuid`: the
     /// instances of its `lib_id` go to the shared off-thread apply read.
-    pub(crate) fn update_symbol_from_library(&mut self, uuid: uuid::Uuid) -> Task<Message> {
+    ///
+    /// `only_this` is "Only this one": just that part (all its units) moves to
+    /// the library's current version; by default every instance of the library
+    /// symbol on the sheet does.
+    pub(crate) fn update_symbol_from_library(
+        &mut self,
+        uuid: uuid::Uuid,
+        only_this: bool,
+    ) -> Task<Message> {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return Task::none();
         };
@@ -266,8 +280,13 @@ impl Signex {
             ));
             return Task::none();
         }
-        let stamps = instance_stamps(engine.document(), &lib_id, &Default::default());
+        let mut stamps = instance_stamps(engine.document(), &lib_id, &Default::default());
+        let only = only_this.then(|| part_units(engine.document(), uuid));
+        if let Some(units) = &only {
+            stamps.retain(|s| units.contains(&s.symbol));
+        }
         let input = ApplyInput {
+            only,
             sheet,
             engine_instance: engine.instance_id(),
             any_unchecked: false,
@@ -277,6 +296,23 @@ impl Signex {
         };
         self.spawn_apply_read(input)
     }
+}
+
+/// The uuids of every unit of the part `symbol` belongs to.
+fn part_units(
+    doc: &signex_types::schematic::SchematicSheet,
+    symbol: uuid::Uuid,
+) -> Vec<uuid::Uuid> {
+    let parts = signex_types::schematic::group_into_parts(
+        doc.symbols
+            .iter()
+            .map(signex_types::schematic::Symbol::part_key),
+    );
+    parts
+        .into_iter()
+        .find(|part| part.iter().any(|&i| doc.symbols[i].uuid == symbol))
+        .map(|part| part.into_iter().map(|i| doc.symbols[i].uuid).collect())
+        .unwrap_or_else(|| vec![symbol])
 }
 
 /// An unreadable library says nothing about its rows: carry the previous

@@ -106,7 +106,7 @@ fn a_placed_stock_part_has_its_fields_clear_of_its_body() {
 
     let sheet = doc(&app);
     let sym = &sheet.symbols[0];
-    let lib = sheet.lib_symbols.get(&sym.lib_id).expect("embedded body");
+    let lib = sheet.body_of(sym).expect("embedded body");
     let parts = signex_types::schematic::lower_placed_symbol(
         Some(lib),
         sym,

@@ -436,7 +436,7 @@ fn a_read_that_fails_after_esc_raises_no_notice_but_one_that_fails_live_does() {
 }
 
 #[test]
-fn the_ghost_shows_the_sheets_copy_of_a_body_the_library_has_since_changed() {
+fn the_ghost_shows_the_librarys_current_body_even_when_the_sheet_holds_an_older_copy() {
     let f = fixture();
     let mut app = app_with_library(&f);
     crate::library_place_symbol::place(&mut app, &f);
@@ -455,10 +455,11 @@ fn the_ghost_shows_the_sheets_copy_of_a_body_the_library_has_since_changed() {
         .values()
         .next()
         .unwrap();
+    assert!(ghost_body.pins.is_empty(), "what lands is the current body");
     assert_eq!(
-        ghost_body.pins.len(),
+        doc(&app).lib_symbols.values().next().unwrap().pins.len(),
         sheet_pins,
-        "what lands is the sheet's copy"
+        "the sheet's own copy is untouched until the click"
     );
 }
 

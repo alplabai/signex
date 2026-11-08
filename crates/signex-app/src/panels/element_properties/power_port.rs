@@ -33,6 +33,7 @@ pub(super) fn push_power_port_sections<'a>(
     let library_drifted = get("Library Drift") == "Yes";
     let library_status = LibraryStatus {
         drifted: library_drifted,
+        older_instances: get("Library Older Version").parse().unwrap_or(0),
         missing: get("Library Status") == "Symbol missing",
     };
     let rotation_deg = rotation_degrees(&rotation_str);

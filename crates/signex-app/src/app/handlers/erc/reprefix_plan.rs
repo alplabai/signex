@@ -236,7 +236,7 @@ fn decide(input: &PlanInput<'_>, units: &[Member]) -> Decision {
     {
         return Decision::Skip(SkipReason::RetargetedByInstance);
     }
-    let lib_symbol = input.sheets[units[0].0].lib_symbols.get(&first.lib_id);
+    let lib_symbol = input.sheets[units[0].0].lib_symbols.get(first.body_key());
     let symbol_letters = lib_symbol.map_or("", |l| l.reference.as_str());
     let current = alphabetic_prefix(&first.reference).to_ascii_uppercase();
     if !is_system_issued(&current, symbol_letters, facts) {
