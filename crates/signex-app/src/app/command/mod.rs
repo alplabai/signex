@@ -16,6 +16,9 @@ mod document_operand_tests;
 mod document_operands;
 pub(crate) mod enablement;
 #[cfg(test)]
+mod file_operand_tests;
+mod file_operands;
+#[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 mod needs;
 mod opened;

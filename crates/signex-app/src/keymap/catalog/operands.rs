@@ -131,11 +131,8 @@ pub const POWER: &[Operand] = &[
 ];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
-/// A save dialog's answer; `overwrite` lets it replace an existing file.
-pub const SAVE_PATH: &[Operand] = &[
-    required("path", OperandKind::Path),
-    optional("overwrite", OperandKind::Bool),
-];
+/// A new project's `.snxprj` path; it never replaces a project, so no `overwrite`.
+pub const NEW_PROJECT_PATH: &[Operand] = &[required("path", OperandKind::Path)];
 
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[

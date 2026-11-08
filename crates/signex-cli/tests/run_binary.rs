@@ -134,6 +134,14 @@ fn one_command_runs_from_arguments_and_a_failed_open_is_failed_not_ran() {
     );
     assert_eq!(statuses(&ok.lines), ["answered"], "{}", ok.stderr);
     assert_eq!(ok.code, Some(0));
+    // Open answers with the document it opened (#2155): id, path and kind.
+    let answer = &ok.lines[0]["data"];
+    assert_eq!(answer["path"], fx.sheet.display().to_string(), "{answer}");
+    assert_eq!(answer["kind"], "schematic", "{answer}");
+    assert!(
+        answer["id"].as_str().is_some_and(|id| !id.is_empty()),
+        "{answer}"
+    );
 
     // Inside the project, but not a file: the app reports an error notice.
     let missing = run_cli(

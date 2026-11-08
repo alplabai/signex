@@ -586,6 +586,9 @@ pub struct DocumentState {
     /// spawned; cleared in both the `Ok` and `Err` arms of
     /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
     pub pending_opens: crate::app::document_read::InFlightReads,
+    /// The `path` operand of the `open_document` that ran last, kept for the
+    /// headless answer naming the document it opened (`command/opened.rs`).
+    pub open_requested: Option<PathBuf>,
     /// What the directory case probes of loose documents reported, and the
     /// opens and saves waiting on one (#1447).
     pub dir_case: dir_case::DirCases,

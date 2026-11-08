@@ -53,6 +53,7 @@ impl Signex {
         task: Task<Message>,
     ) -> (CommandOutcome, Task<Message>) {
         let OpenSnapshot { asked, before } = snapshot;
+        let asked = asked.or_else(|| self.document_state.open_requested.take());
         if let Err(error) = crate::task_driver::TaskDriver::new().settle(self, task) {
             return (
                 CommandOutcome::disabled(format!("`{}` did not finish: {error}", command.as_str())),

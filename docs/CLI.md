@@ -66,12 +66,13 @@ new document's `{id, path, kind}`.
 | `messages` | what the app logged to its Messages panel during the command |
 | `changed` | documents whose content or unsaved state differs after the command |
 
-A command that asks a GUI dialog (open, new) takes the dialog's answer as
-`path` and `overwrite`. A dialog that cannot be answered (an existing file
-without `overwrite: true`) is `refused`, never `ran`. `save_document_as` takes
-`document`, `path` and `overwrite`: an existing target without
-`overwrite: true` is `refused`. An open or new that makes nothing, with an
-error notice, is `failed` with that notice.
+`open_document` and `new_document` take a `path` (a new project's `.snxprj`)
+and do what the menu entry does after its dialog; a new project never replaces
+one, so it takes no `overwrite`. `save_document_as` takes `document`, `path` and
+`overwrite`: an existing target without `overwrite: true` is `refused`. An open
+or new that makes nothing, with an error notice, is `failed` with that notice.
+A command with no operand that opens a dialog is `refused`, never `ran`, when
+the dialog cannot be answered.
 
 ## Security
 
