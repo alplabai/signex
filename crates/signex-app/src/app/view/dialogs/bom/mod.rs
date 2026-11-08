@@ -192,7 +192,7 @@ impl Signex {
                     };
                     text(label)
                         .size(TS.caption)
-                        .color(rules::severity_color(severity, text_muted))
+                        .color(rules::severity_color(severity, text_muted, tokens))
                         .boxed()
                 }
                 None => text("No BOM issues")

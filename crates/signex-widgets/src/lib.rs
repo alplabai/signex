@@ -5,6 +5,7 @@
 
 pub mod active_bar;
 pub mod chevron;
+pub mod dropdown_style;
 pub mod history_pane;
 pub mod icon_button;
 pub mod passive_calculator;

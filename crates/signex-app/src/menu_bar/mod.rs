@@ -326,8 +326,8 @@ const DROPDOWN_WIDTH: f32 = 240.0;
 /// at the same pixel height and would otherwise look shrunken next to the
 /// label. Exposed as constants so every menu row pulls from the same
 /// scale — no `size(11)`/`size(12)`/`size(14)` sprinkled around.
-const MENU_LABEL_SIZE: f32 = crate::styles::TypeScale::DEFAULT.label;
-const MENU_SHORTCUT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
+const MENU_LABEL_SIZE: f32 = signex_widgets::active_bar_dropdown::MENU_LABEL_SIZE;
+const MENU_SHORTCUT_SIZE: f32 = signex_widgets::active_bar_dropdown::MENU_SHORTCUT_SIZE;
 const MENU_CHEVRON_SIZE: f32 = crate::styles::chrome_px(18.0);
 
 /// Approximate visible width of the menu bar in pixels. Includes the

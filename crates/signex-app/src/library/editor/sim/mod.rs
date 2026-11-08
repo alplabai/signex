@@ -20,6 +20,7 @@ use iced::widget::{
 use iced::{Element, Length};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
@@ -169,6 +170,7 @@ pub fn view<'a>(
         SIM_KIND_OPTS.map(SimKindPick),
         |k: &SimKindPick| k.to_string(),
     )
+    .graphite()
     .on_select(move |SimKindPick(k)| event(&kind_address, EditorMsg::SimSetKind(k)))
     .text_size(TS.body)
     .padding([SP.s, SP.m])

@@ -6,6 +6,7 @@
 use super::*;
 use iced::widget::{Column, Space, Widget, button, column, container, row, text, text_input};
 use iced::{Background, Border, Element, Length, Theme};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -120,6 +121,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             profile_options,
             |profile: &KeymapProfileOption| { profile.to_string() }
         )
+        .graphite()
         .on_select(|profile: KeymapProfileOption| PrefMsg::KeymapProfileSelected(profile.id))
         .text_size(12)
         .width(180),

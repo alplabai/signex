@@ -95,6 +95,10 @@ fn library_dialogs_refuse_without_a_path() {
             LibraryMessage::ComponentsPanelAddLibrary(ComponentsMountSource::Installed),
             "Add Library (*.snxlib)",
         ),
+        (
+            LibraryMessage::ComponentsPanelAddLibrary(ComponentsMountSource::Global),
+            "Add Library (*.snxlib)",
+        ),
     ] {
         refused_on_message(Message::Library(message), title);
     }

@@ -3,6 +3,7 @@
 //! Pure views — every edit is a `PrintPreviewMsg` the handlers validate.
 
 use signex_output::{MarginEdge, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use iced::Widget;
 
@@ -48,6 +49,7 @@ impl Signex {
             PageSizeKind::ALL.to_vec(),
             |kind: &PageSizeKind| kind.to_string(),
         )
+        .graphite()
         .on_select(move |kind: PageSizeKind| {
             Message::PrintPreview(PrintPreviewMsg::SetPageSize(
                 kind.select(current_size, orientation),
@@ -71,6 +73,7 @@ impl Signex {
                     ],
                     |o: &signex_types::schematic::SheetOrientation| o.to_string(),
                 )
+                .graphite()
                 .on_select(|o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)))
                 .text_size(FIELD_TEXT)
                 .boxed()
@@ -101,6 +104,7 @@ impl Signex {
             PdfScaleMode::ALL.to_vec(),
             |m: &PdfScaleMode| m.to_string(),
         )
+        .graphite()
         .on_select(|m| Message::PrintPreview(PrintPreviewMsg::SetScaleMode(m)))
         .text_size(FIELD_TEXT);
         controls = controls.push(text("Scale").size(FIELD_TEXT).color(text_muted).boxed());

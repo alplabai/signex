@@ -15,6 +15,7 @@ use iced::widget::{
 use iced::{Color, Element, Length};
 use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
@@ -229,6 +230,7 @@ fn view_document<'a>(
 
     let mode_address = address.clone();
     let mode_picker = pick_list(Some(mode), DatasheetMode::ALL, ToString::to_string)
+        .graphite()
         .on_select(move |m| event(&mode_address, DatasheetMsg::SetMode(index, m)))
         .text_size(TS.body)
         .padding([SP.s, SP.m])

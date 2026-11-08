@@ -5,8 +5,11 @@
 //! `signex_engine::NetClassCommand`; nothing here mutates the table.
 
 use super::*;
-use crate::styles::{Spacing, TypeScale};
+use crate::icons;
+use crate::styles::tokens::{hover_overlay, resolve};
+use crate::styles::{Spacing, TypeScale, ti};
 use signex_types::net_class::{NetClass, NetLineStyle, format_hex_color};
+use signex_types::theme::ThemeId;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -174,19 +177,23 @@ pub fn view_net_classes_section<'a>(
     palette: PanelPalette,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
-        muted,
         primary,
         border: border_c,
         ..
     } = palette;
     let panel = &ctx.net_classes;
-    collapsible_section(
+    let tokens = &ctx.tokens;
+    let theme_id = ctx.theme_id;
+    let hint_ink = resolve(tokens).ink3;
+    ctx.collapsible(
         "prop_net_classes",
         "Net Classes",
         &ctx.collapsed_sections,
         primary,
         border_c,
         move || {
+            let muted = hint_ink;
+            let label = LabelInk::for_tokens(muted, tokens);
             let mut c = Column::new().spacing(SP.s).width(Length::Fill);
             if !panel.available {
                 return c.push(
@@ -201,28 +208,26 @@ pub fn view_net_classes_section<'a>(
             }
             let wrap = |m: NetClassMsg| PanelMsg::NetClass(m);
 
-            let undo = iced::widget::button(text("Undo").size(TS.caption)).padding([3.0, SP.m]);
-            let redo = iced::widget::button(text("Redo").size(TS.caption)).padding([3.0, SP.m]);
-            let undo = if panel.can_undo {
-                undo.on_press(wrap(NetClassMsg::Undo))
-            } else {
-                undo
-            };
-            let redo = if panel.can_redo {
-                redo.on_press(wrap(NetClassMsg::Redo))
-            } else {
-                redo
-            };
             c = c.push(
                 container(
                     row![
-                        iced::widget::button(text("+ Add Class").size(TS.caption))
-                            .padding([3.0, SP.m])
-                            .on_press(wrap(NetClassMsg::Add)),
-                        undo,
-                        redo,
+                        add_class_button(theme_id, tokens),
+                        Space::new().width(Length::Fill),
+                        history_button(
+                            icons::icon_undo(theme_id),
+                            "Undo",
+                            panel.can_undo.then(|| wrap(NetClassMsg::Undo)),
+                            tokens,
+                        ),
+                        history_button(
+                            icons::icon_redo(theme_id),
+                            "Redo",
+                            panel.can_redo.then(|| wrap(NetClassMsg::Redo)),
+                            tokens,
+                        ),
                     ]
-                    .spacing(SP.s),
+                    .spacing(SP.s)
+                    .align_y(iced::Alignment::Center),
                 )
                 .padding([SP.s, SP.m])
                 .boxed(),
@@ -242,18 +247,13 @@ pub fn view_net_classes_section<'a>(
             let selected = panel.selected.min(panel.classes.len() - 1);
             let mut list = Column::new().spacing(SP.xs);
             for (idx, class) in panel.classes.iter().enumerate() {
+                let is_selected = idx == selected;
                 let btn = iced::widget::button(text(class.name.clone()).size(TS.body))
                     .padding([SP.xs, SP.m])
                     .width(Length::Fill)
-                    .on_press(wrap(NetClassMsg::Select(idx)));
-                list = list.push(
-                    if idx == selected {
-                        btn.style(iced::widget::button::primary)
-                    } else {
-                        btn.style(iced::widget::button::secondary)
-                    }
-                    .boxed(),
-                );
+                    .on_press(wrap(NetClassMsg::Select(idx)))
+                    .style(form_look::option_tile(is_selected));
+                list = list.push(btn.boxed());
             }
             c = c.push(container(list).padding([SP.xs, SP.m]).boxed());
             c = c.push(
@@ -268,18 +268,13 @@ pub fn view_net_classes_section<'a>(
             c = c.push(
                 container(
                     row![
-                        iced::widget::button(text("Move Up").size(TS.caption))
-                            .padding([3.0, SP.m])
-                            .on_press_maybe((selected > 0).then(|| wrap(NetClassMsg::MoveUp))),
-                        iced::widget::button(text("Move Down").size(TS.caption))
-                            .padding([3.0, SP.m])
-                            .on_press_maybe(
-                                (selected + 1 < panel.classes.len())
-                                    .then(|| wrap(NetClassMsg::MoveDown))
-                            ),
-                        iced::widget::button(text("Delete").size(TS.caption))
-                            .padding([3.0, SP.m])
-                            .on_press(wrap(NetClassMsg::RemoveSelected)),
+                        action_button("Move Up", (selected > 0).then(|| wrap(NetClassMsg::MoveUp))),
+                        action_button(
+                            "Move Down",
+                            (selected + 1 < panel.classes.len())
+                                .then(|| wrap(NetClassMsg::MoveDown))
+                        ),
+                        action_button("Delete", Some(wrap(NetClassMsg::RemoveSelected))),
                     ]
                     .spacing(SP.s),
                 )
@@ -287,8 +282,8 @@ pub fn view_net_classes_section<'a>(
                 .boxed(),
             );
 
-            let field = |label: &str, hint: &str, f: NetClassField, value: &str| {
-                commit_row(label, hint, value, muted, f)
+            let field = |label_text: &str, hint: &str, f: NetClassField, value: &str| {
+                commit_row(label_text, hint, value, label, f)
             };
             c = c.push(field(
                 "Name",
@@ -313,7 +308,7 @@ pub fn view_net_classes_section<'a>(
                 ClassLine::options(),
                 ClassLine(panel.classes[selected].style.line),
                 |l: ClassLine| PanelMsg::NetClass(NetClassMsg::SetLine(l.0)),
-                muted,
+                label,
             ));
             c = c.push(field(
                 "Nets",
@@ -343,12 +338,87 @@ pub fn view_net_classes_section<'a>(
     )
 }
 
+/// Graphite ghost look; a disabled button loses its hover and mutes its label.
+fn ghost_style(theme: &Theme, status: button::Status) -> button::Style {
+    let Some(mut style) = form_look::ghost_button(theme, status) else {
+        return button::secondary(theme, status);
+    };
+    if let (button::Status::Disabled, Some(look)) = (status, form_look::FormLook::of(theme)) {
+        style.text_color = look.ink4;
+    }
+    style
+}
+
+/// Text ghost button; disabled without a message.
+fn action_button<'a>(label: &str, on_press: Option<PanelMsg>) -> Element<'a, PanelMsg> {
+    button(text(label.to_string()).size(TS.caption))
+        .padding([3.0, SP.m])
+        .on_press_maybe(on_press)
+        .style(ghost_style)
+        .boxed()
+}
+
+/// "+ Add Class": ghost button with the plus icon.
+fn add_class_button<'a>(theme_id: ThemeId, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+    let ink = ti(tokens.text);
+    let glyph = svg(icons::icon_plus(theme_id))
+        .width(12)
+        .height(12)
+        .style(move |_: &Theme, _| svg::Style { color: Some(ink) });
+    button(
+        row![glyph, text("Add Class").size(TS.caption)]
+            .spacing(SP.xs)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([3.0, SP.m])
+    .on_press(PanelMsg::NetClass(NetClassMsg::Add))
+    .style(ghost_style)
+    .boxed()
+}
+
+/// Undo / Redo: a ghost icon button with a tooltip; muted and inert when
+/// `on_press` is `None`.
+fn history_button<'a>(
+    handle: svg::Handle,
+    label: &str,
+    on_press: Option<PanelMsg>,
+    tokens: &ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let r = resolve(tokens);
+    let ink = if on_press.is_some() {
+        ti(tokens.text)
+    } else {
+        r.ink4
+    };
+    let glyph = svg(handle)
+        .width(14)
+        .height(14)
+        .style(move |_: &Theme, _| svg::Style { color: Some(ink) });
+    let btn = button(glyph)
+        .padding([4.0, 6.0])
+        .on_press_maybe(on_press)
+        .style(ghost_style);
+    let hint = container(
+        text(label.to_string())
+            .size(TS.caption)
+            .color(ti(tokens.text)),
+    )
+    .padding([3, 8])
+    .style(signex_widgets::active_bar_dropdown::tooltip_style(
+        hover_overlay(tokens),
+        ti(tokens.border),
+    ));
+    iced::widget::tooltip(btn, hint, iced::widget::tooltip::Position::Bottom)
+        .gap(4)
+        .boxed()
+}
+
 /// Label | text input that edits a draft and commits on Enter.
 fn commit_row<'a>(
     label: &str,
     hint: &str,
     value: &str,
-    label_c: Color,
+    label_c: LabelInk,
     field: NetClassField,
 ) -> Element<'a, PanelMsg> {
     container(

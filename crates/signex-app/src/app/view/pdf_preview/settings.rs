@@ -3,6 +3,7 @@
 //! `view/pdf_preview.rs` as pure code motion.
 
 use super::super::*;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -177,6 +178,7 @@ impl Signex {
         variant_options.dedup();
         let variant_picker =
             iced::widget::pick_list(Some(variant_label), variant_options, |s: &String| s.clone())
+                .graphite()
                 .on_select(|s: String| {
                     if s.eq_ignore_ascii_case("Base") {
                         Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
@@ -357,6 +359,7 @@ impl Signex {
                 ],
                 |q: &PdfQuality| q.to_string(),
             )
+            .graphite()
             .on_select(|v: PdfQuality| Message::PrintPreview(PrintPreviewMsg::SetQuality(v)))
             .text_size(11)
             .width(180),

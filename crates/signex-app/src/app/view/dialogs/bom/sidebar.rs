@@ -34,6 +34,8 @@ impl Signex {
         // the pill reads as "selected" without being a hard solid
         // fill that fights the theme.
         let accent_c = crate::styles::ti(tokens.accent);
+        let hover_c = crate::styles::tokens::hover_overlay(tokens);
+        let field_c = crate::styles::tokens::resolve(tokens).field;
         let row_pill = |label: String, on: bool, msg: Message| -> Element<'_, Message> {
             button(text(label).size(TS.body).color(text_c))
                 .padding([SP.s, 10.0])
@@ -44,10 +46,8 @@ impl Signex {
                             a: 0.15,
                             ..accent_c
                         },
-                        (false, button::Status::Hovered | button::Status::Pressed) => {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                        }
-                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                        (false, button::Status::Hovered | button::Status::Pressed) => hover_c,
+                        _ => field_c,
                     };
                     let border_color = if on { accent_c } else { border_c };
                     button::Style {
@@ -204,9 +204,7 @@ impl Signex {
                             a: 0.15,
                             ..accent_c
                         },
-                        (false, button::Status::Hovered) => {
-                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
-                        }
+                        (false, button::Status::Hovered) => hover_c,
                         _ => iced::Color::TRANSPARENT,
                     };
                     let border_color = if on { accent_c } else { border_c };
@@ -258,7 +256,7 @@ impl Signex {
             let pip_bg = if on {
                 Color::from_rgb(0.00, 0.47, 0.84)
             } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                field_c
             };
             let inner = if on {
                 text("\u{2713}").size(TS.caption).color(Color::WHITE)
@@ -295,7 +293,7 @@ impl Signex {
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
                     button::Status::Hovered | button::Status::Pressed => {
-                        Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)))
+                        Some(Background::Color(hover_c))
                     }
                     _ => None,
                 };

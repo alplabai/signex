@@ -614,11 +614,9 @@ fn render_components_panel_shots() {
             .expect("write png");
         };
         save(&mut live, "components");
-        // The empty sections folded, so the Stock rows and the selection show.
+        // Stock only, so its rows and the selection show.
         let panel = &mut live.app.library.components_panel;
-        panel.collapsed_project = true;
-        panel.collapsed_installed = true;
-        panel.collapsed_global = true;
+        panel.source_filter = Some(crate::library::state::ComponentsMountSource::Stock);
         save(&mut live, "components-rows");
     }
 }

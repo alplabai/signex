@@ -8,6 +8,7 @@
 use iced::widget::pick_list;
 use iced::{Element, Widget as _};
 use signex_types::quantity::{SiPrefix, Unit};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// One picker entry. Shown with the unit glyph (`kΩ`, `µF`) so the picker
 /// also says which unit the number is in.
@@ -65,6 +66,7 @@ pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
     let current = choice(effective_prefix(unit, selected), unit);
     Some(
         pick_list(Some(current), choices, |c: &PrefixChoice| c.to_string())
+            .graphite()
             .on_select(move |c: PrefixChoice| on_pick(c.prefix))
             .text_size(text_size)
             .padding([3, 6])

@@ -187,10 +187,14 @@ fn selection_filters_body<'a>(
 
 pub fn view_properties_general<'a>(
     ctx: &'a PanelContext,
-    muted: Color,
+    _muted: Color,
     primary: Color,
     border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
+    // Graphite muted ink for labels and hints, on the shared label column.
+    let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
+    let label = LabelInk::for_tokens(muted, &ctx.tokens);
+    let hairline = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
     // Derive button/input colors from tokens (Copy values captured in closures)
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
@@ -209,6 +213,7 @@ pub fn view_properties_general<'a>(
     col = col.push(selection_filters_section_for(ctx, palette).boxed());
 
     // General (collapsible)
+    col = col.push(thin_sep(hairline));
     {
         let unit = ctx.unit;
         let grid_size_mm = ctx.grid_size_mm;
@@ -271,7 +276,7 @@ pub fn view_properties_general<'a>(
                         unit,
                         false,
                         PanelMsg::SetVisibleGridSize,
-                        muted,
+                        label,
                         grid_visible,
                         PanelMsg::ToggleGrid,
                     ));
@@ -281,7 +286,7 @@ pub fn view_properties_general<'a>(
                         unit,
                         true,
                         PanelMsg::SetGridSize,
-                        muted,
+                        label,
                         snap_enabled,
                         PanelMsg::ToggleSnap,
                     ));
@@ -290,7 +295,7 @@ pub fn view_properties_general<'a>(
                         snap_hotspots,
                         PanelMsg::ToggleSnapHotspots,
                         "Shift+E",
-                        muted,
+                        label,
                     ));
                     c = c.push(form_font_link_row(
                         "Canvas Font",
@@ -298,7 +303,7 @@ pub fn view_properties_general<'a>(
                         canvas_font_size,
                         canvas_font_bold,
                         canvas_font_italic,
-                        muted,
+                        label,
                     ));
                     if canvas_font_popup_open {
                         c = c.push(
@@ -325,7 +330,7 @@ pub fn view_properties_general<'a>(
                         crate::panels::SchematicSheetColor::options(),
                         sheet_color,
                         PanelMsg::SetSheetColor,
-                        muted,
+                        label,
                     ));
                     c
                 },
@@ -335,6 +340,7 @@ pub fn view_properties_general<'a>(
     }
 
     // Page Options (collapsible)
+    col = col.push(thin_sep(hairline));
     {
         let paper_size = ctx.paper_size.clone();
         let format_mode = ctx.page_format_mode;
@@ -408,7 +414,7 @@ pub fn view_properties_general<'a>(
                                     .0
                                     .token(SheetOrientation::Landscape),
                                 PanelMsg::SetPaperSize,
-                                muted,
+                                label,
                             ));
                             if matches!(format_mode, PageFormatMode::Template) {
                                 c = c.push(
@@ -434,7 +440,7 @@ pub fn view_properties_general<'a>(
                                     })
                                     .as_deref(),
                                 PaperEdge::Width,
-                                muted,
+                                label,
                                 input_bg,
                                 input_bdr,
                             ));
@@ -448,7 +454,7 @@ pub fn view_properties_general<'a>(
                                     })
                                     .as_deref(),
                                 PaperEdge::Height,
-                                muted,
+                                label,
                                 input_bg,
                                 input_bdr,
                             ));
@@ -460,7 +466,7 @@ pub fn view_properties_general<'a>(
                             vec![SheetOrientation::Landscape, SheetOrientation::Portrait],
                             orientation,
                             PanelMsg::SetSheetOrientation,
-                            muted,
+                            label,
                         ));
                     }
                     let (w, h) = paper_dimensions(&paper_size);
@@ -477,7 +483,7 @@ pub fn view_properties_general<'a>(
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(
                             !sheet_frame.show_border,
                         )),
-                        muted,
+                        label,
                         panel_bg,
                     ));
                     c = c.push(form_check_row(
@@ -486,7 +492,7 @@ pub fn view_properties_general<'a>(
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
                             !sheet_frame.show_title_block,
                         )),
-                        muted,
+                        label,
                         panel_bg,
                     ));
                     let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
@@ -495,14 +501,14 @@ pub fn view_properties_general<'a>(
                         zone_counts.clone(),
                         sheet_frame.vertical_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
-                        muted,
+                        label,
                     ));
                     c = c.push(form_pick_row(
                         "Horizontal",
                         zone_counts,
                         sheet_frame.horizontal_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
-                        muted,
+                        label,
                     ));
                     let origin_opts: Vec<PageOrigin> =
                         vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
@@ -511,7 +517,7 @@ pub fn view_properties_general<'a>(
                         origin_opts,
                         origin,
                         PanelMsg::SetPageOrigin,
-                        muted,
+                        label,
                     ));
                     c = c.push(form_label("Text", muted));
                     c = c.push(crate::panels::element_properties::font_family_row(
@@ -528,10 +534,12 @@ pub fn view_properties_general<'a>(
     }
 
     // Title Block (collapsible, #1080)
+    col = col.push(thin_sep(hairline));
     col = col.push(super::view_title_block_section(
         ctx, muted, primary, border_c,
     ));
 
+    col = col.push(thin_sep(hairline));
     col = col.push(view_net_classes_section(ctx, palette).boxed());
 
     col

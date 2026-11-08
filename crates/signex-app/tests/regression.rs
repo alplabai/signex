@@ -286,6 +286,8 @@ mod deleted_sheet_not_resaved;
 mod exclude_dirty_sheet_prompt;
 #[path = "regression/library_components_panel_actions.rs"]
 mod library_components_panel_actions;
+#[path = "regression/library_components_panel_layout.rs"]
+mod library_components_panel_layout;
 #[path = "regression/library_git_recovery.rs"]
 mod library_git_recovery;
 

@@ -4,6 +4,7 @@
 
 use iced::widget::{container, row, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::{PanelMsg, SP, TS};
 use crate::panels::{PROPERTY_ROW_PAD_X, form_look};
@@ -110,10 +111,10 @@ where
         row![
             label(key, label_c),
             iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
+                .graphite()
                 .on_select(on_change)
                 .text_size(TS.body)
                 .padding(SP.s)
-                .style(form_look::pick_list_style)
                 .width(Length::FillPortion(VALUE_PORTION))
                 .boxed(),
         ]

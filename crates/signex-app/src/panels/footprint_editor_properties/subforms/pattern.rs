@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, button, container, pick_list, row, text};
 use iced::{Color, Element, Length, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row};
@@ -372,6 +373,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     NumberingSchemeKindUi::ALL.as_slice(),
                     |scheme: &NumberingSchemeKindUi| scheme.to_string(),
                 )
+                .graphite()
                 .on_select(move |scheme| PanelMsg::FpEditorSetArrayNumberingScheme {
                     array_id,
                     scheme,

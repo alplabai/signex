@@ -1,5 +1,6 @@
 use super::{PasteArrayMsg, PasteArrayState};
 use iced::widget::{Space, Widget, button, column, container, pick_list, row, text, text_input};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use crate::paste_prefs::PasteDesignators;
 use iced::{Background, Element, Length, Theme};
@@ -81,6 +82,7 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
             PasteDesignators::ALL,
             |mode: &PasteDesignators| mode.to_string(),
         )
+        .graphite()
         .on_select(PasteArrayMsg::DesignatorsChosen)
         .text_size(12),
     ]

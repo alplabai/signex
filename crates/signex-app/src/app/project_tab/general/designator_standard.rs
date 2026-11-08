@@ -10,6 +10,7 @@ use iced::widget::{Widget, column, pick_list, text};
 use iced::{Element, Length};
 use signex_types::designator::DesignatorStandard;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use super::view::{labelled, tab_message};
 use crate::app::Message;
@@ -48,6 +49,7 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
         StandardChoice::ALL,
         |choice: &StandardChoice| choice.to_string(),
     )
+    .graphite()
     .on_select(move |choice: StandardChoice| {
         tab_message(ProjectTabMsg::DesignatorStandardPicked {
             project_id,

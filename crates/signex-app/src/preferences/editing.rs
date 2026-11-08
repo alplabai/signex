@@ -3,6 +3,7 @@
 use super::*;
 use iced::widget::{Space, checkbox, column, pick_list, row, slider, text};
 use iced::{Element, Length, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -118,6 +119,7 @@ pub(super) fn content_editing<'a>(
             crate::paste_prefs::PasteDesignators::ALL,
             ToString::to_string,
         )
+        .graphite()
         .on_select(PrefMsg::DraftPasteDesignators)
         .text_size(12),
     ]

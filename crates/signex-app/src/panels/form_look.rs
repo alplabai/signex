@@ -10,7 +10,7 @@ use super::*;
 use crate::styles::tokens::resolve;
 use crate::styles::{TypeScale, is_graphite, ti};
 use iced::Widget;
-use iced::widget::{button, checkbox, pick_list, scrollable, text_input};
+use iced::widget::{button, checkbox, scrollable, text_input};
 use signex_types::theme::{ThemeId, theme_tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -125,31 +125,6 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
     }
 }
 
-/// `pick_list` style for a form dropdown: Graphite, else the stock style.
-pub(crate) fn pick_list_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
-    let base = pick_list::default(theme, status);
-    let Some(l) = FormLook::of(theme) else {
-        return base;
-    };
-    let border = match status {
-        pick_list::Status::Opened { .. } => l.accent,
-        pick_list::Status::Hovered => l.line_strong,
-        _ => l.line,
-    };
-    pick_list::Style {
-        text_color: l.ink,
-        placeholder_color: l.ink4,
-        handle_color: l.ink3,
-        background: Background::Color(l.field),
-        border: Border {
-            width: 1.0,
-            radius: PROPERTY_FIELD_RADIUS.into(),
-            color: border,
-            ..Border::default()
-        },
-    }
-}
-
 /// `checkbox` style for a form toggle: Graphite, else the stock style.
 pub(crate) fn checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
     let base = checkbox::primary(theme, status);
@@ -243,10 +218,7 @@ pub(in crate::panels) fn segment_cell(
 }
 
 /// Ghost button: transparent, hairline, radius 7. `None` on other themes.
-pub(in crate::panels) fn ghost_button(
-    theme: &Theme,
-    status: button::Status,
-) -> Option<button::Style> {
+pub(crate) fn ghost_button(theme: &Theme, status: button::Status) -> Option<button::Style> {
     let l = FormLook::of(theme)?;
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
     Some(button::Style {
@@ -260,6 +232,44 @@ pub(in crate::panels) fn ghost_button(
         },
         ..button::Style::default()
     })
+}
+
+/// Option tile of a Properties row (fill, placement, a class list): a ghost
+/// button, the chosen one in accent-soft with an accent hairline. The stock
+/// secondary style on any other theme.
+pub(crate) fn option_tile(
+    active: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let Some(mut style) = ghost_button(theme, status) else {
+            return button::secondary(theme, status);
+        };
+        if let (true, Some(l)) = (active, FormLook::of(theme)) {
+            style.background = Some(Background::Color(l.accent_soft));
+            style.border.color = l.accent;
+        }
+        style
+    }
+}
+
+/// A value shown as a field that opens something when pressed (the canvas
+/// font): field fill, hairline, ink text; the hairline strengthens on hover.
+pub(crate) fn value_field_button(theme: &Theme, status: button::Status) -> button::Style {
+    let Some(l) = FormLook::of(theme) else {
+        return button::text(theme, status);
+    };
+    let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+    button::Style {
+        background: Some(Background::Color(l.field)),
+        text_color: l.ink,
+        border: Border {
+            width: 1.0,
+            radius: PROPERTY_FIELD_RADIUS.into(),
+            color: if hovered { l.line_strong } else { l.line },
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
 }
 
 /// Active tab chip of the Properties tab strip: accent-soft fill, radius 7.

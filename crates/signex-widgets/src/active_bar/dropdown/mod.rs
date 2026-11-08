@@ -50,7 +50,7 @@ use crate::theme_ext;
 
 mod metrics;
 
-pub use metrics::{MONO_FAMILY, MenuMetrics};
+pub use metrics::{MENU_LABEL_SIZE, MENU_SHORTCUT_SIZE, MONO_FAMILY, MenuMetrics};
 
 /// Hover wash and corner radius of a menu row. Public so a `Custom` row
 /// built by the app (the net-colour swatches) hovers like an item row.

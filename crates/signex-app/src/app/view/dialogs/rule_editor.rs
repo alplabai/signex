@@ -81,7 +81,15 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
                     .size(TS.body)
                     .color(text_c)
                     .width(Length::FillPortion(3)),
-                severity_segmented(*rule, current, border_c, text_muted, editable, on_severity),
+                severity_segmented(
+                    *rule,
+                    current,
+                    border_c,
+                    text_muted,
+                    crate::styles::tokens::resolve(tokens).field,
+                    editable,
+                    on_severity,
+                ),
             ]
             .align_y(iced::Alignment::Center)
             .padding([2.0, 8.0])
@@ -136,6 +144,7 @@ fn severity_segmented<M: Clone + 'static>(
     current: Severity,
     border: Color,
     text_muted: Color,
+    unselected: Color,
     editable: bool,
     on_severity: fn(RuleKind, Severity) -> M,
 ) -> Element<'static, M> {
@@ -145,11 +154,7 @@ fn severity_segmented<M: Clone + 'static>(
         } else {
             value == current
         };
-        let bg = if selected {
-            color
-        } else {
-            Color::from_rgba(1.0, 1.0, 1.0, 0.03)
-        };
+        let bg = if selected { color } else { unselected };
         let fg = if selected { Color::WHITE } else { text_muted };
         button(container(text(label.to_string()).size(TS.caption).color(fg)).padding([3.0, 8.0]))
             .on_press_maybe(editable.then(|| on_severity(rule, value)))

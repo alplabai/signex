@@ -1,3 +1,4 @@
+use crate::dropdown_style::GraphiteDropdown;
 use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
@@ -257,6 +258,7 @@ impl CalculatorControl {
                     SiPrefix::for_kind(self.kind),
                     SiPrefix::to_string,
                 )
+                .graphite()
                 .on_select(CalculatorMessage::PrefixChanged)
                 .text_size(11)
                 .padding([4, 6])
@@ -269,6 +271,7 @@ impl CalculatorControl {
                 11.0,
                 "Preferred series",
                 pick_list(Some(state.series), ESeries::ALL, ESeries::to_string)
+                    .graphite()
                     .on_select(CalculatorMessage::SeriesChanged)
                     .text_size(11)
                     .padding([4, 6])
@@ -282,6 +285,7 @@ impl CalculatorControl {
                     MAX_COMPONENT_OPTIONS,
                     usize::to_string,
                 )
+                .graphite()
                 .on_select(CalculatorMessage::MaxComponentsChanged)
                 .text_size(11)
                 .padding([4, 6])

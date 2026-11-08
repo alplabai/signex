@@ -11,7 +11,6 @@ use iced_aw::style::menu_bar as menu_style;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
 use super::{MenuColors, MenuMessage, model};
-use crate::styles::TypeScale;
 
 /// Row metrics of a dropdown: the same card numbers as every context menu.
 const M: MenuMetrics = MenuMetrics::GRAPHITE;
@@ -37,6 +36,8 @@ pub(super) const ITEM_RADIUS: f32 = 6.0;
 const DROPDOWN_RADIUS: f32 = 10.0;
 /// Horizontal padding of a root button.
 const ROOT_PAD_X: f32 = 8.0;
+/// Size of a root label: the same token as every dropdown row.
+pub(super) const ROOT_LABEL_SIZE: f32 = M.label_size;
 /// Vertical padding of a root button (26 px tall with a 12 px label).
 const ROOT_PAD_Y: f32 = 5.0;
 /// Left padding of the bar, before the mark.
@@ -51,23 +52,19 @@ pub(super) fn mark<'a, M: 'a>() -> Element<'a, M> {
 /// while its dropdown is open.
 pub(super) fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let (ink, hover_bg) = (mc.text, mc.hover);
-    let btn = button(
-        text(label.to_owned())
-            .size(TypeScale::DEFAULT.dense)
-            .color(ink),
-    )
-    .padding([ROOT_PAD_Y, ROOT_PAD_X])
-    .on_press(MenuMessage::NoOp)
-    .style(move |_: &Theme, status: button::Status| button::Style {
-        background: matches!(status, button::Status::Hovered | button::Status::Pressed)
-            .then_some(Background::Color(hover_bg)),
-        text_color: ink,
-        border: Border {
-            radius: ITEM_RADIUS.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    });
+    let btn = button(text(label.to_owned()).size(ROOT_LABEL_SIZE).color(ink))
+        .padding([ROOT_PAD_Y, ROOT_PAD_X])
+        .on_press(MenuMessage::NoOp)
+        .style(move |_: &Theme, status: button::Status| button::Style {
+            background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+                .then_some(Background::Color(hover_bg)),
+            text_color: ink,
+            border: Border {
+                radius: ITEM_RADIUS.into(),
+                ..Border::default()
+            },
+            ..button::Style::default()
+        });
     iced::advanced::Widget::_boxed(btn)
 }
 
@@ -293,5 +290,21 @@ mod tests {
         assert!(w > BAR_LEFT_PAD + MARK_SIZE + MARK_GAP);
         // 52 label chars, 10 roots at 16 px padding.
         assert_eq!(w, 10.0 + 20.0 + 6.0 + 52.0 * 7.5 + 10.0 * 16.0);
+    }
+
+    /// One token per menu text: the bar roots, the dropdown and context-menu
+    /// rows (both `MenuMetrics::GRAPHITE`) and the legacy-path constants all
+    /// read the same label size, and every shortcut hint the same mono size.
+    #[test]
+    fn every_menu_surface_shares_one_label_and_shortcut_size() {
+        use signex_widgets::active_bar_dropdown::{
+            MENU_LABEL_SIZE, MENU_SHORTCUT_SIZE, MenuMetrics,
+        };
+        assert_eq!(ROOT_LABEL_SIZE, MENU_LABEL_SIZE);
+        assert_eq!(MenuMetrics::GRAPHITE.label_size, ROOT_LABEL_SIZE);
+        assert_eq!(MenuMetrics::GRAPHITE.shortcut_size, MENU_SHORTCUT_SIZE);
+        const { assert!(MenuMetrics::GRAPHITE.mono_shortcut) };
+        assert_eq!(super::super::MENU_LABEL_SIZE, MENU_LABEL_SIZE);
+        assert_eq!(super::super::MENU_SHORTCUT_SIZE, MENU_SHORTCUT_SIZE);
     }
 }

@@ -112,14 +112,16 @@ fn the_shortcut_and_chevron_columns_are_part_of_the_fitted_width() {
     assert!(with_chevron > plain, "{with_chevron} {plain}");
 }
 
-/// Graphite rows are dense: 13 px type on 28 px rows, with or without icons.
+/// Graphite rows are dense: the shared menu label token on 28 px rows, with
+/// or without icons.
 #[test]
 fn graphite_rows_are_28_px_with_dense_type() {
     let m = MenuMetrics::of(&theme_tokens(ThemeId::GraphiteLight));
     assert_eq!(m, MenuMetrics::GRAPHITE);
     assert_eq!(m.item_height(false), 28.0);
     assert_eq!(m.item_height(true), 28.0);
-    assert!((12.5..=13.0).contains(&m.label_size), "{}", m.label_size);
+    assert_eq!(m.label_size, super::MENU_LABEL_SIZE);
+    assert_eq!(m.shortcut_size, super::MENU_SHORTCUT_SIZE);
     assert_eq!(m.icon_size, 16.0);
     assert!(m.mono_shortcut);
     assert_eq!(MenuMetrics::of(&unskinned()), MenuMetrics::LEGACY);

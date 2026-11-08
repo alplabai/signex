@@ -1,6 +1,7 @@
 //! The range-filter bar both surfaces draw. Pure: it reads the model and
 //! turns interaction into [`RangeFilterMsg`], mapped by the caller.
 
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -67,6 +68,7 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
         let w = Rc::clone(&wrap);
         bar = bar.push(
             pick_list(None::<FilterColumn>, free, |c: &FilterColumn| c.to_string())
+                .graphite()
                 .on_select(move |c: FilterColumn| {
                     w(RangeFilterMsg::ColumnPicked {
                         key: c.key,
@@ -99,6 +101,7 @@ fn filter_row<'a, M: Clone + 'a>(
         pick_list(Some(draft.op), RangeOp::ALL.to_vec(), |op: &RangeOp| {
             op.to_string()
         })
+        .graphite()
         .on_select(move |op: RangeOp| {
             w(RangeFilterMsg::OperatorPicked {
                 key: key.clone(),
