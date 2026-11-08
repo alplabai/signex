@@ -693,6 +693,10 @@ fn a_referenced_sheet_over_the_size_cap_is_not_read_by_a_query() {
 /// A FIFO named like a sheet does not hang a query.
 #[cfg(unix)]
 #[test]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "`mkfifo` makes the pipe; the standard library has no call for it"
+)]
 fn a_referenced_fifo_does_not_hang_a_query() {
     let (_guard, root) = temp_root();
     let out = list_with_reference(&root, "pipe.snxsch", |path| {
