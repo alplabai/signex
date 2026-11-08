@@ -92,6 +92,7 @@ const MAX_TMP_ATTEMPTS: usize = 16;
 /// `next_name` is tried; after [`MAX_TMP_ATTEMPTS`] the save fails. An
 /// existing path is never opened.
 fn create_temp_with(
+    document: &Path,
     first: PathBuf,
     mut next_name: impl FnMut() -> io::Result<PathBuf>,
 ) -> io::Result<(File, PathBuf)> {
@@ -110,16 +111,18 @@ fn create_temp_with(
     Err(io::Error::new(
         io::ErrorKind::AlreadyExists,
         format!(
-            "no free temporary file name next to {} after {MAX_TMP_ATTEMPTS} tries; nothing written",
-            tmp.display()
+            "no free temporary file name for {} after {MAX_TMP_ATTEMPTS} tries; nothing written",
+            document.display()
         ),
     ))
 }
 
-/// Give `tmp` the permissions of the regular file already at `path`, if any.
-fn copy_existing_permissions(path: &Path, tmp: &Path) -> io::Result<()> {
+/// Give the open temp `file` the permissions of the regular file already at
+/// `path`, if any. Applied to the handle (fchmod), never by path, so a swapped
+/// temp name cannot be chmodded; the later rename-by-path window is inherent.
+fn copy_existing_permissions(path: &Path, file: &File) -> io::Result<()> {
     match std::fs::symlink_metadata(path) {
-        Ok(meta) if meta.is_file() => std::fs::set_permissions(tmp, meta.permissions()),
+        Ok(meta) if meta.is_file() => file.set_permissions(meta.permissions()),
         Ok(_) => Ok(()),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
@@ -273,15 +276,16 @@ fn write_resolved(path: &Path, bytes: &[u8], create_parents: bool) -> io::Result
     // which the next write to the same target simply overwrote — a stranded
     // temp would never be reclaimed and repeated failures (a full or flaky
     // disk) would accumulate `<path>.<pid>-<n>.tmp` siblings unboundedly.
-    let (mut file, tmp) = create_temp_with(first, || tmp_path_for(path))?;
+    let (mut file, tmp) = create_temp_with(path, first, || tmp_path_for(path))?;
     if let Err(e) = file.write_all(bytes).and_then(|()| file.sync_all()) {
         drop(file);
         let _ = std::fs::remove_file(&tmp);
         return Err(e);
     }
-    drop(file);
     // A replaced file keeps its permissions (a 0600 file stays 0600).
-    if let Err(e) = copy_existing_permissions(path, &tmp) {
+    let permissions = copy_existing_permissions(path, &file);
+    drop(file);
+    if let Err(e) = permissions {
         tracing::warn!(
             path = %path.display(),
             error = %e,
@@ -350,9 +354,8 @@ mod tests {
     #[test]
     fn a_missing_destination_is_not_a_permission_copy_failure() {
         let dir = tempfile::tempdir().unwrap();
-        let tmp = dir.path().join("t.tmp");
-        std::fs::write(&tmp, b"x").unwrap();
-        copy_existing_permissions(&dir.path().join("absent"), &tmp).unwrap();
+        let file = File::create(dir.path().join("t.tmp")).unwrap();
+        copy_existing_permissions(&dir.path().join("absent"), &file).unwrap();
     }
 
     #[test]
@@ -360,9 +363,8 @@ mod tests {
         // A directory is not a regular file: its permissions are never
         // copied, and the write still reports its own outcome only.
         let dir = tempfile::tempdir().unwrap();
-        let tmp = dir.path().join("t.tmp");
-        std::fs::write(&tmp, b"x").unwrap();
-        copy_existing_permissions(dir.path(), &tmp).unwrap();
+        let file = File::create(dir.path().join("t.tmp")).unwrap();
+        copy_existing_permissions(dir.path(), &file).unwrap();
     }
 
     #[test]
@@ -454,6 +456,47 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn a_link_at_the_first_name_yields_the_second_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("victim.txt");
+        std::fs::write(&outside, b"victim").unwrap();
+        let doc = dir.path().join("doc.snxsch");
+        let first = dir.path().join("doc.snxsch.1-0.tmp");
+        let second = dir.path().join("doc.snxsch.1-1.tmp");
+        std::os::unix::fs::symlink(&outside, &first).unwrap();
+        let next = second.clone();
+
+        let (_file, got) = create_temp_with(&doc, first.clone(), || Ok(next.clone())).unwrap();
+
+        assert_eq!(got, second);
+        assert_eq!(std::fs::read(&outside).unwrap(), b"victim");
+        assert!(
+            std::fs::symlink_metadata(&first)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_temp_has_the_documents_mode_before_the_rename() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let doc = dir.path().join("secret.txt");
+        std::fs::write(&doc, b"old").unwrap();
+        std::fs::set_permissions(&doc, std::fs::Permissions::from_mode(0o640)).unwrap();
+        let (file, tmp) =
+            create_temp_with(&doc, dir.path().join("t.tmp"), || unreachable!()).unwrap();
+
+        copy_existing_permissions(&doc, &file).unwrap();
+
+        let mode = std::fs::metadata(&tmp).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o640);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn exhausting_the_temp_names_fails_and_leaves_the_document() {
         let dir = tempfile::tempdir().unwrap();
         let outside = dir.path().join("victim.txt");
@@ -464,13 +507,15 @@ mod tests {
         std::os::unix::fs::symlink(&outside, &link).unwrap();
         let mut calls = 0;
 
-        let err = create_temp_with(link.clone(), || {
+        let err = create_temp_with(&path, link.clone(), || {
             calls += 1;
             Ok(link.clone())
         })
         .unwrap_err();
 
         assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert!(err.to_string().contains("doc.snxsch"));
+        assert!(!err.to_string().contains("stuck"));
         assert_eq!(calls, MAX_TMP_ATTEMPTS - 1);
         assert_eq!(std::fs::read(&outside).unwrap(), b"victim");
         assert_eq!(std::fs::read(&path).unwrap(), b"old");
