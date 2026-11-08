@@ -260,3 +260,42 @@ fn only_the_operand_refusal_is_logged_by_a_key_or_palette_dispatch() {
         "nothing new for other commands"
     );
 }
+
+/// a pick on a background sheet, undone and redone by
+/// document; the active sheet untouched.
+#[test]
+fn by_document_undo_and_redo_step_the_pick_on_a_background_sheet() {
+    let (mut app, ..) = child_label_selected(&dir("assign-probe-undo"));
+    let top = top_sheet(&app);
+    let child = app.document_state.active_path.clone().unwrap();
+    let (tab, child_at) = (app.document_state.active_tab, child_position(&app));
+    let table = app.document_state.projects[0].path.clone();
+    let doc = format!("document={}", top.display());
+    let top_at = app.document_state.engines[&top].undo_position();
+    let undo = AppCommandId::new("undo").unwrap();
+    let redo = AppCommandId::new("redo").unwrap();
+    let uargs = CommandArgs::parse_operands(&undo, &[&doc]).unwrap();
+    let rargs = CommandArgs::parse_operands(&redo, &[&doc]).unwrap();
+
+    assert_eq!(
+        run(&mut app, &["net_name=VCC", "class=Power", &doc]),
+        CommandOutcome::Ran
+    );
+    assert_eq!(classes(&app)[0].nets, ["VCC"]);
+    assert!(app.document_state.is_document_dirty(&table));
+
+    assert_eq!(app.run_operands(&undo, &uargs).0, CommandOutcome::Ran);
+    assert!(classes(&app)[0].nets.is_empty(), "pick undone");
+    assert!(
+        !app.document_state.is_document_dirty(&table),
+        "table clean again"
+    );
+    assert_eq!(app.document_state.engines[&top].undo_position(), top_at);
+    assert_eq!(app.run_operands(&redo, &rargs).0, CommandOutcome::Ran);
+    assert_eq!(classes(&app)[0].nets, ["VCC"], "pick redone");
+    assert_eq!(app.run_operands(&undo, &uargs).0, CommandOutcome::Ran);
+    assert!(classes(&app)[0].nets.is_empty());
+    assert_eq!(child_position(&app), child_at, "active sheet untouched");
+    assert_eq!(app.document_state.active_path.as_ref(), Some(&child));
+    assert_eq!(app.document_state.active_tab, tab);
+}
