@@ -618,6 +618,7 @@ impl SnxSchematic {
                 load_repairs: Vec::new(),
             },
         };
+        sheet.upgrade_unversioned_bodies();
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);

@@ -719,28 +719,26 @@ fn schematic_extras_are_byte_identical_after_parse() {
     }
 
     for id in ["zeta", "alpha", "middle"] {
-        sheet.lib_symbols.insert(
-            id.into(),
-            LibSymbol {
-                id: id.into(),
-                reference: "U".into(),
-                value: id.into(),
-                footprint: String::new(),
-                datasheet: String::new(),
-                description: format!("{id} library symbol"),
-                keywords: String::new(),
-                fp_filters: String::new(),
-                in_bom: true,
-                on_board: true,
-                in_pos_files: true,
-                duplicate_pin_numbers_are_jumpers: false,
-                graphics: Vec::new(),
-                pins: Vec::new(),
-                show_pin_numbers: true,
-                show_pin_names: true,
-                pin_name_offset: 0.0,
-            },
-        );
+        let body = LibSymbol {
+            id: id.into(),
+            reference: "U".into(),
+            value: id.into(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: format!("{id} library symbol"),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: Vec::new(),
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        };
+        sheet.lib_symbols.insert(body.body_ref(), body);
     }
 
     let mut symbol = sample_symbol();
@@ -777,7 +775,13 @@ fn schematic_extras_are_byte_identical_after_parse() {
 
     assert_eq!(first, second);
     assert_eq!(parsed.sheet.title_block["revision"], "A");
-    assert_eq!(parsed.sheet.lib_symbols["alpha"].value, "alpha");
+    assert!(
+        parsed
+            .sheet
+            .lib_symbols
+            .iter()
+            .any(|(key, body)| key.starts_with("alpha#") && body.value == "alpha")
+    );
     assert_eq!(
         parsed.sheet.symbols[0].fields["Manufacturer"],
         "Example Semi"
@@ -886,4 +890,92 @@ values = [1.0, {bad}]
             other => panic!("{bad}: expected NonFiniteNumber, got {other:?}"),
         }
     }
+}
+
+// --- versioned embedded library symbols (#2209) ---------------------------
+
+fn lib_body(id: &str, description: &str) -> LibSymbol {
+    serde_json::from_value(serde_json::json!({
+        "id": id,
+        "description": description,
+        "pin_name_offset": 0.5,
+    }))
+    .expect("lib symbol")
+}
+
+#[test]
+fn a_body_hash_is_stable_and_tells_versions_apart() {
+    let a = lib_body("L:A", "1");
+    assert_eq!(a.content_hash(), a.clone().content_hash());
+    assert_eq!(a.content_hash().len(), 8);
+    assert_ne!(a.content_hash(), lib_body("L:A", "2").content_hash());
+    // Pinned: the hash is part of the saved form, so a change here is a
+    // format change (see docs/architecture/library-symbol-versions.md).
+    assert_eq!(a.body_ref(), format!("L:A#{}", a.content_hash()));
+    assert_eq!(a.content_hash(), "eb13bdee");
+}
+
+#[test]
+fn a_body_ref_collision_is_an_error_not_a_merge() {
+    let mut sheet = empty_sheet();
+    let a = lib_body("L:A", "1");
+    let other = lib_body("L:A", "2");
+    sheet.lib_symbols.insert(a.body_ref(), other);
+    let err = sheet.embed_body(a.clone()).expect_err("collision");
+    assert_eq!(err.body_ref, a.body_ref());
+    let mut clean = empty_sheet();
+    assert_eq!(clean.embed_body(a.clone()), Ok(a.body_ref()));
+    assert_eq!(
+        clean.embed_body(a.clone()),
+        Ok(a.body_ref()),
+        "same body reuses"
+    );
+}
+
+#[test]
+fn two_versions_of_one_symbol_round_trip_on_one_sheet() {
+    let mut sheet = empty_sheet();
+    let (v1, v2) = (lib_body("L:A", "1"), lib_body("L:A", "2"));
+    let (k1, k2) = (
+        sheet.embed_body(v1.clone()).unwrap(),
+        sheet.embed_body(v2.clone()).unwrap(),
+    );
+    for (n, key) in [(0u128, &k1), (1, &k2)] {
+        let mut sym = sample_symbol();
+        sym.uuid = Uuid::from_u128(n + 1);
+        sym.lib_id = "L:A".into();
+        sym.body_ref = key.clone();
+        sheet.symbols.push(sym);
+    }
+    let text = SnxSchematic::new(sheet).write_string().unwrap();
+    let back = SnxSchematic::parse(&text).unwrap();
+    assert_eq!(back.sheet.lib_symbols.len(), 2);
+    assert_eq!(back.sheet.body_of(&back.sheet.symbols[0]), Some(&v1));
+    assert_eq!(back.sheet.body_of(&back.sheet.symbols[1]), Some(&v2));
+    assert_eq!(back.write_string().unwrap(), text);
+}
+
+#[test]
+fn an_old_form_sheet_upgrades_on_load_and_saves_in_the_new_form() {
+    // Old form: the body keyed by plain lib id, symbols naming no body_ref.
+    let mut sheet = empty_sheet();
+    let body = lib_body("L:A", "1");
+    sheet.lib_symbols.insert("L:A".into(), body.clone());
+    let mut sym = sample_symbol();
+    sym.lib_id = "L:A".into();
+    sheet.symbols.push(sym);
+    let old = SnxSchematic::new(sheet).write_string().unwrap();
+    assert!(!old.contains("body_ref"), "{old}");
+
+    let loaded = SnxSchematic::parse(&old).unwrap();
+    let key = body.body_ref();
+    assert_eq!(loaded.sheet.symbols[0].body_ref, key);
+    assert_eq!(loaded.sheet.lib_symbols.get(&key), Some(&body));
+    assert!(!loaded.sheet.lib_symbols.contains_key("L:A"));
+    let new = loaded.write_string().unwrap();
+    assert!(new.contains(&format!("body_ref = \"{key}\"")), "{new}");
+    assert_eq!(
+        SnxSchematic::parse(&new).unwrap().write_string().unwrap(),
+        new
+    );
 }

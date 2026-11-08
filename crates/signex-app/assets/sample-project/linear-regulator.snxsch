@@ -86,6 +86,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "Connector:Conn_01x02#b6181923"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000001.fields]
 
@@ -129,6 +130,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "Device:C#1b683bdf"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000002.fields]
 
@@ -172,6 +174,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "Regulator:LDO_3V3#ae763a04"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000003.fields]
 
@@ -215,6 +218,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "Device:C#1b683bdf"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000004.fields]
 
@@ -258,6 +262,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "Device:R#2e0c0856"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000005.fields]
 
@@ -301,6 +306,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "Device:LED#a16b90d1"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000006.fields]
 
@@ -344,6 +350,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "Connector:Conn_01x02#b6181923"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000007.fields]
 
@@ -387,6 +394,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "power:+5V#8145e08f"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000008.fields]
 
@@ -430,6 +438,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "power:+3V3#ff27be3c"
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000009.fields]
 
@@ -473,6 +482,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "power:GND#368c3eb3"
 
 [extras.symbols.5a3c0000-0000-4000-8000-00000000000a.fields]
 
@@ -552,7 +562,7 @@ date = "2026-01-01"
 rev = "A"
 title = "Linear Regulator Sample"
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02"]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923"]
 id = "Connector:Conn_01x02"
 reference = "J"
 value = ""
@@ -569,28 +579,28 @@ show_pin_numbers = true
 show_pin_names = false
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics]]
+[[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics.graphic]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".graphics.graphic]
 type = "rectangle"
 width = 0.0
 fill = "background"
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics.graphic.start]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".graphics.graphic.start]
 x = -2.54
 y = -5.08
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics.graphic.end]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".graphics.graphic.end]
 x = 2.54
 y = 5.08
 
-[[extras.sheet.lib_symbols."Connector:Conn_01x02".pins]]
+[[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 180.0
@@ -601,15 +611,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin.position]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".pins.pin.position]
 x = 5.08
 y = 2.54
 
-[[extras.sheet.lib_symbols."Connector:Conn_01x02".pins]]
+[[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 180.0
@@ -620,11 +630,11 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin.position]
+[extras.sheet.lib_symbols."Connector:Conn_01x02#b6181923".pins.pin.position]
 x = 5.08
 y = -2.54
 
-[extras.sheet.lib_symbols."Device:C"]
+[extras.sheet.lib_symbols."Device:C#1b683bdf"]
 id = "Device:C"
 reference = "C"
 value = ""
@@ -641,45 +651,45 @@ show_pin_numbers = true
 show_pin_names = true
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."Device:C".graphics]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:C".graphics.graphic]
+[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics.graphic.points]]
 x = -1.905
 y = 0.635
 
-[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics.graphic.points]]
 x = 1.905
 y = 0.635
 
-[[extras.sheet.lib_symbols."Device:C".graphics]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:C".graphics.graphic]
+[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics.graphic.points]]
 x = -1.905
 y = -0.635
 
-[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".graphics.graphic.points]]
 x = 1.905
 y = -0.635
 
-[[extras.sheet.lib_symbols."Device:C".pins]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:C".pins.pin]
+[extras.sheet.lib_symbols."Device:C#1b683bdf".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 270.0
@@ -690,15 +700,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Device:C".pins.pin.position]
+[extras.sheet.lib_symbols."Device:C#1b683bdf".pins.pin.position]
 x = 0.0
 y = 3.81
 
-[[extras.sheet.lib_symbols."Device:C".pins]]
+[[extras.sheet.lib_symbols."Device:C#1b683bdf".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:C".pins.pin]
+[extras.sheet.lib_symbols."Device:C#1b683bdf".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 90.0
@@ -709,11 +719,11 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Device:C".pins.pin.position]
+[extras.sheet.lib_symbols."Device:C#1b683bdf".pins.pin.position]
 x = 0.0
 y = -3.81
 
-[extras.sheet.lib_symbols."Device:LED"]
+[extras.sheet.lib_symbols."Device:LED#a16b90d1"]
 id = "Device:LED"
 reference = "D"
 value = ""
@@ -730,53 +740,53 @@ show_pin_numbers = true
 show_pin_names = false
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."Device:LED".graphics]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:LED".graphics.graphic]
+[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic.points]]
 x = -1.27
 y = 1.27
 
-[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic.points]]
 x = 1.27
 y = 1.27
 
-[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic.points]]
 x = 0.0
 y = -1.27
 
-[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic.points]]
 x = -1.27
 y = 1.27
 
-[[extras.sheet.lib_symbols."Device:LED".graphics]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:LED".graphics.graphic]
+[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic.points]]
 x = -1.27
 y = -1.27
 
-[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".graphics.graphic.points]]
 x = 1.27
 y = -1.27
 
-[[extras.sheet.lib_symbols."Device:LED".pins]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:LED".pins.pin]
+[extras.sheet.lib_symbols."Device:LED#a16b90d1".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 270.0
@@ -787,15 +797,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Device:LED".pins.pin.position]
+[extras.sheet.lib_symbols."Device:LED#a16b90d1".pins.pin.position]
 x = 0.0
 y = 3.81
 
-[[extras.sheet.lib_symbols."Device:LED".pins]]
+[[extras.sheet.lib_symbols."Device:LED#a16b90d1".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:LED".pins.pin]
+[extras.sheet.lib_symbols."Device:LED#a16b90d1".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 90.0
@@ -806,11 +816,11 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Device:LED".pins.pin.position]
+[extras.sheet.lib_symbols."Device:LED#a16b90d1".pins.pin.position]
 x = 0.0
 y = -3.81
 
-[extras.sheet.lib_symbols."Device:R"]
+[extras.sheet.lib_symbols."Device:R#2e0c0856"]
 id = "Device:R"
 reference = "R"
 value = ""
@@ -827,28 +837,28 @@ show_pin_numbers = true
 show_pin_names = true
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."Device:R".graphics]]
+[[extras.sheet.lib_symbols."Device:R#2e0c0856".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:R".graphics.graphic]
+[extras.sheet.lib_symbols."Device:R#2e0c0856".graphics.graphic]
 type = "rectangle"
 width = 0.0
 fill = "background"
 
-[extras.sheet.lib_symbols."Device:R".graphics.graphic.start]
+[extras.sheet.lib_symbols."Device:R#2e0c0856".graphics.graphic.start]
 x = -1.016
 y = -2.54
 
-[extras.sheet.lib_symbols."Device:R".graphics.graphic.end]
+[extras.sheet.lib_symbols."Device:R#2e0c0856".graphics.graphic.end]
 x = 1.016
 y = 2.54
 
-[[extras.sheet.lib_symbols."Device:R".pins]]
+[[extras.sheet.lib_symbols."Device:R#2e0c0856".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:R".pins.pin]
+[extras.sheet.lib_symbols."Device:R#2e0c0856".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 270.0
@@ -859,15 +869,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Device:R".pins.pin.position]
+[extras.sheet.lib_symbols."Device:R#2e0c0856".pins.pin.position]
 x = 0.0
 y = 3.81
 
-[[extras.sheet.lib_symbols."Device:R".pins]]
+[[extras.sheet.lib_symbols."Device:R#2e0c0856".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Device:R".pins.pin]
+[extras.sheet.lib_symbols."Device:R#2e0c0856".pins.pin]
 direction = "passive"
 shape_style = "plain"
 rotation = 90.0
@@ -878,11 +888,11 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Device:R".pins.pin.position]
+[extras.sheet.lib_symbols."Device:R#2e0c0856".pins.pin.position]
 x = 0.0
 y = -3.81
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3"]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04"]
 id = "Regulator:LDO_3V3"
 reference = "U"
 value = ""
@@ -899,28 +909,28 @@ show_pin_numbers = true
 show_pin_names = true
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics]]
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics.graphic]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".graphics.graphic]
 type = "rectangle"
 width = 0.0
 fill = "background"
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics.graphic.start]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".graphics.graphic.start]
 x = -7.62
 y = -5.08
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics.graphic.end]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".graphics.graphic.end]
 x = 7.62
 y = 5.08
 
-[[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins]]
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins.pin]
 direction = "power_input"
 shape_style = "plain"
 rotation = 0.0
@@ -931,15 +941,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin.position]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins.pin.position]
 x = -10.16
 y = 2.54
 
-[[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins]]
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins.pin]
 direction = "power_output"
 shape_style = "plain"
 rotation = 180.0
@@ -950,15 +960,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin.position]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins.pin.position]
 x = 10.16
 y = 2.54
 
-[[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins]]
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins.pin]
 direction = "ground_reference"
 shape_style = "plain"
 rotation = 90.0
@@ -969,11 +979,11 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin.position]
+[extras.sheet.lib_symbols."Regulator:LDO_3V3#ae763a04".pins.pin.position]
 x = 0.0
 y = -7.62
 
-[extras.sheet.lib_symbols."power:+3V3"]
+[extras.sheet.lib_symbols."power:+3V3#ff27be3c"]
 id = "power:+3V3"
 reference = "#PWR"
 value = ""
@@ -990,28 +1000,28 @@ show_pin_numbers = false
 show_pin_names = false
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."power:+3V3".graphics]]
+[[extras.sheet.lib_symbols."power:+3V3#ff27be3c".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:+3V3".graphics.graphic]
+[extras.sheet.lib_symbols."power:+3V3#ff27be3c".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:+3V3#ff27be3c".graphics.graphic.points]]
 x = -0.635
 y = 1.27
 
-[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:+3V3#ff27be3c".graphics.graphic.points]]
 x = 0.635
 y = 1.27
 
-[[extras.sheet.lib_symbols."power:+3V3".pins]]
+[[extras.sheet.lib_symbols."power:+3V3#ff27be3c".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:+3V3".pins.pin]
+[extras.sheet.lib_symbols."power:+3V3#ff27be3c".pins.pin]
 direction = "power_input"
 shape_style = "plain"
 rotation = 90.0
@@ -1022,11 +1032,11 @@ visible = true
 name_visible = false
 number_visible = false
 
-[extras.sheet.lib_symbols."power:+3V3".pins.pin.position]
+[extras.sheet.lib_symbols."power:+3V3#ff27be3c".pins.pin.position]
 x = 0.0
 y = 0.0
 
-[extras.sheet.lib_symbols."power:+5V"]
+[extras.sheet.lib_symbols."power:+5V#8145e08f"]
 id = "power:+5V"
 reference = "#PWR"
 value = ""
@@ -1043,28 +1053,28 @@ show_pin_numbers = false
 show_pin_names = false
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."power:+5V".graphics]]
+[[extras.sheet.lib_symbols."power:+5V#8145e08f".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:+5V".graphics.graphic]
+[extras.sheet.lib_symbols."power:+5V#8145e08f".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:+5V#8145e08f".graphics.graphic.points]]
 x = -0.635
 y = 1.27
 
-[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:+5V#8145e08f".graphics.graphic.points]]
 x = 0.635
 y = 1.27
 
-[[extras.sheet.lib_symbols."power:+5V".pins]]
+[[extras.sheet.lib_symbols."power:+5V#8145e08f".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:+5V".pins.pin]
+[extras.sheet.lib_symbols."power:+5V#8145e08f".pins.pin]
 direction = "power_input"
 shape_style = "plain"
 rotation = 90.0
@@ -1075,11 +1085,11 @@ visible = true
 name_visible = false
 number_visible = false
 
-[extras.sheet.lib_symbols."power:+5V".pins.pin.position]
+[extras.sheet.lib_symbols."power:+5V#8145e08f".pins.pin.position]
 x = 0.0
 y = 0.0
 
-[extras.sheet.lib_symbols."power:GND"]
+[extras.sheet.lib_symbols."power:GND#368c3eb3"]
 id = "power:GND"
 reference = "#PWR"
 value = ""
@@ -1096,62 +1106,62 @@ show_pin_numbers = false
 show_pin_names = false
 pin_name_offset = 0.0
 
-[[extras.sheet.lib_symbols."power:GND".graphics]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic.points]]
 x = -0.9525
 y = -1.27
 
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic.points]]
 x = 0.9525
 y = -1.27
 
-[[extras.sheet.lib_symbols."power:GND".graphics]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic.points]]
 x = -0.6
 y = -1.77
 
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic.points]]
 x = 0.6
 y = -1.77
 
-[[extras.sheet.lib_symbols."power:GND".graphics]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic]
 type = "polyline"
 width = 0.0
 fill = "none"
 
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic.points]]
 x = -0.25
 y = -2.27
 
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".graphics.graphic.points]]
 x = 0.25
 y = -2.27
 
-[[extras.sheet.lib_symbols."power:GND".pins]]
+[[extras.sheet.lib_symbols."power:GND#368c3eb3".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:GND".pins.pin]
+[extras.sheet.lib_symbols."power:GND#368c3eb3".pins.pin]
 direction = "power_input"
 shape_style = "plain"
 rotation = 270.0
@@ -1162,6 +1172,6 @@ visible = true
 name_visible = false
 number_visible = false
 
-[extras.sheet.lib_symbols."power:GND".pins.pin.position]
+[extras.sheet.lib_symbols."power:GND#368c3eb3".pins.pin.position]
 x = 0.0
 y = 0.0

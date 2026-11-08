@@ -651,6 +651,11 @@ pub struct Pin {
 pub struct Symbol {
     pub uuid: Uuid,
     pub lib_id: String,
+    /// Key of the embedded body this symbol draws with (`lib_symbols`), a
+    /// version of the library symbol `lib_id` names. Empty: drawn by
+    /// `lib_id`. See `lib_symbol_version`.
+    #[serde(default)]
+    pub body_ref: String,
     #[serde(default)]
     pub reference: String,
     #[serde(default)]
@@ -759,6 +764,7 @@ impl Default for Symbol {
         Self {
             uuid: Uuid::nil(),
             lib_id: String::new(),
+            body_ref: String::new(),
             reference: String::new(),
             value: String::new(),
             footprint: String::new(),
@@ -805,6 +811,9 @@ mod field_style;
 mod instance_path;
 pub use field_style::{field_effective_style, readable_text_style};
 pub use instance_path::InstancePath;
+
+mod lib_symbol_version;
+pub use lib_symbol_version::{BodyRefCollision, lib_id_of_body_ref};
 mod parts;
 pub use parts::*;
 #[cfg(test)]
