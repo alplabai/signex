@@ -16,7 +16,7 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         position: Point::new(x, y),
         size: Point::new(w, h),
         drill: None,
-        layers: vec!["F.Cu".into()],
+        layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
         unknown: Default::default(),
@@ -48,7 +48,7 @@ fn segment(uuid: Uuid, a: (f64, f64), b: (f64, f64), width: f64) -> Segment {
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         width,
-        layer: "F.Cu".into(),
+        layer: "TopCopper".into(),
         net: 1,
         unknown_columns: Default::default(),
     }
@@ -60,7 +60,7 @@ fn via(uuid: Uuid, x: f64, y: f64, diameter: f64) -> Via {
         position: Point::new(x, y),
         diameter,
         drill: diameter / 2.0,
-        layers: vec!["F.Cu".into(), "B.Cu".into()],
+        layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 1,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
@@ -95,7 +95,7 @@ fn sample() -> PcbBoard {
         10.0,
         10.0,
         90.0,
-        "F.Cu",
+        "TopCopper",
         vec![pad(id(2), 2.0, 0.0, 2.0, 1.0)],
     );
     board(
@@ -207,7 +207,7 @@ fn bottom_side_pad_is_mirrored_before_hit_test() {
         0.0,
         0.0,
         0.0,
-        "B.Cu",
+        "BottomCopper",
         vec![pad(id(2), 2.0, 0.0, 1.0, 1.0)],
     );
     let index = BoardIndex::build(&board(vec![fp], Vec::new(), Vec::new()));
@@ -223,7 +223,7 @@ fn unconvertible_items_are_reported_not_dropped_silently() {
             0.0,
             0.0,
             f64::NAN,
-            "F.Cu",
+            "TopCopper",
             vec![pad(id(2), 0.0, 0.0, 1.0, 1.0)],
         )],
         vec![segment(id(3), (0.0, 0.0), (f64::INFINITY, 0.0), 0.2)],
@@ -281,7 +281,47 @@ fn from_items_indexes_shapes_given_in_nm() {
             center: PointNm::new(MM, MM),
             radius: 100,
         },
-    );
+    )
+    .unwrap();
     let index = BoardIndex::from_items(vec![item]);
     assert_eq!(index.hit_point(PointNm::new(MM + 100, MM), 0), vec![VIA]);
+}
+
+#[test]
+fn shapes_beyond_the_limit_are_refused() {
+    let far = Shape::Disc {
+        center: PointNm::new(i64::MAX / 2, 0),
+        radius: 1,
+    };
+    assert_eq!(
+        IndexedItem::new(VIA, far),
+        Err(GeomError::Unrepresentable("shape"))
+    );
+}
+
+#[test]
+fn extreme_query_inputs_do_not_overflow() {
+    let index = BoardIndex::build(&sample());
+    assert!(index.hit_point(PointNm::new(i64::MIN, i64::MAX), 0).is_empty());
+    assert!(index.hit_point(PointNm::new(0, 0), i64::MAX).contains(&TRACK));
+    assert!(
+        index
+            .hit_point(PointNm::new(i64::MAX, i64::MAX), i64::MAX)
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_repeated_item_identity_is_rejected() {
+    let v = via(id(4), 30.0, 0.0, 0.6);
+    let other = via(id(4), 31.0, 0.0, 0.6);
+    let index = BoardIndex::build(&board(Vec::new(), Vec::new(), vec![v, other]));
+    assert_eq!(index.len(), 1);
+    assert_eq!(
+        index.rejected(),
+        &[Rejected {
+            item: VIA,
+            error: GeomError::DuplicateItem
+        }]
+    );
 }

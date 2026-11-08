@@ -2,11 +2,15 @@
 //!
 //! Order: mirror (bottom side only), then rotate, then translate. A
 //! bottom-side footprint mirrors its local x axis, as seen from the top.
+//! Pad coordinates stay library-local in the model; the mirror lives here
+//! only (ADR-0005 §7).
 //! Rotation is counter-clockwise in the model's axes, the sense the PCB
 //! renderer turns pads (`signex-renderer` `pcb/emit.rs`). A board pad has
 //! no angle of its own: it turns with its footprint.
 
+use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadShape};
+use signex_types::pcb_layer::BoardSide;
 
 use crate::shape::Shape;
 use crate::units::{GeomError, PointNm, mm_to_nm};
@@ -19,13 +23,13 @@ pub enum Side {
 }
 
 impl Side {
-    /// The side a footprint's layer name puts it on: a bottom-side layer
-    /// name starts with `B.`, anything else is the top.
+    /// The side a footprint's native layer token (`TopCopper`,
+    /// `BottomCopper`, ...) puts it on. A token this build does not know,
+    /// or a layer with no side, is the top.
     pub fn of_layer(layer: &str) -> Side {
-        if layer.starts_with("B.") {
-            Side::Bottom
-        } else {
-            Side::Top
+        match parse_pcb_layer(layer).and_then(|l| l.side()) {
+            Some(BoardSide::Bottom) => Side::Bottom,
+            _ => Side::Top,
         }
     }
 }
@@ -86,8 +90,8 @@ pub fn pad_shape(footprint: &Footprint, pad: &Pad) -> Result<Shape, GeomError> {
     let center = placement.to_world(PointNm::from_mm(pad.position, "pad.position")?);
     let half_w = (mm_to_nm(pad.size.x, "pad.size")? / 2).abs();
     let half_h = (mm_to_nm(pad.size.y, "pad.size")? / 2).abs();
-    // Every pad outline is symmetric about its own x axis, so the mirror of
-    // a bottom-side footprint moves the centre but leaves the angle alone.
+    // Rect and ellipse outlines are symmetric about both axes, so the x
+    // mirror of a bottom-side footprint moves the centre but not the angle.
     let rotation_deg = placement.rotation_deg;
     Ok(match pad.shape {
         PadShape::Circle => Shape::Disc {
@@ -119,7 +123,7 @@ pub fn pad_shape(footprint: &Footprint, pad: &Pad) -> Result<Shape, GeomError> {
 /// 90° footprint lands on whole nanometres.
 pub(crate) fn sin_cos_deg(deg: f64) -> (f64, f64) {
     let turn = deg.rem_euclid(360.0);
-    if turn == 0.0 {
+    if turn == 0.0 || turn == 360.0 {
         (0.0, 1.0)
     } else if turn == 90.0 {
         (1.0, 0.0)
@@ -188,20 +192,20 @@ mod tests {
 
     #[test]
     fn top_side_rotates_counter_clockwise_then_translates() {
-        let fp = footprint(10.0, 20.0, 90.0, "F.Cu");
+        let fp = footprint(10.0, 20.0, 90.0, "TopCopper");
         let p = pad(1.0, 0.0, 1.0, 1.0, PadShape::Rect);
         assert_eq!(pad_world_center(&fp, &p), Ok(mm(10.0, 21.0)));
-        let fp = footprint(10.0, 20.0, 180.0, "F.Cu");
+        let fp = footprint(10.0, 20.0, 180.0, "TopCopper");
         assert_eq!(pad_world_center(&fp, &p), Ok(mm(9.0, 20.0)));
     }
 
     #[test]
     fn bottom_side_mirrors_x_before_rotating() {
         let p = pad(1.0, 2.0, 1.0, 1.0, PadShape::Rect);
-        let fp = footprint(0.0, 0.0, 0.0, "B.Cu");
+        let fp = footprint(0.0, 0.0, 0.0, "BottomCopper");
         assert_eq!(pad_world_center(&fp, &p), Ok(mm(-1.0, 2.0)));
         // Mirror (−1, 2), then +90°: (−2, −1).
-        let fp = footprint(0.0, 0.0, 90.0, "B.Cu");
+        let fp = footprint(0.0, 0.0, 90.0, "BottomCopper");
         assert_eq!(pad_world_center(&fp, &p), Ok(mm(-2.0, -1.0)));
     }
 
@@ -209,7 +213,7 @@ mod tests {
     fn quarter_turns_are_exact_and_negative_angles_wrap() {
         assert_eq!(sin_cos_deg(-90.0), (-1.0, 0.0));
         assert_eq!(sin_cos_deg(450.0), (1.0, 0.0));
-        let fp = footprint(0.0, 0.0, -270.0, "F.Cu");
+        let fp = footprint(0.0, 0.0, -270.0, "TopCopper");
         let p = pad(1.234_567, 0.0, 1.0, 1.0, PadShape::Rect);
         assert_eq!(pad_world_center(&fp, &p), Ok(mm(0.0, 1.234_567)));
     }
@@ -231,17 +235,17 @@ mod tests {
     #[test]
     fn non_finite_rotation_or_position_is_refused() {
         let p = pad(0.0, 0.0, 1.0, 1.0, PadShape::Rect);
-        let fp = footprint(0.0, 0.0, f64::NAN, "F.Cu");
+        let fp = footprint(0.0, 0.0, f64::NAN, "TopCopper");
         assert_eq!(
             pad_world_center(&fp, &p),
             Err(GeomError::Unrepresentable("footprint.rotation"))
         );
-        let fp = footprint(f64::INFINITY, 0.0, 0.0, "F.Cu");
+        let fp = footprint(f64::INFINITY, 0.0, 0.0, "TopCopper");
         assert_eq!(
             pad_shape(&fp, &p),
             Err(GeomError::Unrepresentable("footprint.position"))
         );
-        let fp = footprint(0.0, 0.0, 0.0, "F.Cu");
+        let fp = footprint(0.0, 0.0, 0.0, "TopCopper");
         let bad = pad(0.0, 0.0, f64::NAN, 1.0, PadShape::Rect);
         assert_eq!(
             pad_shape(&fp, &bad),
@@ -251,7 +255,7 @@ mod tests {
 
     #[test]
     fn pad_shape_follows_the_pad_kind() {
-        let fp = footprint(0.0, 0.0, 30.0, "F.Cu");
+        let fp = footprint(0.0, 0.0, 30.0, "TopCopper");
         let circle = pad_shape(&fp, &pad(0.0, 0.0, 2.0, 1.0, PadShape::Circle)).unwrap();
         assert_eq!(
             circle,
@@ -282,9 +286,17 @@ mod tests {
     }
 
     #[test]
-    fn side_reads_the_layer_name() {
-        assert_eq!(Side::of_layer("B.Cu"), Side::Bottom);
-        assert_eq!(Side::of_layer("F.Cu"), Side::Top);
+    fn side_reads_the_native_layer_token() {
+        assert_eq!(Side::of_layer("BottomCopper"), Side::Bottom);
+        assert_eq!(Side::of_layer("BottomSilkscreen"), Side::Bottom);
+        assert_eq!(Side::of_layer("TopCopper"), Side::Top);
+        assert_eq!(Side::of_layer("Inner1Copper"), Side::Top);
         assert_eq!(Side::of_layer(""), Side::Top);
+        assert_eq!(Side::of_layer("not a layer"), Side::Top);
+    }
+
+    #[test]
+    fn tiny_negative_angle_takes_the_zero_turn_path() {
+        assert_eq!(sin_cos_deg(-1e-20), (0.0, 1.0));
     }
 }

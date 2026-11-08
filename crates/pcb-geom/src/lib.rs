@@ -10,6 +10,7 @@
 //!
 //! Hit-testing reads the model, never the render output (#662).
 
+mod flip;
 mod index;
 mod mst;
 mod rect;
@@ -18,6 +19,7 @@ mod transform;
 mod union_find;
 mod units;
 
+pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
 pub use rect::RectNm;

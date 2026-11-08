@@ -23,6 +23,20 @@ Board geometry asks questions that floating point answers badly:
 4. **The boundary refuses, it does not clamp.** NaN, an infinity, or a length beyond 1 km (`MAX_ABS_NM`) is a `GeomError` naming the model field. The board index lists every item it could not convert (`BoardIndex::rejected`) instead of dropping it silently. The 1 km bound is what keeps every `i128` product in range; no board comes near it.
 5. **Where `f64` still appears inside.** Two steps use `sin`/`cos` or a division and round back to the nearest nm: turning a point into a rotated pad's frame, and the foot of a perpendicular on a track. Quarter turns are exact. The error is under 1 nm, below what the file stores. Every comparison after that is integer.
 6. **Hit-tests read the model, never the render output (#662).** The pad world transform (mirror for a bottom-side footprint, then rotate, then translate) is computed here from the footprint and pad fields.
+7. **Footprint-local geometry is never mirrored in the model (maintainer decision, #2174).** A footprint's pads, graphics and properties keep their library-local coordinates. The side comes from the footprint's native layer token (`TopCopper` / `BottomCopper`, the `.snxpcb` names), parsed through `signex_types::pcb_layer::PcbLayer`; an unknown token or a layer with no side is the top. The mirror (local x negated) is applied only at world-transform time, in `pcb-geom`. No foreign-tool layer prefix is read anywhere.
+8. **Flip.** `flip_footprint` swaps the sided layers of the footprint, its pads and its graphics (`PcbLayer::flipped`, top <-> bottom; inner copper and unknown tokens stay) and sets rotation to `-rotation` mod 360. Local coordinates are untouched. This is the turn about the footprint's vertical axis: `R(-t)·M = M·R(t)` for the x mirror `M`, so each pad lands at the mirror image of where it was.
+
+## Rounding
+
+Besides §5, a pad's half-width and half-height are `mm_to_nm(size) / 2`, which drops 0.5 nm when the size is an odd number of nm. That is below what the file stores.
+
+## Open: the renderer must consume `pcb-geom`
+
+`signex-renderer` (`pcb/emit.rs`, `pad_from_footprint`) still builds its own pad centre and size: it does not mirror a bottom-side pad and it floors a zero size at `PCB_DEFAULT_PAD_SIZE_MM`. Until it takes both from `pcb-geom`, a ratsnest end or a click on a bottom-side pad can land where nothing is drawn. **The renderer must consume `pcb-geom` before the first consumer of `pcb-geom` merges** (#662, one lowering); a "kept in step" pair is not allowed. This unit does not change the renderer.
+
+## Ownership of item identity
+
+`BoardIndex::build` lists a repeated `ItemRef` (two pads with one footprint and pad UUID) in `rejected()` as `GeomError::DuplicateItem`. `from_items` leaves uniqueness to its caller.
 
 ## Relation to #1058
 

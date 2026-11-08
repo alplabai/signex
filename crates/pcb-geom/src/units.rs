@@ -16,11 +16,14 @@ pub enum GeomError {
     /// NaN, an infinity, or a length beyond [`MAX_ABS_NM`]. Carries the
     /// model field's name.
     Unrepresentable(&'static str),
+    /// Two items of one board share an identity; the later one is left out.
+    DuplicateItem,
 }
 
 impl std::fmt::Display for GeomError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            GeomError::DuplicateItem => write!(f, "another item on the board has this identity"),
             GeomError::Unrepresentable(field) => {
                 write!(
                     f,

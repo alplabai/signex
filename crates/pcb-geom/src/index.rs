@@ -3,6 +3,8 @@
 //! Envelopes are `i128` so every area rstar computes while it builds the
 //! tree fits, at any coordinate [`MAX_ABS_NM`](crate::MAX_ABS_NM) allows.
 
+use std::collections::HashSet;
+
 use rstar::{AABB, RTree, RTreeObject};
 use signex_types::pcb::{PcbBoard, Point, Segment, Via};
 use uuid::Uuid;
@@ -10,7 +12,7 @@ use uuid::Uuid;
 use crate::rect::RectNm;
 use crate::shape::Shape;
 use crate::transform::pad_shape;
-use crate::units::{GeomError, PointNm, mm_to_nm};
+use crate::units::{GeomError, MAX_ABS_NM, PointNm, mm_to_nm};
 
 /// A model item the index holds, by identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,12 +31,14 @@ pub struct IndexedItem {
 }
 
 impl IndexedItem {
-    pub fn new(item: ItemRef, shape: Shape) -> Self {
-        IndexedItem {
+    /// Refuses a shape beyond [`MAX_ABS_NM`], like the model boundary does.
+    pub fn new(item: ItemRef, shape: Shape) -> Result<Self, GeomError> {
+        shape.check_limits()?;
+        Ok(IndexedItem {
             item,
             shape,
             envelope: envelope_of(&shape.aabb()),
-        }
+        })
     }
 }
 
@@ -77,7 +81,10 @@ impl BoardIndex {
         let mut items = Vec::new();
         let mut rejected = Vec::new();
         let mut keep = |item: ItemRef, shape: Result<Shape, GeomError>| match shape {
-            Ok(shape) => items.push(IndexedItem::new(item, shape)),
+            Ok(shape) => match IndexedItem::new(item, shape) {
+                Ok(indexed) => items.push(indexed),
+                Err(error) => rejected.push(Rejected { item, error }),
+            },
             Err(error) => rejected.push(Rejected { item, error }),
         };
         for footprint in &board.footprints {
@@ -95,13 +102,25 @@ impl BoardIndex {
         for via in &board.vias {
             keep(ItemRef::Via(via.uuid), via_shape(via));
         }
+        let mut seen = HashSet::new();
+        items.retain(|indexed| {
+            let first = seen.insert(indexed.item);
+            if !first {
+                rejected.push(Rejected {
+                    item: indexed.item,
+                    error: GeomError::DuplicateItem,
+                });
+            }
+            first
+        });
         BoardIndex {
             tree: RTree::bulk_load(items),
             rejected,
         }
     }
 
-    /// An index over items already in nm.
+    /// An index over items already in nm. Item identity is the caller's
+    /// to keep unique: two items with one [`ItemRef`] answer as one hit.
     pub fn from_items(items: Vec<IndexedItem>) -> Self {
         BoardIndex {
             tree: RTree::bulk_load(items),
@@ -127,7 +146,14 @@ impl BoardIndex {
 
     /// Every item whose copper lies within `tolerance` of `p`, sorted by
     /// [`ItemRef`] so the result is the same however the tree was built.
+    ///
+    /// `tolerance` is capped at [`MAX_ABS_NM`] and `p` at four times that,
+    /// beyond which nothing on the board can be reached, so no input
+    /// overflows.
     pub fn hit_point(&self, p: PointNm, tolerance: i64) -> Vec<ItemRef> {
+        let tolerance = tolerance.min(MAX_ABS_NM);
+        let far = 4 * MAX_ABS_NM;
+        let p = PointNm::new(p.x.clamp(-far, far), p.y.clamp(-far, far));
         let query = envelope_of(&RectNm::point(p).inflate(tolerance));
         sorted(
             self.tree

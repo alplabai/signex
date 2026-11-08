@@ -7,7 +7,7 @@
 
 use crate::rect::RectNm;
 use crate::transform::{rotate, sin_cos_deg};
-use crate::units::PointNm;
+use crate::units::{GeomError, MAX_ABS_NM, PointNm};
 
 /// One item's copper on the board.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -33,6 +33,34 @@ pub enum Shape {
 }
 
 impl Shape {
+    /// Refuse a shape with a coordinate or length beyond [`MAX_ABS_NM`], the
+    /// bound the `i128` arithmetic relies on.
+    pub fn check_limits(&self) -> Result<(), GeomError> {
+        let ok = |v: i64| v.unsigned_abs() <= MAX_ABS_NM.unsigned_abs();
+        let point = |p: PointNm| ok(p.x) && ok(p.y);
+        let within = match *self {
+            Shape::Disc { center, radius } => point(center) && ok(radius),
+            Shape::Capsule { a, b, radius } => point(a) && point(b) && ok(radius),
+            Shape::Rect {
+                center,
+                half_w,
+                half_h,
+                ..
+            }
+            | Shape::Ellipse {
+                center,
+                half_w,
+                half_h,
+                ..
+            } => point(center) && ok(half_w) && ok(half_h),
+        };
+        if within {
+            Ok(())
+        } else {
+            Err(GeomError::Unrepresentable("shape"))
+        }
+    }
+
     /// The smallest axis-aligned rectangle holding the shape (rounded out).
     pub fn aabb(&self) -> RectNm {
         match *self {
