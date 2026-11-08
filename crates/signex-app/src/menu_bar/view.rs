@@ -13,9 +13,15 @@ type MenuItemView = Item<'static, MenuMessage, Theme, iced::Renderer>;
 
 // ─── View: Menu Bar ──────────────────────────────────────────
 
-pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, MenuMessage> {
+/// The menu bar in `tokens`' theme; `ui_font` is the face its labels draw
+/// in, which the Graphite dropdowns are fitted to.
+pub fn view(
+    tokens: &ThemeTokens,
+    ui_font: &str,
+    ctx: MenuContext<'_>,
+) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
-    let mb = render_menu_bar(&menu_bar_model(&ctx), mc);
+    let mb = render_menu_bar(&menu_bar_model(&ctx), mc, ui_font);
 
     // Wordmark — white on dark themes, near-black on light themes. Picked
     // by toolbar background luminance so custom themes also resolve
@@ -59,12 +65,13 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, Menu
 fn render_menu_bar(
     model: &MenuBarModel,
     mc: MenuColors,
+    ui_font: &str,
 ) -> MenuBar<'static, MenuMessage, Theme, iced::Renderer> {
     MenuBar::new(
         model
             .menus
             .iter()
-            .map(|menu| render_root(menu, mc))
+            .map(|menu| render_root(menu, mc, ui_font))
             .collect(),
     )
     .spacing(1.0)
@@ -113,23 +120,42 @@ fn bar_style(mc: MenuColors) -> menu_style::Style {
     }
 }
 
-fn render_root(menu: &MenuModel, mc: MenuColors) -> MenuItemView {
-    Item::with_menu(root_btn(&menu.title, mc), render_dropdown(menu, mc))
+fn render_root(menu: &MenuModel, mc: MenuColors, ui_font: &str) -> MenuItemView {
+    Item::with_menu(
+        root_btn(&menu.title, mc),
+        render_dropdown(menu, mc, ui_font),
+    )
 }
 
-fn render_submenu(menu: &MenuModel, mc: MenuColors) -> MenuItemView {
-    Item::with_menu(submenu_item_btn(&menu.title, mc), render_dropdown(menu, mc))
+fn render_submenu(menu: &MenuModel, mc: MenuColors, ui_font: &str) -> MenuItemView {
+    let launcher = if mc.graphite {
+        graphite::submenu_btn(&menu.title, mc)
+    } else {
+        submenu_item_btn(&menu.title, mc)
+    };
+    Item::with_menu(launcher, render_dropdown(menu, mc, ui_font))
 }
 
 fn render_dropdown(
     menu: &MenuModel,
     mc: MenuColors,
+    ui_font: &str,
 ) -> Menu<'static, MenuMessage, Theme, iced::Renderer> {
+    let shape = graphite::RowShape::of(menu);
     let items = menu
         .entries
         .iter()
-        .map(|entry| render_entry(entry, mc))
+        .map(|entry| render_entry(entry, mc, shape, ui_font))
         .collect();
+    if mc.graphite {
+        // Fitted to its rows, 28 px rows with no gaps between them, so every
+        // hover fill touches the next and the card pads its rows evenly.
+        return Menu::new(items)
+            .width(Length::Fixed(graphite::dropdown_width(menu, ui_font)))
+            .offset(4.0)
+            .spacing(0.0)
+            .padding(graphite::dropdown_padding());
+    }
     Menu::new(items)
         .max_width(DROPDOWN_WIDTH)
         // Sit a couple of pixels below the bar — offset(0) overlaps
@@ -152,25 +178,42 @@ fn render_dropdown(
         })
 }
 
-fn render_entry(entry: &MenuEntry, mc: MenuColors) -> MenuItemView {
+fn render_entry(
+    entry: &MenuEntry,
+    mc: MenuColors,
+    shape: graphite::RowShape,
+    ui_font: &str,
+) -> MenuItemView {
     match entry {
-        MenuEntry::Item(item) => render_item(item, mc),
-        MenuEntry::Submenu(menu) => render_submenu(menu, mc),
+        MenuEntry::Item(item) => render_item(item, mc, shape),
+        MenuEntry::Submenu(menu) => render_submenu(menu, mc, ui_font),
+        MenuEntry::Separator if mc.graphite => Item::new(graphite::separator(mc)),
         MenuEntry::Separator => separator(mc),
     }
 }
 
 /// A row dispatches only when it has a handler and is enabled; otherwise it
 /// renders greyed out with no press handler.
-fn render_item(item: &MenuItem, mc: MenuColors) -> MenuItemView {
+fn render_item(item: &MenuItem, mc: MenuColors, shape: graphite::RowShape) -> MenuItemView {
     let shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
-    let row = menu_item_btn(
-        &item.label,
-        item.checked,
-        shortcut,
-        item.dispatches().cloned(),
-        mc,
-    );
+    let row = if mc.graphite {
+        graphite::item_btn(
+            &item.label,
+            item.checked,
+            shortcut,
+            item.dispatches().cloned(),
+            mc,
+            shape,
+        )
+    } else {
+        menu_item_btn(
+            &item.label,
+            item.checked,
+            shortcut,
+            item.dispatches().cloned(),
+            mc,
+        )
+    };
     if !matches!(item.state, ItemState::Placeholder) {
         return Item::new(row);
     }

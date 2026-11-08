@@ -9,7 +9,7 @@ use super::items::{dd_disabled, dd_msg};
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries, tab_menu_entries};
 use super::project_tree::{TreeNodeRole, tree_node_role};
 use super::submenu::{align_entries, align_gate, place_entries};
-use signex_types::theme::{ThemeId, theme_tokens};
+use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::TreeIcon;
 
@@ -38,10 +38,13 @@ fn seps(entries: &[DropdownEntry<Message>]) -> usize {
         .count()
 }
 
-fn customs(entries: &[DropdownEntry<Message>]) -> usize {
+/// Live submenu launchers: item rows that open a submenu on hover. They
+/// were `Custom` rows until the launcher became a plain item row with the
+/// shared row chrome.
+fn launchers(entries: &[DropdownEntry<Message>]) -> usize {
     entries
         .iter()
-        .filter(|e| matches!(e, DropdownEntry::Custom(_)))
+        .filter(|e| matches!(e, DropdownEntry::Item(it) if it.submenu && it.on_hover.is_some()))
         .count()
 }
 
@@ -88,8 +91,7 @@ fn edit_rows_show_the_resolved_keymap_shortcuts() {
     sc.set("delete_selection", "Delete");
     sc.set("mirror_x", "Shift+X");
     sc.set("mirror_y", "Shift+Y");
-    let tokens = theme_tokens(TID);
-    let entries = canvas_menu_entries(TID, &tokens, selected(), None, None, &sc);
+    let entries = canvas_menu_entries(TID, selected(), None, None, &sc);
     let shortcut_of = |label: &str| {
         entries.iter().find_map(|e| match e {
             DropdownEntry::Item(it) if it.label == label => Some(it.shortcut.clone()),
@@ -160,11 +162,9 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
 /// without a selection.
 #[test]
 fn find_similar_row_is_enabled_and_routes_to_its_action() {
-    let tokens = theme_tokens(TID);
     for has_selection in [false, true] {
         let rows = canvas_menu_entries(
             TID,
-            &tokens,
             CanvasSelection {
                 has_selection,
                 ..CanvasSelection::default()
@@ -193,11 +193,9 @@ fn find_similar_row_is_enabled_and_routes_to_its_action() {
 
 #[test]
 fn canvas_menu_grows_and_gates_on_selection() {
-    let tokens = theme_tokens(TID);
     let sc = shortcuts();
     let with = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: true,
             child_sheet_selected: false,
@@ -210,7 +208,6 @@ fn canvas_menu_grows_and_gates_on_selection() {
     );
     let without = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: false,
             child_sheet_selected: false,
@@ -230,9 +227,9 @@ fn canvas_menu_grows_and_gates_on_selection() {
     assert!(!has_row(&without, "Rotate"));
     assert!(has_row(&with, "Rotate"));
     assert!(has_row(&with, "Properties..."));
-    // Place launcher is a Custom row; Align launcher joins it on selection.
-    assert_eq!(customs(&without), 1);
-    assert_eq!(customs(&with), 2);
+    // Place launcher always; Align launcher joins it on selection.
+    assert_eq!(launchers(&without), 1);
+    assert_eq!(launchers(&with), 2);
 }
 
 fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Message> {
@@ -247,11 +244,9 @@ fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Mess
 
 #[test]
 fn canvas_project_options_opens_the_active_project_options() {
-    let tokens = theme_tokens(TID);
     let sc = shortcuts();
     let live = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection::default(),
         None,
         Some(vec!["7".to_string()]),
@@ -269,11 +264,9 @@ fn canvas_project_options_opens_the_active_project_options() {
 
 #[test]
 fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned() {
-    let tokens = theme_tokens(TID);
     let sc = shortcuts();
     let none = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: false,
             child_sheet_selected: false,
@@ -292,11 +285,9 @@ fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned()
 
 #[test]
 fn canvas_child_sheet_adds_open_row() {
-    let tokens = theme_tokens(TID);
     let sc = shortcuts();
     let plain = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: false,
             child_sheet_selected: false,
@@ -309,7 +300,6 @@ fn canvas_child_sheet_adds_open_row() {
     );
     let child = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: false,
             child_sheet_selected: true,
@@ -547,10 +537,8 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
 
 #[test]
 fn canvas_row_text_is_byte_identical_to_the_old_literals() {
-    let tokens = theme_tokens(TID);
     let rows = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: true,
             child_sheet_selected: true,
@@ -589,10 +577,8 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
 
     // Context-menu canvas ids: label comes from the catalog, so the menu
     // bar's lookup of the same id must agree with the row.
-    let tokens = theme_tokens(TID);
     let rows = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: true,
             child_sheet_selected: true,
@@ -671,11 +657,9 @@ fn a_command_the_keymap_does_not_bind_gets_no_shortcut_hint() {
 /// its submenu rows reorder drawings (#1583).
 #[test]
 fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
-    let tokens = theme_tokens(TID);
     let sc = shortcuts();
     let with = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: true,
             child_sheet_selected: false,
@@ -688,7 +672,6 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     );
     let without = canvas_menu_entries(
         TID,
-        &tokens,
         CanvasSelection {
             has_selection: true,
             child_sheet_selected: false,
@@ -699,7 +682,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
         None,
         &sc,
     );
-    assert_eq!(customs(&with), customs(&without) + 1);
+    assert_eq!(launchers(&with), launchers(&without) + 1);
 
     let rows = super::submenu::arrange_entries(&|_| String::new());
     for label in [
@@ -717,14 +700,13 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
 /// its own action.
 #[test]
 fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
-    let tokens = theme_tokens(TID);
     let sc = shortcuts();
     let part = CanvasSelection {
         placed_part_selected: true,
         ..selected()
     };
-    let with = canvas_menu_entries(TID, &tokens, part, None, None, &sc);
-    let without = canvas_menu_entries(TID, &tokens, selected(), None, None, &sc);
+    let with = canvas_menu_entries(TID, part, None, None, &sc);
+    let without = canvas_menu_entries(TID, selected(), None, None, &sc);
 
     for (label, command) in [
         ("Open Datasheet", "open_datasheet"),

@@ -420,7 +420,7 @@ impl Signex {
             OverlayId::ComponentsRowContextMenu => {
                 layers.extend(self.components_row_context_menu_overlay(window_id))
             }
-            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay(window_id)),
+            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {

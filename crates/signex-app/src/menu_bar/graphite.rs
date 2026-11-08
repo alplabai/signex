@@ -1,14 +1,25 @@
 //! Graphite look of the menu bar: the Signex mark in place of the wordmark,
-//! flat root buttons and the dropdown frame. Legacy themes never reach it.
+//! flat root buttons, and dropdowns with the shared menu card metrics (28 px
+//! rows, a mono shortcut column, a chevron column, soft separators, a width
+//! fitted to the rows). Legacy themes never reach it.
 
 use std::sync::LazyLock;
 
-use iced::widget::{button, svg, text};
-use iced::{Background, Border, Element, Theme, Widget as _};
+use iced::widget::{Row, Space, button, container, svg, text};
+use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use iced_aw::style::menu_bar as menu_style;
+use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
 use super::{MenuColors, MenuMessage, model};
 use crate::styles::TypeScale;
+
+/// Row metrics of a dropdown: the same card numbers as every context menu.
+const M: MenuMetrics = MenuMetrics::GRAPHITE;
+/// Width of the leading check-mark column of a toggle row: the width
+/// `MenuMetrics::fitted_width` reserves for it, so the card fits its rows.
+const MARK_WIDTH: f32 = M.check_size;
+/// Glyph of the submenu chevron.
+const CHEVRON: &str = "\u{203A}";
 
 /// The Signex mark from `assets/brand/signex-logo.svg`, without the wordmark.
 /// Its cyan gradient reads on both the light and the dark bar.
@@ -80,6 +91,184 @@ pub(super) fn bar_style(mc: MenuColors) -> menu_style::Style {
             radius: ITEM_RADIUS.into(),
             ..Border::default()
         },
+    }
+}
+
+/// Columns every row of one dropdown reserves.
+#[derive(Clone, Copy)]
+pub(super) struct RowShape {
+    /// Some row opens a submenu: every row keeps the chevron column.
+    pub chevrons: bool,
+}
+
+impl RowShape {
+    pub(super) fn of(menu: &model::Menu) -> Self {
+        Self {
+            chevrons: menu
+                .entries
+                .iter()
+                .any(|e| matches!(e, model::MenuEntry::Submenu(_))),
+        }
+    }
+}
+
+/// Width of `menu`'s dropdown: its rows measured as a context-menu card in
+/// `ui_font`, between 200 and 320 px.
+pub(super) fn dropdown_width(menu: &model::Menu, ui_font: &str) -> f32 {
+    let rows: Vec<DropdownEntry<()>> = menu
+        .entries
+        .iter()
+        .filter_map(|entry| match entry {
+            model::MenuEntry::Item(item) => {
+                let mut row =
+                    DropdownItem::passive(item.label.clone()).checked(item.checked.is_some());
+                if let Some(s) = &item.shortcut {
+                    row = row.shortcut(s.text.clone());
+                }
+                Some(DropdownEntry::Item(row))
+            }
+            model::MenuEntry::Submenu(sub) => Some(DropdownEntry::Item(
+                DropdownItem::passive(sub.title.clone()).submenu(),
+            )),
+            model::MenuEntry::Separator => None,
+        })
+        .collect();
+    M.fitted_width(&rows, f32::MAX, ui_font)
+}
+
+/// Padding of a dropdown card around its rows.
+pub(super) fn dropdown_padding() -> iced::Padding {
+    iced::Padding::new(M.panel_pad)
+}
+
+/// One dropdown row: the check column of a toggle row, the label, the
+/// right-aligned mono shortcut and the chevron column, in a button exactly
+/// one 28 px row tall and as wide as the card (the hover fill is the rect
+/// that takes the click).
+pub(super) fn item_btn(
+    label: &str,
+    checked: Option<bool>,
+    shortcut: Option<String>,
+    msg: Option<MenuMessage>,
+    mc: MenuColors,
+    shape: RowShape,
+) -> Element<'static, MenuMessage> {
+    let enabled = msg.is_some();
+    let ink = if enabled { mc.text } else { mc.text_disabled };
+    let mut cells = cells(label, ink, checked);
+    if let Some(s) = shortcut {
+        cells = cells.push(
+            text(s)
+                .size(M.shortcut_size)
+                .font(crate::fonts::iced_font_for_family(
+                    crate::fonts::CHROME_MONO_FONT,
+                ))
+                .color(mc.text_muted)
+                .wrapping(text::Wrapping::None)
+                .boxed(),
+        );
+    }
+    if shape.chevrons {
+        cells = cells.push(chevron_cell("", mc));
+    }
+    row_button(cells, mc, msg)
+}
+
+/// A row that opens a submenu: label and chevron, no shortcut; iced_aw opens
+/// the submenu on hover.
+pub(super) fn submenu_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
+    let cells = cells(label, mc.text, None).push(chevron_cell(CHEVRON, mc));
+    row_button(cells, mc, Some(MenuMessage::NoOp))
+}
+
+/// A soft separator line with the card's margin above and below.
+pub(super) fn separator(mc: MenuColors) -> Element<'static, MenuMessage> {
+    let line = mc.line_soft;
+    container(
+        container(Space::new())
+            .height(1.0)
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(line)),
+                ..container::Style::default()
+            }),
+    )
+    .padding([M.separator_margin, 0.0])
+    .width(Length::Fill)
+    .boxed()
+}
+
+/// The leading cells of a row: the check column of a toggle row, the label
+/// and the gap that pushes the rest to the right edge.
+fn cells(
+    label: &str,
+    ink: iced::Color,
+    checked: Option<bool>,
+) -> Row<Element<'static, MenuMessage>> {
+    let mut cells: Row<Element<'static, MenuMessage>> = Row::new()
+        .spacing(M.row_spacing)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill);
+    if let Some(on) = checked {
+        cells = cells.push(
+            text(if on { "\u{2713}" } else { "" })
+                .size(M.label_size)
+                .color(ink)
+                .width(Length::Fixed(MARK_WIDTH))
+                .boxed(),
+        );
+    }
+    cells
+        .push(
+            text(label.to_owned())
+                .size(M.label_size)
+                .color(ink)
+                .wrapping(text::Wrapping::None)
+                .boxed(),
+        )
+        .push(Space::new().width(Length::Fill).boxed())
+}
+
+fn chevron_cell(glyph: &'static str, mc: MenuColors) -> Element<'static, MenuMessage> {
+    text(glyph)
+        .size(M.chevron_size)
+        .color(mc.text_muted)
+        .width(Length::Fixed(M.chevron_width))
+        .align_x(iced::alignment::Horizontal::Right)
+        .boxed()
+}
+
+/// `cells` in a row button that publishes `msg`; without one the row is
+/// greyed and takes no hover fill.
+fn row_button(
+    cells: Row<Element<'static, MenuMessage>>,
+    mc: MenuColors,
+    msg: Option<MenuMessage>,
+) -> Element<'static, MenuMessage> {
+    let (hover, ink, enabled) = (mc.hover, mc.text, msg.is_some());
+    let btn = button(
+        container(cells)
+            .padding([0.0, M.row_pad_x])
+            .height(M.item_height(false))
+            .align_y(iced::alignment::Vertical::Center)
+            .width(Length::Fill),
+    )
+    .padding(0)
+    .width(Length::Fill)
+    .style(move |_: &Theme, status: button::Status| button::Style {
+        background: (enabled
+            && matches!(status, button::Status::Hovered | button::Status::Pressed))
+        .then_some(Background::Color(hover)),
+        text_color: ink,
+        border: Border {
+            radius: M.row_radius.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    });
+    match msg {
+        Some(m) => btn.on_press(m).boxed(),
+        None => btn.boxed(),
     }
 }
 

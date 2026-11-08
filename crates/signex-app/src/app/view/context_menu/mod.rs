@@ -4,8 +4,10 @@
 //! `impl Signex` builders here are called from `view/mod.rs` and its
 //! sibling `overlays` module.
 
+mod anchored;
 mod components_row;
 mod dock_tab;
+mod grid_picker;
 mod items;
 mod menus;
 mod placement;
@@ -17,6 +19,6 @@ mod catalog_agreement_tests;
 #[cfg(test)]
 mod tests;
 
-pub(super) use placement::submenu_origin;
+pub(super) use anchored::AnchoredMenu;
 
 use super::*;

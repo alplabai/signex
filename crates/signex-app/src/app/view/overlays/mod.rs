@@ -503,10 +503,10 @@ impl Signex {
         ]
     }
 
-    /// Canvas right-click context menu (+ its Place/Align submenu).
-    /// Clamps the menu inside the window; the submenu pops to the right
-    /// (or left on overflow) level with its launcher row. Pushes dismiss,
-    /// menu, then the optional submenu.
+    /// Canvas right-click context menu (+ its Place/Align submenu): the
+    /// card opens at the click and the open submenu's flyout sits beside it,
+    /// level with its launcher row; both are kept inside the window. Pushes
+    /// dismiss, then the placed menu.
     pub(in crate::app) fn context_menu_overlay(
         &self,
         window_id: iced::window::Id,
@@ -519,90 +519,56 @@ impl Signex {
         if !self.overlay_belongs_to(ctx_menu.window, window_id) {
             return Vec::new();
         }
-        let menu = self.view_context_menu(window_id);
-        // The footprint is estimated from the largest possible row count,
-        // so a click near an edge flips the card up or left.
-        let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let origin = self.menu_origin(window_id, (ctx_menu.x, ctx_menu.y), menu_w, 22, true);
-        let mut out = Self::menu_layers(Message::ContextMenu(ContextMenuMsg::Close), menu, origin);
-        if let Some(submenu_kind) = interaction.context_submenu {
+        let card = self.view_context_menu(window_id);
+        let mut menu =
+            super::context_menu::AnchoredMenu::new(card.element, (ctx_menu.x, ctx_menu.y));
+        if let (Some(kind), Some(offset)) = (interaction.context_submenu, card.flyout_offset) {
             let submenu = self.view_context_submenu(
-                submenu_kind,
+                kind,
                 interaction.canvas_for_window(window_id).selected.len(),
             );
-            // Rows and separators above each launcher in `view_context_menu`.
-            let (rows_above, separators_above) = match submenu_kind {
-                // 3 always-visible rows + 1 separator.
-                ContextSubmenu::Place => (3, 1),
-                // Shown only with a selection: the same, then Place / Part
-                // Actions / Sheet Actions / References.
-                ContextSubmenu::Align => (7, 1),
-                // Right under Align, only when a drawing is selected (#1583).
-                ContextSubmenu::Arrange => (8, 1),
-                // Only the project-tree menu opens this one.
-                ContextSubmenu::AddNewToProject => (0, 0),
-            };
-            let sub_origin = super::context_menu::submenu_origin(
-                origin,
-                menu_w,
-                menu_w,
-                rows_above,
-                separators_above,
-                true,
-                self.ui_state.size_of_window(window_id).0,
-            );
-            out.push(Self::submenu_flyout(submenu, sub_origin));
+            menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
-        out
+        Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::Close), menu)
     }
 
     /// Document-tab right-click menu. Rendered before the project-tree
     /// menu since the two are mutually exclusive. Pushes dismiss then the
-    /// clamped menu.
+    /// placed menu.
     pub(super) fn tab_context_menu_overlay(
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
-            return self.dock_tab_context_menu_overlay(window_id);
+            return self.dock_tab_context_menu_overlay();
         };
         // Only the main window's tab strip opens this menu, so only the main
         // window paints it (#2037).
         if !self.overlay_belongs_to(None, window_id) {
             return Vec::new();
         }
-        self.menu_overlay(
-            window_id,
+        Self::menu_overlay(
             Message::ContextMenu(ContextMenuMsg::CloseTab),
             self.view_tab_context_menu(tab_ctx),
             (tab_ctx.x, tab_ctx.y),
-            Self::CONTEXT_MENU_WIDTH,
-            5,
         )
     }
 
-    /// Dock panel tab right-click menu: dismiss layer, then the menu clamped
-    /// into the window.
-    fn dock_tab_context_menu_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Vec<Element<'_, Message>> {
+    /// Dock panel tab right-click menu: dismiss layer, then the placed menu.
+    fn dock_tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
         let Some(menu_ctx) = self.document_state.dock.tab_menu else {
             return Vec::new();
         };
-        self.menu_overlay(
-            window_id,
+        Self::menu_overlay(
             Message::Dock(crate::dock::DockMessage::TabMenuDismissed),
             self.view_dock_tab_context_menu(),
             (menu_ctx.x, menu_ctx.y),
-            Self::CONTEXT_MENU_WIDTH,
-            5,
         )
     }
 
     /// Projects-panel tree right-click menu (+ its AddNewToProject
-    /// submenu). Pushes dismiss, menu, then the optional submenu.
+    /// submenu). Pushes dismiss, then the placed menu and its flyout.
     pub(super) fn project_tree_context_menu_overlay(
         &self,
         window_id: iced::window::Id,
@@ -615,51 +581,33 @@ impl Signex {
         if !self.overlay_belongs_to(tree_ctx.window, window_id) {
             return Vec::new();
         }
-        let (menu, menu_w, origin) = self.view_project_tree_context_menu(window_id, tree_ctx);
-        let mut out = Self::menu_layers(
-            Message::ContextMenu(ContextMenuMsg::CloseProjectTree),
-            menu,
-            origin,
-        );
-        // Currently only AddNewToProject opens from this menu: row 2, under
-        // `Make Project Available Online...` and `Validate Project`.
-        if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
+        let card = self.view_project_tree_context_menu(tree_ctx);
+        let mut menu =
+            super::context_menu::AnchoredMenu::new(card.element, (tree_ctx.x, tree_ctx.y));
+        // Only AddNewToProject opens from this menu.
+        if let (Some(ContextSubmenu::AddNewToProject), Some(offset)) =
+            (interaction.context_submenu, card.flyout_offset)
+        {
             let submenu = self.view_context_submenu(
                 ContextSubmenu::AddNewToProject,
                 interaction.canvas.selected.len(),
             );
-            let sub_origin = super::context_menu::submenu_origin(
-                origin,
-                menu_w,
-                // The flyout is built at the shared width (`submenu.rs`).
-                Self::CONTEXT_MENU_WIDTH,
-                2,
-                0,
-                false,
-                self.ui_state.size_of_window(window_id).0,
-            );
-            out.push(Self::submenu_flyout(submenu, sub_origin));
+            menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
-        out
+        Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::CloseProjectTree), menu)
     }
 
     /// v0.18.10 — Altium-style grid picker popup. Floats at the cursor
     /// when `G` is pressed in a footprint editor. Pushes dismiss then the
-    /// clamped menu.
-    pub(super) fn grid_picker_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Vec<Element<'_, Message>> {
+    /// placed menu.
+    pub(super) fn grid_picker_overlay(&self) -> Vec<Element<'_, Message>> {
         let Some(picker) = self.interaction_state.grid_picker.as_ref() else {
             return Vec::new();
         };
-        self.menu_overlay(
-            window_id,
+        Self::menu_overlay(
             Message::Ui(UiMsg::GridPickerClose),
             self.view_grid_picker_menu(),
             (picker.x, picker.y),
-            200.0,
-            13,
         )
     }
 

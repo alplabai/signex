@@ -31,7 +31,6 @@ pub(crate) use subscription::modal_overlay_id;
 mod window_subscriptions;
 
 impl Signex {
-    pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;
     /// Default size of the unified Export PDF / Print Preview modal.
     /// Both `view_print_preview` (in-window) and the detached-window
     /// path read from these so resizing the modal happens in one

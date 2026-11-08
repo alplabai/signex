@@ -8,7 +8,7 @@
 use iced::{Color, Shadow, Vector};
 use signex_types::theme::ThemeTokens;
 
-use crate::theme_ext::{border_color, text_primary, to_color};
+use crate::theme_ext::{border_color, text_primary, text_secondary, to_color};
 
 /// Radius of the bar and of a dropdown panel.
 const FLOATING_RADIUS: f32 = 10.0;
@@ -35,6 +35,10 @@ pub(crate) struct Skin {
     pub ink: Color,
     /// Icon tint on the armed tool's fill (the bar surface colour).
     pub on_selected: Color,
+    /// Separator line inside a dropdown card (the soft line token).
+    pub line_soft: Color,
+    /// Tint of a dropdown row icon (the third ink token).
+    pub icon_ink: Color,
 }
 
 impl Skin {
@@ -71,6 +75,14 @@ impl Skin {
                 .raised
                 .as_ref()
                 .map_or_else(|| to_color(&tokens.panel_bg), to_color),
+            line_soft: e
+                .line_soft
+                .as_ref()
+                .map_or_else(|| border_color(tokens), to_color),
+            icon_ink: e
+                .ink3
+                .as_ref()
+                .map_or_else(|| text_secondary(tokens), to_color),
         })
     }
 }
