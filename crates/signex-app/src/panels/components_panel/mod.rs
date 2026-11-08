@@ -301,6 +301,8 @@ fn view_section<'a>(
                     .boxed(),
             );
         } else {
+            // identifier/data folding, never shown
+            // ast-grep-ignore: no-case-in-view
             let needle = state.components_panel.filter.trim().to_lowercase();
             for lib in libs_for_source.iter().copied() {
                 section_col = section_col.push(view_library_block(

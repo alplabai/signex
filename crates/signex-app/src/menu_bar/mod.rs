@@ -328,7 +328,7 @@ const MENU_CHEVRON_SIZE: f32 = crate::styles::chrome_px(18.0);
 /// `root_btn`) plus the chrome's left padding. Used by the chrome
 /// to clamp the centered search bar so it can't slide under the
 /// menu items on narrow windows.
-pub fn approx_menu_bar_width() -> f32 {
+pub fn approx_menu_bar_width(i18n: &signex_i18n::I18n) -> f32 {
     // `root_btn` uses `padding([7, 6])` → 12 px horizontal per button.
     const PER_BTN_PADDING: f32 = 12.0;
     // Approx pixels per character at MENU_LABEL_SIZE (12 pt sans-serif).
@@ -338,7 +338,7 @@ pub fn approx_menu_bar_width() -> f32 {
     const CHROME_LEFT_PAD: f32 = 8.0;
     // Gap between wordmark and the first menu root button.
     const WORDMARK_TO_MENU_GAP: f32 = 8.0;
-    let labels_total: f32 = model::ROOT_TITLES
+    let labels_total: f32 = model::root_titles(i18n)
         .iter()
         .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
         .sum();

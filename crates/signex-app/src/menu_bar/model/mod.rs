@@ -100,6 +100,21 @@ const ROOT_TITLE_IDS: [Option<signex_i18n::MessageId>; 8] = [
     None,
 ];
 
+/// The root titles as the bar draws them under `i18n`: the catalog text of a
+/// migrated title, English for the rest.
+pub fn root_titles(i18n: &signex_i18n::I18n) -> Vec<String> {
+    ROOT_TITLES
+        .into_iter()
+        .zip(ROOT_TITLE_IDS)
+        .map(|(english, id)| {
+            id.map_or_else(
+                || english.to_owned(),
+                |id| i18n.message(id, &[]).into_string(),
+            )
+        })
+        .collect()
+}
+
 /// Build the menu bar for `ctx`. Pure: the same context gives the same model.
 pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
     let entries = [
@@ -113,17 +128,10 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::help(ctx),
     ];
     MenuBarModel {
-        menus: ROOT_TITLES
+        menus: root_titles(&ctx.i18n)
             .into_iter()
-            .zip(ROOT_TITLE_IDS)
             .zip(entries)
-            .map(|((english, id), entries)| Menu {
-                title: id.map_or_else(
-                    || english.to_owned(),
-                    |id| ctx.i18n.message(id, &[]).into_string(),
-                ),
-                entries,
-            })
+            .map(|(title, entries)| Menu { title, entries })
             .collect(),
     }
 }

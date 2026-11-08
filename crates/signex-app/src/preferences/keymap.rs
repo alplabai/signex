@@ -635,6 +635,7 @@ fn title_case(value: &str) -> String {
         .map(|part| {
             let mut chars = part.chars();
             match chars.next() {
+                // user-visible: migrate to the #2063 casemap (inside format!, which the case lint cannot see)
                 Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
                 None => String::new(),
             }

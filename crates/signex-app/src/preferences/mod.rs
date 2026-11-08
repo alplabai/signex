@@ -541,6 +541,8 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
             last_group = group;
             col = col.push(
                 container(
+                    // user-visible: migrate to the #2063 casemap
+                    // ast-grep-ignore: no-case-in-view
                     text(raw(group.to_uppercase()))
                         .size(TS.caption)
                         .style(text_muted),
