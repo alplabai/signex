@@ -113,6 +113,7 @@ altium	hint	-	-	edit_value
 altium	hint	-	-	fast_grid_1
 altium	hint	-	-	fast_grid_2
 altium	hint	-	Ctrl+F	find
+altium	hint	-	-	find_items
 altium	hint	-	Ctrl+H	find_and_replace
 altium	hint	-	F3	find_next
 altium	hint	-	Shift+F3	find_previous
@@ -412,6 +413,7 @@ classic	hint	-	V	edit_value
 classic	hint	-	Alt+1	fast_grid_1
 classic	hint	-	Alt+2	fast_grid_2
 classic	hint	-	Ctrl+F	find
+classic	hint	-	-	find_items
 classic	hint	-	-	find_and_replace
 classic	hint	-	F3	find_next
 classic	hint	-	Shift+F3	find_previous

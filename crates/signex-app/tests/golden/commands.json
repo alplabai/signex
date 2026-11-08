@@ -345,6 +345,11 @@
     "category": "search"
   },
   {
+    "id": "find_items",
+    "group": "General",
+    "category": "search"
+  },
+  {
     "id": "find_next",
     "group": "General",
     "category": "search"

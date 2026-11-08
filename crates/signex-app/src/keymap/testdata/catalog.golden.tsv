@@ -33,7 +33,8 @@ edit_text_in_place	edit	In-place edit selected text	-	General	-	-	RequiresSelect
 edit_value	edit	Edit value	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 fast_grid_1	view	Fast grid 1	-	General	-	-	Always	gui_only	-
 fast_grid_2	view	Fast grid 2	-	General	-	-	Always	gui_only	-
-find	search	Find	-	General	-	-	Always	-	document:document?,kind:text?,project:text?,name:text?,dirty:bool?,designator:text?,value:text?,net:text?,text:text?
+find	search	Find	-	General	-	-	Always	gui_only	-
+find_items	search	Find documents or items	-	General	-	-	Always	-	document:document?,kind:text?,project:text?,name:text?,dirty:bool?,designator:text?,value:text?,net:text?,text:text?
 find_and_replace	search	Find and replace	Find and Replace	General	-	-	Always	gui_only	-
 find_next	search	Find next	-	General	-	-	Always	gui_only	-
 find_previous	search	Find previous	-	General	-	-	Always	gui_only	-

@@ -30,9 +30,9 @@ id or an absolute path, and acts on that document alone: never the active
 one, and it changes no tab, focus, panel or selection. A person's palette or
 keybinding call has no operands and keeps the active document.
 
-`list_documents`, `document_info`, `resolve`, `find` and `read_document` are
-read-only queries that answer with data (`CommandOutcome::Answered`); `find`
-with no filter is still the Find dialog. Ids and where each file kind stores
+`list_documents`, `document_info`, `resolve`, `find_items` and `read_document` are
+read-only queries that answer with data (`CommandOutcome::Answered`); `find` is
+still the Find dialog. Ids and where each file kind stores
 one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General
@@ -73,6 +73,7 @@ one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
 | `find` | Find | search | `Ctrl+F` | `Ctrl+F` |
 | `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
+| `find_items` | Find documents or items | search | — | — |
 | `find_next` | Find next | search | `F3` | `F3` |
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
