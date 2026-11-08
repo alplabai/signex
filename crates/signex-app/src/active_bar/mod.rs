@@ -12,6 +12,9 @@ use crate::styles::{self, TypeScale};
 const TS: TypeScale = TypeScale::DEFAULT;
 
 mod dropdown;
+#[cfg(test)]
+mod glyph_tests;
+mod glyphs;
 mod layout;
 mod planned;
 
@@ -168,6 +171,11 @@ pub enum ActiveBarMsg {
     Action(ActiveBarAction),
     ToggleFilter(SelectionFilter),
     ToggleAllFilters,
+    /// The All cell of the Graphite filter's All / None control was picked:
+    /// every category on.
+    AllFiltersPicked,
+    /// The None cell was picked: every category off.
+    NoFiltersPicked,
     /// Replace the active filter set with the user-defined preset at
     /// `index` (0..N). No-op if the index is out of range or the slot is
     /// empty. Source: shortcut buttons in the Filter dropdown.
@@ -566,7 +574,8 @@ fn bar_items(
     };
     // Graphite draws monochrome stroke glyphs only for the group defaults;
     // the multi-colour per-action icons would tint into solid blobs, so the
-    // button keeps its group glyph there.
+    // button keeps its group glyph there. Power has monochrome family
+    // variants, so it follows the last-used port (see `glyphs`).
     let graphite = styles::is_graphite(tokens);
     let last_icon = |group: &str, default_icon: svg::Handle| -> svg::Handle {
         if graphite {
@@ -653,8 +662,13 @@ fn bar_items(
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)),
         "Wiring",
     ));
+    let power_icon = if graphite {
+        glyphs::PowerGlyph::of(last_tool.get("power").filter(|a| !is_planned(a))).handle(tid)
+    } else {
+        last_icon("power", ic::icon_power(tid))
+    };
     items.push(btn(
-        last_icon("power", ic::icon_power(tid)),
+        power_icon,
         false,
         last("power", ActiveBarAction::PlacePowerGND),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)),

@@ -51,6 +51,7 @@ fn main() {
         "align",
         "wire",
         "power",
+        "power_rail",
         "harness",
         "sheetsym",
         "port",
