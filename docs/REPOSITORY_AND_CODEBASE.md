@@ -123,6 +123,7 @@ signex/
 ├── LICENSE
 ├── crates/
 │   ├── signex-app/                 # desktop application shell (apex)
+│   ├── signex-cli/                 # headless command runner (JSON Lines, see CLI.md)
 │   ├── signex-types/               # shared domain types (foundation)
 │   ├── signex-engine/              # command / patch / undo engine
 │   ├── signex-net/                 # authoritative netlist + connectivity

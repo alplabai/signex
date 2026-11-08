@@ -244,6 +244,7 @@ A 17-crate Rust workspace (`edition = 2024`), an acyclic DAG with
 signex/
 ├── crates/
 │   ├── signex-app/            # Main binary — iced 0.14 app (panels, dock, canvas, editors)
+│   ├── signex-cli/            # Headless command runner — JSON Lines in, result lines out (docs/CLI.md)
 │   ├── signex-types/          # Domain types — schematic/PCB/layer/theme — NO rendering deps
 │   ├── signex-engine/         # Command / patch / undo engine for schematic edits
 │   ├── signex-net/            # Authoritative netlist + connectivity contract
@@ -417,7 +418,7 @@ Project**. It lives in the repository, so it is versioned with the code and
 reviewed in pull requests.
 
 In-repo reference docs live under [`docs/`](docs/): the
-[command reference](docs/COMMANDS.md),
+[command reference](docs/COMMANDS.md), [headless command runner](docs/CLI.md),
 [keyboard shortcut file format](docs/KEYBOARD_SHORTCUTS.md),
 [main menu bar](docs/MENU_BAR.md), [ERC rules](docs/ERC_RULES.md),
 [ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md),
