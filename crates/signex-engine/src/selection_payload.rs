@@ -45,10 +45,10 @@ impl Engine {
             ..Default::default()
         };
         for symbol in &fragment.symbols {
-            if let Some(body) = self.document().lib_symbols.get(&symbol.lib_id) {
+            if let Some(body) = self.document().body_of(symbol) {
                 fragment
                     .lib_symbols
-                    .insert(symbol.lib_id.clone(), body.clone());
+                    .insert(symbol.body_key().to_owned(), body.clone());
             }
         }
         CopiedSelection::from_fragment(fragment, grid_mm)
@@ -136,26 +136,6 @@ impl PlacementPayload {
         }
         bounds
     }
-
-    /// The payload with every body the `sheet` already holds under the same
-    /// id replaced by the sheet's copy, since `RegisterLibSymbol` keeps the
-    /// sheet's and the placed parts bind to it. Also returns the ids whose
-    /// body differed, for the caller to warn about.
-    pub fn adopt_sheet_bodies(&self, sheet: &SchematicSheet) -> (Self, Vec<String>) {
-        let mut fragment = self.fragment.clone();
-        let mut differing = Vec::new();
-        for (id, body) in fragment.lib_symbols.iter_mut() {
-            let Some(existing) = sheet.lib_symbols.get(id) else {
-                continue;
-            };
-            if !existing.same_body(body) {
-                differing.push(id.clone());
-                *body = existing.clone();
-            }
-        }
-        differing.sort();
-        (Self::new(fragment), differing)
-    }
 }
 
 #[cfg(test)]
@@ -235,25 +215,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn adopting_the_sheet_body_reports_a_difference_and_keeps_the_sheets_copy() {
-        let (engine, items) = sheet_with_part_and_wire();
-        let copied = engine.copy_selection(&items, 1.27).unwrap().unwrap();
-        let mut other = test_sheet();
-        let mut body = copied.payload.fragment().lib_symbols["lib:r"].clone();
-        body.description = "different".to_owned();
-        other.lib_symbols.insert(body.id.clone(), body);
-
-        let (adopted, differing) = copied.payload.adopt_sheet_bodies(&other);
-        assert_eq!(differing, ["lib:r"]);
-        assert_eq!(
-            adopted.fragment().lib_symbols["lib:r"].description,
-            "different"
-        );
-        let (_, none) = copied.payload.adopt_sheet_bodies(&test_sheet());
-        assert!(none.is_empty());
     }
 
     #[test]

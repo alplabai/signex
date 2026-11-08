@@ -109,7 +109,8 @@ fn the_swap_re_keys_the_symbol_and_replaces_part_owned_data() {
     let doc = engine.document();
     let sym = &doc.symbols[0];
     assert_eq!(sym.lib_id, NEW);
-    assert!(doc.lib_symbols.contains_key(NEW));
+    assert!(doc.body_of(sym).is_some_and(|b| b.id == NEW));
+    assert!(sym.body_ref.starts_with(&format!("{NEW}#")));
     assert_eq!(sym.library_id, Some(Uuid::from_u128(0xA)));
     assert_eq!(sym.row_id, Some(Uuid::from_u128(0xB)));
     assert_eq!(sym.library_version, "2.0");

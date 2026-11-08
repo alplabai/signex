@@ -6,8 +6,13 @@ use signex_engine::{Engine, place_power_port, restyle_power_port};
 use signex_erc::engine::run_all;
 use signex_erc::{ErcContext, RuleId, RuleKind};
 use signex_types::format::SnxSchematic;
-use signex_types::schematic::{Point, SchematicSheet, Symbol, Wire};
+use signex_types::schematic::{LibSymbol, Point, SchematicSheet, Symbol, Wire};
 use uuid::Uuid;
+
+/// The embedded body of library symbol `id` (its version key carries a hash).
+fn entry<'a>(doc: &'a SchematicSheet, id: &str) -> Option<&'a LibSymbol> {
+    doc.lib_symbols.values().find(|b| b.id == id)
+}
 
 fn port(lib_id: &str, value: &str, at: Point) -> Symbol {
     Symbol {
@@ -52,7 +57,7 @@ fn placement_is_one_undo_step_and_keeps_the_style_in_the_lib_id() {
 
     let doc = engine.document();
     assert_eq!(doc.symbols[0].lib_id, "power:GNDREF");
-    let lib = doc.lib_symbols.get("power:GNDREF").expect("entry");
+    let lib = entry(doc, "power:GNDREF").expect("entry");
     assert_eq!(lib.pins.len(), 1);
     assert_eq!(
         (lib.pins[0].pin.position.x, lib.pins[0].pin.position.y),
@@ -120,7 +125,7 @@ fn redo_after_placement_restores_the_port_and_its_entry() {
     engine.undo().expect("undo");
     engine.redo().expect("redo");
     assert_eq!(engine.document().symbols.len(), 1);
-    assert!(engine.document().lib_symbols.contains_key("power:GND"));
+    assert!(entry(engine.document(), "power:GND").is_some());
 }
 
 #[test]
@@ -134,17 +139,17 @@ fn restyle_is_one_undo_step_and_redoes() {
         .expect("restyle");
     let doc = engine.document();
     assert_eq!(doc.symbols[0].lib_id, "power:GND");
-    assert!(doc.lib_symbols.contains_key("power:GND"));
+    assert!(entry(doc, "power:GND").is_some());
 
     engine.undo().expect("undo");
     let doc = engine.document();
     assert_eq!(doc.symbols[0].lib_id, "power:VCC");
-    assert!(!doc.lib_symbols.contains_key("power:GND"));
+    assert!(entry(doc, "power:GND").is_none());
 
     engine.redo().expect("redo");
     let doc = engine.document();
     assert_eq!(doc.symbols[0].lib_id, "power:GND");
-    assert!(doc.lib_symbols.contains_key("power:GND"));
+    assert!(entry(doc, "power:GND").is_some());
 }
 
 #[test]
@@ -162,12 +167,8 @@ fn the_registered_entry_survives_a_snxsch_write_and_parse() {
         .expect("write");
     let back = SnxSchematic::parse(&text).expect("parse").sheet;
     let (got, want) = (
-        back.lib_symbols.get("power:VCC").expect("entry kept"),
-        engine
-            .document()
-            .lib_symbols
-            .get("power:VCC")
-            .expect("entry"),
+        entry(&back, "power:VCC").expect("entry kept"),
+        entry(engine.document(), "power:VCC").expect("entry"),
     );
     assert_eq!(got.pins.len(), want.pins.len());
     assert_eq!(got.graphics.len(), want.graphics.len());

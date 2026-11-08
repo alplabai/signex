@@ -6,6 +6,8 @@ pub enum EngineError {
     MissingPath,
     #[error("command {0:?} is not implemented yet")]
     UnsupportedCommand(CommandKind),
+    #[error("{0}")]
+    LibSymbolBodyCollision(#[from] signex_types::schematic::BodyRefCollision),
     #[error("a sheet symbol needs a target filename")]
     EmptyChildSheetFilename,
     #[error(

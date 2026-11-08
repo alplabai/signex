@@ -63,10 +63,11 @@ mod tests {
     fn copied() -> CopiedSelection {
         let mut sheet = test_sheet();
         let lib: LibSymbol = serde_json::from_str(r#"{"id":"lib:r"}"#).unwrap();
-        sheet.lib_symbols.insert(lib.id.clone(), lib);
+        let body_ref = sheet.embed_body(lib).unwrap();
         let part = Symbol {
             uuid: Uuid::now_v7(),
             lib_id: "lib:r".to_owned(),
+            body_ref,
             reference: "R7".to_owned(),
             position: Point::new(25.4, 25.4),
             unit: 1,
@@ -111,7 +112,8 @@ mod tests {
         assert_eq!(b.symbols[0].reference, "R7");
         assert_eq!(b.wires.len(), 1);
         assert_eq!(b.labels[0].text, "D0");
-        assert!(b.lib_symbols.contains_key("lib:r"));
+        assert!(b.lib_symbols.contains_key(&a.symbols[0].body_ref));
+        assert_eq!(a.symbols[0].body_ref, b.symbols[0].body_ref);
         assert_eq!(a.symbols[0].position, b.symbols[0].position);
         assert_eq!(original.origin, back.origin);
     }
