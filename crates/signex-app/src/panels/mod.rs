@@ -9,7 +9,6 @@ use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
-use std::sync::OnceLock;
 
 pub mod components_panel;
 mod element_properties;

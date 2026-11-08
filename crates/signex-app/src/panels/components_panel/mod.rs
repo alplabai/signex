@@ -25,7 +25,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Column, Space, button, column, container, row, svg, text, text_input};
+use iced::widget::{Column, Space, button, column, container, row, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use signex_library::ComponentRow;
