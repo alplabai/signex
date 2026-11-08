@@ -110,7 +110,9 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
     );
 
     // Same absolute path in every run, so a path inside a file cannot differ.
-    let _ = std::fs::remove_dir_all(work);
+    if work.exists() {
+        std::fs::remove_dir_all(work).expect("clear the work folder");
+    }
     let (project, sheet) = signex_app::sample_project::ensure_extracted(work).expect("fixture");
     add_dangling_wire(&sheet);
     send_answered(&mut app, &project, Message::Menu(MenuMessage::OpenProject));
