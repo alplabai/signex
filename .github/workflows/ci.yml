@@ -151,6 +151,16 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      # vendor/iced_aw is excluded from the workspace, so the step above never
+      # lints it, and cargo applies `-- -D warnings` to workspace members only.
+      # RUSTFLAGS reaches it; dependencies are still built with
+      # `--cap-lints allow`. No --all-features: cargo rejects feature flags for
+      # a package outside the workspace, so the default set (`full`) is linted.
+      - name: Clippy (vendored iced_aw)
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo clippy -p iced_aw --all-targets
+
   test:
     name: test · workspace
     needs: changes
@@ -197,6 +207,10 @@ jobs:
       # so --workspace never runs its tests (#2206). -p still resolves it.
       - name: Test vendored iced_aw
         run: cargo nextest run -p iced_aw --profile ci
+
+      # nextest does not run doctests.
+      - name: Doctest vendored iced_aw
+        run: cargo test -p iced_aw --doc
 
       # nextest does not run doctests.
       - name: Doctests
