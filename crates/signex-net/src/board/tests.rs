@@ -526,20 +526,29 @@ fn a_net_with_routed_copper_stays_in_the_table_when_it_loses_its_pads() {
     assign_pad_nets(&before, &pcb, &ReferencePadKey)
         .edit
         .apply(&mut pcb);
-    copper_on(&mut pcb, 2, "N$2");
+    copper_on(&mut pcb, 1, "IN");
 
-    let only_in = Netlist {
-        nets: vec![
-            net(1, "IN", vec![terminal("R1", "1")]),
-            net(3, "OUT", vec![terminal("R2", "2")]),
-        ],
-    };
-    assign_pad_nets(&only_in, &pcb, &ReferencePadKey)
+    assign_pad_nets(&merged_in(), &pcb, &ReferencePadKey)
         .edit
         .apply(&mut pcb);
-    assert!(pcb.nets.iter().any(|n| n.number == 2), "{:?}", pcb.nets);
-    assert_eq!(pad_net(&pcb, "R1", "2"), None, "its pads are cleared");
-    assert_eq!(pad_net(&pcb, "R2", "1"), None);
+    assert!(pcb.nets.iter().any(|n| n.number == 1), "{:?}", pcb.nets);
+    assert_eq!(pad_net(&pcb, "R1", "1").map(|n| n.number), Some(2));
+    assert_eq!(pad_net(&pcb, "R2", "1").map(|n| n.number), Some(2));
+}
+
+/// The divider with the middle pads joined to IN: the old IN net (1) loses
+/// its only pad to the merged net, which keeps the middle net's number 2.
+fn merged_in() -> Netlist {
+    Netlist {
+        nets: vec![
+            net(
+                1,
+                "IN",
+                vec![terminal("R1", "1"), terminal("R1", "2"), terminal("R2", "1")],
+            ),
+            net(3, "OUT", vec![terminal("R2", "2")]),
+        ],
+    }
 }
 
 #[test]
@@ -666,18 +675,12 @@ fn retiring_a_net_that_still_has_copper_is_reported() {
     assign_pad_nets(&before, &pcb, &ReferencePadKey)
         .edit
         .apply(&mut pcb);
-    copper_on(&mut pcb, 2, "N$2");
-    let only_in = Netlist {
-        nets: vec![
-            net(1, "IN", vec![terminal("R1", "1")]),
-            net(3, "OUT", vec![terminal("R2", "2")]),
-        ],
-    };
-    let assignment = assign_pad_nets(&only_in, &pcb, &ReferencePadKey);
+    copper_on(&mut pcb, 1, "IN");
+    let assignment = assign_pad_nets(&merged_in(), &pcb, &ReferencePadKey);
     assert!(
         assignment
             .issues
-            .contains(&PadNetIssue::NetKeptForCopper { number: 2 }),
+            .contains(&PadNetIssue::NetKeptForCopper { number: 1 }),
         "{:?}",
         assignment.issues
     );
