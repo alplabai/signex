@@ -102,12 +102,10 @@ fn library_dialogs_refuse_without_a_path() {
 
 #[test]
 fn preference_dialogs_refuse_without_a_path() {
-    for (msg, title) in [(
-        PrefMsg::KeymapImportProfile,
+    refused_on_message(
+        pref(PrefMsg::KeymapImportProfile),
         "Import Signex Keyboard Shortcuts",
-    )] {
-        refused_on_message(pref(msg), title);
-    }
+    );
 }
 
 #[test]
