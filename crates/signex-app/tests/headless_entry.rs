@@ -685,13 +685,13 @@ fn net_class_assign() {
         "the sheet did not"
     );
 
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&given]), CommandOutcome::Ran);
     assert!(classes(&app).is_empty());
     assert!(
         !app.document_state.is_document_dirty(&prj),
         "back at the saved bytes"
     );
-    assert_eq!(run(&mut app, "redo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "redo", &[&given]), CommandOutcome::Ran);
     assert_eq!(classes(&app), ["GND"]);
     assert!(app.document_state.is_document_dirty(&prj));
 }
