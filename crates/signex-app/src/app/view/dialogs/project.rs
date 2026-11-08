@@ -6,8 +6,9 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length};
+use signex_widgets::{raw, text};
 
 use super::widgets::modal_title_header;
 use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
@@ -35,7 +36,7 @@ impl Signex {
     }
 
     pub(in crate::app::view) fn view_rename_dialog_body(&self) -> Element<'_, Message> {
-        use iced::widget::text_input;
+        use signex_widgets::{raw, text_input};
 
         let Some(ref st) = self.ui_state.rename_dialog else {
             return container(Space::new()).boxed();
@@ -82,7 +83,7 @@ impl Signex {
 
         let mut body: iced::widget::Column<Element<'_, Message>> = column![
             dialog_message(prompt, tokens),
-            text_input(placeholder, &st.buffer)
+            text_input(raw(placeholder), &st.buffer)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
                 .on_submit(Message::Rename(RenameMsg::Submit))
                 .size(TS.label)
@@ -92,7 +93,7 @@ impl Signex {
         .spacing(SP.m);
 
         if let Some(ref err) = st.error {
-            body = body.push(text(err.clone()).size(TS.body).color(error_c).boxed());
+            body = body.push(text(raw(err.clone())).size(TS.body).color(error_c).boxed());
         }
 
         let dialog = container(
@@ -136,7 +137,7 @@ impl Signex {
     pub(in crate::app::view) fn view_enable_version_control_dialog_body(
         &self,
     ) -> Element<'_, Message> {
-        use iced::widget::checkbox;
+        use signex_widgets::checkbox;
         let Some(ref st) = self.ui_state.enable_version_control else {
             return container(Space::new()).boxed();
         };
@@ -160,7 +161,7 @@ impl Signex {
             crate::app::VersionControlScope::Project => "Project",
             crate::app::VersionControlScope::Library => "Library",
         };
-        let summary = text(format!("{summary_label}: {}", st.project_name))
+        let summary = text(raw(format!("{summary_label}: {}", st.project_name)))
             .size(TS.label)
             .color(text_c);
 
@@ -172,7 +173,7 @@ impl Signex {
         let mut items_col: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.s);
         if !st.items.is_empty() {
             items_col = items_col.push(
-                text("Track in repository")
+                text(raw("Track in repository"))
                     .size(TS.body)
                     .color(items_text_muted)
                     .boxed(),
@@ -187,11 +188,11 @@ impl Signex {
                 let row_widget = row![
                     cb,
                     Space::new().width(8),
-                    text(item.relative.clone())
+                    text(raw(item.relative.clone()))
                         .size(TS.body)
                         .color(items_text_c),
                     Space::new().width(Length::Fill),
-                    text(item.label.clone())
+                    text(raw(item.label.clone()))
                         .size(TS.caption)
                         .color(items_text_muted),
                 ]
@@ -208,10 +209,10 @@ impl Signex {
             lfs_check,
             Space::new().width(8),
             column![
-                text("Track binary 3D models via Git LFS")
+                text(raw("Track binary 3D models via Git LFS"))
                     .size(TS.label)
                     .color(text_c),
-                text("Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally.")
+                text(raw("Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally."))
                     .size(TS.caption)
                     .color(text_muted),
             ]
@@ -229,7 +230,7 @@ impl Signex {
         body_col = body_col.push(lfs_row.boxed());
         if st.scanning {
             body_col = body_col.push(
-                text("Reading the project folder…")
+                text(raw("Reading the project folder…"))
                     .size(TS.caption)
                     .color(text_muted)
                     .boxed(),
@@ -237,7 +238,7 @@ impl Signex {
         }
         if let Some(err) = st.error.as_ref() {
             body_col = body_col.push(
-                text(err.clone())
+                text(raw(err.clone()))
                     .size(TS.body)
                     .color(crate::styles::tokens::danger(tokens))
                     .boxed(),
@@ -315,8 +316,8 @@ impl Signex {
             value: &'a str,
             on_input: fn(String) -> Message,
         ) -> Element<'a, Message> {
-            use iced::widget::text_input;
-            text_input(placeholder, value)
+            use signex_widgets::{raw, text_input};
+            text_input(raw(placeholder), value)
                 .size(TS.label)
                 .padding(6)
                 .width(Length::Fixed(140.0))
@@ -333,7 +334,7 @@ impl Signex {
                     grid_segment(label, active, setter(target), text_c, border_c)
                 };
                 row![
-                    container(text(label).size(TS.body).color(text_muted))
+                    container(text(raw(label)).size(TS.body).color(text_muted))
                         .width(Length::Fixed(80.0)),
                     seg("Lines", Gd::Lines, current == Gd::Lines),
                     seg("Dots", Gd::Dots, current == Gd::Dots),
@@ -349,7 +350,7 @@ impl Signex {
                 grid_segment(label, active, msg, text_c, border_c)
             };
             row![
-                container(text("Multiplier").size(TS.body).color(text_muted))
+                container(text(raw("Multiplier")).size(TS.body).color(text_muted))
                     .width(Length::Fixed(80.0)),
                 seg("1×", 1, current == 1),
                 seg("2×", 2, current == 2),
@@ -363,11 +364,14 @@ impl Signex {
 
         let body = column![
             row![
-                container(text("Step").size(TS.body).color(text_muted)).width(Length::Fixed(80.0)),
+                container(text(raw("Step")).size(TS.body).color(text_muted))
+                    .width(Length::Fixed(80.0)),
                 mk_input("0.127", &st.step_mm, |v| Message::GridProperties(
                     GridPropertiesMsg::SetStep(v)
                 )),
-                text("mm, both axes").size(TS.caption).color(text_muted),
+                text(raw("mm, both axes"))
+                    .size(TS.caption)
+                    .color(text_muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
@@ -378,11 +382,11 @@ impl Signex {
                 Message::GridProperties(GridPropertiesMsg::SetCoarseDisplay(d))
             }),
             mk_mult_row(st.multiplier),
-            text(
+            text(raw(
                 "The step applies to both axes (one grid step per footprint editor). \
                  Display: Lines / Dots / Hidden. \
                  Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults)."
-            )
+            ))
             .size(TS.caption)
             .color(text_muted),
         ]
@@ -452,9 +456,9 @@ impl Signex {
 
         let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
             let glyph = if on { "[x]" } else { "[ ]" };
-            iced::widget::button(
+            signex_widgets::button(
                 row![
-                    text(format!("{glyph}  {label}"))
+                    text(raw(format!("{glyph}  {label}")))
                         .size(TS.body)
                         .color(text_c)
                         .width(Length::Fill),
@@ -485,11 +489,9 @@ impl Signex {
         };
 
         let body = column![
-            text(
-                "Toggle which kinds the canvas hit-test will accept. \
+            text(raw("Toggle which kinds the canvas hit-test will accept. \
                  Pads is the only kind functionally wired today; the \
-                 rest store flags for forward compatibility."
-            )
+                 rest store flags for forward compatibility."))
             .size(TS.caption)
             .color(text_muted),
             mk_row("Pads", K::Pads, st.pads),
@@ -547,7 +549,7 @@ fn grid_segment<'a>(
     } else {
         iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
     };
-    iced::widget::button(text(label).size(TS.caption).color(text_c))
+    signex_widgets::button(text(raw(label)).size(TS.caption).color(text_c))
         .padding([3, 10])
         .on_press(on_press)
         .style(move |_: &iced::Theme, _| iced::widget::button::Style {

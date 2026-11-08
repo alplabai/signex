@@ -123,8 +123,8 @@ pub fn view_title_block_section<'a>(
                     container(
                         row![
                             property_label(label, muted),
-                            iced::widget::text_input(
-                                project_value.clone().unwrap_or_default(),
+                            signex_widgets::text_input(
+                                signex_widgets::raw(project_value.clone().unwrap_or_default()),
                                 value.clone()
                             )
                             .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
@@ -143,7 +143,7 @@ pub fn view_title_block_section<'a>(
             }
             c = c.push(
                 container(
-                    text("Press Enter to apply a field.")
+                    text(raw("Press Enter to apply a field."))
                         .size(TS.caption)
                         .color(muted),
                 )

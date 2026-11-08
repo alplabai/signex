@@ -12,9 +12,10 @@
 //! `modal_header_strip` / `modal_footer_strip`) for visual parity
 //! across the Library subsystem.
 
-use iced::widget::{Space, column, container, text};
+use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::styles::{Spacing, TypeScale, dialog_body, dialog_list, dialog_message};
 use signex_widgets::theme_ext;
@@ -83,7 +84,7 @@ pub fn view<'a>(
             .map(|st| st.row.internal_pn.as_str().to_string())
             .unwrap_or_else(|| format!("({} / {})", address.table, address.row_id));
         rows.push(
-            container(text(label).size(ts.body).color(text_c))
+            container(text(raw(label)).size(ts.body).color(text_c))
                 .padding([sp.s, sp.m])
                 .boxed(),
         );
@@ -92,7 +93,7 @@ pub fn view<'a>(
     for path in &confirm.dirty_paths {
         rows.push(
             container(
-                text(dirty_path_label(path, library_dir))
+                text(raw(dirty_path_label(path, library_dir)))
                     .size(ts.body)
                     .color(text_c),
             )

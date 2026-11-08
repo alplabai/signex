@@ -1,9 +1,10 @@
 //! The Project tab shell: a vertical section list beside the selected
 //! section. Pure: `&Signex -> Element`, no mutation.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use super::{ProjectSection, ProjectTabMsg, general, parameters, schematic_defaults};
 use crate::app::state::ProjectId;
@@ -22,7 +23,7 @@ fn section_list<'a>(
     let mut list: iced::widget::Column<Element<'a, Message>> =
         column![].spacing(sp.xs).padding([sp.l, sp.m]);
     for section in ProjectSection::ALL {
-        let label = text(section.label()).size(ts.label);
+        let label = text(raw(section.label())).size(ts.label);
         let entry = button(label)
             .width(Length::Fill)
             .padding([sp.s, sp.m])
@@ -66,7 +67,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return container(
-                text("This project is no longer open.")
+                text(raw("This project is no longer open."))
                     .size(TypeScale::default().title)
                     .color(crate::styles::ti(tokens.text_secondary)),
             )

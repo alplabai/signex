@@ -17,8 +17,9 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{column, container, row, text, text_input};
+use iced::widget::{column, container, row};
 use iced::{Background, Border, Element, Length, Widget as _};
+use signex_widgets::{raw, text, text_input};
 
 use signex_types::theme::ThemeTokens;
 
@@ -70,7 +71,7 @@ pub fn view_move_by_modal<'a>(
                     ctor: fn(String) -> FootprintEditorMsg|
      -> Element<'a, LibraryMessage> {
         let submit_path = field_path.clone();
-        let input = text_input("0.0", value)
+        let input = text_input(raw("0.0"), value)
             .size(ts.label)
             .padding(sp.s)
             .width(input_w)
@@ -95,7 +96,7 @@ pub fn view_move_by_modal<'a>(
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
             });
         row![
-            container(text(label).size(ts.body).color(text_muted)).width(label_w),
+            container(text(raw(label)).size(ts.body).color(text_muted)).width(label_w),
             input,
         ]
         .spacing(sp.s)

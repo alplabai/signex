@@ -9,11 +9,12 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{button, container, image, row, text};
+use iced::widget::{container, image, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::styles;
@@ -462,7 +463,7 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let hover_bg = mc.hover;
     let border = mc.border;
     let text_c = mc.text;
-    let btn = button(text(label).size(MENU_LABEL_SIZE).color(text_c))
+    let btn = button(text(raw(label)).size(MENU_LABEL_SIZE).color(text_c))
         // Tight horizontal padding so the highlight box hugs the label —
         // Altium's root buttons don't extend far past their text. A wide
         // highlight pushes the dropdown's anchor (iced_aw uses the
@@ -497,9 +498,9 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
 fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let label = label.to_owned();
     let r = row![
-        text(label).size(MENU_LABEL_SIZE).color(mc.text),
+        text(raw(label)).size(MENU_LABEL_SIZE).color(mc.text),
         iced::widget::Space::new().width(Length::Fill),
-        text("›".to_string())
+        text(raw("›".to_string()))
             .size(MENU_CHEVRON_SIZE)
             .color(mc.text_muted),
     ]
@@ -558,7 +559,7 @@ fn menu_item_btn(
     // so the labels of a group line up.
     let mark = checked.map(|on| {
         iced::advanced::Widget::_boxed(
-            text(if on { "\u{2713}" } else { "" })
+            text(raw(if on { "\u{2713}" } else { "" }))
                 .size(MENU_LABEL_SIZE)
                 .color(text_c)
                 .width(Length::Fixed(14.0)),
@@ -572,7 +573,7 @@ fn menu_item_btn(
         r = r.push(mark);
     }
     r = r.push(iced::advanced::Widget::_boxed(
-        text(label)
+        text(raw(label))
             .size(MENU_LABEL_SIZE)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
@@ -583,7 +584,7 @@ fn menu_item_btn(
             iced::widget::Space::new().width(Length::Fill),
         ));
         r = r.push(iced::advanced::Widget::_boxed(
-            text(sc)
+            text(raw(sc))
                 .size(MENU_SHORTCUT_SIZE)
                 .color(mc.text_muted)
                 .wrapping(iced::widget::text::Wrapping::None),

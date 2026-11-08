@@ -1,0 +1,14 @@
+id: no-raw-alias
+valid:
+  - 'fn f() { text(raw("Save")); }'
+  - "use signex_widgets::raw;"
+  - "use signex_widgets::{raw, text};"
+  - 'fn f() { let t = signex_widgets::raw("Save"); }'
+  - "use signex_widgets::text as t;"
+  - "fn f(raw: &str) { parse(raw); }"
+invalid:
+  - "use signex_widgets::raw as r;"
+  - "use crate::raw as r;"
+  - "fn f() { names.iter().map(raw); }"
+  - "fn f() { let r = raw; }"
+  - "fn f() { let mut r = None; r = raw; }"

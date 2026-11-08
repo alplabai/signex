@@ -8,10 +8,11 @@
 //! - Order-of-preference list — persisted to `distributors.toml`
 //!   (see `persistence`).
 
-use iced::widget::{Space, button, column, container, row, text, text_input};
+use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text, text_input};
 
 use crate::styles::{HAIRLINE, Spacing, TypeScale};
 use signex_widgets::theme_ext;
@@ -34,7 +35,7 @@ pub fn view<'a>(
     let hover_bg = crate::styles::tokens::hover_overlay(tokens);
 
     let section_title = |title: &'static str| -> Element<'_, LibraryMessage> {
-        text(title).size(ts.body).color(muted).boxed()
+        text(raw(title)).size(ts.body).color(muted).boxed()
     };
 
     // ── DigiKey ──────────────────────────────────────────────
@@ -51,8 +52,8 @@ pub fn view<'a>(
         (false, Some(s), _) => s.to_string(),
         _ => "Not connected".to_string(),
     };
-    let mut digikey_actions =
-        row![text(digikey_status).size(ts.body).color(text_c)].align_y(iced::Alignment::Center);
+    let mut digikey_actions = row![text(raw(digikey_status)).size(ts.body).color(text_c)]
+        .align_y(iced::Alignment::Center);
     digikey_actions = digikey_actions.push(Space::new().width(Length::Fill).boxed());
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(
@@ -72,10 +73,10 @@ pub fn view<'a>(
         Space::new().height(sp.s),
         digikey_actions,
         Space::new().height(sp.s),
-        text(
+        text(raw(
             "OAuth2 PKCE flow — opens your browser, then stores the refresh token in the OS \
              keyring. Set SIGNEX_DIGIKEY_CLIENT_ID + SIGNEX_DIGIKEY_CLIENT_SECRET first."
-        )
+        ))
         .size(ts.caption)
         .color(muted),
     ]
@@ -96,11 +97,11 @@ pub fn view<'a>(
         section_title("Mouser"),
         Space::new().height(sp.s),
         row![
-            text("API Key")
+            text(raw("API Key"))
                 .size(ts.body)
                 .color(text_c)
                 .width(Length::Fixed(96.0)),
-            text_input("Paste API key…", &settings.mouser_api_key_buf)
+            text_input(raw("Paste API key…"), &settings.mouser_api_key_buf)
                 .secure(true)
                 .on_input(|s| LibraryMessage::Settings(SettingsMsg::MouserApiKeyChanged(s)))
                 .padding([sp.s, sp.m])
@@ -114,7 +115,7 @@ pub fn view<'a>(
         ]
         .align_y(iced::Alignment::Center),
         Space::new().height(sp.s),
-        text(mouser_test_status).size(ts.caption).color(muted),
+        text(raw(mouser_test_status)).size(ts.caption).color(muted),
     ]
     .spacing(sp.xs);
 
@@ -122,7 +123,7 @@ pub fn view<'a>(
     let no_key_section = column![
         section_title("LCSC, JLCPCB"),
         Space::new().height(sp.s),
-        text("(no key required)").size(ts.body).color(text_c),
+        text(raw("(no key required)")).size(ts.body).color(text_c),
     ]
     .spacing(sp.xs);
 
@@ -138,14 +139,14 @@ pub fn view<'a>(
         let up_enabled = i > 0;
         let down_enabled = i + 1 < len;
         let mut up_btn =
-            button(container(text("▲").size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
+            button(container(text(raw("▲")).size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
                 .padding(0)
                 .style(crate::styles::outline_button(tokens));
         if up_enabled {
             up_btn = up_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceUp(*src)));
         }
         let mut down_btn =
-            button(container(text("▼").size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
+            button(container(text(raw("▼")).size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
                 .padding(0)
                 .style(crate::styles::outline_button(tokens));
         if down_enabled {
@@ -153,7 +154,7 @@ pub fn view<'a>(
                 down_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceDown(*src)));
         }
         let row_widget = row![
-            text(format!("{}.  {}", i + 1, label))
+            text(raw(format!("{}.  {}", i + 1, label)))
                 .size(ts.body)
                 .color(text_c)
                 .width(Length::Fill),
@@ -176,10 +177,10 @@ pub fn view<'a>(
         order_col = order_col.push(bg_row.boxed());
     }
     order_col = order_col.push(
-        text(
+        text(raw(
             "Saved to <config_dir>/signex/distributors.toml. The first matching adapter is \
-             tried first when you paste a distributor URL into the Supply tab.",
-        )
+         tried first when you paste a distributor URL into the Supply tab.",
+        ))
         .size(ts.caption)
         .color(muted)
         .boxed(),
@@ -188,7 +189,7 @@ pub fn view<'a>(
     // looks applied and silently reverts on next launch.
     if let Some(error) = settings.preferred_order_error.as_deref() {
         order_col = order_col.push(
-            text(format!("Could not save the order: {error}"))
+            text(raw(format!("Could not save the order: {error}")))
                 .size(ts.caption)
                 .color(crate::styles::tokens::danger(tokens))
                 .boxed(),

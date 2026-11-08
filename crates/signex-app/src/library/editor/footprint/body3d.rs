@@ -6,12 +6,13 @@
 //! primitive — the procedural 3D render in `preview3d.rs` rebuilds off
 //! these values on every frame.
 
-use iced::widget::{Space, Widget, button, column, container, pick_list, row, text};
+use iced::widget::{Space, Widget, column, container, pick_list, row};
 use iced::{Border, Element, Length, Theme};
 use iced_aw::NumberInput;
 use signex_library::{Body3D, BodyShape};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text};
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
 use crate::library::state::EditorAddress;
@@ -46,7 +47,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
 
-    let header = text("Body 3D").size(TS.title).color(text_c);
+    let header = text(raw("Body 3D")).size(TS.title).color(text_c);
 
     // Shape picker.
     let opts = [
@@ -143,7 +144,7 @@ fn labeled_field<'a>(
     muted: iced::Color,
 ) -> Element<'a, LibraryMessage> {
     column![
-        text(label).size(TS.caption).color(muted).boxed(),
+        text(raw(label)).size(TS.caption).color(muted).boxed(),
         Space::new().height(SP.xs).boxed(),
         field,
     ]
@@ -166,7 +167,7 @@ fn color_row<'a>(
 ) -> Element<'a, LibraryMessage> {
     let border = theme_ext::border_color(tokens);
     let preview_color = iced::Color::from_rgba(rgba[0], rgba[1], rgba[2], 1.0);
-    let preview_swatch = container(text("").size(TS.body))
+    let preview_swatch = container(text(raw("")).size(TS.body))
         .width(Length::Fixed(36.0))
         .height(Length::Fixed(20.0))
         .style(move |_: &Theme| iced::widget::container::Style {
@@ -199,7 +200,7 @@ fn color_row<'a>(
     };
 
     let cycle_btn =
-        button(container(text("Cycle").size(TS.caption).color(text_c)).padding([SP.s, SP.m]))
+        button(container(text(raw("Cycle")).size(TS.caption).color(text_c)).padding([SP.s, SP.m]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: address.library_path,
                 table: address.table.clone(),
@@ -216,12 +217,12 @@ fn color_row<'a>(
     );
 
     column![
-        text(label).size(TS.caption).color(muted),
+        text(raw(label)).size(TS.caption).color(muted),
         Space::new().height(SP.xs),
         row![
             preview_swatch,
             Space::new().width(SP.m),
-            text(hex).size(TS.body).color(text_c),
+            text(raw(hex)).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
             cycle_btn,
         ]

@@ -1,10 +1,11 @@
 //! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
 
-use iced::widget::{Widget, button, container, row, space, text};
+use iced::widget::{Widget, container, row, space};
 use iced::{Element, Length};
 use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::app::{StatusBarRequest, Tool};
 use crate::styles::{self, Spacing, TypeScale};
@@ -96,20 +97,20 @@ pub fn view<'a>(
     let text_c = styles::ti(tokens.text);
     let muted_c = styles::ti(tokens.text_secondary);
 
-    let sep = move || text("|").size(TS.caption).color(border_c);
-    let lbl = move |s: String| text(s).size(TS.body).color(text_c);
-    let dim = move |s: &'static str| text(s).size(TS.body).color(muted_c);
+    let sep = move || text(raw("|")).size(TS.caption).color(border_c);
+    let lbl = move |s: String| text(raw(s)).size(TS.body).color(text_c);
+    let dim = move |s: &'static str| text(raw(s)).size(TS.body).color(muted_c);
 
     let mut bar = row![
         lbl(coord_text),
         sep(),
         dim("Grid:"),
-        button(text(grid_text).size(TS.body).color(text_c))
+        button(text(raw(grid_text)).size(TS.body).color(text_c))
             .padding([1.0, SP.s])
             .style(button::text)
             .on_press(StatusBarRequest::ToggleGrid),
         sep(),
-        button(text(snap_label).size(TS.body).color(text_c))
+        button(text(raw(snap_label)).size(TS.body).color(text_c))
             .padding([1.0, SP.s])
             .style(button::text)
             .on_press(StatusBarRequest::ToggleSnap),
@@ -123,7 +124,7 @@ pub fn view<'a>(
     if let Some(activity) = activity {
         bar = bar.push(sep().boxed());
         bar = bar.push(
-            text(activity.to_owned())
+            text(raw(activity.to_owned()))
                 .size(TS.body)
                 .color(muted_c)
                 .boxed(),
@@ -132,7 +133,7 @@ pub fn view<'a>(
     if let Some(summary) = selection_summary(selected) {
         bar = bar.push(sep().boxed());
         bar = bar.push(
-            button(text(summary).size(TS.body).color(text_c))
+            button(text(raw(summary)).size(TS.body).color(text_c))
                 .padding([1.0, SP.s])
                 .style(button::text)
                 .on_press(StatusBarRequest::OpenPropertiesForSelection)
@@ -149,7 +150,7 @@ pub fn view<'a>(
             format!("Saving {pending_git_commits}…")
         };
         bar = bar.push(sep().boxed());
-        bar = bar.push(text(label).size(TS.body).color(muted_c).boxed());
+        bar = bar.push(text(raw(label)).size(TS.body).color(muted_c).boxed());
     }
     // A running Altium import is shown until it finishes; clicking it
     // cancels (#1123).
@@ -157,7 +158,7 @@ pub fn view<'a>(
         bar = bar.push(sep().boxed());
         bar = bar.push(
             button(
-                text(format!("Importing {name}… ✕"))
+                text(raw(format!("Importing {name}… ✕")))
                     .size(TS.body)
                     .color(text_c),
             )
@@ -172,7 +173,7 @@ pub fn view<'a>(
         .push(lbl(format!("{zoom:.0}%")).boxed())
         .push(sep().boxed())
         .push(
-            button(text(format!("{unit}")).size(TS.body).color(text_c))
+            button(text(raw(format!("{unit}"))).size(TS.body).color(text_c))
                 .padding([1.0, SP.s])
                 .style(button::text)
                 .on_press(StatusBarRequest::CycleUnit)
@@ -180,7 +181,7 @@ pub fn view<'a>(
         )
         .push(sep().boxed())
         .push(
-            button(text("Panels").size(TS.body).color(text_c))
+            button(text(raw("Panels")).size(TS.body).color(text_c))
                 .padding([1, 6])
                 .style(button::text)
                 .on_press(StatusBarRequest::TogglePanelList)

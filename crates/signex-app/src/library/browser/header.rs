@@ -18,7 +18,7 @@ pub(super) fn view_header<'a>(
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     let library_for_search = lib_pb.clone();
-    let search = text_input("Search…", &browser.search)
+    let search = text_input(raw("Search…"), &browser.search)
         .on_input(move |s| LibraryMessage::BrowserSearchChanged {
             library_path: library_for_search.clone(),
             value: s,
@@ -43,7 +43,7 @@ pub(super) fn view_header<'a>(
             filter: f,
         },
     )
-    .placeholder("Lifecycle")
+    .placeholder_label(raw("Lifecycle"))
     .padding(SP.s)
     .text_size(BROWSER_TEXT_SIZE);
 

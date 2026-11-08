@@ -1,9 +1,8 @@
 //! Dock rendering: region tab strips, collapsed rails, and floating panels.
 
-use iced::widget::{
-    Column, Space, Widget, button, canvas, column, container, mouse_area, row, svg, text,
-};
+use iced::widget::{Column, Space, Widget, canvas, column, container, mouse_area, row, svg};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
+use signex_widgets::{button, raw, text};
 
 use super::types::*;
 use crate::icons;
@@ -37,7 +36,7 @@ impl DockArea {
         };
 
         if region.panels.is_empty() {
-            return container(text("")).width(0).boxed();
+            return container(text(raw(""))).width(0).boxed();
         }
 
         if region.collapsed {
@@ -55,7 +54,7 @@ impl DockArea {
 
         // Left scroll arrow (only when tabs are scrolled)
         if has_overflow {
-            let arrow = button(text("<").size(TS.caption))
+            let arrow = button(text(raw("<")).size(TS.caption))
                 .padding([SP.s, SP.s])
                 .style(button::text);
             tab_row = tab_row.push(
@@ -134,7 +133,7 @@ impl DockArea {
             // happens any time the panel column is in its default
             // ~240 px width with several panels in the strip.
             let inner = container(
-                text(label)
+                text(raw(label))
                     .size(TS.body)
                     .color(text_c)
                     .wrapping(iced::widget::text::Wrapping::None),
@@ -155,7 +154,7 @@ impl DockArea {
 
         // Right scroll arrow (only when more tabs are hidden)
         if has_overflow {
-            let arrow = button(text(">").size(TS.caption))
+            let arrow = button(text(raw(">")).size(TS.caption))
                 .padding([SP.s, SP.s])
                 .style(button::text);
             tab_row = tab_row.push(
@@ -194,7 +193,7 @@ impl DockArea {
             .unwrap_or_default();
         let title_bar = row![
             container(
-                text(active_title)
+                text(raw(active_title))
                     .size(TS.body)
                     .color(styles::ti(ctx.tokens.text)),
             )
@@ -245,7 +244,7 @@ impl DockArea {
                         .boxed(),
                 }
             } else {
-                text("").boxed()
+                text(raw("")).boxed()
             };
 
         // Altium parity: title + collapse/close on top, tabs on the
@@ -349,7 +348,7 @@ impl DockArea {
                 };
 
                 rail = rail.push(
-                    button(text(label).size(TS.caption).color(text_c))
+                    button(text(raw(label)).size(TS.caption).color(text_c))
                         .padding([SP.xs, SP.m])
                         .on_press(DockMessage::SelectTab(position, i))
                         .style(button::text)
@@ -381,9 +380,13 @@ impl DockArea {
         // Title bar with drag handle + close button
         let title_bar_content = container(
             row![
-                container(text(label).size(TS.body).color(styles::ti(ctx.tokens.text)))
-                    .padding([SP.s, SP.m])
-                    .width(Length::Fill),
+                container(
+                    text(raw(label))
+                        .size(TS.body)
+                        .color(styles::ti(ctx.tokens.text))
+                )
+                .padding([SP.s, SP.m])
+                .width(Length::Fill),
                 button(svg_icon(icons::icon_close(ctx.theme_id)))
                     .padding([SP.s, SP.s])
                     .style(button::text)

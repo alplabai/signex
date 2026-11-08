@@ -1,7 +1,8 @@
 //! Silk graphic geometry rows of the footprint Properties panel.
 
-use iced::widget::{Column, container, text};
+use iced::widget::{Column, container};
 use iced::{Color, Element, Length, Widget};
+use signex_widgets::{raw, text};
 
 use super::super::{PanelMsg, SilkKindGeometry};
 use super::pad::pad_input_row;
@@ -102,7 +103,7 @@ pub(super) fn silk_geometry_rows<'a>(
         SilkKindGeometry::Other => {
             col = col.push(
                 container(
-                    text("Use Sketch mode for parametric editing")
+                    text(raw("Use Sketch mode for parametric editing"))
                         .size(TS.caption)
                         .color(muted),
                 )
