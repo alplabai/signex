@@ -548,10 +548,7 @@ fn a_new_net_never_takes_a_number_copper_uses() {
         .apply(&mut pcb);
     let pad = pad_net(&pcb, "U1", "1").expect("assigned");
     assert_ne!(pad.number, 1);
-    assert!(pcb.nets.contains(&NetDef {
-        number: 1,
-        name: "OLD".to_string()
-    }));
+    assert!(pcb.nets.iter().any(|n| n.number == 1 && n.name == "OLD"));
 }
 
 #[test]
