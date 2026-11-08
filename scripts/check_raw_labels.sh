@@ -11,7 +11,7 @@
 # headroom for new raw labels. Two migration PRs that both lower the number
 # conflict on the baseline file; the second regenerates it after its merge.
 #
-# A second check (scripts/raw_label_macro_literals.pl) fails on a bare string
+# A second check (macro_literals below, in awk) fails on a bare string
 # literal that is an element of `row![…]`, `column![…]` or `stack![…]`: `&str`
 # is a widget in this iced fork, so such a literal skips `text(raw(…))`.
 # ast-grep rules cover the rest (no-raw-literal-widget, no-raw-alias).
@@ -66,10 +66,70 @@ hits() {
 
 count() { hits | grep -c . || true; }
 
+# POSIX awk (BSD and GNU): prints `file:line` for each bare string literal that
+# is an element of row![…], column![…] or stack![…]. It walks the brackets after
+# the macro name, splits the top-level elements on commas, and flags an element
+# that is nothing but one string literal. Strings holding a bracket or comma,
+# char literals and `//` comments are skipped; the `#[cfg(test)] mod` tail of a
+# file is ignored; nested macros are checked too.
+MACRO_AWK='
+function check(from, to,   body, lead, nl) {
+  body = substr(s, from, to - from)
+  gsub(/\/\/[^\n]*/, "", body)
+  if (body !~ /^[ \t\n]*"([^"\\]|\\.)*"[ \t\n]*$/) return
+  match(body, /^[ \t\n]*/)
+  lead = substr(body, 1, RLENGTH)
+  nl = gsub(/\n/, "\n", lead)
+  t = substr(s, 1, from - 1)
+  print FILENAME ":" (gsub(/\n/, "\n", t) + nl + 1)
+}
+{
+  if (stop) next
+  if (pend && $0 ~ /^[ \t]*mod[ \t]/) { stop = 1; next }
+  pend = ($0 ~ /^[ \t]*#\[cfg\(test\)\]/)
+  s = s $0 "\n"
+}
+END {
+  n = length(s); p = 1
+  while (p <= n) {
+    if (!match(substr(s, p), /(row|column|stack)!\[/)) break
+    st = p + RSTART - 1; i = st + RLENGTH; p = i
+    if (st > 1 && substr(s, st - 1, 1) ~ /[A-Za-z0-9_]/) continue
+    depth = 0; from = i
+    while (i <= n) {
+      c = substr(s, i, 1)
+      if (c == "\"") {
+        i++
+        while (i <= n) {
+          d = substr(s, i, 1)
+          if (d == "\\") { i += 2; continue }
+          if (d == "\"") break
+          i++
+        }
+      } else if (c == "\047") {
+        if (match(substr(s, i, 12), /^\047(\\[^\047]*|[^\\\047])\047/)) i += RLENGTH - 1
+      } else if (c == "/" && substr(s, i + 1, 1) == "/") {
+        while (i <= n && substr(s, i, 1) != "\n") i++
+        continue
+      } else if (c ~ /[[({]/) {
+        depth++
+      } else if (c ~ /[)}]/) {
+        depth--
+      } else if (c == "]") {
+        if (depth == 0) { check(from, i); break }
+        depth--
+      } else if (c == "," && depth == 0) {
+        check(from, i); from = i + 1
+      }
+      i++
+    }
+  }
+}'
+
 # `file:line` of every bare string literal element in row!/column!/stack!.
 macro_literals() {
   list_files | { grep -vE '/(tests|[a-z_]*_tests)\.rs$' || true; } \
-    | xargs perl "$(cd "$(dirname "$0")" && pwd)/raw_label_macro_literals.pl" | tr -d '\r'
+    | xargs -n 1 awk "$MACRO_AWK" | tr -d '\r'
 }
 
 if [[ "${1:-}" == "--generate" ]]; then
