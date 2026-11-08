@@ -35,13 +35,18 @@ pub(crate) fn format_value<M: MemoizerKind>(value: &FluentValue, memoizer: &M) -
     let FluentValue::Number(number) = value else {
         return None;
     };
-    let decimal = Decimal::try_from_f64(number.value, FloatPrecision::RoundTrip).ok()?;
     memoizer
         .with_try_get_threadsafe::<BundleLocale, _, _>((), |locale| {
-            let formatter =
-                DecimalFormatter::try_new((&locale.0).into(), Default::default()).ok()?;
-            Some(formatter.format(&decimal).to_string())
+            format_decimal(&locale.0, number.value)
         })
         .ok()
         .flatten()
+}
+
+/// `value` in `locale`'s digits, grouping and decimal separator; `None`
+/// for NaN and infinities.
+pub(crate) fn format_decimal(locale: &Locale, value: f64) -> Option<String> {
+    let decimal = Decimal::try_from_f64(value, FloatPrecision::RoundTrip).ok()?;
+    let formatter = DecimalFormatter::try_new(locale.into(), Default::default()).ok()?;
+    Some(formatter.format(&decimal).to_string())
 }

@@ -12,11 +12,14 @@
 
 mod bundle;
 mod catalog;
+mod format;
 mod i18n;
 mod locale;
 mod numbers;
+mod text;
 mod types;
 
+pub use format::{DateLength, ListKind};
 pub use i18n::{I18n, LanguageOption};
 pub use locale::LanguagePref;
 pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
@@ -58,5 +61,7 @@ macro_rules! t {
 
 #[cfg(test)]
 mod consistency_tests;
+#[cfg(test)]
+mod format_tests;
 #[cfg(test)]
 mod tests;

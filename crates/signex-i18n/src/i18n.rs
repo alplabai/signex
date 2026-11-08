@@ -3,7 +3,10 @@
 
 use std::collections::HashSet;
 use std::fmt;
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::sync::{LazyLock, Mutex, OnceLock, PoisonError};
+
+use icu_collator::CollatorBorrowed;
+use icu_locale_core::Locale;
 
 use crate::bundle::{self, Bundle};
 use crate::catalog::{self, EN_US};
@@ -38,6 +41,11 @@ pub struct I18n {
     // What was already logged, so a message rendered every frame is
     // reported once.
     reported: Mutex<HashSet<(Problem, &'static str)>>,
+    // Where numbers, dates, lists, case and order follow: the language asked
+    // for, which stays itself when the messages fall back to en-US.
+    format_locale: Locale,
+    pub(crate) bad_zones: Mutex<HashSet<String>>,
+    pub(crate) collator: OnceLock<Option<CollatorBorrowed<'static>>>,
     #[cfg(test)]
     emitted: std::sync::atomic::AtomicUsize,
 }
@@ -81,6 +89,10 @@ impl I18n {
         if let Some(first) = requested.first().filter(|l| l.to_string() != tag) {
             log::debug!("No {first} messages; using {tag}");
         }
+        let format_locale = requested
+            .first()
+            .and_then(|l| l.to_string().parse().ok())
+            .unwrap_or(icu_locale_core::locale!("en-US"));
         let primary = bundle::build(tag);
         let fallback = bundle::build(EN_US);
         let options = language_options(&primary, &fallback);
@@ -92,6 +104,9 @@ impl I18n {
             fallback,
             options,
             reported: Mutex::default(),
+            format_locale,
+            bad_zones: Mutex::default(),
+            collator: OnceLock::new(),
             #[cfg(test)]
             emitted: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -110,6 +125,13 @@ impl I18n {
     /// The BCP 47 tag of the locale in force.
     pub fn locale(&self) -> &'static str {
         self.locale
+    }
+
+    /// The locale numbers, dates, lists, case and order follow: the first
+    /// language requested (the OS list under System default), even when this
+    /// build has no messages in it; `en-US` when nothing parses.
+    pub fn format_locale(&self) -> &Locale {
+        &self.format_locale
     }
 
     /// A saved language this build no longer has.
