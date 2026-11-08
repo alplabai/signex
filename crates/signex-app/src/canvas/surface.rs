@@ -265,7 +265,7 @@ impl Widget<Message, Theme, Renderer> for SchematicSurface<'_> {
 /// Draw `frame` in one clipped layer: the content layer under its translation,
 /// every other layer as it is. One layer for all of them keeps their order
 /// against each other (within a renderer layer, text draws above every mesh).
-fn draw_layers(renderer: &mut Renderer, bounds: Rectangle, frame: SurfaceLayers) {
+pub(super) fn draw_layers(renderer: &mut Renderer, bounds: Rectangle, frame: SurfaceLayers) {
     let SurfaceLayers {
         layers,
         content_shift,

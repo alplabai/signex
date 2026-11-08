@@ -370,7 +370,7 @@ fn frame_with(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet, look: &Look) 
         Layer::Backdrop => fill(gpu_mount::SchematicBackdrop::new(&slot, prefs)),
         Layer::Overlay => fill(SchematicCanvas::new(&slot, prefs).gpu_overlay()),
         Layer::Shaders => shaders(&slot, prefs),
-        Layer::StaticTexts => fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
+        Layer::StaticTexts => gpu_text_layer::SchematicStaticTextLayer::new(&slot, prefs).boxed(),
         Layer::Cpu => fill(SchematicCanvas::new(&slot, prefs)),
     };
     let element = iced::widget::container(element)
@@ -800,7 +800,7 @@ fn rotated_texts_sit_with_their_layer_in_a_drag() {
     publish_float_drag(&slot, prefs, 130.0);
     let texts = render(
         &mut gpu,
-        fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
+        gpu_text_layer::SchematicStaticTextLayer::new(&slot, prefs).boxed(),
     );
     let overlay = render(
         &mut gpu,
@@ -821,7 +821,7 @@ fn rotated_texts_sit_with_their_layer_in_a_drag() {
     publish_float_drag(&slot, prefs, 130.0);
     let texts = render(
         &mut gpu,
-        fill(gpu_drag::SchematicStaticTextLayer::new(&slot, prefs)),
+        gpu_text_layer::SchematicStaticTextLayer::new(&slot, prefs).boxed(),
     );
     let overlay = render(
         &mut gpu,
