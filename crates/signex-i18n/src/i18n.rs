@@ -3,7 +3,10 @@
 
 use std::collections::HashSet;
 use std::fmt;
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::sync::{LazyLock, Mutex, OnceLock, PoisonError};
+
+use icu_collator::CollatorBorrowed;
+use icu_locale_core::Locale;
 
 use crate::bundle::{self, Bundle};
 use crate::catalog::{self, EN_US};
@@ -38,6 +41,12 @@ pub struct I18n {
     // What was already logged, so a message rendered every frame is
     // reported once.
     reported: Mutex<HashSet<(Problem, &'static str)>>,
+    // Where numbers, dates, lists and order follow: the language asked
+    // for, which stays itself when the messages fall back to en-US.
+    format_locale: Locale,
+    // Formatter failures already logged (see `warn_format_once`).
+    pub(crate) format_warned: Mutex<HashSet<&'static str>>,
+    pub(crate) collator: OnceLock<Option<CollatorBorrowed<'static>>>,
     #[cfg(test)]
     emitted: std::sync::atomic::AtomicUsize,
 }
@@ -70,7 +79,8 @@ impl I18n {
     /// of an available language (`en-xa`, `en-Latn-XA`) is not reported
     /// either. `pref` stays as chosen, so saving Preferences does not erase it.
     pub fn new(pref: &LanguagePref) -> Self {
-        let requested = locale::requested(pref);
+        let tags = locale::requested_tags(pref);
+        let requested = locale::requested(&tags);
         let tag = locale::negotiate(&requested);
         let dropped = match pref {
             LanguagePref::Locale(saved) if locale::is_dropped(&requested, tag) => {
@@ -81,6 +91,7 @@ impl I18n {
         if let Some(first) = requested.first().filter(|l| l.to_string() != tag) {
             log::debug!("No {first} messages; using {tag}");
         }
+        let format_locale = locale::format_locale(&tags, tag);
         let primary = bundle::build(tag);
         let fallback = bundle::build(EN_US);
         let options = language_options(&primary, &fallback);
@@ -92,6 +103,9 @@ impl I18n {
             fallback,
             options,
             reported: Mutex::default(),
+            format_locale,
+            format_warned: Mutex::default(),
+            collator: OnceLock::new(),
             #[cfg(test)]
             emitted: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -110,6 +124,16 @@ impl I18n {
     /// The BCP 47 tag of the locale in force.
     pub fn locale(&self) -> &'static str {
         self.locale
+    }
+
+    /// The locale numbers, dates, lists and order follow (case operations
+    /// follow [`Self::locale`] instead): the first
+    /// language requested (the OS list under System default) with its `-u-`
+    /// extensions (`th-TH-u-ca-buddhist`, `en-US-u-hc-h23`), even when this
+    /// build has no messages in it. A tag that does not parse, or a language
+    /// ICU has no data for (`und`, `xx-YY`, `tlh`), uses the message locale.
+    pub fn format_locale(&self) -> &Locale {
+        &self.format_locale
     }
 
     /// A saved language this build no longer has.
