@@ -5537,6 +5537,7 @@ dependencies = [
 name = "signex-renderer"
 version = "26.11.0-rc.1"
 dependencies = [
+ "pcb-geom",
  "regex",
  "serde",
  "serde_json",
