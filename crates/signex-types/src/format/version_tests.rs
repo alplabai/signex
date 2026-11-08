@@ -66,11 +66,13 @@ fn pad(uuid: &str, number: &str) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        net_locked: false,
     }
 }
 
 fn footprint(uuid: &str, reference: &str, pad: Pad) -> Footprint {
     Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(uuid).unwrap(),
@@ -105,11 +107,13 @@ fn snxpcb_shared_designator_keeps_pads_apart_and_layer_types_round_trip() {
             id: 0,
             name: "Top".into(),
             layer_type: "signal".into(),
+            display_name: String::new(),
         },
         LayerDef {
             id: 1,
             name: "Core".into(),
             layer_type: "dielectric".into(),
+            display_name: String::new(),
         },
     ];
     let text = SnxPcb::new(board).write_string().unwrap();
@@ -147,11 +151,13 @@ fn snxpcb_non_contiguous_layer_ids_round_trip() {
             id: 0,
             name: "Top".into(),
             layer_type: String::new(),
+            display_name: String::new(),
         },
         LayerDef {
             id: 31,
             name: "Bottom".into(),
             layer_type: "signal".into(),
+            display_name: String::new(),
         },
     ];
     let text = SnxPcb::new(board).write_string().unwrap();
