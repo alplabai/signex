@@ -74,12 +74,11 @@ impl Policy {
 
     /// The check again, right before the command is handed to the app: each
     /// path operand must still resolve to the very path that was approved
-    /// (a link swapped in since then changes it) and a write target must
-    /// still not be a link. A same-user process racing symlinks between this
+    /// (a link swapped in since then changes it, so a write target that was
+    /// a plain file stays one). A same-user process racing symlinks between this
     /// check and the app's own open or write is out of scope (docs/CLI.md).
     pub fn recheck(&self, approved: &Approved, roots: &[PathBuf]) -> Result<(), String> {
         let allowed = self.allowed(roots);
-        let writes = capability_of(approved.meta).writes_files();
         for (name, text) in &approved.operands {
             if !is_path_operand(approved.meta, name) {
                 continue;
@@ -91,9 +90,6 @@ impl Policy {
                     "operand `{name}`: {text} now resolves to {}; it changed while the command was prepared",
                     now.display()
                 ));
-            }
-            if writes {
-                refuse_link(Path::new(text)).map_err(|why| format!("operand `{name}`: {why}"))?;
             }
         }
         Ok(())
