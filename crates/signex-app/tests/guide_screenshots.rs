@@ -513,19 +513,15 @@ fn render_readme_screenshots() {
         world_x: 88.9,
         world_y: 71.12,
     }));
-    for (theme, name) in [
-        // The retired-theme shots (catppuccin-, github-dark-, solarized-theme.png)
-        // are no longer rendered; see docs/DECISIONS.md, "Graphite-only themes".
-        (ThemeId::GraphiteLight, "editor.png"),
-    ] {
-        // Pick the theme the way Preferences does: draft it, then save.
-        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
-            PrefMsg::DraftTheme(theme),
-        )));
-        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save)));
-        let _ = draw(&mut renderer, &app);
-        shoot(&mut renderer, &app, name);
-    }
+    // The retired-theme shots (catppuccin-, github-dark-, solarized-theme.png)
+    // are no longer rendered; see docs/DECISIONS.md, "Graphite-only themes".
+    // Pick the theme the way Preferences does: draft it, then save.
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftTheme(ThemeId::GraphiteLight),
+    )));
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save)));
+    let _ = draw(&mut renderer, &app);
+    shoot(&mut renderer, &app, "editor.png");
 }
 
 #[test]
