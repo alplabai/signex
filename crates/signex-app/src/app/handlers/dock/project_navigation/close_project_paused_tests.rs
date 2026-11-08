@@ -39,6 +39,7 @@ fn closing_a_project_forgets_the_heads_of_its_own_files_and_no_others() {
     use signex_types::document_id::DocumentId;
     let dir = tempfile::tempdir().expect("tempdir");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    app.document_state.projects[0].data.schematic_root = Some("Root.snxsch".into());
     let id = app.document_state.projects[0].id;
     let own: Vec<_> = crate::app::document_ids::referenced_files(&app.document_state.projects[0])
         .into_iter()
