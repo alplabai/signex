@@ -64,6 +64,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("rotation", OperandKind::Angle),
     ("text", OperandKind::Text),
     ("net_name", OperandKind::Text),
+    ("class", OperandKind::Text),
     ("lib_id", OperandKind::Text),
     ("path", OperandKind::Path),
     ("overwrite", OperandKind::Bool),
@@ -122,6 +123,14 @@ pub const SAVE_PATH: &[Operand] = &[
 pub const COLOR_NET: &[Operand] = &[
     required("at", OperandKind::Point),
     required("color", OperandKind::Color),
+    optional("path", OperandKind::Path),
+];
+/// Put a net, by its name in the project netlist, in a class of the project
+/// the open sheet (or the one at `path`) belongs to; no `class` takes it out
+/// of its listed class.
+pub const ASSIGN_NET_CLASS: &[Operand] = &[
+    required("net_name", OperandKind::Text),
+    optional("class", OperandKind::Text),
     optional("path", OperandKind::Path),
 ];
 /// An open document to act on, instead of every one.

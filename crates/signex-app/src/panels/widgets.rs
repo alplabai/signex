@@ -139,6 +139,8 @@ pub fn prop_kv_row<'a>(
 }
 
 pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
+    // user-visible: migrate to the #2063 casemap
+    // ast-grep-ignore: no-case-in-view
     text(title.to_uppercase())
         .size(TS.caption)
         .color(theme_ext::text_secondary(tokens))

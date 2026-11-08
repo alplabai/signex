@@ -160,6 +160,8 @@ impl CalculatorControl {
     pub fn target_value(&self) -> Result<f64, &'static str> {
         let state = self.active_state();
         let normalized = state.target_input.trim().replace(',', ".");
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         let value = match normalized.to_ascii_lowercase().as_str() {
             "∞" | "inf" | "infinity" => f64::INFINITY,
             _ => normalized

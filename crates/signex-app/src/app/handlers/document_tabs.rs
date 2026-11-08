@@ -229,7 +229,6 @@ impl Signex {
         // edits. Drop the engine only when the file is clean.
         self.document_state.note_documents_changed();
         if !self.document_state.is_document_dirty(&closing_path) {
-            self.forget_net_class_picks_on(&closing_path);
             self.document_state.remove_engine(&closing_path);
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {

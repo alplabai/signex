@@ -87,13 +87,12 @@ impl Signex {
         }
     }
 
-    /// `(can_undo, can_redo)` of the sheet at `path`: net-class picks and the
-    /// engine (net colours are engine steps).
+    /// `(can_undo, can_redo)` of the sheet at `path`: its one timeline, whose
+    /// steps are edits, net colours and net-class picks.
     fn sheet_history_available(&self, path: &std::path::Path) -> (bool, bool) {
-        let engine = self.document_state.engines.get(path);
         (
-            self.has_net_class_pick(path, true) || engine.is_some_and(|e| e.can_undo()),
-            self.has_net_class_pick(path, false) || engine.is_some_and(|e| e.can_redo()),
+            self.sheet_has_step(path, true),
+            self.sheet_has_step(path, false),
         )
     }
 

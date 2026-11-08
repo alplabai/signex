@@ -361,7 +361,6 @@ impl Signex {
         // The tab closed mid-save and parked the engine because it was
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
-            self.forget_net_class_picks_on(path);
             self.document_state.remove_engine(path);
             self.document_state.document_saves.forget_disk_records(path);
         }
@@ -437,9 +436,6 @@ impl Signex {
             session.finish_save_as(to.clone(), revision);
         });
         if renamed.is_some() {
-            // The net-class pick history follows the re-pathed engine; dirty
-            // and disk records are Save As's own.
-            self.rekey_path_keyed_records(from, &to);
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
             return self.follow_save_as_in_project(owner, from, &to);
         }

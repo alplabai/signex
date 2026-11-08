@@ -56,11 +56,11 @@ impl Signex {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
                     signex_types::schematic::LabelType::Global,
-                    "bidirectional".to_string(),
+                    crate::app::handlers::canvas::GLOBAL_PORT_SHAPE.to_string(),
                 ));
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
-                        shape: "bidirectional".to_string(),
+                        shape: crate::app::handlers::canvas::GLOBAL_PORT_SHAPE.to_string(),
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
                         ..signex_types::schematic::Label::new(

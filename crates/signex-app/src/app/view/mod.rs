@@ -223,6 +223,7 @@ impl Signex {
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries(),
             open_panels: self.open_panels(),
+            i18n: std::sync::Arc::clone(&ui.i18n),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
@@ -812,7 +813,7 @@ mod chrome_geometry_tests {
     #[test]
     fn search_bar_stays_centred_and_clamped() {
         // Windows-style: nothing leading, 138 px of controls trailing.
-        let in_window = crate::menu_bar::approx_menu_bar_width();
+        let in_window = crate::menu_bar::approx_menu_bar_width(&signex_i18n::I18n::en_us());
         search_bar_invariants(0.0, 138.0, in_window);
         // Native macOS lights: room leading, nothing trailing.
         search_bar_invariants(78.0, 0.0, in_window);
