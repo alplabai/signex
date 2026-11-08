@@ -54,3 +54,34 @@ fn each_instance_connects_through_the_pins_of_its_own_version() {
     assert_eq!(terminals, [("R1", "1"), ("R2", "A")]);
     assert_eq!(netlist.nets.len(), 2);
 }
+
+/// A symbol that only changes version (same `lib_id`, same position, the
+/// body table untouched) has other pin tips: the incremental derive must
+/// notice, not reuse the old tips.
+#[test]
+fn a_body_ref_only_change_refreshes_the_pin_tips() {
+    let mut before = empty_sheet();
+    let v1 = before
+        .embed_body(version(vec![lib_pin(
+            "1",
+            pt(0.0, 0.0),
+            PinDirection::Passive,
+        )]))
+        .unwrap();
+    let v2 = before
+        .embed_body(version(vec![lib_pin(
+            "1",
+            pt(5.0, 0.0),
+            PinDirection::Passive,
+        )]))
+        .unwrap();
+    before.symbols.push(placed_with(&v1, "R1", pt(0.0, 0.0)));
+    before.wires.push(wire(pt(5.0, 0.0), pt(10.0, 0.0)));
+    let mut cand = before.clone();
+    cand.symbols[0].body_ref = v2;
+
+    let base = crate::NetBase::new(&before);
+    assert!(base.derives_incrementally(&cand));
+    assert_eq!(base.derive(&cand), crate::net_signatures(&cand));
+    assert_ne!(base.derive(&cand), base.derive(&before));
+}
