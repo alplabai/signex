@@ -292,6 +292,8 @@ pub enum UiMsg {
     },
     /// Switch the active colour theme and persist the preference.
     ThemeChanged(ThemeId),
+    /// Switch the UI language at runtime and persist it.
+    LanguageChanged(signex_i18n::LanguagePref),
     /// Cycle the display unit (mm / mil / inch).
     UnitCycled,
     /// Toggle grid visibility across every canvas.
