@@ -120,6 +120,7 @@ impl SchematicCanvas<'_> {
         // Layer 2: content, static layer then moving items on top
         match self.mode {
             ContentMode::Cpu => {
+                let _probe = crate::frame_probe::span("canvas.drag_content");
                 layers.extend(self.draw_drag_content(renderer, bounds, &drag_frame))
             }
             // The static layer's rotated and oversize texts have their own layer below the
@@ -135,12 +136,16 @@ impl SchematicCanvas<'_> {
         }
 
         // Layer 3: selection overlay
+        let selection_probe = crate::frame_probe::span("canvas.drag_selection");
         if let Some(selection) = self.draw_selection(renderer, bounds, moving, drag_offset) {
             layers.push(selection);
         }
+        drop(selection_probe);
 
         // Layer 4: overlay (cursor HUD, previews, drag guides)
+        let overlay_probe = crate::frame_probe::span("canvas.drag_overlay");
         layers.push(self.draw_overlay(state, renderer, bounds, cursor));
+        drop(overlay_probe);
 
         SurfaceLayers {
             layers,

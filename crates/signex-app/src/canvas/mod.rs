@@ -925,6 +925,8 @@ mod gesture;
 #[cfg(test)]
 mod active_bar_hit;
 #[cfg(test)]
+mod app_loop_bench_tests;
+#[cfg(test)]
 mod background_reuse_tests;
 #[cfg(test)]
 mod draw_order_tests;
@@ -944,8 +946,7 @@ mod pan_bench_tests;
 mod pan_reuse_pixel_tests;
 #[cfg(test)]
 mod pan_reuse_tests;
-// `libc` (peak RSS) is a unix-only dependency.
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod render_bench_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
