@@ -283,8 +283,8 @@ impl Signex {
                 match crate::keymap::export_custom_profile(&profile) {
                     Ok(source) => {
                         let filename = format!("{}.toml", profile.id);
-                        // Same reset as the theme export: the status line
-                        // must describe this attempt, not the last one.
+                        // The status line must describe this attempt, not
+                        // the last one.
                         self.ui_state.preferences_keymap_status.clear();
                         let picker = self.ui_state.io.picker.clone();
                         return Task::future(async move {
@@ -301,9 +301,9 @@ impl Signex {
                             // The serialization failure below already
                             // reported through `preferences_keymap_status`;
                             // the write failure was the half that vanished
-                            // (#533). Same `io::Result<()>` shape as the
-                            // theme export — see that arm for why there is
-                            // no short write to handle.
+                            // (#533). A whole-file write yields
+                            // `io::Result<()>`, so there is no short write
+                            // to handle.
                             let outcome = match tokio::fs::write(&path, source.as_bytes()).await {
                                 Ok(()) => Ok(path),
                                 Err(error) => {

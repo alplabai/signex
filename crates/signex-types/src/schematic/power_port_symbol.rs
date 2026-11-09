@@ -217,7 +217,7 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
 }
 
 /// Gap between the far edge of a power port's head and its value text, mm.
-const VALUE_GAP_MM: f64 = 0.254;
+pub(super) const VALUE_GAP_MM: f64 = 0.254;
 
 /// How far the head of `style` reaches past the connection point, mm.
 fn head_reach_mm(style: PowerPortStyle) -> f64 {
@@ -244,7 +244,7 @@ pub fn power_port_value_field(lib_id: &str, at: Point) -> TextProp {
 /// How far the entry `lib` reaches past the connection point along its stem,
 /// mm, read from its own pin and graphics. An entry without geometry reaches
 /// as far as the built-in head of its style.
-fn lib_head_reach_mm(lib: &LibSymbol, style: PowerPortStyle) -> f64 {
+pub(super) fn lib_head_reach_mm(lib: &LibSymbol, style: PowerPortStyle) -> f64 {
     // Library space is Y-up; the grounds hang to negative y.
     let dir = if style.hangs_down() { -1.0 } else { 1.0 };
     let mut reach: f64 = 0.0;

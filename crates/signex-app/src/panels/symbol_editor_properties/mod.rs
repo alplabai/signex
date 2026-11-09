@@ -15,10 +15,13 @@ use super::{
     GraphicKindSummary, NumericDraft, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection,
 };
 use crate::styles::{Spacing, TypeScale};
+use signex_types::theme::ThemeTokens;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+use super::form_look;
 
 mod graphic;
 mod pin;
@@ -32,6 +35,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
@@ -49,17 +53,15 @@ pub(super) fn view_symbol_editor_properties<'a>(
             GraphicKindSummary::Polygon { .. } => "Graphic — Polygon",
         },
     };
-    col = col.push(
-        container(text(raw(header_label)).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(super::thin_sep(border_c));
+    // The symbol-level form opens on its own "Symbol" section label, so the
+    // generic header would only repeat it.
+    if !matches!(sym.selected, SymbolEditorSelection::None) {
+        col = col.push(section_title(header_label, tokens));
+    }
 
     match &sym.selected {
         SymbolEditorSelection::None => {
-            col = symbol::view_symbol_selection(col, sym, muted, primary, border_c);
+            col = symbol::view_symbol_selection(col, sym, muted, primary, border_c, tokens);
         }
         SymbolEditorSelection::Pin(pin) => {
             col = pin::view_pin_selection(col, pin, draft, muted, primary, border_c);
@@ -112,7 +114,6 @@ pub(super) fn view_symbol_editor_properties<'a>(
         }
     }
 
-    col = col.push(super::thin_sep(border_c));
     col = col.push(
         container(
             text(raw("Click on the canvas to select."))
@@ -123,7 +124,10 @@ pub(super) fn view_symbol_editor_properties<'a>(
         .boxed(),
     );
 
-    scrollable(col).width(Length::Fill).boxed()
+    scrollable(col)
+        .width(Length::Fill)
+        .style(form_look::scrollbar_style)
+        .boxed()
 }
 
 /// Read-only label + value Properties row shared by the symbol-level
@@ -150,4 +154,9 @@ fn prop_row_static<'a>(
     .padding([3.0, SP.m])
     .width(Length::Fill)
     .boxed()
+}
+
+/// A section heading: the uppercase label.
+fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+    form_look::section_label(title, tokens)
 }

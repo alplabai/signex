@@ -355,6 +355,7 @@ impl Signex {
                 add_new_entries(tid, target)
             }
         };
-        signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+        super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
+            .element
     }
 }

@@ -18,16 +18,22 @@ impl SchematicCanvas<'_> {
         None
     }
 
-    /// Mouse-wheel zoom about the cursor. With "Two-finger scroll pans" on, a
-    /// pixel-delta (trackpad) scroll pans instead, unless Ctrl/Cmd is held.
+    /// Mouse-wheel zoom about the cursor, or a pan: see [`wheel_intent`] for
+    /// how "Mouse wheel" and "Two-finger scroll pans" steer it.
     pub(in crate::canvas) fn update_wheel_scrolled(
         &self,
         delta: &mouse::ScrollDelta,
-        zoom_modifier: bool,
+        keys: WheelKeys,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        let intent = Camera::scroll_intent(delta, 50.0, self.prefs.trackpad_pan, zoom_modifier);
+        let intent = wheel_intent(
+            delta,
+            50.0,
+            self.prefs.trackpad_pan,
+            self.prefs.wheel_mode,
+            keys,
+        );
 
         if let Some(cursor_pos) = cursor.position_in(bounds) {
             let changed =

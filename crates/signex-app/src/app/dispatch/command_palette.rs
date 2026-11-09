@@ -102,6 +102,7 @@ impl Signex {
             .take(MAX_RESULTS)
             .map(|&(catalog_idx, _)| catalog[catalog_idx].clone())
             .collect();
+        crate::app::command_palette::group_for_display(&mut palette.results);
     }
 
     /// Re-rank the open palette when the symbols or files behind its rows

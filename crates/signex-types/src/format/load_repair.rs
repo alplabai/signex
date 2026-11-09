@@ -65,6 +65,12 @@ pub enum SheetLoadRepair {
         old: f64,
         new: f64,
     },
+    /// A wire's `color` cell is not a colour this build reads. The cell is
+    /// kept as it was and written back; the wire draws uncoloured.
+    WireColorUnreadable {
+        object: RepairedObject,
+        value: String,
+    },
     /// Two pins of one symbol shared an id; the later pin got a new one.
     PinUuidReminted {
         symbol: String,
@@ -130,6 +136,10 @@ impl SheetLoadRepair {
             }
             Self::TextSizeClamped { object, old, new } => format!(
                 "{} had text size {old} mm; clamped to {new} mm",
+                object.label()
+            ),
+            Self::WireColorUnreadable { object, value } => format!(
+                "{} has colour {value:?}, which is not #RRGGBB or #RRGGBBAA; drawn uncoloured, kept in the file",
                 object.label()
             ),
             Self::PinUuidReminted {

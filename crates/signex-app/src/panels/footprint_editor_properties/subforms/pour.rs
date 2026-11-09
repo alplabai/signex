@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, Widget, container, pick_list, row};
 use iced::{Color, Element, Length};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text, text_input};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
@@ -19,7 +20,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
     id: signex_sketch::id::SketchEntityId,
     muted: Color,
     primary: Color,
-    border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(pour) = fp.selected_pour.as_ref() else {
         return col;
@@ -43,9 +43,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                 text_input(raw("(none)"), net_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(crate::panels::footprint_editor_properties::fp_field_style(
-                        muted, primary, border_c
-                    ))
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(move |v| PanelMsg::FpEditorSetPourNet { id, value: v }),
             ]
             .spacing(6)
@@ -62,8 +60,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         signex_sketch::attr::PourFillType::ALL,
         |v: &signex_sketch::attr::PourFillType| v.to_string(),
     )
+    .graphite()
     .on_select(move |v| PanelMsg::FpEditorSetPourFillType { id, value: v })
-    .text_size(10)
     .padding([3.0, SP.m]);
     col = col.push(
         container(
@@ -93,9 +91,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                 text_input(raw("0"), pour.priority.to_string())
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(crate::panels::footprint_editor_properties::fp_field_style(
-                        muted, primary, border_c
-                    ))
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(move |v| PanelMsg::FpEditorSetPourPriority { id, value: v }),
             ]
             .spacing(6)

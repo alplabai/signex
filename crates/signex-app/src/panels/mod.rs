@@ -10,7 +10,6 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
-use std::sync::OnceLock;
 
 pub mod components_panel;
 mod element_properties;
@@ -27,9 +26,13 @@ mod context;
 mod drafts;
 mod drc;
 pub use drafts::PanelDrafts;
+mod empty_state;
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
+pub(crate) use empty_state::empty_state_card;
 mod erc_waivers;
 mod footprint_context;
+pub(crate) mod form_look;
+pub(crate) mod graphite;
 mod library;
 mod messages;
 mod multi_selection;
@@ -38,11 +41,15 @@ mod net_class_panel;
 mod numeric_draft;
 mod palette;
 mod paper;
+pub mod pcb_nets;
 mod projects;
+mod projects_graphite;
 mod properties;
+pub mod signal;
 mod status;
 mod symbol_context;
 mod widgets;
+mod wire_style_rows;
 
 #[cfg(test)]
 mod contrast_tests;
@@ -51,6 +58,9 @@ mod planned_tests;
 
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
+};
+pub use element_properties::{
+    FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView, FootprintCards,
 };
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
@@ -72,7 +82,7 @@ pub(super) use properties_parameters::{
     form_edit_row, form_font_link_row, form_grid_row, form_input_row, form_label, form_mm_edit_row,
     form_pick_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
     net_params_tabs, preplacement_justification_grid, props_tab_btn, section_hdr, seg_btn,
-    thin_sep, view_custom_selection_filters_section,
+    thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -90,8 +100,10 @@ pub use footprint_context::{
     OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
     SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use library::LibraryRowDetail;
-pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
+pub use library::{ComponentSheet, LibraryRowDetail};
+pub(super) use library::{
+    view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
+};
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
 pub use navigator::NavigatorModel;
@@ -104,8 +116,10 @@ pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
     paper_size_options,
 };
+pub use pcb_nets::PcbNetsSummary;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
+pub use projects_graphite::{ProjectsMsg, ProjectsView};
 #[cfg(test)]
 pub(crate) use properties::pre_placement_readout;
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
@@ -120,10 +134,11 @@ pub use symbol_context::{
     SymbolPinSummary,
 };
 pub(super) use widgets::{
-    collapsible_section, collapsible_section_header, form_edit_row_f64, is_section_collapsed,
-    part_tree_row, prop_kv_row, property_label, section_title, separator, shape_fill_row,
-    shape_icon_handle, view_stub,
+    LabelInk, collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
+    prop_kv_row, property_label, section_title, separator, shape_fill_row, shape_icon_handle,
+    view_stub,
 };
+pub use wire_style_rows::{WireColorPicker, wire_color_row, wire_width_row};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PanelKind {
@@ -134,7 +149,7 @@ pub enum PanelKind {
     Filter,
     Erc,
     Messages,
-    Signal,
+    SignexAi,
     Drc,
     LayerStack,
     NetClasses,
@@ -162,6 +177,14 @@ pub enum PanelKind {
     /// new tab (same `Open ▸ Footprint` flow). Visible whenever a
     /// Footprint editor tab is focused.
     FootprintLibrary,
+    /// Footprint editor layers grouped by board side, with eye toggles.
+    /// Visible whenever a Footprint editor tab is focused.
+    FootprintLayers,
+    /// Symbol editor pin table (number, name, type, part, visibility).
+    /// Visible whenever a Symbol editor tab is focused.
+    SymbolPins,
+    /// PCB editor net table: nets with pad counts and routed length.
+    PcbNets,
     /// VSCode-style per-file Git history. Right-dock surface that
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
@@ -180,7 +203,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::SchList,
     PanelKind::Erc,
     PanelKind::Messages,
-    PanelKind::Signal,
+    PanelKind::SignexAi,
     PanelKind::Drc,
     PanelKind::BomStudio,
     PanelKind::Favorites,
@@ -193,6 +216,9 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Wiki,
     PanelKind::SchLibrary,
     PanelKind::FootprintLibrary,
+    PanelKind::FootprintLayers,
+    PanelKind::SymbolPins,
+    PanelKind::PcbNets,
     PanelKind::History,
 ];
 
@@ -207,7 +233,7 @@ impl PanelKind {
                 | PanelKind::Erc
                 | PanelKind::SchFilter
                 | PanelKind::SchList
-                | PanelKind::Signal
+                | PanelKind::SignexAi
                 | PanelKind::Drc
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
@@ -230,7 +256,7 @@ impl PanelKind {
             PanelKind::Filter => "Filter",
             PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
-            PanelKind::Signal => "Signal",
+            PanelKind::SignexAi => "Signex AI",
             PanelKind::Drc => "DRC",
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::NetClasses => "Net Classes",
@@ -246,6 +272,9 @@ impl PanelKind {
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
+            PanelKind::FootprintLayers => "Layers",
+            PanelKind::SymbolPins => "Pins",
+            PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
         }
     }
@@ -263,10 +292,17 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
-        PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
+        PanelKind::Filter => empty_state_card(
+            &ctx.tokens,
+            "Selection Filter",
+            "All object types enabled",
+            None,
+        ),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
-        PanelKind::Signal => view_stub("Signex AI", "Pro feature — AI design review", ctx),
+        PanelKind::SignexAi => {
+            return signal::view(ctx);
+        }
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
@@ -286,6 +322,9 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),
         PanelKind::FootprintLibrary => view_footprint_library(ctx),
+        PanelKind::FootprintLayers => crate::library::editor::footprint::layers_panel::view(ctx),
+        PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
+        PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
     };
 

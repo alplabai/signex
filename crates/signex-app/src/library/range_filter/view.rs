@@ -1,6 +1,7 @@
 //! The range-filter bar both surfaces draw. Pure: it reads the model and
 //! turns interaction into [`RangeFilterMsg`], mapped by the caller.
 
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -68,6 +69,7 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
         let w = Rc::clone(&wrap);
         bar = bar.push(
             pick_list(None::<FilterColumn>, free, |c: &FilterColumn| c.to_string())
+                .graphite()
                 .on_select(move |c: FilterColumn| {
                     w(RangeFilterMsg::ColumnPicked {
                         key: c.key,
@@ -76,7 +78,6 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
                 })
                 .placeholder_label(raw("Add range filter…"))
                 .padding(SP.s)
-                .text_size(TS.body)
                 .boxed(),
         );
     }
@@ -100,6 +101,7 @@ fn filter_row<'a, M: Clone + 'a>(
         pick_list(Some(draft.op), RangeOp::ALL.to_vec(), |op: &RangeOp| {
             op.to_string()
         })
+        .graphite()
         .on_select(move |op: RangeOp| {
             w(RangeFilterMsg::OperatorPicked {
                 key: key.clone(),
@@ -107,7 +109,6 @@ fn filter_row<'a, M: Clone + 'a>(
             })
         })
         .padding([3, 6])
-        .text_size(TS.body)
     };
 
     let mut line = row![
@@ -185,20 +186,19 @@ fn bound<'a, M: Clone + 'a>(
             .width(Length::Fixed(NUMBER_W))
     };
     let (w, pick_key) = (Rc::clone(wrap), key.to_string());
-    let unit_part: Element<'a, M> =
-        prefix_picker(unit, b.prefix, TS.body, move |prefix: SiPrefix| {
-            w(RangeFilterMsg::PrefixPicked {
-                key: pick_key.clone(),
-                bound: which,
-                prefix,
-            })
+    let unit_part: Element<'a, M> = prefix_picker(unit, b.prefix, move |prefix: SiPrefix| {
+        w(RangeFilterMsg::PrefixPicked {
+            key: pick_key.clone(),
+            bound: which,
+            prefix,
         })
-        .unwrap_or_else(|| {
-            text(raw(unit.glyph().to_string()))
-                .size(TS.body)
-                .color(theme_ext::text_secondary(tokens))
-                .boxed()
-        });
+    })
+    .unwrap_or_else(|| {
+        text(raw(unit.glyph().to_string()))
+            .size(TS.body)
+            .color(theme_ext::text_secondary(tokens))
+            .boxed()
+    });
     row![number, unit_part]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)

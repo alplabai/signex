@@ -233,7 +233,7 @@ fn an_edit_form_whose_window_vanishes_keeps_its_text_and_comes_back_twice_at_mos
 #[test]
 fn the_per_browser_delete_confirm_fills_its_window_on_the_theme_surface() {
     use signex_types::theme::ThemeId;
-    for theme_id in [ThemeId::CatppuccinMocha, ThemeId::SolarizedLight] {
+    for theme_id in [ThemeId::GraphiteDark, ThemeId::GraphiteLight] {
         let (mut app, _main, [a, _b]) = two_browsers();
         app.ui_state.theme_id = theme_id;
         app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);

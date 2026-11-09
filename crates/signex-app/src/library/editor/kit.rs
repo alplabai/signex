@@ -12,8 +12,8 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{button, raw, text};
 
-use crate::styles::tokens::{self, Overlay};
-use crate::styles::{self, HAIRLINE, RADIUS, Spacing, TypeScale};
+use crate::styles::tokens::{self, Overlay, resolve};
+use crate::styles::{self, HAIRLINE, RADIUS, Radii, Spacing, TypeScale};
 
 /// Type scale shared by every Component Preview tab.
 pub(crate) const TS: TypeScale = TypeScale::DEFAULT;
@@ -24,13 +24,15 @@ pub(crate) const SP: Spacing = Spacing::DEFAULT;
 
 /// Card surface: faint overlay over the panel, 1 px token border.
 pub(crate) fn card_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
-    let fill = tokens::overlay(tokens, Overlay::Faint);
+    // Raised fill, card radius (the `styles::card` look).
+    let fill = resolve(tokens).raised;
+    let radius = Radii::GRAPHITE.card;
     let border = theme_ext::border_color(tokens);
     move |_| container::Style {
         background: Some(Background::Color(fill)),
         border: Border {
             width: HAIRLINE,
-            radius: RADIUS.into(),
+            radius: radius.into(),
             color: border,
             ..Border::default()
         },
@@ -47,30 +49,44 @@ pub(crate) fn rule_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::
     }
 }
 
-/// Body-row fill: odd rows take the faint overlay (zebra); a hovered or
-/// pressed row takes the hover / pressed overlay on any stripe.
-pub(crate) fn row_background(
+/// 1 px soft rule between body rows.
+pub(crate) fn row_separator_style(
     tokens: &ThemeTokens,
-    index: usize,
-    status: button::Status,
-) -> Option<Background> {
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let line = resolve(tokens).line_soft;
+    move |_| container::Style {
+        background: Some(Background::Color(line)),
+        ..container::Style::default()
+    }
+}
+
+/// Table header band: the sunken fill.
+pub(crate) fn header_band_style(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let fill = resolve(tokens).sunken;
+    move |_| container::Style {
+        background: Some(Background::Color(fill)),
+        ..container::Style::default()
+    }
+}
+
+/// Body-row fill: a hovered or pressed row takes the hover / pressed
+/// overlay. Rows are flat and split by [`row_separator_style`].
+pub(crate) fn row_background(tokens: &ThemeTokens, status: button::Status) -> Option<Background> {
     let color = match status {
         button::Status::Hovered => tokens::overlay(tokens, Overlay::Hover),
         button::Status::Pressed => tokens::overlay(tokens, Overlay::Pressed),
-        _ if index % 2 == 1 => tokens::overlay(tokens, Overlay::Faint),
         _ => return None,
     };
     Some(Background::Color(color))
 }
 
-fn row_style(
-    tokens: &ThemeTokens,
-    index: usize,
-) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+fn row_style(tokens: &ThemeTokens) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
     let tokens = *tokens;
     let text_c = theme_ext::text_primary(&tokens);
     move |_: &Theme, status| button::Style {
-        background: row_background(&tokens, index, status),
+        background: row_background(&tokens, status),
         text_color: text_c,
         border: Border::default(),
         ..button::Style::default()
@@ -85,6 +101,7 @@ pub(crate) fn danger_button_style(
     let disabled = tokens::disabled_text(tokens);
     let hover = tokens::overlay(tokens, Overlay::Hover);
     let pressed = tokens::overlay(tokens, Overlay::Pressed);
+    let button_radius = Radii::GRAPHITE.button;
     move |_: &Theme, status| {
         let ink = if status == button::Status::Disabled {
             disabled
@@ -100,7 +117,7 @@ pub(crate) fn danger_button_style(
             text_color: ink,
             border: Border {
                 width: HAIRLINE,
-                radius: RADIUS.into(),
+                radius: button_radius.into(),
                 color: ink,
                 ..Border::default()
             },
@@ -126,14 +143,13 @@ pub(crate) fn section_header<'a, M: 'a>(
     trailing: Option<Element<'a, M>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let mut line: iced::widget::Row<Element<'a, M>> = row![
-        text(raw(title))
-            .size(TS.title)
-            .color(theme_ext::text_primary(tokens))
-            .boxed(),
-        Space::new().width(Length::Fill).boxed(),
-    ]
-    .align_y(iced::Alignment::Center);
+    // Uppercase muted section label.
+    let heading = text(raw(title.to_uppercase()))
+        .size(TS.section)
+        .style(styles::section_label(tokens))
+        .boxed();
+    let mut line: iced::widget::Row<Element<'a, M>> =
+        row![heading, Space::new().width(Length::Fill).boxed()].align_y(iced::Alignment::Center);
     if let Some(t) = trailing {
         line = line.push(t);
     }
@@ -157,28 +173,36 @@ pub(crate) fn table_header<'a, M: 'a>(
     columns: &[(&'a str, Length)],
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let muted = theme_ext::text_secondary(tokens);
+    let muted = resolve(tokens).ink3;
     let mut line: iced::widget::Row<Element<'a, M>> =
         row![].spacing(SP.m).align_y(iced::Alignment::Center);
     for (title, width) in columns {
         line = line.push(
-            text(raw(*title))
-                .size(TS.caption)
+            text(raw(title.to_uppercase()))
+                .size(TS.section)
                 .color(muted)
                 .width(*width)
                 .boxed(),
         );
     }
-    column![container(line).padding([SP.s, SP.m]).boxed(), rule(tokens)]
-        .width(Length::Fill)
-        .boxed()
+    column![
+        container(line)
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .style(header_band_style(tokens))
+            .boxed(),
+        rule(tokens)
+    ]
+    .width(Length::Fill)
+    .boxed()
 }
 
-/// Table body row. `index` drives zebra striping; with `on_press` the row
-/// also shows hover / pressed fills (a row without a handler is inert).
+/// Table body row; with `on_press` the row also shows hover / pressed fills
+/// (a row without a handler is inert). `_index` is the row's position; rows
+/// are flat, so it no longer changes the look.
 pub(crate) fn table_row<'a, M: Clone + 'a>(
     cells: Vec<(Element<'a, M>, Length)>,
-    index: usize,
+    _index: usize,
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
@@ -190,21 +214,31 @@ pub(crate) fn table_row<'a, M: Clone + 'a>(
     let body = container(line.boxed())
         .padding([SP.s, SP.m])
         .width(Length::Fill);
-    if on_press.is_none() {
-        let fill = row_background(tokens, index, button::Status::Active);
-        return body
-            .style(move |_: &Theme| container::Style {
-                background: fill,
-                ..container::Style::default()
-            })
-            .boxed();
-    }
-    button(body)
-        .padding(0)
-        .width(Length::Fill)
-        .on_press_maybe(on_press)
-        .style(row_style(tokens, index))
+    let item: Element<'a, M> = if on_press.is_none() {
+        let fill = row_background(tokens, button::Status::Active);
+        body.style(move |_: &Theme| container::Style {
+            background: fill,
+            ..container::Style::default()
+        })
         .boxed()
+    } else {
+        button(body)
+            .padding(0)
+            .width(Length::Fill)
+            .on_press_maybe(on_press)
+            .style(row_style(tokens))
+            .boxed()
+    };
+    column![
+        item,
+        container(Space::new())
+            .width(Length::Fill)
+            .height(HAIRLINE)
+            .style(row_separator_style(tokens))
+            .boxed()
+    ]
+    .width(Length::Fill)
+    .boxed()
 }
 
 // ─── Buttons ─────────────────────────────────────────────────
@@ -227,7 +261,7 @@ pub(crate) fn primary_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    labelled(label, on_press, styles::accent_button(tokens))
+    labelled(label, on_press, styles::primary_button(tokens))
 }
 
 /// Secondary action (outline). `None` disables it.
@@ -236,7 +270,19 @@ pub(crate) fn secondary_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    labelled(label, on_press, styles::outline_button(tokens))
+    labelled(label, on_press, graphite_outline(tokens))
+}
+
+/// Graphite secondary button: the outline look at the button radius.
+fn graphite_outline(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let base = styles::outline_button(tokens);
+    move |theme: &Theme, status| {
+        let mut style = base(theme, status);
+        style.border.radius = Radii::GRAPHITE.button.into();
+        style
+    }
 }
 
 /// Destructive action (error-coloured outline). `None` disables it.
@@ -251,12 +297,31 @@ pub(crate) fn danger_button<'a, M: Clone + 'a>(
 /// Small filled label (role / source badge, tab count): `fill` behind
 /// `ink` text, corners at [`RADIUS`].
 pub(crate) fn pill<'a, M: 'a>(label: String, fill: Color, ink: Color) -> Element<'a, M> {
+    pill_with_radius(label, fill, ink, RADIUS)
+}
+
+/// Status chip in a [`styles::PillTone`], fully rounded.
+pub(crate) fn toned_pill<'a, M: 'a>(
+    label: String,
+    tone: styles::PillTone,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let (fill, ink) = styles::pill_colors(tokens, tone);
+    pill_with_radius(label, fill, ink, Radii::GRAPHITE.pill)
+}
+
+fn pill_with_radius<'a, M: 'a>(
+    label: String,
+    fill: Color,
+    ink: Color,
+    radius: f32,
+) -> Element<'a, M> {
     container(text(raw(label)).size(TS.caption).color(ink).boxed())
         .padding([SP.xs, SP.s])
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),
             border: Border {
-                radius: RADIUS.into(),
+                radius: radius.into(),
                 ..Border::default()
             },
             ..container::Style::default()
@@ -280,6 +345,31 @@ pub(crate) fn reorder_remove<'a, M: Clone + 'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center)
     .boxed()
+}
+
+/// Display label of a lifecycle state, as shown on its pill.
+pub(crate) fn lifecycle_label(state: signex_library::LifecycleState) -> &'static str {
+    use signex_library::LifecycleState as L;
+    match state {
+        L::Draft => "Draft",
+        L::InReview => "In review",
+        L::Released => "Released",
+        L::Deprecated => "Deprecated",
+        L::Obsolete => "Obsolete",
+        _ => "Unknown",
+    }
+}
+
+/// Pill tone of a lifecycle state.
+pub(crate) fn lifecycle_tone(state: signex_library::LifecycleState) -> styles::PillTone {
+    use signex_library::LifecycleState as L;
+    match state {
+        L::Released => styles::PillTone::Ok,
+        L::InReview => styles::PillTone::Info,
+        L::Deprecated => styles::PillTone::Warn,
+        L::Obsolete => styles::PillTone::Err,
+        _ => styles::PillTone::Neutral,
+    }
 }
 
 // ─── Empty state ─────────────────────────────────────────────
@@ -320,27 +410,24 @@ mod tests {
     }
 
     #[test]
-    fn zebra_rows_differ_on_every_builtin() {
+    fn rows_are_flat_on_every_builtin() {
+        // No zebra: rows are flat with a soft separator.
         for &id in ThemeId::BUILTINS {
             let t = theme_tokens(id);
-            let even = bg(row_background(&t, 0, button::Status::Active));
-            let odd = bg(row_background(&t, 1, button::Status::Active));
-            assert_ne!(even, odd, "{id:?}");
-            assert_eq!(odd, bg(row_background(&t, 3, button::Status::Active)));
+            let flat = row_background(&t, button::Status::Active);
+            assert!(flat.is_none(), "{id:?}");
         }
     }
 
     #[test]
-    fn hover_differs_from_active_on_both_stripes() {
+    fn hover_differs_from_active_and_from_pressed() {
         for &id in ThemeId::BUILTINS {
             let t = theme_tokens(id);
-            for index in [0, 1] {
-                let active = bg(row_background(&t, index, button::Status::Active));
-                let hover = bg(row_background(&t, index, button::Status::Hovered));
-                let pressed = bg(row_background(&t, index, button::Status::Pressed));
-                assert!(hover.is_some() && hover != active, "{id:?} {index}");
-                assert_ne!(hover, pressed, "{id:?} {index}");
-            }
+            let active = bg(row_background(&t, button::Status::Active));
+            let hover = bg(row_background(&t, button::Status::Hovered));
+            let pressed = bg(row_background(&t, button::Status::Pressed));
+            assert!(hover.is_some() && hover != active, "{id:?}");
+            assert_ne!(hover, pressed, "{id:?}");
         }
     }
 

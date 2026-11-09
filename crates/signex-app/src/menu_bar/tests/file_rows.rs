@@ -89,9 +89,22 @@ fn close_project_closes_the_active_project() {
     open_project(&mut app, "P.snxprj");
     let before = probe(&app);
     assert_eq!(before.projects, 1);
-    let task = click(&mut app, "File/Close Project");
+    let task = click(&mut app, "Project/Close Project");
     crate::app::path_ops::settle_task(&mut app, task);
     assert_eq!(probe(&app).projects, 0, "the project stays open");
+}
+
+#[test]
+fn project_options_opens_the_project_tab_and_is_greyed_without_a_project() {
+    assert!(!row_is_live(&bare_app(), "Project/Project Options..."));
+    let mut app = one_symbol_selected();
+    open_project(&mut app, "P.snxprj");
+    // The fixture sheet lives outside the project folder; with no active path
+    // the command falls back to the active project, as it does for a project tab.
+    app.document_state.active_path = None;
+    let tabs = app.document_state.tabs.len();
+    let _ = click(&mut app, "Project/Project Options...");
+    assert_eq!(app.document_state.tabs.len(), tabs + 1, "no Project tab");
 }
 
 #[test]
@@ -165,7 +178,7 @@ fn print_and_export_pdf_open_the_print_preview() {
 fn export_netlist_asks_where_to_save() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let task = click(&mut app, "File/Export/Netlist (Protel .NET)...");
+    let task = click(&mut app, "Reports/Netlist (Protel .NET)...");
     assert!(has_work(&task), "no dialog");
     assert_eq!(probe(&app), before);
 }
@@ -174,7 +187,7 @@ fn export_netlist_asks_where_to_save() {
 fn export_bom_opens_the_bom_preview() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let _ = click(&mut app, "File/Export/Bill of Materials…");
+    let _ = click(&mut app, "Reports/Bill of Materials…");
     assert_eq!(
         probe(&app),
         Probe {
@@ -191,7 +204,7 @@ fn export_erc_report_before_a_run_says_to_run_erc_first() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
     let logged_before = crate::diagnostics::logged_count(needle);
-    let task = click(&mut app, "File/Export/ERC Report…");
+    let task = click(&mut app, "Reports/ERC Report…");
     assert!(!has_work(&task));
     assert_eq!(
         probe(&app),
@@ -233,15 +246,15 @@ fn rows_without_a_document_are_greyed() {
     let app = bare_app();
     for path in [
         "File/Close Document",
-        "File/Close Project",
+        "Project/Close Project",
         "File/Save",
         "File/Save As...",
         "File/Save All",
         "File/Library/Place Component...",
         "File/Export/PDF…",
-        "File/Export/Netlist (Protel .NET)...",
-        "File/Export/Bill of Materials…",
-        "File/Export/ERC Report…",
+        "Reports/Netlist (Protel .NET)...",
+        "Reports/Bill of Materials…",
+        "Reports/ERC Report…",
         "File/Print...",
     ] {
         assert!(!row_is_live(&app, path), "{path} is live with no document");

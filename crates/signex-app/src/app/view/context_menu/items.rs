@@ -1,6 +1,6 @@
 //! Shared context-menu primitives — the pure `DropdownEntry` builders
 //! (`dd_kb`, `dd_msg`, `dd_disabled`, `save_entry`), the hover-driven
-//! submenu launcher (`submenu_launcher`, an owned `Custom` row), and the
+//! submenu launcher (`submenu_launcher`, an item row with hover hooks), and the
 //! two `&self` lookups the menu builders need (`keymap_shortcut_label`,
 //! `library_row_ref`).
 //!
@@ -13,16 +13,8 @@
 
 use super::*;
 
-use iced::Widget as _;
 use iced::widget::svg::Handle;
-use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-/// Vertical padding of an item row (the widget's own).
-const ROW_PAD_Y: f32 = 5.0;
 
 /// A keyboard-command row: clicking it dispatches `action` through the
 /// context-menu message bridge. `shortcut` renders right-aligned (empty
@@ -68,16 +60,14 @@ pub(super) fn dd_disabled(
     label: &str,
     right: Option<&str>,
 ) -> DropdownEntry<Message> {
-    DropdownEntry::Item(DropdownItem {
-        label: label.to_string(),
-        icon,
-        checked: false,
-        shortcut: right.map(|s| s.to_string()),
-        disabled: true,
-        on_press: None,
-        tooltip: None,
-        command_id: None,
-    })
+    let mut item = DropdownItem::passive(label).disabled(true);
+    if let Some(handle) = icon {
+        item = item.icon(handle);
+    }
+    if let Some(right) = right {
+        item = item.shortcut(right);
+    }
+    DropdownEntry::Item(item)
 }
 
 /// Catalog menu text for `command_id`. An id missing from the catalog shows
@@ -168,6 +158,15 @@ pub(super) fn dd_planned(
     }
 }
 
+/// A greyed launcher for a submenu that does not exist yet: a planned row
+/// with the chevron in the chevron column.
+pub(super) fn dd_planned_submenu(icon: Option<Handle>, label: &str) -> DropdownEntry<Message> {
+    match dd_planned(icon, label, None) {
+        DropdownEntry::Item(item) => DropdownEntry::Item(item.submenu()),
+        other => other,
+    }
+}
+
 /// Save row for the project-root menu — active only when a schematic tab
 /// is open or the project metadata is dirty. Label and `shortcut` come from
 /// the `save_document` command like every other surface.
@@ -179,99 +178,32 @@ pub(super) fn save_entry(enabled: bool, shortcut: &str) -> DropdownEntry<Message
     }
 }
 
-/// Submenu launcher row (`Place ›`, `Align ›`, `Add New to Project ›`).
-///
-/// This is the one context-menu row the shared widget can't express as a
-/// plain `Item`: it needs `mouse_area` on_enter/on_exit so the 200 ms
-/// hover timer (`ContextMenuMsg::SubmenuTickHover`) can open the flyout
-/// without a click, plus an active-state highlight so the user can see
-/// which submenu is open. It therefore rides the widget's `Custom`
-/// escape hatch as an owned `Element<'static>`. The row is styled to
-/// match the widget's `Item` rows (13 pt label, `[5, 12]` padding, hover
-/// background) so it sits flush with its neighbours; the `›` chevron
-/// renders right-aligned at the unified `SUBMENU_ARROW_SIZE`. With an icon
-/// it has the 20 px icon column; without one it has none, like an
-/// icon-less `Item` in a menu of plain labels (the widget reserves the
-/// column only when a row has an icon). A launcher without an icon belongs
-/// in a menu without icons.
+/// Submenu launcher row (`Place ›`, `Align ›`, `Add New to Project ›`): a
+/// plain item row with the chevron, so it has the same height, padding and
+/// type as its neighbours and a flyout lines up with it. Hovering it
+/// starts the 200 ms open timer (`ContextMenuMsg::SubmenuHover`), a click
+/// opens the flyout at once, and `active` keeps it lit while its flyout is
+/// open.
 pub(super) fn submenu_launcher(
-    tokens: &ThemeTokens,
     icon: Option<Handle>,
     label: &str,
     kind: ContextSubmenu,
     active: bool,
 ) -> DropdownEntry<Message> {
-    let text_c = crate::styles::ti(tokens.text);
-    let hover_c = crate::styles::ti(tokens.hover);
-    let active_bg = crate::styles::ti(tokens.selection);
-    let arrow_c = crate::styles::ti(tokens.text_secondary);
-
-    // The arrow and the label (`TS.title`, a little over the item label size)
-    // would each make a taller line than an item row and stretch the row; fix
-    // both to the content height of an item row, so the
-    // launcher is exactly `row_height` and flyouts line up with it.
-    let arrow_line =
-        signex_widgets::active_bar_dropdown::row_height(icon.is_some()) - 2.0 * ROW_PAD_Y;
-    let mut row: iced::widget::Row<iced::Element<'static, Message>> = iced::widget::Row::new()
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center)
-        .width(Length::Fill);
-    if let Some(handle) = icon {
-        // Launchers are never disabled: keep the icon's own colours.
-        row = row.push(iced::widget::svg(handle).width(20).height(20).boxed());
-    }
-    row = row
-        .push(
-            signex_widgets::text(signex_widgets::raw(label.to_string()))
-                .size(TS.title)
-                .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(
-                    arrow_line,
-                )))
-                .color(text_c)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .boxed(),
-        )
-        .push(iced::widget::Space::new().width(Length::Fill).boxed())
-        .push(
-            signex_widgets::text(signex_widgets::raw(SUBMENU_ARROW.to_string()))
-                .size(SUBMENU_ARROW_SIZE)
-                .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(
-                    arrow_line,
-                )))
-                .color(arrow_c)
-                .boxed(),
-        );
-
-    let btn = signex_widgets::button(
-        iced::widget::container(row)
-            .padding([ROW_PAD_Y, SP.l])
-            .width(Length::Fill),
+    let mut item = DropdownItem::new(
+        label,
+        Message::ContextMenu(ContextMenuMsg::SubmenuOpen(kind)),
     )
-    .padding(0)
-    .on_press(Message::ContextMenu(ContextMenuMsg::SubmenuOpen(kind)))
-    .style(
-        move |_: &iced::Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover_c)),
-                _ if active => Some(iced::Background::Color(active_bg)),
-                _ => None,
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: iced::Border::default(),
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
-        },
-    );
-
-    // mouse_area gives the hover timer its on_enter / on_exit hooks so
-    // the flyout opens after 200 ms without the user clicking.
-    let element: iced::Element<'static, Message> = iced::widget::mouse_area(btn)
-        .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuHover(kind)))
-        .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeave))
-        .boxed();
-    DropdownEntry::Custom(element)
+    .submenu()
+    .hover(
+        Message::ContextMenu(ContextMenuMsg::SubmenuHover(kind)),
+        Message::ContextMenu(ContextMenuMsg::SubmenuLeave),
+    )
+    .active(active);
+    if let Some(handle) = icon {
+        item = item.icon(handle);
+    }
+    DropdownEntry::Item(item)
 }
 
 impl Signex {

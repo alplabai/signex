@@ -16,6 +16,16 @@ use iced::widget::{column, container, row};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Pause glyph (two bars) of the Placement Paused card, tinted at draw time.
+static PAUSE_GLYPH: std::sync::LazyLock<iced::widget::svg::Handle> = std::sync::LazyLock::new(
+    || {
+        iced::widget::svg::Handle::from_memory(
+        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>"##
+            .as_slice(),
+    )
+    },
+);
+
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
     /// the error notice, the netlist-incomplete prompt, print preview, or
@@ -149,50 +159,51 @@ impl Signex {
             return None;
         }
         let tokens = &document.panel_ctx.tokens;
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let text_c = crate::styles::ti(tokens.text);
-        let accent_c = crate::styles::ti(tokens.accent);
-        let border_c = crate::styles::ti(tokens.border);
+        let ink = crate::styles::ti(tokens.text);
+        let muted = crate::styles::ti(tokens.text_secondary);
+        let title_font = iced::Font {
+            weight: iced::font::Weight::Semibold,
+            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+        };
+        let glyph = iced::widget::svg(PAUSE_GLYPH.clone())
+            .width(Length::Fixed(TS.title))
+            .height(Length::Fixed(TS.title))
+            .style(move |_: &iced::Theme, _| iced::widget::svg::Style { color: Some(muted) });
         let card = container(
             column![
-                signex_widgets::text(signex_widgets::raw("⏸"))
-                    .size(TS.banner)
-                    .color(accent_c),
-                signex_widgets::text(signex_widgets::raw("Placement Paused"))
-                    .size(TS.heading)
-                    .color(text_c),
+                row![
+                    glyph,
+                    signex_widgets::text(signex_widgets::raw("Placement Paused"))
+                        .size(TS.title)
+                        .font(title_font)
+                        .color(ink),
+                ]
+                .spacing(SP.s)
+                .align_y(iced::Alignment::Center),
                 signex_widgets::text(signex_widgets::raw(
                     "Editing properties in the panel. Click Resume to keep placing."
                 ))
                 .size(TS.body)
-                .color(text_c),
-                iced::widget::Space::new().height(6.0),
-                signex_widgets::button(
-                    signex_widgets::text(signex_widgets::raw("Resume Placement"))
-                        .size(TS.label)
-                        .color(iced::Color::WHITE)
-                )
-                .padding([6, 18])
-                .on_press(Message::Tool(ToolMessage::ResumePlacement))
-                .style(iced::widget::button::primary),
+                .color(muted),
+                signex_widgets::text(signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_ESC_HINT
+                ))
+                .size(TS.caption)
+                .color(muted),
+                iced::widget::Space::new().height(SP.xs),
+                crate::styles::dialog_button(
+                    "Resume Placement",
+                    crate::styles::DialogButtonKind::Primary,
+                    Some(Message::Tool(ToolMessage::ResumePlacement)),
+                    tokens,
+                ),
             ]
-            .spacing(SP.m)
-            .align_x(iced::Alignment::Center),
+            .spacing(SP.s)
+            .align_x(iced::Alignment::Start),
         )
-        .padding(24)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(iced::Background::Color(iced::Color {
-                a: 0.92,
-                ..panel_bg
-            })),
-            border: iced::Border {
-                color: border_c,
-                width: 1.0,
-                radius: 8.0.into(),
-                ..iced::Border::default()
-            },
-            ..container::Style::default()
-        });
+        .padding(SP.l + SP.s)
+        .style(crate::styles::modal_card(tokens));
         Some(
             container(card)
                 .width(Length::Fill)
@@ -240,7 +251,7 @@ impl Signex {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let y_offset: f32 = canvas_region::CHROME_TOP;
+        let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
         let bar_has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
         let bar_has_net_colors = !ui.net_colors.is_empty();
         let bar = crate::active_bar::view_bar(
@@ -256,8 +267,8 @@ impl Signex {
         .boxed();
         Some(
             column![
-                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
-                container(bar)
+                iced::widget::Space::new().height(y_offset + crate::active_bar::bar_top_margin()),
+                container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
@@ -279,7 +290,8 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 = canvas_region::CHROME_TOP;
+        let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
+        let bar_margin = crate::active_bar::bar_top_margin();
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -293,8 +305,8 @@ impl Signex {
             .boxed();
         out.push(
             column![
-                iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
-                container(bar)
+                iced::widget::Space::new().height(y_offset + bar_margin),
+                container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
@@ -302,7 +314,7 @@ impl Signex {
         );
         // Position the dropdown panel directly below the bar's bottom
         // edge (see the schematic mount for the 42 px derivation).
-        let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+        let dropdown_top: u16 = ((y_offset + bar_margin) as u16).saturating_add(38);
         if let Some(overlay) =
             crate::library::editor::footprint::unified_active_bar::dropdown_overlay(
                 editor,
@@ -313,7 +325,7 @@ impl Signex {
                 self.ui_state.window_size.0,
             )
         {
-            out.push(overlay.map(Message::Library).boxed());
+            out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
     }
@@ -356,17 +368,7 @@ impl Signex {
             },
         );
         let card_msg = card.map(Message::Library).boxed();
-        // Conservative footprint so the card stays on screen near the
-        // right / bottom edges.
-        const FOOTPRINT_MENU_ROWS: usize = 12;
-        self.menu_overlay(
-            window_id,
-            close_msg,
-            card_msg,
-            (menu_state.x, menu_state.y),
-            Self::CONTEXT_MENU_WIDTH,
-            FOOTPRINT_MENU_ROWS,
-        )
+        Self::menu_overlay(close_msg, card_msg, (menu_state.x, menu_state.y))
     }
 
     /// v0.14 — typed-delta "Move Selection By X, Y…" modal for the
@@ -438,7 +440,10 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 = canvas_region::CHROME_TOP;
+        let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
+        // Below the editor's own toolbar strip so the bar never covers it.
+        let bar_margin = crate::active_bar::bar_top_margin()
+            + crate::active_bar::symbol_editor_bar_drop(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
@@ -447,21 +452,21 @@ impl Signex {
             .boxed();
         out.push(
             column![
-                iced::widget::Space::new().height(y_offset + 4.0),
-                container(bar)
+                iced::widget::Space::new().height(y_offset + bar_margin),
+                container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
             .boxed(),
         );
-        let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+        let dropdown_top: u16 = ((y_offset + bar_margin) as u16).saturating_add(38);
         if let Some(overlay) = crate::library::editor::symbol::active_bar::dropdown_overlay(
             editor,
             theme_id,
             tokens,
             dropdown_top,
         ) {
-            out.push(overlay.map(Message::Library).boxed());
+            out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
     }
@@ -495,27 +500,9 @@ impl Signex {
             },
         );
         let card_msg = card.map(Message::Library).boxed();
-        let place_open = menu_state.open_submenu
-            == Some(crate::library::editor::symbol::state::SymbolContextSubmenu::Place);
-        // The collapsed menu is the stable 6-row top-level set (Place ▸,
-        // Join, Delete, Select All, Deselect All, Fit; locked by
-        // rows::tests::top_level_ids_are_stable); an expanded Place ▸ adds
-        // its rows in place (accordion, not a flyout). The estimate must be
-        // tight: the bottom-edge flip lifts the card by exactly its height.
-        const TOP_LEVEL_ROWS: usize = 6;
-        let expanded_rows = if place_open {
-            crate::library::editor::symbol::context_menu::PLACE_TOOLS.len()
-        } else {
-            0
-        };
-        self.menu_overlay(
-            window_id,
-            close_msg,
-            card_msg,
-            (menu_state.x, menu_state.y),
-            crate::library::editor::symbol::context_menu::MENU_WIDTH,
-            TOP_LEVEL_ROWS + expanded_rows,
-        )
+        // An expanded Place ▸ grows the card in place (accordion, not a
+        // flyout); the placement measures the card it really lays out.
+        Self::menu_overlay(close_msg, card_msg, (menu_state.x, menu_state.y))
     }
 
     /// In-canvas text-edit input — the floating `text_input` anchored on
@@ -603,8 +590,8 @@ impl Signex {
         if !ui.panel_list_open {
             return Vec::new();
         }
-        let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
-        let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
+        let tokens = &document.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
         let has_sch = document.panel_ctx.has_schematic;
         let has_pcb = document.panel_ctx.has_pcb;
         // A panel counts as "open" if it lives in any dock region,
@@ -619,12 +606,13 @@ impl Signex {
                 // already somewhere on screen. Clicking an open panel
                 // still fires OpenPanel — the dock brings it forward.
                 let check = if is_open(kind) { "\u{2713}" } else { "" };
-                signex_widgets::button(
+                let check_c = crate::status_bar::check_ink(tokens);
+                let row_btn = signex_widgets::button(
                     iced::widget::row![
                         iced::widget::container(
                             signex_widgets::text(signex_widgets::raw(check.to_string()))
                                 .size(TS.body)
-                                .color(text_muted),
+                                .color(check_c),
                         )
                         .width(Length::Fixed(16.0)),
                         signex_widgets::text(signex_widgets::raw(kind.label().to_string()))
@@ -633,35 +621,38 @@ impl Signex {
                     ]
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([SP.s, SP.l])
                 .width(Length::Fill)
-                .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)))
-                .style(crate::styles::menu_item(&document.panel_ctx.tokens))
-                .boxed()
+                .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)));
+                row_btn
+                    .padding([0.0, SP.m])
+                    .height(crate::status_bar::popup_row_height())
+                    .style(crate::status_bar::popup_row(tokens))
+                    .boxed()
             })
             .collect();
 
         // Drop the scrollable wrapper — the list fits the window at
         // full height (15-ish panels × 21 px each = ~315 px) and a
         // menu-style popup reads cleaner without a scrollbar.
-        let popup = container(column(panel_items).spacing(0).width(210))
-            .padding([6, 0])
-            .style(crate::styles::context_menu(&document.panel_ctx.tokens));
-
-        // Anchor the popup directly above the "Panels" button in the
-        // bottom-right of the status bar. Approx: popup 210 px wide,
-        // 22 px per row × visible rows + 12 px vertical padding.
-        // Status bar sits at y = wh - 22, so we place the popup so
-        // its bottom edge lands just above it.
         let (ww, wh) = ui.window_size;
         let visible_rows = crate::panels::ALL_PANELS
             .iter()
             .filter(|&&k| (!k.needs_schematic() || has_sch) && (!k.needs_pcb() || has_pcb))
-            .count() as f32;
-        let popup_w = 210.0_f32;
-        let popup_h = visible_rows * 22.0 + 12.0;
-        let left = (ww - popup_w - 10.0).max(0.0);
-        let top = (wh - popup_h - 26.0).max(0.0);
+            .count();
+        // Anchor the popup directly above the "Panels" button in the
+        // bottom-right of the status bar, its bottom edge just above the bar.
+        let popup = container(
+            column(panel_items)
+                .spacing(0)
+                .width(crate::status_bar::POPUP_WIDTH - 2.0 * crate::status_bar::POPUP_PADDING),
+        )
+        .padding(crate::status_bar::POPUP_PADDING)
+        .style(crate::status_bar::popup(tokens));
+        let popup_w = crate::status_bar::POPUP_WIDTH;
+        let popup_h = crate::status_bar::popup_height(visible_rows);
+        let status_h = crate::status_bar::status_bar_height(tokens);
+        let left = (ww - popup_w - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
+        let top = (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0);
         Self::dismiss_and_place(
             Message::Overlay(OverlayMsg::TogglePanelList),
             popup.boxed(),

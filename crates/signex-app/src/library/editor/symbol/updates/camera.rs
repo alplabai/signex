@@ -65,15 +65,11 @@ fn apply_pending_view(editor: &mut SymEditor, width: f32, height: f32) {
         height,
     };
     match request {
-        SymbolViewRequest::Fit => {
-            let (min_x, min_y, max_x, max_y) = symbol_bbox(editor.primitive());
-            let world_rect = iced::Rectangle {
-                x: min_x as f32,
-                y: -(max_y as f32),
-                width: (max_x - min_x).max(1.0) as f32,
-                height: (max_y - min_y).max(1.0) as f32,
-            };
-            editor.camera.fit_rect(world_rect, viewport);
+        SymbolViewRequest::Fit => fit_symbol(editor, viewport),
+        // A fresh tab of a symbol that has content opens fitted, not as a
+        // speck at 100% around the origin; an empty symbol keeps the origin.
+        SymbolViewRequest::CenterOrigin if has_content(editor.primitive()) => {
+            fit_symbol(editor, viewport);
         }
         SymbolViewRequest::CenterOrigin => {
             editor.camera = crate::canvas::Camera::default();
@@ -81,4 +77,49 @@ fn apply_pending_view(editor: &mut SymEditor, width: f32, height: f32) {
         }
     }
     editor.canvas_cache.clear();
+}
+
+/// Fit a symbol that has content into a placeholder `width` x `height`
+/// viewport. The canvas replaces it with the measured size on its first
+/// redraw, so the tab opens fitted even before (or without) a measurement.
+pub(crate) fn fit_to_viewport(editor: &mut SymEditor, width: f32, height: f32) {
+    if has_content(editor.primitive()) {
+        let viewport = iced::Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width,
+            height,
+        };
+        fit_symbol(editor, viewport);
+    }
+}
+
+/// Whether the symbol has anything to fit.
+fn has_content(sym: &signex_library::Symbol) -> bool {
+    !sym.pins.is_empty() || !sym.graphics.is_empty()
+}
+
+/// Largest scale a fit may pick: 400%, so a one-pin symbol stays a symbol.
+const FIT_MAX_SCALE: f32 = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 4.0;
+/// Margin kept clear on every side of a fit.
+const FIT_MARGIN: f32 = 72.0;
+/// Extra room kept clear at the top for the floating Active Bar.
+pub(crate) const FIT_TOP_CLEARANCE: f32 = 56.0;
+
+/// Fit the symbol's bounding box into `viewport`, capped at 400% and
+/// centred below the floating Active Bar.
+fn fit_symbol(editor: &mut SymEditor, viewport: iced::Rectangle) {
+    let (min_x, min_y, max_x, max_y) = symbol_bbox(editor.primitive());
+    let world_w = (max_x - min_x).max(1.0) as f32;
+    let world_h = (max_y - min_y).max(1.0) as f32;
+    let avail_w = (viewport.width - FIT_MARGIN * 2.0).max(1.0);
+    let avail_h = (viewport.height - FIT_MARGIN * 2.0 - FIT_TOP_CLEARANCE).max(1.0);
+    let camera = &mut editor.camera;
+    camera.scale = (avail_w / world_w)
+        .min(avail_h / world_h)
+        .clamp(crate::canvas::Camera::MIN_SCALE, FIT_MAX_SCALE);
+    let centre_x = (min_x as f32 + world_w / 2.0) * camera.scale;
+    let centre_y = (-(max_y as f32) + world_h / 2.0) * camera.scale;
+    camera.offset.x = viewport.width / 2.0 - centre_x;
+    camera.offset.y = (viewport.height + FIT_TOP_CLEARANCE) / 2.0 - centre_y;
 }

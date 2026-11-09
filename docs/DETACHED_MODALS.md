@@ -1,23 +1,55 @@
 # Detached modals: dialogs as OS windows
 
-A dialog opens in its own OS window with a native title bar (title, close,
-move, raise), so it can be dragged off the main window. The in-window card
-stays as the fallback when no window exists. The same body function renders
-both; in a window the header slot is empty (`os_title_bar_slot`) and the
-native title bar carries the title (`view/detached_title.rs`).
+A dialog opens in its own OS window with a title bar (title, close, move,
+raise), so it can be dragged off the main window. The in-window card stays as
+the fallback when no window exists. The same body function renders both; in a
+window the header slot is empty (`os_title_bar_slot`) and the window's title
+bar carries the title (`view/detached_title.rs`).
+
+The title bar is the OS one, except on a Graphite theme while the main window
+draws its own chrome: then the window is borderless and draws a Graphite bar
+itself (see "Graphite title bar" below).
 
 ## How a dialog gets its window
 
 `ModalId` names the dialog. `handle_detach_modal` opens the window
-(`detached_modal_settings`: decorations, `exit_on_close_request: false`,
-centred on the screen; iced 0.14 cannot centre on the owner window and the
+(`detached_modal_settings`: `exit_on_close_request: false`, centred on the
+screen; `dialog_window_settings` sets `decorations` and the Signex mark as the
+window icon; iced 0.14 cannot centre on the owner window and the
 main window's position is not tracked). `WindowKind::DetachedModal` maps the
 window to the dialog, `view(window)` renders `view_detached_modal`, and the
 in-window builder skips painting while `modal_detached` holds.
 
 Closing: the OS close button runs `detached_modal_close_message`, the same
 message as the in-dialog close; `SecondaryWindowClosed` clears the state as a
-backstop; Esc typed in the window resolves through the Esc ladder.
+backstop; Esc typed in the window resolves through the Esc ladder. The drawn
+Graphite close sends `WindowMsg::DialogCloseClicked`, which is handled as
+`WindowCloseRequested` for that window, so it takes the same path (and the
+Preferences dirty guard still applies).
+
+## Graphite title bar
+
+`Signex::dialog_windows_borderless` decides once per window, when it opens
+(the OS frame cannot change later): borderless when the theme is Graphite and
+the main window draws its own chrome (`!window_controls_layout().is_native()`).
+`borderless_dialog_windows` remembers the choice per window id. A borderless
+dialog window has `decorations: false` and draws `view/dialogs/title_bar.rs`:
+the Signex mark, the title, an optional subtitle and the Graphite close, with
+`DIALOG_TITLE_BAR_H` (= `DIALOG_HEADER_H`) of height. Resizable (tool) windows
+also get resize edges over the frame; fixed dialogs get none.
+
+Three messages under `WindowMsg` drive it:
+
+- `DialogTitleBarPressed(window)`: the OS moves that window.
+- `DialogEdgePressed(window, direction)`: the OS starts a resize drag from
+  that edge.
+- `DialogCloseClicked(window)`: the close button, handled as the OS close.
+
+The window is taller than its content by the title bar
+(`dialog_window_size`: `DIALOG_TITLE_BAR_H`, whole logical px, times the
+interface scale), so the body keeps all of its height. Other themes, and
+Graphite with native controls, keep the OS frame and the in-dialog header
+slot stays empty as before.
 
 **Followed dialogs.** For Find / Replace, Rename, Remove, Enable Version
 Control, Grid Properties, Custom Selection Filter, About, Keyboard Shortcuts,
@@ -52,11 +84,20 @@ window.
   window behaviour (resizable, zoom allowed) and open at a sensible default size.
 - **Sizing rule.** A fixed dialog's window is sized to its content
   (`modal_size`): width fits the text, height is the content plus the footer.
-  iced cannot measure a body to size its own window, so the sizes are constants,
-  and a test (`fixed_dialogs_fit_their_content_without_large_slack`) lays each
-  body out in its window and fails if content is cut off or more than 110 px of
-  empty window is left. The error notice and the netlist prompt scroll a long
-  message instead of growing the window.
+  iced cannot measure a body to size its own window, so a base height is a
+  constant measured on short text, and the text that is user data (a library
+  name, a part number, a table, a component label) adds the lines it wraps
+  onto beyond the measured text (`handlers/intro_wrap.rs`: the wrapped line
+  count at a deliberately wide average character, times the line height). It
+  is applied to the close-library prompt, the library delete confirm (which
+  needs its browser: `modal_window_size_of(modal, owner)`) and Copy to
+  Library with its notes; the list dialogs grow by their rows
+  (`modal_sizing.rs`). Tests lay each body out in its window: one
+  (`fixed_dialogs_fit_their_content_without_large_slack`) fails if content is
+  cut off or more than 110 px of empty window is left, and
+  `detached_wrap_tests` give each of the three a long name on Graphite and on
+  a legacy theme and fail if the footer leaves the window. The error notice
+  and the netlist prompt scroll a long message instead of growing the window.
 
 ## Dialog surface in a window
 
@@ -68,7 +109,7 @@ bodies in `view/dialogs/*` (and the error notice and netlist prompt) use the ful
 window width there instead of their in-window card width (`dialog_width`). The
 library dialogs do the same (`library::card_len`, a `windowed` argument of each
 view): fixed card widths and heights become `Fill` in the dialog's own window.
-A test checks, for every dialog window in a dark theme and Solarized Light, that
+A test checks, for every dialog window in Graphite Dark and Graphite Light, that
 the body covers the window, that the footer reaches the right edge for the
 dialogs with a button footer, and that the window background is the surface token.
 

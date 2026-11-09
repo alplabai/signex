@@ -83,14 +83,16 @@ impl MenuItem {
 
 /// Titles of the root menus, left to right: the one list both the model and
 /// the chrome's width estimate read.
-pub const ROOT_TITLES: [&str; 8] = [
-    "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help",
+pub const ROOT_TITLES: [&str; 10] = [
+    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window", "Help",
 ];
 
 /// The catalog message of each root title, left to right; `None` is a title
 /// not migrated yet, which keeps its [`ROOT_TITLES`] text.
-const ROOT_TITLE_IDS: [Option<signex_i18n::MessageId>; 8] = [
+const ROOT_TITLE_IDS: [Option<signex_i18n::MessageId>; ROOT_TITLES.len()] = [
     Some(signex_i18n::ids::MENU_FILE),
+    None,
+    None,
     None,
     None,
     None,
@@ -121,9 +123,11 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::file(ctx),
         menus::edit(ctx),
         menus::view(ctx),
+        menus::project(ctx),
         menus::place(ctx),
         menus::design(ctx),
         menus::tools(ctx),
+        menus::reports(ctx),
         menus::window(),
         menus::help(ctx),
     ];

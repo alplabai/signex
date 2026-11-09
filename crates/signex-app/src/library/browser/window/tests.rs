@@ -228,7 +228,7 @@ fn library_at(n: usize, path: &str) -> (LibraryState, PathBuf, Vec<RowId>) {
 
 /// Draw the grid once and return how many row widgets it built.
 fn rows_built_by_view(state: &LibraryState, root: &PathBuf) -> usize {
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
     ROWS_BUILT.with(|c| c.set(0));
     drop(crate::library::browser::view(
         root,
@@ -422,7 +422,7 @@ fn a_rows_widget_state_never_follows_another_row_when_the_window_shifts() {
     // inherit the state of whichever row held its slot before the shift, and
     // an inline edit would be committed to the wrong row.
     let (state, root, ids) = library_of(10_000);
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
     let mut browser = state.library_browsers[&root].clone();
 
     let top = scrolled(0.0, 700.0);
@@ -543,7 +543,7 @@ fn each_input(
 #[test]
 fn a_focused_cell_editor_never_appears_on_another_row_after_a_shift() {
     let (state, root, ids) = library_of(10_000);
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
     let mut browser = state.library_browsers[&root].clone();
 
     let start = scrolled(BROWSER_HEADER_HEIGHT + 100.0 * H, 700.0);
@@ -605,7 +605,7 @@ fn resize_reports(
     use crate::library::messages::LibraryMessage;
     use iced::{Size, mouse, window};
 
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
     let mut renderer = crate::layout_probe::headless_renderer();
     let element = grid_element(state, root, browser.grid_scroll, &tokens, browser);
     let mut ui =

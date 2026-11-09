@@ -1,3 +1,4 @@
+use crate::dropdown_style::GraphiteDropdown;
 use crate::{PickListPlaceholder, button, raw, text};
 use chrono::{Datelike, Local};
 use iced::widget::{column, container, pick_list, row};
@@ -160,6 +161,7 @@ impl RkmEncoder {
                 RKM_CAPTION_SIZE,
                 "Component",
                 pick_list(Some(self.kind), ComponentKind::ALL, ToString::to_string)
+                    .graphite()
                     .on_select(RkmEncoderMessage::KindChanged)
                     .width(WIDE_PICK_W),
             ),
@@ -171,6 +173,7 @@ impl RkmEncoder {
                     self.value_options.as_slice(),
                     ToString::to_string
                 )
+                .graphite()
                 .on_select(RkmEncoderMessage::ValueChanged)
                 .width(130),
             ),
@@ -182,6 +185,7 @@ impl RkmEncoder {
                     SiPrefix::for_kind(self.kind),
                     ToString::to_string
                 )
+                .graphite()
                 .on_select(RkmEncoderMessage::PrefixChanged)
                 .width(100),
             ),
@@ -192,6 +196,7 @@ impl RkmEncoder {
                 RKM_CAPTION_SIZE,
                 "Tolerance",
                 pick_list(Some(self.tolerance), Tolerance::ALL, ToString::to_string)
+                    .graphite()
                     .on_select(RkmEncoderMessage::ToleranceChanged)
                     .width(WIDE_PICK_W),
             ),
@@ -210,6 +215,7 @@ impl RkmEncoder {
                         TemperatureCoefficient::ALL,
                         ToString::to_string
                     )
+                    .graphite()
                     .on_select(RkmEncoderMessage::TemperatureCoefficientChanged)
                     .placeholder_label(raw("Not specified"))
                     .width(165),
@@ -218,6 +224,7 @@ impl RkmEncoder {
                     RKM_CAPTION_SIZE,
                     "Rated power",
                     pick_list(self.rated_power, RatedPower::ALL, ToString::to_string)
+                        .graphite()
                         .on_select(RkmEncoderMessage::RatedPowerChanged)
                         .placeholder_label(raw("Not specified"))
                         .width(135),
@@ -240,6 +247,7 @@ impl RkmEncoder {
                     ProductionDateCycle::ALL,
                     ToString::to_string
                 )
+                .graphite()
                 .on_select(RkmEncoderMessage::ProductionDateCycleChanged)
                 .placeholder_label(raw("Not specified"))
                 .width(150),
@@ -252,6 +260,7 @@ impl RkmEncoder {
                     self.production_year_options.as_slice(),
                     ToString::to_string
                 )
+                .graphite()
                 .on_select(RkmEncoderMessage::ProductionYearChanged)
                 .placeholder_label(raw("Not specified"))
                 .width(130),
@@ -264,6 +273,7 @@ impl RkmEncoder {
                     ProductionMonth::ALL,
                     ToString::to_string
                 )
+                .graphite()
                 .on_select(RkmEncoderMessage::ProductionMonthChanged)
                 .placeholder_label(raw("Not specified"))
                 .width(145),

@@ -32,6 +32,8 @@ mod footprint_binding_tests;
 #[cfg(test)]
 mod patch_exactness_tests;
 #[cfg(test)]
+mod port_text_tests;
+#[cfg(test)]
 mod register_lib_symbol_tests;
 #[cfg(test)]
 mod replace_lib_symbol_tests;

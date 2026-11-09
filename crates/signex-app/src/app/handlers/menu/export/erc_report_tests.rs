@@ -74,7 +74,9 @@ fn refusal_names_the_real_menu_path() {
         "{}",
         notice.detail
     );
-    assert!(notice.detail.contains("Design"), "{}", notice.detail);
+    // ERC moved from Design to the Project menu (maintainer decision 2026-11-07).
+    assert!(notice.detail.contains("Project"), "{}", notice.detail);
+    assert!(!notice.detail.contains("Design"), "{}", notice.detail);
     assert!(!notice.detail.contains("Tools"), "{}", notice.detail);
 }
 

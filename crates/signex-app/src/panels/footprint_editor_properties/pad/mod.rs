@@ -11,6 +11,7 @@ mod stack_preview;
 mod table;
 
 pub(super) use form::{
-    PadEditTarget, PadFormValues, pad_check_row, pad_input_row, pad_pick_row,
-    render_pad_form_pad_features, render_pad_form_pad_stack, render_pad_form_properties,
+    PadEditTarget, PadFormValues, pad_check_row, pad_check_row_w, pad_input_row, pad_input_row_w,
+    pad_pick_row, render_pad_form_pad_features, render_pad_form_pad_stack,
+    render_pad_form_properties,
 };

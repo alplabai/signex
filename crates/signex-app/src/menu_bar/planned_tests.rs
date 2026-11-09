@@ -100,9 +100,9 @@ fn the_scanner_catches_a_new_inert_row() {
 }
 
 #[test]
-fn generate_bom_is_not_a_stub() {
+fn bill_of_materials_is_not_a_stub() {
     let keys = call_keys(include_str!("model/menus.rs"), "stub");
-    assert!(!keys.iter().any(|k| k == "Generate BOM"));
+    assert!(!keys.iter().any(|k| k == "Bill of Materials…"));
 }
 
 /// Rows whose feature already works are wired: a row with a command id runs
@@ -117,7 +117,7 @@ fn working_rows_are_wired() {
         "cmd_item_gated(ctx,cmd(\"place_power_symbol\",\"PowerPort\",\"P\"))",
         "item_if(\"Text\",MenuMessage::PlaceText,",
         "item_if(\"NoConnect\",MenuMessage::PlaceNoConnect,",
-        "item_if(\"GenerateBOM\",MenuMessage::ExportBom,",
+        "item_if(\"BillofMaterials…\",MenuMessage::ExportBom,",
     ] {
         assert!(source.contains(call), "the row is not wired as `{call}`");
     }

@@ -46,10 +46,58 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
     None
 }
 
+/// Smallest on-screen distance between two grid lines or dots, in logical px.
+pub(crate) const MIN_GRID_PITCH_PX: f32 = 6.0;
+/// The same floor in device px, so a high-DPI screen never draws a pitch
+/// under a few physical pixels.
+const MIN_GRID_PITCH_DEVICE_PX: f32 = 4.0;
+/// Most cells a sheet-sized grid pass draws before it steps coarser.
+const MAX_GRID_CELLS: i64 = 40_000;
+/// Multiples of the visible grid the sheet grid steps through: 1, 5, 10, 50, ...
+const PITCH_STEPS: u32 = 12;
+
+/// The minimum on-screen pitch at a device scale, in logical px.
+pub(crate) fn min_grid_pitch_px(device_px_per_logical_px: f32) -> f32 {
+    MIN_GRID_PITCH_PX
+        .max(MIN_GRID_PITCH_DEVICE_PX / sanitised_device_scale(device_px_per_logical_px))
+}
+
+/// The pitch the sheet grid draws at: `grid_mm` times 1, 5, 10, 50, 100, ...
+/// the first that is at least `min_px` apart on screen and keeps the pass
+/// under [`MAX_GRID_CELLS`] over a `span_w_mm` x `span_h_mm` view. It never
+/// gives up: past the last step it keeps the coarsest, so a grid that is
+/// switched on stays on at every zoom. `None` only for a non-positive grid or
+/// scale.
+pub(crate) fn visible_pitch_mm(
+    grid_mm: f32,
+    scale: f32,
+    min_px: f32,
+    span_w_mm: f32,
+    span_h_mm: f32,
+) -> Option<f32> {
+    // NaN must be refused too, so test it explicitly rather than with `<=`.
+    if grid_mm.is_nan() || grid_mm <= 0.0 || scale.is_nan() || scale <= 0.0 {
+        return None;
+    }
+    let mut pitch = grid_mm;
+    for step in 0..PITCH_STEPS {
+        let cells = (f64::from(span_w_mm / pitch) + 2.0) * (f64::from(span_h_mm / pitch) + 2.0);
+        if pitch * scale >= min_px && (cells as i64) <= MAX_GRID_CELLS {
+            return Some(pitch);
+        }
+        pitch *= if step % 2 == 0 { 5.0 } else { 2.0 };
+    }
+    Some(pitch)
+}
+
 /// Fixed widths of the grid lines and crosses, in logical px (not a zoom law). A line or arm
 /// is kept off the paper edge by half of its width (#1940).
 pub(crate) const MINOR_GRID_LINE_PX: f32 = 0.6;
 const MAJOR_GRID_LINE_PX: f32 = 0.5;
+
+/// Radius of a fine grid dot: the smallest, which `fill_grid_dot` floors to a
+/// 1 px square.
+const FINE_DOT_RADIUS: f32 = 0.5;
 
 /// One grid dot, as a filled square with the area of a `radius` circle.
 ///
@@ -127,7 +175,7 @@ fn grid_cross_bars(centre: Point, arm: f32, width: f32, device_scale: f32) -> [i
 /// process global that this function used to read from inside `draw`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "9 arguments: camera + grid metrics + page bounds + colour + glyph style + device scale, all per-frame draw inputs"
+    reason = "10 arguments: camera + grid metrics + page bounds + colour + glyph style + device scale + dot size, all per-frame draw inputs"
 )]
 pub fn draw_grid<R: GeometryRenderer>(
     frame: &mut canvas::Frame<R>,
@@ -139,6 +187,7 @@ pub fn draw_grid<R: GeometryRenderer>(
     page_h: f32,
     style: GridStyle,
     device_px_per_logical_px: f32,
+    fine_dots: bool,
 ) {
     // #1940 - every glyph and line stays inside the paper in this window's
     // device pixels, so none straddles the edge onto the canvas.
@@ -160,6 +209,7 @@ pub fn draw_grid<R: GeometryRenderer>(
         page_h,
         style,
         device_px_per_logical_px,
+        fine_dots,
     );
 }
 
@@ -266,33 +316,14 @@ fn draw_grid_within<R: GeometryRenderer>(
     page_h: f32,
     style: GridStyle,
     device_px_per_logical_px: f32,
+    fine_dots: bool,
 ) {
     let dpr = device_px_per_logical_px;
     if grid_mm <= 0.0 || camera.scale <= 0.0 {
         return;
     }
 
-    // --- 1. Pick adaptive minor step (5^k * grid_mm), aiming for ≥ 6 px. ---
-    const MIN_PX: f32 = 6.0;
-    let Some(minor_mm) = adaptive_pitch_mm(grid_mm, camera.scale, MIN_PX) else {
-        return;
-    };
-    let minor_screen = minor_mm * camera.scale;
-    let major_mm = minor_mm * 5.0;
-    let major_screen = major_mm * camera.scale;
-
-    // Cross-fade so the new finer minor level fades in as zoom increases,
-    // and the previous (now-major) level naturally takes over its role.
-    let minor_alpha = ((minor_screen - MIN_PX) / MIN_PX).clamp(0.0, 1.0);
-    if minor_alpha <= 0.0 {
-        return;
-    }
-    let dot_color = Color {
-        a: color.a * minor_alpha,
-        ..color
-    };
-
-    // --- 2. Visible region clipped to page bounds. ---
+    // --- 1. Pick the minor step: a multiple of the grid, never under the minimum pitch. ---
     let tl = camera.screen_to_world(Point::new(0.0, 0.0), bounds);
     let br = camera.screen_to_world(Point::new(bounds.width, bounds.height), bounds);
     let wx_min = tl.x.max(0.0);
@@ -302,19 +333,31 @@ fn draw_grid_within<R: GeometryRenderer>(
     if wx_min >= wx_max || wy_min >= wy_max {
         return;
     }
-
-    // Safety cap (adaptive step makes this very rare, but keep it).
-    let cols = ((wx_max - wx_min) / minor_mm) as i32 + 2;
-    let rows = ((wy_max - wy_min) / minor_mm) as i32 + 2;
-    if (cols as i64) * (rows as i64) > 40_000 {
+    let Some(minor_mm) = visible_pitch_mm(
+        grid_mm,
+        camera.scale,
+        min_grid_pitch_px(dpr),
+        wx_max - wx_min,
+        wy_max - wy_min,
+    ) else {
         return;
-    }
+    };
+    let minor_screen = minor_mm * camera.scale;
+    let major_mm = minor_mm * 5.0;
+    let major_screen = major_mm * camera.scale;
+    // No fade between levels: the grid is drawn at full strength at every zoom.
+    let dot_color = color;
 
     // Half the thin stroke width, so a cross arm's end stays inside the paper.
     const GLYPH_EDGE_SLACK: f32 = MINOR_GRID_LINE_PX / 2.0;
 
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
-    let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
+    // `fine_dots` (Graphite): one logical px, at every zoom.
+    let dot_radius = if fine_dots {
+        FINE_DOT_RADIUS
+    } else {
+        (minor_screen * 0.06).clamp(0.5, 1.6)
+    };
 
     // Small-cross arm length in screen pixels (Standard-style "+").
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
@@ -509,7 +552,10 @@ mod snap_tests {
 
 #[cfg(test)]
 mod pitch_tests {
-    use super::{adaptive_pitch_mm, axis_stops, paper_clip, pitch_mm_exact};
+    use super::{
+        adaptive_pitch_mm, axis_stops, min_grid_pitch_px, paper_clip, pitch_mm_exact,
+        visible_pitch_mm,
+    };
     use crate::canvas::camera::Camera;
     use iced::{Point, Rectangle, Size};
 
@@ -559,6 +605,60 @@ mod pitch_tests {
                 );
             }
         }
+    }
+
+    /// The sheet grid stays on at every zoom: the pitch is a whole multiple of
+    /// the visible grid, never under the minimum spacing, and draws cells.
+    #[test]
+    fn sheet_grid_never_vanishes_when_zooming_out() {
+        // A3 in mm.
+        let (w, h) = (420.0_f32, 297.0_f32);
+        for dpr in [1.0_f32, 1.5, 2.0] {
+            let min_px = min_grid_pitch_px(dpr);
+            for grid in [0.635_f32, 1.27, 2.54, 5.08] {
+                let mut scale = 0.4_f32;
+                while scale < 40.0 {
+                    let pitch = visible_pitch_mm(grid, scale, min_px, w, h)
+                        .unwrap_or_else(|| panic!("grid {grid} scale {scale}"));
+                    let ratio = f64::from(pitch) / f64::from(grid);
+                    assert!(
+                        (ratio - ratio.round()).abs() < 1e-3,
+                        "{pitch} is not a multiple of {grid}"
+                    );
+                    assert!(
+                        pitch * scale >= min_px,
+                        "{pitch} mm x {scale} < {min_px} px"
+                    );
+                    assert!(
+                        ((w / pitch) as i64 + 2) * ((h / pitch) as i64 + 2) > 0,
+                        "no cells"
+                    );
+                    scale *= 1.07;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sheet_grid_steps_five_then_ten_then_fifty() {
+        let steps: Vec<f32> = [20.0_f32, 6.0, 3.0, 1.0]
+            .iter()
+            .map(|s| visible_pitch_mm(1.27, *s, 6.0, 10.0, 10.0).unwrap() / 1.27)
+            .collect();
+        assert!((steps[0] - 1.0).abs() < 1e-3, "{steps:?}");
+        assert!(steps.windows(2).all(|w| w[1] >= w[0]), "{steps:?}");
+        assert!(
+            (steps[3] - 5.0).abs() < 1e-3 || (steps[3] - 10.0).abs() < 1e-3,
+            "{steps:?}"
+        );
+    }
+
+    #[test]
+    fn sheet_grid_stays_on_a_big_window() {
+        // 1.27 mm at 5.6 px/mm on an A3 sheet in a large window would exceed
+        // the cell cap; it steps coarser instead of dropping the grid.
+        let p = visible_pitch_mm(1.27, 5.6, 6.0, 2000.0 / 5.6, 1500.0 / 5.6).unwrap();
+        assert!(p >= 1.27);
     }
 
     #[test]

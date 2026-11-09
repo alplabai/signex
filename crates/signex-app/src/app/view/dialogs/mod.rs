@@ -7,7 +7,6 @@
 //! motion.
 
 use super::*;
-use iced::Color;
 
 mod annotate;
 mod autosave_recovery;
@@ -16,51 +15,22 @@ pub(in crate::app) use bom::{default_column_width as bom_default_column_width, s
 mod confirms;
 mod create_child_sheet;
 mod erc;
+mod graphite;
+mod graphite_annotate;
+mod header;
 mod project;
 mod rule_editor;
 mod sizes;
+mod title_bar;
+pub(crate) use header::DIALOG_HEADER_H;
 pub(crate) use rule_editor::{RuleEditor, rule_editor};
+pub(crate) use title_bar::DIALOG_TITLE_BAR_H;
 mod widgets;
-
-// ── Modal chrome — single source of truth ───────────────────────────
-//
-// Every modal in the app (Annotate, ERC, Reset Confirm, Rename, Remove,
-// Close-Tab Confirm, Print Preview) reaches for these constants so the
-// header height, title font, and close-X footprint stay locked in
-// step with the main-window chrome strip (`view::view_main_window_chrome`).
-// Tweak here, every modal updates.
-
-/// Modal header total height — Altium-style compact (28 px). The
-/// MENU_BAR_HEIGHT (36 px) read as too chunky on small confirm /
-/// rename modals; 28 keeps the header tight relative to the body.
-/// Close-X follows the same height so there's no empty strip below
-/// the button.
-pub(crate) const MODAL_HEADER_HEIGHT: f32 = 28.0;
-/// Asymmetric padding inside the modal header strip: zero on the right
-/// so the close-X sits flush against the rounded corner (its own
-/// top-right radius matches `MODAL_CORNER_RADIUS`); zero top/bottom so
-/// the X fills the strip's full height; left inset matched to the
-/// modal body padding (16 px) so the title left-aligns with the
-/// body's first text column.
-pub(crate) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
-    top: 0.0,
-    right: 0.0,
-    bottom: 0.0,
-    left: 16.0,
+pub(crate) use header::{
+    PREFERENCES_HEADER_H, graphite_header, graphite_header_closing, scrim_style,
 };
-/// Title text size in the modal header.
-pub(crate) const MODAL_HEADER_TITLE_SIZE: f32 = crate::styles::TypeScale::DEFAULT.title;
-/// Close-X hit-box width — same width the chrome close uses
-/// (`view/chrome/buttons.rs::windows_button`).
-pub(crate) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
-/// Close-X hit-box height — also matches the chrome close (full
-/// menu-bar height) so the modal X is pixel-identical to the OS-window X.
-pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
-/// Hover background for the close-X (Windows-native destructive red).
-pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
-
-pub(crate) use widgets::{close_x_button, modal_title_header, os_title_bar_slot};
 pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size};
+pub(crate) use widgets::{modal_title_header, os_title_bar_slot};
 
 #[cfg(test)]
 mod fit_window_tests;

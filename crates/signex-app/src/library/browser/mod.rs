@@ -9,12 +9,12 @@
 
 use std::collections::BTreeMap;
 
-use iced::widget::{Column, Space, column, container, mouse_area, pick_list, row, scrollable};
+use iced::widget::{Column, Space, column, container, mouse_area, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{ComponentRow, LifecycleState, RowId};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{PickListPlaceholder, button, raw, text, text_input};
+use signex_widgets::{button, raw, text, text_input};
 
 use super::messages::LibraryMessage;
 use super::range_filter::range_filter_bar;
@@ -26,11 +26,15 @@ mod empty_state;
 mod grid;
 mod header;
 mod keyed;
+mod layout;
+mod look;
 mod names;
+mod preview;
 mod price;
 mod sidebar;
 mod size_sensor;
 mod sort;
+mod tree;
 mod uncommitted;
 mod view_cache;
 mod window;
@@ -122,7 +126,7 @@ pub fn view<'a>(
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
     let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, read_only);
-    let header = view_header(library_path, lib, browser, tokens);
+    let header = view_header(library_path, lib, browser, tokens, read_only);
 
     // Body — left grid, right preview pane.
     let active_table = active_table(lib, browser);
@@ -207,7 +211,15 @@ pub fn view<'a>(
     // (visible regression: "double-clicking the .snxlib opens
     // nothing"). The original three-child Row hid this because two
     // of the children were fixed-width.
-    let body = row![left].width(Length::Fill).height(Length::Fill);
+    // Graphite: a preview pane for the selected row sits to the right.
+    let mut body: iced::widget::Row<Element<'a, LibraryMessage>> = row![left.boxed()].spacing(SP.m);
+    if let Some(selected) = browser.selected_row
+        && let Some(picked) = rows.iter().find(|r| RowId::from_uuid(r.row_id) == selected)
+    {
+        let names = names::PrimitiveNames::of(lib);
+        body = body.push(preview::view_preview(picked, &names, tokens));
+    }
+    let body = body.width(Length::Fill).height(Length::Fill);
 
     // Range filters on the measurement columns (#1572, phase 4).
     let range_bar = range_filter_bar(
@@ -225,8 +237,9 @@ pub fn view<'a>(
     )
     .map(|bar| container(bar).padding([4, 10]).boxed());
 
-    let banner = view_uncommitted_banner(library_path, library_state, tokens);
-    let mut right = column![header, banner].spacing(0);
+    // The uncommitted banner lives in the sidebar footer.
+    let footer = view_uncommitted_banner(library_path, library_state, tokens);
+    let mut right = column![header, Space::new().boxed()].spacing(0);
     if let Some(bar) = range_bar {
         right = right.push(bar);
     }
@@ -249,6 +262,17 @@ pub fn view<'a>(
             background: Some(iced::Background::Color(border_c)),
             ..iced::widget::container::Style::default()
         });
+    let table_sidebar = column![
+        tree::view_libraries_tree(library_path, library_state, tokens),
+        container(table_sidebar).height(Length::Fill).boxed(),
+        container(footer)
+            .padding(SP.m)
+            .width(Length::Fixed(sidebar::SIDEBAR_W))
+            .boxed(),
+    ]
+    .width(Length::Shrink)
+    .height(Length::Fill)
+    .boxed();
     row![table_sidebar, separator, right]
         .width(Length::Fill)
         .height(Length::Fill)

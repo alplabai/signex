@@ -350,14 +350,9 @@ impl Signex {
             return Task::none();
         }
 
-        let size = self.modal_window_size(modal);
-        let mut settings = modal_window_settings(modal, size);
-        settings.position = self.new_window_position(
-            size,
-            crate::app::handlers::window_placement::Anchor::MonitorCenter,
-            settings.position,
-        );
+        let (settings, borderless) = self.dialog_window_settings(modal);
         let (id, open_task) = iced::window::open(settings);
+        self.note_dialog_window(id, borderless);
         // Stash the mapping right away — view(id) for the new window
         // fires before open_task resolves on some platforms, and without
         // the entry the detached window would render empty.
@@ -497,8 +492,8 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),
         ModalId::LibraryStockCopy => iced::Size::new(520.0, 380.0),
         ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
-        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 410.0),
-        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 240.0),
+        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 234.0),
+        ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 100.0),
         ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),
         // Height follows the type scale (authored at the 11 px base).
         ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(390.0)),

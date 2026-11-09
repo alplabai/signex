@@ -208,9 +208,7 @@ fn justify_row<'a>(
     shared: &Shared<HAlign>,
     muted: Color,
     ctx: &PanelContext,
-    border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let hover = crate::styles::ti(ctx.tokens.hover);
     let accent = crate::styles::ti(ctx.tokens.accent);
     let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     let button = |label: &str, to: HAlign| {
@@ -221,8 +219,6 @@ fn justify_row<'a>(
             accent,
             Color::WHITE,
             text_inactive,
-            hover,
-            border_c,
         )
     };
     let label = if matches!(shared, Shared::Mixed) {
@@ -257,9 +253,7 @@ fn rotation_row<'a>(
     shared: &Shared<f64>,
     muted: Color,
     ctx: &PanelContext,
-    border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let hover = crate::styles::ti(ctx.tokens.hover);
     let accent = crate::styles::ti(ctx.tokens.accent);
     let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     let buttons = LABEL_TURNS.map(|deg| {
@@ -270,8 +264,6 @@ fn rotation_row<'a>(
             accent,
             Color::WHITE,
             text_inactive,
-            hover,
-            border_c,
         )
     });
     let label = if matches!(shared, Shared::Mixed) {
@@ -377,8 +369,8 @@ pub fn view_multi_selection<'a>(
             SCHEMATIC_PT_TO_MM,
             muted,
         ));
-        col = col.push(justify_row(&g.justify, muted, ctx, border_c));
-        col = col.push(rotation_row(&g.rotation_degrees, muted, ctx, border_c));
+        col = col.push(justify_row(&g.justify, muted, ctx));
+        col = col.push(rotation_row(&g.rotation_degrees, muted, ctx));
     }
     if let Some(g) = &ctx.multi_groups.wires {
         col = col.push(section_hdr(

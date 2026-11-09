@@ -565,7 +565,7 @@ mod tests {
         build_renderer_snapshot(
             sheet,
             &transform,
-            &canvas_colors(ThemeId::Signex),
+            &canvas_colors(ThemeId::GraphiteLight),
             bounds,
             Some(&setup.focus),
             SceneOverrides {
@@ -759,7 +759,7 @@ mod tests {
 
     #[test]
     fn the_static_layer_is_drawn_once_across_frames_and_again_on_a_view_change() {
-        let colors = canvas_colors(ThemeId::Signex);
+        let colors = canvas_colors(ThemeId::GraphiteLight);
         let transform = |scale: f32, offset_x: f32| ScreenTransform {
             offset_x,
             offset_y: 0.0,
@@ -812,7 +812,7 @@ mod tests {
     #[test]
     fn the_end_or_cancel_of_a_drag_drops_the_session_and_the_static_layer() {
         let (sheet, selection) = mixed_sheet();
-        let colors = canvas_colors(ThemeId::Signex);
+        let colors = canvas_colors(ThemeId::GraphiteLight);
         let mut layers = DragLayers::default();
         assert!(!layers.is_active());
         layers.session_for(&sheet, 1, &selection);

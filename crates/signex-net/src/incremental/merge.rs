@@ -34,20 +34,6 @@ fn root_of(uf: &mut [usize], mut x: usize) -> usize {
     x
 }
 
-fn join<'a>(uf: &mut [usize], groups: &mut HashMap<&'a str, usize>, text: &'a str, at: usize) {
-    match groups.get(text) {
-        Some(&other) => {
-            let (a, b) = (root_of(uf, at), root_of(uf, other));
-            if a != b {
-                uf[a.max(b)] = a.min(b);
-            }
-        }
-        None => {
-            groups.insert(text, at);
-        }
-    }
-}
-
 #[derive(Default)]
 struct Acc<'a> {
     id: Option<Key>,
@@ -88,29 +74,52 @@ fn first_port<'a>(
         .map(|(_, value)| *value)
 }
 
+/// A name that joins clusters: `power` false for the label namespace (`Net`,
+/// `Global` and `Power` labels of one text), true for the power namespace
+/// (`Global` / `Power` labels and power ports of one value).
+pub(super) type GroupKey = (bool, String);
+
+/// Every group `cluster` belongs to; the one place the joining rules live.
+pub(super) fn name_groups(cluster: &Cluster) -> Vec<GroupKey> {
+    let mut groups = Vec::new();
+    for label in &cluster.labels {
+        if label.text.is_empty() {
+            continue;
+        }
+        if matches!(
+            label.kind,
+            LabelType::Global | LabelType::Power | LabelType::Net
+        ) {
+            groups.push((false, label.text.clone()));
+        }
+        if matches!(label.kind, LabelType::Global | LabelType::Power) {
+            groups.push((true, label.text.clone()));
+        }
+    }
+    for (_, value) in &cluster.ports {
+        if !value.is_empty() {
+            groups.push((true, value.clone()));
+        }
+    }
+    groups
+}
+
 /// The union-find over `clusters` after the name joins.
 fn join_by_name(clusters: &[(Key, &Cluster)]) -> Vec<usize> {
     let mut uf: Vec<usize> = (0..clusters.len()).collect();
-    let mut by_label: HashMap<&str, usize> = HashMap::new();
-    let mut by_power: HashMap<&str, usize> = HashMap::new();
+    let mut groups: HashMap<GroupKey, usize> = HashMap::new();
     for (at, (_, cluster)) in clusters.iter().enumerate() {
-        for label in &cluster.labels {
-            if label.text.is_empty() {
-                continue;
-            }
-            if matches!(
-                label.kind,
-                LabelType::Global | LabelType::Power | LabelType::Net
-            ) {
-                join(&mut uf, &mut by_label, &label.text, at);
-            }
-            if matches!(label.kind, LabelType::Global | LabelType::Power) {
-                join(&mut uf, &mut by_power, &label.text, at);
-            }
-        }
-        for (_, value) in &cluster.ports {
-            if !value.is_empty() {
-                join(&mut uf, &mut by_power, value, at);
+        for key in name_groups(cluster) {
+            match groups.get(&key) {
+                Some(&other) => {
+                    let (a, b) = (root_of(&mut uf, at), root_of(&mut uf, other));
+                    if a != b {
+                        uf[a.max(b)] = a.min(b);
+                    }
+                }
+                None => {
+                    groups.insert(key, at);
+                }
             }
         }
     }

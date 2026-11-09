@@ -13,6 +13,7 @@ use iced::widget::{Column, Row, Space, Widget, column, container, pick_list, row
 use iced::{Color, Element, Length};
 use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 use signex_widgets::{raw, text, text_input};
 
@@ -228,8 +229,8 @@ fn view_document<'a>(
 
     let mode_address = address.clone();
     let mode_picker = pick_list(Some(mode), DatasheetMode::ALL, ToString::to_string)
+        .graphite()
         .on_select(move |m| event(&mode_address, DatasheetMsg::SetMode(index, m)))
-        .text_size(TS.body)
         .padding([SP.s, SP.m])
         .boxed();
 
@@ -367,12 +368,15 @@ fn view_pinned_input<'a>(
                 hash.clone()
             };
             row![
-                text(raw(filename.clone()))
+                text(signex_i18n::UserText::new(filename.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .boxed(),
                 Space::new().width(Length::Fill).boxed(),
-                text(raw(short_hash)).size(TS.caption).color(muted).boxed(),
+                text(signex_i18n::UserText::new(short_hash))
+                    .size(TS.caption)
+                    .color(muted)
+                    .boxed(),
             ]
             .align_y(iced::Alignment::Center)
             .boxed()

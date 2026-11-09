@@ -1,4 +1,4 @@
-//! File ▸ Export ▸ ERC Report — text, CSV, JSON, HTML or PDF of the cached
+//! Reports ▸ ERC Report — text, CSV, JSON, HTML or PDF of the cached
 //! ERC results, with the project's waivers (#1287).
 //!
 //! Rows come from `build_erc_diagnostic_entries`, the Messages panel's own row

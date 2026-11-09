@@ -13,10 +13,12 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 mod buttons;
+mod graphite;
 
 impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
-    /// title bar with a 36 px strip:
+    /// title bar with a strip (`MENU_BAR_HEIGHT`; Graphite themes use
+    /// `view_graphite_window_chrome`):
     ///
     /// `[leading controls] [wordmark + menus] [drag] [drag] [trailing controls]`
     ///
@@ -32,191 +34,25 @@ impl Signex {
     /// buttons, search, and window controls keep their own click
     /// handlers. Double-click on a drag zone toggles maximize.
     pub(super) fn view_main_window_chrome<'a>(
-        &self,
+        &'a self,
         menu_row: Option<Element<'a, Message>>,
         tokens: &signex_types::theme::ThemeTokens,
     ) -> Element<'a, Message> {
-        use iced::widget::{Space, container, mouse_area, row, svg};
-        use iced::{Alignment, Background, Border, Color, Length};
-
-        let theme_id = self.ui_state.effective_theme_id();
-        let h_search = crate::icons::icon_chrome_search(theme_id);
-
-        let text_c = crate::styles::ti(tokens.text);
-        let muted_c = crate::styles::ti(tokens.text_secondary);
-        let search_bg = crate::styles::ti(tokens.panel_bg);
-        let search_border = crate::styles::ti(tokens.border);
-        // Windows-native destructive red for the close hover — overrides
-        // the theme hover so close reads as destructive at a glance.
-        let palette = buttons::Palette {
-            theme_id,
-            text: text_c,
-            hover: crate::styles::ti(tokens.hover),
-            close_hover: Color::from_rgba(0.78, 0.22, 0.22, 1.0),
-        };
-        let btn_h = crate::menu_bar::MENU_BAR_HEIGHT;
-        let layout = self.window_controls_layout();
-        let fullscreen = self.ui_state.main_window_is_fullscreen();
-        let leading_controls = buttons::leading(&layout, palette, fullscreen);
-        let trailing_controls = buttons::trailing(&layout, palette);
-
-        // Left-pad the menu row so the wordmark doesn't sit flush against
-        // the window edge; Windows-style controls stay flush so their hover
-        // boxes touch the corner like in native chrome.
-        let menu_padded = menu_row.map(|row| {
-            container(row).padding(iced::Padding {
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-                left: 8.0,
-            })
-        });
-
-        // Shrinks with the window; the palette dropdown reads the same
-        // geometry so it stays glued to the input.
-        let (search_bar_x, search_bar_w) = self.chrome_search_bar_geometry();
-
-        // Chrome-strip command palette input — VS Code-style fuzzy
-        // search over commands, placed symbols, and project files. The
-        // text_input is always rendered; the dropdown overlay is gated
-        // on `command_palette.open` and rendered by `collect_overlays`.
-        let search_icon =
-            svg(h_search.clone())
-                .width(12)
-                .height(12)
-                .style(move |_: &iced::Theme, _| svg::Style {
-                    color: Some(muted_c),
-                });
-        let palette_input = text_input(
-            raw("Search files, symbols, commands…"),
-            // A palette owned by an undocked window types in that window.
-            if self.ui_state.command_palette.window.is_none() {
-                self.ui_state.command_palette.query.clone()
-            } else {
-                String::new()
-            },
-        )
-        .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
-        .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
-        .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
-        .padding(iced::Padding::ZERO)
-        .size(TS.body)
-        .width(Length::Fill)
-        .style(
-            move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
-                // Outer container owns the chrome border + bg, so the
-                // input itself is transparent. Without this the input's
-                // default frame paints on top of the container's
-                // rounded rect and the corners look doubled.
-                background: Background::Color(Color::TRANSPARENT),
-                border: Border {
-                    color: Color::TRANSPARENT,
-                    width: 0.0,
-                    radius: 0.0.into(),
-                    ..Border::default()
-                },
-                placeholder: muted_c,
-                value: text_c,
-                selection: Color { a: 0.4, ..text_c },
-            },
-        );
-        let search_bar: Element<'_, Message> = container(
-            row![search_icon, palette_input]
-                .spacing(SP.m)
-                .align_y(Alignment::Center),
-        )
-        .padding(iced::Padding {
-            top: 0.0,
-            right: 10.0,
-            bottom: 0.0,
-            left: 10.0,
-        })
-        .width(search_bar_w)
-        .height(28)
-        .align_y(iced::alignment::Vertical::Center)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(Background::Color(search_bg)),
-            border: Border {
-                color: search_border,
-                width: 1.0,
-                radius: 4.0.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed();
-
-        // Drag zones on either side of the search bar. Double-click
-        // toggles maximize (Windows title-bar convention).
-        let drag_zone = || -> Element<'static, Message> {
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-            )
-            .on_press(Message::Window(WindowMsg::StartMainWindowDrag))
-            .on_double_click(Message::Window(WindowMsg::ToggleMaximizeMainWindow))
-            .boxed()
-        };
-
-        // Two layers. Underneath: menus, controls, and two Fill drag
-        // zones covering everything between them. On top: the search
-        // bar, centred on the window. Putting the bar in the row
-        // instead would centre it in the *gap*, which sits right of
-        // window centre because the menu section is far wider than the
-        // three control buttons.
-        //
-        // The top layer is a bare container — outside the bar's own
-        // bounds it captures nothing, so presses fall straight through
-        // to the drag zones below and the whole strip stays draggable.
-        let strip = row![leading_controls]
-            .push(menu_padded.boxed())
-            .push(drag_zone())
-            .push(drag_zone())
-            .push(trailing_controls)
-            .width(Length::Fill)
-            .align_y(Alignment::Center);
-        // Positioned by left padding rather than centre alignment so it
-        // lands on exactly the `x` the geometry helper reports — the
-        // dropdown anchors to that same `x`, and the helper stops
-        // centring on very narrow windows.
-        let centered_search = container(search_bar)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(iced::Padding {
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-                left: search_bar_x,
-            })
-            .align_y(iced::alignment::Vertical::Center);
-        let inner = iced::widget::Stack::new()
-            .push(strip.boxed())
-            .push(centered_search.boxed());
-
-        container(inner)
-            .width(Length::Fill)
-            .height(btn_h)
-            .style(crate::styles::toolbar_strip(tokens))
-            .boxed()
+        self.view_graphite_window_chrome(menu_row, tokens)
     }
 
     /// `(x, width)` of the search bar for the current window width and
     /// control layout; the palette dropdown anchors to the same `x`.
     pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
-        let (leading_w, trailing_w) = buttons::extents(&self.window_controls_layout(), fullscreen);
+        let (leading_w, trailing_w) =
+            buttons::extents_for(&self.window_controls_layout(), fullscreen, true);
         let menu_w = if self.native_menu.hides_in_window_menu() {
             0.0
         } else {
-            crate::menu_bar::approx_menu_bar_width(&self.ui_state.i18n)
+            crate::menu_bar::approx_graphite_menu_bar_width(&self.ui_state.i18n)
         };
-        crate::app::view::chrome_search_bar_geometry(
-            self.ui_state.window_size.0,
-            leading_w,
-            trailing_w,
-            menu_w,
-        )
+        graphite::search_geometry(self.ui_state.window_size.0, leading_w, trailing_w, menu_w)
     }
 
     fn view_preferences_body(&self) -> Element<'_, Message> {
@@ -234,6 +70,7 @@ impl Signex {
                 draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
                 draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
                 draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
+                draft_wheel_mode: ui.preferences_draft_wheel_mode,
                 draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
                 draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
                 draft_increment_step: ui.preferences_draft_increment_step,
@@ -248,8 +85,6 @@ impl Signex {
                 draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
                 draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
                 draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
-                custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
-                theme_status: &ui.preferences_theme_status,
                 dirty: ui.preferences_dirty,
                 profiles: &ui.profile_manager,
                 default_profile: ui.default_rule_profile.as_deref(),
@@ -263,6 +98,7 @@ impl Signex {
                 prefs_load_error: ui.prefs_load_error.as_deref(),
                 prefs_status: &ui.preferences_prefs_status,
                 keymap_search: &ui.preferences_keymap_search,
+                nav_search: &ui.preferences_nav_search,
                 keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
             })
             .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
@@ -271,7 +107,7 @@ impl Signex {
         dialog
     }
 
-    pub(super) fn view_detached_modal(
+    pub(in crate::app::view) fn view_detached_modal(
         &self,
         window: iced::window::Id,
         modal: super::state::ModalId,
@@ -360,6 +196,14 @@ impl Signex {
     /// coordinates (Active Bar, text edit, net-colour picker) stay
     /// correct without a +EDGE correction everywhere.
     pub(super) fn resize_edges_overlay<'a>() -> Element<'a, Message> {
+        Self::resize_edges_overlay_with(|d| Message::Window(WindowMsg::StartMainWindowResize(d)))
+    }
+
+    /// [`Self::resize_edges_overlay`] sending `on_edge(direction)`, for a
+    /// borderless window other than the main one.
+    pub(in crate::app::view) fn resize_edges_overlay_with<'a>(
+        on_edge: impl Fn(iced::window::Direction) -> Message + Copy + 'a,
+    ) -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};
         use iced::window::Direction;
@@ -375,7 +219,7 @@ impl Signex {
                 (Length::Fixed(EDGE), Length::Fill)
             };
             mouse_area(Space::new().width(w).height(h))
-                .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
+                .on_press(on_edge(direction))
                 .interaction(cursor)
                 .boxed()
         };
@@ -386,7 +230,7 @@ impl Signex {
                     .width(Length::Fixed(EDGE))
                     .height(Length::Fixed(EDGE)),
             )
-            .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
+            .on_press(on_edge(direction))
             .interaction(cursor)
             .boxed()
         };
@@ -505,15 +349,17 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(size)
                 .height(Length::Fill)
-                .style(crate::styles::resize_handle(
+                .style(crate::styles::resize_handle_edge(
                     &self.document_state.panel_ctx.tokens,
+                    true,
                 ))
         } else {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(size)
-                .style(crate::styles::resize_handle(
+                .style(crate::styles::resize_handle_edge(
                     &self.document_state.panel_ctx.tokens,
+                    false,
                 ))
         };
         let interaction = if horizontal {

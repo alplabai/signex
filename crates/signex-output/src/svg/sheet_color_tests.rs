@@ -43,13 +43,13 @@ fn page_fill(color: Option<Color>, theme: ThemeId) -> (f32, f32, f32) {
 
 #[test]
 fn the_default_sheet_colour_follows_the_theme_and_a_set_one_does_not() {
-    let light = page_fill(None, ThemeId::Signex);
-    let dark = page_fill(None, ThemeId::CatppuccinMocha);
+    let light = page_fill(None, ThemeId::GraphiteLight);
+    let dark = page_fill(None, ThemeId::GraphiteDark);
     assert_ne!(light, dark, "Default follows the theme");
     let gray = Color::new(0xd0, 0xd0, 0xd0, 0xff);
     let want = (208.0 / 255.0, 208.0 / 255.0, 208.0 / 255.0);
-    assert_eq!(page_fill(Some(gray), ThemeId::Signex), want);
-    assert_eq!(page_fill(Some(gray), ThemeId::CatppuccinMocha), want);
+    assert_eq!(page_fill(Some(gray), ThemeId::GraphiteLight), want);
+    assert_eq!(page_fill(Some(gray), ThemeId::GraphiteDark), want);
 }
 
 /// Review of #2034: Black & White ignores the sheet colour, so a Black sheet
@@ -77,7 +77,7 @@ fn black_and_white_ignores_the_sheet_colour() {
         };
         let opts = PdfOptions {
             colour_mode: ColourMode::BlackAndWhite,
-            palette: SchematicPalette::from(&canvas_colors(ThemeId::Signex)),
+            palette: SchematicPalette::from(&canvas_colors(ThemeId::GraphiteLight)),
             ..PdfOptions::default()
         };
         let ctx = SvgRenderContext::from_sheet(&snapshot, &opts, 297.0, 210.0, 1.0, None);

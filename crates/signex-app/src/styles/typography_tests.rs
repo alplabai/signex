@@ -64,6 +64,16 @@ fn every_step_keeps_its_authored_ratio_to_body_at_any_base() {
     }
 }
 
+/// The Graphite steps: 11 px section labels and 12 px dense text at the
+/// default base, scaling with it.
+#[test]
+fn the_section_and_dense_steps_follow_the_base() {
+    let ts = TypeScale::default();
+    assert_eq!([ts.section, ts.dense], [11.0, 12.0]);
+    let big = TypeScale::from_base(24.0);
+    assert_eq!([big.section, big.dense], [22.0, 24.0]);
+}
+
 #[test]
 fn scale_steps_are_strictly_increasing() {
     let ts = TypeScale::from_base(13.0);
@@ -273,4 +283,36 @@ fn line_height_is_the_frameworks_default() {
     use iced::widget::text::LineHeight;
     let framework = LineHeight::default().to_absolute(Pixels(1.0)).0;
     assert_eq!(super::typography::LINE_HEIGHT, framework);
+}
+
+/// No expand/collapse header draws a text arrow; they all use the shared
+/// stroke chevron. Sort arrows, the sub-menu `›`, breadcrumbs and menu
+/// paths are not collapse chevrons and stay.
+#[test]
+fn no_expand_collapse_header_draws_a_text_chevron() {
+    const PINNED: &[&str] = &[
+        "library/panel.rs",
+        "library/editor/footprint/context_menu.rs",
+        "panels/components_panel/look.rs",
+    ];
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for rel in PINNED {
+        let text = std::fs::read_to_string(src.join(rel)).expect("source file");
+        let code: String = text
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for glyph in [
+            "\u{25B8}", "\u{25BE}", "\u{25B6}", "\u{25BC}", "\u{25BA}", "\u{2304}",
+        ] {
+            // A whole string literal is a drawn arrow; a glyph inside a
+            // sentence (a menu path) is prose.
+            let literal = format!("\"{glyph}\"");
+            assert!(
+                !code.contains(&literal),
+                "{rel} draws the text chevron {glyph}"
+            );
+        }
+    }
 }

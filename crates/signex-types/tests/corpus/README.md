@@ -37,6 +37,7 @@ byte-identically. Filenames name the feature:
 | Area | Fixtures |
 |---|---|
 | Baseline | `empty_sheet`, `symbol-single`, `symbol-all-tsv-columns` |
+| Wire colour | `wire-colour` (optional `color` wire column: empty cell, `#rrggbbaa`) |
 | Extras-only data | `symbol-extras-only-data` (`fields`, `pin_uuids`, `custom_properties`, field texts, instances) |
 | Symbol flags | `symbol-dnp`, `symbol-not-in-bom`, `symbol-not-on-board`, `symbol-exclude-from-sim`, `symbol-locked`, `symbol-power` |
 | Units / orientation | `symbol-multi-unit`, `symbol-mirror-x`, `symbol-mirror-y`, `symbol-rotations-axis` (0/90/180/270), `symbol-rotation-non-axis` |

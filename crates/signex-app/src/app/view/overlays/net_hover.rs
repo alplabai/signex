@@ -27,7 +27,7 @@ impl Signex {
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(card.pins.len() + 3);
         rows.push(
-            text(raw(card.name.clone()))
+            text(signex_i18n::UserText::new(card.name.clone()))
                 .size(TS.label)
                 .color(text_c)
                 .boxed(),
@@ -44,7 +44,9 @@ impl Signex {
             rows.push(
                 row![
                     text(raw(pin.pin.clone())).size(TS.caption).color(text_c),
-                    text(raw(pin.sheet.clone())).size(TS.caption).color(muted_c),
+                    text(signex_i18n::UserText::new(pin.sheet.clone()))
+                        .size(TS.caption)
+                        .color(muted_c),
                 ]
                 .spacing(SP.s)
                 .boxed(),

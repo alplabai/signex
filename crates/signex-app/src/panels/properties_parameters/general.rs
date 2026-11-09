@@ -7,6 +7,7 @@
 
 use super::super::*;
 use crate::panels::PaperEdge;
+use crate::panels::form_look;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
@@ -16,146 +17,125 @@ use signex_types::schematic::{SheetOrientation, SheetSize};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Custom Selection Filters collapsible section — tabbed editor for up to
-/// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
-/// `view_properties_general` so the schematic Properties panel and the
-/// Footprint editor's Properties panel render the EXACT same widget.
-pub fn view_custom_selection_filters_section<'a>(
-    presets: Vec<crate::active_bar::CustomFilterPreset>,
-    active_custom_filter_tab: usize,
-    collapsed_sections: &'a CollapsedSections,
+/// The section on the Graphite section chrome.
+fn selection_filters_section_for<'a>(
+    ctx: &'a PanelContext,
     palette: PanelPalette,
 ) -> Column<Element<'a, PanelMsg>> {
-    let PanelPalette {
-        muted,
-        primary,
-        border: border_c,
-        accent: accent_c,
-        tag_hover,
-        ..
-    } = palette;
-    use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
-    let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
-    let muted_c = muted;
-    let primary_c = primary;
+    let presets = ctx.custom_filter_presets.clone();
+    let tab = ctx.active_custom_filter_tab;
     Column::new().spacing(0).width(Length::Fill).push(
-        collapsible_section(
+        ctx.collapsible(
             "prop_sel_filter",
             "Custom Selection Filters",
-            collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c: Column<Element<'a, PanelMsg>> =
-                    Column::new().spacing(6).width(Length::Fill);
-                if presets.is_empty() {
-                    c = c.push(
-                        container(
-                            text(raw("No presets yet. Click + to define one."))
-                                .size(TS.body)
-                                .color(muted_c),
-                        )
-                        .padding([SP.s, SP.m])
-                        .boxed(),
-                    );
-                    c = c.push(
-                        container(
-                            signex_widgets::button(text(raw("+ Add Filter")).size(TS.body))
-                                .padding([SP.s, 10.0])
-                                .on_press(PanelMsg::AddCustomFilterPreset)
-                                .style(move |theme: &Theme, status| {
-                                    add_filter_button_style(theme, status, primary_c)
-                                }),
-                        )
-                        .padding([SP.s, SP.m])
-                        .boxed(),
-                    );
-                    return c;
-                }
-                let mut tabs: iced::widget::Row<Element<'a, PanelMsg>> = iced::widget::Row::new()
-                    .spacing(SP.xs)
-                    .align_y(iced::Alignment::Center);
-                for (idx, preset) in presets.iter().enumerate() {
-                    let label = if preset.name.trim().is_empty() {
-                        format!("Filter {}", idx + 1)
-                    } else {
-                        preset.name.clone()
-                    };
-                    tabs = tabs.push(custom_filter_tab(
-                        label,
-                        idx == active_tab,
-                        idx,
-                        tag_hover,
-                        accent_c,
-                    ));
-                }
-                if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
-                    tabs = tabs.push(
-                        signex_widgets::button(text(raw("+")).size(TS.label).color(primary_c))
-                            .padding([3, 10])
-                            .on_press(PanelMsg::AddCustomFilterPreset)
-                            .boxed(),
-                    );
-                }
-                c = c.push(container(tabs).padding([SP.s, SP.m]).boxed());
-                let preset = &presets[active_tab];
-                let included: std::collections::HashSet<SelectionFilter> =
-                    preset.filters.iter().copied().collect();
-                let header = row![
-                    signex_widgets::text_input(
-                        signex_widgets::raw("Preset name"),
-                        preset.name.clone()
-                    )
-                    .size(TS.body)
-                    .padding([3, 6])
-                    .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
-                    .width(Length::Fill)
-                    .boxed(),
-                    signex_widgets::button(text(raw("Delete")).size(TS.body).color(primary_c))
-                        .padding([3.0, SP.m])
-                        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
-                        .boxed(),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center);
-                let mut wrap = Wrap::new().spacing(SP.s).line_spacing(4.0);
-                for &f in SelectionFilter::ALL {
-                    wrap = wrap.push(preset_chip(
-                        f.label(),
-                        active_tab,
-                        f,
-                        included.contains(&f),
-                        tag_hover,
-                        accent_c,
-                    ));
-                }
-                c = c.push(
-                    container(
-                        column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()]
-                            .spacing(SP.s),
-                    )
-                    .padding([6.0, SP.m])
-                    .boxed(),
-                );
-                c
-            },
+            &ctx.collapsed_sections,
+            move || selection_filters_body(presets, tab, palette),
         )
         .boxed(),
     )
 }
 
+/// Body of the Custom Selection Filters section.
+fn selection_filters_body<'a>(
+    presets: Vec<crate::active_bar::CustomFilterPreset>,
+    active_custom_filter_tab: usize,
+    palette: PanelPalette,
+) -> Column<Element<'a, PanelMsg>> {
+    let PanelPalette { muted, primary, .. } = palette;
+    use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
+    let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
+    let muted_c = muted;
+    let primary_c = primary;
+    let mut c: Column<Element<'a, PanelMsg>> = Column::new().spacing(6).width(Length::Fill);
+    if presets.is_empty() {
+        c = c.push(
+            container(
+                text(raw("No presets yet. Click + to define one."))
+                    .size(TS.body)
+                    .color(muted_c),
+            )
+            .padding([SP.s, SP.m])
+            .boxed(),
+        );
+        c = c.push(
+            container(
+                signex_widgets::button(text(raw("+ Add Filter")).size(TS.body))
+                    .padding([SP.s, 10.0])
+                    .on_press(PanelMsg::AddCustomFilterPreset)
+                    .style(form_look::ghost_button),
+            )
+            .padding([SP.s, SP.m])
+            .boxed(),
+        );
+        return c;
+    }
+    let mut tabs: iced::widget::Row<Element<'a, PanelMsg>> = iced::widget::Row::new()
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center);
+    for (idx, preset) in presets.iter().enumerate() {
+        let label = if preset.name.trim().is_empty() {
+            format!("Filter {}", idx + 1)
+        } else {
+            preset.name.clone()
+        };
+        tabs = tabs.push(custom_filter_tab(label, idx == active_tab, idx));
+    }
+    if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
+        tabs = tabs.push(
+            signex_widgets::button(text(raw("+")).size(TS.label).color(primary_c))
+                .padding([3, 10])
+                .on_press(PanelMsg::AddCustomFilterPreset)
+                .style(form_look::ghost_button)
+                .boxed(),
+        );
+    }
+    c = c.push(container(tabs).padding([SP.s, SP.m]).boxed());
+    let preset = &presets[active_tab];
+    let included: std::collections::HashSet<SelectionFilter> =
+        preset.filters.iter().copied().collect();
+    let header = row![
+        signex_widgets::text_input(signex_widgets::raw("Preset name"), preset.name.clone())
+            .size(TS.body)
+            .padding([3, 6])
+            .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
+            .style(form_look::text_input_style)
+            .width(Length::Fill)
+            .boxed(),
+        signex_widgets::button(text(raw("Delete")).size(TS.body).color(primary_c))
+            .padding([3.0, SP.m])
+            .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
+            .style(form_look::ghost_button)
+            .boxed(),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    let mut wrap = Wrap::new().spacing(SP.s).line_spacing(4.0);
+    for &f in SelectionFilter::ALL {
+        wrap = wrap.push(preset_chip(f.label(), active_tab, f, included.contains(&f)));
+    }
+    c = c.push(
+        container(
+            column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()].spacing(SP.s),
+        )
+        .padding([6.0, SP.m])
+        .boxed(),
+    );
+    c
+}
+
 pub fn view_properties_general<'a>(
     ctx: &'a PanelContext,
-    muted: Color,
     primary: Color,
-    border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
+    // Graphite muted ink for labels and hints, on the shared label column.
+    let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
+    let label = LabelInk::graphite(muted);
+    let hairline = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
     // Derive button/input colors from tokens (Copy values captured in closures)
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
         input_bg,
         input_bdr,
-        seg_hover,
         panel_bg,
         ..
     } = palette;
@@ -165,17 +145,10 @@ pub fn view_properties_general<'a>(
     // Custom Selection Filters — shared widget reused by the Footprint
     // editor's Properties panel so both editors render the EXACT same
     // chrome (tabs, chips, name input, accent border).
-    col = col.push(
-        view_custom_selection_filters_section(
-            ctx.custom_filter_presets.clone(),
-            ctx.active_custom_filter_tab,
-            &ctx.collapsed_sections,
-            palette,
-        )
-        .boxed(),
-    );
+    col = col.push(selection_filters_section_for(ctx, palette).boxed());
 
     // General (collapsible)
+    col = col.push(thin_sep(hairline));
     {
         let unit = ctx.unit;
         let grid_size_mm = ctx.grid_size_mm;
@@ -190,16 +163,14 @@ pub fn view_properties_general<'a>(
         let canvas_font_popup_open = ctx.canvas_font_popup_open;
         let sheet_color = ctx.sheet_color;
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "prop_general",
                 "General",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
                         Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_label("Units", muted));
+                    c = c.push(form_label("Units"));
                     c = c.push(
                         container(
                             row![
@@ -210,8 +181,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr
                                 ),
                                 seg_btn(
                                     "mils",
@@ -220,14 +189,13 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr
                                 ),
                             ]
                             .spacing(0.0)
                             .width(Length::Fill),
                         )
                         .padding([SP.xs, SP.m])
+                        .style(form_look::segmented_frame)
                         .boxed(),
                     );
                     // Altium-style: Visible Grid and Snap Grid are independent
@@ -237,7 +205,7 @@ pub fn view_properties_general<'a>(
                         unit,
                         false,
                         PanelMsg::SetVisibleGridSize,
-                        muted,
+                        label,
                         grid_visible,
                         PanelMsg::ToggleGrid,
                     ));
@@ -247,7 +215,7 @@ pub fn view_properties_general<'a>(
                         unit,
                         true,
                         PanelMsg::SetGridSize,
-                        muted,
+                        label,
                         snap_enabled,
                         PanelMsg::ToggleSnap,
                     ));
@@ -256,7 +224,7 @@ pub fn view_properties_general<'a>(
                         snap_hotspots,
                         PanelMsg::ToggleSnapHotspots,
                         "Shift+E",
-                        muted,
+                        label,
                     ));
                     c = c.push(form_font_link_row(
                         "Canvas Font",
@@ -264,7 +232,7 @@ pub fn view_properties_general<'a>(
                         canvas_font_size,
                         canvas_font_bold,
                         canvas_font_italic,
-                        muted,
+                        label,
                     ));
                     if canvas_font_popup_open {
                         c = c.push(
@@ -291,7 +259,7 @@ pub fn view_properties_general<'a>(
                         crate::panels::SchematicSheetColor::options(),
                         sheet_color,
                         PanelMsg::SetSheetColor,
-                        muted,
+                        label,
                     ));
                     c
                 },
@@ -301,6 +269,7 @@ pub fn view_properties_general<'a>(
     }
 
     // Page Options (collapsible)
+    col = col.push(thin_sep(hairline));
     {
         let paper_size = ctx.paper_size.clone();
         let format_mode = ctx.page_format_mode;
@@ -308,16 +277,14 @@ pub fn view_properties_general<'a>(
         let origin = ctx.page_origin;
         let document_font = ctx.document_font_family.clone();
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "prop_page_opts",
                 "Page Options",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
                         Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_label("Formatting and Size", muted));
+                    c = c.push(form_label("Formatting and Size"));
                     c = c.push(
                         container(
                             row![
@@ -328,8 +295,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr,
                                 ),
                                 seg_btn(
                                     "Standard",
@@ -338,8 +303,6 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr,
                                 ),
                                 seg_btn(
                                     "Custom",
@@ -348,14 +311,13 @@ pub fn view_properties_general<'a>(
                                     input_bg,
                                     primary,
                                     muted,
-                                    seg_hover,
-                                    input_bdr,
                                 ),
                             ]
                             .spacing(0.0)
                             .width(Length::Fill),
                         )
                         .padding([SP.xs, SP.m])
+                        .style(form_look::segmented_frame)
                         .boxed(),
                     );
                     let (sheet_size, orientation) = SheetSize::parse(&paper_size);
@@ -373,7 +335,7 @@ pub fn view_properties_general<'a>(
                                     .0
                                     .token(SheetOrientation::Landscape),
                                 PanelMsg::SetPaperSize,
-                                muted,
+                                label,
                             ));
                             if matches!(format_mode, PageFormatMode::Template) {
                                 c = c.push(
@@ -399,7 +361,7 @@ pub fn view_properties_general<'a>(
                                     })
                                     .as_deref(),
                                 PaperEdge::Width,
-                                muted,
+                                label,
                                 input_bg,
                                 input_bdr,
                             ));
@@ -413,7 +375,7 @@ pub fn view_properties_general<'a>(
                                     })
                                     .as_deref(),
                                 PaperEdge::Height,
-                                muted,
+                                label,
                                 input_bg,
                                 input_bdr,
                             ));
@@ -425,7 +387,7 @@ pub fn view_properties_general<'a>(
                             vec![SheetOrientation::Landscape, SheetOrientation::Portrait],
                             orientation,
                             PanelMsg::SetSheetOrientation,
-                            muted,
+                            label,
                         ));
                     }
                     let (w, h) = paper_dimensions(&paper_size);
@@ -435,14 +397,14 @@ pub fn view_properties_general<'a>(
                             .padding([3.0, SP.m])
                             .boxed(),
                     );
-                    c = c.push(form_label("Border and Zones", muted));
+                    c = c.push(form_label("Border and Zones"));
                     c = c.push(form_check_row(
                         "Show Border",
                         sheet_frame.show_border,
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(
                             !sheet_frame.show_border,
                         )),
-                        muted,
+                        label,
                         panel_bg,
                     ));
                     c = c.push(form_check_row(
@@ -451,7 +413,7 @@ pub fn view_properties_general<'a>(
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
                             !sheet_frame.show_title_block,
                         )),
-                        muted,
+                        label,
                         panel_bg,
                     ));
                     let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
@@ -460,14 +422,14 @@ pub fn view_properties_general<'a>(
                         zone_counts.clone(),
                         sheet_frame.vertical_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
-                        muted,
+                        label,
                     ));
                     c = c.push(form_pick_row(
                         "Horizontal",
                         zone_counts,
                         sheet_frame.horizontal_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
-                        muted,
+                        label,
                     ));
                     let origin_opts: Vec<PageOrigin> =
                         vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
@@ -476,9 +438,9 @@ pub fn view_properties_general<'a>(
                         origin_opts,
                         origin,
                         PanelMsg::SetPageOrigin,
-                        muted,
+                        label,
                     ));
-                    c = c.push(form_label("Text", muted));
+                    c = c.push(form_label("Text"));
                     c = c.push(crate::panels::element_properties::font_family_row(
                         "Default Font",
                         document_font.as_deref(),
@@ -493,26 +455,47 @@ pub fn view_properties_general<'a>(
     }
 
     // Title Block (collapsible, #1080)
-    col = col.push(super::view_title_block_section(
-        ctx, muted, primary, border_c,
-    ));
+    col = col.push(thin_sep(hairline));
+    col = col.push(super::view_title_block_section(ctx));
 
-    col = col.push(view_net_classes_section(ctx, palette).boxed());
+    col = col.push(thin_sep(hairline));
+    col = col.push(view_net_classes_section(ctx).boxed());
 
     col
 }
 
+/// Standard document parameters the Parameters tab lists.
+pub(super) const DOCUMENT_PARAMETERS: &[(&str, &str)] = &[
+    ("CurrentTime", "*"),
+    ("CurrentDate", "*"),
+    ("Time", "*"),
+    ("Date", "*"),
+    ("DocumentFullPathAndName", "*"),
+    ("DocumentName", "*"),
+    ("ModifiedDate", "*"),
+    ("ApprovedBy", "*"),
+    ("CheckedBy", "*"),
+    ("Author", "*"),
+    ("CompanyName", "*"),
+    ("DrawnBy", "*"),
+    ("Engineer", "*"),
+    ("Organization", "*"),
+    ("Title", "*"),
+    ("Address1", "*"),
+    ("Address2", "*"),
+    ("Address3", "*"),
+    ("Address4", "*"),
+];
+
 pub fn view_properties_parameters<'a>(
+    tokens: &ThemeTokens,
     muted: Color,
     primary: Color,
-    border_c: Color,
     input_bg: Color,
-    input_bdr: Color,
-    seg_hover: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    col = col.push(section_hdr("\u{25BC} Parameters", primary, border_c).boxed());
+    col = col.push(form_look::section_label("Parameters", tokens));
 
     // Sub-tabs: All | Parameters | Rules
     col = col.push(
@@ -525,8 +508,6 @@ pub fn view_properties_parameters<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr
                 ),
                 seg_btn(
                     "Parameters",
@@ -535,8 +516,6 @@ pub fn view_properties_parameters<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr
                 ),
                 seg_btn(
                     "Rules",
@@ -545,103 +524,20 @@ pub fn view_properties_parameters<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr
                 ),
             ]
             .spacing(0.0)
             .width(Length::Fill),
         )
         .padding([SP.s, SP.m])
+        .style(form_look::segmented_frame)
         .boxed(),
     );
 
-    // Table header
-    col = col.push(thin_sep(border_c));
-    col = col.push(
-        container(
-            row![
-                text(raw("Name"))
-                    .size(TS.body)
-                    .color(muted)
-                    .width(Length::FillPortion(3))
-                    .boxed(),
-                text(raw("Value"))
-                    .size(TS.body)
-                    .color(muted)
-                    .width(Length::FillPortion(2))
-                    .boxed(),
-            ]
-            .spacing(SP.s),
-        )
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
-
-    // Parameter rows (standard Altium document parameters)
-    let params: &[(&str, &str)] = &[
-        ("CurrentTime", "*"),
-        ("CurrentDate", "*"),
-        ("Time", "*"),
-        ("Date", "*"),
-        ("DocumentFullPathAndName", "*"),
-        ("DocumentName", "*"),
-        ("ModifiedDate", "*"),
-        ("ApprovedBy", "*"),
-        ("CheckedBy", "*"),
-        ("Author", "*"),
-        ("CompanyName", "*"),
-        ("DrawnBy", "*"),
-        ("Engineer", "*"),
-        ("Organization", "*"),
-        ("Title", "*"),
-        ("Address1", "*"),
-        ("Address2", "*"),
-        ("Address3", "*"),
-        ("Address4", "*"),
-    ];
-
-    for (name, val) in params {
-        col = col.push(param_table_row(name, val, primary, muted, border_c));
-    }
-
-    col
-}
-
-/// Parameter table row with subtle bottom border.
-pub fn param_table_row<'a, M: 'a>(
-    name: &str,
-    value: &str,
-    name_c: Color,
-    val_c: Color,
-    border_c: Color,
-) -> Element<'a, M> {
-    column![
-        container(
-            row![
-                text(raw(name.to_string()))
-                    .size(TS.body)
-                    .color(name_c)
-                    .width(Length::FillPortion(3))
-                    .wrapping(iced::widget::text::Wrapping::None)
-                    .boxed(),
-                text(raw(value.to_string()))
-                    .size(TS.body)
-                    .color(val_c)
-                    .width(Length::FillPortion(2))
-                    .boxed(),
-            ]
-            .spacing(SP.s),
-        )
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-        thin_sep(border_c),
-    ]
-    .spacing(0)
-    .boxed()
+    col.push(super::graphite_table::parameter_table(
+        tokens,
+        DOCUMENT_PARAMETERS,
+    ))
 }
 
 /// Properties panel tab button (General / Parameters).
@@ -651,73 +547,71 @@ pub fn props_tab_btn(
     msg: PanelMsg,
     text_active: Color,
     text_inactive: Color,
-    hover_bg: Color,
-    border_c: Color,
 ) -> Element<'static, PanelMsg> {
     let text_c = if active { text_active } else { text_inactive };
     signex_widgets::button(text(raw(label.to_string())).size(TS.body).color(text_c))
         .padding([SP.s, SP.l])
         .on_press(msg)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
+        .style(move |theme: &Theme, status: iced::widget::button::Status| {
             let hover = matches!(status, iced::widget::button::Status::Hovered);
-            iced::widget::button::Style {
-                background: if active || hover {
-                    Some(Background::Color(hover_bg))
-                } else {
-                    None
-                },
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border_c,
-                    ..Default::default()
-                },
-                ..iced::widget::button::Style::default()
-            }
+            form_look::tab_chip(theme, active, hover)
         })
         .boxed()
+}
+
+/// Graphite filter chip: accent-soft fill when on, hairline outline when
+/// off, radius 7.
+fn graphite_filter_chip(theme: &Theme, on: bool, hovered: bool) -> iced::widget::button::Style {
+    let l = form_look::FormLook::of(theme);
+    let fill = if on {
+        Some(Background::Color(l.accent_soft))
+    } else if hovered {
+        Some(Background::Color(l.sunken))
+    } else {
+        None
+    };
+    iced::widget::button::Style {
+        background: fill,
+        text_color: if on { l.ink } else { l.ink3 },
+        border: Border {
+            width: 1.0,
+            radius: crate::panels::graphite::PROPERTY_FIELD_RADIUS.into(),
+            color: if on { l.accent } else { l.line },
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    }
+}
+
+/// Label of a filter tab or chip: the Graphite ink pair resolved from the theme.
+fn chip_label<'a>(label: String, on: bool) -> iced::widget::Text<'a> {
+    text(raw(label))
+        .size(TS.body)
+        .style(move |theme: &Theme| iced::widget::text::Style {
+            color: {
+                let l = form_look::FormLook::of(theme);
+                Some(if on { l.ink } else { l.ink3 })
+            },
+            ..Default::default()
+        })
 }
 
 /// Tab button in the Custom Selection Filters tab strip. Active tab
 /// gets a filled background; both states use the theme accent for the
 /// border so the section reads as one piece with the chips and the
 /// Active Bar dropdown.
-pub fn custom_filter_tab(
-    label: String,
-    active: bool,
-    idx: usize,
-    hover_bg: Color,
-    border_c: Color,
-) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
-    signex_widgets::button(text(raw(label)).size(TS.body).color(if active {
-        text_on
-    } else {
-        text_off
-    }))
-    .padding([3, 10])
-    .on_press(PanelMsg::SelectCustomFilterTab(idx))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered if !active => Background::Color(hover_bg),
-            _ if active => Background::Color(active_bg),
-            _ => Background::Color(Color::TRANSPARENT),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-                ..Default::default()
-            },
-            text_color: if active { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
-    })
-    .boxed()
+pub fn custom_filter_tab(label: String, active: bool, idx: usize) -> Element<'static, PanelMsg> {
+    signex_widgets::button(chip_label(label, active))
+        .padding([3, 10])
+        .on_press(PanelMsg::SelectCustomFilterTab(idx))
+        .style(move |theme: &Theme, status: iced::widget::button::Status| {
+            form_look::tab_chip(
+                theme,
+                active,
+                matches!(status, iced::widget::button::Status::Hovered),
+            )
+        })
+        .boxed()
 }
 
 /// Member chip for a custom-filter preset card (Properties panel).
@@ -728,77 +622,20 @@ pub fn preset_chip(
     preset_idx: usize,
     filter: crate::active_bar::SelectionFilter,
     enabled: bool,
-    hover_bg: Color,
-    border_c: Color,
 ) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     signex_widgets::button(
-        text(raw(label.to_string()))
-            .size(TS.body)
-            .color(if enabled { text_on } else { text_off })
-            .align_x(iced::alignment::Horizontal::Center),
+        chip_label(label.to_string(), enabled).align_x(iced::alignment::Horizontal::Center),
     )
     .padding([3.0, SP.m])
     .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
-            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-                ..Default::default()
-            },
-            text_color: if enabled { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
+    .style(move |theme: &Theme, status: iced::widget::button::Status| {
+        graphite_filter_chip(
+            theme,
+            enabled,
+            matches!(status, iced::widget::button::Status::Hovered),
+        )
     })
     .boxed()
-}
-
-/// Primary-fill button whose label keeps `preferred` text where it is
-/// readable on the fill the theme paints behind it.
-pub(crate) fn add_filter_button_style(
-    theme: &Theme,
-    status: iced::widget::button::Status,
-    preferred: Color,
-) -> iced::widget::button::Style {
-    use crate::styles::tokens::{UNREADABLE_CONTRAST, contrast_ratio};
-    use iced::widget::button::Status;
-    let mut style = iced::widget::button::primary(theme, status);
-    // One label for every state, so it cannot flip on hover: `preferred`
-    // when it is visible on all three fills, else white or black, whichever
-    // reads better on the weakest fill.
-    let fills: Vec<Color> = [Status::Active, Status::Hovered, Status::Pressed]
-        .into_iter()
-        .filter_map(
-            |s| match iced::widget::button::primary(theme, s).background {
-                Some(Background::Color(fill)) => Some(fill),
-                _ => None,
-            },
-        )
-        .collect();
-    let worst = |label: Color| {
-        fills
-            .iter()
-            .map(|fill| contrast_ratio(label, *fill))
-            .fold(f32::INFINITY, f32::min)
-    };
-    style.text_color = if worst(preferred) >= UNREADABLE_CONTRAST {
-        preferred
-    } else if worst(Color::WHITE) >= worst(Color::BLACK) {
-        Color::WHITE
-    } else {
-        Color::BLACK
-    };
-    style
 }
 
 /// Label colour of a segmented-button cell: the active cell sits on
@@ -817,10 +654,6 @@ pub(crate) fn seg_text(
 }
 
 /// Segmented button (for units toggle etc).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a general-properties row builder whose parameters are all independent"
-)]
 pub fn seg_btn<'a>(
     label: &str,
     active: bool,
@@ -828,14 +661,7 @@ pub fn seg_btn<'a>(
     active_bg: Color,
     text_active: Color,
     text_inactive: Color,
-    hover_bg: Color,
-    seg_border: Color,
 ) -> Element<'a, PanelMsg> {
-    let bg = if active {
-        active_bg
-    } else {
-        Color::TRANSPARENT
-    };
     let text_c = seg_text(active, text_active, text_inactive, active_bg);
     signex_widgets::button(
         text(raw(label.to_string()))
@@ -846,22 +672,9 @@ pub fn seg_btn<'a>(
     .padding([SP.s, 0.0])
     .width(Length::Fill)
     .on_press(msg)
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
+    .style(move |theme: &Theme, status: iced::widget::button::Status| {
         let hovered = matches!(status, iced::widget::button::Status::Hovered);
-        iced::widget::button::Style {
-            background: Some(Background::Color(if hovered && !active {
-                hover_bg
-            } else {
-                bg
-            })),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: seg_border,
-                ..Default::default()
-            },
-            ..iced::widget::button::Style::default()
-        }
+        form_look::segment_cell(theme, active, hovered && !active)
     })
     .boxed()
 }

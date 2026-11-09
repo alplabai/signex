@@ -312,8 +312,13 @@ impl Signex {
         // Header strip locked to `table_width` so it scrolls in
         // lockstep with the body rows when the user pans
         // horizontally.
+        let sunken = crate::styles::tokens::resolve(tokens).sunken;
+        // The sunken header band.
         let table_header_el: Element<'_, Message> = container(header_row)
-            .style(crate::styles::toolbar_strip(tokens))
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(sunken)),
+                ..container::Style::default()
+            })
             .width(Length::Fixed(table_width.max(100.0)))
             .boxed();
 
@@ -342,20 +347,27 @@ impl Signex {
             // estimate was too wide. iced 0.14 lacks a built-in
             // ellipsis primitive; clipping is the honest choice.
             const CELL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
-            let cell = |s: String, width: Length, _truncate_at: f32| -> Element<'_, Message> {
-                container(
-                    text(raw(s))
+            let cell =
+                |s: String, width: Length, _truncate_at: f32, mono: bool| -> Element<'_, Message> {
+                    let face = text(raw(s))
                         .size(CELL_TEXT_SIZE)
                         .color(text_c)
-                        .wrapping(iced::widget::text::Wrapping::None),
-                )
-                .width(width)
-                .height(DATA_ROW_H)
-                .padding([0, 6])
-                .align_y(iced::alignment::Vertical::Center)
-                .clip(true)
-                .boxed()
-            };
+                        .wrapping(iced::widget::text::Wrapping::None);
+                    let face = if mono {
+                        face.font(crate::fonts::iced_font_for_family(
+                            crate::fonts::CHROME_MONO_FONT,
+                        ))
+                    } else {
+                        face
+                    };
+                    container(face)
+                        .width(width)
+                        .height(DATA_ROW_H)
+                        .padding([0, 6])
+                        .align_y(iced::alignment::Vertical::Center)
+                        .clip(true)
+                        .boxed()
+                };
             // Leftmost row-number gutter cell — muted text, right-aligned.
             let num_cell: Element<'_, Message> = container(
                 text(raw((visible_idx + 1).to_string()))
@@ -393,7 +405,9 @@ impl Signex {
                 // when columns overflow the viewport.
                 let w = column_width(col_idx, c);
                 let (cell_width, truncate_at) = (Length::Fixed(w), w);
-                row_inner = row_inner.push(cell(column_value(c, r), cell_width, truncate_at));
+                // Graphite sets the designator columns in the mono face.
+                let mono = matches!(c, BomColumn::Designator | BomColumn::Reference);
+                row_inner = row_inner.push(cell(column_value(c, r), cell_width, truncate_at, mono));
                 if col_idx + 1 < preview.options.columns.len() {
                     row_inner = row_inner.push(body_divider());
                     // 4 px transparent spacer to mirror the

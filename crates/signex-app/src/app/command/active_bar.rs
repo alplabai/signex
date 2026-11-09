@@ -328,9 +328,18 @@ mod tests {
     /// by accident inside a refactor.
     #[test]
     fn catalog_labels_match_the_active_bar_literals() {
-        const DROPDOWN_SRC: &str = include_str!("../../active_bar/dropdown.rs");
+        // `dropdown/` is split by concern; scan every production file in it.
+        let dropdown_src = [
+            include_str!("../../active_bar/dropdown/mod.rs"),
+            include_str!("../../active_bar/dropdown/tables.rs"),
+            include_str!("../../active_bar/dropdown/custom.rs"),
+        ]
+        .join(
+            "
+",
+        );
 
-        let rows = scan_dropdown_rows(DROPDOWN_SRC);
+        let rows = scan_dropdown_rows(&dropdown_src);
 
         // The ambiguity list must be exactly the actions the view really
         // does render under more than one label — no stale entries, and

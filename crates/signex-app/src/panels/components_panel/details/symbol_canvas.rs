@@ -147,6 +147,14 @@ fn fit_transform(extent: Aabb, size: Size, device_px_per_logical_px: f32) -> Scr
     }
 }
 
+/// Where a drag-pan's pointer is, in the same space as the press that
+/// started it: the widget cursor, which a scrolled pane shifts by its scroll
+/// offset, never the event's window position, which it does not. Observed,
+/// so a drag over a scrollbar or a layer above keeps going.
+pub(super) fn drag_position(cursor: mouse::Cursor) -> Option<Point> {
+    cursor.observe().position()
+}
+
 /// The camera `transform` stands for.
 fn camera_of(transform: &ScreenTransform) -> Camera {
     Camera {
@@ -191,6 +199,8 @@ impl SymbolSheetPreview {
             grid_mm: self.grid.pitch_mm,
             grid_style: self.grid.style,
             device_px_per_logical_px: self.device_px_per_logical_px,
+            border: true,
+            fine_dots: false,
         }
     }
 
@@ -301,11 +311,12 @@ impl canvas::Program<()> for SymbolSheetPreview {
                 state.pan_from = cursor.position();
                 Some(Action::capture())
             }
-            mouse::Event::CursorMoved { position } => {
+            mouse::Event::CursorMoved { .. } => {
                 let last = state.pan_from?;
+                let position = drag_position(cursor)?;
                 let delta = Vector::new(position.x - last.x, position.y - last.y);
                 state.camera.pan(delta.x, delta.y);
-                state.pan_from = Some(*position);
+                state.pan_from = Some(position);
                 state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())

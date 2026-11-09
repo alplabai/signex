@@ -29,6 +29,14 @@ fn headless_app(answers: &HeadlessAnswers) -> (Signex, std::sync::MutexGuard<'st
     (app, serial)
 }
 
+/// Make the active shortcut profile a custom one, which is the only kind
+/// Export Keyboard Shortcuts writes: the file-writing save dialog these tests
+/// drive.
+fn with_custom_profile(app: &mut Signex) {
+    let create = app.update(pref(PrefMsg::KeymapCreateCustomProfile));
+    TaskDriver::new().settle(app, create).expect("created");
+}
+
 /// Settle `task`; the dialog titled `title` must log one refusal naming
 /// `arg`.
 fn assert_refused(app: &mut Signex, task: Task<Message>, title: &str, arg: &str) {
@@ -90,6 +98,10 @@ fn library_dialogs_refuse_without_a_path() {
             LibraryMessage::ComponentsPanelAddLibrary(ComponentsMountSource::Installed),
             "Add Library (*.snxlib)",
         ),
+        (
+            LibraryMessage::ComponentsPanelAddLibrary(ComponentsMountSource::Global),
+            "Add Library (*.snxlib)",
+        ),
     ] {
         refused_on_message(Message::Library(message), title);
     }
@@ -97,16 +109,10 @@ fn library_dialogs_refuse_without_a_path() {
 
 #[test]
 fn preference_dialogs_refuse_without_a_path() {
-    for (msg, title) in [
-        (PrefMsg::ImportTheme, "Import Signex Theme"),
-        (PrefMsg::ExportTheme, "Export Signex Theme"),
-        (
-            PrefMsg::KeymapImportProfile,
-            "Import Signex Keyboard Shortcuts",
-        ),
-    ] {
-        refused_on_message(pref(msg), title);
-    }
+    refused_on_message(
+        pref(PrefMsg::KeymapImportProfile),
+        "Import Signex Keyboard Shortcuts",
+    );
 }
 
 #[test]
@@ -190,25 +196,26 @@ fn schematic_save_and_export_dialogs_refuse_without_a_path() {
 #[test]
 fn a_save_answer_naming_an_existing_file_needs_overwrite() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let existing = dir.path().join("theme.json");
+    let existing = dir.path().join("shortcuts.toml");
     std::fs::write(&existing, b"keep me").expect("seed");
     let answers = HeadlessAnswers::default();
     let (mut app, _serial) = headless_app(&answers);
+    with_custom_profile(&mut app);
     answers.set("path", existing.display().to_string());
     // The ring shortens long lines, so the needle stops at the path.
     let needle = format!(
-        "Export Signex Theme: refused in a headless run; {} exists",
+        "Export Signex Keyboard Shortcuts: refused in a headless run; {} exists",
         existing.display()
     );
     let before = logged_count(&needle);
-    let task = app.update(pref(PrefMsg::ExportTheme));
+    let task = app.update(pref(PrefMsg::KeymapExportProfile));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     assert_eq!(logged_count(&needle), before + 1);
     assert_eq!(std::fs::read(&existing).expect("read"), b"keep me");
 
     answers.set("path", existing.display().to_string());
     answers.set("overwrite", "true");
-    let task = app.update(pref(PrefMsg::ExportTheme));
+    let task = app.update(pref(PrefMsg::KeymapExportProfile));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     assert_ne!(std::fs::read(&existing).expect("read"), b"keep me");
 }
@@ -270,17 +277,18 @@ fn reveal_is_refused_headless() {
 #[test]
 fn a_refused_save_does_not_leave_overwrite_behind() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let existing = dir.path().join("theme.json");
+    let existing = dir.path().join("shortcuts.toml");
     std::fs::write(&existing, b"keep me").expect("seed");
     let answers = HeadlessAnswers::default();
     let (mut app, _serial) = headless_app(&answers);
-    answers.set("path", "relative/theme.json");
+    with_custom_profile(&mut app);
+    answers.set("path", "relative/shortcuts.toml");
     answers.set("overwrite", "true");
-    let task = app.update(pref(PrefMsg::ExportTheme));
+    let task = app.update(pref(PrefMsg::KeymapExportProfile));
     TaskDriver::new().settle(&mut app, task).expect("settled");
 
     answers.set("path", existing.display().to_string());
-    let task = app.update(pref(PrefMsg::ExportTheme));
+    let task = app.update(pref(PrefMsg::KeymapExportProfile));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     assert_eq!(std::fs::read(&existing).expect("read"), b"keep me");
 }
@@ -289,16 +297,17 @@ fn a_refused_save_does_not_leave_overwrite_behind() {
 #[test]
 fn an_open_dialog_takes_overwrite_with_it() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let existing = dir.path().join("theme.json");
+    let existing = dir.path().join("shortcuts.toml");
     std::fs::write(&existing, b"keep me").expect("seed");
     let answers = HeadlessAnswers::default();
     let (mut app, _serial) = headless_app(&answers);
+    with_custom_profile(&mut app);
     answers.set("overwrite", "true");
     let task = app.update(Message::Menu(MenuMessage::OpenProject));
     assert_refused(&mut app, task, "Open Project or Schematic", "path");
 
     answers.set("path", existing.display().to_string());
-    let task = app.update(pref(PrefMsg::ExportTheme));
+    let task = app.update(pref(PrefMsg::KeymapExportProfile));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     assert_eq!(std::fs::read(&existing).expect("read"), b"keep me");
 }
@@ -332,16 +341,6 @@ fn an_unreadable_import_sets_the_pane_status() {
     let answers = HeadlessAnswers::default();
     let (mut app, _serial) = headless_app(&answers);
     answers.set("path", dir.path().display().to_string());
-    let task = app.update(pref(PrefMsg::ImportTheme));
-    TaskDriver::new().settle(&mut app, task).expect("settled");
-    assert!(
-        app.ui_state
-            .preferences_theme_status
-            .starts_with("Could not import theme:"),
-        "{}",
-        app.ui_state.preferences_theme_status
-    );
-    answers.set("path", dir.path().display().to_string());
     let task = app.update(pref(PrefMsg::KeymapImportProfile));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     assert!(
@@ -358,17 +357,18 @@ fn an_unreadable_import_sets_the_pane_status() {
 #[test]
 fn a_commands_answers_replace_what_an_earlier_command_left() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let existing = dir.path().join("theme.json");
+    let existing = dir.path().join("shortcuts.toml");
     std::fs::write(&existing, b"keep me").expect("seed");
     let answers = HeadlessAnswers::default();
     let (mut app, _serial) = headless_app(&answers);
+    with_custom_profile(&mut app);
     answers.replace_all([("overwrite".to_string(), "true".to_string())]);
     // No active sheet: Export Netlist returns before any dialog.
     let task = app.update(Message::Menu(MenuMessage::ExportNetlist));
     TaskDriver::new().settle(&mut app, task).expect("settled");
 
     answers.replace_all([("path".to_string(), existing.display().to_string())]);
-    let task = app.update(pref(PrefMsg::ExportTheme));
+    let task = app.update(pref(PrefMsg::KeymapExportProfile));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     assert_eq!(std::fs::read(&existing).expect("read"), b"keep me");
 }

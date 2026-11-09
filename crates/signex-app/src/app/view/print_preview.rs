@@ -21,42 +21,44 @@ impl Signex {
     /// overlay when both would otherwise render; dismiss_layer handles
     /// click-outside-to-close.
     pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
-        use iced::widget::{column, container, row};
-        use signex_widgets::{raw, text};
+        use iced::widget::{column, container};
         let Some(notice) = self.document_state.error_notice.as_ref() else {
             return iced::widget::Space::new().boxed();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let text_c = crate::styles::ti(tokens.text);
-        let border_c = crate::styles::ti(tokens.border);
-        let err_red = crate::styles::tokens::danger(tokens);
 
         let mut buttons = notice_choice_buttons(notice, tokens);
-        let (ok_label, ok_kind) = if buttons.is_empty() {
-            ("OK", DialogButtonKind::Primary)
+        // A lone OK is the primary; beside choices it is the leading Cancel.
+        if buttons.is_empty() {
+            buttons.push(dialog_button(
+                "OK",
+                DialogButtonKind::Primary,
+                Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+                tokens,
+            ));
         } else {
-            ("Cancel", DialogButtonKind::Secondary)
-        };
-        buttons.push(dialog_button(
-            ok_label,
-            ok_kind,
-            Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+            buttons.insert(
+                0,
+                dialog_button(
+                    "Cancel",
+                    DialogButtonKind::Cancel,
+                    Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+                    tokens,
+                ),
+            );
+        }
+        let lead: Element<'_, Message> = crate::styles::dialog_intro(
+            crate::styles::DialogIcon::Error,
+            notice.title.clone(),
+            None,
             tokens,
-        ));
-
+        );
         let body = column![
             dialog_body(
                 column![
-                    row![
-                        text(raw("\u{26A0}")).size(TS.glyph).color(err_red),
-                        iced::widget::Space::new().width(SP.m),
-                        text(raw(notice.title.clone()))
-                            .size(TS.heading)
-                            .color(text_c),
-                    ]
-                    .align_y(iced::Alignment::Center),
+                    lead,
                     container(iced::widget::scrollable(dialog_message(
                         notice.detail.clone(),
                         tokens
@@ -68,6 +70,7 @@ impl Signex {
             dialog_footer(buttons),
         ];
 
+        let graphite_card = crate::styles::modal_card(tokens);
         let card = container(body)
             .width(Length::Fit.max(
                 if self.modal_detached(crate::app::state::ModalId::ErrorNotice) {
@@ -76,30 +79,7 @@ impl Signex {
                     480.0
                 },
             ))
-            .style(move |theme: &iced::Theme| {
-                if crate::styles::is_dialog_window(theme) {
-                    // Flat in its own window: no second frame.
-                    return container::Style {
-                        background: Some(panel_bg.into()),
-                        ..container::Style::default()
-                    };
-                }
-                container::Style {
-                    background: Some(panel_bg.into()),
-                    border: iced::Border {
-                        color: border_c,
-                        width: 1.0,
-                        radius: iced::border::Radius::from(8.0),
-                        ..iced::Border::default()
-                    },
-                    shadow: iced::Shadow {
-                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                        offset: iced::Vector::new(0.0, 4.0),
-                        blur_radius: 16.0,
-                    },
-                    ..container::Style::default()
-                }
-            });
+            .style(graphite_card);
 
         container(card)
             .width(Length::Fill)
@@ -129,7 +109,7 @@ impl Signex {
     /// omission recorded in its header comment) or cancel and write nothing.
     /// The refusal stays the default; "Export anyway" is an explicit choice.
     pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
-        use iced::widget::{column, container, row};
+        use iced::widget::{column, container};
         use signex_widgets::{raw, text};
         let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
             return iced::widget::Space::new().boxed();
@@ -137,26 +117,24 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
         // The sibling export-error modal's severity cue — reused verbatim so
         // the netlist-incomplete prompt reads as the same modal family.
-        let warn = crate::styles::tokens::danger(tokens);
 
         // The omitted pages, one line each — the same detail the
         // warning logged on export will carry.
         let detail = prompt.messages.join("\n");
 
+        let lead: Element<'_, Message> = crate::styles::dialog_intro(
+            crate::styles::DialogIcon::Warn,
+            "Netlist is incomplete",
+            None,
+            tokens,
+        );
         let body = column![
             dialog_body(
                 column![
-                    row![
-                        text(raw("\u{26A0}")).size(TS.glyph).color(warn),
-                        iced::widget::Space::new().width(SP.m),
-                        text(raw("Netlist is incomplete")).size(TS.heading).color(text_c),
-                    ]
-                    .align_y(iced::Alignment::Center),
+                    lead,
                     dialog_message(
                         "The project netlist does not cover the whole project. Exporting it \
                          would produce a file missing components and carrying the wrong net \
@@ -177,7 +155,7 @@ impl Signex {
             dialog_footer(vec![
                 dialog_button(
                     "Cancel",
-                    DialogButtonKind::Secondary,
+                    DialogButtonKind::Cancel,
                     Some(Message::Export(ExportMsg::NetlistCancelIncomplete)),
                     tokens,
                 ),
@@ -190,6 +168,7 @@ impl Signex {
             ]),
         ];
 
+        let graphite_card = crate::styles::modal_card(tokens);
         let card = container(body)
             .width(Length::Fit.max(
                 if self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt) {
@@ -198,30 +177,7 @@ impl Signex {
                     520.0
                 },
             ))
-            .style(move |theme: &iced::Theme| {
-                if crate::styles::is_dialog_window(theme) {
-                    // Flat in its own window: no second frame.
-                    return container::Style {
-                        background: Some(panel_bg.into()),
-                        ..container::Style::default()
-                    };
-                }
-                container::Style {
-                    background: Some(panel_bg.into()),
-                    border: iced::Border {
-                        color: border_c,
-                        width: 1.0,
-                        radius: iced::border::Radius::from(8.0),
-                        ..iced::Border::default()
-                    },
-                    shadow: iced::Shadow {
-                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                        offset: iced::Vector::new(0.0, 4.0),
-                        blur_radius: 16.0,
-                    },
-                    ..container::Style::default()
-                }
-            });
+            .style(graphite_card);
 
         container(card)
             .width(Length::Fill)

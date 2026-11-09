@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn move_trigger_left_click_arms_select_tool() {
         let editor = new_editor();
-        let items = dropdown_trigger_items(&editor, ThemeId::Signex);
+        let items = dropdown_trigger_items(&editor, ThemeId::GraphiteLight);
         let place = &items[2]; // Filter, Snap, Place, Select, Align, Pin, Text, Shapes
         assert!(matches!(
             left_click_symbol_msg(place),
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn align_trigger_left_click_snaps_selection_to_grid() {
         let editor = new_editor();
-        let items = dropdown_trigger_items(&editor, ThemeId::Signex);
+        let items = dropdown_trigger_items(&editor, ThemeId::GraphiteLight);
         let align = &items[4];
         assert!(matches!(
             left_click_symbol_msg(align),

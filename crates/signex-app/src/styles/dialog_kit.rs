@@ -8,15 +8,16 @@ use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
-use super::{RADIUS, Spacing, TypeScale, accent_button, danger_button, outline_button, ti, tokens};
+use super::{
+    ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button_rounded, danger_button, ghost_button,
+    outline_button, primary_button, ti, tokens,
+};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// Button height: the body size times this, so it follows the type scale.
 const BUTTON_HEIGHT_EM: f32 = 2.2;
-/// Narrowest button, in body-size units, so short labels align.
-const BUTTON_MIN_WIDTH_EM: f32 = 7.5;
 /// Average glyph advance, in body-size units, for sizing a button to its label.
 const GLYPH_ADVANCE_EM: f32 = 0.62;
 
@@ -29,6 +30,24 @@ pub enum DialogButtonKind {
     Secondary,
     /// Destructive actions: outline and text in the `error` colour.
     Danger,
+    /// A copper accent fill, for a call to action beside a `Primary` (Graphite
+    /// look; the accent fill on every theme).
+    Accent,
+    /// A quiet action with no fill or border ("Decide later").
+    Ghost,
+    /// The dismissing action of a footer (Cancel, Close, Later): drawn as
+    /// Ghost, it sits first in the right-aligned row.
+    Cancel,
+}
+
+impl DialogButtonKind {
+    /// The role `self` is drawn with.
+    pub fn resolved(self) -> Self {
+        match self {
+            Self::Cancel => Self::Ghost,
+            other => other,
+        }
+    }
 }
 
 /// The main message of a dialog: primary text, body size.
@@ -102,37 +121,64 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
+    let kind = kind.resolved();
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
-    let label_w = label.chars().count() as f32 * TS.body * GLYPH_ADVANCE_EM;
-    let width = (label_w + 2.0 * SP.l).max(TS.body * BUTTON_MIN_WIDTH_EM);
+    let (height, size, width) = button_metrics(label, kind);
     let face = text(raw(label.to_string()))
-        .size(TS.body)
+        .size(size)
         .color(color)
         .width(Length::Fill)
         .height(Length::Fill)
+        .wrapping(iced::widget::text::Wrapping::None)
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center);
     let btn = button(face)
-        .padding([0.0, SP.l])
+        .padding(0)
         .width(Length::Fixed(width))
-        .height(Length::Fixed(TS.body * BUTTON_HEIGHT_EM))
+        .height(Length::Fixed(height))
         .on_press_maybe(on_press);
     match kind {
+        _ if disabled && kind == DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
         _ if disabled => btn.style(disabled_button(tokens)),
-        DialogButtonKind::Primary => btn.style(accent_button(tokens)),
+        DialogButtonKind::Primary => btn.style(primary_button(tokens)),
+        DialogButtonKind::Accent => btn.style(accent_button_rounded(tokens)),
+        DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
         DialogButtonKind::Secondary => btn.style(outline_button(tokens)),
         DialogButtonKind::Danger => btn.style(danger_button(tokens)),
+        // `resolved` above never leaves `Cancel`.
+        DialogButtonKind::Cancel => btn.style(outline_button(tokens)),
     }
     .boxed()
 }
 
+/// Horizontal label padding of a dense button (14 px; Ghost 10 px).
+const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
+const DENSE_GHOST_PAD: f32 = 10.0 * 12.0 / 11.0;
+
+/// `(height, label size, width)` of a dialog button. The buttons are dense:
+/// one height for every role, the width hugging the label.
+fn button_metrics(label: &str, kind: DialogButtonKind) -> (f32, f32, f32) {
+    let chars = label.chars().count() as f32;
+    let size = TS.label;
+    let pad = if kind == DialogButtonKind::Ghost {
+        DENSE_GHOST_PAD
+    } else {
+        DENSE_PAD
+    };
+    let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * pad).ceil();
+    (ChromeMetrics::DEFAULT.button, size, width)
+}
+
 /// Label colour of a dialog button: muted when it has no action, whatever its role.
 fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> iced::Color {
-    match kind {
+    match kind.resolved() {
         _ if disabled => ti(tokens.text_secondary),
-        DialogButtonKind::Primary => tokens::on_accent(tokens),
-        DialogButtonKind::Secondary => ti(tokens.text),
+        DialogButtonKind::Primary => tokens::resolve(tokens).primary_ink,
+        DialogButtonKind::Accent => tokens::on_accent(tokens),
+        DialogButtonKind::Secondary | DialogButtonKind::Ghost | DialogButtonKind::Cancel => {
+            ti(tokens.text)
+        }
         DialogButtonKind::Danger => tokens::danger(tokens),
     }
 }
@@ -179,9 +225,16 @@ pub fn dialog_footer_split<'a, M: 'a>(
         .boxed()
 }
 
-/// Height of a footer built by [`dialog_footer`]: the button plus padding.
+/// Height of the footer the base dialog sizes were measured against: a
+/// body-size button plus padding.
 pub const fn dialog_footer_height() -> f32 {
     TS.body * BUTTON_HEIGHT_EM + 2.0 * SP.l
+}
+
+/// Height of a footer built by [`dialog_footer`]: the dense button plus
+/// padding.
+pub const fn dense_footer_height() -> f32 {
+    ChromeMetrics::DEFAULT.button + 2.0 * SP.l
 }
 
 #[cfg(test)]
@@ -199,6 +252,9 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::Accent,
+                DialogButtonKind::Ghost,
+                DialogButtonKind::Cancel,
             ] {
                 let _: Element<'_, ()> = dialog_button("OK", kind, Some(()), &tokens);
                 let _: Element<'_, ()> = dialog_button("OK", kind, None, &tokens);
@@ -209,6 +265,53 @@ mod tests {
             let _: Element<'_, ()> = dialog_footer(vec![dialog_hint("x", &tokens)]);
         }
         assert!(dialog_footer_height() > TS.body * BUTTON_HEIGHT_EM);
+    }
+
+    /// The footer height is the dense button plus padding.
+    #[test]
+    fn the_footer_height_follows_the_buttons() {
+        assert_eq!(
+            dense_footer_height(),
+            ChromeMetrics::DEFAULT.button + 2.0 * SP.l
+        );
+    }
+
+    /// Cancel is the quiet Ghost; no other role changes.
+    #[test]
+    fn cancel_is_ghost() {
+        assert_eq!(DialogButtonKind::Cancel.resolved(), DialogButtonKind::Ghost);
+        for kind in [
+            DialogButtonKind::Primary,
+            DialogButtonKind::Secondary,
+            DialogButtonKind::Danger,
+            DialogButtonKind::Accent,
+            DialogButtonKind::Ghost,
+        ] {
+            assert_eq!(kind.resolved(), kind);
+        }
+    }
+
+    /// Footer buttons are dense: every role has the same height and the
+    /// width hugs the label.
+    #[test]
+    fn graphite_buttons_share_one_height_and_hug_their_label() {
+        for kind in [
+            DialogButtonKind::Primary,
+            DialogButtonKind::Danger,
+            DialogButtonKind::Accent,
+            DialogButtonKind::Ghost,
+            DialogButtonKind::Secondary,
+        ] {
+            assert_eq!(
+                button_metrics("Cancel", kind).0,
+                ChromeMetrics::DEFAULT.button,
+                "{kind:?}"
+            );
+        }
+        let ok = button_metrics("OK", DialogButtonKind::Primary).2;
+        let long = button_metrics("New Library\u{2026}", DialogButtonKind::Primary).2;
+        assert!(ok < long, "{ok} < {long}");
+        assert!(ok < TS.label * 7.5, "{ok}");
     }
 
     /// A button without an action never looks clickable: no fill, no hover
@@ -230,6 +333,8 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::Accent,
+                DialogButtonKind::Ghost,
             ] {
                 assert_eq!(
                     label_color(kind, true, &tokens),

@@ -21,6 +21,10 @@ pub(crate) struct PaperLook {
     pub grid_mm: f32,
     pub grid_style: GridStyle,
     pub device_px_per_logical_px: f32,
+    /// Stroke the paper's border. Off when the paper is the backdrop.
+    pub border: bool,
+    /// Draw grid dots 1 px wide whatever the zoom.
+    pub fine_dots: bool,
 }
 
 /// Paint, in order: backdrop, paper, paper border, grid. The grid comes after
@@ -40,13 +44,15 @@ pub(crate) fn paint_paper_and_grid<R: GeometryRenderer>(
     let paper_h = paper_br.y - paper_tl.y;
     if paper_w > 0.0 && paper_h > 0.0 {
         frame.fill_rectangle(paper_tl, Size::new(paper_w, paper_h), look.paper);
-        let border = canvas::Path::rectangle(paper_tl, Size::new(paper_w, paper_h));
-        frame.stroke(
-            &border,
-            canvas::Stroke::default()
-                .with_color(look.grid)
-                .with_width(1.0),
-        );
+        if look.border {
+            let border = canvas::Path::rectangle(paper_tl, Size::new(paper_w, paper_h));
+            frame.stroke(
+                &border,
+                canvas::Stroke::default()
+                    .with_color(look.grid)
+                    .with_width(1.0),
+            );
+        }
     }
 
     if look.grid_visible {
@@ -61,6 +67,7 @@ pub(crate) fn paint_paper_and_grid<R: GeometryRenderer>(
             paper_mm.1,
             look.grid_style,
             look.device_px_per_logical_px,
+            look.fine_dots,
         );
     }
 }

@@ -125,6 +125,7 @@ fn clash_between_grandchildren_is_reported_once_by_the_lowest_sheet() {
 fn sheet_entry_findings(child_labels: &[(&str, LabelType)]) -> Vec<Violation> {
     use signex_types::schematic::{ChildSheet, SheetPin, Wire};
     let wire = |start, end| Wire {
+        color: None,
         uuid: Uuid::now_v7(),
         start,
         end,
