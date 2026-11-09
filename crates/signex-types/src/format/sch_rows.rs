@@ -327,6 +327,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
     Symbol {
         uuid: row.uuid,
         lib_id: row.library,
+        body_ref: extras.body_ref,
         reference: row.ref_des,
         value: row.value,
         footprint: extras.footprint,

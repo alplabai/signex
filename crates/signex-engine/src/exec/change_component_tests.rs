@@ -3,7 +3,7 @@
 
 use super::change_component::{ComponentReplacement, DataChange, change_component_preview};
 use crate::test_support::test_sheet;
-use crate::{Command, Engine};
+use crate::{Command, Engine, EngineError};
 use signex_types::schematic::RowStamp;
 use signex_types::schematic::{
     LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol, Wire,
@@ -109,7 +109,8 @@ fn the_swap_re_keys_the_symbol_and_replaces_part_owned_data() {
     let doc = engine.document();
     let sym = &doc.symbols[0];
     assert_eq!(sym.lib_id, NEW);
-    assert!(doc.lib_symbols.contains_key(NEW));
+    assert!(doc.body_of(sym).is_some_and(|b| b.id == NEW));
+    assert!(sym.body_ref.starts_with(&format!("{NEW}#")));
     assert_eq!(sym.library_id, Some(Uuid::from_u128(0xA)));
     assert_eq!(sym.row_id, Some(Uuid::from_u128(0xB)));
     assert_eq!(sym.library_version, "2.0");
@@ -618,5 +619,37 @@ fn the_swap_tags_the_stamp_with_the_version_it_travels_with() {
     assert!(
         part.valid_stamp().is_some(),
         "the stamp matches the version"
+    );
+}
+
+#[test]
+fn a_swap_to_an_embedded_ref_held_by_another_body_is_refused_and_changes_nothing() {
+    let (mut engine, id) = engine_with_wired_pin_2();
+    let r = replacement(swap_pins());
+    let mut squatter = r.lib_symbol.clone();
+    squatter.description = "squatter".into();
+    // The ref is taken by a body with other content (as only a hash
+    // collision could do); embedding is skipped when the key is present, so
+    // the check has to run anyway.
+    let mut doc = engine.document().clone();
+    doc.lib_symbols.insert(r.lib_symbol.body_ref(), squatter);
+    engine.set_document(doc);
+    let before = engine.document().clone();
+    let err = engine
+        .execute(Command::ChangeComponent {
+            symbol_id: id,
+            replacement: r,
+        })
+        .expect_err("collision");
+    assert!(
+        matches!(err, EngineError::LibSymbolBodyCollision(_)),
+        "{err}"
+    );
+    assert_eq!(engine.document().symbols, before.symbols);
+    assert!(
+        engine
+            .document()
+            .lib_symbols
+            .shares_storage_with(&before.lib_symbols)
     );
 }

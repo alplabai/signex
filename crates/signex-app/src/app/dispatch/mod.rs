@@ -84,6 +84,7 @@ impl Signex {
             Message::Tool(msg) => self.dispatch_tool_message(msg),
             Message::Edit(msg) => self.dispatch_edit_message(msg),
             Message::File(msg) => self.dispatch_file_message(msg),
+            Message::Agent(msg) => self.dispatch_agent_message(msg),
             Message::Export(msg) => self.dispatch_export_message(msg),
             Message::PrintPreview(msg) => self.dispatch_print_preview_message(msg),
             Message::BomPreview(msg) => self.dispatch_bom_preview_message(msg),

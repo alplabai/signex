@@ -330,10 +330,6 @@ impl SvgRenderContext {
         }
 
         // Full symbol body graphics from library definitions.
-        let mut lib_by_id: HashMap<&str, &signex_types::schematic::LibSymbol> = HashMap::new();
-        for ls in sheet.schematic.lib_symbols.values() {
-            lib_by_id.entry(ls.id.as_str()).or_insert(ls);
-        }
         for sym in &sheet.schematic.symbols {
             let symbol_vars = symbol_eval_variables(sym);
             let mut refdes_vars = HashMap::new();
@@ -357,11 +353,7 @@ impl SvgRenderContext {
                     ))
             });
 
-            let lib = lib_by_id
-                .get(sym.lib_id.as_str())
-                .copied()
-                .map(std::borrow::Cow::Borrowed)
-                .or_else(|| sheet.schematic.resolve_lib_symbol(sym));
+            let lib = sheet.schematic.resolve_lib_symbol(sym);
             if let Some(lib) = lib {
                 push_symbol_lib_graphics(
                     &mut elements,

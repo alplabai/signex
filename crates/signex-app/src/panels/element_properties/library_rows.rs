@@ -163,13 +163,18 @@ pub(super) fn library_id_row<'a>(
 
 /// How the sheet's embedded copy compares with the library (#912, #1845).
 #[derive(Clone, Copy)]
-pub(super) struct LibraryStatus {
+pub(super) struct LibraryStatus<'a> {
     pub(super) drifted: bool,
+    /// Placed instances of the part on the sheet that draw with an older
+    /// version of the library symbol (0: unknown or none).
+    pub(super) older_instances: usize,
+    /// The selected instance already draws with the current version, so
+    /// "Only this one" has nothing to do for it.
+    pub(super) this_one_current: bool,
     pub(super) missing: bool,
+    /// The UI language's catalog, for the labels these rows render.
+    pub(super) i18n: &'a signex_i18n::I18n,
 }
-
-/// Text of the out-of-date status.
-pub(super) const OUT_OF_DATE: &str = "Library: out of date";
 
 /// Append the readable `Library` row and, when the sheet's embedded copy
 /// differs from the library, the "out of date" status with its Update
@@ -180,60 +185,97 @@ pub(super) fn push_library_rows<'a>(
     mut c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     library_name: &str,
-    status: LibraryStatus,
+    status: LibraryStatus<'_>,
     muted: impl Into<LabelInk>,
     input_bg: Color,
     tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
+    use signex_i18n::{ids, t};
     let ink: LabelInk = muted.into();
     if !library_name.is_empty() {
         c = c.push(form_input_row("Library", library_name, ink, input_bg));
     }
-    let LibraryStatus { drifted, missing } = status;
+    let LibraryStatus {
+        drifted,
+        older_instances,
+        this_one_current,
+        missing,
+        i18n,
+    } = status;
     if missing {
         c = c.push(
-            signex_widgets::text(signex_widgets::raw(
-                "Library: symbol missing (sheet keeps its embedded copy)",
-            ))
-            .size(TS.body)
-            .color(ink.color)
-            .boxed(),
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_SYMBOL_MISSING))
+                .size(TS.body)
+                .color(ink.color)
+                .boxed(),
         );
     }
     if drifted {
-        c = c.push(out_of_date_row(id, tokens));
+        c = c.push(out_of_date_row(
+            id,
+            older_instances,
+            this_one_current,
+            i18n,
+            tokens,
+        ));
     }
     c
 }
 
-/// The out-of-date status and its Update button.
-fn out_of_date_row<'a>(id: uuid::Uuid, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+/// The out-of-date status pill, its Update button and, when the selected
+/// instance still draws with an older version, "Only this one".
+fn out_of_date_row<'a>(
+    id: uuid::Uuid,
+    older_instances: usize,
+    this_one_current: bool,
+    i18n: &signex_i18n::I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    use signex_i18n::{ids, t};
     let update = signex_widgets::button(
-        signex_widgets::text(signex_widgets::raw("Update from library")).size(TS.body),
+        signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE)).size(TS.body),
     )
     .padding([SP.xs, SP.m])
     .on_press(PanelMsg::UpdateSymbolFromLibrary(id))
     .style(super::super::form_look::ghost_button);
-    let status: Element<'a, PanelMsg> =
-        container(signex_widgets::text(signex_widgets::raw(OUT_OF_DATE)).size(TS.caption))
-            .padding([2.0, 8.0])
-            .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
-            .boxed();
-    iced::widget::row![
+    let note = match older_instances {
+        0 => t!(i18n, ids::PROPERTIES_LIBRARY_OUT_OF_DATE),
+        n => t!(i18n, ids::PROPERTIES_LIBRARY_OLDER_INSTANCES, "count" => n),
+    };
+    let status: Element<'a, PanelMsg> = container(signex_widgets::text(note).size(TS.caption))
+        .padding([2.0, 8.0])
+        .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
+        .boxed();
+    let mut actions = iced::widget::row![
         status,
         signex_widgets::tooltip(
             update,
-            signex_widgets::text(signex_widgets::raw(
-                "Updates every instance of this part on the sheet"
-            ))
-            .size(TS.body),
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE_TIP)).size(TS.body),
             iced::widget::tooltip::Position::Bottom,
         ),
-    ]
-    .spacing(SP.m)
-    .padding([SP.xs, SP.m])
-    .align_y(iced::Alignment::Center)
-    .boxed()
+    ];
+    if !this_one_current {
+        let only_this = signex_widgets::button(
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE)).size(TS.body),
+        )
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::UpdateSymbolFromLibraryOnly(id))
+        .style(super::super::form_look::ghost_button);
+        actions = actions.push(
+            signex_widgets::tooltip(
+                only_this,
+                signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP))
+                    .size(TS.body),
+                iced::widget::tooltip::Position::Bottom,
+            )
+            .boxed(),
+        );
+    }
+    actions
+        .spacing(SP.m)
+        .padding([SP.xs, SP.m])
+        .align_y(iced::Alignment::Center)
+        .boxed()
 }
 
 /// The placed-part actions of the Properties panel, label first.

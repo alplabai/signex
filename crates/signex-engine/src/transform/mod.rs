@@ -509,7 +509,7 @@ impl Engine {
         };
         let mut symbol = self.document.symbols[index].clone();
         edit(&mut symbol);
-        if let Some(lib) = self.document.lib_symbols.get(&symbol.lib_id) {
+        if let Some(lib) = self.document.body_of(&symbol) {
             autoplace_fields(&mut symbol, lib, &self.document);
         }
         self.document.symbols[index] = symbol;

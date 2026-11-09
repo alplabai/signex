@@ -315,7 +315,7 @@ impl Signex {
                 preferences_draft_trackpad_pan: trackpad_pan,
                 wheel_mode,
                 preferences_draft_wheel_mode: wheel_mode,
-                i18n,
+                i18n: std::sync::Arc::clone(&i18n),
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
@@ -507,6 +507,7 @@ impl Signex {
                     symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::DEFAULT),
                     theme_id: ThemeId::DEFAULT,
+                    i18n,
                     canvas_colors: signex_types::theme::canvas_colors(ThemeId::DEFAULT),
                     device_px_per_logical_px:
                         signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,

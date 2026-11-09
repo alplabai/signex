@@ -19,7 +19,7 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
     let text = signex_types::format::SnxSchematic::new(sheet)
         .write_string()
         .expect("serialise");
-    let newer = text.replacen("format = \"snxsch/1\"", "format = \"snxsch/1.7\"", 1);
+    let newer = text.replacen("format = \"snxsch/1.1\"", "format = \"snxsch/1.7\"", 1);
     assert_ne!(newer, text, "fixture must carry the newer token");
     std::fs::write(&path, &newer).expect("write fixture");
 

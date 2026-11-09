@@ -72,6 +72,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let library_drifted = get("Library Drift") == "Yes";
         let library_status = super::library_rows::LibraryStatus {
             drifted: library_drifted,
+            older_instances: get("Library Older Version").parse().unwrap_or(0),
+            this_one_current: get("Library This One Current") == "Yes",
+            i18n: &ctx.i18n,
             missing: get("Library Status") == "Symbol missing",
         };
         let rotation_deg = rotation_degrees(&rotation_str);
@@ -296,6 +299,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let library_drifted = get("Library Drift") == "Yes";
             let library_status = super::library_rows::LibraryStatus {
                 drifted: library_drifted,
+                older_instances: get("Library Older Version").parse().unwrap_or(0),
+                this_one_current: get("Library This One Current") == "Yes",
+                i18n: &ctx.i18n,
                 missing: get("Library Status") == "Symbol missing",
             };
             let body = get("Body Style");

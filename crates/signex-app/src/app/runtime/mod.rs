@@ -383,6 +383,37 @@ impl Signex {
                         .panel_ctx
                         .selection_info
                         .push(("Library Drift".into(), "Yes".into()));
+                    // Instances of this part on the older version (#2209): the
+                    // passive note beside the Update action.
+                    let doc = engine.document();
+                    let older = doc
+                        .symbols
+                        .iter()
+                        .filter(|s| s.lib_id == lib_id && drift.is_stale_body(&path, s.body_key()))
+                        .count();
+                    if older > 0 {
+                        self.document_state
+                            .panel_ctx
+                            .selection_info
+                            .push(("Library Older Version".into(), older.to_string()));
+                        // "Only this one" has nothing to do for a part whose
+                        // every unit already draws with the current version.
+                        // This sits inside the drift report (`older > 0`), so
+                        // nothing is called current before a drift pass ran.
+                        let part = signex_engine::placed_unit_ids(doc, details.selected_uuid);
+                        let this_current = !part.is_empty()
+                            && doc
+                                .symbols
+                                .iter()
+                                .filter(|s| part.contains(&s.uuid))
+                                .all(|s| !drift.is_stale_body(&path, s.body_key()));
+                        if this_current {
+                            self.document_state
+                                .panel_ctx
+                                .selection_info
+                                .push(("Library This One Current".into(), "Yes".into()));
+                        }
+                    }
                 }
                 if drift.is_missing(&path, &lib_id) {
                     self.document_state

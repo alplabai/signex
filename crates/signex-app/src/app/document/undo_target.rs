@@ -80,9 +80,8 @@ impl Signex {
                     }),
                 DocumentKey::Row(address) => self.component_history_of(address),
                 DocumentKey::Project(id) => self.project_tab_history_available(*id),
-                DocumentKey::Schematic(path) | DocumentKey::Pcb(path) => {
-                    self.sheet_history_available(path)
-                }
+                DocumentKey::Schematic(path) => self.sheet_history_available(path),
+                DocumentKey::Pcb(path) => docs.board_history_available(path),
             },
         }
     }
@@ -131,8 +130,9 @@ impl Signex {
                 }
                 moved
             }
-            DocumentKey::Schematic(_) | DocumentKey::Pcb(_) if undo => self.undo_active_sheet(),
-            DocumentKey::Schematic(_) | DocumentKey::Pcb(_) => self.redo_active_sheet(),
+            DocumentKey::Pcb(path) => self.step_board_history(path, undo),
+            DocumentKey::Schematic(_) if undo => self.undo_active_sheet(),
+            DocumentKey::Schematic(_) => self.redo_active_sheet(),
         }
     }
 }

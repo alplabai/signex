@@ -26,6 +26,7 @@ pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
 mod pcb_board;
+pub(crate) mod pcb_edit;
 mod pcb_ratsnest;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -492,13 +493,12 @@ pub struct DocumentState {
     /// Designators used on the sheets of the project a part is placed in,
     /// scanned off-thread; see `designator_scan.rs`.
     pub(crate) designator_cache: crate::app::designator_scan::DesignatorCache,
-    /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
+    /// Highest board revision any engine reached; see `state/pcb_revision.rs`.
     pub next_pcb_revision: u64,
-    /// The current board revision per PCB path; a PCB save completion only
-    /// marks clean while it still matches.
+    /// Board revision per PCB path (mirror of its engine); a save marks clean only if it matches.
     pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
-    /// The boards of PCB tabs closed while dirty; see `state/pcb_board.rs`.
-    pub(crate) parked_pcb_boards: std::collections::HashMap<PathBuf, signex_types::pcb::PcbBoard>,
+    /// The engines of PCB tabs closed while dirty; see `state/pcb_board.rs`.
+    pub(crate) parked_pcb_boards: pcb_board::ParkedBoards,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:

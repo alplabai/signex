@@ -184,7 +184,7 @@ impl Engine {
                 info.push(("Type".into(), type_label.into()));
                 info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
-                if let Some(lib_sym) = self.document.lib_symbols.get(&symbol.lib_id)
+                if let Some(lib_sym) = self.document.body_of(symbol)
                     && !lib_sym.description.is_empty()
                 {
                     info.push(("Description".into(), lib_sym.description.clone()));

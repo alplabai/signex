@@ -87,8 +87,8 @@ fn a_fragment_copied_in_another_process_pastes_with_its_bodies() {
 
     let doc = second.document_state.active_engine().unwrap().document();
     assert_eq!(doc.symbols.len(), 3);
-    assert!(doc.lib_symbols.contains_key("lib:dual"));
-    assert!(doc.lib_symbols.contains_key("lib:r"));
+    assert!(doc.lib_symbols.values().any(|b| b.id == "lib:dual"));
+    assert!(doc.lib_symbols.values().any(|b| b.id == "lib:r"));
 }
 
 #[test]

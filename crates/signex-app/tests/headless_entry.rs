@@ -218,12 +218,13 @@ fn net_colors() {
     assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
     assert_eq!(junctions(&app), before);
 
-    // A command that declares operands and has no handler is still refused.
-    let missing = std::env::temp_dir().join("zq-no-handler.snxsch");
+    // Open runs its path operand (#2155); a file that is not there makes no
+    // document, so it is refused rather than reported as run.
+    let missing = std::env::temp_dir().join("zq-no-such-file.snxsch");
     let path_operand = format!("path={}", missing.display());
     let refused = run(&mut app, "open_document", &[&path_operand]);
     assert!(
-        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("not run yet")),
+        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
         "{refused:?}"
     );
 }

@@ -134,19 +134,28 @@ impl DocumentState {
         }
     }
 
-    /// The engine's history moved (an edit, an undo, a redo) on the sheet at
-    /// `path`: it is dirty unless the history sits at its save point and
+    /// The engine's history moved (an edit, an undo, a redo) on the sheet or
+    /// board at `path`: it is dirty unless the history sits at its save point and
     /// nothing outside the history marked it. Undoing the only edit since the
     /// last save is clean again; redoing it is dirty again.
     pub fn sync_history_dirty(&mut self, path: &Path) {
-        let Some(engine) = self.engines.get(path) else {
+        // A sheet's engine or a board's: the same rule for both.
+        let Some(at_save_point) = self
+            .engines
+            .get(path)
+            .map(|engine| engine.is_at_save_point())
+            .or_else(|| {
+                self.board_engine(path)
+                    .map(|engine| engine.is_at_save_point())
+            })
+        else {
             return;
         };
         // A write that has not landed holds the sheet dirty: an Undo back to
         // the old save point during it would otherwise read clean while the
         // file is about to receive the newer snapshot. The completion
         // settles the mark (clean on a matching revision, re-synced else).
-        let clean = engine.is_at_save_point()
+        let clean = at_save_point
             && !self.dirty_docs.external.contains(path)
             && !self.document_saves.is_saving(path);
         if clean {
@@ -221,6 +230,7 @@ impl DocumentState {
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
+        self.mark_board_saved(path);
         self.record_project_saved_state(path);
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.mark_saved();
