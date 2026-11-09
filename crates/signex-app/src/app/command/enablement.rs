@@ -18,6 +18,7 @@
 //! and `place_local_net_label`, …), so an alias cannot bypass the gate; a
 //! test checks every such pair in the catalog.
 
+pub(crate) use crate::app::handlers::pcb_placement::PcbTargets;
 use crate::keymap::AppCommandId;
 
 use super::super::*;
@@ -93,7 +94,7 @@ pub(crate) struct CommandContext {
     pub can_remove_part: bool,
     /// The board the window shows and what its selection lets the
     /// placement commands do (#2240).
-    pub pcb: crate::app::handlers::pcb_placement::PcbTargets,
+    pub pcb: PcbTargets,
     /// Rotate and mirror have something on a sheet besides the selection:
     /// a part on the cursor, or the Bus Entry tool's next entry.
     pub turn_in_hand: bool,

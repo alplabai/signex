@@ -179,6 +179,11 @@ impl PcbCanvas {
         self.grab.iter().any(|shape| shape.contains(p, reach))
     }
 
+    /// Whether a footprint drag is live on this canvas.
+    pub fn is_carrying(&self) -> bool {
+        self.carry.get()
+    }
+
     /// Drop a box or a footprint drag in progress (Esc); the gesture sees
     /// it gone and quits.
     pub fn cancel_marquee(&self) {

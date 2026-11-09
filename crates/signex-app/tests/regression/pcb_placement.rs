@@ -13,13 +13,18 @@ use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::PcbCanvasMsg;
 use signex_types::format::SnxPcb;
-use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
+use signex_types::pcb::{
+    Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via, ViaType,
+};
 use uuid::Uuid;
 
 const U1: Uuid = Uuid::from_u128(0x10);
 const U2: Uuid = Uuid::from_u128(0x20);
 const ROUND_RECT: Uuid = Uuid::from_u128(0x11);
 const OVAL: Uuid = Uuid::from_u128(0x12);
+/// A track (0, 20)-(10, 20) and a via at (20, 20), clear of both parts.
+const TRACK: Uuid = Uuid::from_u128(0x30);
+const VIA: Uuid = Uuid::from_u128(0x31);
 const REACH: f64 = 0.05;
 
 fn pad(uuid: Uuid, shape: PadShape, at: (f64, f64), size: (f64, f64), rotation: f64) -> Pad {
@@ -102,8 +107,25 @@ fn board() -> PcbBoard {
         setup: None,
         nets: Vec::new(),
         footprints: vec![u1, u2],
-        segments: Vec::new(),
-        vias: Vec::new(),
+        segments: vec![Segment {
+            uuid: TRACK,
+            start: Point::new(0.0, 20.0),
+            end: Point::new(10.0, 20.0),
+            width: 0.5,
+            layer: "TopCopper".into(),
+            net: 1,
+            unknown_columns: Default::default(),
+        }],
+        vias: vec![Via {
+            uuid: VIA,
+            position: Point::new(20.0, 20.0),
+            diameter: 0.6,
+            drill: 0.3,
+            layers: vec!["TopCopper".into(), "BottomCopper".into()],
+            net: 1,
+            via_type: ViaType::Through,
+            unknown_columns: Default::default(),
+        }],
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
@@ -405,6 +427,58 @@ fn a_locked_footprint_refuses_every_edit_with_a_notice() {
         .filter(|e| e.id > since && e.message.contains("U2 is locked"))
         .count();
     assert_eq!(notices, tries, "each refusal names the locked footprint");
-    undo(&mut f.app);
-    assert_eq!(snapshot(&f.app), before, "no undo step was made");
+    assert!(!can_undo(&f.app), "no undo step was made");
+}
+
+fn can_undo(app: &Signex) -> bool {
+    let docs = &app.document_state;
+    docs.tabs[docs.active_tab]
+        .cached_document
+        .as_ref()
+        .and_then(TabDocument::as_pcb_engine)
+        .expect("a board engine")
+        .can_undo()
+}
+
+fn select_add(app: &mut Signex, x: f64, y: f64) {
+    let msg = PcbCanvasMsg::Clicked {
+        at: Point::new(x, y),
+        tolerance_mm: REACH,
+        mode: ClickMode::Add,
+    };
+    send(app, Message::PcbCanvas(msg));
+}
+
+#[test]
+fn delete_removes_a_selected_track_and_via_as_one_step() {
+    let mut f = open_board();
+    click(&mut f.app, 5.0, 20.0);
+    select_add(&mut f.app, 20.0, 20.0);
+    let selected: Vec<ItemRef> = f
+        .app
+        .interaction_state
+        .pcb_selection
+        .selection()
+        .items()
+        .collect();
+    assert_eq!(selected, vec![ItemRef::Track(TRACK), ItemRef::Via(VIA)]);
+    let edited = one_step(&mut f, key(KeyToken::Delete, false));
+    assert!(edited.segments.is_empty() && edited.vias.is_empty());
+    assert_eq!(edited.footprints.len(), 2, "no footprint went with them");
+}
+
+#[test]
+fn delete_with_a_locked_footprint_in_the_selection_removes_nothing() {
+    let mut f = open_board();
+    click(&mut f.app, 20.0, 20.0);
+    select_add(&mut f.app, 30.0, 10.0);
+    let before = snapshot(&f.app);
+    let since = diagnostics::newest_entry_id().unwrap_or(0);
+    send(&mut f.app, key(KeyToken::Delete, false));
+    assert_eq!(snapshot(&f.app), before, "the via stays with the locked U2");
+    let noticed = diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.id > since && e.message.contains("Delete: U2 is locked"));
+    assert!(noticed, "the refusal names U2");
+    assert!(!can_undo(&f.app));
 }

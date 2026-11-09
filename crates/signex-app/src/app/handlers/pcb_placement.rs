@@ -82,7 +82,11 @@ impl Signex {
         } else {
             "Move: click a reference point, then click where it should go (Esc to cancel)"
         });
-        self.interaction_state.pcb_carry = Some(PcbCarry::new(CarryKind::Move, path, footprints));
+        let window = self.interaction_state.acting_window;
+        let carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
+        self.interaction_state.pcb_carry = Some(carry);
+        // While a Move waits for its clicks, a press never starts a drag.
+        self.refresh_pcb_highlight();
         true
     }
 
@@ -134,12 +138,18 @@ impl Signex {
 
     /// A drag of the selected footprints reached `to`: preview it.
     pub(crate) fn pcb_footprints_dragged(&mut self, from: Point, to: Point) {
-        if self.live_carry(CarryKind::Drag).is_none() {
+        // A drag is one press: a carry from another press (a release that
+        // never arrived) is replaced, never reused for this selection.
+        let same_press = self
+            .live_carry(CarryKind::Drag)
+            .is_some_and(|carry| carry.anchor == Some(from));
+        if !same_press {
             let footprints = self.pcb_selected_footprints();
             let Some(path) = self.active_tab_path() else {
                 return;
             };
-            let mut carry = PcbCarry::new(CarryKind::Drag, path, footprints);
+            let window = self.interaction_state.acting_window;
+            let mut carry = PcbCarry::new(CarryKind::Drag, path, window, footprints);
             carry.anchor = Some(from);
             self.interaction_state.pcb_carry = Some(carry);
             self.refresh_pcb_highlight();
@@ -149,32 +159,63 @@ impl Signex {
 
     /// The drag was released at `to`: move as one step.
     pub(crate) fn pcb_footprints_dropped(&mut self, from: Point, to: Point) {
-        if self.live_carry(CarryKind::Drag).is_none() {
-            self.pcb_footprints_dragged(from, to);
-        }
+        self.pcb_footprints_dragged(from, to);
         self.drop_pcb_carry(from, to);
     }
 
-    /// Drop a drag or a Move without moving anything (Esc, pointer gone).
+    /// Drop this window's drag or Move without moving anything (Esc, the
+    /// pointer gone, a right-click). Another window's carry is left alone.
     pub(crate) fn end_pcb_carry(&mut self) {
         self.interaction_state.pcb_canvas.cancel_marquee();
-        if self.interaction_state.pcb_carry.take().is_some() {
+        if self.has_own_pcb_carry() {
+            self.interaction_state.pcb_carry = None;
             self.refresh_pcb_highlight();
         }
     }
 
-    /// The carry of `kind`, if it belongs to the board in view.
-    fn live_carry(&self, kind: CarryKind) -> Option<PcbCarry> {
+    /// Whether the carry belongs to the board this window shows.
+    pub(crate) fn has_own_pcb_carry(&self) -> bool {
+        let path = self.active_tab_path();
+        let window = self.interaction_state.acting_window;
+        self.interaction_state
+            .pcb_carry
+            .as_ref()
+            .is_some_and(|carry| carry.is_for(path.as_deref(), window))
+    }
+
+    /// Forget a carry left on a board this window no longer shows (a tab
+    /// switch mid-Move). Whether one was dropped.
+    pub(crate) fn drop_stale_pcb_carry(&mut self) -> bool {
+        let stale = self
+            .interaction_state
+            .pcb_carry
+            .as_ref()
+            .is_some_and(|carry| {
+                carry.window == self.interaction_state.acting_window && !self.has_own_pcb_carry()
+            });
+        if stale {
+            self.interaction_state.pcb_carry = None;
+        }
+        stale
+    }
+
+    /// The carry of `kind`, if it belongs to the board in view in this
+    /// window.
+    pub(crate) fn live_carry(&self, kind: CarryKind) -> Option<PcbCarry> {
         let carry = self.interaction_state.pcb_carry.as_ref()?;
-        let shown = self.active_tab_path();
-        (carry.kind == kind && shown.as_ref() == Some(&carry.path)).then(|| carry.clone())
+        (carry.kind == kind && self.has_own_pcb_carry()).then(|| carry.clone())
     }
 
     fn carry_to(&mut self, from: Point, to: Point) {
         let Some(board) = self.active_pcb() else {
             return;
         };
-        let Some(carry) = self.interaction_state.pcb_carry.as_ref() else {
+        let Some(carry) = self
+            .interaction_state
+            .pcb_carry
+            .as_ref()
+            .filter(|_| self.has_own_pcb_carry())
+        else {
             return;
         };
         let delta = carry_delta(board, &carry.footprints, from, to);
@@ -187,7 +228,12 @@ impl Signex {
     }
 
     fn drop_pcb_carry(&mut self, from: Point, to: Point) {
-        let Some(carry) = self.interaction_state.pcb_carry.clone() else {
+        let Some(carry) = self
+            .interaction_state
+            .pcb_carry
+            .clone()
+            .filter(|_| self.has_own_pcb_carry())
+        else {
             return;
         };
         let built = self.active_pcb().map(|board| {

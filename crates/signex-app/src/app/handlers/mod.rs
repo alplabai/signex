@@ -41,6 +41,8 @@ mod pcb_parking;
 pub(crate) mod pcb_placement;
 #[cfg(test)]
 mod pcb_placement_tests;
+#[cfg(test)]
+mod pcb_placement_window_tests;
 pub mod pcb_select;
 pub mod placed_part;
 pub mod placement_session;

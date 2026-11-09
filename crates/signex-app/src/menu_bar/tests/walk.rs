@@ -167,9 +167,11 @@ fn the_same_holds_in_an_undocked_windows_own_bar() {
 /// dead. The list may only shrink.
 const KNOWN_INERT: &[(&str, &[&str])] = &[];
 
-/// What a row run from an undocked window can move besides [`probe`]: the
-/// selection and zoom of each window canvas, and the symbols and revision
-/// of every sheet (a rotate keeps the count).
+/// What a row can move besides [`probe`]: the selection and zoom of each
+/// window canvas, the symbols of every sheet, and the revisions of every
+/// sheet and board, which a rotate or a mirror moves while it keeps the
+/// counts (#2240). Compared before and after within one app only:
+/// revisions are process-wide counters.
 fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64) {
     let canvases = app
         .interaction_state
@@ -188,6 +190,7 @@ fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64) {
         .engines
         .values()
         .map(signex_engine::Engine::revision)
+        .chain(app.document_state.pcb_revisions.values().copied())
         .sum();
     (canvases, symbols, revisions)
 }

@@ -105,6 +105,20 @@ impl Signex {
                 if let Some(overlay_msg) = self.escape_overlay_message() {
                     return self.update(overlay_msg);
                 }
+                // A board window clears its own selection, drag and Move,
+                // never the board the main window shows (#2240).
+                if let Some(id) =
+                    window.filter(|id| self.interaction_state.pcb_canvases.contains_key(id))
+                {
+                    let cleared = self.run_in_window(id, false, |app| {
+                        app.clear_pcb_selection();
+                        Task::none()
+                    });
+                    let reset = self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+                        crate::app::Tool::Select,
+                    )));
+                    return Task::batch([cleared, reset]);
+                }
                 self.escape_tool_reset()
             }
 

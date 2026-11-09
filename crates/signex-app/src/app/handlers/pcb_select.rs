@@ -78,7 +78,10 @@ impl Signex {
     /// a drag or Move in progress.
     pub(crate) fn clear_pcb_selection(&mut self) {
         self.interaction_state.pcb_canvas.cancel_marquee();
-        let carried = self.interaction_state.pcb_carry.take().is_some();
+        let carried = self.has_own_pcb_carry();
+        if carried {
+            self.interaction_state.pcb_carry = None;
+        }
         if self.interaction_state.pcb_selection.clear() || carried {
             self.refresh_pcb_highlight();
         }
@@ -119,27 +122,60 @@ impl Signex {
     /// Hand the canvas the copper to paint for the current selection, the
     /// preview of a drag or Move, and what a press grabs to drag (#2240).
     pub(crate) fn refresh_pcb_highlight(&mut self) {
-        let carry = self.interaction_state.pcb_carry.clone();
-        let painted = self.with_pcb_selection(|sel, board| {
-            let mut highlight = sel.highlight(board);
-            let selected = sel.selection().footprints();
-            let grab = sel.footprint_shapes(board, &selected);
-            if let Some(carry) = carry.filter(|c| c.anchor.is_some()) {
-                let by = pcb_geom::PointNm::from_mm(carry.delta, "carry");
-                highlight.ghost = match by {
-                    Ok(by) => sel
-                        .footprint_shapes(board, &carry.footprints)
-                        .into_iter()
-                        .map(|shape| shape.translated(by))
-                        .collect(),
-                    Err(_) => Vec::new(),
-                };
-            }
-            (highlight, grab)
-        });
+        let carry = self
+            .interaction_state
+            .pcb_carry
+            .clone()
+            .filter(|_| self.has_own_pcb_carry());
+        let painted = self.with_pcb_selection(|sel, board| sel.paint(board, carry.as_ref()));
         let (highlight, grab) = painted.unwrap_or_default();
         let canvas = &mut self.interaction_state.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(grab);
+    }
+
+    /// Repaint the selection of every undocked window that shows the board
+    /// at `path` over its current geometry: highlight, Move preview and
+    /// grab. The window acting now has its state in the main slots and is
+    /// painted by [`Self::refresh_pcb_highlight`].
+    pub(crate) fn refresh_undocked_pcb_highlights(&mut self, path: &std::path::Path) {
+        use crate::app::state::WindowKind;
+        let windows: Vec<iced::window::Id> = self
+            .interaction_state
+            .pcb_selections
+            .keys()
+            .copied()
+            .filter(|id| {
+                matches!(
+                    self.ui_state.windows.get(id),
+                    Some(WindowKind::UndockedTab { path: shown, .. }) if shown == path
+                )
+            })
+            .collect();
+        let Some(board) = self.document_state.pcb_board(path) else {
+            return;
+        };
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(path)
+            .copied()
+            .unwrap_or(0);
+        let interaction = &mut self.interaction_state;
+        for id in windows {
+            let carry = interaction
+                .pcb_carry
+                .as_ref()
+                .filter(|c| c.is_for(Some(path), Some(id)));
+            let Some(selection) = interaction.pcb_selections.get_mut(&id) else {
+                continue;
+            };
+            selection.sync(Some(path), revision);
+            let (highlight, grab) = selection.paint(board, carry);
+            if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
+                canvas.set_highlight(highlight);
+                canvas.set_grab(grab);
+            }
+        }
     }
 }

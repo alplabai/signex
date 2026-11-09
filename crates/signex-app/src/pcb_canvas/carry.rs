@@ -24,6 +24,9 @@ pub struct PcbCarry {
     pub kind: CarryKind,
     /// The board the carry belongs to; another tab drops it.
     pub path: PathBuf,
+    /// The undocked window it started in (`None`: the main window). Another
+    /// window showing the same board does not see it.
+    pub window: Option<iced::window::Id>,
     /// Empty while a Move waits to pick a footprint.
     pub footprints: BTreeSet<Uuid>,
     /// The reference point, board mm; `None` until a Move's first click.
@@ -33,14 +36,25 @@ pub struct PcbCarry {
 }
 
 impl PcbCarry {
-    pub fn new(kind: CarryKind, path: PathBuf, footprints: BTreeSet<Uuid>) -> Self {
+    pub fn new(
+        kind: CarryKind,
+        path: PathBuf,
+        window: Option<iced::window::Id>,
+        footprints: BTreeSet<Uuid>,
+    ) -> Self {
         Self {
             kind,
             path,
+            window,
             footprints,
             anchor: None,
             delta: Point::new(0.0, 0.0),
         }
+    }
+
+    /// Whether the carry belongs to the board at `path` shown in `window`.
+    pub fn is_for(&self, path: Option<&std::path::Path>, window: Option<iced::window::Id>) -> bool {
+        path == Some(self.path.as_path()) && window == self.window
     }
 }
 

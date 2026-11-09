@@ -52,8 +52,9 @@ impl Signex {
 
     /// The board at `path` changed: repaint every window that shows it. The
     /// main window's canvas, ratsnest and pick index follow the revision when
-    /// it is the active tab; an undocked window keeps its own camera. This
-    /// repaints only: it does not touch the tool or the placement in progress.
+    /// it is the active tab; an undocked window keeps its own camera and
+    /// repaints its own selection. This repaints only: it does not touch the
+    /// tool or the placement in progress.
     fn after_board_change(&mut self, path: &Path) {
         let active = self.active_tab_path().as_deref() == Some(path);
         if active {
@@ -66,6 +67,8 @@ impl Signex {
         } else {
             self.repaint_undocked_boards(path);
         }
+        // The undocked windows' selections follow the new geometry too (#2240).
+        self.refresh_undocked_pcb_highlights(path);
     }
 
     /// Give each undocked window that shows the board at `path` its new

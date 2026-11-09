@@ -228,7 +228,10 @@ impl Signex {
         // power/port OR paused preview OR net-colour pen armed)
         // instead of opening the context menu. On a board that is a
         // footprint Move in progress (#2240).
-        if self.interaction_state.pcb_carry.is_some() {
+        // A Move left on a board this window no longer shows is forgotten,
+        // so it cannot swallow a right-click on a sheet.
+        self.drop_stale_pcb_carry();
+        if self.has_own_pcb_carry() {
             self.end_pcb_carry();
             return Task::none();
         }

@@ -268,9 +268,6 @@ pub(super) struct Probe {
     pub pcb_fit_queued: bool,
     pub error_notice: bool,
     pub refs: Vec<String>,
-    /// An edit that keeps the counts (a rotate, a mirror) moves these.
-    pub sheet_revision: Option<u64>,
-    pub board_revisions: Vec<u64>,
     /// Edit ▸ Move arms a pick on a sheet or a board (#2240).
     pub move_pick: bool,
     pub pcb_carry: bool,
@@ -343,16 +340,6 @@ pub(super) fn probe(app: &Signex) -> Probe {
                     .collect()
             })
             .unwrap_or_default(),
-        sheet_revision: app
-            .document_state
-            .active_engine()
-            .map(signex_engine::Engine::revision),
-        board_revisions: {
-            let mut revisions: Vec<u64> =
-                app.document_state.pcb_revisions.values().copied().collect();
-            revisions.sort_unstable();
-            revisions
-        },
         move_pick: app.ui_state.move_pick.is_some(),
         pcb_carry: app.interaction_state.pcb_carry.is_some(),
     }
