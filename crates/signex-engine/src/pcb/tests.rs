@@ -5,22 +5,22 @@ use uuid::Uuid;
 
 use super::*;
 
-const FP_A: &str = "00000000-0000-0000-0000-00000000000a";
-const FP_B: &str = "00000000-0000-0000-0000-00000000000b";
-const SEG_1: &str = "00000000-0000-0000-0000-000000000101";
-const SEG_2: &str = "00000000-0000-0000-0000-000000000102";
-const SEG_3: &str = "00000000-0000-0000-0000-000000000103";
-const VIA_1: &str = "00000000-0000-0000-0000-000000000201";
-const ZONE_1: &str = "00000000-0000-0000-0000-000000000301";
-const TEXT_1: &str = "00000000-0000-0000-0000-000000000401";
+pub(super) const FP_A: &str = "00000000-0000-0000-0000-00000000000a";
+pub(super) const FP_B: &str = "00000000-0000-0000-0000-00000000000b";
+pub(super) const SEG_1: &str = "00000000-0000-0000-0000-000000000101";
+pub(super) const SEG_2: &str = "00000000-0000-0000-0000-000000000102";
+pub(super) const SEG_3: &str = "00000000-0000-0000-0000-000000000103";
+pub(super) const VIA_1: &str = "00000000-0000-0000-0000-000000000201";
+pub(super) const ZONE_1: &str = "00000000-0000-0000-0000-000000000301";
+pub(super) const TEXT_1: &str = "00000000-0000-0000-0000-000000000401";
 
-fn id(s: &str) -> Uuid {
+pub(super) fn id(s: &str) -> Uuid {
     Uuid::parse_str(s).unwrap()
 }
 
 /// Values chosen to be inexact in binary (0.1, 1/3, 1e-7) so a delta-based
 /// inverse would leave a different bit pattern behind.
-fn board() -> PcbBoard {
+pub(super) fn board() -> PcbBoard {
     serde_json::from_value(serde_json::json!({
         "uuid": "00000000-0000-0000-0000-000000000001",
         "outline": [{"x": 0.0, "y": 0.0}, {"x": 50.1, "y": 0.0}, {"x": 50.1, "y": 30.3}],
@@ -70,11 +70,11 @@ fn board() -> PcbBoard {
 /// Exact snapshot: the JSON text writes each f64 in its shortest round-trip
 /// form, so two boards give the same text only if every bit matches
 /// (0.0 and -0.0 included).
-fn snapshot(board: &PcbBoard) -> String {
+pub(super) fn snapshot(board: &PcbBoard) -> String {
     serde_json::to_string(board).unwrap()
 }
 
-fn commands() -> Vec<(&'static str, BoardCommand)> {
+pub(super) fn commands() -> Vec<(&'static str, BoardCommand)> {
     use BoardItemId::*;
     vec![
         (

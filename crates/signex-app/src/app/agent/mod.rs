@@ -34,7 +34,7 @@ pub use reply::{
 };
 pub(crate) use state::AgentState;
 
-/// The agent channel's messages: `Message::File(FileMsg::Agent(..))`.
+/// The agent channel's messages: `Message::Agent(..)`.
 #[derive(Debug, Clone)]
 pub enum AgentMsg {
     /// A request line arrived on a connection (or the connection could not

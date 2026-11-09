@@ -138,6 +138,14 @@ impl PanelDrafts {
         d.paper_edge.retain(|d| d.sheet != sheet);
     }
 
+    /// Whether `sheet` has a pending draft of any kind (title-block field or
+    /// paper edge).
+    pub fn has_sheet(&self, sheet: &Path) -> bool {
+        let d = self.lock();
+        d.title_block.iter().any(|d| d.sheet == sheet)
+            || d.paper_edge.iter().any(|d| d.sheet == sheet)
+    }
+
     /// Keep the drafts of the sheets `keep` accepts; a closed sheet's go.
     pub fn retain_sheets(&self, keep: impl Fn(&Path) -> bool) {
         let mut d = self.lock();

@@ -438,6 +438,7 @@ fn snxpcb_round_trip_with_data() {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        rotation: 0.0,
         net_locked: false,
     };
     let pad2 = Pad {
@@ -456,6 +457,7 @@ fn snxpcb_round_trip_with_data() {
             name: "GND".into(),
         }),
         roundrect_ratio: 0.25,
+        rotation: 0.0,
         net_locked: false,
     };
 

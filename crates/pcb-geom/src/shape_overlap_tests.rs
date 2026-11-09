@@ -1,4 +1,5 @@
 use super::*;
+use crate::rect::RectNm;
 
 const MM: i64 = 1_000_000;
 
@@ -62,12 +63,11 @@ fn discs_overlap_by_radius_sum() {
 }
 
 #[test]
-fn an_ellipse_overlaps_a_disc_on_its_long_axis_only() {
-    let oval = Shape::Ellipse {
-        center: p(0, 0),
-        half_w: 3 * MM,
-        half_h: MM,
-        rotation_deg: 0.0,
+fn a_stadium_overlaps_a_disc_on_its_long_axis_only() {
+    let oval = Shape::Capsule {
+        a: p(-2, 0),
+        b: p(2, 0),
+        radius: MM,
     };
     let at = |x, y| Shape::Disc {
         center: p(x, y),
@@ -187,4 +187,91 @@ fn a_polygon_with_no_area_is_a_segment_or_point_for_both_polygon_tests() {
     assert!(pad.overlaps_polygon(&[p(-3, 0), p(0, 0), p(3, 0)]));
     assert!(pad.overlaps_polygon(&[p(1, 0)]));
     assert!(!pad.overlaps_polygon(&[]));
+}
+
+fn round_rect(rotation_deg: f64) -> Shape {
+    Shape::RoundRect {
+        center: p(0, 0),
+        half_w: 2 * MM,
+        half_h: MM,
+        radius: MM / 2,
+        rotation_deg,
+    }
+}
+
+#[test]
+fn round_rect_hit_overlap_and_window_agree_near_the_corner_arc() {
+    use crate::index::{BoardIndex, IndexedItem, ItemRef, RectSelect};
+    use uuid::Uuid;
+
+    for rotation in [0.0, 30.0, 45.0] {
+        let pad = round_rect(rotation);
+        let index = BoardIndex::from_items(vec![
+            IndexedItem::new(ItemRef::Via(Uuid::from_u128(1)), pad).unwrap(),
+        ]);
+        let step = MM / 25;
+        let mut seen = (false, false);
+        let mut x = -3 * MM + 7;
+        while x <= 3 * MM {
+            let mut y = -3 * MM + 7;
+            while y <= 3 * MM {
+                let at = PointNm::new(x, y);
+                let hit = pad.contains(at, 0);
+                let probe = Shape::Disc {
+                    center: at,
+                    radius: 0,
+                };
+                let window = RectNm::new(at, at);
+                let ctx = format!("rotation {rotation}, point {x},{y}");
+                assert_eq!(pad.overlaps(&probe), hit, "overlap {ctx}");
+                assert_eq!(probe.overlaps(&pad), hit, "overlap rev {ctx}");
+                assert_eq!(pad.touches_rect(&window), hit, "touches {ctx}");
+                assert_eq!(
+                    !index.hit_rect(&window, RectSelect::Touching).is_empty(),
+                    hit,
+                    "window {ctx}"
+                );
+                seen = (seen.0 | hit, seen.1 | !hit);
+                y += step;
+            }
+            x += step;
+        }
+        assert_eq!(seen, (true, true));
+        // The window that holds the whole pad selects it; one that cuts a
+        // corner arc does not.
+        let bounds = pad.aabb();
+        assert!(!index.hit_rect(&bounds, RectSelect::Inside).is_empty());
+        let cut = RectNm::new(bounds.min, PointNm::new(bounds.max.x - 1_000, bounds.max.y));
+        assert!(index.hit_rect(&cut, RectSelect::Inside).is_empty());
+    }
+}
+
+#[test]
+fn a_probe_just_inside_the_arc_between_chord_vertices_overlaps() {
+    // Inner corner (1.5, 0.5) mm, radius 0.5 mm; 5.625 degrees is midway
+    // between two 11.25 degree outline points, where a chord sags ~1.2 um.
+    let t = 5.625_f64.to_radians();
+    let reach = (MM / 2 - 1_000) as f64;
+    let at = PointNm::new(
+        3 * MM / 2 + (reach * t.cos()).round() as i64,
+        MM / 2 + (reach * t.sin()).round() as i64,
+    );
+    let pad = round_rect(0.0);
+    let probe = Shape::Disc {
+        center: at,
+        radius: 0,
+    };
+    assert!(pad.contains(at, 0) && pad.overlaps(&probe));
+}
+
+#[test]
+fn a_ratio_half_square_round_rect_turned_45_is_its_disc_to_the_nm() {
+    let pad = Shape::RoundRect {
+        center: p(0, 0),
+        half_w: MM / 2,
+        half_h: MM / 2,
+        radius: MM / 2,
+        rotation_deg: 45.0,
+    };
+    assert_eq!(pad.aabb(), RectNm::around(p(0, 0), MM / 2, MM / 2));
 }

@@ -1,5 +1,5 @@
-//! A dirty PCB tab that closes parks its board; reopening the file restores
-//! it (#2149). The board store is `state/pcb_board.rs`.
+//! A dirty PCB tab that closes parks its board engine, history included;
+//! reopening the file restores it (#2149). The board store is `state/pcb_board.rs`.
 
 use std::path::PathBuf;
 
@@ -17,10 +17,10 @@ impl Signex {
         let path = tab.path.clone();
         let keep = park_dirty && self.document_state.is_document_dirty(&path);
         if keep
-            && let Some(TabDocument::Pcb(board)) =
+            && let Some(TabDocument::Pcb(engine)) =
                 self.document_state.tabs[idx].cached_document.take()
         {
-            self.document_state.park_pcb_board(path, board);
+            self.document_state.park_pcb_board(path, engine);
             return;
         }
         self.document_state.mark_document_clean(&path);
@@ -31,7 +31,7 @@ impl Signex {
     /// parked board still in flight completes against it. `false` when no
     /// board is parked for `path`.
     pub(crate) fn attach_parked_pcb_tab(&mut self, path: PathBuf, title: String) -> bool {
-        let Some(board) = self.document_state.take_parked_pcb_board(&path) else {
+        let Some(engine) = self.document_state.take_parked_pcb_board(&path) else {
             return false;
         };
         self.park_active_schematic_session();
@@ -39,7 +39,7 @@ impl Signex {
         self.document_state.tabs.push(TabInfo {
             title,
             path,
-            cached_document: Some(TabDocument::Pcb(board)),
+            cached_document: Some(TabDocument::Pcb(engine)),
             project_id,
             kind: TabKind::Pcb,
         });
