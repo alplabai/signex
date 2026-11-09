@@ -26,6 +26,7 @@ pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
 mod pcb_board;
+mod pcb_drc;
 pub(crate) mod pcb_edit;
 mod pcb_ratsnest;
 mod pcb_revision;
