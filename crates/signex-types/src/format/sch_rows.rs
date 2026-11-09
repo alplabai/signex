@@ -410,27 +410,20 @@ fn take_locked_cell(columns: &mut UnknownColumns) -> bool {
 /// Format: `docs/architecture/snxsch-wire-color.md`.
 pub(in crate::format) const WIRE_COLOR_COLUMN: &str = "color";
 
-/// Take the colour cell out of a wire row's foreign columns. An unreadable
-/// value is a read error naming the block, row and value.
-fn take_wire_color(
-    columns: &mut UnknownColumns,
-    block: &str,
-    row: usize,
-) -> Result<Option<crate::theme::Color>, FormatError> {
-    let Some(cell) = columns.take(WIRE_COLOR_COLUMN) else {
-        return Ok(None);
-    };
+/// Take the colour cell out of a wire row's foreign columns. An empty cell is
+/// an uncoloured wire. A value this build cannot read (a later syntax, a
+/// hand edit) is cosmetic, so like `locked` it stays a foreign cell and
+/// round-trips untouched; the wire draws uncoloured and
+/// `wire_color_repair` reports the value.
+fn take_wire_color(columns: &mut UnknownColumns) -> Option<crate::theme::Color> {
+    let cell = columns.get(WIRE_COLOR_COLUMN)?;
     if cell.is_empty() {
-        return Ok(None);
+        columns.take(WIRE_COLOR_COLUMN);
+        return None;
     }
-    crate::theme::Color::parse_hex(&cell)
-        .map(Some)
-        .ok_or_else(|| FormatError::TsvFieldParse {
-            block: block.to_string(),
-            row,
-            field: WIRE_COLOR_COLUMN.to_string(),
-            message: format!("{cell:?} is not a colour (#RRGGBB or #RRGGBBAA)"),
-        })
+    let color = crate::theme::Color::parse_hex(cell)?;
+    columns.take(WIRE_COLOR_COLUMN);
+    Some(color)
 }
 
 pub(in crate::format) fn wire_to_row(w: &Wire) -> Result<SchWireRow, NonFiniteField> {
@@ -458,14 +451,10 @@ fn with_wire_color_cell(
     columns
 }
 
-pub(in crate::format) fn row_to_wire(
-    mut row: SchWireRow,
-    block: &str,
-    index: usize,
-) -> Result<Wire, FormatError> {
+pub(in crate::format) fn row_to_wire(mut row: SchWireRow) -> Wire {
     let locked = take_locked_cell(&mut row.unknown_columns);
-    let color = take_wire_color(&mut row.unknown_columns, block, index)?;
-    Ok(Wire {
+    let color = take_wire_color(&mut row.unknown_columns);
+    Wire {
         uuid: row.uuid,
         start: Point {
             x: nm_to_mm(row.start_x),
@@ -479,7 +468,7 @@ pub(in crate::format) fn row_to_wire(
         color,
         locked,
         unknown_columns: row.unknown_columns,
-    })
+    }
 }
 
 pub(in crate::format) fn junction_to_row(j: &Junction) -> Result<SchJunctionRow, NonFiniteField> {

@@ -50,6 +50,7 @@ mod unknown;
 mod unknown_columns;
 mod uuid_repair;
 mod version;
+mod wire_color_repair;
 
 #[cfg(test)]
 mod body_style_tests;
@@ -527,11 +528,7 @@ impl SnxSchematic {
                 row_to_symbol(row, extra)
             })
             .collect();
-        let wires = wire_rows
-            .into_iter()
-            .enumerate()
-            .map(|(index, row)| row_to_wire(row, "sheets.wires", index))
-            .collect::<Result<Vec<_>, _>>()?;
+        let wires = wire_rows.into_iter().map(row_to_wire).collect::<Vec<_>>();
         let junctions = junction_rows
             .into_iter()
             .map(|row| {
@@ -629,6 +626,10 @@ impl SnxSchematic {
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
+        sheet
+            .unknown
+            .load_repairs
+            .extend(wire_color_repair::unreadable_wire_colors(&sheet));
 
         Ok(SnxSchematic {
             format: raw.format,

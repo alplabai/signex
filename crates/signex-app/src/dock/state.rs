@@ -207,16 +207,6 @@ impl DockArea {
                     region.collapsed = false;
                 }
             }
-            DockMessage::TabScroll(pos, delta) => {
-                let region = match pos {
-                    PanelPosition::Left => &mut self.left,
-                    PanelPosition::Right => &mut self.right,
-                    PanelPosition::Bottom => &mut self.bottom,
-                };
-                let new_off = region.tab_offset as i32 + delta;
-                let max_off = region.panels.len().saturating_sub(1) as i32;
-                region.tab_offset = new_off.clamp(0, max_off) as usize;
-            }
             DockMessage::ToggleCollapse(pos) => {
                 let region = match pos {
                     PanelPosition::Left => &mut self.left,

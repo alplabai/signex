@@ -21,7 +21,6 @@ pub enum DockMessage {
     /// Mouse released on a tab — if no undock happened, treat as click → select.
     TabClick(PanelPosition, usize),
     /// Scroll tabs left/right when they overflow the panel width.
-    TabScroll(PanelPosition, i32),
     /// Pointer entered a dock tab — feeds the hover highlight on
     /// inactive tabs. Container-style tabs can't read `button::Status`,
     /// so we track the hovered tab in `DockArea::hovered_tab` via
