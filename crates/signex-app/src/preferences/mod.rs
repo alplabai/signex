@@ -5,9 +5,10 @@
 //! Right side: settings panel for the selected category.
 
 use crate::render_config::{GridStyle, PinSelectionMode};
-use iced::widget::{Space, Widget, button, column, container, row, scrollable, text};
+use iced::widget::{Space, Widget, column, container, row, scrollable};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::{Spacing, TypeScale};
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -519,7 +520,7 @@ fn build_prefs_file_banner<'a>(
         // repair is the path the app actually reads and writes.
         let path = crate::fonts::prefs_file_path().display().to_string();
         lines = lines.push(
-            text(format!("Your preferences file at {path} {error}."))
+            text(raw(format!("Your preferences file at {path} {error}.")))
                 .size(TS.body)
                 .style(text_warning),
         );
@@ -531,18 +532,18 @@ fn build_prefs_file_banner<'a>(
         // Distributors pane it invites a user to re-enter API keys that
         // did save.
         lines = lines.push(
-            text(
+            text(raw(
                 "Appearance, ERC severities, component classes and panel layout are showing \
-                 their defaults, and changes to them are not being saved. The file itself \
-                 has not been altered — repair it by hand, or start a fresh one and keep \
-                 the old file beside it.",
-            )
+             their defaults, and changes to them are not being saved. The file itself \
+             has not been altered — repair it by hand, or start a fresh one and keep \
+             the old file beside it.",
+            ))
             .size(TS.caption)
             .style(text_muted),
         );
     }
     if !status.is_empty() {
-        lines = lines.push(text(status).size(TS.caption).style(text_muted));
+        lines = lines.push(text(raw(status)).size(TS.caption).style(text_muted));
     }
 
     let mut strip = row![lines].spacing(SP.xl).align_y(iced::Alignment::Center);
@@ -550,7 +551,7 @@ fn build_prefs_file_banner<'a>(
     // banner is a result line and there is nothing left to reset.
     if load_error.is_some() {
         strip = strip.push(
-            button(text("Start a fresh preferences file").size(TS.body))
+            button(text(raw("Start a fresh preferences file")).size(TS.body))
                 .padding([7, 14])
                 .on_press(PrefMsg::ResetPrefsFile)
                 // NOT `secondary_button_style` — that fills with

@@ -5,6 +5,7 @@ resolver = "2"
 exclude = ["fuzz", "vendor/iced_aw"]
 members = [
     "crates/signex-app",
+    "crates/signex-cli",
     "crates/signex-engine",
     "crates/signex-bom",
     "crates/signex-types",
@@ -14,6 +15,7 @@ members = [
     "crates/signex-erc",
     "crates/signex-erc-dsl",
     "crates/signex-net",
+    "crates/signex-history",
     "crates/signex-output",
     "crates/chrome-catalog",
     "crates/signex-library",
@@ -21,6 +23,8 @@ members = [
     "crates/signex-sketch",
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
+    "crates/signex-i18n",
+    "crates/pcb-geom",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -32,6 +36,7 @@ default-members = [
     "crates/signex-erc",
     "crates/signex-erc-dsl",
     "crates/signex-net",
+    "crates/signex-history",
     "crates/signex-output",
     "crates/signex-library",
     "crates/signex-sketch",
@@ -41,10 +46,12 @@ default-members = [
     "crates/signex-gfx",
     "crates/signex-renderer",
     "crates/signex-widgets",
+    "crates/signex-i18n",
+    "crates/pcb-geom",
 ]
 
 [workspace.package]
-version = "1.0.0-rc.1"
+version = "26.11.0-rc.1"
 edition = "2024"
 # MSRV tracks the pinned toolchain (`rust-toolchain.toml` channel). We build,
 # test, and support exactly one toolchain — the pinned stable — so the declared
@@ -100,9 +107,11 @@ signex-bom = { path = "crates/signex-bom" }
 signex-gfx = { path = "crates/signex-gfx" }
 signex-renderer = { path = "crates/signex-renderer" }
 signex-widgets = { path = "crates/signex-widgets" }
+signex-i18n = { path = "crates/signex-i18n" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-net = { path = "crates/signex-net" }
+signex-history = { path = "crates/signex-history" }
 signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
 

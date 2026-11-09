@@ -188,7 +188,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             if !panel.available {
                 return c.push(
                     container(
-                        text("Open a project to define net classes.")
+                        text(raw("Open a project to define net classes."))
                             .size(TS.body)
                             .color(muted),
                     )
@@ -225,7 +225,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             if panel.classes.is_empty() {
                 return c.push(
                     container(
-                        text("No net classes. A net in no class draws as before.")
+                        text(raw("No net classes. A net in no class draws as before."))
                             .size(TS.body)
                             .color(muted),
                     )
@@ -238,7 +238,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             let mut list = Column::new().spacing(SP.xs);
             for (idx, class) in panel.classes.iter().enumerate() {
                 let is_selected = idx == selected;
-                let btn = iced::widget::button(text(class.name.clone()).size(TS.body))
+                let btn = signex_widgets::button(text(raw(class.name.clone())).size(TS.body))
                     .padding([SP.xs, SP.m])
                     .width(Length::Fill)
                     .on_press(wrap(NetClassMsg::Select(idx)))
@@ -248,7 +248,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             c = c.push(container(list).padding([SP.xs, SP.m]).boxed());
             c = c.push(
                 container(
-                    text("The first matching class wins; reorder to change it.")
+                    text(raw("The first matching class wins; reorder to change it."))
                         .size(TS.caption)
                         .color(muted),
                 )
@@ -315,7 +315,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             if let Some(notice) = &panel.notice {
                 c = c.push(
                     container(
-                        text(notice.clone())
+                        text(raw(notice.clone()))
                             .size(TS.caption)
                             .color(theme_ext::warning_color(&ctx.tokens)),
                     )
@@ -339,7 +339,7 @@ fn ghost_style(theme: &Theme, status: button::Status) -> button::Style {
 
 /// Text ghost button; disabled without a message.
 fn action_button<'a>(label: &str, on_press: Option<PanelMsg>) -> Element<'a, PanelMsg> {
-    button(text(label.to_string()).size(TS.caption))
+    button(text(raw(label.to_string())).size(TS.caption))
         .padding([3.0, SP.m])
         .on_press_maybe(on_press)
         .style(ghost_style)
@@ -354,7 +354,7 @@ fn add_class_button<'a>(theme_id: ThemeId, tokens: &ThemeTokens) -> Element<'a, 
         .height(12)
         .style(move |_: &Theme, _| svg::Style { color: Some(ink) });
     button(
-        row![glyph, text("Add Class").size(TS.caption)]
+        row![glyph, text(raw("Add Class")).size(TS.caption)]
             .spacing(SP.xs)
             .align_y(iced::Alignment::Center),
     )
@@ -387,7 +387,7 @@ fn history_button<'a>(
         .on_press_maybe(on_press)
         .style(ghost_style);
     let hint = container(
-        text(label.to_string())
+        text(raw(label.to_string()))
             .size(TS.caption)
             .color(ti(tokens.text)),
     )
@@ -396,7 +396,7 @@ fn history_button<'a>(
         hover_overlay(tokens),
         ti(tokens.border),
     ));
-    iced::widget::tooltip(btn, hint, iced::widget::tooltip::Position::Bottom)
+    signex_widgets::tooltip(btn, hint, iced::widget::tooltip::Position::Bottom)
         .gap(4)
         .boxed()
 }
@@ -412,7 +412,7 @@ fn commit_row<'a>(
     container(
         row![
             widgets::property_label(label.to_string(), label_c),
-            iced::widget::text_input(hint.to_string(), value.to_string())
+            signex_widgets::text_input(signex_widgets::raw(hint.to_string()), value.to_string())
                 .on_input(move |s| PanelMsg::NetClass(NetClassMsg::Draft(field, s)))
                 .on_submit(PanelMsg::NetClass(NetClassMsg::Commit(field)))
                 .size(TS.body)

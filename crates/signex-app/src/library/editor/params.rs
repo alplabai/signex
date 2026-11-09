@@ -19,13 +19,14 @@
 
 use std::collections::BTreeSet;
 
-use iced::widget::{Column, Widget, column, row, scrollable, text, text_input};
+use iced::widget::{Column, Widget, column, row, scrollable};
 use iced::{Element, Length};
 use signex_library::{
     ParamKind, ParamMap, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation,
 };
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text, text_input};
 
 use super::super::messages::{EditorMsg, LibraryMessage, ParamKindMsg};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
@@ -201,9 +202,12 @@ pub fn view<'a>(
     let template = resolve_template(state, library_state);
     let problems = slot_problems(state, library_state);
 
-    let class_note = text(class_label(state.row.class.as_str(), template.is_some()))
-        .size(TS.body)
-        .color(theme_ext::text_secondary(tokens));
+    let class_note = text(raw(class_label(
+        state.row.class.as_str(),
+        template.is_some(),
+    )))
+    .size(TS.body)
+    .color(theme_ext::text_secondary(tokens));
 
     let specs = row_specs(template, &state.row.parameters);
     let mut grid: Column<Element<'a, LibraryMessage>> =
@@ -266,27 +270,29 @@ fn param_row<'a>(
     } else {
         muted
     };
-    let scope_cell: Element<'a, LibraryMessage> = text(spec.scope.label())
+    let scope_cell: Element<'a, LibraryMessage> = text(raw(spec.scope.label()))
         .size(TS.body)
         .color(scope_color)
         .boxed();
-    let name_cell: Element<'a, LibraryMessage> =
-        text(name.to_string()).size(TS.body).color(text_c).boxed();
+    let name_cell: Element<'a, LibraryMessage> = text(raw(name.to_string()))
+        .size(TS.body)
+        .color(text_c)
+        .boxed();
 
     let editor = slot_input(state, name, kind, unit.clone(), spec.slot, tokens, address);
     let unit_cell = unit_cell(spec.scope, kind, unit, name, tokens, address);
 
     let status_cell: Element<'a, LibraryMessage> =
         match status_note(spec.scope, value.is_some(), problem) {
-            Some(StatusNote::Missing) => text("Missing value")
+            Some(StatusNote::Missing) => text(raw("Missing value"))
                 .size(TS.body)
                 .color(theme_ext::warning_color(tokens))
                 .boxed(),
-            Some(StatusNote::Problem(why)) => text(why)
+            Some(StatusNote::Problem(why)) => text(raw(why))
                 .size(TS.body)
                 .color(theme_ext::error_color(tokens))
                 .boxed(),
-            None => text("").size(TS.body).boxed(),
+            None => text(raw("")).size(TS.body).boxed(),
         };
 
     let action_cell: Element<'a, LibraryMessage> = if spec.scope == Scope::Custom {
@@ -301,7 +307,7 @@ fn param_row<'a>(
             tokens,
         )
     } else {
-        text("").size(TS.body).boxed()
+        text(raw("")).size(TS.body).boxed()
     };
 
     let [scope_w, name_w, value_w, unit_w, status_w, action_w] = COLUMNS.map(|(_, w)| w);
@@ -354,10 +360,10 @@ fn unit_cell<'a>(
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let (Some(u), ParamKind::Measurement) = (unit, kind) else {
-        return text("").size(TS.body).boxed();
+        return text(raw("")).size(TS.body).boxed();
     };
     if scope != Scope::Custom {
-        return text(u).size(TS.body).color(muted).boxed();
+        return text(raw(u)).size(TS.body).color(muted).boxed();
     }
     match unit_of_token(&u) {
         Ok(selected) => {
@@ -374,7 +380,10 @@ fn unit_cell<'a>(
                 )
             })
         }
-        Err(raw) => text(raw.to_string()).size(TS.body).color(muted).boxed(),
+        Err(raw) => text(signex_widgets::raw(raw.to_string()))
+            .size(TS.body)
+            .color(muted)
+            .boxed(),
     }
 }
 
@@ -423,7 +432,7 @@ fn text_cell<'a>(
     };
     let address = address.clone();
     let name = name.to_string();
-    text_input("", value)
+    text_input(raw(""), value)
         .on_input(move |s| {
             editor_event(
                 &address,
@@ -454,7 +463,7 @@ fn number_cell<'a>(
     });
     let (input_address, input_name) = (address.clone(), name.to_string());
     let (submit_address, submit_name) = (address.clone(), name.to_string());
-    text_input("", buf)
+    text_input(raw(""), buf)
         .on_input(move |s| {
             editor_event(
                 &input_address,
@@ -481,7 +490,7 @@ fn bool_cell<'a>(
     let checked = matches!(state.row.parameters.get(name), Some(ParamValue::Bool(true)));
     let address = address.clone();
     let name = name.to_string();
-    iced::widget::checkbox(checked)
+    signex_widgets::checkbox(checked)
         .on_toggle(move |v| {
             editor_event(
                 &address,
@@ -513,7 +522,7 @@ fn add_custom_card<'a>(
 ) -> Element<'a, LibraryMessage> {
     let name_input = {
         let address = address.clone();
-        text_input("Parameter name", &state.new_param_name)
+        text_input(raw("Parameter name"), &state.new_param_name)
             .on_input(move |s| editor_event(&address, EditorMsg::ParamNewNameChanged(s)))
             .padding([SP.s, SP.m])
             .size(TS.body)

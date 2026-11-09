@@ -1,8 +1,9 @@
 //! Pattern (array) role sub-form. Split from `subforms.rs`.
 
-use iced::widget::{Column, button, container, pick_list, row, text};
+use iced::widget::{Column, container, pick_list, row};
 use iced::{Color, Element, Length, Widget};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{button, raw, text};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row};
@@ -62,11 +63,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     col = col.push(
         container(
             row![
-                text("Kind")
+                text(raw("Kind"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text(kind_label).size(TS.caption).color(primary),
+                text(raw(kind_label)).size(TS.caption).color(primary),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
@@ -189,7 +190,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 let nx = (*nx).min(MAX_GRID_CHECKBOX_DIM);
                 let ny = (*ny).min(MAX_GRID_CHECKBOX_DIM);
                 col = col.push(
-                    container(text("Instances").size(TS.caption).color(muted))
+                    container(text(raw("Instances")).size(TS.caption).color(muted))
                         .padding([6.0, SP.m])
                         .width(Length::Fill)
                         .boxed(),
@@ -205,7 +206,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                             .iter()
                             .any(|(si, sj)| *si == i && *sj == j);
                         let on = !suppressed;
-                        let cb = iced::widget::checkbox(on)
+                        let cb = signex_widgets::checkbox(on)
                             .size(TS.label)
                             .spacing(0)
                             .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
@@ -261,11 +262,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             col = col.push(
                 container(
                     row![
-                        text("Centre")
+                        text(raw("Centre"))
                             .size(TS.caption)
                             .color(muted)
                             .width(Length::Fixed(80.0)),
-                        text(centre_label).size(TS.caption).color(primary),
+                        text(raw(centre_label)).size(TS.caption).color(primary),
                     ]
                     .spacing(6)
                     .align_y(iced::Alignment::Center),
@@ -286,7 +287,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             };
             col = col.push(
                 container(
-                    button(text(repick_label).size(TS.caption).color(primary))
+                    button(text(raw(repick_label)).size(TS.caption).color(primary))
                         .padding([3.0, SP.m])
                         .style(repick_btn_style)
                         .on_press(PanelMsg::FpEditorBeginRepickPolarCenter { array_id }),
@@ -311,7 +312,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             if let Some(count) = count_value {
                 let count = (*count).min(MAX_POLAR_CHECKBOX_COUNT);
                 col = col.push(
-                    container(text("Instances").size(TS.caption).color(muted))
+                    container(text(raw("Instances")).size(TS.caption).color(muted))
                         .padding([6.0, SP.m])
                         .width(Length::Fill)
                         .boxed(),
@@ -322,7 +323,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 for i in 0..count {
                     let suppressed = suppressed_instances.contains(&i);
                     let on = !suppressed;
-                    let cb = iced::widget::checkbox(on)
+                    let cb = signex_widgets::checkbox(on)
                         .size(TS.label)
                         .spacing(0)
                         .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
@@ -342,7 +343,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     col = col.push(
         container(
             row![
-                text("Numbering")
+                text(raw("Numbering"))
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
@@ -397,7 +398,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     // Delete button — destructive style. Source entity stays put.
     col = col.push(
         container(
-            button(text("Delete pattern").size(TS.caption).color(primary))
+            button(text(raw("Delete pattern")).size(TS.caption).color(primary))
                 .padding([3.0, SP.m])
                 .style(iced::widget::button::danger)
                 .on_press(PanelMsg::FpEditorDeleteArray { array_id }),

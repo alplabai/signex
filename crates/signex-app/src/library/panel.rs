@@ -23,10 +23,11 @@
 //! which routes through the same handler the project-tree double-click
 //! uses.
 
-use iced::widget::{Column, Space, Widget, button, column, container, row, text, text_input};
+use iced::widget::{Column, Space, Widget, column, container, row};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text, text_input};
 
 use super::messages::{LibraryMessage, PickerMsg};
 use super::state::LibraryState;
@@ -48,7 +49,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     // The search box filters library *names*, not rows. Component-row
     // search lives inside the Library Browser tab (each browser tab
     // has its own search buffer).
-    let search = text_input("Search libraries…", &state.panel_search)
+    let search = text_input(raw("Search libraries…"), &state.panel_search)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::PanelSearchChanged(s)))
         .padding(LIB_PANEL_ROW_PADDING)
         .size(LIB_PANEL_TEXT_SIZE)
@@ -62,9 +63,11 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     if state.open_libraries.is_empty() {
         col = col.push(
             container(
-                text("No libraries open. Use File ▸ Library ▸ Open Library… to open a *.snxlib/.")
-                    .size(LIB_PANEL_TEXT_SIZE)
-                    .color(muted),
+                text(raw(
+                    "No libraries open. Use File ▸ Library ▸ Open Library… to open a *.snxlib/.",
+                ))
+                .size(LIB_PANEL_TEXT_SIZE)
+                .color(muted),
             )
             .padding([SP.l, SP.m])
             .boxed(),
@@ -89,7 +92,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     let footer = container(
         row![
             button(
-                text("+ Open Library…")
+                text(raw("+ Open Library…"))
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(text_c)
             )
@@ -143,7 +146,7 @@ fn library_row<'a>(
     let toggle = button(
         row![
             chevron,
-            text(format!("{}.snxlib", lib.display_name))
+            text(raw(format!("{}.snxlib", lib.display_name)))
                 .size(LIB_PANEL_TEXT_SIZE)
                 .color(text_c),
             rows_pill,
@@ -157,7 +160,7 @@ fn library_row<'a>(
         lib.root.clone(),
     )))
     .style(crate::styles::subtle_button(tokens));
-    let open = button(text("Open").size(LIB_PANEL_TEXT_SIZE).color(text_c))
+    let open = button(text(raw("Open")).size(LIB_PANEL_TEXT_SIZE).color(text_c))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
         .style(crate::panels::form_look::ghost_button);
@@ -181,7 +184,7 @@ fn component_rows<'a>(
     if tables.is_empty() {
         list = list.push(
             container(
-                text("No tables in this library.")
+                text(raw("No tables in this library."))
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(muted),
             )
@@ -192,7 +195,7 @@ fn component_rows<'a>(
     for (table, rows) in tables {
         list = list.push(
             container(
-                text(format!("{table}  ({})", rows.len()))
+                text(raw(format!("{table}  ({})", rows.len())))
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(muted),
             )
@@ -208,7 +211,7 @@ fn component_rows<'a>(
             let selected = state.panel_selected.as_ref() == Some(&key);
             list = list.push(
                 button(
-                    text(r.internal_pn.as_str().to_owned())
+                    text(raw(r.internal_pn.as_str().to_owned()))
                         .size(LIB_PANEL_TEXT_SIZE)
                         .wrapping(iced::widget::text::Wrapping::None),
                 )

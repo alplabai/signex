@@ -1,7 +1,8 @@
 use super::{FindReplaceMsg, FindReplaceState, FindScope};
-use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
+use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text, text_input};
 
 use crate::styles::{Spacing, TypeScale};
 
@@ -44,11 +45,14 @@ fn build<'a>(
 
     // The shared dialog header (title, neutral close).
     let header: Element<'a, FindReplaceMsg> =
-        crate::app::view::dialogs::modal_title_header(title, FindReplaceMsg::Close, tokens);
+        crate::app::view::dialogs::modal_title_header(raw(title), FindReplaceMsg::Close, tokens);
 
     let query_row = row![
-        text("Find").size(TS.body).color(text_secondary).width(80),
-        text_input("Search text", &state.query)
+        text(raw("Find"))
+            .size(TS.body)
+            .color(text_secondary)
+            .width(80),
+        text_input(raw("Search text"), &state.query)
             .style(crate::panels::form_look::text_input_style)
             .on_input(FindReplaceMsg::QueryChanged)
             .padding([6.0, SP.m])
@@ -61,7 +65,7 @@ fn build<'a>(
     let scope_button = |label: &'static str, scope: FindScope| {
         let chosen = state.scope == scope;
         button(
-            text(label)
+            text(raw(label))
                 .size(TS.body)
                 .color(if chosen { accent } else { text_secondary }),
         )
@@ -69,7 +73,10 @@ fn build<'a>(
         .style(crate::styles::menu_item(tokens))
     };
     let scope_row = row![
-        text("Scope").size(TS.body).color(text_secondary).width(80),
+        text(raw("Scope"))
+            .size(TS.body)
+            .color(text_secondary)
+            .width(80),
         scope_button("Sheet", FindScope::Sheet),
         scope_button("Project", FindScope::Project),
     ]
@@ -80,11 +87,11 @@ fn build<'a>(
     if state.replace_mode {
         form = form.push(Widget::boxed(
             row![
-                text("Replace")
+                text(raw("Replace"))
                     .size(TS.body)
                     .color(text_secondary)
                     .width(80),
-                text_input("Replacement text", &state.replacement)
+                text_input(raw("Replacement text"), &state.replacement)
                     .style(crate::panels::form_look::text_input_style)
                     .on_input(FindReplaceMsg::ReplacementChanged)
                     .padding([6.0, SP.m])
@@ -103,13 +110,13 @@ fn build<'a>(
         format!("{} match(es)", state.matches.len())
     };
     form = form.push(
-        container(text(count).size(TS.caption).color(text_secondary))
+        container(text(raw(count)).size(TS.caption).color(text_secondary))
             .padding([SP.xs, 0.0])
             .boxed(),
     );
     if let Some(note) = &state.skipped_note {
         form = form.push(
-            text(note.clone())
+            text(raw(note.clone()))
                 .size(TS.caption)
                 .color(text_secondary)
                 .boxed(),
@@ -118,7 +125,7 @@ fn build<'a>(
 
     let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
         vec![
-            container(text("No matches").size(TS.body).color(text_secondary))
+            container(text(raw("No matches")).size(TS.body).color(text_secondary))
                 .padding([10.0, SP.l])
                 .width(Length::Fill)
                 .boxed(),
@@ -134,11 +141,13 @@ fn build<'a>(
             button(
                 row![
                     column![
-                        text(hit.hit.kind.label()).size(TS.body).color(text_primary),
-                        text(match &hit.placement_label {
+                        text(raw(hit.hit.kind.label()))
+                            .size(TS.body)
+                            .color(text_primary),
+                        text(raw(match &hit.placement_label {
                             Some(label) => format!("{} · {label}", hit.hit.text),
                             None => hit.hit.text.clone(),
-                        })
+                        }))
                         .size(TS.caption)
                         .color(text_secondary),
                     ]
@@ -178,7 +187,7 @@ fn build<'a>(
                     .and_then(|p| p.file_name())
                     .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 rows.push(
-                    container(text(name).size(TS.body).color(accent))
+                    container(text(raw(name)).size(TS.body).color(accent))
                         .padding([6.0, SP.s])
                         .boxed(),
                 );
@@ -190,31 +199,39 @@ fn build<'a>(
 
     let replace_current: Element<'a, FindReplaceMsg> =
         if state.replace_mode && state.selected_index.is_some() && !state.is_busy() {
-            button(text("Replace Current").size(TS.body).color(text_primary))
-                .on_press(FindReplaceMsg::ReplaceCurrent)
-                .style(crate::styles::menu_item(tokens))
-                .boxed()
+            button(
+                text(raw("Replace Current"))
+                    .size(TS.body)
+                    .color(text_primary),
+            )
+            .on_press(FindReplaceMsg::ReplaceCurrent)
+            .style(crate::styles::menu_item(tokens))
+            .boxed()
         } else {
-            container(text("Replace Current").size(TS.body).color(text_secondary))
-                .padding([6, 10])
-                .boxed()
+            container(
+                text(raw("Replace Current"))
+                    .size(TS.body)
+                    .color(text_secondary),
+            )
+            .padding([6, 10])
+            .boxed()
         };
 
     let replace_all: Element<'a, FindReplaceMsg> =
         if state.replace_mode && !state.matches.is_empty() && !state.is_busy() {
-            button(text("Replace All").size(TS.body).color(text_primary))
+            button(text(raw("Replace All")).size(TS.body).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceAll)
                 .style(crate::styles::menu_item(tokens))
                 .boxed()
         } else {
-            container(text("Replace All").size(TS.body).color(text_secondary))
+            container(text(raw("Replace All")).size(TS.body).color(text_secondary))
                 .padding([6, 10])
                 .boxed()
         };
 
     let footer = row![
         container(
-            text("Targets: labels, notes, designators, values")
+            text(raw("Targets: labels, notes, designators, values"))
                 .size(TS.caption)
                 .color(text_secondary)
         ),

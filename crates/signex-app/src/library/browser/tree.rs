@@ -25,7 +25,7 @@ pub(super) fn view_libraries_tree<'a>(
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![
         container(
-            text("LIBRARIES")
+            text(raw("LIBRARIES"))
                 .size(TS.section)
                 .style(crate::styles::section_label(tokens))
         )
@@ -44,7 +44,7 @@ pub(super) fn view_libraries_tree<'a>(
         let is_current = lib.root == library_path;
         let rows: usize = lib.tables.values().map(Vec::len).sum();
         let mut label: Row<Element<'a, LibraryMessage>> = row![
-            text(lib.display_name.clone())
+            text(raw(lib.display_name.clone()))
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)
@@ -55,7 +55,7 @@ pub(super) fn view_libraries_tree<'a>(
         .align_y(iced::Alignment::Center);
         if library_state.is_read_only(&lib.root) {
             label = label.push(
-                container(text("read-only").size(TS.caption).color(muted))
+                container(text(raw("read-only")).size(TS.caption).color(muted))
                     .padding([0.0, SP.s])
                     .style(move |_: &Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(pill_fill)),
@@ -71,7 +71,7 @@ pub(super) fn view_libraries_tree<'a>(
             );
         }
         label = label.push(
-            text(rows.to_string())
+            text(raw(rows.to_string()))
                 .size(BROWSER_TEXT_SIZE)
                 .color(muted)
                 .boxed(),

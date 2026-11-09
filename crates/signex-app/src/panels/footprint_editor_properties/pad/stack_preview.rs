@@ -2,8 +2,9 @@
 //! enums (PadShapeChoice / HoleShapeChoice / ExpansionMode) used by
 //! the pick_list rows in `pad_form`.
 
-use iced::widget::{Widget, container, row, text};
+use iced::widget::{Widget, container, row};
 use iced::{Color, Length, Theme};
+use signex_widgets::{raw, text};
 
 use super::super::super::PanelMsg;
 use super::form::PadFormValues;
@@ -453,8 +454,8 @@ pub(super) fn pad_stack_tab_strip<'a>(
     let current = values.pad_stack_tab;
     let mk = move |label: &'static str, target: PadStackTab| -> iced::Element<'a, PanelMsg> {
         let active = current == target;
-        iced::widget::button(
-            text(label)
+        signex_widgets::button(
+            text(raw(label))
                 .size(TS.caption)
                 .color(if active { primary } else { muted })
                 .align_x(iced::alignment::Horizontal::Center),

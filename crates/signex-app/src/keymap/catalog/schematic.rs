@@ -1,7 +1,7 @@
 //! Schematic-surface command metadata — placement, net, annotation,
 //! sheet-navigation. Split from `keymap/catalog.rs`; entries verbatim.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 
 pub(super) const SCHEMATIC: &[CommandMetadata] = &[
     CommandMetadata {
@@ -11,7 +11,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -31,7 +31,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -41,7 +41,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -181,7 +182,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Bus"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -211,7 +213,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Global Label"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::LABEL,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -221,7 +224,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Hierarchical Label"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::LABEL,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -231,7 +235,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Junction"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::AT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -241,7 +246,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::LABEL,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -251,7 +257,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Net Label"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::LABEL,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -261,7 +268,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::AT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -271,7 +279,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Generic No ERC"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::AT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -281,7 +290,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Power Port"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::POWER,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -301,7 +311,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::TEXT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -311,7 +322,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Wire"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -351,7 +363,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Electrical Rules Check"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -361,7 +373,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Electrical Rules Check"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -371,7 +383,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Parameter Manager..."),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -381,7 +393,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

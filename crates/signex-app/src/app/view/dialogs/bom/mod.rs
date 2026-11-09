@@ -8,8 +8,9 @@
 //! so the rendered modal is pixel-identical.
 
 use super::*;
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_widgets::{raw, text};
 
 use super::widgets::{draggable_header, os_title_bar_slot};
 use crate::styles::dialog_button;
@@ -89,7 +90,7 @@ impl Signex {
         // header strip area, sits to the left. (i) info badge sits
         // on the right.
         let variant_dropdown: Element<'_, Message> = if preview.variants.is_empty() {
-            text(format!("Variant: {}", active_variant_label))
+            text(raw(format!("Variant: {}", active_variant_label)))
                 .size(TS.body)
                 .color(text_muted)
                 .boxed()
@@ -97,11 +98,11 @@ impl Signex {
             container(
                 row![
                     Space::new().width(Length::Fill),
-                    text(active_variant_label.clone())
+                    text(raw(active_variant_label.clone()))
                         .size(TS.body)
                         .color(text_c),
                     Space::new().width(Length::Fill),
-                    text("\u{25BE}").size(TS.caption).color(text_c),
+                    text(raw("\u{25BE}")).size(TS.caption).color(text_c),
                 ]
                 .align_y(iced::Alignment::Center),
             )
@@ -123,7 +124,7 @@ impl Signex {
             .boxed()
         };
         let info_badge: Element<'_, Message> =
-            container(text("i").size(TS.body).color(iced::Color::WHITE))
+            container(text(raw("i")).size(TS.body).color(iced::Color::WHITE))
                 .width(20)
                 .height(20)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -190,23 +191,23 @@ impl Signex {
                     } else {
                         signex_output::BomIssueSeverity::Warning
                     };
-                    text(label)
+                    text(raw(label))
                         .size(TS.caption)
                         .color(rules::severity_color(severity, text_muted, tokens))
                         .boxed()
                 }
-                None => text("No BOM issues")
+                None => text(raw("No BOM issues"))
                     .size(TS.caption)
                     .color(text_muted)
                     .boxed(),
             };
         let footer = container(
             row![
-                text(status_label).size(TS.caption).color(text_muted),
+                text(raw(status_label)).size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text("|").size(TS.caption).color(text_muted),
+                text(raw("|")).size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text(variant_label).size(TS.caption).color(text_muted),
+                text(raw(variant_label)).size(TS.caption).color(text_muted),
                 Space::new().width(Length::Fill),
                 issue_badge,
                 Space::new().width(12),

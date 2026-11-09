@@ -1,7 +1,8 @@
 //! Sketch-mode Pad Attributes sub-form. Split from `subforms.rs`.
 
-use iced::widget::{Column, container, text};
+use iced::widget::{Column, container};
 use iced::{Color, Element, Length, Widget as _};
+use signex_widgets::{raw, text};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row, pad_pick_row};
@@ -88,7 +89,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
 
     // Pad Features.
     col = col.push(
-        container(text("Pad Features").size(TS.caption).color(muted))
+        container(text(raw("Pad Features")).size(TS.caption).color(muted))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -116,7 +117,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
 
     // Testpoint flags.
     col = col.push(
-        container(text("Testpoint").size(TS.caption).color(muted))
+        container(text(raw("Testpoint")).size(TS.caption).color(muted))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -153,7 +154,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // Pad Stack overrides (the bool-typed subset; expression-typed
     // mask/paste margins stay sketch-parameterised).
     col = col.push(
-        container(text("Pad Stack").size(TS.caption).color(muted))
+        container(text(raw("Pad Stack")).size(TS.caption).color(muted))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -208,7 +209,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // Hole Details (THT pads only).
     if p.has_drill {
         col = col.push(
-            container(text("Hole Details").size(TS.caption).color(muted))
+            container(text(raw("Hole Details")).size(TS.caption).color(muted))
                 .padding([6.0, SP.m])
                 .width(Length::Fill)
                 .boxed(),
@@ -277,7 +278,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     // the EditorPad index from the entity ID.
     col = col.push(
         container(
-            iced::widget::button(text("Edit in Pads ▸").size(TS.caption).color(primary))
+            signex_widgets::button(text(raw("Edit in Pads ▸")).size(TS.caption).color(primary))
                 .padding([SP.s, 10.0])
                 .on_press(PanelMsg::FpEditorEditSketchPadInPads { id })
                 .style(iced::widget::button::primary),

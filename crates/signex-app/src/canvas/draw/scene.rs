@@ -6,16 +6,6 @@ const FOCUSED_PIN_LINE_PX: f32 = 3.0;
 const FOCUSED_PIN_TIP_PX: f32 = 3.5;
 
 impl SchematicCanvas<'_> {
-    /// Whether the retained content layer was drawn at the camera as it is now,
-    /// within a sub-pixel pan and a negligible zoom.
-    pub(in crate::canvas) fn content_cache_fits_camera(&self) -> bool {
-        let cam = self.camera();
-        let (x, y, scale) = self.content_cache_camera.get();
-        (x - cam.offset.x).abs() < 0.01
-            && (y - cam.offset.y).abs() < 0.01
-            && (scale - cam.scale).abs() < 0.0001
-    }
-
     /// Layer 2 — the schematic content. Retained across pans (see
     /// [`super::retained`]); a move-drag draws it uncached.
     pub(in crate::canvas) fn draw_content(

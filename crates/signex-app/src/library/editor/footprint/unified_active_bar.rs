@@ -156,8 +156,7 @@ pub fn dropdown_overlay<'a>(
         raw_x
     };
 
-    let panel_anchor =
-        crate::app::view::translate::Translate::new(panel, (abs_x, top_padding_px as f32));
+    let panel_anchor = signex_widgets::Translate::new(panel, (abs_x, top_padding_px as f32));
 
     let backstop = mouse_area(
         container(Space::new())

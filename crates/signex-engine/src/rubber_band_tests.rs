@@ -524,6 +524,37 @@ fn when_every_route_collides_the_pin_moves_alone_and_a_warning_names_it() {
     assert!(warnings[0].contains("R1 pin 1"), "{warnings:?}");
 }
 
+/// A move that raises a notice, run inside a transaction (#2178).
+fn warning_move_in_a_transaction() -> (Engine, Vec<String>) {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (45.0, 55.0), (45.0, 58.0));
+    add_wire(&mut sheet, (30.0, 55.0), (30.0, 58.0));
+    let mut engine = Engine::new(sheet).expect("engine");
+    engine.begin_transaction().unwrap();
+    mv(&mut engine, vec![symbol_item(r1)], 0.0, 10.0, true);
+    let drained_early = engine.take_warnings();
+    (engine, drained_early)
+}
+
+#[test]
+fn a_transactions_notices_are_held_until_it_commits() {
+    let (mut engine, early) = warning_move_in_a_transaction();
+    assert!(early.is_empty(), "held while the transaction is open");
+    engine.commit_transaction(None).unwrap();
+    let warnings = engine.take_warnings();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+}
+
+#[test]
+fn a_rolled_back_transaction_drops_its_notices() {
+    let (mut engine, _) = warning_move_in_a_transaction();
+    engine.rollback_transaction();
+    assert!(engine.take_warnings().is_empty());
+    assert!(engine.take_unkept_pins().is_empty());
+}
+
 #[test]
 fn twenty_alternating_moves_keep_the_wire_count_bounded() {
     let (mut engine, r1, _) = series_fixture();
@@ -1731,7 +1762,7 @@ fn a_selected_wire_overlapping_a_follower_is_merged() {
         true,
     );
     assert_no_overlaps(&e);
-    let _ = before;
+    assert_eq!(net_shape(e.document()), before, "netlist changed");
 }
 
 #[test]

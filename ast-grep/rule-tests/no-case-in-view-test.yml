@@ -1,0 +1,25 @@
+id: no-case-in-view
+valid:
+  - "fn view(state: &State) -> Element<'_, Message> { text(&state.name).into() }"
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn t() { let _ = "A".to_lowercase(); }
+    }
+invalid:
+  - "fn view(s: &str) -> String { s.to_uppercase() }"
+  - "fn view(s: &str) -> String { s.to_lowercase() }"
+  - "fn view(s: &str) -> String { s.to_ascii_uppercase() }"
+  - "fn view(s: &str) -> String { s.to_ascii_lowercase() }"
+  - "fn f(s: &str) -> String { s.chars().flat_map(char::to_uppercase).collect() }"
+  - "fn f(s: &[&str]) -> Vec<String> { s.iter().map(|x| str::to_lowercase(x)).collect() }"
+  - "fn f(s: &mut String) { s.make_ascii_uppercase() }"
+  - "fn f(s: &mut String) { s.make_ascii_lowercase() }"
+  - "fn f(s: &[char]) -> Vec<char> { s.iter().map(char::to_ascii_uppercase).collect() }"
+  - "fn f(s: &[char]) -> Vec<char> { s.iter().map(char::to_ascii_lowercase).collect() }"
+  - "fn f(s: &[u8]) -> Vec<u8> { s.iter().map(u8::to_ascii_uppercase).collect() }"
+  - "fn f(s: &[u8]) -> Vec<u8> { s.iter().map(u8::to_ascii_lowercase).collect() }"
+  - "fn f(s: &str) -> String { std::primitive::str::to_lowercase(s) }"
+  - "fn f(c: char) -> char { core::primitive::char::to_ascii_uppercase(&c) }"
+  - "const F: fn(&str) -> String = |s| s.to_uppercase();"
+  - "static NAMES: LazyLock<String> = LazyLock::new(|| \"a\".to_uppercase());"

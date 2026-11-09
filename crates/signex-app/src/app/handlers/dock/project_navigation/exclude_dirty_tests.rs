@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::exclude_dirty::DiscardBlock;
+use crate::app::handlers::editing_commands::net_color_driver::{colour_of, paint_on};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::scope::CaseFold;
 use crate::app::{ExcludeDirtyChoice, Message, RemoveChoice, RemoveDialogState, RemoveMsg, Signex};
@@ -102,19 +103,19 @@ fn discard_forgets_the_discarded_sheets_net_colours() {
     };
     let mut engine = signex_engine::Engine::new(sheet).expect("engine");
     engine.set_path(Some(held.clone()));
-    app.document_state.engines.insert(held, engine);
+    app.document_state.engines.insert(held.clone(), engine);
     let red = signex_types::theme::Color {
         r: 255,
         g: 0,
         b: 0,
         a: 255,
     };
-    app.ui_state.wire_color_overrides.insert(wire, red);
+    paint_on(&mut app, &held, &[wire], red);
 
     exclude_then(&mut app, ExcludeDirtyChoice::Discard);
 
     assert!(
-        !app.ui_state.wire_color_overrides.contains_key(&wire),
+        !colour_of(&app, wire).is_some(),
         "a discarded sheet must not leave its net colours behind"
     );
 }
@@ -442,6 +443,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
         id,
         path: PathBuf::from("Stray.snxprj"),
         data: signex_types::project::ProjectData {
+            document_id: None,
             description: None,
             name: "s".into(),
             dir: String::new(),

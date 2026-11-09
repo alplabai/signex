@@ -240,7 +240,7 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
             },
             ..container::Style::default()
         });
-    let name = text(project.name.clone())
+    let name = text(raw(project.name.clone()))
         .size(TS.title)
         .color(ink)
         .font(iced::Font {
@@ -248,7 +248,7 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
             ..iced::Font::DEFAULT
         })
         .wrapping(iced::widget::text::Wrapping::None);
-    let summary = text(card_summary(project))
+    let summary = text(raw(card_summary(project)))
         .size(TS.caption)
         .color(ink4)
         .wrapping(iced::widget::text::Wrapping::None);
@@ -261,7 +261,7 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
         .push(titles.boxed());
     if project.version_control {
         let pill = container(
-            text("git")
+            text(raw("git"))
                 .size(TS.caption)
                 .font(iced::Font::MONOSPACE)
                 .wrapping(iced::widget::text::Wrapping::None),
@@ -339,7 +339,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         roots = filtered(&roots, &needle);
     }
     let body: Element<'a, PanelMsg> = if roots.is_empty() {
-        text("No files match")
+        text(raw("No files match"))
             .size(TS.caption)
             .color(r.ink4)
             .boxed()

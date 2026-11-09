@@ -18,8 +18,9 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Column, Space, button, column, container, row, text};
+use iced::widget::{Column, Space, column, container, row};
 use iced::{Background, Color, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 use signex_library::ComponentRow;
 use signex_types::theme::ThemeTokens;
@@ -259,13 +260,13 @@ fn id_clash_notices<'a>(
     let mut notices: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.xs);
     for notice in &state.id_clash_notices {
         notices = notices.push(
-            text(notice.message())
+            text(raw(notice.message()))
                 .size(ROW_TEXT_SIZE)
                 .color(text_c)
                 .boxed(),
         );
     }
-    let dismiss = button(text("Dismiss").size(ROW_TEXT_SIZE).color(text_c))
+    let dismiss = button(text(raw("Dismiss")).size(ROW_TEXT_SIZE).color(text_c))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::IdClashNoticesDismissed)
         .style(crate::styles::menu_item(tokens));
@@ -392,10 +393,10 @@ fn view_library_block<'a>(
     if matched > MAX_ROWS_PER_LIBRARY {
         col = col.push(
             container(
-                text(format!(
+                text(raw(format!(
                     "{} more — refine search",
                     matched - MAX_ROWS_PER_LIBRARY
-                ))
+                )))
                 .size(HINT_TEXT_SIZE)
                 .color(muted),
             )
@@ -407,7 +408,7 @@ fn view_library_block<'a>(
     if matched == 0 && !needle.is_empty() {
         col = col.push(
             container(
-                text("(no matches in this library)")
+                text(raw("(no matches in this library)"))
                     .size(HINT_TEXT_SIZE)
                     .color(muted),
             )
@@ -470,7 +471,7 @@ fn view_row_button<'a>(
     let label_left = component_row_label(row_data.internal_pn.as_str(), &row_data.primary_mpn.mpn);
     let label_right = row_data.primary_mpn.manufacturer.clone();
 
-    let part = text(label_left)
+    let part = text(raw(label_left))
         .size(ROW_TEXT_SIZE)
         .color(text_c)
         .width(Length::FillPortion(3))
@@ -479,7 +480,7 @@ fn view_row_button<'a>(
     let content = container(
         row![
             part,
-            text(label_right)
+            text(raw(label_right))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .width(Length::FillPortion(2))

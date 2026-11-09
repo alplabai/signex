@@ -33,11 +33,12 @@ pub mod supply;
 pub mod symbol;
 pub mod text_extent;
 
-use iced::widget::{Space, Widget, column, container, row, text};
+use iced::widget::{Space, Widget, column, container, row};
 use iced::{Color, Element, Length};
 use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text};
 
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 
@@ -107,7 +108,7 @@ fn graphite_header<'a>(
     };
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let mut line: iced::widget::Row<Element<'a, LibraryMessage>> = row![
-        text(pn)
+        text(raw(pn))
             .size(TS.heading)
             .font(mono)
             .color(theme_ext::text_primary(tokens))
@@ -139,7 +140,7 @@ fn graphite_header<'a>(
     line = line.push(Space::new().width(Length::Fill).boxed());
     if state.dirty {
         line = line.push(
-            text("\u{2022} Unsaved changes")
+            text(raw("\u{2022} Unsaved changes"))
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
                 .boxed(),
@@ -269,7 +270,7 @@ fn view_tabs<'a>(
             (resting_fill, theme_ext::text_secondary(tokens))
         };
         let mut content: iced::widget::Row<Element<'_, LibraryMessage>> = row![
-            text(tab.graphite_label())
+            text(raw(tab.graphite_label()))
                 .size(TS.label)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)
@@ -389,7 +390,7 @@ fn view_footer<'a>(
 
     if read_only {
         return container(
-            text("Read-only library - this component cannot be changed.")
+            text(raw("Read-only library - this component cannot be changed."))
                 .size(TS.body)
                 .color(muted),
         )
@@ -413,8 +414,11 @@ fn view_footer<'a>(
             msg,
         })
     };
-    let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
-        text("\u{2022} unsaved").size(TS.body).color(muted).boxed()
+    let dirty_marker: Element<'_, LibraryMessage> = if state.has_unsaved_edits() {
+        text(raw("\u{2022} unsaved"))
+            .size(TS.body)
+            .color(muted)
+            .boxed()
     } else {
         Space::new().width(0.0).boxed()
     };
@@ -426,7 +430,7 @@ fn view_footer<'a>(
     } else if state.reload_confirming {
         row![
             Space::new().width(SP.l),
-            text("Discard your edits and reload?")
+            text(raw("Discard your edits and reload?"))
                 .size(TS.body)
                 .color(muted),
             Space::new().width(SP.m),

@@ -763,6 +763,7 @@ pub mod catalog;
 mod dock_layout;
 pub mod document_report;
 mod erc;
+mod language;
 pub mod measure;
 mod misc;
 mod ordered_write;
@@ -793,6 +794,7 @@ pub use prefs_file::{
 
 pub use dock_layout::*;
 pub use erc::*;
+pub use language::*;
 pub use misc::*;
 pub use ordered_write::{OrderedPrefWrite, background_pref_write, wait_for_pref_writes};
 #[cfg(test)]

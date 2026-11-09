@@ -180,8 +180,8 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
     use signex_types::project::{ProjectData, SheetEntry};
 
     let tmp = TempDir::new().expect("tempdir");
-    let (mut app, _first, root) = app_with_one_sheet(&tmp);
-    // `root` references sheet1.snxsch. A second open sheet of the same project
+    let (mut app, _first, _) = app_with_one_sheet(&tmp);
+    // The root sheet references sheet1.snxsch. A second open sheet of the same project
     // places its own symbol (default sheet2.snxsch).
     let other = tmp.path().join("other.snxsch");
     app.document_state.engines.insert(
@@ -200,6 +200,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
         id: project,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),
@@ -259,5 +260,4 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
     type_and_commit_file(&mut app, id, "free.snxsch");
     assert!(app.document_state.error_notice.is_none());
     assert_eq!(identity(&app).1, "free.snxsch");
-    let _ = root;
 }

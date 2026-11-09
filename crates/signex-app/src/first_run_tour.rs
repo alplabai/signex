@@ -3,9 +3,10 @@
 //! gestures a new user needs immediately (right-click pan, scroll
 //! zoom, F1 for help). Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.3.
 
-use iced::widget::{column, container, text};
+use iced::widget::{column, container};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::app::{Message, OverlayMsg};
 use crate::styles;
@@ -33,18 +34,20 @@ fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
 
     // The shared dialog header (title, neutral close).
     let header: Element<'a, Message> = crate::app::view::dialogs::modal_title_header(
-        "Welcome to Signex",
+        raw("Welcome to Signex"),
         Message::Overlay(OverlayMsg::DismissFirstRunTour),
         tokens,
     );
 
     let body = container(
         column![
-            text("Right-click + drag to pan")
+            text(raw("Right-click + drag to pan"))
                 .size(TS.body)
                 .color(text_primary),
-            text("Scroll to zoom").size(TS.body).color(text_primary),
-            text("F1 for keyboard shortcuts")
+            text(raw("Scroll to zoom"))
+                .size(TS.body)
+                .color(text_primary),
+            text(raw("F1 for keyboard shortcuts"))
                 .size(TS.body)
                 .color(text_primary),
         ]

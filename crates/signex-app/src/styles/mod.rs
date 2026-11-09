@@ -4,9 +4,10 @@
 //! and return closures. This ensures every UI component picks up theme
 //! changes in real time.
 
-use iced::widget::{button, container};
+use iced::widget::container;
 use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::button;
 
 mod buttons;
 mod dialog_kit;

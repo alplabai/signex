@@ -117,7 +117,7 @@ fn render_item(item: &MenuItem, mc: MenuColors, shape: graphite::RowShape) -> Me
     }
     // A planned feature reads as planned rather than broken (#1251).
     let hint = container(
-        text(crate::active_bar::PLANNED_TOOLTIP)
+        text(raw(crate::active_bar::PLANNED_TOOLTIP))
             .size(MENU_SHORTCUT_SIZE)
             .color(mc.text),
     )
@@ -126,6 +126,6 @@ fn render_item(item: &MenuItem, mc: MenuColors, shape: graphite::RowShape) -> Me
         mc.hover, mc.border,
     ));
     Item::new(iced::advanced::Widget::_boxed(
-        iced::widget::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4),
+        signex_widgets::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4),
     ))
 }

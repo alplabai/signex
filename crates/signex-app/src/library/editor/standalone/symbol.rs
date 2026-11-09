@@ -1,10 +1,11 @@
 //! Standalone `.snxsym` symbol-editor document tab view builders.
 //! Split from `library/editor/standalone.rs` as pure code motion.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::coord::Unit;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text};
 
 use crate::app::SymbolDocument;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
@@ -105,7 +106,7 @@ fn view_symbol_status<'a>(
     let pin_count = format!("{} pins", editor.primitive().pins.len());
     let tool_text = format!("Tool: {}", editor.tool.label());
 
-    let sep = || text("|").size(TS.caption).color(muted);
+    let sep = || text(raw("|")).size(TS.caption).color(muted);
 
     // Grid toggle button.
     let grid_vis_label = if display.grid_visible {
@@ -113,7 +114,7 @@ fn view_symbol_status<'a>(
     } else {
         "Grid: OFF"
     };
-    let grid_toggle = button(text(grid_vis_label).size(TS.body).color(text_c))
+    let grid_toggle = button(text(raw(grid_vis_label)).size(TS.body).color(text_c))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
@@ -123,7 +124,7 @@ fn view_symbol_status<'a>(
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
-    let grid_cycle = button(text(grid_size_label).size(TS.body).color(muted))
+    let grid_cycle = button(text(raw(grid_size_label)).size(TS.body).color(muted))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.to_path_buf(),
@@ -146,27 +147,27 @@ fn view_symbol_status<'a>(
 
     container(
         row![
-            text(coord_text).size(TS.body).color(text_c),
+            text(raw(coord_text)).size(TS.body).color(text_c),
             sep(),
-            text(zoom_text).size(TS.body).color(muted),
+            text(raw(zoom_text)).size(TS.body).color(muted),
             sep(),
-            text(pin_count).size(TS.body).color(muted),
+            text(raw(pin_count)).size(TS.body).color(muted),
             sep(),
-            text(tool_text).size(TS.body).color(muted),
+            text(raw(tool_text)).size(TS.body).color(muted),
             sep(),
             grid_toggle,
             grid_cycle,
             copy_again,
             Space::new().width(Length::Fill),
             match &editor.status_message {
-                Some(msg) => text(msg.clone())
+                Some(msg) => text(raw(msg.clone()))
                     .size(TS.caption)
                     .color(theme_ext::error_color(tokens)),
-                None => text(if editor.selected.is_some() {
+                None => text(raw(if editor.selected.is_some() {
                     "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
                 } else {
                     "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
-                })
+                }))
                 .size(TS.caption)
                 .color(muted),
             },
@@ -230,13 +231,13 @@ fn graphite_toolbar<'a>(
         ..iced::widget::button::Style::default()
     };
     let ghost = |label: &'static str, msg: LibraryMessage| {
-        button(text(label).size(TS.caption))
+        button(text(raw(label)).size(TS.caption))
             .padding([SP.xs, SP.m])
             .on_press(msg)
             .style(ghost_style)
     };
     let cell = |label: &'static str, active: bool, msg: LibraryMessage| {
-        button(text(label).size(TS.caption))
+        button(text(raw(label)).size(TS.caption))
             .padding([SP.xs, SP.m])
             .on_press(msg)
             .style(
@@ -284,13 +285,13 @@ fn graphite_toolbar<'a>(
     });
     let max_part = sym_state::max_part_number(editor.primitive());
     let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
-    let save = button(text(save_label).size(TS.caption))
+    let save = button(text(raw(save_label)).size(TS.caption))
         .padding([SP.xs, SP.l])
         .on_press(send(PrimitiveEdit::Save))
         .style(crate::styles::primary_button(tokens));
 
     let body_row = row![
-        text("Body").size(TS.caption).color(ink3),
+        text(raw("Body")).size(TS.caption).color(ink3),
         segmented,
         ghost(
             "Both",
@@ -307,7 +308,7 @@ fn graphite_toolbar<'a>(
     .align_y(iced::Alignment::Center);
     let part_row = row![
         ghost("\u{2190}", sym(SymbolEditorMsg::PrevPart)),
-        text(format!("Part {} / {max_part}", editor.active_part))
+        text(raw(format!("Part {} / {max_part}", editor.active_part)))
             .size(TS.body)
             .color(ink),
         ghost("\u{2192}", sym(SymbolEditorMsg::NextPart)),

@@ -25,6 +25,7 @@ pub(crate) fn project(
 ) -> signex_app::app::ProjectId {
     let id = app.document_state.mint_project_id();
     let mut data = ProjectData {
+        document_id: None,
         name: name.to_string(),
         description: None,
         dir: String::new(),

@@ -7,11 +7,12 @@
 //! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
 //! to open the standalone `.snxsym` / `.snxfpt` document tab.
 
-use iced::widget::{Column, Space, Widget, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, Widget, column, container, row, scrollable};
 use iced::{Element, Length};
 use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text};
 
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 
@@ -155,7 +156,7 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
     };
 
     let identity = column![
-        text(description)
+        text(raw(description))
             .size(TS.body)
             .color(description_color)
             .boxed()
@@ -166,8 +167,8 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
     let labelled = |label: &'static str, value: String| {
         let value_color = if value == NOT_SET { muted } else { text_c };
         row![
-            text(label).size(TS.body).color(muted).boxed(),
-            text(value).size(TS.body).color(value_color).boxed(),
+            text(raw(label)).size(TS.body).color(muted).boxed(),
+            text(raw(value)).size(TS.body).color(value_color).boxed(),
         ]
         .spacing(SP.m)
         .boxed()
@@ -417,7 +418,7 @@ fn match_pill<'a>(
         return kit::toned_pill("Override".to_string(), PillTone::Info, tokens);
     }
     let Some(footprint) = state.footprint.as_ref() else {
-        return text("\u{2014}").size(TS.body).boxed();
+        return text(raw("\u{2014}")).size(TS.body).boxed();
     };
     if footprint.pads.iter().any(|p| p.number == line.pad) {
         kit::toned_pill("By number".to_string(), PillTone::Ok, tokens)
@@ -515,7 +516,7 @@ fn pin_map_subsection<'a>(
             .unwrap_or("");
         let cells = vec![
             (
-                text(line.number.clone())
+                text(raw(line.number.clone()))
                     .size(TS.body)
                     .font(mono)
                     .color(text_c)
@@ -523,7 +524,7 @@ fn pin_map_subsection<'a>(
                 widths[0],
             ),
             (
-                text(line.name.clone())
+                text(raw(line.name.clone()))
                     .size(TS.body)
                     .font(mono)
                     .color(text_c)
@@ -531,11 +532,11 @@ fn pin_map_subsection<'a>(
                 widths[1],
             ),
             (
-                text(direction).size(TS.body).color(muted).boxed(),
+                text(raw(direction)).size(TS.body).color(muted).boxed(),
                 widths[1],
             ),
             (
-                text(line.pad.clone())
+                text(raw(line.pad.clone()))
                     .size(TS.body)
                     .font(mono)
                     .color(text_c)
@@ -571,7 +572,7 @@ fn override_editor_row<'a>(
 
     let pin_for_input = pin_number.to_string();
     let address_for_input = address.clone();
-    let input = iced::widget::text_input("pad number…", buf)
+    let input = signex_widgets::text_input(signex_widgets::raw("pad number…"), buf)
         .on_input(move |s| {
             editor_event(
                 &address_for_input,
@@ -615,7 +616,7 @@ fn override_editor_row<'a>(
 
     container(
         row![
-            text(format!("Override pin {pin_number} →"))
+            text(raw(format!("Override pin {pin_number} →")))
                 .size(TS.body)
                 .color(muted)
                 .boxed(),
@@ -661,7 +662,7 @@ fn where_used_footer<'a>(
         theme_ext::text_primary(tokens)
     };
     kit::card(
-        text(where_used_label(uses.len(), projects))
+        text(raw(where_used_label(uses.len(), projects)))
             .size(TS.body)
             .color(color)
             .boxed(),

@@ -491,6 +491,21 @@ impl Signex {
         }
     }
 
+    /// The net colours of the sheet `window` shows: its engine document's own
+    /// (#661), so a colour step and its undo repaint with nothing to copy.
+    fn net_colors_shown_in(
+        &self,
+        window: iced::window::Id,
+    ) -> &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color> {
+        static NONE: std::sync::LazyLock<
+            std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+        > = std::sync::LazyLock::new(Default::default);
+        self.document_state
+            .sheet_path_for_window(window, &self.ui_state)
+            .and_then(|path| self.document_state.engines.get(path))
+            .map_or(&NONE, |engine| &engine.document().net_colors)
+    }
+
     /// Settings the schematic canvas renders with, read fresh from app
     /// state on every frame (#631).
     ///
@@ -539,7 +554,7 @@ impl Signex {
             draw_mode: self.interaction_state.draw_mode,
             current_tool: self.interaction_state.current_tool,
             window_width: self.ui_state.size_of_window(window).0,
-            wire_color_overrides: &self.ui_state.wire_color_overrides,
+            wire_color_overrides: self.net_colors_shown_in(window),
             wire_class_styles: self.ui_state.net_class_styles.styles_in(placement.as_ref()),
             wire_class_revision: self
                 .ui_state
@@ -734,8 +749,8 @@ mod tests {
         // Arrange
         let (mut app, _t) = Signex::new();
         // Copy the scalars out so the prefs borrow of `app` ends here —
-        // it borrows `wire_color_overrides`, so holding it would block the
-        // mutations below.
+        // it borrows the shown sheet's net colours, so holding it would block
+        // the mutations below.
         let (visible_before, grid_visible_before, snap_before) = {
             let before = app.canvas_view_prefs(iced::window::Id::unique());
             (
@@ -811,43 +826,45 @@ mod tests {
         );
     }
 
-    /// The wire-colour overrides are borrowed, not cloned onto the canvas.
-    /// The old copy was cleared in parallel with `ui_state`'s at each
-    /// mutation site — one missed site and the canvas kept painting a
-    /// colour the user had cleared.
+    /// The net colours a window draws are the shown sheet's own, borrowed
+    /// from its engine document: a colour step and its undo repaint with
+    /// nothing to copy, and a window shows the colours of its own sheet.
     #[test]
-    fn wire_colour_overrides_are_read_from_ui_state() {
+    fn net_colours_are_read_from_the_shown_sheets_engine() {
+        use crate::app::handlers::editing_commands::net_color_driver as colours;
         // Arrange
-        let (mut app, _t) = Signex::new();
-        let uuid = uuid::Uuid::now_v7();
-        let color = signex_types::theme::Color {
-            r: 1,
-            g: 2,
-            b: 3,
-            a: 255,
-        };
+        let (mut app, path) = colours::app_with_sheet("shown.snxsch");
+        let window = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(window);
+        let wire = colours::wire_of(&app, &path);
 
         // Act
-        app.ui_state.wire_color_overrides.insert(uuid, color);
+        colours::paint(&mut app, &[wire], colours::color(1));
 
         // Assert
         assert_eq!(
-            app.canvas_view_prefs(iced::window::Id::unique())
+            app.canvas_view_prefs(window)
                 .wire_color_overrides
-                .get(&uuid),
-            Some(&color),
-            "the renderer must see the override without a copy step"
+                .get(&wire),
+            Some(&colours::color(1)),
+            "the renderer must see the colour without a copy step"
         );
-
-        // Act — and clearing `ui_state` is the whole operation.
-        app.ui_state.wire_color_overrides.clear();
-
-        // Assert
         assert!(
             app.canvas_view_prefs(iced::window::Id::unique())
                 .wire_color_overrides
                 .is_empty(),
-            "a cleared override must not survive on a canvas copy"
+            "a window that shows no sheet draws no colours"
+        );
+
+        // Act: the undo is the whole operation.
+        app.handle_undo_requested();
+
+        // Assert
+        assert!(
+            app.canvas_view_prefs(window)
+                .wire_color_overrides
+                .is_empty(),
+            "an undone colour must not survive on the canvas"
         );
     }
 }

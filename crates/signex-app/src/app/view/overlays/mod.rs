@@ -82,7 +82,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
-        use iced::widget::text;
+        use signex_widgets::{raw, text};
 
         if self.interaction_state.editing_text.is_some() {
             return None;
@@ -145,12 +145,12 @@ impl Signex {
         let fill_or_shrink = if at_cap { Length::Fill } else { Length::Shrink };
         let field = |label: &'static str, value: String| -> Element<'_, Message> {
             iced::widget::row![
-                text(label)
+                text(raw(label))
                     .font(canvas_font)
                     .size(TS.body)
                     .color(muted_c)
                     .width(label_w),
-                text(value)
+                text(raw(value))
                     .font(canvas_font)
                     .size(TS.label)
                     .color(text_c)
@@ -188,7 +188,7 @@ impl Signex {
         let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let (x, y) =
             canvas_region::place_card((sx, sy), (card_w, estimated_h), self.card_bounds(window_id));
-        Some(super::view::translate::Translate::new(card, (x, y)).boxed())
+        Some(signex_widgets::Translate::new(card, (x, y)).boxed())
     }
 
     /// Result list for the chrome-strip command palette. Anchored
@@ -196,8 +196,9 @@ impl Signex {
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
         use crate::app::command_palette::MAX_RESULTS;
-        use iced::widget::{Space, column, container, scrollable, text, text_input};
+        use iced::widget::{Space, column, container, scrollable};
         use iced::{Background, Border, Color};
+        use signex_widgets::{raw, text, text_input};
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -231,7 +232,7 @@ impl Signex {
         }
 
         let body: Element<'_, Message> = if total == 0 {
-            container(text("No results").size(TS.label).color(muted_c))
+            container(text(raw("No results")).size(TS.label).color(muted_c))
                 .padding([SP.l, 14.0])
                 .width(Length::Fill)
                 .boxed()
@@ -275,7 +276,7 @@ impl Signex {
         let window_input: Option<Element<'_, Message>> =
             self.ui_state.command_palette.window.map(|window| {
                 text_input(
-                    "Search files, symbols, commands…",
+                    raw("Search files, symbols, commands…"),
                     &self.ui_state.command_palette.query,
                 )
                 .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
@@ -307,7 +308,7 @@ impl Signex {
         } else {
             crate::menu_bar::MENU_BAR_HEIGHT + 4.0
         };
-        super::view::translate::Translate::new(card.boxed(), (card_x, y)).boxed()
+        signex_widgets::Translate::new(card.boxed(), (card_x, y)).boxed()
     }
 
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
@@ -384,12 +385,11 @@ impl Signex {
         let (ww, _) = ui.size_of_window(window_id);
         let adjusted_x =
             x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww, &metrics);
-        vec![
-            Self::dismiss_layer(Message::ActiveBar(
-                crate::active_bar::ActiveBarMsg::CloseMenus,
-            )),
-            super::translate::Translate::new(dropdown, (adjusted_x, ab_y)).boxed(),
-        ]
+        Self::dismiss_and_place(
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus),
+            dropdown,
+            (adjusted_x, ab_y),
+        )
     }
 
     /// Canvas right-click context menu (+ its Place/Align submenu): the
@@ -557,7 +557,7 @@ impl Signex {
             ) {
                 let fp = &document.dock.floating[i];
                 out.push(
-                    super::translate::Translate::new(
+                    signex_widgets::Translate::new(
                         panel_widget
                             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)))
                             .boxed(),

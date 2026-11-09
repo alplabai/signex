@@ -35,6 +35,7 @@ fn open_project(app: &mut Signex, dir: &Path, sheets: &[&str]) {
         id,
         path: dir.join("P.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".into(),
             dir: dir.to_string_lossy().into_owned(),

@@ -6,8 +6,9 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 use crate::app::state::AnnotateOrder;
 
@@ -91,7 +92,7 @@ impl Signex {
         };
 
         let order_row = column![
-            text("Order of Processing")
+            text(raw("Order of Processing"))
                 .size(TS.caption)
                 .color(text_muted),
             row![
@@ -141,10 +142,10 @@ impl Signex {
         .spacing(SP.s);
 
         let process_location = column![
-            text("Process Location of")
+            text(raw("Process Location of"))
                 .size(TS.caption)
                 .color(text_muted),
-            container(text("Designator").size(TS.body).color(text_c),)
+            container(text(raw("Designator")).size(TS.body).color(text_c),)
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
                 .style(bordered_style(tokens)),
@@ -152,8 +153,10 @@ impl Signex {
         .spacing(SP.s);
 
         let replace_sub = column![
-            text("Replace Sub-Parts").size(TS.caption).color(text_muted),
-            container(text("Off").size(TS.body).color(text_muted))
+            text(raw("Replace Sub-Parts"))
+                .size(TS.caption)
+                .color(text_muted),
+            container(text(raw("Off")).size(TS.body).color(text_muted))
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
                 .style(bordered_style(tokens)),
@@ -183,11 +186,11 @@ impl Signex {
         };
         let mut param_rows: iced::widget::Column<Element<'_, Message>> = column![
             row![
-                text("Component Parameter")
+                text(raw("Component Parameter"))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(5)),
-                text("Strictly")
+                text(raw("Strictly"))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(1)),
@@ -201,7 +204,7 @@ impl Signex {
                     row![
                         check_pip(false, tokens),
                         Space::new().width(6),
-                        text(name.clone()).size(TS.body).color(text_c),
+                        text(raw(name.clone())).size(TS.body).color(text_c),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(5)),
@@ -217,7 +220,7 @@ impl Signex {
         if param_names.is_empty() {
             param_rows = param_rows.push(
                 (container(
-                    text("No custom parameters on any symbol yet.")
+                    text(raw("No custom parameters on any symbol yet."))
                         .size(TS.body)
                         .color(text_muted),
                 )
@@ -227,14 +230,14 @@ impl Signex {
         }
 
         let matching = column![
-            text("Matching Options").size(TS.label).color(text_c),
+            text(raw("Matching Options")).size(TS.label).color(text_c),
             Space::new().height(4),
             row![
-                text("Complete Existing Packages")
+                text(raw("Complete Existing Packages"))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(2)),
-                container(text("None").size(TS.body).color(text_muted))
+                container(text(raw("None")).size(TS.body).color(text_muted))
                     .padding([SP.s, SP.m])
                     .width(Length::FillPortion(3))
                     .style(bordered_style(tokens)),
@@ -248,7 +251,7 @@ impl Signex {
                 .padding(SP.xs)
                 .style(bordered_style(tokens)),
             Space::new().height(4),
-            text("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now.")
+            text(raw("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now."))
                 .size(TS.caption)
                 .color(text_muted),
         ]
@@ -276,11 +279,11 @@ impl Signex {
         };
 
         let sheets_table = column![
-            text("Schematic Sheets To Annotate").size(TS.label).color(text_c),
+            text(raw("Schematic Sheets To Annotate")).size(TS.label).color(text_c),
             Space::new().height(4),
             sheets_view,
             Space::new().height(4),
-            text("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic.")
+            text(raw("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic."))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::Fill),
@@ -302,23 +305,25 @@ impl Signex {
         .width(Length::Fill);
 
         // ── Right column: Proposed Change List ──
-        let right_title = text("Proposed Change List").size(TS.label).color(text_c);
+        let right_title = text(raw("Proposed Change List"))
+            .size(TS.label)
+            .color(text_c);
 
         // Column headers
         let list_headers = row![
-            text("Lock")
+            text(raw("Lock"))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::Fixed(42.0)),
-            text("Current")
+            text(raw("Current"))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
-            text("Proposed")
+            text(raw("Proposed"))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
-            text("Location")
+            text(raw("Location"))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(3)),
@@ -331,13 +336,13 @@ impl Signex {
         if proposed.is_empty() {
             rows_col = rows_col.push(
                 (container(
-                    text(if self.ui_state.annotate_preview.loading {
+                    text(raw(if self.ui_state.annotate_preview.loading {
                         "Loading project sheets…"
                     } else if self.ui_state.annotate_preview.load_failed {
                         "Could not load the project's sheets - see the Messages panel."
                     } else {
                         "No symbols need annotation — every reference has a number."
-                    })
+                    }))
                     .size(TS.body)
                     .color(text_muted),
                 )
@@ -373,12 +378,12 @@ impl Signex {
                     .boxed();
                 // Designators in mono; a changing row is tinted and its proposed
                 // designator takes the accent ink.
-                let cur_text = text(entry.current.clone())
+                let cur_text = text(raw(entry.current.clone()))
                     .size(TS.body)
                     .color(cur_color)
                     .width(Length::FillPortion(2))
                     .font(gr::mono());
-                let new_text = text(proposed_display)
+                let new_text = text(raw(proposed_display))
                     .size(TS.body)
                     .color(if changing {
                         gr::changed_ink(tokens)
@@ -393,7 +398,7 @@ impl Signex {
                         .padding([0.0, 6.0]),
                     cur_text,
                     new_text,
-                    text(entry.sheet.clone())
+                    text(raw(entry.sheet.clone()))
                         .size(TS.body)
                         .color(text_muted)
                         .width(Length::FillPortion(3)),
@@ -428,8 +433,8 @@ impl Signex {
                 "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.",
             )
         };
-        let summary =
-            container(text(summary_text).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]);
+        let summary = container(text(raw(summary_text)).size(TS.caption).color(text_muted))
+            .padding([SP.s, SP.s]);
         let standard = self
             .document_state
             .active_document_project()
@@ -442,9 +447,12 @@ impl Signex {
             list_headers,
             right_list,
             Space::new().height(6),
-            text("Annotation Summary").size(TS.caption).color(text_c),
+            text(raw("Annotation Summary"))
+                .size(TS.caption)
+                .color(text_c),
             summary,
-            container(text(reprefix_note).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]),
+            container(text(raw(reprefix_note)).size(TS.caption).color(text_muted))
+                .padding([SP.s, SP.s]),
         ]
         .spacing(0)
         .width(Length::Fill)
@@ -458,7 +466,7 @@ impl Signex {
         let secondary = |label: &str, message: Option<Message>| {
             dialog_button(label, DialogButtonKind::Secondary, message, tokens)
         };
-        let status: Element<'_, Message> = text(if busy { "Running…" } else { "" })
+        let status: Element<'_, Message> = text(raw(if busy { "Running…" } else { "" }))
             .size(TS.caption)
             .color(text_muted)
             .boxed();

@@ -13,7 +13,7 @@
 //! would be 23 names to deprecate later. See
 //! `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 
 pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
     CommandMetadata {
@@ -153,7 +153,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Bring To Front Of"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -163,7 +163,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Send To Back Of"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -303,7 +303,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Wire"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -313,7 +314,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Bus"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -413,7 +415,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Text String"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::TEXT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -483,7 +486,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Line"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -493,7 +497,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Rectangle"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -543,7 +548,18 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Clear Net Color"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "color_net",
+        category: "view",
+        label: "Color net",
+        menu_label: Some("Custom Color..."),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::COLOR_NET,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -553,7 +569,19 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Clear All Net Colors"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::MUTATES,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "assign_net_class",
+        category: "design",
+        label: "Assign net to class",
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::ASSIGN_NET_CLASS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

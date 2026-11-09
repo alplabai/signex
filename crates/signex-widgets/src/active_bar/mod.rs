@@ -48,7 +48,8 @@ mod skin;
 
 pub use metrics::Metrics;
 
-use iced::widget::{button, container, image, mouse_area, row, svg, text, tooltip};
+use crate::{button, raw, text, tooltip};
+use iced::widget::{container, image, mouse_area, row, svg};
 use iced::{Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -313,7 +314,7 @@ where
             .width(Length::Fixed(icon_size))
             .height(Length::Fixed(icon_size))
             .boxed(),
-        ActiveBarIcon::Glyph(s) => text(s.to_string()).size(14).color(glyph_color).boxed(),
+        ActiveBarIcon::Glyph(s) => text(raw(s.to_string())).size(14).color(glyph_color).boxed(),
     };
 
     // Optional dropdown chevron in the bottom-right corner.
@@ -328,7 +329,7 @@ where
                 .width(Length::Fixed(chevron_size))
                 .height(Length::Fixed(chevron_size))
                 .boxed(),
-            ActiveBarIcon::Glyph(s) => text(s.to_string()).size(10).color(glyph_color).boxed(),
+            ActiveBarIcon::Glyph(s) => text(raw(s.to_string())).size(10).color(glyph_color).boxed(),
         };
         iced::widget::Stack::new()
             .push(
@@ -414,7 +415,7 @@ where
     let tooltip_text = b.tooltip.clone();
     tooltip(
         interactive,
-        container(text(tooltip_text).size(11).color(text_c))
+        container(text(raw(tooltip_text)).size(11).color(text_c))
             .padding([2, 6])
             .style(move |_: &Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(theme_ext::to_color(

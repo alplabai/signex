@@ -569,10 +569,7 @@ fn a_blocking_save_leaves_its_recovery_copy_to_the_sweep() {
         .autosave
         .set_dir(Some(recovery.path().to_path_buf()));
     sidecar::write(recovery.path(), &path, b"stale").expect("write sidecar");
-    let stamp = DocStamp {
-        revision: 1,
-        net_color_revision: 0,
-    };
+    let stamp = DocStamp { revision: 1 };
     app.document_state.autosave.begin(&path);
     app.document_state.autosave.finish(&path, stamp, true);
     let copy = sidecar::sidecar_path(recovery.path(), &path);

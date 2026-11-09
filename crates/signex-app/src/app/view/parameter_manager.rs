@@ -15,16 +15,20 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Whether a row survives the filter: a case-insensitive substring of its
 /// reference, value or footprint. An empty filter keeps every row.
 fn row_matches_filter(filter: &str, sym: &signex_types::schematic::Symbol) -> bool {
+    // Match folding, never shown: the same fold on both sides of the compare.
+    // ast-grep-ignore: no-case-in-view
     let needle = filter.trim().to_lowercase();
     needle.is_empty()
         || [&sym.reference, &sym.value, &sym.footprint]
             .iter()
+            // ast-grep-ignore: no-case-in-view
             .any(|field| field.to_lowercase().contains(&needle))
 }
 
 impl Signex {
     pub(super) fn view_parameter_manager_body(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, row, scrollable, text, text_input};
+        use iced::widget::{column, container, row, scrollable};
+        use signex_widgets::{button, raw, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -57,7 +61,7 @@ impl Signex {
         keys.sort();
 
         let toolbar = row![
-            text_input("Filter rows", &table.filter)
+            text_input(raw("Filter rows"), &table.filter)
                 .style(crate::panels::form_look::text_input_style)
                 .on_input(
                     |text| Message::ParameterManager(ParameterManagerMsg::FilterChanged(text))
@@ -65,7 +69,7 @@ impl Signex {
                 .padding([SP.xs, 6.0])
                 .size(TS.body)
                 .width(iced::Length::Fixed(220.0)),
-            text_input("New parameter", &table.new_key)
+            text_input(raw("New parameter"), &table.new_key)
                 .style(crate::panels::form_look::text_input_style)
                 .on_input(
                     |text| Message::ParameterManager(ParameterManagerMsg::NewKeyChanged(text))
@@ -86,15 +90,15 @@ impl Signex {
 
         let header_row = {
             let mut r = row![
-                text("Reference")
+                text(raw("Reference"))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(iced::Length::Fixed(100.0)),
-                text("Value")
+                text(raw("Value"))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(iced::Length::Fixed(160.0)),
-                text("Footprint")
+                text(raw("Footprint"))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(iced::Length::Fixed(200.0)),
@@ -102,11 +106,11 @@ impl Signex {
             for k in &keys {
                 r = r.push(
                     row![
-                        text(k.clone())
+                        text(raw(k.clone()))
                             .size(TS.caption)
                             .color(text_muted)
                             .width(iced::Length::Fill),
-                        button(text("×").size(TS.caption).color(text_c))
+                        button(text(raw("×")).size(TS.caption).color(text_c))
                             .padding([0, 6])
                             .on_press(Message::ParameterManager(
                                 ParameterManagerMsg::ParameterRemoved { key: k.clone() }
@@ -127,15 +131,15 @@ impl Signex {
             .filter(|s| !s.is_power && row_matches_filter(&table.filter, s))
         {
             let mut r = row![
-                text(sym.reference.clone())
+                text(raw(sym.reference.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(100.0)),
-                text(sym.value.clone())
+                text(raw(sym.value.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(160.0)),
-                text(sym.footprint.clone())
+                text(raw(sym.footprint.clone()))
                     .size(TS.body)
                     .color(text_muted)
                     .width(iced::Length::Fixed(200.0)),
@@ -145,7 +149,7 @@ impl Signex {
                 let sym_uuid = sym.uuid;
                 let k_str = k.clone();
                 r = r.push(
-                    text_input("", shown)
+                    text_input(raw(""), shown)
                         .style(crate::panels::form_look::text_input_style)
                         .on_input(move |text| {
                             Message::ParameterManager(ParameterManagerMsg::Edit {

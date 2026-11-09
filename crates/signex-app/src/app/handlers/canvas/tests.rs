@@ -26,6 +26,7 @@ fn app_focused_on(focused: &str) -> Signex {
         id,
         path: PathBuf::from("/w/a/ProjectA.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "ProjectA".to_string(),
             dir: "/w/a".to_string(),

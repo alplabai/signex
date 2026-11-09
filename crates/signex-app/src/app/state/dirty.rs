@@ -14,9 +14,9 @@
 //! - a Component editor keeps its flag in `LibraryState.editors`, keyed by
 //!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`. The flag
 //!   follows a row undo history with a saved position (`RowHistory`, #1854),
-//!   so Undo back to the saved row reads clean. The close, quit and reopen gates
-//!   read that flag; a half-typed value in an edit buffer counts as unsaved
-//!   only for the reload and rebase decisions (`has_unsaved_edits`);
+//!   so Undo back to the saved row reads clean. The close, quit, reopen and Save
+//!   All gates read that flag or a half-typed value in an edit buffer
+//!   (`has_unsaved_edits`, #2132); Save refuses a value that does not parse;
 //! - a `.snxprj` folds its General, rules and net-class histories under one
 //!   saved cursor, the bytes the file holds (`dirty/project_history.rs`,
 //!   #1854): a history step reads clean when the project encodes to them and
@@ -239,8 +239,9 @@ impl DocumentState {
 
     /// Clear every stored dirty mark of `path` without touching the engine's
     /// save point: for a discard, where an engine at `path` is not known to
-    /// equal the file.
+    /// equal the file. A board parked for `path` goes with the mark.
     pub fn clear_document_dirty(&mut self, path: &Path) {
+        self.parked_pcb_boards.remove(path);
         self.dirty_docs.paths.remove(path);
         self.dirty_docs.external.remove(path);
         self.dirty_docs.project_saved.remove(path);

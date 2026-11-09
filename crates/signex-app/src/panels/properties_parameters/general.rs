@@ -50,7 +50,7 @@ fn selection_filters_body<'a>(
     if presets.is_empty() {
         c = c.push(
             container(
-                text("No presets yet. Click + to define one.")
+                text(raw("No presets yet. Click + to define one."))
                     .size(TS.body)
                     .color(muted_c),
             )
@@ -59,7 +59,7 @@ fn selection_filters_body<'a>(
         );
         c = c.push(
             container(
-                iced::widget::button(text("+ Add Filter").size(TS.body))
+                signex_widgets::button(text(raw("+ Add Filter")).size(TS.body))
                     .padding([SP.s, 10.0])
                     .on_press(PanelMsg::AddCustomFilterPreset)
                     .style(form_look::ghost_button),
@@ -82,7 +82,7 @@ fn selection_filters_body<'a>(
     }
     if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
         tabs = tabs.push(
-            iced::widget::button(text("+").size(TS.label).color(primary_c))
+            signex_widgets::button(text(raw("+")).size(TS.label).color(primary_c))
                 .padding([3, 10])
                 .on_press(PanelMsg::AddCustomFilterPreset)
                 .style(form_look::ghost_button)
@@ -94,14 +94,14 @@ fn selection_filters_body<'a>(
     let included: std::collections::HashSet<SelectionFilter> =
         preset.filters.iter().copied().collect();
     let header = row![
-        iced::widget::text_input("Preset name", preset.name.clone())
+        signex_widgets::text_input(signex_widgets::raw("Preset name"), preset.name.clone())
             .size(TS.body)
             .padding([3, 6])
             .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
             .style(form_look::text_input_style)
             .width(Length::Fill)
             .boxed(),
-        iced::widget::button(text("Delete").size(TS.body).color(primary_c))
+        signex_widgets::button(text(raw("Delete")).size(TS.body).color(primary_c))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
             .style(form_look::ghost_button)
@@ -340,7 +340,7 @@ pub fn view_properties_general<'a>(
                             if matches!(format_mode, PageFormatMode::Template) {
                                 c = c.push(
                                     container(
-                                        text("Template: using A-series defaults")
+                                        text(raw("Template: using A-series defaults"))
                                             .size(TS.caption)
                                             .color(muted),
                                     )
@@ -393,7 +393,7 @@ pub fn view_properties_general<'a>(
                     let (w, h) = paper_dimensions(&paper_size);
                     let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
                     c = c.push(
-                        container(text(dims).size(TS.caption).color(muted))
+                        container(text(raw(dims)).size(TS.caption).color(muted))
                             .padding([3.0, SP.m])
                             .boxed(),
                     );
@@ -549,7 +549,7 @@ pub fn props_tab_btn(
     text_inactive: Color,
 ) -> Element<'static, PanelMsg> {
     let text_c = if active { text_active } else { text_inactive };
-    iced::widget::button(text(label.to_string()).size(TS.body).color(text_c))
+    signex_widgets::button(text(raw(label.to_string())).size(TS.body).color(text_c))
         .padding([SP.s, SP.l])
         .on_press(msg)
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
@@ -585,7 +585,7 @@ fn graphite_filter_chip(theme: &Theme, on: bool, hovered: bool) -> iced::widget:
 
 /// Label of a filter tab or chip: the Graphite ink pair resolved from the theme.
 fn chip_label<'a>(label: String, on: bool) -> iced::widget::Text<'a> {
-    text(label)
+    text(raw(label))
         .size(TS.body)
         .style(move |theme: &Theme| iced::widget::text::Style {
             color: {
@@ -601,7 +601,7 @@ fn chip_label<'a>(label: String, on: bool) -> iced::widget::Text<'a> {
 /// border so the section reads as one piece with the chips and the
 /// Active Bar dropdown.
 pub fn custom_filter_tab(label: String, active: bool, idx: usize) -> Element<'static, PanelMsg> {
-    iced::widget::button(chip_label(label, active))
+    signex_widgets::button(chip_label(label, active))
         .padding([3, 10])
         .on_press(PanelMsg::SelectCustomFilterTab(idx))
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
@@ -623,7 +623,7 @@ pub fn preset_chip(
     filter: crate::active_bar::SelectionFilter,
     enabled: bool,
 ) -> Element<'static, PanelMsg> {
-    iced::widget::button(
+    signex_widgets::button(
         chip_label(label.to_string(), enabled).align_x(iced::alignment::Horizontal::Center),
     )
     .padding([3.0, SP.m])
@@ -663,8 +663,8 @@ pub fn seg_btn<'a>(
     text_inactive: Color,
 ) -> Element<'a, PanelMsg> {
     let text_c = seg_text(active, text_active, text_inactive, active_bg);
-    iced::widget::button(
-        text(label.to_string())
+    signex_widgets::button(
+        text(raw(label.to_string()))
             .size(TS.body)
             .color(text_c)
             .align_x(iced::alignment::Horizontal::Center),

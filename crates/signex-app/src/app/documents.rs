@@ -742,7 +742,7 @@ impl FootprintDocument {
     /// stacks. 100 entries × ~5 KB = ~500 KB per editor; raise if
     /// users start losing far-back undos and we've moved to
     /// fine-grained inverse ops.
-    pub const HISTORY_DEPTH: usize = 100;
+    pub const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
 
     /// v0.24 Phase 1 (Track B) — capture a snapshot of the
     /// canonical state ahead of a mutation. Caller invokes this
@@ -887,7 +887,10 @@ impl FootprintDocument {
     /// state. Resets the canvas cache so the next render reflects
     /// the rolled-back geometry.
     fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        // The file's id is the live one, not the snapshot's (#2172).
+        let live_id = self.file.file_uuid;
         self.file = snap.file;
+        self.file.file_uuid = live_id;
         self.active_idx = snap.active_idx;
         self.state.pads = snap.pads;
         self.state.selected_pad = snap.selected_pad;

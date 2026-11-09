@@ -4,15 +4,17 @@
 //! Files come from the dirty path set plus the dirty drafts. A member the
 //! app has no document for (a library manifest, a draft save in flight whose
 //! editor closed, a case-variant spelling) is listed like any other. Component
-//! rows live outside the set and are listed apart, by their dirty flag only.
+//! rows live outside the set and are listed apart: a row with unsaved work
+//! (its dirty flag, or a half-typed value, #2132).
 
 use std::path::PathBuf;
 
+use super::DocumentKey;
 use crate::app::Signex;
 use crate::app::state::DocumentState;
 use crate::library::state::EditorAddress;
 
-/// Everything with unsaved edits: files, and rows by their dirty flag.
+/// Everything with unsaved edits: files, and rows with unsaved work.
 #[derive(Debug, Default)]
 pub(crate) struct UnsavedDocuments {
     pub files: Vec<PathBuf>,
@@ -26,6 +28,19 @@ impl DocumentState {
         paths.extend(self.dirty_primitive_paths());
         paths.sort();
         paths.dedup();
+        paths
+    }
+
+    /// The unsaved files that are symbol or footprint drafts: what the Close
+    /// Project and Close Library prompts place by their owning library.
+    pub(crate) fn unsaved_drafts(&self) -> Vec<PathBuf> {
+        let mut paths = self.unsaved_files();
+        paths.retain(|path| {
+            matches!(
+                self.document_key_for_path(path),
+                Some(DocumentKey::Symbol(_) | DocumentKey::Footprint(_))
+            )
+        });
         paths
     }
 }

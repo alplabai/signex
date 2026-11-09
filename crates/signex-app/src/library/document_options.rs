@@ -9,10 +9,11 @@
 //! `app/view/mod.rs::collect_overlays` when
 //! `LibraryState::document_options.is_some()`.
 
-use iced::widget::{button, column, container, pick_list, row, text};
+use iced::widget::{column, container, pick_list, row};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
@@ -43,7 +44,7 @@ pub fn view<'a>(
         |label: &'a str, value: Element<'a, LibraryMessage>| -> Element<'a, LibraryMessage> {
             container(
                 row![
-                    text(label)
+                    text(raw(label))
                         .size(ts.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
@@ -67,15 +68,16 @@ pub fn view<'a>(
     .padding([sp.xs, sp.s])
     .boxed();
 
-    let grid_check: Element<'a, LibraryMessage> = iced::widget::checkbox(state.draft.grid_visible)
-        .style(crate::panels::form_look::checkbox_style)
-        .size(ts.heading)
-        .on_toggle(|_| LibraryMessage::DocumentOptionsToggleGrid)
-        .boxed();
+    let grid_check: Element<'a, LibraryMessage> =
+        signex_widgets::checkbox(state.draft.grid_visible)
+            .style(crate::panels::form_look::checkbox_style)
+            .size(ts.heading)
+            .on_toggle(|_| LibraryMessage::DocumentOptionsToggleGrid)
+            .boxed();
 
     let grid_label = format!("{:.3} mm", state.draft.grid_size_mm);
     let grid_size_btn: Element<'a, LibraryMessage> =
-        button(text(grid_label).size(ts.body).color(text_c))
+        button(text(raw(grid_label)).size(ts.body).color(text_c))
             .padding([sp.xs, sp.m])
             .on_press(LibraryMessage::DocumentOptionsCycleGridSize)
             .style(crate::styles::outline_button(tokens))
@@ -83,7 +85,7 @@ pub fn view<'a>(
 
     let unit_label = format!("{}", state.draft.unit);
     let unit_btn: Element<'a, LibraryMessage> =
-        button(text(unit_label).size(ts.body).color(text_c))
+        button(text(raw(unit_label)).size(ts.body).color(text_c))
             .padding([sp.xs, sp.m])
             .on_press(LibraryMessage::DocumentOptionsCycleUnit)
             .style(crate::styles::outline_button(tokens))

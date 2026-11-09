@@ -13,12 +13,13 @@
 //! `EditorMsg::Supply*` → the library dispatcher's `dispatch/library/`
 //! handlers, which write to the editor's draft row and mark it dirty.
 
-use iced::widget::{Column, Widget, column, pick_list, scrollable, text, text_input};
+use iced::widget::{Column, Widget, column, pick_list, scrollable};
 use iced::{Element, Length};
 use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text, text_input};
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
@@ -153,7 +154,7 @@ fn input<'a>(
     make: impl Fn(String) -> EditorMsg + 'a,
 ) -> Element<'a, LibraryMessage> {
     let address = address.clone();
-    text_input(placeholder, value)
+    text_input(raw(placeholder), value)
         .on_input(move |s| editor_event(&address, make(s)))
         .padding([SP.s, SP.m])
         .size(TS.label)
@@ -184,11 +185,11 @@ fn role_cell<'a>(
     } else {
         theme_ext::text_secondary(tokens)
     };
-    text(label).size(TS.body).color(color).boxed()
+    text(raw(label)).size(TS.body).color(color).boxed()
 }
 
 fn blank<'a>() -> Element<'a, LibraryMessage> {
-    text("").size(TS.body).boxed()
+    text(raw("")).size(TS.body).boxed()
 }
 
 // ─────────────────────── Manufacturer parts grid ───────────────────────

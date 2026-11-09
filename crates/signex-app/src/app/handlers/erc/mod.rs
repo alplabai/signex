@@ -2,6 +2,8 @@
 
 mod annotate;
 #[cfg(test)]
+mod annotate_colour_tests;
+#[cfg(test)]
 mod annotate_golden_tests;
 mod annotate_job;
 #[cfg(test)]

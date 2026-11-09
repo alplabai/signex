@@ -4,10 +4,11 @@
 //! through `BomPreviewMsg::SetRule`.
 
 use super::super::*;
-use iced::widget::{Column, Space, button, column, container, row, text};
+use iced::widget::{Column, Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_output::{BomIssueSeverity, BomRule};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use super::super::widgets::section_header;
 
@@ -37,7 +38,7 @@ impl Signex {
         let report = &preview.validation_report;
         if report.issues.is_empty() {
             issues = issues.push(
-                text("No issues found.")
+                text(raw("No issues found."))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
@@ -57,7 +58,7 @@ impl Signex {
                 continue;
             }
             issues = issues.push(
-                text(format!("{heading} ({})", of_severity.len()))
+                text(raw(format!("{heading} ({})", of_severity.len())))
                     .size(TS.body)
                     .color(severity_color(severity, text_c, tokens))
                     .boxed(),
@@ -65,8 +66,8 @@ impl Signex {
             for issue in of_severity {
                 issues = issues.push(
                     column![
-                        text(issue.message.clone()).size(TS.body).color(text_c),
-                        text(issue.references.join(", "))
+                        text(raw(issue.message.clone())).size(TS.body).color(text_c),
+                        text(raw(issue.references.join(", ")))
                             .size(TS.caption)
                             .color(text_muted),
                     ]
@@ -123,9 +124,9 @@ fn rule_row<'a>(
         crate::styles::tokens::resolve(tokens).field
     };
     let inner = if on {
-        text("\u{2713}").size(TS.caption).color(Color::WHITE)
+        text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
     } else {
-        text(" ").size(TS.caption)
+        text(raw(" ")).size(TS.caption)
     };
     let pip = container(inner)
         .width(14)
@@ -146,7 +147,7 @@ fn rule_row<'a>(
         row![
             pip,
             Space::new().width(8),
-            text(rule.label()).size(TS.body).color(text_c),
+            text(raw(rule.label())).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
         ]
         .align_y(iced::Alignment::Center),

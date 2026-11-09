@@ -14,9 +14,10 @@
 
 use std::path::{Path, PathBuf};
 
-use iced::widget::{column, container, text};
+use iced::widget::{column, container};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::app::Message;
 use crate::menu_bar::MenuMessage;
@@ -110,10 +111,10 @@ pub fn view<'a>(
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
     let text_secondary = styles::ti(tokens.text_secondary);
     let content = column![
-        text("No document selected")
+        text(raw("No document selected"))
             .size(BASE * 1.15)
             .color(text_secondary),
-        text("Choose a schematic or PCB from the project tree")
+        text(raw("Choose a schematic or PCB from the project tree"))
             .size(BASE * 0.9)
             .color(text_secondary),
     ]
@@ -209,7 +210,7 @@ mod tests {
             // box is the button's, not a line's; wrapping shows as a
             // narrower-than-natural box, which the width check below catches.
             let natural = crate::layout_probe::natural::<()>(
-                text(label.to_string()).size(label_size(label)).boxed(),
+                text(raw(label.to_string())).size(label_size(label)).boxed(),
                 label,
             );
             if label != "New project" {
@@ -255,7 +256,7 @@ mod tests {
             for (label, size) in &labels {
                 let bounds = find(&texts, label).bounds;
                 let natural = crate::layout_probe::natural::<()>(
-                    text(label.clone()).size(*size).boxed(),
+                    text(raw(label.clone())).size(*size).boxed(),
                     label,
                 );
                 // "New project" fills its button's height (see above).

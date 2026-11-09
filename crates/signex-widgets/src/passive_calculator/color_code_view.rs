@@ -1,4 +1,5 @@
-use iced::widget::{column, container, row, text};
+use crate::{raw, text};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -17,14 +18,14 @@ pub fn color_code_representations<'a, Message: 'a>(
         "Color code"
     };
     let mut color_codes = column![
-        text(representation_label)
+        text(raw(representation_label))
             .size(10)
             .color(token_color(tokens.text_secondary))
     ]
     .spacing(8);
     if representations.is_empty() {
         color_codes = color_codes.push(
-            text(color_code_unavailable_label(kind))
+            text(raw(color_code_unavailable_label(kind)))
                 .size(11)
                 .color(token_color(tokens.text_secondary))
                 .boxed(),
@@ -45,7 +46,7 @@ fn color_code_line<'a, Message: 'a>(
     let mut bands = row![].spacing(5).align_y(Alignment::Center);
     for band in code.bands {
         bands = bands.push(
-            container(text(" "))
+            container(text(raw(" ")))
                 .width(20)
                 .height(30)
                 .style(move |_theme: &iced::Theme| container::Style {
@@ -64,7 +65,7 @@ fn color_code_line<'a, Message: 'a>(
     bands
         .push(
             container(
-                text(accessible_label)
+                text(raw(accessible_label))
                     .size(11)
                     .color(token_color(tokens.text)),
             )

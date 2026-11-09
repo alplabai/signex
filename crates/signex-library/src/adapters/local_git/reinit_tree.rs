@@ -110,6 +110,8 @@ fn is_executable(path: &Path) -> bool {
     }
     #[cfg(not(unix))]
     {
+        // `path` is read only by the unix branch.
+        // ast-grep-ignore: no-binding-silencer
         let _ = path;
         false
     }

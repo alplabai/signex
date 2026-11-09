@@ -607,6 +607,7 @@ fn loaded_project(app: &mut Signex, file: &str, owns_sheet: bool) -> usize {
         id,
         path: std::path::PathBuf::from(format!("/w/{file}")),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: file.to_string(),
             dir: "/w".to_string(),

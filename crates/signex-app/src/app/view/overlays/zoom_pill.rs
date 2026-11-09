@@ -48,7 +48,7 @@ impl Signex {
             Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll),
         );
         // The `Translate` spans the window; only the pill may take the wheel.
-        Some(super::super::translate::Translate::new(super::scroll_guard(pill), at).boxed())
+        Some(signex_widgets::Translate::new(super::scroll_guard(pill), at).boxed())
     }
 }
 

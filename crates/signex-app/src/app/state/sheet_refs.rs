@@ -623,9 +623,8 @@ impl DocumentState {
         let reach = self.reach_sets(sheet_refs);
         let project_file = keys.key(&project.path);
         let mut scan = CloseScan::default();
-        let dirty = self.dirty_document_paths();
-        let primitives: HashSet<PathBuf> = self.dirty_primitive_paths().collect();
-        for path in &dirty {
+        let primitives: HashSet<PathBuf> = self.unsaved_drafts().into_iter().collect();
+        for path in &self.unsaved_files() {
             // A symbol or footprint draft is placed by its library, not by the
             // sheet walk, like a Component Preview row below.
             if primitives.contains(path)
@@ -993,6 +992,7 @@ mod tests {
             id: ProjectId(id),
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                document_id: None,
                 description: None,
                 name: format!("p{id}"),
                 dir: dir.to_string_lossy().into_owned(),

@@ -14,14 +14,13 @@
 
 pub mod state;
 
-use iced::widget::{
-    Widget, column, container, pick_list, row, scrollable, text, text_editor, text_input,
-};
+use iced::widget::{Widget, column, container, pick_list, row, scrollable, text_editor};
 use iced::{Element, Length};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
+use signex_widgets::{TextEditorPlaceholder, raw, text, text_input};
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
@@ -123,7 +122,7 @@ fn labelled<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     column![
-        text(label)
+        text(raw(label))
             .size(TS.caption)
             .color(theme_ext::text_secondary(tokens))
             .boxed(),
@@ -176,7 +175,7 @@ pub fn view<'a>(
     .boxed();
 
     let name_address = address.clone();
-    let name_input = text_input("LM358_DUAL", sim.name.as_str())
+    let name_input = text_input(raw("LM358_DUAL"), sim.name.as_str())
         .on_input(move |s| event(&name_address, EditorMsg::SimSetName(s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
@@ -186,7 +185,7 @@ pub fn view<'a>(
     let deck: Element<'a, LibraryMessage> = if let Some(content) = state.sim_body.as_ref() {
         let deck_address = address.clone();
         text_editor(content)
-            .placeholder(".SUBCKT NAME 1 2 3 4\n  …\n.ENDS")
+            .placeholder_label(raw(".SUBCKT NAME 1 2 3 4\n  …\n.ENDS"))
             .padding(SP.m)
             .size(TS.body)
             .height(Length::Fixed(TS.body * DECK_LINES))
@@ -195,7 +194,7 @@ pub fn view<'a>(
     } else {
         // sim_body is seeded by the SelectTab(Sim) arm; this is the
         // safety fallback for a tab reached without it.
-        text(sim.body.clone())
+        text(raw(sim.body.clone()))
             .size(TS.body)
             .color(theme_ext::text_primary(tokens))
             .boxed()
@@ -258,7 +257,7 @@ fn view_pin_node_table<'a>(
     for (index, line) in pin_node_lines(sim, pins).into_iter().enumerate() {
         let pin_number = line.number.clone();
         let node_address = address.clone();
-        let input = text_input("net", line.node.clone())
+        let input = text_input(raw("net"), line.node.clone())
             .padding([SP.xs, SP.s])
             .size(TS.body)
             .on_input(move |s| {
@@ -272,11 +271,11 @@ fn view_pin_node_table<'a>(
             });
         let cells: Vec<(Element<'a, LibraryMessage>, Length)> = vec![
             (
-                text(line.number).size(TS.body).color(text_c).boxed(),
+                text(raw(line.number)).size(TS.body).color(text_c).boxed(),
                 PIN_COLUMNS[0].1,
             ),
             (
-                text(line.name).size(TS.body).color(muted).boxed(),
+                text(raw(line.name)).size(TS.body).color(muted).boxed(),
                 PIN_COLUMNS[1].1,
             ),
             (input.boxed(), PIN_COLUMNS[2].1),

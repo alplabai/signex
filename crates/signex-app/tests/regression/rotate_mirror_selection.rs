@@ -239,7 +239,7 @@ fn assert_text_followed(op: Op, before: (f64, HAlign, VAlign), after: (f64, HAli
 fn mixed_selection_turns_about_the_centre_and_the_wire_stays_on_the_pin() {
     for mirror in [(false, false), (true, false), (false, true), (true, true)] {
         for op in OPS {
-            let (mut app, ids) = mixed_app(mirror);
+            let (mut app, _) = mixed_app(mirror);
             let before = doc(&app);
             press(&mut app, op);
             let after = doc(&app);
@@ -317,7 +317,6 @@ fn mixed_selection_turns_about_the_centre_and_the_wire_stays_on_the_pin() {
                 ),
                 (note.rotation, note.justify_h, note.justify_v),
             );
-            let _ = &ids;
         }
     }
 }

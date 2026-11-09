@@ -16,8 +16,9 @@
 //! `bounds.x + cursor.x`). The Translate widget at the call site
 //! positions the card at exactly those pixels.
 
-use iced::widget::{button, column, container, row, text};
+use iced::widget::{column, container, row};
 use iced::{Background, Border, Element, Length, Padding, Widget};
+use signex_widgets::{button, raw, text};
 
 use signex_types::theme::ThemeTokens;
 
@@ -365,9 +366,11 @@ fn item_msg<'a>(
     let hover_c = ti(tokens.hover);
     button(
         row![
-            text(label.to_string()).size(FONT_SIZE).color(text_c),
+            text(raw(label.to_string())).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
-            text(shortcut.to_string()).size(TS.caption).color(secondary),
+            text(raw(shortcut.to_string()))
+                .size(TS.caption)
+                .color(secondary),
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
@@ -405,9 +408,11 @@ fn item_indented<'a>(
     button(
         row![
             iced::widget::Space::new().width(SP.xl),
-            text(label.to_string()).size(FONT_SIZE).color(text_c),
+            text(raw(label.to_string())).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
-            text(shortcut.to_string()).size(TS.caption).color(secondary),
+            text(raw(shortcut.to_string()))
+                .size(TS.caption)
+                .color(secondary),
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
@@ -441,9 +446,11 @@ fn item_disabled<'a>(
     let muted = ti(tokens.text_secondary);
     container(
         row![
-            text(label.to_string()).size(FONT_SIZE).color(muted),
+            text(raw(label.to_string())).size(FONT_SIZE).color(muted),
             iced::widget::Space::new().width(Length::Fill),
-            text(shortcut.to_string()).size(TS.caption).color(muted),
+            text(raw(shortcut.to_string()))
+                .size(TS.caption)
+                .color(muted),
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
@@ -464,7 +471,7 @@ fn item_submenu_header<'a>(
     let hover_c = ti(tokens.hover);
     button(
         row![
-            text(label.to_string()).size(FONT_SIZE).color(text_c),
+            text(raw(label.to_string())).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
             signex_widgets::chevron::chevron(expanded, TS.body, text_c),
         ]

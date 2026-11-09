@@ -391,7 +391,9 @@ impl LibraryState {
         let Some(old) = self.editors.get(&address) else {
             return ReloadApplied::Dropped;
         };
-        if rebase && old.has_unsaved_edits() {
+        // A typed name or pin override bumps the epoch without counting as
+        // unsaved, so a cascade reload rebases then too rather than drop.
+        if rebase && (old.has_unsaved_edits() || old.edit_epoch != epoch_at_plan) {
             if old.saving_row.is_some() || old.binding_primitive {
                 return ReloadApplied::Dropped;
             }

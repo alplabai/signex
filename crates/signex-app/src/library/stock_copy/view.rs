@@ -1,10 +1,11 @@
 //! The "Copy to Library" dialog. A pure read of [`StockCopyState`] and the
 //! open libraries' names; every colour comes from theme tokens.
 
-use iced::widget::{Space, Widget, column, container, scrollable, text};
+use iced::widget::{Space, Widget, column, container, scrollable};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text};
 
 use super::{StockCopyMsg, StockCopyState};
 use crate::library::messages::LibraryMessage;
@@ -54,7 +55,7 @@ pub fn view<'a>(
     let mut body = column![intro].spacing(sp.m);
     if let Some(previous) = &state.previous_unavailable {
         body = body.push(
-            text(previous_note(previous))
+            text(raw(previous_note(previous)))
                 .size(ts.caption)
                 .color(muted)
                 .boxed(),
@@ -62,7 +63,7 @@ pub fn view<'a>(
     }
     if let Some(error) = &state.error {
         body = body.push(
-            text(error.as_str())
+            text(raw(error.as_str()))
                 .size(ts.caption)
                 .color(theme_ext::error_color(tokens))
                 .boxed(),
@@ -71,10 +72,12 @@ pub fn view<'a>(
 
     let writable = library.writable_libraries();
     let list: Element<'a, LibraryMessage> = if writable.is_empty() {
-        text("No writable library is open. Create a new one to copy into.")
-            .size(ts.body)
-            .color(muted)
-            .boxed()
+        text(raw(
+            "No writable library is open. Create a new one to copy into.",
+        ))
+        .size(ts.body)
+        .color(muted)
+        .boxed()
     } else {
         let rows = writable.into_iter().map(|(root, name)| {
             secondary_btn(

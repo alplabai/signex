@@ -13,9 +13,10 @@
 //! - `pad_input_row` / `pad_pick_row` / `pad_check_row` are the row-
 //!   chrome primitives; `subforms` and `pad_table` import them.
 
-use iced::widget::{Column, Widget as _, container, pick_list, row, text, text_input};
+use iced::widget::{Column, Widget as _, container, pick_list, row};
 use iced::{Color, Length};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{raw, text, text_input};
 
 use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
@@ -228,8 +229,8 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row_w<'a>(
 ) -> iced::Element<'a, PanelMsg> {
     container(
         row![
-            text(label).size(TS.caption).color(muted).width(fw.0),
-            text_input(placeholder, value)
+            text(raw(label)).size(TS.caption).color(muted).width(fw.0),
+            text_input(raw(placeholder), value)
                 .size(TS.caption)
                 .width(fw.1)
                 .padding(SP.xs)
@@ -276,7 +277,7 @@ where
 {
     container(
         row![
-            text(label).size(TS.caption).color(muted).width(fw.0),
+            text(raw(label)).size(TS.caption).color(muted).width(fw.0),
             pick_list(Some(selected), options, |t: &T| t.to_string())
                 .graphite()
                 .on_select(on_change)
@@ -342,11 +343,11 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row_w<'a>(
 ) -> iced::Element<'a, PanelMsg> {
     container(
         row![
-            text(label)
+            text(raw(label))
                 .size(TS.caption)
                 .color(if on { primary } else { muted })
                 .width(fw.0),
-            iced::widget::checkbox(on)
+            signex_widgets::checkbox(on)
                 .on_toggle(on_toggle)
                 .size(TS.label)
                 .spacing(0)
@@ -398,7 +399,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         if placement_paused {
             col = col.push(
                 container(
-                    text("PAUSED — TAB to resume placement")
+                    text(raw("PAUSED — TAB to resume placement"))
                         .size(TS.caption)
                         .color(Color::from_rgba(1.0, 0.85, 0.30, 1.0)),
                 )
@@ -409,7 +410,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         } else {
             col = col.push(
                 container(
-                    text("TAB to pause placement and edit defaults")
+                    text(raw("TAB to pause placement and edit defaults"))
                         .size(TS.caption)
                         .color(muted),
                 )
@@ -544,7 +545,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     ));
 
     col = col.push(
-        container(text("Testpoint").size(TS.caption).color(muted))
+        container(text(raw("Testpoint")).size(TS.caption).color(muted))
             .padding([SP.m, SP.m])
             .width(Length::Fill)
             .boxed(),

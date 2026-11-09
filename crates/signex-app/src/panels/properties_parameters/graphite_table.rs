@@ -22,7 +22,7 @@ pub fn parameter_table<'a>(tokens: &ThemeTokens, rows: &[(&str, &str)]) -> Eleme
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let mut table: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
     for (name, value) in rows {
-        let name_cell = container(text(name.to_string()).size(TS.dense).color(ink3))
+        let name_cell = container(text(raw(name.to_string())).size(TS.dense).color(ink3))
             .padding([5.0, 8.0])
             .width(NAME_COLUMN_WIDTH)
             .style(move |_: &Theme| container::Style {
@@ -30,7 +30,7 @@ pub fn parameter_table<'a>(tokens: &ThemeTokens, rows: &[(&str, &str)]) -> Eleme
                 ..container::Style::default()
             });
         let value_cell = container(
-            text(value.to_string())
+            text(raw(value.to_string()))
                 .size(TS.dense)
                 .color(ink)
                 .font(mono)

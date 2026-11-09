@@ -57,6 +57,14 @@ impl EditorAddress {
         }
     }
 
+    /// Is `path` a [`Self::synthetic_tab_path`]? Such a path names no file:
+    /// its last segment is `<table>.tsv#<row id>`.
+    pub fn is_synthetic_tab_path(path: &std::path::Path) -> bool {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.contains(".tsv#"))
+    }
+
     /// Synthetic on-disk identity for a Component Preview tab — used by
     /// `TabInfo.path` so the tab bar, undock detector, and dirty-paths
     /// machinery have a single unique `PathBuf` per row without needing

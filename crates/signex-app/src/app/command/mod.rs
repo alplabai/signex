@@ -9,20 +9,45 @@
 //! the main window's, an undocked window's and the native menu's.
 
 pub(crate) mod active_bar;
+#[cfg(test)]
+mod agent_edit_tests;
+mod agent_edits;
 mod args;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod document_operand_tests;
+mod document_operands;
 pub(crate) mod enablement;
+#[cfg(test)]
+mod headless_gui_only_tests;
+#[cfg(test)]
+pub(in crate::app) mod interaction_snapshot_tests;
 mod needs;
+mod opened;
+#[cfg(test)]
+mod operand_handler_tests;
+mod operand_handlers;
+mod operands;
 mod outcome;
+#[cfg(test)]
+mod placement_operand_tests;
+mod placement_operands;
+pub(crate) mod queries;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 
+pub use agent_edits::{
+    EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_edit_list,
+};
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
+pub(crate) use opened::answers_with_the_new_document;
+pub(crate) use operands::missing_headless_operand;
+pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;
 
 use iced::Task;
@@ -49,7 +74,18 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        self.dispatch_command_reporting(command, args, window).1
+        let (outcome, task) = self.dispatch_command_reporting(command, args, window);
+        // Only the missing-operand refusal is said here; every other command
+        // reports (or stays silent) exactly as before.
+        if let CommandOutcome::Disabled { reason } = outcome
+            && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
+        {
+            crate::diagnostics::log_info(format!(
+                "Command: {} did nothing: {reason}",
+                command.as_str()
+            ));
+        }
+        task
     }
 
     /// A menu row's command, from the window `window` (`None`: the main one).
@@ -100,6 +136,18 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
+        // A query answers an agent or the CLI with data; no GUI surface shows
+        // that answer, so a palette, key or menu call is refused rather than
+        // reported as run (#2172).
+        if queries::is_query(command) {
+            return (
+                CommandOutcome::disabled(format!(
+                    "`{}` is for agents and the CLI: it answers with data",
+                    command.as_str()
+                )),
+                Task::none(),
+            );
+        }
         // Undo / Redo typed in an undocked tab step that window's document
         // and are gated by its history, not the main window's active tab
         // (#1546).
@@ -141,6 +189,13 @@ impl Signex {
             }
             self.step_undo_target(&target, undo);
             return (CommandOutcome::Ran, Task::none());
+        }
+        // A command whose surface is another widget does nothing without its
+        // operands, and says why: it never opens or focuses that widget.
+        if !args.has_operands()
+            && let Some(reason) = operand_handlers::needs_operands_reason(command)
+        {
+            return (CommandOutcome::disabled(reason), Task::none());
         }
         // Close Document follows the window the stroke came from (#1787).
         if command.as_str() == "close_active_document"

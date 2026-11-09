@@ -29,7 +29,7 @@ fn field<'a>(
     } else {
         value
     };
-    let mut body = text(shown)
+    let mut body = text(raw(shown))
         .size(TS.body)
         .color(theme_ext::text_primary(tokens));
     if mono {
@@ -38,7 +38,7 @@ fn field<'a>(
         ));
     }
     column![
-        text(label.to_uppercase())
+        text(raw(label.to_uppercase()))
             .size(TS.section)
             .color(r.ink3)
             .boxed(),
@@ -55,7 +55,7 @@ pub(super) fn view_preview<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let title = text(row.internal_pn.as_str().to_string())
+    let title = text(raw(row.internal_pn.as_str().to_string()))
         .size(TS.heading)
         .font(mono)
         .color(theme_ext::text_primary(tokens));
@@ -79,7 +79,7 @@ pub(super) fn view_preview<'a>(
     let mut body: Column<Element<'a, LibraryMessage>> = column![head.boxed()].spacing(SP.m);
     if !row.description.is_empty() {
         body = body.push(
-            text(row.description.clone())
+            text(raw(row.description.clone()))
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
                 .boxed(),

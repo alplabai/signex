@@ -1,8 +1,9 @@
 //! Parameters section view. Pure: reads the project, emits `ProjectTabMsg`s.
 
-use iced::widget::{button, column, container, row, text, text_input};
+use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text, text_input};
 
 use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
@@ -19,7 +20,7 @@ fn value_input<'a>(project: &'a LoadedProject, name: &str) -> iced::widget::Text
     let project_id = project.id;
     let key = name.to_string();
     text_input(
-        "",
+        raw(""),
         project.data.parameters.get(name).map_or("", String::as_str),
     )
     .on_input(move |value| {
@@ -42,14 +43,16 @@ pub(in crate::app::project_tab) fn view<'a>(
     let (ts, sp) = (TypeScale::default(), Spacing::default());
     let project_id = project.id;
     let mut body = column![
-        text("Parameters")
+        text(raw("Parameters"))
             .size(ts.heading)
             .color(crate::styles::ti(tokens.text))
             .boxed(),
-        text("Every sheet inherits these; a sheet's own Title Block value overrides one.")
-            .size(ts.label)
-            .color(crate::styles::ti(tokens.text_secondary))
-            .boxed(),
+        text(raw(
+            "Every sheet inherits these; a sheet's own Title Block value overrides one."
+        ))
+        .size(ts.label)
+        .color(crate::styles::ti(tokens.text_secondary))
+        .boxed(),
     ]
     .spacing(sp.l)
     .width(Length::Fixed(ts.body * SECTION_MAX_EMS));
@@ -61,7 +64,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         ));
     }
     body = body.push(
-        text("Custom parameters")
+        text(raw("Custom parameters"))
             .size(ts.heading)
             .color(crate::styles::ti(tokens.text))
             .boxed(),
@@ -72,7 +75,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         .keys()
         .filter(|k| !TitleBlockField::ALL.iter().any(|f| f.key() == k.as_str()))
     {
-        let remove = button(text("Remove").size(ts.body))
+        let remove = button(text(raw("Remove")).size(ts.body))
             .padding([sp.xs, sp.m])
             .style(crate::styles::outline_button(tokens))
             .on_press(tab_message(ProjectTabMsg::ParameterRemoved {
@@ -87,11 +90,11 @@ pub(in crate::app::project_tab) fn view<'a>(
             tokens,
         ));
     }
-    let add = button(text("Add").size(ts.body))
+    let add = button(text(raw("Add")).size(ts.body))
         .padding([sp.xs, sp.m])
         .style(crate::styles::outline_button(tokens))
         .on_press(tab_message(ProjectTabMsg::ParameterAdded { project_id }));
-    let new_input = text_input("Name", new_name)
+    let new_input = text_input(raw("Name"), new_name)
         .on_input(move |text| {
             tab_message(ProjectTabMsg::NewParameterNameEdited { project_id, text })
         })

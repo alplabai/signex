@@ -151,6 +151,15 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      # vendor/iced_aw is excluded from the workspace, so the step above never
+      # lints it, and cargo applies `-- -D warnings` to workspace members only.
+      # Its own `[lints]` table (vendor/iced_aw/Cargo.toml) denies every rustc
+      # and clippy warning, so this plain run fails on any warning and shares
+      # the build cache. No --all-features: cargo rejects feature flags for a
+      # package outside the workspace, so the default set (`full`) is linted.
+      - name: Clippy (vendored iced_aw)
+        run: cargo clippy -p iced_aw --all-targets
+
   test:
     name: test · workspace
     needs: changes
@@ -192,6 +201,15 @@ jobs:
           # uploaded below for review and commit.
           SIGNEX_GOLDEN_CANDIDATES: ${{ github.workspace }}/target/golden-candidates
         run: cargo nextest run --workspace --profile ci
+
+      # vendor/iced_aw is excluded from the workspace (a path dependency only),
+      # so --workspace never runs its tests (#2206). -p still resolves it.
+      - name: Test vendored iced_aw
+        run: cargo nextest run -p iced_aw --profile ci
+
+      # nextest does not run doctests.
+      - name: Doctest vendored iced_aw
+        run: cargo test -p iced_aw --doc
 
       # nextest does not run doctests.
       - name: Doctests
@@ -356,12 +374,36 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_arch_guard.sh
 
+      # Layering ratchet (#664): SymbolTransform / union-find copies outside
+      # their crate and app imports of library-editor internals may not grow,
+      # and the baseline is regenerated when they shrink. Rules live in
+      # scripts/check_layer_ratchet.sh.
+      - name: Layer ratchet
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_layer_ratchet.sh
+
+      - name: Layer ratchet controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_layer_ratchet.sh
+
       # Hard gate (NOT continue-on-error): a PR may not add a new production
       # god-file or grow a grandfathered one. Ratchet + rationale live in
       # scripts/check_file_size.sh; the slice model it points to is ADR-0001.
       - name: God-file ratchet gate
         if: ${{ !cancelled() }}
         run: bash scripts/check_file_size.sh
+
+      # Hard gate (#2056): UI text goes through the house widgets, and `raw("…")`
+      # is the escape hatch for text not in the message catalog yet. The count
+      # of raw call sites may not grow (scripts/check_raw_labels.sh); clippy's
+      # `disallowed-methods` (clippy.toml) bans the raw iced widget functions.
+      - name: Raw-label ratchet
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_raw_labels.sh
+
+      - name: Raw-label ratchet controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_raw_labels.sh
 
       # This step fails hard (NOT continue-on-error) on a violation, and
       # `ci · required` gates the merge on this job, so a violation actually
@@ -397,6 +439,28 @@ jobs:
       - name: Native-side-effect gate controls
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_io_ports.sh
+
+      # Structural lint rules (sgconfig.yml, ast-grep/rules): shapes a text
+      # grep cannot see, e.g. a discarded Task wrapped over several lines.
+      # Hard gate. Run it locally with
+      #   ast-grep test --skip-snapshot-tests && ast-grep scan --error
+      # A true false positive takes `// ast-grep-ignore: <rule-id>` with the
+      # reason on the line above; narrow the rule first if you can.
+      - name: Install ast-grep
+        id: install-ast-grep
+        if: ${{ !cancelled() }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ast-grep@0.51.1
+
+      # Skipped when the install failed: that step has already failed the job.
+      - name: ast-grep rules
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        # --error: the third-party rules ship as `warning`, which alone
+        # would never fail the step.
+        run: |
+          ast-grep test --skip-snapshot-tests
+          ast-grep scan --error
 
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its

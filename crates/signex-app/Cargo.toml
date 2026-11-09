@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 signex-types = { workspace = true }
 signex-engine = { workspace = true }
+signex-history = { workspace = true }
 signex-renderer = { workspace = true }
 signex-gfx = { workspace = true }
 iced = { workspace = true }
@@ -31,6 +32,7 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
 signex-widgets = { workspace = true }
+signex-i18n = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
 signex-net = { workspace = true }

@@ -6,10 +6,11 @@
 //! theme tokens ([`Overlay`] steps over `tokens.text`), so it reads on
 //! light and dark themes alike.
 
-use iced::widget::{Space, Widget, button, column, container, row, text};
+use iced::widget::{Space, Widget, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::tokens::{self, Overlay, resolve};
 use crate::styles::{self, HAIRLINE, RADIUS, Radii, Spacing, TypeScale};
@@ -143,7 +144,7 @@ pub(crate) fn section_header<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     // Uppercase muted section label.
-    let heading = text(title.to_uppercase())
+    let heading = text(raw(title.to_uppercase()))
         .size(TS.section)
         .style(styles::section_label(tokens))
         .boxed();
@@ -177,7 +178,7 @@ pub(crate) fn table_header<'a, M: 'a>(
         row![].spacing(SP.m).align_y(iced::Alignment::Center);
     for (title, width) in columns {
         line = line.push(
-            text(title.to_uppercase())
+            text(raw(title.to_uppercase()))
                 .size(TS.section)
                 .color(muted)
                 .width(*width)
@@ -247,7 +248,7 @@ fn labelled<'a, M: Clone + 'a>(
     on_press: Option<M>,
     style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Element<'a, M> {
-    button(text(label).size(TS.body).boxed())
+    button(text(raw(label)).size(TS.body).boxed())
         .padding([SP.xs, SP.m])
         .on_press_maybe(on_press)
         .style(style)
@@ -315,7 +316,7 @@ fn pill_with_radius<'a, M: 'a>(
     ink: Color,
     radius: f32,
 ) -> Element<'a, M> {
-    container(text(label).size(TS.caption).color(ink).boxed())
+    container(text(raw(label)).size(TS.caption).color(ink).boxed())
         .padding([SP.xs, SP.s])
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),
@@ -380,7 +381,7 @@ pub(crate) fn empty_state<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let mut col: iced::widget::Column<Element<'a, M>> = column![
-        text(message)
+        text(raw(message))
             .size(TS.label)
             .color(theme_ext::text_secondary(tokens))
             .boxed()

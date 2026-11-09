@@ -42,7 +42,7 @@ fn sidebar_footer<'a>(
         "Commit now"
     };
     let commit_now = button(
-        text(label)
+        text(raw(label))
             .size(BROWSER_TEXT_SIZE)
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
@@ -55,7 +55,7 @@ fn sidebar_footer<'a>(
     .style(crate::styles::outline_button(tokens));
     container(
         column![
-            text(summary).size(BROWSER_HEADER_SIZE).color(warn),
+            text(raw(summary)).size(BROWSER_HEADER_SIZE).color(warn),
             commit_now,
         ]
         .spacing(SP.s),

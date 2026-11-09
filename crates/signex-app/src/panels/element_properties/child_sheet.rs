@@ -123,7 +123,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                 ));
                 c = c.push(
                     container(
-                        iced::widget::button(text("Reset to Default").size(TS.caption))
+                        signex_widgets::button(text(raw("Reset to Default")).size(TS.caption))
                             .padding([SP.s, 10.0])
                             .on_press(PanelMsg::ResetChildSheetStyle(id))
                             .style(crate::panels::form_look::option_tile(false)),
@@ -232,7 +232,7 @@ fn child_sheet_stroke_width_row<'a>(
             .trim_end_matches('.')
             .to_string(),
     };
-    let input = iced::widget::text_input("0.1524", display)
+    let input = signex_widgets::text_input(signex_widgets::raw("0.1524"), display)
         .size(TS.body)
         .padding(SP.s)
         .width(120)
@@ -242,7 +242,10 @@ fn child_sheet_stroke_width_row<'a>(
 
     container(
         row![
-            text("Line Width (mm)").size(TS.body).color(muted).width(96),
+            text(raw("Line Width (mm)"))
+                .size(TS.body)
+                .color(muted)
+                .width(96),
             input,
         ]
         .spacing(SP.s)
@@ -271,7 +274,7 @@ fn child_sheet_text_row<'a>(
     on_input: impl Fn(String) -> PanelMsg + 'a,
     on_submit: PanelMsg,
 ) -> Element<'a, PanelMsg> {
-    let input = iced::widget::text_input("", value.to_string())
+    let input = signex_widgets::text_input(signex_widgets::raw(""), value.to_string())
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill)
@@ -279,7 +282,7 @@ fn child_sheet_text_row<'a>(
         .on_submit(on_submit)
         .style(crate::panels::form_look::text_input_style);
     container(
-        row![text(label).size(TS.body).color(muted).width(84), input]
+        row![text(raw(label)).size(TS.body).color(muted).width(84), input]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center),
     )

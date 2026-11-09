@@ -53,8 +53,157 @@ fn probe() {
     match scenario.as_str() {
         "run" => run(),
         "no_override" => no_override(),
+        "undo_round_trip" => undo_round_trip(),
+        "undo_depth" => undo_depth(),
+        "undo_depth_dispatch" => undo_depth_dispatch(),
+        "net_colors" => net_colors(),
+        "net_class_assign" => net_class_assign(),
         other => panic!("unknown scenario {other}"),
     }
+}
+
+#[test]
+fn net_colours_run_undo_and_save_through_command_ids_alone() {
+    run_probe("net_colors");
+}
+
+/// Colour a net by operands, undo, redo, clear, save: no window, and the
+/// sheet's dirty state follows the history (#661).
+fn net_colors() {
+    use signex_types::schematic::{Point, SchematicSheet, Wire};
+
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, boot).expect("boot settled");
+
+    let path = isolated.path().join("colours.snxsch");
+    let wire = Wire {
+        color: None,
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    let wire_id = wire.uuid;
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        ..Default::default()
+    };
+    let mut seed = signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("engine");
+    seed.save().expect("seed file");
+    app.headless_answers()
+        .expect("headless answers")
+        .replace_all([("path".to_string(), path.display().to_string())]);
+    let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "open answers with the document: {outcome:?}"
+    );
+    driver.settle(&mut app, task).expect("open settled");
+
+    let doc = format!("document={}", path.display());
+    let painted = |app: &Signex| {
+        app.document_state.engines[&path]
+            .document()
+            .net_colors
+            .get(&wire_id)
+            .copied()
+    };
+    let mut run = |app: &mut Signex, name: &str, operands: &[&str]| {
+        let command = id(name);
+        let args = CommandArgs::parse_operands(&command, operands).expect("operands");
+        let (outcome, task) = app.dispatch_command_headless(&command, args);
+        driver.settle(app, task).expect("command settled");
+        outcome
+    };
+    assert!(!app.document_state.is_document_dirty(&path));
+
+    let ran = run(&mut app, "color_net", &["at=5,0", "color=#336699", &doc]);
+    assert_eq!(ran, CommandOutcome::Ran);
+    assert_eq!(
+        painted(&app),
+        Some(signex_types::theme::Color::new(0x33, 0x66, 0x99, 255)),
+        "the operands changed the sheet"
+    );
+    assert!(app.document_state.is_document_dirty(&path), "an edit");
+
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
+    assert_eq!(painted(&app), None);
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "undo back to the saved colours is clean"
+    );
+    assert_eq!(run(&mut app, "redo", &[&doc]), CommandOutcome::Ran);
+    assert!(painted(&app).is_some());
+    assert!(app.document_state.is_document_dirty(&path));
+
+    assert_eq!(run(&mut app, "save_document", &[&doc]), CommandOutcome::Ran);
+    assert!(!app.document_state.is_document_dirty(&path), "saved");
+    let text = std::fs::read_to_string(&path).expect("saved file");
+    let saved = signex_types::format::SnxSchematic::parse(&text)
+        .expect("reopens")
+        .sheet;
+    assert!(
+        saved.net_colors.contains_key(&wire_id),
+        "the file holds the colour"
+    );
+
+    let cleared = run(&mut app, "clear_all_net_colors", &[&doc]);
+    assert_eq!(cleared, CommandOutcome::Ran);
+    assert_eq!(painted(&app), None);
+    assert!(app.document_state.is_document_dirty(&path));
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
+    assert!(painted(&app).is_some());
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "back at the save"
+    );
+
+    // Without its operands `color_net` would only open the colour picker:
+    // refused with the reason, nothing coloured, never `Ran`.
+    let before = app.document_state.engines[&path]
+        .document()
+        .net_colors
+        .clone();
+    let (outcome, _task) = app.dispatch_command_headless(&id("color_net"), CommandArgs::none());
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("needs the operand")),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        app.document_state.engines[&path].document().net_colors,
+        before
+    );
+    assert!(!app.ui_state.net_color_custom.show, "no picker opened");
+
+    // A placement runs from its operands (#2155): one undo step, as a click.
+    let junctions = |app: &Signex| app.document_state.engines[&path].document().junctions.len();
+    let before = junctions(&app);
+    assert_eq!(
+        run(&mut app, "place_junction", &["at=5.08,0"]),
+        CommandOutcome::Ran
+    );
+    assert_eq!(
+        junctions(&app),
+        before + 1,
+        "the operands placed a junction"
+    );
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
+    assert_eq!(junctions(&app), before);
+
+    // A command that declares operands and has no handler is still refused.
+    let missing = std::env::temp_dir().join("zq-no-handler.snxsch");
+    let path_operand = format!("path={}", missing.display());
+    let refused = run(&mut app, "open_document", &[&path_operand]);
+    assert!(
+        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("not run yet")),
+        "{refused:?}"
+    );
 }
 
 /// `unused_pin` switched off: a rule the machine profile does not change.
@@ -127,13 +276,28 @@ fn run() {
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::NotHeadless);
     app.ui_state.io.opener = signex_app::io_ports::Opener::Refuse;
+    // Headless dialogs and launches but native git commits: not headless either.
+    app.ui_state.io.git = signex_app::io_ports::GitCommits::Native;
+    let (outcome, _task) =
+        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::NotHeadless);
+    app.ui_state.io.git = signex_app::io_ports::GitCommits::Skip;
 
     let grid_before = app.ui_state.grid_visible;
-    let (outcome, task) =
+    // A command that only works in a window is refused and changes nothing
+    // (#2170).
+    let (outcome, _task) =
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(
+        outcome,
+        CommandOutcome::Disabled {
+            reason: "`toggle_visible_grid` only works in a window".into()
+        }
+    );
+    assert_eq!(app.ui_state.grid_visible, grid_before, "nothing ran");
+    let (outcome, task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::Ran);
     driver.settle(&mut app, task).expect("command settled");
-    assert_eq!(app.ui_state.grid_visible, !grid_before, "the command ran");
 
     // One answered dialog: Open takes the `path` answer, so the open of a
     // file that is not there reports that file.
@@ -142,7 +306,10 @@ fn run() {
         .expect("headless answers")
         .replace_all([("path".to_string(), missing.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        "{outcome:?}"
+    );
     driver.settle(&mut app, task).expect("open settled");
     let notice = app
         .document_state
@@ -164,12 +331,21 @@ fn run() {
         matches!(outcome, CommandOutcome::Disabled { .. }),
         "{outcome:?}"
     );
+    // A placement with operands and no schematic open is refused, never a
+    // silent "Ran" that only arms the tool.
+    let label = id("place_net_label");
+    let args = CommandArgs::parse_operands(&label, &["at=10,5", "text=VCC"]).expect("operands");
+    let (outcome, _task) = app.dispatch_command_headless(&label, args);
+    assert!(
+        matches!(outcome, CommandOutcome::Disabled { .. }),
+        "{outcome:?}"
+    );
 
     let end = app.end_headless_session();
     driver.settle(&mut app, end).expect("session ended");
     assert!(driver.has_exited());
     let written = std::fs::read_to_string(isolated.path().join("prefs.json")).expect("prefs");
-    assert!(written.contains("grid_visible"), "{written}");
+    assert!(written.contains("first_run_tour_dismissed"), "{written}");
     assert_eq!(snapshot(&real), before, "the real config root changed");
 }
 
@@ -197,4 +373,354 @@ fn snapshot(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
         }
     }
     out
+}
+
+#[test]
+fn a_headless_undo_and_redo_of_a_sheet_edit_move_the_dirty_state() {
+    run_probe("undo_round_trip");
+}
+
+/// Edit, undo, redo through command ids only, no window: the sheet and its
+/// dirty state follow the history.
+fn undo_round_trip() {
+    use signex_types::schematic::{Point, SchematicSheet, Wire};
+
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, boot).expect("boot settled");
+
+    let path = isolated.path().join("round-trip.snxsch");
+    let wire = Wire {
+        color: None,
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        ..Default::default()
+    };
+    let mut seed = signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("engine");
+    seed.save().expect("seed file");
+    app.headless_answers()
+        .expect("headless answers")
+        .replace_all([("path".to_string(), path.display().to_string())]);
+    let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "open answers with the document: {outcome:?}"
+    );
+    driver.settle(&mut app, task).expect("open settled");
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(path.as_path())
+    );
+
+    let wires = |app: &Signex| app.document_state.engines[&path].document().wires.len();
+    let doc = format!("document={}", path.display());
+    let mut run = |app: &mut Signex, name: &str| {
+        // Undo and Redo name their document; the editing commands act on
+        // the active one, as a click does.
+        let command = id(name);
+        let args = match name {
+            "undo" | "redo" => CommandArgs::parse_operands(&command, &[&doc]).expect("operands"),
+            _ => CommandArgs::none(),
+        };
+        let (outcome, task) = app.dispatch_command_headless(&command, args);
+        assert_eq!(outcome, CommandOutcome::Ran, "{name}");
+        driver.settle(app, task).expect("command settled");
+    };
+    assert!(!app.document_state.is_document_dirty(&path));
+
+    run(&mut app, "select_all");
+    run(&mut app, "delete_selection");
+    assert_eq!(wires(&app), 0, "the delete ran");
+    assert!(
+        app.document_state.is_document_dirty(&path),
+        "an edit is dirty"
+    );
+
+    run(&mut app, "undo");
+    assert_eq!(wires(&app), 1, "undo brought the wire back");
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "undo back to the saved state is clean"
+    );
+
+    run(&mut app, "redo");
+    assert_eq!(wires(&app), 0);
+    assert!(app.document_state.is_document_dirty(&path));
+}
+
+#[test]
+fn the_undo_depth_comes_from_prefs_or_the_option_and_a_bad_value_is_reported() {
+    run_probe("undo_depth");
+}
+
+/// `prefs.json` first, then the boot option over it: 1000 is taken as is,
+/// 1001 is clamped, zero and text give the default, and each of the last
+/// three is a warning naming the value.
+fn undo_depth() {
+    signex_app::diagnostics::init_logging().expect("logger");
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let prefs = isolated.path().join("prefs.json");
+
+    let cases: [(&str, usize, bool); 5] = [
+        ("1000", 1000, false),
+        ("1001", 1000, true),
+        ("0", 100, true),
+        ("\"many\"", 100, true),
+        ("1", 1, false),
+    ];
+    for (stored, want, warned) in cases {
+        std::fs::write(&prefs, format!(r#"{{"undo_depth":{stored}}}"#)).expect("prefs");
+        let before = signex_app::diagnostics::newest_entry_id();
+        let (app, _boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+        assert_eq!(app.document_state.undo_depth, want, "prefs {stored}");
+        let logged = signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("undo_depth") && e.message.contains("prefs.json"));
+        assert_eq!(logged, warned, "prefs {stored}");
+    }
+
+    std::fs::write(&prefs, br#"{"undo_depth":7}"#).expect("prefs");
+    let cases: [(&str, usize, bool); 5] = [
+        ("1000", 1000, false),
+        ("1001", 1000, true),
+        ("0", 100, true),
+        ("many", 100, true),
+        ("3", 3, false),
+    ];
+    for (typed, want, warned) in cases {
+        let before = signex_app::diagnostics::newest_entry_id();
+        let (app, _boot) =
+            Signex::boot_headless_with_undo_depth(Vec::new(), &rules(), typed).expect("boot");
+        assert_eq!(app.document_state.undo_depth, want, "option {typed}");
+        let logged = signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("the undo depth option") && e.message.contains(typed));
+        assert_eq!(logged, warned, "option {typed}");
+    }
+    let (app, _boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    assert_eq!(
+        app.document_state.undo_depth, 7,
+        "no option: prefs.json wins"
+    );
+}
+
+#[test]
+fn a_headless_command_applies_the_undo_depth_without_an_update() {
+    run_probe("undo_depth_dispatch");
+}
+
+/// `dispatch_command_headless` never calls `update`: an engine that exists
+/// when a command returns still gets the configured depth.
+fn undo_depth_dispatch() {
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, _boot) =
+        Signex::boot_headless_with_undo_depth(Vec::new(), &rules(), "3").expect("boot");
+    let path = isolated.path().join("depth.snxsch");
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    assert_eq!(engine.undo_depth(), 100);
+    app.document_state.engines.insert(path.clone(), engine);
+    let (outcome, _task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
+    assert_eq!(outcome, CommandOutcome::Ran);
+    assert_eq!(app.document_state.engines[&path].undo_depth(), 3);
+}
+
+#[test]
+fn a_net_class_assignment_runs_undoes_and_dirties_the_project_through_command_ids_alone() {
+    run_probe("net_class_assign");
+}
+
+/// Assign a net to a class by operands, undo, redo: no window, the pick is a
+/// step of the sheet's timeline, the project (not the sheet) reads dirty, and
+/// undoing it reads the project clean again (#661).
+fn net_class_assign() {
+    use signex_types::net_class::NetClass;
+    use signex_types::project::{ProjectData, SheetEntry, write_project};
+    use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
+
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    let mut driver = TaskDriver::new();
+    driver.settle(&mut app, boot).expect("boot settled");
+
+    let dir = isolated.path().join("proj");
+    std::fs::create_dir_all(&dir).expect("project dir");
+    let (prj, sheet_path) = (dir.join("demo.snxprj"), dir.join("main.snxsch"));
+    let wire = Wire {
+        color: None,
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        stroke_width: 0.0,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    // A net exists in the netlist once a pin sits on it: one resistor pin.
+    let origin = Point::new(0.0, 0.0);
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle};
+    let lib = LibSymbol {
+        id: "Device:R".into(),
+        reference: "R".into(),
+        value: String::new(),
+        footprint: String::new(),
+        datasheet: String::new(),
+        description: String::new(),
+        keywords: String::new(),
+        fp_filters: String::new(),
+        in_bom: true,
+        on_board: true,
+        in_pos_files: true,
+        duplicate_pin_numbers_are_jumpers: false,
+        graphics: Vec::new(),
+        pins: vec![LibPin {
+            unit: 0,
+            body_style: 1,
+            pin: Pin {
+                direction: PinDirection::Passive,
+                shape_style: PinShapeStyle::Plain,
+                position: origin,
+                rotation: 0.0,
+                length: 0.0,
+                name: String::new(),
+                number: "1".into(),
+                visible: true,
+                name_visible: true,
+                number_visible: true,
+            },
+        }],
+        show_pin_numbers: true,
+        show_pin_names: true,
+        pin_name_offset: 0.0,
+    };
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        labels: vec![Label::new("GND", origin, LabelType::Global)],
+        symbols: vec![signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::now_v7(),
+            lib_id: "Device:R".into(),
+            reference: "R1".into(),
+            position: origin,
+            ..Default::default()
+        }],
+        lib_symbols: [("Device:R".to_string(), lib)].into_iter().collect(),
+        ..Default::default()
+    };
+    let mut seed =
+        signex_engine::Engine::new_with_path(sheet, Some(sheet_path.clone())).expect("engine");
+    seed.save().expect("seed sheet");
+    let data = ProjectData {
+        document_id: None,
+        description: None,
+        name: "demo".into(),
+        dir: dir.to_string_lossy().into_owned(),
+        schematic_root: Some("main.snxsch".into()),
+        pcb_file: None,
+        sheets: vec![SheetEntry {
+            name: "Main".into(),
+            filename: "main.snxsch".into(),
+            symbols_count: 0,
+            wires_count: 1,
+            labels_count: 1,
+            unknown: Default::default(),
+        }],
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: Vec::new(),
+        enable_git: false,
+        net_classes: vec![NetClass::named("Power")],
+        rules: None,
+        annotation: None,
+        schematic_defaults: Default::default(),
+        parameters: Default::default(),
+        unknown: Default::default(),
+    };
+    write_project(&prj, &data).expect("seed project");
+
+    let mut run = |app: &mut Signex, name: &str, operands: &[&str]| {
+        let command = id(name);
+        let args = if operands.is_empty() {
+            CommandArgs::none()
+        } else {
+            CommandArgs::parse_operands(&command, operands).expect("operands")
+        };
+        let (outcome, task) = app.dispatch_command_headless(&command, args);
+        driver.settle(app, task).expect("command settled");
+        outcome
+    };
+    for opened in [&prj, &sheet_path] {
+        app.headless_answers()
+            .expect("headless answers")
+            .replace_all([("path".to_string(), opened.display().to_string())]);
+        assert!(matches!(
+            run(&mut app, "open_document", &[]),
+            CommandOutcome::Answered(_)
+        ));
+    }
+    let classes = |app: &Signex| {
+        app.document_state.projects[0].data.net_classes[0]
+            .nets
+            .clone()
+    };
+    assert!(!app.document_state.is_document_dirty(&prj));
+    assert!(!app.document_state.is_document_dirty(&sheet_path));
+
+    // Headless names its document: no operands, or no `path`, is refused and
+    // never falls back to the active sheet; nothing changes.
+    match run(&mut app, "assign_net_class", &[]) {
+        CommandOutcome::Disabled { reason } => {
+            assert!(reason.contains("needs the operand `document`"), "{reason}")
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+    let without =
+        CommandArgs::parse_operands(&id("assign_net_class"), &["net_name=GND", "class=Power"]);
+    assert!(
+        matches!(&without, Err(signex_app::headless::OperandError::Missing { operand, .. }) if operand == "document"),
+        "{without:?}"
+    );
+    assert!(classes(&app).is_empty() && !app.document_state.is_document_dirty(&prj));
+    let given = format!("document={}", sheet_path.display());
+    let ran = run(
+        &mut app,
+        "assign_net_class",
+        &["net_name=GND", "class=Power", &given],
+    );
+    assert_eq!(ran, CommandOutcome::Ran, "{ran:?}");
+    assert_eq!(classes(&app), ["GND"]);
+    assert!(
+        app.document_state.is_document_dirty(&prj),
+        "the project changed"
+    );
+    assert!(
+        !app.document_state.is_document_dirty(&sheet_path),
+        "the sheet did not"
+    );
+
+    assert_eq!(run(&mut app, "undo", &[&given]), CommandOutcome::Ran);
+    assert!(classes(&app).is_empty());
+    assert!(
+        !app.document_state.is_document_dirty(&prj),
+        "back at the saved bytes"
+    );
+    assert_eq!(run(&mut app, "redo", &[&given]), CommandOutcome::Ran);
+    assert_eq!(classes(&app), ["GND"]);
+    assert!(app.document_state.is_document_dirty(&prj));
 }

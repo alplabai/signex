@@ -1,5 +1,6 @@
 //! Footprint preview: the footprint editor's own rendering (backdrop, grid,
-//! origin, silk, courtyard, pads with holes) over a read-only
+//! origin, front and back silk and fab, courtyard, pads with holes, a size
+//! readout and a scale bar) over a read-only
 //! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
 //! first show, and again when the box changes size while the user has not
 //! zoomed or panned. Shared by the Components panel and the Component Preview
@@ -12,10 +13,13 @@ use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, mouse};
 use crate::canvas::Camera;
 use crate::library::editor::footprint::canvas::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
-    draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk, graphite_look_for,
+    draw_back_layers, draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk,
+    graphite_look_for,
 };
 use crate::library::editor::footprint::layers::LayerPalette;
 use crate::library::editor::footprint::state::SnapOptions;
+
+mod footprint_scale;
 
 /// Lowest zoom of the preview, px per mm: low enough to fit a large part
 /// into the small details box.
@@ -244,10 +248,18 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             if let Some((_, palette)) = self.graphite {
                 layers.palette = palette;
             }
+            draw_back_layers(
+                frame,
+                &camera,
+                self.model.silk_b(),
+                self.model.fab_b(),
+                layers.palette,
+            );
             draw_fab(frame, &camera, self.model.fab_f(), layers.palette);
             draw_silk(frame, &camera, &layers);
             draw_courtyard(frame, &camera, &layers);
             draw_pads(frame, &camera, &layers);
+            footprint_scale::draw_readouts(frame, area, camera.scale, self.model.bbox_mm());
         });
         vec![geometry]
     }

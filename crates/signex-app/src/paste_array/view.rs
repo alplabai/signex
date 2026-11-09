@@ -1,6 +1,7 @@
 use super::{PasteArrayMsg, PasteArrayState};
-use iced::widget::{Space, Widget, button, column, container, pick_list, row, text, text_input};
+use iced::widget::{Space, Widget, column, container, pick_list, row};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{button, raw, text, text_input};
 
 use crate::paste_prefs::PasteDesignators;
 use iced::{Background, Element, Length, Theme};
@@ -23,9 +24,11 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
 
     let header = container(
         row![
-            text("Paste Array").size(TS.heading).color(text_primary),
+            text(raw("Paste Array"))
+                .size(TS.heading)
+                .color(text_primary),
             Space::new().width(Length::Fill),
-            button(text("Close").size(TS.body).color(text_secondary))
+            button(text(raw("Close")).size(TS.body).color(text_secondary))
                 .on_press(PasteArrayMsg::Closed)
                 .style(crate::styles::menu_item(tokens)),
         ]
@@ -37,8 +40,11 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
 
     let field = |label: String, value: &'a str, on_input: fn(String) -> PasteArrayMsg| {
         row![
-            text(label).size(TS.body).color(text_primary).width(LABEL_W),
-            text_input("", value)
+            text(raw(label))
+                .size(TS.body)
+                .color(text_primary)
+                .width(LABEL_W),
+            text_input(raw(""), value)
                 .on_input(on_input)
                 .on_submit_maybe(verdict.is_ok().then_some(PasteArrayMsg::ApplyPressed))
                 .size(TS.body)
@@ -73,7 +79,7 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
     .spacing(SP.m);
 
     let designators = row![
-        text("Designators")
+        text(raw("Designators"))
             .size(TS.body)
             .color(text_primary)
             .width(LABEL_W),
@@ -95,7 +101,7 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
         Err(reason) => reason.clone(),
     };
 
-    let ok = button(text("OK").size(TS.body).color(if verdict.is_ok() {
+    let ok = button(text(raw("OK")).size(TS.body).color(if verdict.is_ok() {
         text_primary
     } else {
         text_secondary
@@ -103,10 +109,10 @@ pub fn view<'a>(state: &'a PasteArrayState, tokens: &ThemeTokens) -> Element<'a,
     .on_press_maybe(verdict.is_ok().then_some(PasteArrayMsg::ApplyPressed))
     .style(crate::styles::menu_item(tokens));
     let footer = row![
-        text(note).size(TS.caption).color(text_secondary),
+        text(raw(note)).size(TS.caption).color(text_secondary),
         Space::new().width(Length::Fill),
         ok,
-        button(text("Cancel").size(TS.body).color(text_secondary))
+        button(text(raw("Cancel")).size(TS.body).color(text_secondary))
             .on_press(PasteArrayMsg::Closed)
             .style(crate::styles::menu_item(tokens)),
     ]

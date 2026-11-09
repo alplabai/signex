@@ -30,11 +30,13 @@ fn pad(uuid: &str) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        net_locked: false,
     }
 }
 
 fn footprint(uuid: &str, reference: &str, pad_uuid: &str) -> Footprint {
     Footprint {
+        schematic_link: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(uuid).unwrap(),
@@ -187,6 +189,7 @@ fn positional_layer_ids_write_no_layer_ids_key() {
             id,
             name: format!("L{id}"),
             layer_type: "signal".into(),
+            display_name: String::new(),
         })
         .collect();
     let text = SnxPcb::new(board).write_string().unwrap();

@@ -293,6 +293,8 @@ pub(super) fn derive_columns(
                 let label = {
                     let mut chars = slot.name.chars();
                     match chars.next() {
+                        // user-visible: migrate to the #2063 casemap
+                        // ast-grep-ignore: no-case-in-view
                         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
                         None => String::new(),
                     }
@@ -358,16 +360,24 @@ pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str, names: &Primiti
     if bound
         .into_iter()
         .flatten()
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         .any(|n| n.to_lowercase().contains(needle))
     {
         return true;
     }
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     if r.internal_pn.as_str().to_lowercase().contains(needle) {
         return true;
     }
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     if r.primary_mpn.manufacturer.to_lowercase().contains(needle) {
         return true;
     }
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     if r.primary_mpn.mpn.to_lowercase().contains(needle) {
         return true;
     }

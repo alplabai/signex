@@ -12,9 +12,10 @@ pub(crate) mod symbol_canvas;
 #[path = "pan_app_tests.rs"]
 mod pan_app_tests;
 
-use iced::widget::{Column, Space, column, container, pick_list, scrollable, text};
+use iced::widget::{Column, Space, column, container, pick_list, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{raw, text};
 
 use crate::library::editor::footprint::canvas::PreviewFootprint;
 use signex_library::primitive::PrimitiveRef;
@@ -202,7 +203,7 @@ pub(crate) fn view<'a>(
     let muted = crate::styles::tokens::resolve(tokens).ink4;
 
     let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
-        container(text(message).size(HINT_TEXT_SIZE).color(color))
+        container(text(raw(message)).size(HINT_TEXT_SIZE).color(color))
             .padding([SP.s, 10.0])
             .width(Length::Fill)
             .boxed()
@@ -220,7 +221,7 @@ pub(crate) fn view<'a>(
     let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.s).width(Length::Fill);
     if let Some(why) = &panel.details.error {
         col = col.push(
-            text(why.as_str())
+            text(raw(why.as_str()))
                 .size(ROW_TEXT_SIZE)
                 .color(theme_ext::error_color(tokens))
                 .boxed(),
@@ -276,7 +277,7 @@ pub(crate) fn view<'a>(
         );
     } else if let Some(fp) = &d.footprint {
         col = col.push(
-            text(fp.name.as_str())
+            text(raw(fp.name.as_str()))
                 .size(ROW_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -296,7 +297,7 @@ pub(crate) fn view<'a>(
     });
     for note in &d.notes {
         col = col.push(
-            text(note.as_str())
+            text(raw(note.as_str()))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -306,7 +307,7 @@ pub(crate) fn view<'a>(
     col = col.push(title("Parameters"));
     if d.parameters.is_empty() {
         col = col.push(
-            text("No parameters.")
+            text(raw("No parameters."))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),

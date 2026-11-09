@@ -253,7 +253,8 @@ impl Engine {
             // Foreign columns belong to one wire; folding would drop one set.
             || wire.unknown_columns != other.unknown_columns
             // A net colour is kept per wire; folding two colours drops one.
-            || self.wire_colors.get(&wire.uuid) != self.wire_colors.get(&other.uuid)
+            || self.document.net_colors.get(&wire.uuid)
+                != self.document.net_colors.get(&other.uuid)
             || met(wire.uuid, other.uuid)
             || self.wire_passes_through(at, i, j)
             || occupied.get_or_init(|| self.occupied_points()).contains(&at))

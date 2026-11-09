@@ -2,7 +2,7 @@
 //!
 //! The engine records the whole sheet before every edit. Holding a plain
 //! `SchematicSheet` per step costs one deep copy of every collection per step
-//! (up to `MAX_HISTORY_ENTRIES` copies), although a typical edit changes one
+//! (up to `DEFAULT_UNDO_DEPTH` copies), although a typical edit changes one
 //! collection. A [`SheetSnapshot`] keeps each big collection behind an
 //! `Arc`, and capturing it reuses the previous entry's `Arc` for every
 //! collection that compares equal, so consecutive entries share the

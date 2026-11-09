@@ -1,6 +1,6 @@
 //! The parameters table of the Edit Component Details modal.
 
-use iced::widget::{Column, Row, Space, button, column, container, row, text, text_input};
+use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{
     ParamKind, ParamSlot, ParamValue, ParameterTemplate, slot_problem, slot_unit,
@@ -8,6 +8,7 @@ use signex_library::{
 use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text, text_input};
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::prefix_picker::prefix_picker;
@@ -28,12 +29,13 @@ pub(super) fn view<'a>(
     let border = theme_ext::border_color(tokens);
 
     let header = row![
-        text("Parameters")
+        text(raw("Parameters"))
             .size(TS.body)
             .color(muted)
             .width(Length::Fill),
         button(
-            container(text("+ Add Parameter").size(TS.body).color(text_c)).padding([SP.xs, SP.l])
+            container(text(raw("+ Add Parameter")).size(TS.body).color(text_c))
+                .padding([SP.xs, SP.l])
         )
         .on_press(send.clone()(BrowserEditMsg::AddParam))
         .style(crate::panels::form_look::option_tile(false)),
@@ -48,19 +50,19 @@ pub(super) fn view<'a>(
 
     let header_row = container(
         row![
-            text("Key")
+            text(raw("Key"))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(3)),
-            text("Value")
+            text(raw("Value"))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(3)),
-            text("Unit")
+            text(raw("Unit"))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            text("").size(TS.caption).width(Length::Fixed(40.0)),
+            text(raw("")).size(TS.caption).width(Length::Fixed(40.0)),
         ]
         .padding([SP.xs, 6.0]),
     )
@@ -88,7 +90,7 @@ pub(super) fn view<'a>(
         .collect();
     if visible_params.is_empty() {
         col = col.push(
-            container(text("No parameters yet.").size(TS.body).color(muted))
+            container(text(raw("No parameters yet.")).size(TS.body).color(muted))
                 .padding([SP.m, 6.0])
                 .boxed(),
         );
@@ -132,7 +134,7 @@ fn slot_offer<'a>(
                 Some(u) => format!("+ {} ({})", slot.name, u.glyph()),
                 None => format!("+ {}", slot.name),
             };
-            button(container(text(label).size(TS.body).color(text_c)).padding([SP.xs, SP.m]))
+            button(container(text(raw(label)).size(TS.body).color(text_c)).padding([SP.xs, SP.m]))
                 .on_press(send(BrowserEditMsg::AddSlotParam {
                     name: slot.name.clone(),
                 }))
@@ -155,7 +157,9 @@ fn slot_offer<'a>(
     }
     Some(
         column![
-            text("Template parameters").size(TS.caption).color(muted),
+            text(raw("Template parameters"))
+                .size(TS.caption)
+                .color(muted),
             Row::with_children(buttons).spacing(SP.s).wrap(),
             Space::new().height(SP.s),
         ]
@@ -197,7 +201,7 @@ fn param_row<'a>(
     let key_for_v = key_owned.clone();
     let send_c = send.clone();
     let key_c = key_owned.clone();
-    let val_input = text_input("value", cur_value)
+    let val_input = text_input(raw("value"), cur_value)
         .on_input(move |s| {
             send_v(BrowserEditMsg::SetParamValue {
                 key: key_for_v.clone(),
@@ -235,7 +239,7 @@ fn param_row<'a>(
     let value_cell: Element<'a, LibraryMessage> = match problem {
         Some(why) => column![
             field,
-            text(format!("\u{2717} {why}"))
+            text(raw(format!("\u{2717} {why}")))
                 .size(TS.caption)
                 .color(theme_ext::error_color(tokens))
         ]
@@ -247,7 +251,7 @@ fn param_row<'a>(
     // The unit is fixed by the slot, or picked, never typed. A unit string
     // the build does not know is shown as it is and kept untouched.
     let unit_cell: Element<'a, LibraryMessage> = match (&fixed_unit, unit_of_token(&cur_unit)) {
-        (Some(u), _) => text(u.glyph().to_string())
+        (Some(u), _) => text(raw(u.glyph().to_string()))
             .size(TS.body)
             .color(muted)
             .boxed(),
@@ -261,33 +265,37 @@ fn param_row<'a>(
                 })
             })
         }
-        (None, Err(raw)) => text(raw.to_string()).size(TS.body).color(muted).boxed(),
+        (None, Err(raw)) => text(signex_widgets::raw(raw.to_string()))
+            .size(TS.body)
+            .color(muted)
+            .boxed(),
     };
 
     let send_del = send.clone();
     let key_for_del = key_owned.clone();
-    let delete_btn = button(container(text("✕").size(TS.body).color(muted)).padding([SP.xs, SP.m]))
-        .on_press_with(move || {
-            send_del(BrowserEditMsg::DeleteParam {
-                key: key_for_del.clone(),
+    let delete_btn =
+        button(container(text(raw("✕")).size(TS.body).color(muted)).padding([SP.xs, SP.m]))
+            .on_press_with(move || {
+                send_del(BrowserEditMsg::DeleteParam {
+                    key: key_for_del.clone(),
+                })
             })
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(
-                crate::styles::tokens::resolve(tokens).field,
-            )),
-            text_color: muted,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(
+                    crate::styles::tokens::resolve(tokens).field,
+                )),
+                text_color: muted,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
 
     row![
-        container(text(key_owned).size(TS.body).color(text_c))
+        container(text(raw(key_owned)).size(TS.body).color(text_c))
             .padding([SP.xs, 6.0])
             .width(Length::FillPortion(3)),
         container(value_cell)

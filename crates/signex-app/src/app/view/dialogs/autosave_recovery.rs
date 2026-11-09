@@ -4,8 +4,9 @@
 //! loads anything.
 
 use super::*;
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_widgets::{raw, text};
 
 use super::widgets::modal_title_header;
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
@@ -51,11 +52,20 @@ impl Signex {
             header_content.boxed()
         };
 
-        let name = offer
-            .path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| offer.path.display().to_string());
+        // A Component Preview row has no file: the prompt names the part.
+        let row_name = self
+            .library
+            .editors
+            .iter()
+            .find(|(address, _)| address.synthetic_tab_path() == offer.path)
+            .map(|(_, editor)| editor.row.internal_pn.as_str().to_string());
+        let name = row_name.unwrap_or_else(|| {
+            offer
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| offer.path.display().to_string())
+        });
         let mut body = column![dialog_message(
             format!(
                 "Signex found a recovery copy of {name} written {} that differs from the \
@@ -67,10 +77,10 @@ impl Signex {
         .spacing(SP.m);
         if offer.older_than_file {
             body = body.push(
-                text(format!(
+                text(raw(format!(
                     "{name} was saved after this copy was written. Restore replaces that \
                      newer saved work in the editor with the older copy."
-                ))
+                )))
                 .size(TS.body)
                 .color(crate::styles::ti(tokens.warning))
                 .boxed(),
@@ -116,14 +126,18 @@ impl Signex {
             let r = crate::styles::tokens::resolve(tokens);
             let card = container(
                 row![
-                    text(name.clone())
+                    text(raw(name.clone()))
                         .size(TS.dense)
                         .font(crate::fonts::iced_font_for_family(
                             crate::fonts::CHROME_MONO_FONT,
                         ))
                         .color(crate::styles::ti(tokens.text)),
                     Space::new().width(Length::Fill),
-                    text(format!("autosaved {}", describe_age(offer.age_secs)))
+                    text(signex_i18n::t!(
+                        self.ui_state.i18n,
+                        signex_i18n::ids::DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE,
+                        "age" => describe_age(offer.age_secs)
+                    ))
                         .size(TS.label)
                         .color(r.ink3),
                 ]

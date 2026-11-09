@@ -325,6 +325,7 @@ fn app_in_a_project(sheet: SchematicSheet) -> Signex {
         id,
         path: PathBuf::from("/w/p/P.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".to_string(),
             dir: "/w/p".to_string(),

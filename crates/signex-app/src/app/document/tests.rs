@@ -10,7 +10,10 @@ use crate::app::state::LoadedProject;
 use crate::app::{ComponentEditorTab, Signex, TabInfo, TabKind};
 use crate::library::state::{ComponentPreviewState, EditorAddress};
 
+mod autosave_tick;
+mod close_readers;
 mod dirty_readers;
+mod save_routing;
 
 #[derive(Debug, Clone, Copy)]
 enum Kind {
@@ -39,6 +42,7 @@ fn project_at(app: &mut Signex, dir: &Path) {
         id,
         path: dir.join("p.snxprj"),
         data: signex_types::project::ProjectData {
+            document_id: None,
             description: None,
             name: "p".into(),
             dir: dir.to_string_lossy().into_owned(),
@@ -193,16 +197,10 @@ fn a_dirty_document_reads_dirty_on_the_dot_the_quit_guard_and_close_project() {
     for kind in ALL {
         let dir = tempfile::tempdir().unwrap();
         let (mut app, t) = fixture(dir.path(), kind, true);
-        // A half-typed value is unsaved input only: the dot shows it, the
-        // gates read the dirty flag (#2132).
-        let gates_see_it = !matches!(kind, Kind::HalfTypedRow);
+        // A half-typed value counts at every gate, as on the dot (#2132).
         assert!(dot(&app, &t), "{kind:?} dot");
-        assert_eq!(
-            close_scan_lists_something(&app),
-            gates_see_it,
-            "{kind:?} close scan"
-        );
-        assert_eq!(quit_prompts(&mut app), gates_see_it, "{kind:?} quit guard");
+        assert!(close_scan_lists_something(&app), "{kind:?} close scan");
+        assert!(quit_prompts(&mut app), "{kind:?} quit guard");
     }
 }
 
@@ -286,4 +284,24 @@ fn a_tab_without_a_document_owner_keeps_the_path_set_dot() {
     assert!(dot(&app, &project));
     app.document_state.projects.clear();
     assert!(dot(&app, &project), "project tab after its project closed");
+}
+
+/// #2149 — a board parked without a tab is listed as `kept` by the Close
+/// Project scan (it asks, but does not own the board) and prompts at quit.
+#[test]
+fn a_parked_board_is_kept_by_the_close_scan_and_prompts_at_quit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, t) = fixture(dir.path(), Kind::Pcb, true);
+    app.document_state.tabs.clear();
+    app.document_state.park_pcb_board(
+        t.path.clone(),
+        crate::app::handlers::document_files::save_async_tests::empty_board(),
+    );
+    let refs = app.document_state.sheet_ref_inputs().resolve(|_| true);
+    let scan =
+        app.document_state
+            .close_scan(&refs, 0, &app.library.dirty_editors(), &[], &HashMap::new());
+    assert_eq!(scan.kept, vec![t.path.clone()]);
+    assert!(scan.mine.is_empty());
+    assert!(quit_prompts(&mut app));
 }

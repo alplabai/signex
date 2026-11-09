@@ -36,8 +36,8 @@ mod tests;
 // `silk_f_hit_at` below.
 use draw::draw_pads_tool_preview;
 pub(crate) use draw::{
-    BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_backdrop, draw_courtyard, draw_fab, draw_origin,
-    draw_pads, draw_silk, graphite_look_for,
+    BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_back_layers, draw_backdrop, draw_courtyard,
+    draw_fab, draw_origin, draw_pads, draw_silk, graphite_look_for,
 };
 #[cfg(test)]
 pub(crate) use draw::{LayerInput, PadLabels};

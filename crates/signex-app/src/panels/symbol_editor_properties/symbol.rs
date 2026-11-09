@@ -1,7 +1,8 @@
 //! Symbol-level (nothing-selected) Properties rows + local-colour swatches.
 
-use iced::widget::{Column, Widget, container, row, text};
+use iced::widget::{Column, Widget, container, row};
 use iced::{Color, Element, Length};
+use signex_widgets::{raw, text};
 
 use super::super::form_look;
 use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
@@ -77,11 +78,11 @@ pub(super) fn view_symbol_selection<'a>(
      -> Element<'a, PanelMsg> {
         container(
             row![
-                text(label)
+                text(raw(label))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(2)),
-                iced::widget::text_input(placeholder, value)
+                signex_widgets::text_input(signex_widgets::raw(placeholder), value)
                     .padding([SP.xs, SP.s])
                     .size(TS.body)
                     .on_input(on_input)
@@ -140,11 +141,11 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(super::section_title("Graphical", tokens));
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
-            text("Mirrored")
+            text(raw("Mirrored"))
                 .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::checkbox(sym.symbol_mirrored)
+            signex_widgets::checkbox(sym.symbol_mirrored)
                 .size(TS.heading)
                 .style(form_look::checkbox_style)
                 .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),

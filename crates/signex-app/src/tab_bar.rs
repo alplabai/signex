@@ -1,10 +1,11 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
 use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
-use iced::widget::{Row, container, mouse_area, scrollable, text, tooltip};
+use iced::widget::{Row, container, mouse_area, scrollable};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::TabPill;
+use signex_widgets::{raw, text, tooltip};
 
 use crate::app::{Document, DocumentKey, TabInfo};
 use crate::styles::{self, Spacing, TypeScale};
@@ -171,7 +172,7 @@ pub fn view<'a>(
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
                 Some(tip) => tooltip(
                     tab_el,
-                    container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
+                    container(text(raw(tip)).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
                     tooltip::Position::Bottom,
                 )
                 .style(styles::context_menu(tokens))

@@ -49,6 +49,11 @@ impl ProjectFsFacts {
         self.exists.get(path) == Some(&false)
     }
 
+    /// The modification time the last probe saw for `path`, if it exists.
+    pub fn modified(&self, path: &Path) -> Option<std::time::SystemTime> {
+        self.mtimes.get(path).copied()
+    }
+
     /// True once a probe saw that `path` exists. Unprobed is not known.
     pub fn knows_present(&self, path: &Path) -> bool {
         self.exists.get(path) == Some(&true)

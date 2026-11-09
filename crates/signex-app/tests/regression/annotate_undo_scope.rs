@@ -39,12 +39,20 @@ struct Project {
 }
 
 fn project(mode: AnnotateUndo) -> Project {
+    project_with_child(mode, "child.snxsch")
+}
+
+/// [`project`] with the child sheet saved as `child_name`. The diagnostics
+/// ring is shared by every test in the binary, and the warnings name sheets
+/// by file name, so a test that asserts a warning is *absent* gives its child
+/// a name no other test uses.
+fn project_with_child(mode: AnnotateUndo, child_name: &str) -> Project {
     let dir = tempfile::Builder::new()
         .prefix("annotate-undo")
         .tempdir()
         .expect("tempdir");
     let root = dir.path().join("root.snxsch");
-    let child = dir.path().join("child.snxsch");
+    let child = dir.path().join(child_name);
 
     let mut root_sheet = sheet_with(vec![
         symbol("Amp:Dual", "U?", 1, 0.0),
@@ -53,7 +61,7 @@ fn project(mode: AnnotateUndo) -> Project {
     root_sheet.child_sheets.push(ChildSheet {
         uuid: uuid::Uuid::nil(),
         name: String::new(),
-        filename: "child.snxsch".to_string(),
+        filename: child_name.to_string(),
         position: Point::new(0.0, 0.0),
         size: (0.0, 0.0),
         stroke_width: 0.0,
@@ -378,4 +386,51 @@ fn redo_names_a_sheet_closed_after_the_undo() {
     assert!(warned(
         "Annotate redone on open sheets but not on child.snxsch: closed since the annotate"
     ));
+}
+
+/// A DEAD net-class pick marker (its class edit is already undone, here: no
+/// such project) is no later edit: it is passed and the project-wide undo
+/// goes ahead with no "edited after" refusal (#661). A live one blocks; see
+/// `pick_undo_tests`.
+#[test]
+fn a_dead_pick_marker_on_the_other_sheet_does_not_block_the_project_wide_undo() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut p = project_with_child(AnnotateUndo::Project, "dead-pick-child.snxsch");
+    annotate(&mut p.app);
+    let after = annotated_pair(&p);
+    p.app
+        .document_state
+        .engines
+        .get_mut(&p.child)
+        .unwrap()
+        .record_class_pick(signex_engine::ClassPickMarker {
+            project: 1,
+            step: 1,
+        });
+
+    assert_ne!(
+        after,
+        (
+            vec!["U?".into(), "C?".into()],
+            vec!["U?".into(), "R?".into()]
+        )
+    );
+
+    let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
+    undo(&mut p.app);
+
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
+    assert_eq!(refs(&p.app, &p.child), ["U?", "R?"]);
+    // Other tests in this binary log the same refusal for their own
+    // `child.snxsch` at any moment; only one naming this test's sheet,
+    // logged after the undo started, would be this test's refusal. The
+    // sheet is matched on its own, as the refusal lists every blocked sheet.
+    assert!(
+        !signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.id > before
+                && e.message.contains("Cannot undo the project-wide annotate")
+                && e.message.contains("dead-pick-child.snxsch")),
+        "the dead marker raised no refusal"
+    );
 }

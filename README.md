@@ -1,5 +1,10 @@
 <p align="center">
-  <img src="assets/screenshots/hero.png" alt="Signex — schematic editor" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/graphite/schematic-dark.webp">
+    <img src="assets/screenshots/graphite/schematic-light.webp" alt="Signex schematic editor in the Graphite interface, with the Signex AI panel" width="900">
+  </picture>
+  <br>
+  <em>Design preview: Graphite, the next Signex interface, coming in the next release. <a href="#graphite-the-next-interface-design-preview">More previews</a> &middot; <a href="#screenshots">the app today</a></em>
 </p>
 
 <h1 align="center">Signex</h1>
@@ -54,13 +59,19 @@ converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a siblin
 approximate or skip; review that list before you fabricate an imported
 board.
 
-**Two editions from one codebase:**
+**Editions:**
 
-- **Signex Community** (Apache-2.0, free forever) — the schematic editor
-  today; the PCB editor follows (PCB Viewer, then PCB Routing and Community Release; see the [roadmap](docs/ROADMAP.md))
-- **Signex Pro** (subscription, planned for the Pro Release) — adds Signal AI
-  (Claude-powered design copilot), plugins, real-time collaboration, and
-  Signex 365 cloud PLM
+- **Signex Community** (Apache-2.0, free, offline forever) — the full editor:
+  schematic today, then PCB layout, routing and DRC (see the
+  [roadmap](docs/ROADMAP.md)), plus the plugin system and the headless CLI
+- **Signex Pro** (subscription with included AI credits) — Signex AI (AI
+  design assistant, Pro) and the Generator, served by Signex's hosted service
+- **Signex Team** — collaboration
+- **Signex Enterprise** — SSO, a self-hosted AI gateway, data agreements
+
+Pro is built from a separate private workspace on top of this one; nothing in
+Community is locked or gated, and Community shows no upgrade prompts. Customer
+designs are never used for AI training unless the customer opts in.
 
 > **Status:** Early development. **v1.0.0-rc.1** (2026-10-29), the first
 > release candidate of the **Community Preview** (schematic-only), is the
@@ -154,9 +165,10 @@ board.
 | Plan | Milestone |
 |---|---|
 | **Community Preview** | Schematic-only release |
-| **PCB Viewer → Community Release** | Full PCB editor (viewer, routing, DRC, output) |
+| **AI Design** | PCB layout from the schematic, routing, and Signex AI as assistant and generator for schematic and board |
+| **Community Release** | Manufacturing output (Gerber, drill, ODB++) |
 | **3D Viewer → High-Speed Design** | 3D Viewer, Advanced PCB, High-Speed Design |
-| **Pro Release** | Signal AI + plugins + collaboration |
+| **Pro Release** | Licensing and billing for Signex AI, collaboration |
 | **Simulation** | Unified simulation view with SPICE, EM, thermal |
 | **Signex 365** | Cloud PLM |
 
@@ -168,6 +180,54 @@ board.
   <em>Active Bar, project tree with native <code>.snxsch</code> / <code>.snxprj</code> files, and the Properties panel for the selected symbol</em>
 </p>
 
+### Graphite: the next interface (design preview)
+
+The next Signex interface, Graphite, in its light and dark themes. These are
+design previews: Graphite, the Signex AI panel (Assistant and Generator) and
+PCB layout are in development for the AI Design gate
+([roadmap](docs/ROADMAP.md)); the screenshots above this section show the
+app as it ships today, apart from the design preview at the top of this page.
+
+<p align="center">
+  <img src="assets/screenshots/graphite/schematic-light.webp" alt="Schematic editor with the Signex AI panel, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/schematic-dark.webp" alt="Schematic editor with the Signex AI panel, Graphite Dark" width="400">
+  <br>
+  <em>Schematic editor: Projects, Properties and Messages docks, the Active Bar, and Signex AI</em>
+</p>
+
+<details>
+<summary><strong>More Graphite screens</strong></summary>
+
+<p align="center">
+  <img src="assets/screenshots/graphite/pcb-light.webp" alt="PCB layout with layer stack and DRC, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/pcb-dark.webp" alt="PCB layout with layer stack and DRC, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/start-light.webp" alt="Start screen with the Generator, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/start-dark.webp" alt="Start screen with the Generator, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/library-light.webp" alt="Library Browser, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/library-dark.webp" alt="Library Browser, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/component-light.webp" alt="Component editor pin map, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/component-dark.webp" alt="Component editor pin map, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/footprint-light.webp" alt="Footprint editor with sketch constraints, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/footprint-dark.webp" alt="Footprint editor with sketch constraints, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/symbol-light.webp" alt="Symbol editor, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/symbol-dark.webp" alt="Symbol editor, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/preferences-light.webp" alt="Preferences, theme, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/preferences-dark.webp" alt="Preferences, theme, Graphite Dark" width="400">
+  <br>
+  <img src="assets/screenshots/graphite/dialogs-light.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/dialogs-dark.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Dark" width="400">
+  <br>
+  <em>PCB layout, start screen with the Generator, Library Browser, component, footprint and symbol editors, Preferences and the main dialogs</em>
+</p>
+
+</details>
+
 ## Architecture
 
 A 17-crate Rust workspace (`edition = 2024`), an acyclic DAG with
@@ -177,6 +237,7 @@ A 17-crate Rust workspace (`edition = 2024`), an acyclic DAG with
 signex/
 ├── crates/
 │   ├── signex-app/            # Main binary — iced 0.14 app (panels, dock, canvas, editors)
+│   ├── signex-cli/            # Headless command runner — JSON Lines in, result lines out (docs/CLI.md)
 │   ├── signex-types/          # Domain types — schematic/PCB/layer/theme — NO rendering deps
 │   ├── signex-engine/         # Command / patch / undo engine for schematic edits
 │   ├── signex-net/            # Authoritative netlist + connectivity contract
@@ -187,6 +248,7 @@ signex/
 │   ├── signex-renderer/       # Domain types → render primitives (+ signex-gfx wgpu pipelines)
 │   ├── signex-library/        # .snxlib component library — port/adapter model (+ signex-library-server)
 │   ├── signex-widgets/        # Reusable iced widgets (tree view, active bar, previews)
+│   ├── signex-i18n/           # UI message catalogs (Fluent) and locale-aware formatting
 │   └── signex-3d-model-importer/  # STEP / WRL importer for 3D body attach
 └── Cargo.toml
 ```
@@ -332,11 +394,10 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
 | Command Registry & Symbol Units | 1.0.0-rc.1 | Done (test follow-up #1727 ships in the next release) |
 | **Community Preview** — schematic-only editor | **Gate** | `v1.0.0-rc.1` shipped 2026-10-29 (last SemVer tag); next release is CalVer |
-| PCB Viewer — GPU rendering, layers, cross-probe | **Gate** | |
-| PCB Routing + DRC + Output | Planned | |
-| **Community Release** — full schematic + PCB editor | **Gate** | |
+| **AI Design** — PCB layout from the schematic, routing, Signex AI assistant and generator | **Gate** | Next after the Community Preview |
+| **Community Release** — manufacturing output; full schematic + PCB editor | **Gate** | |
 | 3D Viewer, Advanced PCB, High-Speed Design | Planned | |
-| **Pro Release** — Signal AI + plugins + collaboration | **Gate** | |
+| **Pro Release** — licensing and billing for Signex AI, collaboration | **Gate** | |
 | Simulation — SPICE, EM, thermal, simulation wizards | Planned | |
 | **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **Gate** | |
 
@@ -350,7 +411,7 @@ Project**. It lives in the repository, so it is versioned with the code and
 reviewed in pull requests.
 
 In-repo reference docs live under [`docs/`](docs/): the
-[command reference](docs/COMMANDS.md),
+[command reference](docs/COMMANDS.md), [headless command runner](docs/CLI.md),
 [keyboard shortcut file format](docs/KEYBOARD_SHORTCUTS.md),
 [main menu bar](docs/MENU_BAR.md), [ERC rules](docs/ERC_RULES.md),
 [ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md),
@@ -397,4 +458,7 @@ file formats with structure derived from their GPL-3.0 source. The two
 projects are distributed independently. See [docs/LICENSING.md](docs/LICENSING.md)
 for the full rationale and the audit trail behind the two-repo split.
 
-Copyright 2026 [Alp Lab AI](https://github.com/alplabai)
+Copyright 2026 [Alp Lab AB](https://github.com/alplabai)
+
+Signex™ and Signex AI™ are trademarks of Alp Lab AB. The Apache-2.0 licence
+does not grant rights to use them; forks must use a different name.

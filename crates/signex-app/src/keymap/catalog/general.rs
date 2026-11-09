@@ -2,9 +2,20 @@
 //! transform commands, plus anything without an obvious home. Split
 //! from `keymap/catalog.rs`; entries verbatim.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 
 pub(super) const GENERAL: &[CommandMetadata] = &[
+    CommandMetadata {
+        id: "apply_edits",
+        category: "edit",
+        label: "Apply edits (agent)",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::APPLY_EDITS,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "autoplace_fields",
         category: "edit",
@@ -103,6 +114,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -112,7 +124,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -152,7 +164,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -172,7 +184,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -215,6 +227,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "document_info",
+        category: "file",
+        label: "Document info",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -348,6 +371,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "find_items",
+        category: "search",
+        label: "Find documents or items",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::FIND,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "find_and_replace",
         category: "search",
         label: "Find and replace",
@@ -408,6 +442,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "list_documents",
+        category: "file",
+        label: "List documents",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT_FILTERS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "measure_distance",
         category: "view",
         label: "Measure distance",
@@ -465,6 +510,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::SAVE_PATH,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -515,6 +561,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::OPEN_PATH,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -564,7 +611,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -574,7 +621,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -638,6 +685,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "read_document",
+        category: "file",
+        label: "Read document",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::READ_DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "redo",
         category: "edit",
         label: "Redo",
@@ -645,6 +703,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -684,7 +743,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -695,6 +754,28 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "resolve",
+        category: "file",
+        label: "Resolve id",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::RESOLVE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "revert",
+        category: "edit",
+        label: "Revert an agent's edit step",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: operands::REVERT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -735,6 +816,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -745,6 +827,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
+        operands: operands::SAVE_DOCUMENT_AS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -754,7 +837,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("Select All"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -834,7 +917,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -844,7 +927,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -914,7 +997,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("AutoFocus (dim unselected)"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -924,7 +1007,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("Toggle Grid"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -935,6 +1018,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -954,7 +1038,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

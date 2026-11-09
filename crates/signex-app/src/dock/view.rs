@@ -1,9 +1,8 @@
 //! Dock rendering: region tab strips, collapsed rails, and floating panels.
 
-use iced::widget::{
-    Column, Space, Widget, button, canvas, column, container, mouse_area, row, svg, text,
-};
+use iced::widget::{Column, Space, Widget, canvas, column, container, mouse_area, row, svg};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
+use signex_widgets::{button, raw, text};
 
 use super::graphite;
 use super::measure;
@@ -69,7 +68,7 @@ impl DockArea {
         };
 
         if region.panels.is_empty() {
-            return container(text("")).width(0).boxed();
+            return container(text(raw(""))).width(0).boxed();
         }
 
         if region.collapsed {
@@ -148,14 +147,14 @@ impl DockArea {
             // lines whenever the dock area squeezes the tab — which
             // happens any time the panel column is in its default
             // ~240 px width with several panels in the strip.
-            let label_text = text(label)
+            let label_text = text(raw(label))
                 .size(tab_size)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None);
             let tab_content: Element<'_, DockMessage> = match graphite::tab_badge(*panel, ctx) {
                 Some((count, tone)) => row![
                     label_text.boxed(),
-                    container(text(count.to_string()).size(TS.caption).boxed())
+                    container(text(raw(count.to_string())).size(TS.caption).boxed())
                         .padding([0.0, SP.s])
                         .style(styles::pill(&ctx.tokens, tone))
                         .boxed(),
@@ -203,7 +202,7 @@ impl DockArea {
             .get(region.active)
             .map(|p| p.label().to_string())
             .unwrap_or_default();
-        let title_text = text(active_title)
+        let title_text = text(raw(active_title))
             .size(graphite::TITLE_SIZE)
             .font(graphite::title_font())
             .color(styles::ti(ctx.tokens.text));
@@ -265,7 +264,7 @@ impl DockArea {
                         .boxed(),
                 }
             } else {
-                text("").boxed()
+                text(raw("")).boxed()
             };
 
         // Title + collapse/close on top, tabs on the bottom. Content grows
@@ -388,7 +387,7 @@ impl DockArea {
                 let tab_style: TabStyleFn =
                     Box::new(graphite::rail_tab(&ctx.tokens, position, is_active));
                 rail = rail.push(
-                    button(text(label).size(TS.caption).color(text_c))
+                    button(text(raw(label)).size(TS.caption).color(text_c))
                         .padding([SP.xs, SP.m])
                         .on_press(DockMessage::SelectTab(position, i))
                         .style(tab_style)
@@ -436,7 +435,7 @@ impl DockArea {
         let bar = container(
             row![
                 container(
-                    text(label)
+                    text(raw(label))
                         .size(graphite::TITLE_SIZE)
                         .font(graphite::title_font())
                         .color(styles::ti(ctx.tokens.text)),

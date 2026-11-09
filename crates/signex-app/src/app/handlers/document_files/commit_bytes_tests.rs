@@ -83,7 +83,7 @@ fn save_without_running_the_commit(app: &mut Signex, path: &Path, bytes: &[u8]) 
     let _ = app.handle_document_saved(DocumentSaveDone {
         path: path.to_path_buf(),
         revision,
-        net_color_revision: 0,
+
         save_as_from: None,
         bytes: saved,
         sequence,
@@ -292,8 +292,7 @@ fn a_later_save_coalesces_into_the_newest_queued_entry_of_the_file() {
 
 #[test]
 fn a_newer_unbound_write_replaces_the_bytes_of_a_pending_restore_commit() {
-    let (dir, path, sha, mut app) = footprint_fixture();
-    let _ = sha;
+    let (dir, path, _, mut app) = footprint_fixture();
     let rel = file_name(&path);
     app.commit_bytes_to_project_git(&path, "Restore part", commit_bytes(b"restored", 0));
 

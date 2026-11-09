@@ -15,6 +15,7 @@ use crate::autosave::{
     AutosaveMsg, InFlight, RecoveryChecked, RecoveryChoice, RecoveryOffer, RestoreLoaded,
     RestoredDocument, recovery,
 };
+use crate::library::state::EditorAddress;
 
 impl Signex {
     /// A document just opened from disk (a symbol or footprint editor):
@@ -37,14 +38,43 @@ impl Signex {
             self.document_state.autosave.finish_check(path);
             return Task::none();
         };
+        if EditorAddress::is_synthetic_tab_path(path) {
+            return self.start_row_recovery_check(dir, path);
+        }
         let guard = self.document_state.autosave.track_job();
         // A move the live state owns into this path finishes on its own.
         let finish_owed = !self.document_state.autosave.move_owed(path);
         check_task(dir, path.to_path_buf(), finish_owed, guard)
     }
 
-    /// Start the recovery check of every schematic tab opened since the last
-    /// call. The opening path already held autosave back for each of them.
+    /// The recovery check of a Component Preview row (#2141): its copy is
+    /// judged against the row as the open editor holds it. An editor that
+    /// is gone or already edited has nothing to compare, so the copy stays.
+    fn start_row_recovery_check(&mut self, dir: PathBuf, path: &Path) -> Task<Message> {
+        match self.row_baseline_bytes(path) {
+            Some(Ok(baseline)) => {
+                let guard = self.document_state.autosave.track_job();
+                row_check_task(dir, path.to_path_buf(), baseline, guard)
+            }
+            Some(Err(reason)) => {
+                self.document_state.autosave.finish_check(path);
+                self.document_state.autosave.defer(path);
+                self.report_autosave_failure(&format!(
+                    "{reason}. The recovery copy of this row was not touched and autosave is \
+                     paused for it; close and reopen the row to check the copy again."
+                ));
+                Task::none()
+            }
+            None => {
+                self.document_state.autosave.finish_check(path);
+                Task::none()
+            }
+        }
+    }
+
+    /// Start the recovery check of every document opened since the last
+    /// call (schematic, PCB, project, Component Preview row). The opening
+    /// path already held autosave back for each of them.
     pub(crate) fn start_due_recovery_checks(&mut self) -> Task<Message> {
         if self.document_state.recovery_check_due.is_empty() {
             return Task::none();
@@ -141,11 +171,13 @@ impl Signex {
             }
             RecoveryChoice::Discard => self.start_remove(&dir, offer.path),
             RecoveryChoice::Restore => {
-                if !self
-                    .document_state
-                    .tabs
-                    .iter()
-                    .any(|t| t.path == offer.path)
+                // A project has no tab of its own; every other kind does.
+                if !self.is_loaded_project(&offer.path)
+                    && !self
+                        .document_state
+                        .tabs
+                        .iter()
+                        .any(|t| t.path == offer.path)
                 {
                     // A dirty tab closed meanwhile leaves its engine parked
                     // and still autosaved: keep the copy protected (the
@@ -208,7 +240,7 @@ impl Signex {
             }
         }
         let path = current;
-        let restored = match result {
+        let mut restored = match result {
             Ok(restored) => restored,
             Err(LoadError::Invalid(reason)) => {
                 // A copy that cannot be parsed protects nothing, and keeping
@@ -246,6 +278,8 @@ impl Signex {
                 self.document_state.footprint_editors.contains_key(&path)
             }
             RestoredDocument::Pcb(_) => self.is_open_pcb(&path),
+            RestoredDocument::Project(_) => self.is_loaded_project(&path),
+            RestoredDocument::Row(_) => self.row_editor_at(&path).is_some(),
         };
         if !is_open {
             // Closed while the copy was read; the copy stays for the next open.
@@ -256,6 +290,7 @@ impl Signex {
         if self.document_state.is_document_dirty(&path)
             || self.is_dirty_primitive_editor(&path)
             || self.is_dirty_pcb(&path)
+            || self.is_dirty_row(&path)
         {
             // Both versions are worth keeping: the edits live in the open
             // document, the earlier ones in the copy. Autosave stays off for
@@ -270,7 +305,8 @@ impl Signex {
             ));
             return Task::none();
         }
-        if !self.activate_tab_for_path(&path) {
+        let needs_tab = !matches!(restored, RestoredDocument::Project(_));
+        if needs_tab && !self.activate_tab_for_path(&path) {
             self.document_state.autosave.offer(offer);
             self.report_recovery_failure(format!(
                 "The tab of {} could not be activated, so its recovery copy was not restored. \
@@ -280,6 +316,7 @@ impl Signex {
             ));
             return Task::none();
         }
+        self.keep_live_document_id(&path, &mut restored);
         match restored {
             RestoredDocument::Schematic(mut sheet) => {
                 crate::app::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs());
@@ -296,6 +333,12 @@ impl Signex {
                 crate::app::sheet_repairs::take_and_log_board(&path, &mut board);
                 self.restore_pcb_copy(&path, *board);
             }
+            RestoredDocument::Project(data) => {
+                self.restore_project_copy(&path, *data);
+            }
+            RestoredDocument::Row(row) => {
+                self.restore_row_copy(&path, *row);
+            }
         }
         // The copy is still on disk and now describes the open document:
         // track it so the next save removes it.
@@ -307,6 +350,42 @@ impl Signex {
 }
 
 impl Signex {
+    /// A recovery copy brings back content, not identity: the restored
+    /// document keeps the id the open one holds (#2172), so the copy's own
+    /// id (the file's, as autosave last saw it) never reaches a second
+    /// document or goes unreported.
+    fn keep_live_document_id(&self, path: &Path, restored: &mut RestoredDocument) {
+        let docs = &self.document_state;
+        match restored {
+            RestoredDocument::Schematic(sheet) => {
+                if let Some(engine) = docs.engines.get(path) {
+                    sheet.uuid = engine.document().uuid;
+                }
+            }
+            RestoredDocument::Symbol(file) => {
+                if let Some(editor) = docs.symbol_editors.get(path) {
+                    file.file_uuid = editor.file.file_uuid;
+                }
+            }
+            RestoredDocument::Footprint(file) => {
+                if let Some(editor) = docs.footprint_editors.get(path) {
+                    file.file_uuid = editor.file.file_uuid;
+                }
+            }
+            RestoredDocument::Pcb(board) => {
+                if let Some(live) = docs.pcb_board(path) {
+                    board.uuid = live.uuid;
+                }
+            }
+            RestoredDocument::Project(data) => {
+                if let Some(project) = docs.projects.iter().find(|p| p.path == path) {
+                    data.document_id = project.data.document_id;
+                }
+            }
+            RestoredDocument::Row(_) => {}
+        }
+    }
+
     /// A schematic engine (possibly parked), a symbol editor or a footprint
     /// editor holds `path`.
     fn is_open_document(&self, path: &Path) -> bool {
@@ -315,6 +394,8 @@ impl Signex {
             || self.is_open_pcb(path)
             || docs.symbol_editors.contains_key(path)
             || docs.footprint_editors.contains_key(path)
+            || self.is_loaded_project(path)
+            || self.row_editor_at(path).is_some()
     }
 
     fn report_restore_target_closed(&mut self, path: &Path) {
@@ -346,6 +427,32 @@ fn check_task(dir: PathBuf, path: PathBuf, finish_owed: bool, guard: InFlight) -
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
                 recovery::reconcile_with(&dir, &target, SystemTime::now(), finish_owed)
+            })
+            .await
+            .map_err(|e| format!("the recovery check failed: {e}"))
+            .and_then(|result| result)
+        },
+        move |result| {
+            Message::Autosave(AutosaveMsg::RecoveryChecked(RecoveryChecked {
+                path: path.clone(),
+                result,
+            }))
+        },
+    )
+}
+
+fn row_check_task(
+    dir: PathBuf,
+    path: PathBuf,
+    baseline: Vec<u8>,
+    guard: InFlight,
+) -> Task<Message> {
+    let target = path.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let _guard = guard;
+                recovery::reconcile_snapshot(&dir, &target, &baseline, SystemTime::now())
             })
             .await
             .map_err(|e| format!("the recovery check failed: {e}"))

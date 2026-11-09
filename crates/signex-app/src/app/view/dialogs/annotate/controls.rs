@@ -4,9 +4,10 @@
 //! delegates to `graphite_annotate`; other themes keep the original look.
 
 use super::super::*;
-use iced::widget::{button, container, scrollable, text};
+use iced::widget::{container, scrollable};
 use iced::{Background, Border, Element, Theme};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use super::super::graphite_annotate as ga;
 use crate::app::state::AnnotateOrder;
@@ -56,7 +57,7 @@ pub(super) fn order_radio<'a>(
     current: AnnotateOrder,
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    button(container(text(label.to_string()).size(TS.body)).padding([SP.s, 10.0]))
+    button(container(text(raw(label.to_string())).size(TS.body)).padding([SP.s, 10.0]))
         .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
         .style(ga::toggle_style(theme_tokens, value == current))
         .boxed()

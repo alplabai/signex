@@ -278,7 +278,14 @@ fn only_changes_that_can_alter_a_finding_make_the_results_stale() {
     let dir = path.parent().unwrap().to_path_buf();
 
     // A net colour is display only: the same sheet is dirtied, no finding changes.
-    app.mark_net_colors_dirty(&path);
+    let colours = crate::app::handlers::editing_commands::net_color_driver::color(1);
+    app.apply_engine_command(
+        signex_engine::Command::SetNetColors {
+            colors: [(uuid::Uuid::now_v7(), colours)].into_iter().collect(),
+        },
+        false,
+        false,
+    );
     assert!(!app.erc_results_stale(), "net colour");
     app.document_state
         .mark_document_dirty(&dir.join("board.snxpcb"));

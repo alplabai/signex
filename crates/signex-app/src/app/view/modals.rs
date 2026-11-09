@@ -18,7 +18,8 @@ impl Signex {
     /// OK / Cancel. No header on the body: the dialog opens in its own
     /// OS window, whose native title bar carries the title and close.
     pub(super) fn view_move_selection_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, Widget, column, container, row, text, text_input};
+        use iced::widget::{Space, Widget, column, container, row};
+        use signex_widgets::{raw, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let ms = &self.ui_state.move_selection;
@@ -30,8 +31,8 @@ impl Signex {
          -> Element<'static, Message> {
             let value = value.to_owned();
             column![
-                text(label).size(TS.caption).color(text_muted),
-                text_input("0.00", value)
+                text(raw(label)).size(TS.caption).color(text_muted),
+                text_input(raw("0.00"), value)
                     .style(crate::panels::form_look::text_input_style)
                     .on_input(msg)
                     .padding([SP.s, SP.m])
@@ -86,14 +87,15 @@ impl Signex {
     /// Header of the custom net colour card: the in-window strip with its
     /// close button, the empty slot once the dialog has its own OS window.
     fn net_color_custom_header(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, Widget, container, row, text};
+        use iced::widget::{Space, Widget, container, row};
+        use signex_widgets::{raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         if self.modal_detached(crate::app::state::ModalId::NetColorCustom) {
             return super::dialogs::os_title_bar_slot();
         }
         container(
             row![
-                text("Pick Net Color")
+                text(raw("Pick Net Color"))
                     .size(TS.title)
                     .color(crate::styles::ti(tokens.text)),
                 Space::new().width(iced::Length::Fill),
@@ -108,12 +110,18 @@ impl Signex {
 
     /// Compact X close button shared by the detached-modal bodies.
     fn view_close_x(&self, message: Message) -> Element<'_, Message> {
-        use iced::widget::{Widget, button, container, text};
+        use iced::widget::{Widget, container};
+        use signex_widgets::{button, raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text_secondary);
         let border = crate::styles::ti(tokens.border);
         button(
-            container(text("\u{00D7}".to_string()).size(TS.heading).color(text_c)).padding([0, 6]),
+            container(
+                text(raw("\u{00D7}".to_string()))
+                    .size(TS.heading)
+                    .color(text_c),
+            )
+            .padding([0, 6]),
         )
         .on_press(message)
         .style(
@@ -146,7 +154,8 @@ impl Signex {
     /// color picker. Ships with a 10-swatch palette; a full ColorPicker
     /// widget can replace it later without changing the message contract.
     pub(super) fn view_net_color_palette_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, Widget, button, column, container, row, scrollable, text};
+        use iced::widget::{Space, Widget, column, container, row, scrollable};
+        use signex_widgets::{button, raw, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -192,7 +201,7 @@ impl Signex {
         let mut rows_col = column![].spacing(SP.s);
         if nets.is_empty() {
             rows_col = rows_col.push(
-                text("No net labels on the active sheet.")
+                text(raw("No net labels on the active sheet."))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
@@ -242,30 +251,32 @@ impl Signex {
                 // Clear-override button
                 let net_clear = net.clone();
                 swatches = swatches.push(
-                    button(container(text("×").size(TS.caption).color(text_c)).padding([0, 6]))
-                        .on_press(Message::NetColor(NetColorMsg::Set {
-                            net: net_clear,
-                            color: None,
-                        }))
-                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            ))),
-                            border: iced::Border {
-                                width: 1.0,
-                                radius: 2.0.into(),
-                                color: border_c,
-                                ..iced::Border::default()
-                            },
-                            text_color: text_c,
-                            ..iced::widget::button::Style::default()
-                        })
-                        .boxed(),
+                    button(
+                        container(text(raw("×")).size(TS.caption).color(text_c)).padding([0, 6]),
+                    )
+                    .on_press(Message::NetColor(NetColorMsg::Set {
+                        net: net_clear,
+                        color: None,
+                    }))
+                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        ))),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                            ..iced::Border::default()
+                        },
+                        text_color: text_c,
+                        ..iced::widget::button::Style::default()
+                    })
+                    .boxed(),
                 );
 
                 rows_col = rows_col.push(
                     row![
-                        text(net)
+                        text(raw(net))
                             .size(TS.body)
                             .color(text_c)
                             .width(iced::Length::FillPortion(2)),
@@ -299,7 +310,8 @@ impl Signex {
     /// EDA-specific diagnostic colours.
     pub(super) fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
         use super::contracts::Channel;
-        use iced::widget::{Space, Widget, button, column, container, row, text, text_input};
+        use iced::widget::{Space, Widget, column, container, row};
+        use signex_widgets::{button, raw, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -422,11 +434,11 @@ impl Signex {
             |label: &'static str, value: f32, chan: Channel| -> Element<'_, Message> {
                 let v255 = (value * 255.0).round() as i32;
                 row![
-                    text(label)
+                    text(raw(label))
                         .size(TS.body)
                         .color(text_muted)
                         .width(iced::Length::Fixed(16.0)),
-                    text_input("0", v255.to_string())
+                    text_input(raw("0"), v255.to_string())
                         .style(crate::panels::form_look::text_input_style)
                         .size(TS.body)
                         .padding([3.0, SP.m])
@@ -458,7 +470,7 @@ impl Signex {
         );
 
         let rgb_col = column![
-            text("Custom RGB").size(TS.body).color(text_c),
+            text(raw("Custom RGB")).size(TS.body).color(text_c),
             Space::new().height(6),
             channel_row("R", draft.r, Channel::R),
             channel_row("G", draft.g, Channel::G),
@@ -466,14 +478,14 @@ impl Signex {
             Space::new().height(10),
             preview_box,
             Space::new().height(4),
-            text(preview_hex).size(TS.caption).color(text_muted),
+            text(raw(preview_hex)).size(TS.caption).color(text_muted),
         ]
         .spacing(SP.s)
         .width(iced::Length::Fixed(150.0));
 
         let body = row![
             column![
-                text("Quick Pick").size(TS.body).color(text_c),
+                text(raw("Quick Pick")).size(TS.body).color(text_c),
                 Space::new().height(6),
                 palette_col,
             ]
@@ -528,6 +540,6 @@ impl Signex {
         let card_capturing = iced::widget::mouse_area(card)
             .on_press(Message::noop())
             .boxed();
-        super::view::translate::Translate::new(card_capturing, (x, y)).into()
+        signex_widgets::Translate::new(card_capturing, (x, y)).into()
     }
 }

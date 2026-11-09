@@ -1,5 +1,6 @@
 use crate::dropdown_style::GraphiteDropdown;
-use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
+use crate::{button, raw, text, text_input};
+use iced::widget::{column, container, pick_list, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -161,6 +162,8 @@ impl CalculatorControl {
     pub fn target_value(&self) -> Result<f64, &'static str> {
         let state = self.active_state();
         let normalized = state.target_input.trim().replace(',', ".");
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         let value = match normalized.to_ascii_lowercase().as_str() {
             "∞" | "inf" | "infinity" => f64::INFINITY,
             _ => normalized
@@ -224,10 +227,14 @@ impl CalculatorControl {
 
         if self.active_tab == CalculatorTab::RkmEncoder {
             let content = column![
-                text("RKM Encoder").size(16).color(token_color(tokens.text)),
-                text("Encode component specifications independently of network synthesis.")
-                    .size(11)
-                    .color(token_color(tokens.text_secondary)),
+                text(raw("RKM Encoder"))
+                    .size(16)
+                    .color(token_color(tokens.text)),
+                text(raw(
+                    "Encode component specifications independently of network synthesis."
+                ))
+                .size(11)
+                .color(token_color(tokens.text_secondary)),
                 tabs,
                 self.rkm_encoder
                     .view(tokens)
@@ -244,7 +251,7 @@ impl CalculatorControl {
             labeled(
                 11.0,
                 "Target",
-                text_input("220", &state.target_input)
+                text_input(raw("220"), &state.target_input)
                     .on_input(CalculatorMessage::TargetChanged)
                     .size(11)
                     .padding([4, 6])
@@ -264,7 +271,7 @@ impl CalculatorControl {
                 .padding([4, 6])
                 .width(UNIT_PICK_W),
             ),
-            text(state.prefix.unit(self.kind))
+            text(raw(state.prefix.unit(self.kind)))
                 .size(11)
                 .color(token_color(tokens.text_secondary)),
             labeled(
@@ -291,7 +298,7 @@ impl CalculatorControl {
                 .padding([4, 6])
                 .width(MAX_PARTS_PICK_W),
             ),
-            button(text("Calculate").size(11))
+            button(text(raw("Calculate")).size(11))
                 .padding([4, 10])
                 .on_press(CalculatorMessage::Calculate),
         ]
@@ -299,12 +306,14 @@ impl CalculatorControl {
         .align_y(Alignment::End);
 
         let mut content = column![
-            text("Passive Network Calculator")
+            text(raw("Passive Network Calculator"))
                 .size(16)
                 .color(token_color(tokens.text)),
-            text("Find a bounded preferred-value series/parallel realization.")
-                .size(11)
-                .color(token_color(tokens.text_secondary)),
+            text(raw(
+                "Find a bounded preferred-value series/parallel realization."
+            ))
+            .size(11)
+            .color(token_color(tokens.text_secondary)),
             tabs,
             target_row,
         ]
@@ -313,7 +322,7 @@ impl CalculatorControl {
 
         if let Some(error) = &state.validation_error {
             content = content.push(
-                text(error)
+                text(raw(error))
                     .size(11)
                     .color(crate::theme_ext::error_color(tokens))
                     .boxed(),
@@ -325,8 +334,10 @@ impl CalculatorControl {
         } else {
             content = content.push(
                 container(
-                    text("Enter a target and select Calculate to generate a network.")
-                        .color(token_color(tokens.text_secondary)),
+                    text(raw(
+                        "Enter a target and select Calculate to generate a network.",
+                    ))
+                    .color(token_color(tokens.text_secondary)),
                 )
                 .padding(12)
                 .width(Length::Fill)
@@ -355,7 +366,7 @@ impl CalculatorControl {
         let maximum = result.maximum(self.kind);
 
         let summary = column![
-            text(result.expression(self.kind))
+            text(raw(result.expression(self.kind)))
                 .size(14)
                 .color(token_color(tokens.text)),
             row![
@@ -410,7 +421,7 @@ impl CalculatorControl {
         let mut component_cards = column![].spacing(10);
         if components.is_empty() {
             component_cards = component_cards.push(
-                text("No discrete component is required.")
+                text(raw("No discrete component is required."))
                     .size(11)
                     .color(token_color(tokens.text_secondary))
                     .boxed(),
@@ -449,7 +460,7 @@ fn tab_button<'a>(
     message: CalculatorMessage,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, CalculatorMessage> {
-    button(text(label).size(11))
+    button(text(raw(label)).size(11))
         .padding([4, 10])
         .on_press(message)
         .style(move |_theme: &Theme, status| {

@@ -63,6 +63,9 @@ impl Signex {
         if patch.contains(signex_engine::DocumentPatch::PAPER) {
             invalidation |= RenderInvalidation::PAPER;
         }
+        if patch.contains(signex_engine::DocumentPatch::NET_COLORS) {
+            invalidation |= RenderInvalidation::NET_COLORS;
+        }
         // The sheet default font is inherited by every kind of text.
         if patch.contains(signex_engine::DocumentPatch::FONT_FAMILY) {
             invalidation |= RenderInvalidation::SYMBOLS
@@ -100,19 +103,16 @@ impl Signex {
         (kept, skipped)
     }
 
-    /// The active engine, ready for an edit: refused when the sheet is
-    /// read-only or there is none, and told the net colours so a merge keeps
-    /// wires of different colours apart.
+    /// The engine an edit acts on, ready for it: the active one, or the sheet
+    /// an agent's edit list targets (#2178). Refused when the sheet is
+    /// read-only or there is none.
     fn prepare_active_engine(&mut self) -> Result<&mut signex_engine::Engine, String> {
         if let Some(reason) = self.refuse_if_active_read_only() {
             return Err(reason);
         }
-        let colors = self.ui_state.wire_color_overrides.clone();
-        let Some(engine) = self.document_state.active_engine_mut() else {
-            return Err("There is no active schematic.".to_string());
-        };
-        engine.set_wire_colors(colors);
-        Ok(engine)
+        self.document_state
+            .edit_engine_mut()
+            .ok_or_else(|| "There is no active schematic.".to_string())
     }
 
     pub(crate) fn apply_engine_commands(
@@ -187,7 +187,6 @@ impl Signex {
             update_selection_info,
         );
         if changed {
-            self.clear_active_net_color_redo();
             (CommandOutcome::Changed, None)
         } else {
             (CommandOutcome::Unchanged, None)
@@ -311,9 +310,6 @@ impl Signex {
             clear_overlay_cache,
             update_selection_info,
         );
-        if changed {
-            self.clear_active_net_color_redo();
-        }
         let outcome = if failed.is_some() {
             CommandOutcome::Failed
         } else if changed {
@@ -322,13 +318,6 @@ impl Signex {
             CommandOutcome::Unchanged
         };
         (outcome, failed)
-    }
-
-    fn clear_active_net_color_redo(&mut self) {
-        if let Some(path) = self.document_state.active_path.clone() {
-            self.ui_state.net_color_redo.remove(&path);
-            self.clear_net_class_pick_redo(&path);
-        }
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -343,8 +332,6 @@ impl Signex {
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
-        // Any history-recording edit ends the colour redo branch.
-        self.clear_active_net_color_redo();
         self.document_state.note_sheet_edit();
         self.sync_active_history_dirty()
     }
@@ -391,7 +378,17 @@ impl Signex {
             .active_engine()
             .and_then(|engine| direction.top(engine))
         {
-            return self.apply_grouped_step(group, direction, update_selection_info);
+            let stepped = self.apply_grouped_step(group, direction, update_selection_info);
+            // An agent's step says what it was (docs/AGENT_EDITS.md, "Undo").
+            if stepped && let Some(label) = self.document_state.agent_edits.labels.get(&group) {
+                let verb = if direction == StepDirection::Undo {
+                    "Undone"
+                } else {
+                    "Redone"
+                };
+                crate::diagnostics::log_info(format!("{verb}: {label}"));
+            }
+            return stepped;
         }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             let (stepped, failure) = match direction {
@@ -418,7 +415,7 @@ impl Signex {
 
     /// Drop selected wires the edit removed (a merge folds one wire into its
     /// neighbour), so the selection never names a wire that is gone.
-    fn prune_selected_wires(&mut self) {
+    pub(crate) fn prune_selected_wires(&mut self) {
         let Some(engine) = self.document_state.active_engine() else {
             return;
         };
@@ -442,8 +439,18 @@ impl Signex {
         if invalidation == crate::schematic_runtime::RenderInvalidation::NONE {
             return false;
         }
+        // An agent's edit list refreshes the sheet once, when it ends, and
+        // never through the person's canvas (docs/AGENT_EDITS.md).
+        if self.document_state.agent_edit_running() {
+            self.document_state.agent_edits.owed |= invalidation;
+            return true;
+        }
 
-        self.document_state.note_sheet_edit();
+        // A colour changes how the sheet is shown, never what ERC finds.
+        let display_only = invalidation == crate::schematic_runtime::RenderInvalidation::NET_COLORS;
+        if !display_only {
+            self.document_state.note_sheet_edit();
+        }
         if !self.sync_active_history_dirty() {
             return false;
         }
@@ -467,7 +474,9 @@ impl Signex {
                 .clear_overlay_cache();
         }
         self.prune_selected_wires();
-        self.refresh_erc_after_edit();
+        if !display_only {
+            self.refresh_erc_after_edit();
+        }
         if update_selection_info {
             self.update_selection_info();
         }

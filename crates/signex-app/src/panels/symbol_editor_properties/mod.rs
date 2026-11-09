@@ -7,8 +7,9 @@
 //! numeric fields, field selected → field properties, nothing selected
 //! → symbol-level defaults (Name / UUID / pin count) with Name editable.
 
-use iced::widget::{Column, Widget, container, row, scrollable, text};
+use iced::widget::{Column, Widget, container, row, scrollable};
 use iced::{Color, Element, Length};
+use signex_widgets::{raw, text};
 
 use super::{
     GraphicKindSummary, NumericDraft, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection,
@@ -84,9 +85,11 @@ pub(super) fn view_symbol_editor_properties<'a>(
             ));
             col = col.push(
                 container(
-                    text("Bound to the host Component's designator at place-time.")
-                        .size(TS.caption)
-                        .color(muted),
+                    text(raw(
+                        "Bound to the host Component's designator at place-time.",
+                    ))
+                    .size(TS.caption)
+                    .color(muted),
                 )
                 .padding([SP.s, SP.m])
                 .boxed(),
@@ -101,7 +104,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
             ));
             col = col.push(
                 container(
-                    text("Bound to the host Component's value at place-time.")
+                    text(raw("Bound to the host Component's value at place-time."))
                         .size(TS.caption)
                         .color(muted),
                 )
@@ -113,7 +116,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
 
     col = col.push(
         container(
-            text("Click on the canvas to select.")
+            text(raw("Click on the canvas to select."))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -137,11 +140,11 @@ fn prop_row_static<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(label.to_string())
+            text(raw(label.to_string()))
                 .size(TS.body)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            text(value)
+            text(raw(value))
                 .size(TS.body)
                 .color(primary)
                 .width(Length::FillPortion(3)),

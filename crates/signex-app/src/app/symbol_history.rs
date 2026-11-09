@@ -45,7 +45,7 @@ impl SymbolHistorySnapshot {
 
 impl SymbolDocument {
     /// Depth cap for the undo / redo stacks.
-    pub const HISTORY_DEPTH: usize = 100;
+    pub const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
 
     /// Capture the current container and active index. Symbols equal to
     /// ones in the newest undo / redo step share that step's allocation.
@@ -89,8 +89,12 @@ impl SymbolDocument {
     /// does, so new pins cannot land on a unit the symbol lacks.
     fn restore(&mut self, snap: SymbolHistorySnapshot) {
         let previous_idx = self.active_idx;
+        // The file's id is the live one: a step brings back content, not
+        // identity (#2172).
+        let live_id = self.file.file_uuid;
         self.file = SymbolFile {
             symbols: snap.symbols.into_iter().map(Arc::unwrap_or_clone).collect(),
+            file_uuid: live_id,
             ..snap.header
         };
         self.active_idx = snap

@@ -1,6 +1,7 @@
 use iced::Task;
 
 use super::super::super::*;
+use crate::app::document::DocumentKey;
 
 impl Signex {
     pub(super) fn handle_menu_file_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
@@ -256,14 +257,14 @@ impl Signex {
 
     /// Pick the Save As dialog by the active tab's document kind (#671).
     /// Kinds without Save As log a message and open nothing.
-    fn save_as_dialog_for_active_tab(&mut self) -> Task<Message> {
-        let kind = self
+    pub(crate) fn save_as_dialog_for_active_tab(&mut self) -> Task<Message> {
+        let key = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .map(|tab| tab.kind.clone());
-        match kind {
-            Some(TabKind::Schematic) => {
+            .and_then(DocumentKey::of);
+        match key {
+            Some(DocumentKey::Schematic(_)) => {
                 let from_path = self.active_tab_path().unwrap_or_default();
                 let target = self.save_target(Some(&from_path));
                 let save_as_name = target.save_as_suggested_name();
@@ -291,7 +292,7 @@ impl Signex {
                     },
                 )
             }
-            Some(TabKind::SymbolEditor(path)) | Some(TabKind::FootprintEditor(path)) => {
+            Some(DocumentKey::Symbol(path) | DocumentKey::Footprint(path)) => {
                 super::super::document_files::spawn_save_as_for_primitive(
                     self.ui_state.io.picker.clone(),
                     path,

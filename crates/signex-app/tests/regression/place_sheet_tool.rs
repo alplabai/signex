@@ -194,6 +194,7 @@ fn defaults_are_unique_in_the_parent_and_the_project() {
         id,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),
@@ -259,6 +260,7 @@ fn defaults_are_unique_across_parents_of_one_project() {
         id,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),

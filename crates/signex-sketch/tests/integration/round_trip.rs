@@ -10,7 +10,7 @@ use signex_sketch::attr::{
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use uuid::Uuid;
 
 #[test]
@@ -274,7 +274,7 @@ fn pad_attr_thermal_grid_round_trip() {
 #[test]
 fn standalone_mask_opening_round_trip() {
     let a = MaskOpeningAttr {
-        layer: SignexLayer::TopSolderMask,
+        layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
     };
     let s = toml::to_string(&a).unwrap();
     let back: MaskOpeningAttr = toml::from_str(&s).unwrap();
@@ -284,7 +284,7 @@ fn standalone_mask_opening_round_trip() {
 #[test]
 fn standalone_paste_aperture_round_trip() {
     let a = PasteApertureAttr {
-        layer: SignexLayer::TopPaste,
+        layer: PcbLayer::Technical(TechnicalLayer::PasteTop),
     };
     let s = toml::to_string(&a).unwrap();
     let back: PasteApertureAttr = toml::from_str(&s).unwrap();
@@ -317,7 +317,7 @@ fn fiducial_pad_round_trip() {
 #[test]
 fn pour_attr_round_trip_default() {
     let a = PourAttr {
-        layer: SignexLayer::TopCopper,
+        layer: PcbLayer::Copper(CopperLayer::Top),
         net: Some("GND".into()),
         fill_type: PourFillType::Solid,
         thermal_relief: ThermalRelief::default(),
@@ -333,7 +333,7 @@ fn pour_attr_round_trip_default() {
 #[test]
 fn pour_attr_hatched_with_overrides_round_trip() {
     let a = PourAttr {
-        layer: SignexLayer::TopCopper,
+        layer: PcbLayer::Copper(CopperLayer::Top),
         net: Some("GND".into()),
         fill_type: PourFillType::Hatched,
         thermal_relief: ThermalRelief {
@@ -354,7 +354,7 @@ fn pour_attr_hatched_with_overrides_round_trip() {
 #[test]
 fn keepout_attr_no_copper_round_trip() {
     let a = KeepoutAttr {
-        layer: SignexLayer::TopCopper,
+        layer: PcbLayer::Copper(CopperLayer::Top),
         kinds: KeepoutKinds::ALL_COPPER,
     };
     let s = toml::to_string(&a).unwrap();
@@ -365,7 +365,7 @@ fn keepout_attr_no_copper_round_trip() {
 #[test]
 fn keepout_attr_antenna_preset_round_trip() {
     let a = KeepoutAttr {
-        layer: SignexLayer::TopCopper,
+        layer: PcbLayer::Copper(CopperLayer::Top),
         kinds: KeepoutKinds::ANTENNA,
     };
     let s = toml::to_string(&a).unwrap();
@@ -376,7 +376,7 @@ fn keepout_attr_antenna_preset_round_trip() {
 #[test]
 fn keepout_attr_routing_only_round_trip() {
     let a = KeepoutAttr {
-        layer: SignexLayer::TopCopper,
+        layer: PcbLayer::Copper(CopperLayer::Top),
         kinds: KeepoutKinds::NO_ROUTING,
     };
     let s = toml::to_string(&a).unwrap();

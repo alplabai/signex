@@ -8,6 +8,10 @@ use crate::menu_bar::MenuContext;
 use crate::menu_bar::golden_tests::variants;
 use crate::menu_bar::model::menu_bar_model;
 
+fn en() -> std::sync::Arc<signex_i18n::I18n> {
+    signex_i18n::I18n::en_us()
+}
+
 fn recent_paths() -> Vec<PathBuf> {
     ["/a/one/p.snxprj", "/b/two/p.snxprj", "/c/three/q.snxprj"]
         .into_iter()
@@ -316,34 +320,40 @@ fn refresh_plan_follows_what_changed() {
 #[test]
 fn inputs_compare_by_what_the_menu_reads() {
     let recent = recent_paths();
-    let a = MenuInputs::new(CommandContext::default(), &recent, false, Vec::new());
+    let a = MenuInputs::new(CommandContext::default(), &recent, false, Vec::new(), en());
     assert_eq!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent, false, Vec::new())
+        MenuInputs::new(CommandContext::default(), &recent, false, Vec::new(), en())
     );
     assert_ne!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent, true, Vec::new())
+        MenuInputs::new(CommandContext::default(), &recent, true, Vec::new(), en())
     );
     assert_ne!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent[1..], false, Vec::new())
+        MenuInputs::new(
+            CommandContext::default(),
+            &recent[1..],
+            false,
+            Vec::new(),
+            en()
+        )
     );
     let dirty = CommandContext {
         project_dirty: true,
         ..CommandContext::default()
     };
-    assert_ne!(a, MenuInputs::new(dirty, &recent, false, Vec::new()));
+    assert_ne!(a, MenuInputs::new(dirty, &recent, false, Vec::new(), en()));
     let panels = vec![crate::panels::PanelKind::Properties];
     assert_ne!(
         a,
-        MenuInputs::new(CommandContext::default(), &recent, false, panels)
+        MenuInputs::new(CommandContext::default(), &recent, false, panels, en())
     );
 }
 
 #[test]
 fn nothing_syncs_before_the_main_window_opens() {
-    let inputs = MenuInputs::new(CommandContext::default(), &[], false, Vec::new());
+    let inputs = MenuInputs::new(CommandContext::default(), &[], false, Vec::new(), en());
     let mut state = NativeMenuState::default();
     assert!(!state.needs_sync(&inputs));
     state.arm();
@@ -453,7 +463,7 @@ fn the_menu_inputs_follow_the_active_keymap() {
             .unwrap()
             .compile_active(),
     );
-    let base = || MenuInputs::new(CommandContext::default(), &[], false, Vec::new());
+    let base = || MenuInputs::new(CommandContext::default(), &[], false, Vec::new(), en());
     assert_eq!(
         base().with_keymap(first.clone()),
         base().with_keymap(first.clone())
@@ -488,4 +498,22 @@ fn the_native_file_menu_has_the_approved_rows() {
     ));
     let print = item_labelled(file, "Print...").unwrap();
     assert!(print.accelerator.is_none());
+}
+
+/// #2055: a new language changes a root title, a change of shape, so the
+/// native menu is rebuilt rather than patched in place.
+#[test]
+fn a_new_language_title_rebuilds_the_native_menu() {
+    let spec_in = |tag: &str| {
+        let ctx = MenuContext {
+            i18n: std::sync::Arc::new(signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale(
+                tag.to_owned(),
+            ))),
+            ..MenuContext::default()
+        };
+        build(&menu_bar_model(&ctx), false).spec
+    };
+    let (en, xa) = (spec_in("en-US"), spec_in("en-XA"));
+    assert_eq!(plan_refresh(Some(&en), &en.clone()), Refresh::Unchanged);
+    assert_eq!(plan_refresh(Some(&en), &xa), Refresh::Rebuild);
 }

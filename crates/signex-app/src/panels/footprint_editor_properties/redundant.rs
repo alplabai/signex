@@ -1,8 +1,9 @@
 //! #1649 — the "Redundant" rows of the DOF / Last solve section: consistent
 //! constraints that restate earlier ones. Advisory (amber), not a conflict.
 
-use iced::widget::{Column, Widget, button, container, text};
+use iced::widget::{Column, Widget, container};
 use iced::{Color, Element, Length, Theme};
+use signex_widgets::{button, raw, text};
 
 use super::super::{FootprintSolveSummary, PanelMsg};
 use super::props_kv_row;
@@ -30,13 +31,13 @@ pub(super) fn push_redundant_rows<'a>(
     for rc in s.redundant_constraints.iter().take(MAX_ROWS) {
         let label = format!("{} — already implied by earlier constraints", rc.kind_label);
         let row: Element<'a, PanelMsg> = match rc.focus_entity_id {
-            Some(id) => button(text(label).size(TS.caption).color(amber))
+            Some(id) => button(text(raw(label)).size(TS.caption).color(amber))
                 .padding([SP.xs, SP.m])
                 .width(Length::Fill)
                 .on_press(PanelMsg::FpEditorSelectSketchEntity { id })
                 .style(|_t: &Theme, _| iced::widget::button::Style::default())
                 .boxed(),
-            None => container(text(label).size(TS.caption).color(amber))
+            None => container(text(raw(label)).size(TS.caption).color(amber))
                 .padding([SP.xs, SP.m])
                 .width(Length::Fill)
                 .boxed(),
@@ -46,10 +47,10 @@ pub(super) fn push_redundant_rows<'a>(
     if s.redundant_constraints.len() > MAX_ROWS {
         col = col.push(
             container(
-                text(format!(
+                text(raw(format!(
                     "… +{} more",
                     s.redundant_constraints.len() - MAX_ROWS
-                ))
+                )))
                 .size(TS.caption)
                 .color(muted),
             )

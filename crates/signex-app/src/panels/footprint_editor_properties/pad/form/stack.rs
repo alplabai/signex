@@ -1,8 +1,9 @@
 //! Pad Stack section renderer, split out of `form/mod.rs` to keep both
 //! files under the 800-line cap (ADR-0001 #165). Verbatim code motion.
 
-use iced::widget::{Column, container, text};
+use iced::widget::{Column, container};
 use iced::{Element, Length, Widget};
+use signex_widgets::{raw, text};
 
 use super::super::super::super::{CollapsedSections, PanelMsg, PanelPalette};
 use super::super::stack_preview::{
@@ -228,7 +229,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         // holes, Copper Offset shifts the copper outline relative to
         // the hole centre. Only shown for Multi-Layer pads.
         col = col.push(
-            container(text("Hole Details").size(TS.caption).color(muted))
+            container(text(raw("Hole Details")).size(TS.caption).color(muted))
                 .padding([6.0, SP.m])
                 .width(Length::Fill)
                 .boxed(),

@@ -13,7 +13,7 @@ impl Signex {
         // only when absent): the text follows that one.
         let held_entry = self
             .document_state
-            .active_engine()
+            .edit_engine()
             .and_then(|e| e.document().lib_symbols.get(lib_id).cloned())
             .unwrap_or_else(|| signex_types::schematic::power_port_lib_symbol(lib_id));
         let sym = signex_types::schematic::Symbol {
@@ -73,7 +73,7 @@ impl Signex {
     /// 1 um key) joins nothing new and would only stack in the file, so it
     /// is not placed.
     pub(crate) fn place_junction_at(&mut self, at: Point) -> bool {
-        let already_there = self.document_state.active_engine().is_some_and(|engine| {
+        let already_there = self.document_state.edit_engine().is_some_and(|engine| {
             engine
                 .document()
                 .junctions

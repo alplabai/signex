@@ -113,7 +113,7 @@ pub(super) fn library_id_row<'a>(
 ) -> Element<'a, PanelMsg> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let value = container(
-        iced::widget::text(lib_id.to_string())
+        signex_widgets::text(signex_widgets::raw(lib_id.to_string()))
             .size(TS.body)
             .font(mono)
             .color(crate::styles::tokens::readable_on(input_bg))
@@ -137,10 +137,10 @@ pub(super) fn library_id_row<'a>(
             ..container::Style::default()
         }
     });
-    let tip = iced::widget::tooltip(
+    let tip = signex_widgets::tooltip(
         value,
         container(
-            iced::widget::text(lib_id.to_string())
+            signex_widgets::text(signex_widgets::raw(lib_id.to_string()))
                 .size(TS.body)
                 .font(mono),
         )
@@ -192,10 +192,12 @@ pub(super) fn push_library_rows<'a>(
     let LibraryStatus { drifted, missing } = status;
     if missing {
         c = c.push(
-            iced::widget::text("Library: symbol missing (sheet keeps its embedded copy)")
-                .size(TS.body)
-                .color(ink.color)
-                .boxed(),
+            signex_widgets::text(signex_widgets::raw(
+                "Library: symbol missing (sheet keeps its embedded copy)",
+            ))
+            .size(TS.body)
+            .color(ink.color)
+            .boxed(),
         );
     }
     if drifted {
@@ -206,19 +208,25 @@ pub(super) fn push_library_rows<'a>(
 
 /// The out-of-date status and its Update button.
 fn out_of_date_row<'a>(id: uuid::Uuid, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
-    let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
+    let update = signex_widgets::button(
+        signex_widgets::text(signex_widgets::raw("Update from library")).size(TS.body),
+    )
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id))
         .style(super::super::form_look::ghost_button);
-    let status: Element<'a, PanelMsg> = container(iced::widget::text(OUT_OF_DATE).size(TS.caption))
+    let status: Element<'a, PanelMsg> =
+        container(signex_widgets::text(signex_widgets::raw(OUT_OF_DATE)).size(TS.caption))
         .padding([2.0, 8.0])
         .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
         .boxed();
     iced::widget::row![
         status,
-        iced::widget::tooltip(
+        signex_widgets::tooltip(
             update,
-            iced::widget::text("Updates every instance of this part on the sheet").size(TS.body),
+            signex_widgets::text(signex_widgets::raw(
+                "Updates every instance of this part on the sheet"
+            ))
+            .size(TS.body),
             iced::widget::tooltip::Position::Bottom,
         ),
     ]
@@ -250,7 +258,7 @@ pub(super) fn push_part_actions<'a>(
     // next line instead of being clipped (#1747).
     let buttons = iced::widget::Row::with_children(part_action_buttons().into_iter().map(
         |(label, message)| -> Element<'a, PanelMsg> {
-            iced::widget::button(iced::widget::text(label).size(TS.body))
+            signex_widgets::button(signex_widgets::text(signex_widgets::raw(label)).size(TS.body))
                 .padding([SP.xs, SP.m])
                 .on_press(message)
                 .style(super::super::form_look::ghost_button)

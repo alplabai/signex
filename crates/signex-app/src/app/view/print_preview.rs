@@ -109,7 +109,8 @@ impl Signex {
     /// omission recorded in its header comment) or cancel and write nothing.
     /// The refusal stays the default; "Export anyway" is an explicit choice.
     pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
-        use iced::widget::{column, container, text};
+        use iced::widget::{column, container};
+        use signex_widgets::{raw, text};
         let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
             return iced::widget::Space::new().boxed();
         };
@@ -143,7 +144,7 @@ impl Signex {
                         tokens,
                     ),
                     container(iced::widget::scrollable(
-                        text(detail).size(TS.body).color(text_muted)
+                        text(raw(detail)).size(TS.body).color(text_muted)
                     ))
                     .height(Length::Fit.max(120.0)),
                 ]
@@ -201,22 +202,14 @@ impl Signex {
     /// the left, the selected page full-size on the right, with Export PDF
     /// and Close buttons at the bottom. Triggered by File → Print Preview
     /// (Ctrl+P) and File → Export PDF; disappears on Close or when the
-    /// export completes. In-window flavour wraps the body in `wrap_modal`
+    /// export completes. In-window flavour wraps the body in `wrap_dialog`
     /// for backdrop + drag-to-position.
     pub(super) fn view_print_preview(&self) -> Element<'_, Message> {
         use crate::app::state::ModalId;
-        use crate::app::view::dialogs::wrap_modal;
-        let body = self.view_print_preview_inner(true);
-        let offset = self
-            .ui_state
-            .modal_offsets
-            .get(&ModalId::PrintPreview)
-            .copied()
-            .unwrap_or((0.0, 0.0));
-        wrap_modal(
-            body,
-            offset,
-            self.ui_state.window_size,
+        // `pdf_modal_size` is already fitted; fitting again is a no-op.
+        self.wrap_dialog(
+            ModalId::PrintPreview,
+            self.view_print_preview_inner(true),
             self.pdf_modal_size(),
         )
     }
@@ -239,7 +232,8 @@ impl Signex {
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
         use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{draggable_header, modal_title_header, os_title_bar_slot};
-        use iced::widget::{column, container, text};
+        use iced::widget::{column, container};
+        use signex_widgets::{raw, text};
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -281,7 +275,12 @@ impl Signex {
             (None, false) => format!("{} page(s)", preview.pages.len()),
         };
         let footer = dialog_footer_split(
-            vec![text(footer_caption).size(TS.body).color(text_muted).boxed()],
+            vec![
+                text(raw(footer_caption))
+                    .size(TS.body)
+                    .color(text_muted)
+                    .boxed(),
+            ],
             vec![dialog_button(
                 "Export PDF",
                 DialogButtonKind::Primary,

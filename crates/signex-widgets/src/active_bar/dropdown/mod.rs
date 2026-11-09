@@ -41,8 +41,9 @@
 //! - The toggle state (each editor's state owns it).
 //! - The click-outside backstop layer (each editor mounts its own).
 
+use crate::{button, raw, text};
 use iced::widget::svg;
-use iced::widget::{Column, Row, Space, button, container, mouse_area, text};
+use iced::widget::{Column, Row, Space, container, mouse_area};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
@@ -305,7 +306,7 @@ where
     for entry in entries {
         let row = match entry {
             DropdownEntry::Header(label) => container(
-                text(label)
+                text(raw(label))
                     .size(metrics.header_size)
                     .color(look.muted)
                     .wrapping(text::Wrapping::None),
@@ -411,7 +412,7 @@ where
     // Menu rows never wrap: a too-narrow card clips rather than reflowing a
     // label onto two lines.
     cells = cells.push(
-        text(label)
+        text(raw(label))
             .size(m.label_size)
             .color(text_c)
             .wrapping(text::Wrapping::None)
@@ -426,7 +427,7 @@ where
     };
     cells = cells.push(Space::new().width(gap).boxed());
     if let Some(s) = shortcut {
-        let mut hint = text(s)
+        let mut hint = text(raw(s))
             .size(m.shortcut_size)
             .color(look.muted)
             .wrapping(text::Wrapping::None);
@@ -439,7 +440,7 @@ where
     }
     if checked {
         cells = cells.push(
-            text("\u{2713}")
+            text(raw("\u{2713}"))
                 .size(m.check_size)
                 .color(look.accent)
                 .boxed(),
@@ -447,7 +448,7 @@ where
     }
     if shape.has_chevrons {
         cells = cells.push(
-            text(if submenu { CHEVRON } else { "" })
+            text(raw(if submenu { CHEVRON } else { "" }))
                 .size(m.chevron_size)
                 .color(look.muted)
                 .width(Length::Fixed(m.chevron_width))
@@ -486,9 +487,9 @@ where
         btn = btn.on_press(msg);
     }
     let row = match tooltip_text {
-        Some(hint) => iced::widget::tooltip(
+        Some(hint) => crate::tooltip(
             btn,
-            container(text(hint).size(11).color(look.primary))
+            container(text(raw(hint)).size(11).color(look.primary))
                 .padding([3, 8])
                 .style(tooltip_style(look.panel_bg, look.border)),
             iced::widget::tooltip::Position::Right,
@@ -529,7 +530,7 @@ where
     let text_on = Color::WHITE;
     let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
     button(
-        text(label.into())
+        text(raw(label.into()))
             .size(11)
             .color(if enabled { text_on } else { text_off }),
     )

@@ -300,18 +300,18 @@ impl<T> Operation<T> for CollectTexts {
 mod tests {
     use super::*;
     use iced::Widget as _;
-    use iced::widget::text;
+    use signex_widgets::{raw, text};
 
     #[test]
     fn a_label_reports_its_bounds_and_wraps_when_squeezed() {
         let single = natural::<()>(
-            text("Start a fresh preferences file").boxed(),
+            text(raw("Start a fresh preferences file")).boxed(),
             "Start a fresh preferences file",
         );
         assert!(single.width > 50.0 && single.height > 0.0, "{single:?}");
 
         let narrow = lay_out_texts::<()>(
-            text("Start a fresh preferences file").boxed(),
+            text(raw("Start a fresh preferences file")).boxed(),
             Size::new(single.width / 3.0, 500.0),
         );
         let narrow = find(&narrow, "Start a fresh preferences file").bounds;

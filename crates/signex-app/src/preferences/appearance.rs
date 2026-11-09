@@ -7,9 +7,10 @@
 use super::*;
 use crate::fonts;
 use crate::render_config::{GridStyle, PinSelectionMode};
-use iced::widget::{Space, column, row, text};
+use iced::widget::{Space, column, row};
 use iced::{Element, Length, Widget};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -61,8 +62,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("UI Font").size(TS.label).style(text_primary),
-                text("Applies to all panels and menus. Requires restart.")
+                text(raw("UI Font")).size(TS.label).style(text_primary),
+                text(raw("Applies to all panels and menus. Requires restart."))
                     .size(TS.caption)
                     .style(text_muted),
             ]
@@ -103,8 +104,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Grid Style").size(TS.label).style(text_primary),
-                text("Appearance of snap points on the schematic canvas.")
+                text(raw("Grid Style")).size(TS.label).style(text_primary),
+                text(raw("Appearance of snap points on the schematic canvas."))
                     .size(TS.caption)
                     .style(text_muted),
             ]
@@ -131,10 +132,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("GPU Render (experimental)")
+                text(raw("GPU Render (experimental)"))
                     .size(TS.label)
                     .style(text_primary),
-                text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
+                text(raw("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately."))
                     .size(TS.caption)
                     .style(text_muted),
                 // This used to carry a second line naming the known GPU gaps.
@@ -147,7 +148,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .spacing(3)
             .width(200),
             Space::new().width(Length::Fill),
-            iced::widget::checkbox(draft_pcb_gpu_render)
+            signex_widgets::checkbox(draft_pcb_gpu_render)
                 .size(TS.heading)
                 .on_toggle(PrefMsg::DraftPcbGpuRender),
         ]
@@ -164,17 +165,19 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Anti-aliasing (MSAA 4x)")
+                text(raw("Anti-aliasing (MSAA 4x)"))
                     .size(TS.label)
                     .style(text_primary),
-                text("Smooth the edges of canvas shapes. Applies after restart.")
-                    .size(TS.caption)
-                    .style(text_muted),
+                text(raw(
+                    "Smooth the edges of canvas shapes. Applies after restart."
+                ))
+                .size(TS.caption)
+                .style(text_muted),
             ]
             .spacing(3)
             .width(200),
             Space::new().width(Length::Fill),
-            iced::widget::checkbox(draft_antialiasing)
+            signex_widgets::checkbox(draft_antialiasing)
                 .size(TS.heading)
                 .on_toggle(PrefMsg::DraftAntialiasing),
         ]
@@ -191,11 +194,11 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Default Grid Size").size(TS.label).style(text_primary),
-                text(
-                    "Applied when a symbol library is first opened. \
-                      Can be changed per-library from the canvas status bar."
-                )
+                text(raw("Default Grid Size"))
+                    .size(TS.label)
+                    .style(text_primary),
+                text(raw("Applied when a symbol library is first opened. \
+                      Can be changed per-library from the canvas status bar."))
                 .size(TS.caption)
                 .style(text_muted),
             ]
@@ -230,10 +233,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Grid Style").size(TS.label).style(text_primary),
-                text("Appearance of snap points on the symbol editor canvas.")
-                    .size(TS.caption)
-                    .style(text_muted),
+                text(raw("Grid Style")).size(TS.label).style(text_primary),
+                text(raw(
+                    "Appearance of snap points on the symbol editor canvas."
+                ))
+                .size(TS.caption)
+                .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -254,8 +259,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Pin Selection").size(TS.label).style(text_primary),
-                text("How a click selects a pin on the symbol editor canvas — the pin body only, or its name and number labels too.")
+                text(raw("Pin Selection")).size(TS.label).style(text_primary),
+                text(raw("How a click selects a pin on the symbol editor canvas — the pin body only, or its name and number labels too."))
                     .size(TS.caption)
                     .style(text_muted),
             ]
@@ -281,11 +286,13 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Interface scale").size(TS.label).style(text_primary),
-                text(
+                text(raw("Interface scale"))
+                    .size(TS.label)
+                    .style(text_primary),
+                text(raw(
                     "Scales text, panels, menus and dialogs on top of the display \
                      scale. Applied to every window when you save."
-                )
+                ))
                 .size(TS.caption)
                 .style(text_muted),
             ]
@@ -299,7 +306,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             )
             .step(crate::ui_scale::UI_SCALE_STEP_PERCENT)
             .width(140),
-            text(format!("{draft_ui_scale_percent}%"))
+            text(raw(format!("{draft_ui_scale_percent}%")))
                 .size(TS.label)
                 .style(text_primary)
                 .width(100)
@@ -317,11 +324,11 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Zoom speed").size(TS.label).style(text_primary),
-                text(
+                text(raw("Zoom speed")).size(TS.label).style(text_primary),
+                text(raw(
                     "How far one mouse-wheel notch zooms on the schematic, PCB, \
                       symbol and footprint canvases."
-                )
+                ))
                 .size(TS.caption)
                 .style(text_muted),
             ]
@@ -335,7 +342,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 PrefMsg::DraftZoomStepPercent,
             )
             .width(140),
-            text(format!("{draft_zoom_step_percent}% per notch"))
+            text(raw(format!("{draft_zoom_step_percent}% per notch")))
                 .size(TS.label)
                 .style(text_primary)
                 .width(100)
@@ -349,15 +356,17 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Two-finger scroll pans")
+                text(raw("Two-finger scroll pans"))
                     .size(TS.label)
                     .style(text_primary),
-                text(TRACKPAD_PAN_HELP).size(TS.caption).style(text_muted),
+                text(raw(TRACKPAD_PAN_HELP))
+                    .size(TS.caption)
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(320),
             Space::new().width(Length::Fill),
-            iced::widget::checkbox(draft_trackpad_pan)
+            signex_widgets::checkbox(draft_trackpad_pan)
                 .size(TS.heading)
                 .on_toggle(PrefMsg::DraftTrackpadPan),
         ]
@@ -368,8 +377,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Mouse wheel").size(TS.label).style(text_primary),
-                text(WHEEL_MODE_HELP).size(TS.caption).style(text_muted),
+                text(raw("Mouse wheel")).size(TS.label).style(text_primary),
+                text(raw(WHEEL_MODE_HELP)).size(TS.caption).style(text_muted),
             ]
             .spacing(3)
             .width(320),
@@ -394,17 +403,17 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text("Remember window size and position")
+                text(raw("Remember window size and position"))
                     .size(TS.label)
                     .style(text_primary),
-                text(REMEMBER_GEOMETRY_HELP)
+                text(raw(REMEMBER_GEOMETRY_HELP))
                     .size(TS.caption)
                     .style(text_muted),
             ]
             .spacing(3)
             .width(320),
             Space::new().width(Length::Fill),
-            iced::widget::checkbox(draft_remember_window_geometry)
+            signex_widgets::checkbox(draft_remember_window_geometry)
                 .size(TS.heading)
                 .on_toggle(PrefMsg::DraftRememberWindowGeometry),
         ]
@@ -423,16 +432,20 @@ fn window_controls_row<'a>(
     restart_note: bool,
 ) -> Element<'a, PrefMsg> {
     let mut help = column![
-        text("Window buttons").size(TS.label).style(text_primary),
-        text("Where minimize, maximize and close sit. Automatic follows your system.")
-            .size(TS.caption)
-            .style(text_muted),
+        text(raw("Window buttons"))
+            .size(TS.label)
+            .style(text_primary),
+        text(raw(
+            "Where minimize, maximize and close sit. Automatic follows your system."
+        ))
+        .size(TS.caption)
+        .style(text_muted),
     ]
     .spacing(3)
     .width(200);
     if restart_note {
         help = help.push(
-            text("Takes effect after restart.")
+            text(raw("Takes effect after restart."))
                 .size(TS.caption)
                 .style(text_muted)
                 .boxed(),

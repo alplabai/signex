@@ -844,12 +844,13 @@ fn fold_sheet() -> (SchematicSheet, uuid::Uuid) {
 /// Static-layer wire count after dragging the first wire of [`fold_sheet`]
 /// 5 mm right, with that wire `coloured` or not.
 fn static_wires_after_fold_drag(coloured: bool) -> (usize, usize) {
-    let (sheet, id) = fold_sheet();
-    let overrides = if coloured {
-        std::collections::HashMap::from([(id, signex_types::theme::Color::new(0, 255, 0, 255))])
-    } else {
-        Default::default()
-    };
+    let (mut sheet, id) = fold_sheet();
+    // The sheet carries its colours: the ghost reads them from the snapshot.
+    let overrides: std::collections::HashMap<_, _> = coloured
+        .then(|| (id, signex_types::theme::Color::new(0, 255, 0, 255)))
+        .into_iter()
+        .collect();
+    sheet.net_colors.clone_from(&overrides);
     let mut slot = slot_with(&sheet);
     slot.selected = vec![SelectedItem::new(id, SelectedKind::Wire)];
     rig_with(&slot, &overrides, |p| {

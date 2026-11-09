@@ -6,8 +6,9 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Space, column, container, row, text, text_input};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_widgets::{raw, text, text_input};
 
 use super::rule_editor::{RuleEditor, rule_editor};
 use super::widgets::{draggable_header, fit_modal_size, os_title_bar_slot};
@@ -100,12 +101,13 @@ impl Signex {
         // Editing the machine's rules while they are loading, or while the
         // User Default file cannot be read or written: say so here, not only
         // in the log.
-        let mut scope = column![text(scope_note).size(TS.caption).color(text_muted)].spacing(SP.xs);
+        let mut scope =
+            column![text(raw(scope_note)).size(TS.caption).color(text_muted)].spacing(SP.xs);
         if stored.is_none()
             && let Some(notice) = self.machine_rules_notice()
         {
             scope = scope.push(
-                text(notice)
+                text(raw(notice))
                     .size(TS.caption)
                     .color(crate::styles::tokens::danger(tokens))
                     .boxed(),
@@ -247,9 +249,9 @@ impl Signex {
                 lines.len()
             )
         };
-        let mut list = column![text(heading).size(TS.body).color(text_c)].spacing(SP.xs);
+        let mut list = column![text(raw(heading)).size(TS.body).color(text_c)].spacing(SP.xs);
         for line in lines {
-            list = list.push(text(line).size(TS.caption).color(text_muted).boxed());
+            list = list.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
         }
         let buttons = row![
             dialog_button(
@@ -292,7 +294,7 @@ impl Signex {
             return Space::new().height(0).boxed();
         };
         let mut panel = column![
-            text("Save the project's ERC rules as a profile")
+            text(raw("Save the project's ERC rules as a profile"))
                 .size(TS.body)
                 .color(text_c)
         ]
@@ -301,11 +303,11 @@ impl Signex {
             let name = dialog.name.trim();
             panel = panel
                 .push(
-                    text(format!(
+                    text(raw(format!(
                         "A profile named \"{name}\" already exists. Overwriting replaces its \
                          rules and version; projects that took their rules from it will show \
                          the change as an update."
-                    ))
+                    )))
                     .size(TS.caption)
                     .color(text_muted)
                     .boxed(),
@@ -332,10 +334,10 @@ impl Signex {
         } else {
             let submit = || Message::Erc(ErcMsg::ProfileSaveSubmitted);
             let editable = !dialog.busy;
-            let mut name_input = text_input("Profile name", &dialog.name)
+            let mut name_input = text_input(raw("Profile name"), &dialog.name)
                 .style(crate::panels::form_look::text_input_style)
                 .size(TS.body);
-            let mut version_input = text_input("Version", &dialog.version)
+            let mut version_input = text_input(raw("Version"), &dialog.version)
                 .style(crate::panels::form_look::text_input_style)
                 .size(TS.body)
                 .width(90);
@@ -349,9 +351,9 @@ impl Signex {
             }
             panel = panel.push(
                 row![
-                    text("Name").size(TS.caption).color(text_muted),
+                    text(raw("Name")).size(TS.caption).color(text_muted),
                     name_input,
-                    text("Version").size(TS.caption).color(text_muted),
+                    text(raw("Version")).size(TS.caption).color(text_muted),
                     version_input,
                 ]
                 .spacing(SP.m)
@@ -360,7 +362,7 @@ impl Signex {
             );
             if let Some(error) = &dialog.error {
                 panel = panel.push(
-                    text(error.clone())
+                    text(raw(error.clone()))
                         .size(TS.caption)
                         .color(crate::styles::tokens::danger(tokens))
                         .boxed(),

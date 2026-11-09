@@ -173,6 +173,9 @@ pub struct UiState {
     pub wheel_mode: crate::canvas::WheelMode,
     /// Draft mirror of [`Self::wheel_mode`] for the Preferences dialog.
     pub preferences_draft_wheel_mode: crate::canvas::WheelMode,
+    /// The locale in force: its catalog bundle and the Language list. Shared
+    /// with the menus; replaced by `Signex::set_language` (#2055).
+    pub i18n: std::sync::Arc<signex_i18n::I18n>,
     /// Saved "Remember window size and position" preference. Off by default.
     pub remember_window_geometry: bool,
     /// Draft mirror of [`Self::remember_window_geometry`] for Preferences.
@@ -467,7 +470,7 @@ pub struct UiState {
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     /// Net-color overrides keyed by net-label text. Drives the Active-Bar
     /// net-colour menu state and the net-color modal; the canvas paints
-    /// from the per-wire `wire_color_overrides` map below.
+    /// from each sheet's own net colours (`SchematicSheet::net_colors`).
     pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
@@ -550,12 +553,9 @@ pub struct UiState {
     /// Net-color override armed from the Active Bar palette. When Some,
     /// the cursor turns into a paint-bucket over the canvas and the
     /// next click on a wire floods that color across every connected
-    /// wire. Cleared after the click applies, or by Escape. Colors are
-    /// render-time only — they do NOT write back to the .standard_sch.
+    /// wire. Cleared after the click applies, or by Escape. The colours are
+    /// then an undoable edit of the sheet and are saved with it.
     pub pending_net_color: Option<signex_types::theme::Color>,
-    /// Per-wire color overrides keyed by wire uuid. Populated by the
-    /// net-color click; consulted when drawing wires. Not serialised.
-    pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Net-class style of every wire and junction, resolved from the class
     /// table and the sheets' netlists after each update (`finish_update`).
     /// The canvas reads it instead of the project. Not serialised.
@@ -565,21 +565,6 @@ pub struct UiState {
     /// double-click or a click on the first vertex closes the polygon
     /// and commits the selection. Escape or right-click cancels.
     pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
-    /// App-level undo stack for net-color floods. Each step holds the
-    /// overrides of the sheet's own wires captured before an action plus the
-    /// engine's `undo_position` at that moment, so Ctrl+Z can interleave
-    /// colour steps and engine edits in true chronological order. Separate
-    /// from the engine's history because net colours are render-only and
-    /// shouldn't mix with document mutations.
-    pub net_color_undo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
-    /// Keyed by document path: each document has its own timeline.
-    /// Redo mirror of [`Self::net_color_undo`]; cleared by any new colour
-    /// action or engine edit.
-    /// Per sheet, bumped by every net-colour change. Colours are not part of
-    /// the engine revision, so a save records this too and may mark the sheet
-    /// clean only if it is unchanged when the write lands.
-    pub net_color_revision: std::collections::HashMap<std::path::PathBuf, u64>,
-    pub net_color_redo: std::collections::HashMap<std::path::PathBuf, Vec<NetColorStep>>,
     /// Custom net-color picker state. When `show = true`, a floating
     /// iced_aw ColorPicker appears anchored to the Active Bar button;
     /// `draft` is the user's pending pick — committed on OK.
@@ -704,14 +689,6 @@ impl UiState {
     pub fn preferences_has_unsaved_changes(&self) -> bool {
         self.preferences_draft_differs()
     }
-}
-
-/// One net-colour undo/redo step: the owning sheet's overrides to restore, stamped
-/// with the engine edit-timeline position it was recorded at.
-#[derive(Debug, Clone)]
-pub struct NetColorStep {
-    pub colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    pub at: usize,
 }
 
 #[cfg(test)]

@@ -253,7 +253,7 @@ pub(in crate::panels) fn section_label<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let ink = resolve(tokens).ink4;
-    container(text(title.to_uppercase()).size(TS.section).color(ink))
+    container(text(raw(title.to_uppercase())).size(TS.section).color(ink))
         .padding(iced::Padding {
             top: 12.0,
             right: 12.0,
@@ -275,7 +275,7 @@ fn graphite_section_header<'a>(
     let ink = resolve(tokens).ink4;
     let label = row![
         signex_widgets::chevron::chevron(!is_collapsed, TS.section, ink),
-        text(title.to_uppercase()).size(TS.section).color(ink),
+        text(raw(title.to_uppercase())).size(TS.section).color(ink),
     ]
     .spacing(6)
     .align_y(iced::Alignment::Center);

@@ -50,7 +50,7 @@ impl Signex {
         let menu_w = if self.native_menu.hides_in_window_menu() {
             0.0
         } else {
-            crate::menu_bar::approx_graphite_menu_bar_width()
+            crate::menu_bar::approx_graphite_menu_bar_width(&self.ui_state.i18n)
         };
         graphite::search_geometry(self.ui_state.window_size.0, leading_w, trailing_w, menu_w)
     }
@@ -430,7 +430,12 @@ mod layout_tests {
         let texts = lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0));
 
         let label = find(&texts, RESET).bounds;
-        let one_line = natural::<()>(iced::widget::text(RESET).size(TS.body).boxed(), RESET);
+        let one_line = natural::<()>(
+            signex_widgets::text(signex_widgets::raw(RESET))
+                .size(TS.body)
+                .boxed(),
+            RESET,
+        );
         assert!(
             label.height <= one_line.height + 0.5,
             "the button label wraps: {label:?}, one line is {one_line:?}"

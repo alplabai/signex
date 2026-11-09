@@ -54,9 +54,8 @@ impl Signex {
         // Net-colour flood: the user picked a swatch from the
         // Active Bar and is now clicking a wire. Union-find the
         // whole connected net and apply the colour (or clear it
-        // if alpha == 0). Colours stay in app state so the
-        // .standard_sch round-trips unchanged — Standard has no
-        // notion of per-wire override colours.
+        // if alpha == 0) as one undoable engine edit of the sheet
+        // (`commit_net_colors`, the path the `color_net` command runs).
         if let Some(pending) = self.ui_state.pending_net_color {
             // Snap the click point to the grid before hit
             // testing so the click lands where the pen ghost
@@ -70,107 +69,9 @@ impl Signex {
             } else {
                 (world_x, world_y)
             };
-            // Compute the net's wire uuids while only holding an
-            // immutable snapshot borrow, then release it before
-            // mutating ui_state.
-            let net_wire_uuids: Vec<uuid::Uuid> = match self.active_render_snapshot() {
-                None => Vec::new(),
-                Some(snapshot) => {
-                    // Strict on-wire test: the snapped click
-                    // point must lie on a wire segment (point-
-                    // to-segment distance < 0.05 mm). The
-                    // general `hit_test` uses a 1.5 mm
-                    // tolerance so parallel wires on adjacent
-                    // grid points could each register; for
-                    // net-colour painting we only want the
-                    // wire directly under the pen.
-                    fn point_on_segment(
-                        px: f64,
-                        py: f64,
-                        ax: f64,
-                        ay: f64,
-                        bx: f64,
-                        by: f64,
-                    ) -> bool {
-                        let dx = bx - ax;
-                        let dy = by - ay;
-                        let len2 = dx * dx + dy * dy;
-                        if len2 == 0.0 {
-                            let ddx = px - ax;
-                            let ddy = py - ay;
-                            return (ddx * ddx + ddy * ddy).sqrt() < 0.05;
-                        }
-                        let t = ((px - ax) * dx + (py - ay) * dy) / len2;
-                        let t = t.clamp(0.0, 1.0);
-                        let cx = ax + t * dx;
-                        let cy = ay + t * dy;
-                        let ddx = px - cx;
-                        let ddy = py - cy;
-                        (ddx * ddx + ddy * ddy).sqrt() < 0.05
-                    }
-                    let hit = snapshot.wires.iter().find_map(|w| {
-                        if point_on_segment(hit_x, hit_y, w.start.x, w.start.y, w.end.x, w.end.y) {
-                            Some(w.uuid)
-                        } else {
-                            None
-                        }
-                    });
-                    // Net membership comes from the authoritative
-                    // connectivity core (signex-net), the same one
-                    // build_netlist / ERC read. It buckets at 1 µm and
-                    // resolves T-junctions by an interior on-segment
-                    // test, so the highlight follows the real net —
-                    // unlike the old inline union-find here, which
-                    // bucketed at 0.01 mm (bleeding across nearly
-                    // coincident nets) and only tied junctions sitting
-                    // exactly on a wire endpoint (missing true Ts).
-                    match hit {
-                        Some(wire_uuid) => {
-                            match signex_net::flood_net_elements(snapshot, wire_uuid) {
-                                Some(f) => f.wires.into_iter().chain(f.junctions).collect(),
-                                None => Vec::new(),
-                            }
-                        }
-                        None => Vec::new(),
-                    }
-                }
-            };
-            if !net_wire_uuids.is_empty() {
-                // Dry-run the flood to see if anything will
-                // actually change; only snapshot + apply when
-                // there's a real diff. Clicking the same net
-                // twice with the same colour was double-pushing
-                // identical snapshots, forcing the user to hit
-                // Ctrl+Z twice for a single visible change.
-                let mut diff = false;
-                for uuid in &net_wire_uuids {
-                    if pending.a == 0 {
-                        if self.ui_state.wire_color_overrides.contains_key(uuid) {
-                            diff = true;
-                            break;
-                        }
-                    } else {
-                        match self.ui_state.wire_color_overrides.get(uuid) {
-                            Some(c) if *c == pending => {}
-                            _ => {
-                                diff = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if diff && self.record_net_color_undo() {
-                    for uuid in net_wire_uuids {
-                        if pending.a == 0 {
-                            self.ui_state.wire_color_overrides.remove(&uuid);
-                        } else {
-                            self.ui_state.wire_color_overrides.insert(uuid, pending);
-                        }
-                    }
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_content_cache();
-                }
+            let net = self.net_elements_at(hit_x, hit_y);
+            if !net.is_empty() {
+                self.commit_net_colors(&net, pending);
             }
             // Altium-style continuous placement: stay armed
             // until the user right-clicks or presses Escape.
@@ -255,7 +156,8 @@ impl Signex {
                 if !self.interaction_state.wire_drawing {
                     self.start_wire_drawing(pt);
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                    let end_pt = self.place_wire_at(start, pt, self.interaction_state.draw_mode);
+                    let (end_pt, _) =
+                        self.place_wire_at(start, pt, self.interaction_state.draw_mode);
                     self.continue_wire_drawing(end_pt);
                 }
             }
@@ -264,7 +166,8 @@ impl Signex {
                 if !self.interaction_state.wire_drawing {
                     self.start_wire_drawing(pt);
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                    let end_pt = self.place_bus_at(start, pt, self.interaction_state.draw_mode);
+                    let (end_pt, _) =
+                        self.place_bus_at(start, pt, self.interaction_state.draw_mode);
                     self.continue_wire_drawing(end_pt);
                 }
             }

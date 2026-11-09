@@ -464,7 +464,7 @@ mod tests {
     fn set_role_silk_top_attaches_silk_attr_with_top_layer() {
         use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
         use crate::library::messages::RoleTag;
-        use signex_types::layer::SignexLayer;
+        use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
         let mut fp = empty_footprint();
         let plane = PlaneId::new();
@@ -496,7 +496,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             line_entity.silk.as_ref().unwrap().layer,
-            SignexLayer::TopSilk
+            PcbLayer::Technical(TechnicalLayer::SilkscreenTop)
         );
         assert_eq!(current_role_of(line_entity), RoleTag::SilkTop);
     }

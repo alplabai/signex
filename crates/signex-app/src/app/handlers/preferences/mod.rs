@@ -4,6 +4,7 @@ mod committed_writes;
 mod keymap;
 #[cfg(test)]
 mod keymap_tests;
+pub(crate) mod language;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;

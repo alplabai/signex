@@ -20,6 +20,7 @@ mod sheet;
 mod sheet_entry;
 mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
+pub mod pcb;
 mod sheet_placement;
 mod transform;
 
@@ -34,6 +35,8 @@ pub(crate) mod test_support;
 mod annotation_placements_tests;
 #[cfg(test)]
 mod annotation_tests;
+#[cfg(test)]
+mod document_id_tests;
 
 #[cfg(test)]
 mod field_follow_tests;
@@ -47,9 +50,13 @@ mod object_lock_tests;
 mod wire_merge_tests;
 
 #[cfg(test)]
+mod class_pick_marker_tests;
+#[cfg(test)]
 mod history_tests;
 #[cfg(test)]
 mod incremental_nets_tests;
+#[cfg(test)]
+mod net_colors_tests;
 #[cfg(test)]
 mod rubber_band_power_tests;
 #[cfg(test)]
@@ -61,6 +68,8 @@ mod save_point_tests;
 
 #[cfg(test)]
 mod sheet_identity_tests;
+#[cfg(test)]
+mod undo_depth_tests;
 
 use std::path::{Path, PathBuf};
 
@@ -83,8 +92,8 @@ pub use find::{
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
 };
-use history::HistoryEntry;
-pub use history::UndoGroupId;
+use history::HistoryStep;
+pub use history::{ClassPickMarker, UndoGroupId};
 pub use multi_edit::{
     LabelGroup, MultiEdit, SelectionGroups, Shared, SymbolGroup, WireGroup,
     edit_commands as multi_edit_commands, selection_groups,
@@ -114,6 +123,7 @@ pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
+use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::schematic::{SchematicSheet, SelectedItem};
 pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
@@ -139,24 +149,22 @@ const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 pub struct Engine {
     document: SchematicSheet,
     path: Option<PathBuf>,
-    history: std::collections::VecDeque<HistoryEntry>,
-    redo_stack: Vec<HistoryEntry>,
-    /// Entries evicted from the front of `history` by the cap, so
-    /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
-    history_evicted: usize,
-    /// The `undo_position` the document held when it last matched its file
-    /// (set by [`Engine::open`] and [`Engine::mark_saved`]); `None` when it is
-    /// unknown or no step of the history can reproduce the file, which
-    /// reads as dirty. An engine built from content that is not known to be
-    /// on disk (`new`, a recovery copy) starts there. See
+    /// The undo and redo stacks and the save point: the position the
+    /// document held when it last matched its file (set by [`Engine::open`]
+    /// and [`Engine::mark_saved`]), unknown when no step can reproduce the
+    /// file, which reads as dirty. An engine built from content that is not
+    /// known to be on disk (`new`, a recovery copy) starts unknown. See
     /// [`Engine::is_at_save_point`].
-    saved_point: Option<usize>,
+    history: History<HistoryStep>,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
     /// records one coalesced entry when the loop finishes. Always `false`
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// The open transaction, if any (`exec/transaction.rs`, #2178): history
+    /// stays suppressed while it is open.
+    transaction: Option<exec::transaction::Transaction>,
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
@@ -205,10 +213,6 @@ pub struct Engine {
     /// fold looked only where wires changed.
     #[cfg(test)]
     full_scan_moves: bool,
-    /// Net colour of each wire the app has painted, by wire uuid. The engine
-    /// never changes it; a merge reads it so two wires of different colours
-    /// are not folded into one (see `transform::merge`).
-    wire_colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -266,18 +270,18 @@ impl MovePreview {
     /// dropped.
     #[must_use]
     pub fn moved(&self, moves: &[(SelectedItem, f64, f64)], keep_wires: bool) -> SchematicSheet {
-        self.moved_with(moves, keep_wires, &Default::default()).0
+        self.moved_with(moves, keep_wires).0
     }
 
-    /// [`Self::moved`] with the net colours the commit passes the engine (two
-    /// wires of different colours are not folded), and the references of the
-    /// items the lock holds back, sorted: the reason a held item does not move.
+    /// [`Self::moved`] with the references of the items the lock holds back,
+    /// sorted: the reason a held item does not move. The sheet's own net
+    /// colours keep wires of different colours from being folded, as in the
+    /// commit.
     #[must_use]
     pub fn moved_with(
         &self,
         moves: &[(SelectedItem, f64, f64)],
         keep_wires: bool,
-        wire_colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     ) -> (SchematicSheet, Vec<String>) {
         let Ok(mut engine) = Engine::new(SchematicSheet::clone(&self.sheet)) else {
             return (SchematicSheet::clone(&self.sheet), Vec::new());
@@ -291,7 +295,6 @@ impl MovePreview {
         {
             engine.full_scan_moves = self.full_scan_moves;
         }
-        engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
         let (command, held) = engine.without_locked_naming(
@@ -324,11 +327,9 @@ impl Engine {
         Ok(Self {
             document,
             path,
-            history: std::collections::VecDeque::new(),
-            redo_stack: Vec::new(),
-            history_evicted: 0,
-            saved_point: None,
+            history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -345,7 +346,6 @@ impl Engine {
             preset_sheet: None,
             #[cfg(test)]
             full_scan_moves: false,
-            wire_colors: std::collections::HashMap::new(),
         })
     }
 
@@ -364,11 +364,9 @@ impl Engine {
         Ok(Self {
             document: snx.sheet,
             path: Some(path.to_path_buf()),
-            history: std::collections::VecDeque::new(),
-            redo_stack: Vec::new(),
-            history_evicted: 0,
-            saved_point: Some(0),
+            history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -385,26 +383,24 @@ impl Engine {
             preset_sheet: None,
             #[cfg(test)]
             full_scan_moves: false,
-            wire_colors: std::collections::HashMap::new(),
         })
-    }
-
-    /// Tell the engine the wires' net colours before a command, so a merge
-    /// keeps wires of different colours apart.
-    pub fn set_wire_colors(
-        &mut self,
-        colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) {
-        self.wire_colors = colors;
     }
 
     /// The pins the last commands could not keep connected (drained).
     pub fn take_unkept_pins(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.unkept_pins)
     }
 
-    /// Drain the notices raised since the last call.
+    /// Drain the notices raised since the last call. While a transaction is
+    /// open they are held: they are shown after its commit, and dropped by its
+    /// rollback.
     pub fn take_warnings(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.warnings)
     }
 
@@ -422,7 +418,16 @@ impl Engine {
         Self::encode(self.document.clone())
     }
 
-    fn encode(sheet: SchematicSheet) -> Result<String, EngineError> {
+    fn encode(mut sheet: SchematicSheet) -> Result<String, EngineError> {
+        // The colour of a wire or junction the sheet no longer holds is not
+        // written; the engine keeps it so an undo can bring the element back.
+        let live: std::collections::HashSet<uuid::Uuid> = sheet
+            .wires
+            .iter()
+            .map(|w| w.uuid)
+            .chain(sheet.junctions.iter().map(|j| j.uuid))
+            .collect();
+        sheet.net_colors.retain(|id, _| live.contains(id));
         signex_types::format::SnxSchematic::new(sheet)
             .write_string()
             // The typed `FormatError` stays reachable through the io error's
@@ -500,63 +505,44 @@ impl Engine {
         self.instance
     }
 
-    /// [`Self::serialize`] with `colors` as the sheet's net colour overrides.
-    /// The app keeps the live overrides outside the document (they are not
-    /// part of the undo history), so a save passes them in. Overrides whose
-    /// wire or junction is no longer in the sheet are dropped here.
-    pub fn serialize_with_net_colors(
-        &self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> Result<String, EngineError> {
-        self.serialize_with_extents(colors, |_| None)
-    }
-
-    /// [`Self::serialize_with_net_colors`] with the stored text widths
-    /// refreshed on the copy being encoded: `measure` answers for texts whose
-    /// face is installed, the others keep their loaded record (#2029). The
-    /// document itself is untouched.
+    /// [`Self::serialize`] with the stored text widths refreshed on the copy
+    /// being encoded: `measure` answers for texts whose face is installed,
+    /// the others keep their loaded record (#2029). The document itself is
+    /// untouched.
     pub fn serialize_with_extents(
         &self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
         measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
     ) -> Result<String, EngineError> {
         let mut sheet = self.document.clone();
-        let live: std::collections::HashSet<uuid::Uuid> = sheet
-            .wires
-            .iter()
-            .map(|w| w.uuid)
-            .chain(sheet.junctions.iter().map(|j| j.uuid))
-            .collect();
-        sheet.net_colors = colors
-            .iter()
-            .filter(|(id, _)| live.contains(id))
-            .map(|(id, color)| (*id, *color))
-            .collect();
         sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
         Self::encode(sheet)
     }
 
-    /// [`Self::save`] writing `colors` as the net colour overrides; see
-    /// [`Self::serialize_with_net_colors`]. Returns the bytes written, so a
-    /// caller fingerprints what it wrote instead of re-reading the file.
-    pub fn save_with_net_colors(
-        &mut self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> Result<Vec<u8>, EngineError> {
-        self.save_with_extents(colors, |_| None)
+    /// [`Self::serialize_with_extents`] for a Save As (#2172): the copy being
+    /// encoded carries `id` as its own document id, a new document's, while
+    /// this document keeps the id it has until the copy is written.
+    pub fn serialize_as_copy_with_extents(
+        &self,
+        id: uuid::Uuid,
+        measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
+    ) -> Result<String, EngineError> {
+        let mut sheet = self.document.clone();
+        sheet.uuid = id;
+        sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
+        Self::encode(sheet)
     }
 
-    /// [`Self::save_with_net_colors`] refreshing the stored text widths with
-    /// `measure`; see [`Self::serialize_with_extents`].
+    /// [`Self::save`] refreshing the stored text widths with `measure`; see
+    /// [`Self::serialize_with_extents`]. Returns the bytes written, so a
+    /// caller fingerprints what it wrote instead of re-reading the file.
     pub fn save_with_extents(
         &mut self,
-        colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
         measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
     ) -> Result<Vec<u8>, EngineError> {
         let Some(path) = self.path.clone() else {
             return Err(EngineError::MissingPath);
         };
-        let bytes = self.serialize_with_extents(colors, measure)?.into_bytes();
+        let bytes = self.serialize_with_extents(measure)?.into_bytes();
         signex_types::atomic_io::atomic_write_existing_dir(&path, &bytes)
             .map_err(EngineError::SaveFailed)?;
         Ok(bytes)
@@ -654,7 +640,8 @@ impl Engine {
             | Command::SetSheetColor { .. }
             | Command::SetPageOrigin { .. }
             | Command::SetTitleBlockField { .. }
-            | Command::SetDocumentFontFamily { .. } => self.exec_structure(before, cmd),
+            | Command::SetDocumentFontFamily { .. }
+            | Command::SetNetColors { .. } => self.exec_structure(before, cmd),
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {
                 self.exec_drawings(before, cmd)
             }
@@ -698,9 +685,17 @@ impl Engine {
         self.path = path;
     }
 
+    /// Give the sheet a new id of its own (#2172): the repair of a missing or
+    /// repeated one, and Save As, which makes a new document. Not an edit: no
+    /// history entry and no revision, so it is never dirty by itself and the
+    /// next save writes it.
+    pub fn reassign_document_id(&mut self, id: uuid::Uuid) {
+        self.document.uuid = id;
+    }
+
     /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.
     pub fn set_document(&mut self, document: SchematicSheet) {
-        self.saved_point = None;
+        self.history.forget();
         self.bump_revision();
         self.bump_connectivity_revision();
         self.document = document;
@@ -810,7 +805,7 @@ mod tests {
         assert_eq!(engine.revision(), revision, "a refusal moves no revision");
         assert_eq!(engine.connectivity_revision(), connectivity);
         assert_eq!(engine.document().paper_size, test_sheet().paper_size);
-        assert!(engine.history.is_empty(), "a refusal writes no history");
+        assert!(!engine.can_undo(), "a refusal writes no history");
     }
 
     #[test]

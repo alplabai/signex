@@ -499,6 +499,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
         id: PROJECT,
         path: PathBuf::from("P.snxprj"),
         data: ProjectData {
+            document_id: None,
             name: "P".to_string(),
             description: None,
             dir: String::new(),

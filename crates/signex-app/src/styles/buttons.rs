@@ -4,9 +4,9 @@
 //! inline "transparent / hover tint / pressed tint" `button::Style`
 //! closures that hard-coded white-alpha fills.
 
-use iced::widget::button;
 use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::button;
 
 use super::tokens::{self, Overlay, composite_over};
 use super::{RADIUS, ti};

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::document_id::DocumentId;
+
 mod annotation;
 mod erc_waiver;
 mod rule_profile;
@@ -24,6 +26,19 @@ pub use schematic_defaults::{
     SchematicDefaultOverrides,
 };
 pub use unknown::UnknownJson;
+
+/// Reads a stored `document_id`; a value that is not one reads as absent, so
+/// a hand-edited key never makes the project unopenable.
+fn lenient_document_id<'de, D>(deserializer: D) -> Result<Option<DocumentId>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value
+        .as_ref()
+        .and_then(Value::as_str)
+        .and_then(|text| text.parse().ok()))
+}
 
 /// Format token written into every saved `.snxprj` (`"format"` key). Files
 /// without it predate the token and are read as version 1.
@@ -137,6 +152,17 @@ pub struct SheetEntry {
 /// opened and silently degraded.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectData {
+    /// The project's own id (#2172), made with the project and kept for as
+    /// long as the file lives. `None` in a file an older build wrote: the app
+    /// mints one when it opens the project and the next save writes it. A
+    /// value that is not a document id reads as `None` too. Skipped when
+    /// `None`, so a project that was never given one re-saves byte-identical.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "lenient_document_id"
+    )]
+    pub document_id: Option<DocumentId>,
     pub name: String,
     /// Free-text description of the project, edited in the Project tab's
     /// General section (#1202). `None` (and an empty description, which the
@@ -246,6 +272,8 @@ impl ProjectData {
 
 #[cfg(test)]
 mod description_tests;
+#[cfg(test)]
+mod document_id_tests;
 #[cfg(test)]
 mod net_class_tests;
 #[cfg(test)]
@@ -426,6 +454,7 @@ mod tests {
     #[test]
     fn resolve_library_path_joins_project_local() {
         let project = ProjectData {
+            document_id: None,
             description: None,
             name: "p".into(),
             dir: "/projects/foo".into(),
@@ -458,6 +487,7 @@ mod tests {
     #[test]
     fn resolve_library_path_keeps_absolute_for_shared() {
         let project = ProjectData {
+            document_id: None,
             description: None,
             name: "p".into(),
             dir: "/projects/foo".into(),
@@ -565,6 +595,17 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         return Err(ProjectError::UnsupportedExtension(ext));
     }
 
+    let bytes = std::fs::read(path).map_err(|source| ProjectError::Io {
+        path: path.display().to_string(),
+        source,
+    })?;
+    parse_project_bytes(path, &bytes)
+}
+
+/// [`parse_project`] over bytes already read. `path` names the project (its
+/// folder and stem fill `dir` and `name`) and need not hold these bytes: a
+/// recovery copy of the project parses as the project it stands for.
+pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, ProjectError> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let project_name = path
         .file_stem()
@@ -575,14 +616,10 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     // JSON-backed projects: deserialize ProjectData directly. We don't
     // care if the persisted `dir` is stale (projects move); patch it to
     // the parent of the path the user actually opened.
-    let bytes = std::fs::read(path).map_err(|source| ProjectError::Io {
-        path: path.display().to_string(),
-        source,
-    })?;
     // Non-UTF-8 content is not a valid project file: refuse it rather than
     // probing the directory, which would yield an empty project that the
     // next save writes over the file.
-    let text = std::str::from_utf8(&bytes).map_err(|err| ProjectError::Corrupt {
+    let text = std::str::from_utf8(bytes).map_err(|err| ProjectError::Corrupt {
         path: path.display().to_string(),
         reason: err.to_string(),
     })?;
@@ -663,6 +700,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     };
 
     Ok(ProjectData {
+        document_id: None,
         name: project_name,
         description: None,
         dir: dir.to_string_lossy().to_string(),

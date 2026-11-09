@@ -360,16 +360,6 @@ impl Signex {
         let keys: std::collections::HashSet<String> =
             docs.iter().map(|p| path_key_with(p, fold)).collect();
         let is_discarded = |p: &std::path::Path| keys.contains(&path_key_with(p, fold));
-        let dead: Vec<std::path::PathBuf> = self
-            .document_state
-            .engines
-            .keys()
-            .filter(|p| is_discarded(p))
-            .cloned()
-            .collect();
-        for path in &dead {
-            self.forget_net_colors_of(path);
-        }
         let doc = &mut self.document_state;
         doc.engines.retain(|p, _| !is_discarded(p));
         doc.symbol_editors.retain(|p, _| !is_discarded(p));

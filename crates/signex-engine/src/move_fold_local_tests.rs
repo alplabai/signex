@@ -69,10 +69,9 @@ fn lattice(rng: &mut Lcg) -> (f64, f64) {
     )
 }
 
-/// A sheet and the net colours the app would hand the engine for it.
+/// A sheet, its net colours set on it (`SchematicSheet::net_colors`).
 struct Rig {
     sheet: SchematicSheet,
-    colors: HashMap<Uuid, Color>,
 }
 
 const RED: Color = Color::new(255, 0, 0, 255);
@@ -218,7 +217,9 @@ fn random_rig(rng: &mut Lcg) -> Rig {
     {
         wire.stroke_width = 0.5;
     }
-    Rig { sheet, colors }
+    // Net colours live on the sheet, keyed by wire uuid.
+    sheet.net_colors = colors;
+    Rig { sheet }
 }
 
 /// Every selectable item of the sheet that moves.
@@ -296,7 +297,6 @@ fn commit_both_ways(rig: &Rig, moves: &Moves, keep_wires: bool, what: &str) -> b
     let run = |full_scan: bool| {
         let mut engine = Engine::new(rig.sheet.clone()).expect("engine");
         engine.full_scan_moves = full_scan;
-        engine.set_wire_colors(rig.colors.clone());
         let result = engine.execute(Command::MoveEach {
             moves: moves.clone(),
             keep_wires,
@@ -320,9 +320,9 @@ fn commit_both_ways(rig: &Rig, moves: &Moves, keep_wires: bool, what: &str) -> b
 /// were folded.
 fn ghost_both_ways(rig: &Rig, moves: &Moves, keep_wires: bool, what: &str) -> bool {
     let mut preview = MovePreview::new(&rig.sheet);
-    let near = preview.moved_with(moves, keep_wires, &rig.colors);
+    let near = preview.moved_with(moves, keep_wires);
     preview.full_scan_moves = true;
-    let full = preview.moved_with(moves, keep_wires, &rig.colors);
+    let full = preview.moved_with(moves, keep_wires);
     assert_eq!(
         exact(&near.0, &rig.sheet),
         exact(&full.0, &rig.sheet),
@@ -377,8 +377,8 @@ fn the_local_fold_equals_the_full_scan_over_a_drag() {
         for target in [wire, symbol, child].into_iter().flatten() {
             for step in 1..=8 {
                 let moves = vec![(target, 5.0 * step as f64, 5.0 * (step % 3) as f64)];
-                let a = preview.moved_with(&moves, true, &rig.colors);
-                let b = full.moved_with(&moves, true, &rig.colors);
+                let a = preview.moved_with(&moves, true);
+                let b = full.moved_with(&moves, true);
                 assert_eq!(
                     exact(&a.0, sheet),
                     exact(&b.0, sheet),
@@ -467,7 +467,6 @@ fn the_local_fold_equals_the_full_scan_on_the_corpus() {
         };
         let rig = Rig {
             sheet: engine.document().clone(),
-            colors: HashMap::new(),
         };
         let sheet = &rig.sheet;
         with_wires += usize::from(!sheet.wires.is_empty());

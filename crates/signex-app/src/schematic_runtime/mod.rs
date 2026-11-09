@@ -70,6 +70,8 @@ impl RenderInvalidation {
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
     pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
+    /// The sheet's net colours: a repaint with no geometry or ERC change.
+    pub const NET_COLORS: Self = Self(1 << 13);
     pub const FULL: Self = Self(u32::MAX);
 
     /// True when any bit of `mask` is also set in `self`.
@@ -259,6 +261,9 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::LIB_SYMBOLS) {
         dst.lib_symbols.clone_from(&src.lib_symbols);
+    }
+    if invalidation.intersects(R::NET_COLORS) {
+        dst.net_colors.clone_from(&src.net_colors);
     }
     if invalidation.intersects(R::PAPER) {
         dst.paper_size.clone_from(&src.paper_size);

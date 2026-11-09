@@ -333,8 +333,12 @@ impl Signex {
                 super::save::file_label(project_path)
             );
         }
-        let data = signex_types::project::parse_project(project_path)
+        let mut data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
+        // A project an older build wrote has no id yet: it gets one now and
+        // the next save writes it (#2172). Not an edit, so not dirty.
+        data.document_id
+            .get_or_insert_with(signex_types::document_id::DocumentId::new);
         let id = self.document_state.mint_project_id();
         // Auto-mount every library referenced by `Project::libraries`
         // so the project tree picks them up before the panel rebuild
@@ -377,27 +381,39 @@ impl Signex {
                 case_decided: false,
             });
         self.document_state.active_project = Some(id);
+        // An earlier run's recovery copy of this project (#2141): hold
+        // autosave back and let `update` start the check, as for a sheet.
+        self.document_state.autosave.begin_check(project_path);
+        self.document_state
+            .recovery_check_due
+            .push(project_path.to_path_buf());
         // A project that recorded a rule profile learns, off the update loop,
         // whether the local copy of that profile has changed since (#1608).
         let drift = self.check_profile_drift_task_for(id);
-        Ok((id, iced::Task::batch([mount_task, drift])))
+        // Every sheet and the board the project names is listed with its id
+        // without a tab: the ids are read from the file heads (#2172).
+        let headers = self.read_missing_document_headers(id);
+        self.reconcile_document_ids();
+        Ok((id, iced::Task::batch([mount_task, drift, headers])))
     }
 
-    /// Whether a document already owns `path`: it has a tab, or its engine
-    /// holds unsaved edits (a parked tab-less engine). A clean tab-less
+    /// Whether a document already owns `path`: it has a tab, a board parked
+    /// when its dirty tab closed, or an engine holding unsaved edits (a
+    /// parked tab-less engine). A clean tab-less
     /// engine owns nothing: reopening reads the file, which is the truth.
     /// Exact path equality, pending the `CaseFold` key (#1034).
     pub(crate) fn path_is_owned_by_open_document(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
+            || self.document_state.holds_pcb(path)
             || (self.document_state.engines.contains_key(path)
                 && self.document_state.is_document_dirty(path))
     }
 
-    /// The owner of a superseded schematic open result may be a dirty
+    /// The owner of a superseded open result may be a dirty board or
     /// engine parked without a tab (a sheet-reference rewrite loaded it
     /// while the open was in flight). The user asked for that tab, so attach
-    /// it to the parked engine, exactly like a re-open does; nothing is read
-    /// from disk and the engine is kept as is.
+    /// it to the parked document, exactly like a re-open does; nothing is
+    /// read from disk and the document is kept as is.
     pub(crate) fn attach_parked_tab_for_superseded_open(
         &mut self,
         path: &std::path::Path,
@@ -406,7 +422,12 @@ impl Signex {
         if self.document_state.tabs.iter().any(|tab| tab.path == path) {
             return;
         }
-        self.attach_parked_schematic_tab(path.to_path_buf(), title);
+        if self.attach_parked_pcb_tab(path.to_path_buf(), title.clone()) {
+            return;
+        }
+        if self.document_state.engines.contains_key(path) {
+            self.attach_parked_schematic_tab(path.to_path_buf(), title);
+        }
     }
 
     /// An open result landed for a path a document now owns (a Save As got
@@ -619,6 +640,11 @@ impl Signex {
             .file_stem()
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "PCB".to_string());
+        // A board parked when its dirty tab closed holds the unsaved edits;
+        // reading the file would discard them (#2149).
+        if self.attach_parked_pcb_tab(path.clone(), title.clone()) {
+            return Ok(iced::Task::none());
+        }
         // Read + parse off the UI thread — same reasoning as
         // `open_schematic_file` above. Mark the path in flight right
         // before spawning — cleared in both arms of

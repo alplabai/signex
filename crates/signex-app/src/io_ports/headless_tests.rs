@@ -42,10 +42,13 @@ fn with_custom_profile(app: &mut Signex) {
 fn assert_refused(app: &mut Signex, task: Task<Message>, title: &str, arg: &str) {
     let needle = format!("{title}: refused in a headless run; give the `{arg}` argument");
     let before = logged_count(&needle);
+    let answers = app.headless_answers().expect("a headless app").clone();
+    let counted_before = answers.refusals();
     TaskDriver::new()
         .settle(app, task)
         .expect("a headless dialog settles without a window");
     assert_eq!(logged_count(&needle), before + 1, "{title}");
+    assert_eq!(answers.refusals(), counted_before + 1, "{title}: counted");
 }
 
 fn refused_on_message(message: Message, title: &str) {

@@ -14,7 +14,7 @@
 //! The obvious shape is to let each inner `execute` record its own entry
 //! and then truncate the batch's entries away and push one coalesced entry
 //! in their place. That silently erodes undo depth. `record_history` evicts
-//! from the *front* once `history` reaches `MAX_HISTORY_ENTRIES`, so a batch
+//! from the *front* once `history` reaches its cap (`undo_depth`), so a batch
 //! of 10 run against a full history evicts 10 genuine pre-batch entries on
 //! the way in. Truncating the 10 transient entries afterwards cannot bring
 //! those back: the user is left at depth 91 after an action that should have
@@ -70,6 +70,9 @@ impl Engine {
         commands: impl IntoIterator<Item = Command>,
         group: Option<UndoGroupId>,
     ) -> Result<CommandResult, EngineError> {
+        if self.transaction.is_some() {
+            return self.batch_in_transaction(commands);
+        }
         debug_assert!(
             !self.history_suppressed,
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
@@ -96,7 +99,7 @@ impl Engine {
                 return Ok(CommandResult::unchanged());
             }
             Err(error) => {
-                // Nothing reached `history` and `redo_stack` was never
+                // Nothing reached `history` and the redo stack was never
                 // cleared, so restoring the pre-image is the whole rollback.
                 self.document = before;
                 return Err(error);
@@ -116,7 +119,7 @@ impl Engine {
     /// stack holds an entry, and when called inside a batch. The checks are
     /// real (release builds too); the engine is left untouched on refusal.
     pub fn execute_unrecorded(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
-        if self.history_suppressed || !self.history.is_empty() || !self.redo_stack.is_empty() {
+        if self.history_suppressed || self.history.can_undo() || self.history.can_redo() {
             return Err(EngineError::UnrecordedEditRefused);
         }
         self.history_suppressed = true;
@@ -124,7 +127,7 @@ impl Engine {
         self.history_suppressed = false;
         // No history step can reproduce the file now: the edit has no entry.
         if result.as_ref().is_ok_and(|r| r.changed) {
-            self.saved_point = None;
+            self.history.forget();
         }
         result
     }
@@ -133,7 +136,7 @@ impl Engine {
     ///
     /// Returns the coalesced patch, or `None` when no command in the batch
     /// changed anything.
-    fn run_batch(
+    pub(super) fn run_batch(
         &mut self,
         commands: impl IntoIterator<Item = Command>,
     ) -> Result<Option<PatchPair>, EngineError> {
@@ -169,8 +172,8 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::MAX_HISTORY_ENTRIES;
     use crate::test_support::test_sheet;
+    use signex_history::DEFAULT_UNDO_DEPTH;
     use signex_types::schematic::{Label, LabelType, NoConnect, Point};
 
     fn engine() -> Engine {
@@ -190,13 +193,13 @@ mod tests {
     fn history_cap_evicts_oldest_and_undo_walks_newest_first() {
         let mut engine = engine();
         let extra = 5;
-        for _ in 0..MAX_HISTORY_ENTRIES + extra {
+        for _ in 0..DEFAULT_UNDO_DEPTH + extra {
             engine.execute(place_no_connect()).unwrap();
         }
-        assert_eq!(engine.history.len(), MAX_HISTORY_ENTRIES);
-        assert_eq!(engine.undo_position(), MAX_HISTORY_ENTRIES + extra);
+        assert_eq!(engine.history.undo_len(), DEFAULT_UNDO_DEPTH);
+        assert_eq!(engine.undo_position(), DEFAULT_UNDO_DEPTH + extra);
 
-        for _ in 0..MAX_HISTORY_ENTRIES {
+        for _ in 0..DEFAULT_UNDO_DEPTH {
             assert!(engine.undo().unwrap().is_some());
         }
         // The evicted steps are gone: the sheet keeps the first `extra`.
@@ -244,7 +247,7 @@ mod tests {
 
         assert!(result.changed);
         assert_eq!(engine.document().no_connects.len(), 3);
-        assert_eq!(engine.history.len(), 1);
+        assert_eq!(engine.history.undo_len(), 1);
 
         assert!(engine.undo().unwrap().is_some());
 
@@ -290,7 +293,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(engine.document().no_connects.len(), 3);
-        assert_eq!(engine.history.len(), 2);
+        assert_eq!(engine.history.undo_len(), 2);
 
         engine.undo().unwrap();
         assert_eq!(engine.document().no_connects.len(), 1);
@@ -317,7 +320,7 @@ mod tests {
         assert!(result.patch_pair.is_none());
         assert!(!engine.can_undo());
         // A no-op batch must not eat a redoable step — the suppressed
-        // `record_history` skips `redo_stack.clear()` along with the push.
+        // `record_history` skips the redo clear along with the push.
         assert!(engine.can_redo());
     }
 
@@ -348,7 +351,10 @@ mod tests {
             patch_pair.document,
             DocumentPatch::NO_CONNECTS | DocumentPatch::LABELS
         );
-        assert_eq!(engine.history[0].patch_pair.document, patch_pair.document);
+        assert_eq!(
+            engine.history.undo_steps()[0].edit().patch_pair.document,
+            patch_pair.document
+        );
     }
 
     #[test]
@@ -396,28 +402,28 @@ mod tests {
         // batch's commands individually and truncating them away afterwards
         // would evict `BATCH` genuine pre-batch entries from the front of a
         // full history and leave the user at
-        // `MAX_HISTORY_ENTRIES - BATCH + 1`. Suppressing the inner writes
+        // `DEFAULT_UNDO_DEPTH - BATCH + 1`. Suppressing the inner writes
         // costs exactly one eviction.
         const BATCH: usize = 10;
 
         let mut engine = engine();
 
-        for _ in 0..MAX_HISTORY_ENTRIES {
+        for _ in 0..DEFAULT_UNDO_DEPTH {
             engine.execute(place_no_connect()).unwrap();
         }
-        assert_eq!(engine.history.len(), MAX_HISTORY_ENTRIES);
-        assert_eq!(engine.document().no_connects.len(), MAX_HISTORY_ENTRIES);
+        assert_eq!(engine.history.undo_len(), DEFAULT_UNDO_DEPTH);
+        assert_eq!(engine.document().no_connects.len(), DEFAULT_UNDO_DEPTH);
 
         engine
             .execute_batch(std::iter::repeat_with(place_no_connect).take(BATCH))
             .unwrap();
 
         // One entry evicted for the one entry pushed. The truncate shape
-        // would leave `MAX_HISTORY_ENTRIES - BATCH + 1` == 91 here.
-        assert_eq!(engine.history.len(), MAX_HISTORY_ENTRIES);
+        // would leave `DEFAULT_UNDO_DEPTH - BATCH + 1` == 91 here.
+        assert_eq!(engine.history.undo_len(), DEFAULT_UNDO_DEPTH);
         assert_eq!(
             engine.document().no_connects.len(),
-            MAX_HISTORY_ENTRIES + BATCH
+            DEFAULT_UNDO_DEPTH + BATCH
         );
 
         // Drain every undo step. The oldest reachable state is the one whose
@@ -427,7 +433,7 @@ mod tests {
             undone += 1;
         }
 
-        assert_eq!(undone, MAX_HISTORY_ENTRIES);
+        assert_eq!(undone, DEFAULT_UNDO_DEPTH);
         assert_eq!(engine.document().no_connects.len(), 1);
     }
 
@@ -435,12 +441,12 @@ mod tests {
     fn a_batch_longer_than_the_history_cap_is_still_one_entry() {
         let mut engine = engine();
 
-        let count = MAX_HISTORY_ENTRIES + 50;
+        let count = DEFAULT_UNDO_DEPTH + 50;
         engine
             .execute_batch(std::iter::repeat_with(place_no_connect).take(count))
             .unwrap();
 
-        assert_eq!(engine.history.len(), 1);
+        assert_eq!(engine.history.undo_len(), 1);
         assert_eq!(engine.document().no_connects.len(), count);
 
         engine.undo().unwrap();
@@ -462,7 +468,7 @@ mod tests {
         assert!(result.changed);
         assert_eq!(patch_pair.semantic, SemanticPatch::ObjectPlaced);
         assert_eq!(patch_pair.document, DocumentPatch::NO_CONNECTS);
-        assert_eq!(engine.history.len(), 1);
+        assert_eq!(engine.history.undo_len(), 1);
     }
 
     #[test]
@@ -475,7 +481,7 @@ mod tests {
         assert_eq!(engine.document().no_connects.len(), 1);
         assert!(!engine.can_undo());
         engine.execute(place_no_connect()).unwrap();
-        assert_eq!(engine.history.len(), 1, "later commands still record");
+        assert_eq!(engine.history.undo_len(), 1, "later commands still record");
     }
 
     #[test]
@@ -514,7 +520,7 @@ mod tests {
         engine.execute(place_no_connect()).unwrap();
 
         assert!(!engine.history_suppressed);
-        assert_eq!(engine.history.len(), 2);
+        assert_eq!(engine.history.undo_len(), 2);
     }
 }
 
@@ -539,7 +545,7 @@ mod snapshot_cost_tests {
         engine
             .execute_batch(std::iter::repeat_with(place).take(8))
             .unwrap();
-        assert_eq!(engine.history.len(), 1);
+        assert_eq!(engine.history.undo_len(), 1);
         assert_eq!(engine.pre_image_clones, 0, "inner commands must not clone");
     }
 

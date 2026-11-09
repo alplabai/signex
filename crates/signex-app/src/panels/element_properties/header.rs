@@ -42,7 +42,7 @@ pub(super) fn selection_header<'a>(
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .push(
-            text(title.to_owned())
+            text(raw(title.to_owned()))
                 .size(TS.body)
                 .color(primary)
                 .font(iced::Font {
@@ -54,7 +54,7 @@ pub(super) fn selection_header<'a>(
         );
     if let Some(line) = line {
         header = header.push(
-            text(line.to_owned())
+            text(raw(line.to_owned()))
                 .size(TS.dense)
                 .color(ink3)
                 .wrapping(iced::widget::text::Wrapping::None)

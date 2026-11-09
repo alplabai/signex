@@ -24,7 +24,7 @@ pub(super) fn view_empty_state<'a>(
     let library_for_add = lib_pb.clone();
     let primary = crate::styles::primary_button(tokens);
     let add_btn = button(
-        text("Add Component")
+        text(raw("Add Component"))
             .size(BROWSER_TEXT_SIZE)
             .color(crate::styles::tokens::resolve(tokens).primary_ink),
     )
@@ -39,11 +39,11 @@ pub(super) fn view_empty_state<'a>(
     let card_radius = crate::styles::Radii::GRAPHITE.card;
     let card = container(
         column![
-            text(format!("{}.snxlib", lib.display_name))
+            text(raw(format!("{}.snxlib", lib.display_name)))
                 .size(TS.heading)
                 .color(text_c),
             Space::new().height(4).boxed(),
-            text("No components — Add Component to begin")
+            text(raw("No components — Add Component to begin"))
                 .size(TS.label)
                 .color(muted)
                 .boxed(),

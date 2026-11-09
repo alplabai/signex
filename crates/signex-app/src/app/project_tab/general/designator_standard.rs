@@ -6,11 +6,12 @@
 //! description and parameter edits; it flips the `.snxprj` dirty and the
 //! file is written by the normal explicit save (atomic write).
 
-use iced::widget::{Widget, column, pick_list, text};
+use iced::widget::{Widget, column, pick_list};
 use iced::{Element, Length};
 use signex_types::designator::DesignatorStandard;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{raw, text};
 
 use super::view::{labelled, tab_message};
 use crate::app::Message;
@@ -61,7 +62,7 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
     let field: Element<'a, Message> = if project.data.has_unreadable_annotation() {
         column![
             picker,
-            text("Set by a newer Signex version \u{2014} kept unchanged")
+            text(raw("Set by a newer Signex version \u{2014} kept unchanged"))
                 .size(ts.caption)
                 .color(crate::styles::ti(tokens.text_secondary))
                 .boxed(),

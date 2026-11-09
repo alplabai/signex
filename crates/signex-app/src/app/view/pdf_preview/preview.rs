@@ -16,9 +16,9 @@ impl Signex {
         preview: &'a crate::app::state::PreviewState,
     ) -> Element<'a, Message> {
         use iced::widget::{
-            Space, Widget as _, button, checkbox, column, container, image, mouse_area, row,
-            scrollable, text, text_input,
+            Space, Widget as _, column, container, image, mouse_area, row, scrollable,
         };
+        use signex_widgets::{button, checkbox, raw, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
         let text_c = crate::styles::ti(tokens.text);
@@ -32,7 +32,7 @@ impl Signex {
             let selected_text = iced::Color::WHITE;
             let default_bg = panel_bg;
             let default_text = text_c;
-            button(text(label).size(TS.body).color(if selected {
+            button(text(raw(label)).size(TS.body).color(if selected {
                 selected_text
             } else {
                 default_text
@@ -63,7 +63,7 @@ impl Signex {
         };
 
         let colour_controls = row![
-            text("Colour").size(TS.body).color(text_muted),
+            text(raw("Colour")).size(TS.body).color(text_muted),
             mode_button(
                 "Color",
                 matches!(
@@ -99,7 +99,7 @@ impl Signex {
         .align_y(iced::Alignment::Center);
 
         let range_controls = row![
-            text("Pages").size(TS.body).color(text_muted),
+            text(raw("Pages")).size(TS.body).color(text_muted),
             mode_button(
                 "All",
                 matches!(
@@ -133,8 +133,8 @@ impl Signex {
             signex_output::PageRange::Specific(_)
         ) {
             row![
-                text("Page").size(TS.body).color(text_muted),
-                text_input("1", &preview.specific_page_input)
+                text(raw("Page")).size(TS.body).color(text_muted),
+                text_input(raw("1"), &preview.specific_page_input)
                     .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
                     .padding([SP.s, SP.m])
                     .size(TS.label)
@@ -148,11 +148,11 @@ impl Signex {
         };
 
         let toggles_row = row![
-            text("Output").size(TS.body).color(text_muted),
+            text(raw("Output")).size(TS.body).color(text_muted),
             row![
                 checkbox(preview.pdf_options.include_title_block)
                     .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetIncludeTitleBlock(v))),
-                text("Title Block").size(TS.body).color(text_c),
+                text(raw("Title Block")).size(TS.body).color(text_c),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
@@ -205,7 +205,7 @@ impl Signex {
             let card = container(
                 column![
                     thumb,
-                    text(format!("Page {}", page.page_number))
+                    text(raw(format!("Page {}", page.page_number)))
                         .size(TS.caption)
                         .color(text_c)
                 ]
@@ -237,9 +237,9 @@ impl Signex {
         // scrollbars, just drag-to-pan + wheel-zoom.
         let viewport: Element<'_, Message> = if preview.pages.is_empty() {
             container(
-                text(preview.range_note.clone().unwrap_or_else(|| {
+                text(raw(preview.range_note.clone().unwrap_or_else(|| {
                     "No files selected — toggle files in Settings → Files.".to_string()
-                }))
+                })))
                 .size(TS.label)
                 .color(text_muted),
             )
@@ -287,7 +287,7 @@ impl Signex {
             let positioned: Element<'_, Message> = if zoom <= 1.0 {
                 img_el
             } else {
-                super::view::translate::Translate::new(img_el, preview.pan).boxed()
+                signex_widgets::Translate::new(img_el, preview.pan).boxed()
             };
             let surface = container(positioned)
                 .width(Length::Fill)
@@ -329,17 +329,17 @@ impl Signex {
 
         let zoom = preview.zoom;
         let page_caption = if preview.pages.is_empty() {
-            text("—".to_string()).size(TS.body).color(text_muted)
+            text(raw("—".to_string())).size(TS.body).color(text_muted)
         } else {
             let selected_page = &preview.pages[preview.selected];
-            text(format!(
+            text(raw(format!(
                 "Page {} of {} — {}×{} px · {:.0}%",
                 selected_page.page_number,
                 selected_page.sheet_count,
                 selected_page.width_px,
                 selected_page.height_px,
                 zoom * 100.0,
-            ))
+            )))
             .size(TS.body)
             .color(text_muted)
         };

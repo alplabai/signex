@@ -77,10 +77,10 @@ impl Signex {
         {
             return Vec::new();
         }
-        vec![
-            Self::dismiss_layer(Message::Overlay(OverlayMsg::DismissErrorNotice)),
+        Self::dismiss_over(
+            Message::Overlay(OverlayMsg::DismissErrorNotice),
             self.view_error_notice(),
-        ]
+        )
     }
 
     /// #431 — netlist-incomplete "Export anyway?" prompt. Same modal idiom as
@@ -95,10 +95,10 @@ impl Signex {
         {
             return Vec::new();
         }
-        vec![
-            Self::dismiss_layer(Message::Export(ExportMsg::NetlistCancelIncomplete)),
+        Self::dismiss_over(
+            Message::Export(ExportMsg::NetlistCancelIncomplete),
             self.view_netlist_incomplete_prompt(),
-        ]
+        )
     }
 
     /// Print preview overlay — Altium parity: opens as a separate OS
@@ -134,10 +134,10 @@ impl Signex {
         {
             return Vec::new();
         }
-        vec![
-            Self::dismiss_layer(Message::NetColor(NetColorMsg::CustomShow(false))),
+        Self::dismiss_over(
+            Message::NetColor(NetColorMsg::CustomShow(false)),
             self.view_net_color_custom_picker(),
-        ]
+        )
     }
 
     /// Altium-style pause overlay: big centered "Placement Paused" card
@@ -173,21 +173,24 @@ impl Signex {
             column![
                 row![
                     glyph,
-                    iced::widget::text("Placement Paused")
+                    signex_widgets::text(signex_widgets::raw("Placement Paused"))
                         .size(TS.title)
                         .font(title_font)
                         .color(ink),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
-                iced::widget::text(
+                signex_widgets::text(signex_widgets::raw(
                     "Editing properties in the panel. Click Resume to keep placing."
-                )
+                ))
                 .size(TS.body)
                 .color(muted),
-                iced::widget::text("Esc cancels placement.")
-                    .size(TS.caption)
-                    .color(muted),
+                signex_widgets::text(signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_ESC_HINT
+                ))
+                .size(TS.caption)
+                .color(muted),
                 iced::widget::Space::new().height(SP.xs),
                 crate::styles::dialog_button(
                     "Resume Placement",
@@ -393,15 +396,7 @@ impl Signex {
                 ),
             },
         );
-        vec![
-            Self::dismiss_layer(close_msg),
-            container(card.map(Message::Library).boxed())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .boxed(),
-        ]
+        Self::dismiss_and_centre(close_msg, card.map(Message::Library).boxed())
     }
 
     /// #370 — "Align…" dialog for the footprint editor. Mounted at the
@@ -430,15 +425,7 @@ impl Signex {
                 ),
             },
         );
-        vec![
-            Self::dismiss_layer(close_msg),
-            container(card.map(Message::Library).boxed())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .boxed(),
-        ]
+        Self::dismiss_and_centre(close_msg, card.map(Message::Library).boxed())
     }
 
     /// v0.13 — symbol library editor active bar (+ its dropdown overlay)
@@ -562,7 +549,7 @@ impl Signex {
                 row![
                     iced::widget::Space::new().width(abs_x.max(0.0)).boxed(),
                     container(
-                        iced::widget::text_input(placeholder, text)
+                        signex_widgets::text_input(signex_widgets::raw(placeholder), text)
                             .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))
@@ -620,15 +607,15 @@ impl Signex {
                 // still fires OpenPanel — the dock brings it forward.
                 let check = if is_open(kind) { "\u{2713}" } else { "" };
                 let check_c = crate::status_bar::check_ink(tokens);
-                let row_btn = iced::widget::button(
+                let row_btn = signex_widgets::button(
                     iced::widget::row![
                         iced::widget::container(
-                            iced::widget::text(check.to_string())
+                            signex_widgets::text(signex_widgets::raw(check.to_string()))
                                 .size(TS.body)
                                 .color(check_c),
                         )
                         .width(Length::Fixed(16.0)),
-                        iced::widget::text(kind.label().to_string())
+                        signex_widgets::text(signex_widgets::raw(kind.label().to_string()))
                             .size(TS.body)
                             .color(text_c),
                     ]
@@ -666,10 +653,11 @@ impl Signex {
         let status_h = crate::status_bar::status_bar_height(tokens);
         let left = (ww - popup_w - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
         let top = (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0);
-        vec![
-            Self::dismiss_layer(Message::Overlay(OverlayMsg::TogglePanelList)),
-            super::super::translate::Translate::new(popup.boxed(), (left, top)).boxed(),
-        ]
+        Self::dismiss_and_place(
+            Message::Overlay(OverlayMsg::TogglePanelList),
+            popup.boxed(),
+            (left, top),
+        )
     }
 }
 

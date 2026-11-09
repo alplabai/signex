@@ -174,12 +174,9 @@ impl Signex {
         }
         match signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())) {
             Ok(engine) => {
-                self.forget_net_colors_of(path);
                 self.document_state
                     .engines
                     .insert(path.to_path_buf(), engine);
-                self.adopt_net_colors_of(path);
-                self.clear_net_color_steps(path);
                 // An undocked window on this sheet must not keep drawing the
                 // replaced engine, nor select its objects.
                 self.refresh_slots_from_engine(
@@ -212,12 +209,7 @@ impl Signex {
     ) -> bool {
         match result {
             Ok(engine) => {
-                // The incoming sheet's saved colours replace those
-                // of the engine it stands in for.
-                self.forget_net_colors_of(&p);
                 self.document_state.insert_engine(p.clone(), engine);
-                self.adopt_net_colors_of(&p);
-                self.clear_net_color_steps(&p);
                 self.document_state.active_path = Some(p);
                 true
             }
@@ -321,14 +313,15 @@ impl Signex {
             if clear_selection {
                 slot.selected.clear();
             }
-            // The drawn geometry rebuilds only on a clear or a camera move.
+            // The retained layers rebuild on a clear, a zoom, a non-whole-pixel
+            // pan or a new scene; a whole-pixel pan only moves them.
             slot.clear_content_cache();
         }
     }
 
     /// Whether the open inline text edit targets an object of the engine at
     /// `path`.
-    fn text_edit_targets_sheet_at(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn text_edit_targets_sheet_at(&self, path: &std::path::Path) -> bool {
         use signex_types::schematic::SelectedKind;
         let (Some(edit), Some(engine)) = (
             self.interaction_state.editing_text.as_ref(),
@@ -515,6 +508,9 @@ impl Signex {
         // next view tick.
         self.scan_library_updates_for_open_schematic(scan_path);
         self.library.drift.check_pending = true;
+        // A copied file that repeats an id is told and repaired as it opens,
+        // not when an agent first asks (#2172).
+        self.reconcile_document_ids();
     }
 
     /// Reattach a tab to a schematic engine that's already parked in
@@ -572,6 +568,7 @@ impl Signex {
             // The file on disk still holds what was repaired (#1886).
             self.document_state.mark_document_dirty(&dirty_path);
         }
+        self.reconcile_document_ids();
     }
 
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {

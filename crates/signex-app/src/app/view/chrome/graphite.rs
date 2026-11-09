@@ -338,7 +338,7 @@ mod tests {
     /// cluster, for every window-control layout.
     #[test]
     fn search_bar_stays_centred_and_clamped() {
-        let in_window = crate::menu_bar::approx_graphite_menu_bar_width();
+        let in_window = crate::menu_bar::approx_graphite_menu_bar_width(&signex_i18n::I18n::en_us());
         // Windows-style: nothing leading, 138 px of controls trailing.
         search_bar_invariants(0.0, 138.0, in_window);
         // Native macOS lights: room leading, nothing trailing.

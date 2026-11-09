@@ -117,11 +117,17 @@ impl Signex {
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
         let ui_scale =
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
+        let undo_depth =
+            crate::undo_depth::read_undo_depth_pref_from(prefs, &crate::fonts::prefs_file_path());
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
+        let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+            &crate::fonts::read_language_pref_from(prefs),
+        ));
+        crate::app::handlers::preferences::language::log_dropped_language(&i18n);
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
@@ -308,6 +314,7 @@ impl Signex {
                 preferences_draft_trackpad_pan: trackpad_pan,
                 wheel_mode,
                 preferences_draft_wheel_mode: wheel_mode,
+                i18n,
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
@@ -427,12 +434,8 @@ impl Signex {
                 reprefix_window_close_pending: false,
                 selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
-                wire_color_overrides: std::collections::HashMap::new(),
                 net_class_styles: Default::default(),
                 lasso_polygon: None,
-                net_color_undo: Default::default(),
-                net_color_revision: Default::default(),
-                net_color_redo: Default::default(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
             },
@@ -443,6 +446,7 @@ impl Signex {
                 search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
                 parked_save_all_settles: Default::default(),
+                document_ids: Default::default(),
                 autosave: crate::autosave::AutosaveState::new(
                     crate::autosave::default_recovery_dir(),
                 ),
@@ -470,17 +474,19 @@ impl Signex {
                 recovery_check_due: Vec::new(),
                 sheet_edit_epoch: 0,
                 symbol_editors_opened: 0,
+                undo_depth,
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
                 project_tabs: std::collections::HashMap::new(),
-                net_class_picks: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 documents_epoch: 0,
                 designator_cache: Default::default(),
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
+                parked_pcb_boards: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
+                agent_edits: Default::default(),
                 window_panel_ctx: std::collections::HashMap::new(),
                 window_panel_ctx_keys: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {

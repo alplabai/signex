@@ -99,6 +99,9 @@ impl Signex {
                 project_id,
                 outcome,
             } => self.handle_case_probed(project_id, outcome),
+            ProjectMsg::DocumentHeadersRead { project_id, reads } => {
+                self.handle_document_headers_read(project_id, reads)
+            }
             ProjectMsg::FsFactsProbed(generation, facts) => {
                 self.handle_project_fs_probed(generation, facts)
             }

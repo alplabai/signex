@@ -95,7 +95,7 @@ In code:
 - `signex_types::schematic::PinShape` → replaced by `PinShapeStyle`.
 - `signex_types::layer::{F_CU, B_CU, F_SILKS, ...}` constants (mirroring
   pre-KiCad-7 `PCB_LAYER_ID` numbering) → replaced by semantic
-  `SignexLayer` enum.
+  `PcbLayer` enum.
 - `signex_types::markup::parse_markup` (KiCad's curly-brace markup
   syntax) → replaced by `parse_signex_markup` using Markdown-extension
   syntax with `_~text~_` overbar for active-low signal naming.

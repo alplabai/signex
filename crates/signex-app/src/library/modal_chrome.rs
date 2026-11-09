@@ -7,10 +7,11 @@
 //! one definition built on [`crate::styles`] tokens, so a theme change
 //! reaches all of them.
 
-use iced::widget::{Space, container, text};
+use iced::widget::{Space, container};
 use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text};
 
 use super::messages::LibraryMessage;
 use crate::styles::{DialogButtonKind, TypeScale, dialog_button, dialog_footer_split};
@@ -44,7 +45,7 @@ fn header_strip<'a>(
         // window title, so it stays, as a muted line above the body.
         return match end {
             HeaderEnd::Note(note) => container(
-                text(note)
+                text(raw(note))
                     .size(ts.body)
                     .color(theme_ext::text_secondary(tokens)),
             )

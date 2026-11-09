@@ -41,11 +41,12 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, column, container, text};
+use iced::widget::{Space, column, container};
 use iced::{Element, Widget};
 use signex_library::PrimitiveKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text};
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
@@ -268,7 +269,7 @@ fn git_missing_view<'a>(
 
     if let Some(reason) = error {
         summary_lines = summary_lines.push(
-            text(format!("Re-init failed: {reason}"))
+            text(raw(format!("Re-init failed: {reason}")))
                 .size(TS.body)
                 .color(danger)
                 .boxed(),
@@ -276,11 +277,9 @@ fn git_missing_view<'a>(
     }
 
     summary_lines = summary_lines.push(
-        text(
-            "Re-init creates a fresh repository at the parent \
-             directory. Past commits are lost; new edits are tracked \
-             from this point forward.",
-        )
+        text(raw("Re-init creates a fresh repository at the parent \
+         directory. Past commits are lost; new edits are tracked \
+         from this point forward."))
         .size(TS.body)
         .color(danger)
         .boxed(),

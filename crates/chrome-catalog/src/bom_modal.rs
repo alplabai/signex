@@ -1,8 +1,9 @@
 //! Bill-of-materials modal catalog slice.
 
-use iced::widget::{Column, Space, column, container, row, svg, text};
+use iced::widget::{Column, Space, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::catalog::Message;
 use crate::icon::x_handle;
@@ -29,9 +30,11 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         });
     let header = container(
         row![
-            text("Bill of Materials for Variant [Production] of Project [Loratis-SN]")
-                .size(13)
-                .color(text_color),
+            text(raw(
+                "Bill of Materials for Variant [Production] of Project [Loratis-SN]"
+            ))
+            .size(13)
+            .color(text_color),
             Space::new().width(Length::Fill),
             container(close_icon)
                 .width(46)
@@ -111,11 +114,13 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
     let status = container(
         row![
-            text("84 of 84 lines visible").size(11).color(muted),
+            text(raw("84 of 84 lines visible")).size(11).color(muted),
             Space::new().width(16),
-            text("|").size(11).color(muted),
+            text(raw("|")).size(11).color(muted),
             Space::new().width(16),
-            text("Current variant: Production").size(11).color(muted),
+            text(raw("Current variant: Production"))
+                .size(11)
+                .color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -171,9 +176,9 @@ fn dropdown<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
     container(
         row![
             Space::new().width(Length::Fill),
-            text(label.to_string()).size(11).color(text_color),
+            text(raw(label.to_string())).size(11).color(text_color),
             Space::new().width(Length::Fill),
-            text("▾").size(10).color(text_color),
+            text(raw("▾")).size(10).color(text_color),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -196,7 +201,7 @@ fn dropdown<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
 fn secondary_button<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
     let text_color = theme::color(tokens.text);
     let border = theme::color(tokens.border);
-    container(text(label.to_string()).size(11).color(text_color))
+    container(text(raw(label.to_string())).size(11).color(text_color))
         .padding([5, 14])
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
@@ -212,7 +217,7 @@ fn secondary_button<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Messag
 }
 
 fn primary_button<'a>(label: &str, accent: Color, text_color: Color) -> Element<'a, Message> {
-    container(text(label.to_string()).size(11).color(text_color))
+    container(text(raw(label.to_string())).size(11).color(text_color))
         .padding([5, 18])
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(accent)),
@@ -229,7 +234,7 @@ fn primary_button<'a>(label: &str, accent: Color, text_color: Color) -> Element<
 
 fn info_icon<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let accent = theme::color(tokens.accent);
-    container(text("i").size(11).color(Color::WHITE))
+    container(text(raw("i")).size(11).color(Color::WHITE))
         .width(20)
         .height(20)
         .align_x(iced::alignment::Horizontal::Center)
@@ -252,7 +257,7 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let muted = theme::color(tokens.text_secondary);
     let toolbar_bg = theme::color(tokens.toolbar_bg);
     let header_cell = |label: &'static str, width: f32| -> Element<'a, Message> {
-        container(text(label).size(11).color(text_color))
+        container(text(raw(label)).size(11).color(text_color))
             .width(Length::Fixed(width))
             .padding([4, 8])
             .boxed()
@@ -375,7 +380,7 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             Color::from_rgba(1.0, 1.0, 1.0, 0.025)
         };
         let cell = |value: &str, width: f32| -> Element<'a, Message> {
-            container(text(value.to_string()).size(10).color(text_color))
+            container(text(raw(value.to_string())).size(10).color(text_color))
                 .width(Length::Fixed(width))
                 .padding([3, 8])
                 .boxed()
@@ -383,7 +388,7 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         body = body.push(
             container(
                 row![
-                    container(text(values.0).size(10).color(muted))
+                    container(text(raw(values.0)).size(10).color(muted))
                         .width(Length::Fixed(32.0))
                         .padding([3, 8])
                         .align_x(iced::alignment::Horizontal::Right),
@@ -412,7 +417,7 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let muted = theme::color(tokens.text_secondary);
     let border = theme::color(tokens.border);
     let accent = theme::color(tokens.accent);
-    let sidebar_title = container(text("Properties").size(13).color(text_color))
+    let sidebar_title = container(text(raw("Properties")).size(13).color(text_color))
         .padding([8, 12])
         .width(Length::Fill);
 
@@ -422,7 +427,7 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         } else {
             Color::TRANSPARENT
         };
-        container(text(label).size(11).color(text_color))
+        container(text(raw(label)).size(11).color(text_color))
             .padding([4, 12])
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(background)),
@@ -451,7 +456,7 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         };
         let check = if checked { "✓" } else { " " };
         row![
-            container(text(check).size(9).color(Color::WHITE))
+            container(text(raw(check)).size(9).color(Color::WHITE))
                 .width(12)
                 .height(12)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -467,7 +472,7 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
                     ..container::Style::default()
                 }),
             Space::new().width(8),
-            text(label).size(11).color(text_color),
+            text(raw(label)).size(11).color(text_color),
         ]
         .align_y(iced::Alignment::Center)
         .boxed()
@@ -475,12 +480,12 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
     let field = |label: &'static str, value: &'static str| -> Element<'a, Message> {
         row![
-            container(text(label).size(11).color(muted)).width(Length::Fixed(80.0)),
+            container(text(raw(label)).size(11).color(muted)).width(Length::Fixed(80.0)),
             container(
                 row![
-                    text(value).size(11).color(text_color),
+                    text(raw(value)).size(11).color(text_color),
                     Space::new().width(Length::Fill),
-                    text("▾").size(10).color(text_color),
+                    text(raw("▾")).size(10).color(text_color),
                 ]
                 .align_y(iced::Alignment::Center),
             )
@@ -505,9 +510,9 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let section = |title: &'static str, body: Element<'a, Message>| -> Element<'a, Message> {
         let header = container(
             row![
-                text("▾").size(10).color(muted),
+                text(raw("▾")).size(10).color(muted),
                 Space::new().width(6),
-                text(title).size(11).color(text_color),
+                text(raw(title)).size(11).color(text_color),
             ]
             .align_y(iced::Alignment::Center),
         )

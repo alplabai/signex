@@ -120,7 +120,11 @@ fn route_inline_edit(state: &mut ComponentPreviewState, msg: EditorMsg) {
         EditorMsg::ParamUnitPicked { name, unit } => measurement::pick_unit(state, name, unit),
         EditorMsg::ParamSetBool { name, value } => parameters::set_bool(state, name, value),
         EditorMsg::ParamRemove { name } => parameters::remove(state, name),
-        EditorMsg::ParamNewNameChanged(name) => state.new_param_name = name,
+        EditorMsg::ParamNewNameChanged(name) => {
+            // Half-typed text: a reload read started before it lands stale.
+            state.new_param_name = name;
+            state.note_edit();
+        }
         EditorMsg::ParamAddCustom { kind } => parameters::add_custom(state, kind),
 
         // ── Simulation ───────────────────────────────────────────────

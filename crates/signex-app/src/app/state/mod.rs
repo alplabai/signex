@@ -6,6 +6,7 @@ use crate::dock::DockArea;
 
 use super::TabInfo;
 
+mod agent_edits;
 mod case_fold;
 pub(crate) mod dir_case;
 mod dirty;
@@ -19,12 +20,12 @@ mod keymap_recorder;
 pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod navigator_job;
-pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
+mod pcb_board;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
@@ -47,6 +48,7 @@ mod window_scales;
 mod window_sizes;
 mod window_tab;
 
+pub use agent_edits::AgentEdits;
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
 pub use interaction::{ClickedPin, InteractionState};
@@ -60,7 +62,7 @@ pub use pdf_preview_raster::{
 pub use placement::{LastPlacement, PasteCounters, PlacementKind, PlacementSession};
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
-pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, NetColorStep, UiState};
+pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, UiState};
 
 pub struct Signex {
     pub ui_state: UiState,
@@ -229,6 +231,11 @@ pub use signex_types::schematic::AnnotateOrder;
 pub struct ProjectId(u32);
 
 impl ProjectId {
+    /// The id as an engine pick marker carries it.
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+
     /// A fixed id for a test that has no `DocumentState` to mint one from.
     #[cfg(test)]
     pub(crate) const fn test_id(n: u32) -> Self {
@@ -341,6 +348,9 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
+    /// Document ids a document cannot say itself: project files not loaded,
+    /// and the order documents were first seen in (#2172).
+    pub document_ids: crate::app::document_ids::DocumentIds,
     /// Counts the changes that can alter an ERC finding: an edit to a sheet
     /// (through the engine, or Annotate, Replace, library update and the like),
     /// a project-file change, and a sheet written behind the engines. Each calls
@@ -384,6 +394,9 @@ pub struct DocumentState {
     pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
     pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
+    /// How many undo steps every history keeps (`undo_depth`); see
+    /// [`Signex::set_undo_depth`](crate::app::Signex::set_undo_depth).
+    pub undo_depth: usize,
     /// Which font families the Messages panel has already said an open
     /// document names but this machine lacks (#510), so each is reported
     /// once per document.
@@ -456,9 +469,6 @@ pub struct DocumentState {
     /// Project tab state per loaded project (#1202): selected section and
     /// the General history. Outlives the tab, dropped with the project.
     pub project_tabs: std::collections::HashMap<ProjectId, crate::app::ProjectTabState>,
-    /// Net-class picks made from a sheet's Properties panel, keyed by that
-    /// sheet, so Ctrl+Z on it can interleave them with its engine edits (#1220).
-    pub net_class_picks: std::collections::HashMap<PathBuf, net_class_picks::NetClassPickSteps>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
@@ -482,10 +492,14 @@ pub struct DocumentState {
     /// The current board revision per PCB path; a PCB save completion only
     /// marks clean while it still matches.
     pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
+    /// The boards of PCB tabs closed while dirty; see `state/pcb_board.rs`.
+    pub(crate) parked_pcb_boards: std::collections::HashMap<PathBuf, signex_types::pcb::PcbBoard>,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
+    /// An agent's edit list in progress, and the labels of its undo steps (#2178).
+    pub agent_edits: AgentEdits,
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,
@@ -959,10 +973,10 @@ impl DocumentState {
             })
     }
 
-    /// [`Self::schematic_defaults_for`] the active document.
+    /// [`Self::schematic_defaults_for`] the active document, or the sheet an
+    /// agent's edit list runs on.
     pub fn active_schematic_defaults(&self) -> signex_types::schematic::SchematicDefaults {
-        self.active_path
-            .as_deref()
+        self.edit_path()
             .map(|path| self.schematic_defaults_for(path))
             .unwrap_or_default()
     }
@@ -995,8 +1009,7 @@ impl DocumentState {
     /// The font a label or note placed on the active document stores: the
     /// project's default font when it names one, else `None` (#2026).
     pub fn placed_font_family(&self) -> Option<String> {
-        self.active_path
-            .as_deref()
+        self.edit_path()
             .and_then(|path| self.document_project(path))
             .and_then(|p| p.data.schematic_defaults.placed_font_family())
     }
@@ -1069,6 +1082,8 @@ impl DocumentState {
     /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
     pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
         self.note_documents_changed();
+        // The head read before it was open may be older than what it saved.
+        self.document_ids.forget_header(path);
         self.engines.remove(path)
     }
 

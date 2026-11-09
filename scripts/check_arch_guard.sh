@@ -32,12 +32,12 @@ EDGES="${ARCH_GUARD_EDGES:-$ROOT/scripts/arch-edges.txt}"
 
 # Crates holding domain logic: no UI toolkit, no GPU, no app.
 DOMAIN=(
-  signex-types signex-net signex-erc signex-erc-dsl signex-engine
+  signex-types signex-net signex-history signex-erc signex-erc-dsl signex-engine
   signex-bom signex-output signex-library signex-sketch signex-bake
-  signex-3d-model-importer
+  signex-3d-model-importer pcb-geom
 )
 # Matched as exact names or, with a trailing *, as a prefix.
-UI_STACK=(iced 'iced_*' wgpu 'wgpu-*' naga winit cryoglyph glyphon rfd signex-widgets signex-app)
+UI_STACK=(iced 'iced_*' wgpu 'wgpu-*' naga winit cryoglyph glyphon rfd signex-widgets signex-i18n signex-app)
 
 metadata() {
   if [[ -n "${ARCH_GUARD_METADATA:-}" ]]; then

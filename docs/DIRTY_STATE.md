@@ -4,7 +4,7 @@ One question, one owner: "does this document hold edits that are not on
 disk?" is answered by `DocumentState::is_document_dirty(path)`
 (`crates/signex-app/src/app/state/dirty.rs`). Epic #661, ADR-0003 gap G8.
 
-The tab dot and the Component row collector ask `Document` (`app/document`, a `DocumentKey` derived from the tab, resolved by `Signex::document`); quit, Close Project and the title count still read the path set until slice 5c of #661.
+The tab dot and the Component row collector ask `Document` (`app/document`, a `DocumentKey` derived from the tab, resolved by `Signex::document`); quit, Close Project and the title count read `unsaved_set()` (below). Ctrl+S, the Save As dialog and the autosave tick name their document as a `DocumentKey` and dispatch by kind; the tick writes dirty projects and Component rows as bytes (`autosave_project.rs`, `autosave_row.rs`).
 
 ## What is stored
 
@@ -19,7 +19,7 @@ title-bar "N unsaved", the quit and close-project gates, Save All, the
 History panel and the project tree all read the one query (or
 `dirty_document_paths()`, the union of the stored set and the dirty drafts).
 
-`Signex::unsaved_set()` (`app/document/unsaved.rs`) lists them once: each unsaved file's path, and the dirty rows apart. The title count (files only), Save All enablement (files and rows) and `has_dirty_documents` read it.
+`Signex::unsaved_set()` (`app/document/unsaved.rs`) lists them once: each unsaved file's path, and the rows with unsaved work (half-typed values included) apart. The title count (files only), Save All enablement (files and rows) and `has_dirty_documents` read it. The Close Project scan, the Close Library list and the quit prompt place its files and draft subset (`unsaved_drafts`), and Save All routes each path by `document_key_for_path` (engine, then symbol or footprint editor, then project file; a PCB or manifest has no key and fails as before).
 
 ## The writers
 
@@ -117,7 +117,8 @@ sheet reads dirty when it could read clean; nothing is lost.
 
 `DirtyDocuments` also remembers which marked paths were marked from outside
 the history (`mark_document_dirty` and its display-only twin: a project
-edit, a net colour or class, an annotate pass, a restore). The history can
+edit, a net class, an annotate pass, a restore). A net colour is an engine
+step, so undo back to the save point reads clean. The history can
 only clear a mark it set itself, so undo never hides such a change; only a
 save clears it. This stays inside the one dirty owner: one query, one
 writer set. When #661 moves the flag into the engine, the save point and
@@ -178,8 +179,9 @@ dropped. An inline edit that changed the row is one step
 (`begin_edit` / `finish_edit` around `apply_inline_edit` and the save-time buffer
 flush). The flag after Undo, Redo or a landed save is "away from the saved
 position". A half-typed value in `params_edit_buf` counts as unsaved
-(`has_unsaved_edits`) only where a reload or a cascade rebase decides whether
-to replace the row; the close, quit and reopen gates read `.dirty`. The first
+(`has_unsaved_edits`, #2132): the close, quit, reopen and Save All gates count
+it, as do a reload or a cascade rebase deciding whether to replace the row, and
+Save refuses a value that does not parse. The first
 Ctrl+Z with a half-typed value only drops the typed text; the next one steps.
 
 - The point is set where the save snapshot is taken (`begin_save`, beside

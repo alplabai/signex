@@ -395,16 +395,6 @@ impl Signex {
     ) {
         // The file is gone: a replace that read it earlier must not bring it back.
         self.document_state.note_document_written_behind_engines();
-        let dead: Vec<_> = self
-            .document_state
-            .engines
-            .keys()
-            .filter(|p| gone(p))
-            .cloned()
-            .collect();
-        for path in &dead {
-            self.forget_net_colors_of(path);
-        }
         let doc = &mut self.document_state;
         let discarded = doc
             .dirty_document_paths()
@@ -727,6 +717,7 @@ impl Signex {
 mod tests {
     use std::path::{Path, PathBuf};
 
+    use crate::app::handlers::editing_commands::net_color_driver::{colour_of, paint_on};
     use crate::app::state::scope::CaseFold;
     use crate::app::{FootprintDocument, Signex, TabInfo, TabKind};
 
@@ -774,8 +765,10 @@ mod tests {
             app.document_state
                 .engines
                 .insert(path.clone(), signex_engine::Engine::new(s).expect("engine"));
-            app.ui_state.wire_color_overrides.insert(
-                id,
+            paint_on(
+                &mut app,
+                path,
+                &[id],
                 signex_types::theme::Color {
                     r: 1,
                     g: 0,
@@ -787,8 +780,8 @@ mod tests {
 
         app.drop_deleted_documents(&gone, CaseFold::PRESERVE);
 
-        assert!(!app.ui_state.wire_color_overrides.contains_key(&gone_wire));
-        assert!(app.ui_state.wire_color_overrides.contains_key(&kept_wire));
+        assert!(!colour_of(&app, gone_wire).is_some());
+        assert!(colour_of(&app, kept_wire).is_some());
     }
 
     #[test]

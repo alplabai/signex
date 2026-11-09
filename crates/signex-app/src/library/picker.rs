@@ -17,10 +17,11 @@
 //! └────────────────────────────────────────────────────────┘
 //! ```
 
-use iced::widget::{button, column, container, row, scrollable, text, text_input};
+use iced::widget::{column, container, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text, text_input};
 
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header, primary_btn_if};
@@ -73,11 +74,14 @@ pub fn view<'a>(
         tokens,
     );
 
-    let search = text_input("Search internal PN / MPN / description…", &picker.filter)
-        .style(crate::panels::form_look::text_input_style)
-        .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
-        .padding(6)
-        .size(TS.label);
+    let search = text_input(
+        raw("Search internal PN / MPN / description…"),
+        &picker.filter,
+    )
+    .style(crate::panels::form_look::text_input_style)
+    .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
+    .padding(6)
+    .size(TS.label);
 
     let rows = &picker.rows;
 
@@ -85,9 +89,11 @@ pub fn view<'a>(
     if rows.is_empty() {
         list_col = list_col.push(
             container(
-                text("No components match. Open a library or refine the filter.")
-                    .size(TS.body)
-                    .color(muted),
+                text(raw(
+                    "No components match. Open a library or refine the filter.",
+                ))
+                .size(TS.body)
+                .color(muted),
             )
             .padding([14, 14])
             .boxed(),
@@ -107,19 +113,19 @@ pub fn view<'a>(
             };
             let row_widget = button(
                 row![
-                    text(summary.internal_pn.as_str())
+                    text(raw(summary.internal_pn.as_str()))
                         .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(2)),
-                    text(entry.state_label.as_str())
+                    text(raw(entry.state_label.as_str()))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::Fixed(96.0)),
-                    text(summary.mpn.as_str())
+                    text(raw(summary.mpn.as_str()))
                         .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
-                    text(summary.description.as_str())
+                    text(raw(summary.description.as_str()))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(4)),

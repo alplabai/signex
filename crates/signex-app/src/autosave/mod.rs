@@ -60,7 +60,6 @@ pub const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(60);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct DocStamp {
     pub revision: u64,
-    pub net_color_revision: u64,
 }
 
 impl DocStamp {
@@ -70,7 +69,6 @@ impl DocStamp {
     pub fn of_bytes(bytes: &[u8]) -> Self {
         Self {
             revision: sidecar::bytes_hash(bytes),
-            net_color_revision: 0,
         }
     }
 }
@@ -125,6 +123,10 @@ pub enum RestoredDocument {
     Symbol(Box<signex_library::SymbolFile>),
     Footprint(Box<signex_library::FootprintFile>),
     Pcb(Box<signex_types::pcb::PcbBoard>),
+    /// A `.snxprj` as it would have been saved.
+    Project(Box<signex_types::project::ProjectData>),
+    /// A Component Preview row, from its JSON snapshot.
+    Row(Box<signex_library::ComponentRow>),
 }
 
 /// Result of reading the sidecar a Restore chose.
@@ -639,10 +641,7 @@ mod tests {
     fn a_stamp_unknown_copy_is_rewritten_on_the_next_tick_and_removed_on_save() {
         let mut state = AutosaveState::default();
         let path = Path::new("a.snxsch");
-        let stamp = DocStamp {
-            revision: 3,
-            net_color_revision: 0,
-        };
+        let stamp = DocStamp { revision: 3 };
         state.adopt_on_disk(path);
         assert!(state.needs_write(path, stamp));
         assert!(state.saved(path), "an adopted copy is removed by a save");
@@ -662,10 +661,7 @@ mod tests {
     fn a_deferred_copy_blocks_writes_until_the_document_closes() {
         let mut state = AutosaveState::default();
         let path = Path::new("a.snxsch");
-        let stamp = DocStamp {
-            revision: 1,
-            net_color_revision: 0,
-        };
+        let stamp = DocStamp { revision: 1 };
         assert!(state.needs_write(path, stamp));
         state.defer(path);
         assert!(!state.needs_write(path, stamp));

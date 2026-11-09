@@ -44,7 +44,9 @@ mod sketch;
 // reaching into the private renderer submodules.
 pub(crate) use background::{BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_backdrop, draw_origin};
 pub(crate) use graphite::look_for as graphite_look_for;
-pub(crate) use layers::{LayerInput, draw_courtyard, draw_fab, draw_pads, draw_silk};
+pub(crate) use layers::{
+    LayerInput, draw_back_layers, draw_courtyard, draw_fab, draw_pads, draw_silk,
+};
 pub(crate) use pad::PadLabels;
 pub(in crate::library::editor::footprint::canvas) use pad::draw_pads_tool_preview;
 pub(in crate::library::editor::footprint::canvas) use sketch::{ClosedLoop, find_closed_loops};

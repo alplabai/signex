@@ -475,7 +475,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             if section_params.is_empty() {
                                 c = c.push(
                                     container(
-                                        text("No custom parameters".to_string())
+                                        text(raw("No custom parameters"))
                                             .size(TS.body)
                                             .color(muted),
                                     )
@@ -861,7 +861,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     col = col.push(Space::new().height(8.0).boxed());
     col = col.push(thin_sep(border_c));
     col = col.push(
-        container(text("1 object selected").size(TS.caption).color(muted))
+        container(text(raw("1 object selected")).size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .boxed(),
     );

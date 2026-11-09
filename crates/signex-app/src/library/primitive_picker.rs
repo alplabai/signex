@@ -21,11 +21,12 @@
 //! └────────────────────────────────────────────────────┘
 //! ```
 
-use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
+use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{PrimitiveKind, PrimitiveRef, PrimitiveSummary};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{button, raw, text, text_input};
 
 use super::browser::{OVERSCAN_ROWS, visible_range};
 use super::loose_symbols::LooseSymbol;
@@ -191,11 +192,11 @@ fn row_button<'a>(
     button(
         row![
             Space::new().width(20),
-            text(format!("{name}.{ext}"))
+            text(raw(format!("{name}.{ext}")))
                 .size(TS.body)
                 .color(text_c)
                 .width(Length::FillPortion(3)),
-            text(format!("(uuid …{})", short_uuid))
+            text(raw(format!("(uuid …{})", short_uuid)))
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
@@ -252,7 +253,7 @@ pub fn view<'a>(
         tokens,
     );
 
-    let search = text_input("Filter…", &picker.filter)
+    let search = text_input(raw("Filter…"), &picker.filter)
         .style(crate::panels::form_look::text_input_style)
         .on_input(|s| LibraryMessage::PrimitivePicker(PrimitivePickerMsg::SetFilter(s)))
         .padding(6)
@@ -276,7 +277,7 @@ pub fn view<'a>(
     for item in &items[window.clone()] {
         list_col = list_col.push(match item {
             ListItem::Header { text: label } => {
-                container(text(label.clone()).size(TS.body).color(muted))
+                container(text(raw(label.clone())).size(TS.body).color(muted))
                     .padding([6.0, SP.m])
                     .height(ROW_H)
                     .boxed()
@@ -312,13 +313,13 @@ pub fn view<'a>(
     if total_visible == 0 {
         list_col = list_col.push(
             container(
-                text(if state.open_libraries.is_empty() {
+                text(raw(if state.open_libraries.is_empty() {
                     "No libraries open. Use Browse filesystem… to pick a primitive directly."
                 } else {
                     "No primitives match. Only primitives saved inside an open `.snxlib` \
                      are listed: save the symbol into `<lib>.snxlib/symbols/`, or use \
                      Browse filesystem…"
-                })
+                }))
                 .size(TS.body)
                 .color(muted),
             )
@@ -343,7 +344,7 @@ pub fn view<'a>(
     let confirm_row = copy_confirm_row(state, picker, tokens);
     let error_row: Element<'_, LibraryMessage> = if let Some(err) = picker.error.as_ref() {
         container(
-            text(err.clone())
+            text(raw(err.clone()))
                 .size(TS.body)
                 .color(crate::styles::tokens::danger(tokens)),
         )
@@ -417,7 +418,7 @@ fn copy_confirm_row<'a>(
     };
     let answers: Element<'_, LibraryMessage> = if picker.opening_library.is_some() {
         row![
-            text("Opening library…").size(TS.body),
+            text(raw("Opening library…")).size(TS.body),
             cancel_btn(
                 "Cancel",
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
@@ -443,7 +444,7 @@ fn copy_confirm_row<'a>(
         .spacing(SP.s)
         .boxed()
     } else if picker.copying {
-        text("Copying…").size(TS.body).boxed()
+        text(raw("Copying…")).size(TS.body).boxed()
     } else {
         row![
             primary_btn(
@@ -462,7 +463,7 @@ fn copy_confirm_row<'a>(
     };
     container(
         row![
-            text(question)
+            text(raw(question))
                 .size(TS.body)
                 .color(theme_ext::text_primary(tokens)),
             Space::new().width(Length::Fill),

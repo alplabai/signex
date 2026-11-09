@@ -284,3 +284,19 @@ fn a_project_folder_spelled_in_another_case_still_finds_its_fold() {
         Some(held)
     );
 }
+
+#[test]
+fn a_parked_pcb_holds_its_spelling_for_a_case_variant() {
+    let mut app = app_workspace("/w/proj", &[]);
+    app.document_state.projects[0].case_fold = CaseFold::FOLD;
+    app.document_state.projects[0].case_probed = true;
+    app.document_state.projects[0].case_decided = true;
+    let held = PathBuf::from("/w/proj/Board.snxpcb");
+    app.document_state
+        .park_pcb_board(held.clone(), super::save_async_tests::empty_board());
+    assert_eq!(
+        app.held_spelling(Path::new("/w/proj/board.snxpcb")),
+        Some(held),
+        "a case variant must meet the parked board, not read the file again"
+    );
+}

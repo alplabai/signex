@@ -18,17 +18,23 @@ impl Signex {
         card: &HoverCard,
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
-        use iced::widget::{Widget as _, row, text};
+        use iced::widget::{Widget as _, row};
+        use signex_widgets::{raw, text};
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(card.pins.len() + 3);
-        rows.push(text(card.name.clone()).size(TS.label).color(text_c).boxed());
+        rows.push(
+            text(raw(card.name.clone()))
+                .size(TS.label)
+                .color(text_c)
+                .boxed(),
+        );
         if let Some(class) = &card.class {
             rows.push(
-                text(format!("Class: {class}"))
+                text(raw(format!("Class: {class}")))
                     .size(TS.caption)
                     .color(muted_c)
                     .boxed(),
@@ -37,8 +43,8 @@ impl Signex {
         for pin in &card.pins {
             rows.push(
                 row![
-                    text(pin.pin.clone()).size(TS.caption).color(text_c),
-                    text(pin.sheet.clone()).size(TS.caption).color(muted_c),
+                    text(raw(pin.pin.clone())).size(TS.caption).color(text_c),
+                    text(raw(pin.sheet.clone())).size(TS.caption).color(muted_c),
                 ]
                 .spacing(SP.s)
                 .boxed(),
@@ -46,7 +52,7 @@ impl Signex {
         }
         if card.hidden > 0 {
             rows.push(
-                text(format!("+{} more", card.hidden))
+                text(raw(format!("+{} more", card.hidden)))
                     .size(TS.caption)
                     .color(muted_c)
                     .boxed(),
@@ -73,7 +79,7 @@ impl Signex {
             (width, height),
             self.card_bounds(window_id),
         );
-        super::super::translate::Translate::new(body, (x, y)).boxed()
+        signex_widgets::Translate::new(body, (x, y)).boxed()
     }
 }
 

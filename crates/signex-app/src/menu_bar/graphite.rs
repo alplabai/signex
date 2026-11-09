@@ -270,10 +270,11 @@ fn row_button(
 }
 
 /// Approximate width of the Graphite menu row: left pad, mark, gap and the
-/// root buttons (`PX_PER_CHAR` is a slight overestimate).
-pub fn approx_menu_bar_width() -> f32 {
+/// root buttons, counting the catalog titles the bar draws (`PX_PER_CHAR` is
+/// a slight overestimate).
+pub fn approx_menu_bar_width(i18n: &signex_i18n::I18n) -> f32 {
     const PX_PER_CHAR: f32 = 7.5;
-    let labels: f32 = model::ROOT_TITLES
+    let labels: f32 = model::root_titles(i18n)
         .iter()
         .map(|l| l.chars().count() as f32 * PX_PER_CHAR + 2.0 * ROOT_PAD_X)
         .sum();
@@ -286,7 +287,7 @@ mod tests {
 
     #[test]
     fn the_graphite_row_is_wider_than_the_mark_and_every_root() {
-        let w = approx_menu_bar_width();
+        let w = approx_menu_bar_width(&signex_i18n::I18n::en_us());
         assert!(w > BAR_LEFT_PAD + MARK_SIZE + MARK_GAP);
         // 52 label chars, 10 roots at 16 px padding.
         assert_eq!(w, 10.0 + 20.0 + 6.0 + 52.0 * 7.5 + 10.0 * 16.0);

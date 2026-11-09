@@ -511,10 +511,7 @@ fn frame(
             .width(iced::Length::Fill)
             .height(iced::Length::Fill)
             .boxed(),
-        Path::Texts => canvas(super::gpu_drag::SchematicStaticTextLayer::new(slot, prefs))
-            .width(iced::Length::Fill)
-            .height(iced::Length::Fill)
-            .boxed(),
+        Path::Texts => super::gpu_text_layer::SchematicStaticTextLayer::new(slot, prefs).boxed(),
         Path::Overlay => canvas(SchematicCanvas::new(slot, prefs).gpu_overlay())
             .width(iced::Length::Fill)
             .height(iced::Length::Fill)

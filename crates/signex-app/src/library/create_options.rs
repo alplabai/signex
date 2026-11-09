@@ -14,10 +14,11 @@
 //! `LibraryState::create_options.is_some()`; `create_options_overlay`
 //! owns that guard.
 
-use iced::widget::{Space, checkbox, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{checkbox, raw, text};
 
 use super::messages::LibraryMessage;
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn};
@@ -53,14 +54,14 @@ pub fn view<'a>(
         .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleGit)
         .boxed();
 
-    let git_label = text("Enable version control (Git)")
+    let git_label = text(raw("Enable version control (Git)"))
         .size(TS.label)
         .color(text_c);
-    let git_help = text(
+    let git_help = text(raw(
         "Initialise a Git repository at the library's parent directory and \
-         commit on every save. Off by default — leave plain files unless \
-         you plan to track history or collaborate. Can be enabled later.",
-    )
+     commit on every save. Off by default — leave plain files unless \
+     you plan to track history or collaborate. Can be enabled later.",
+    ))
     .size(TS.caption)
     .color(muted);
 
@@ -92,14 +93,14 @@ pub fn view<'a>(
     };
 
     let lfs_text_color = if state.enable_git { text_c } else { muted };
-    let lfs_label = text("Use Git LFS for binary 3D models")
+    let lfs_label = text(raw("Use Git LFS for binary 3D models"))
         .size(TS.label)
         .color(lfs_text_color);
-    let lfs_help = text(
+    let lfs_help = text(raw(
         "Tracks `*.step`, `*.stp`, `*.wrl`, `*.iges` via Git LFS \
-         (recommended for production libraries). Requires `git lfs` \
-         to be installed locally. Only available with version control on.",
-    )
+     (recommended for production libraries). Requires `git lfs` \
+     to be installed locally. Only available with version control on.",
+    ))
     .size(TS.caption)
     .color(muted);
 
@@ -118,7 +119,7 @@ pub fn view<'a>(
     if let Some(reason) = &state.refusal {
         body = body.push(
             container(
-                text(reason.as_str())
+                text(raw(reason.as_str()))
                     .size(TS.caption)
                     .color(theme_ext::error_color(tokens)),
             )

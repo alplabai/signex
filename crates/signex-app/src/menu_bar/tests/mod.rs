@@ -13,6 +13,7 @@
 mod edit_rows;
 mod file_rows;
 mod help_tools_rows;
+mod language_switch;
 mod place_design_rows;
 mod view_rows;
 mod walk;
@@ -163,6 +164,7 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         active_keymap: Some(std::sync::Arc::clone(&app.ui_state.active_keymap)),
         recent_projects: app.ui_state.recent_projects.entries(),
         open_panels: app.open_panels(),
+        i18n: std::sync::Arc::clone(&app.ui_state.i18n),
     }
 }
 
@@ -406,6 +408,7 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
         id,
         path: std::path::PathBuf::from(format!("/w/{file}")),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: file.to_string(),
             dir: "/w".to_string(),

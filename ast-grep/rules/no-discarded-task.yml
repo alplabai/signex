@@ -1,0 +1,37 @@
+id: no-discarded-task
+language: rust
+severity: error
+message: "a `handle_*` result (an iced Task) is discarded; return or handle it"
+note: |
+  A dropped Task never runs: the save, dialog or follow-up message it
+  carries is silently lost. Return it from update(), or combine several
+  with `Task::batch([...])`. There is no `.ignore("why")` for a Task on
+  purpose (crates/signex-app/src/ignore.rs). If the callee returns
+  `Task::none()` on every path, make it return `()` instead. A real false
+  positive (a `handle_*` that is not a Task) takes
+  `// ast-grep-ignore: no-discarded-task` with the reason on the line above.
+files:
+  - crates/**/src/**/*.rs
+ignores:
+  - "**/*_tests.rs"
+  - "**/tests.rs"
+  - "**/tests/**"
+rule:
+  all:
+    - any:
+        - pattern: let _ = $R.$M($$$);
+        - pattern: let _ = $R::$M($$$);
+        - pattern: drop($R.$M($$$))
+        - pattern: drop($R::$M($$$))
+        - pattern: std::mem::drop($R.$M($$$))
+        - pattern: mem::drop($R.$M($$$))
+        - pattern: _ = $R.$M($$$)
+    - not:
+        inside:
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: 'cfg\(test\)'
+constraints:
+  M:
+    regex: '^handle_'

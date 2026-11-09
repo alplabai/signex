@@ -3,9 +3,10 @@
 //! drift. Generic over the message type; sizes derive from the type scale.
 //! Header and close come from the header helpers of each dialog family.
 
-use iced::widget::{Space, Widget, button, column, container, row, scrollable, text};
+use iced::widget::{Space, Widget, column, container, row, scrollable};
 use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use super::{
     ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button_rounded, danger_button, ghost_button,
@@ -51,7 +52,7 @@ impl DialogButtonKind {
 
 /// The main message of a dialog: primary text, body size.
 pub fn dialog_message<'a, M: 'a>(message: impl ToString, tokens: &ThemeTokens) -> Element<'a, M> {
-    text(message.to_string())
+    text(raw(message.to_string()))
         .size(TS.body)
         .color(ti(tokens.text))
         .boxed()
@@ -59,7 +60,7 @@ pub fn dialog_message<'a, M: 'a>(message: impl ToString, tokens: &ThemeTokens) -
 
 /// A hint or note under the message: muted text, body size.
 pub fn dialog_hint<'a, M: 'a>(hint: impl ToString, tokens: &ThemeTokens) -> Element<'a, M> {
-    text(hint.to_string())
+    text(raw(hint.to_string()))
         .size(TS.body)
         .color(tokens::muted_text(tokens))
         .boxed()
@@ -124,7 +125,7 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
     let (height, size, width) = button_metrics(label, kind);
-    let face = text(label.to_string())
+    let face = text(raw(label.to_string()))
         .size(size)
         .color(color)
         .width(Length::Fill)

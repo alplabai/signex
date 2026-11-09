@@ -55,12 +55,25 @@ impl Signex {
             .get(&source)
             .with_context(|| format!("no open schematic at {}", source.display()))?;
         let revision = engine.revision();
-        let net_color_revision = self.net_color_revision_of(&source);
-        let bytes = engine
-            .serialize_with_extents(
-                &self.ui_state.wire_color_overrides,
-                crate::schematic_runtime::text_width::live_extent_measure(),
+        let measure = crate::schematic_runtime::text_width::live_extent_measure();
+        // A Save As makes a new document: the copy is written with an id of
+        // its own, and the document takes it when the write lands (#2172). A
+        // Save As onto another spelling of its own file (a case variant) is
+        // the same document: it keeps its id.
+        let new_document = save_as_from.as_ref().is_some_and(|from| {
+            let fold = self.identity_fold_for(from);
+            crate::app::state::scope::path_key_with(from, fold)
+                != crate::app::state::scope::path_key_with(&target, fold)
+        });
+        let encoded = if new_document {
+            engine.serialize_as_copy_with_extents(
+                signex_types::document_id::DocumentId::new().as_uuid(),
+                measure,
             )
+        } else {
+            engine.serialize_with_extents(measure)
+        };
+        let bytes = encoded
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was
@@ -78,14 +91,14 @@ impl Signex {
             job,
             target,
             revision,
-            net_color_revision,
             save_as_from,
             hold,
         ))
     }
 
-    /// Snapshot the active PCB tab's board and return the task that writes
-    /// it atomically to its `.snxpcb`. `Ok(None)` means there is nothing to
+    /// Snapshot the board of the PCB at `path` (its tab's, or the one parked
+    /// when its dirty tab closed) and return the task that writes it
+    /// atomically to its `.snxpcb`. `Ok(None)` means there is nothing to
     /// write: a clean tab must not rewrite the open-time snapshot over a file
     /// another tool or a git operation changed, and a board opened read-only
     /// (newer minor) is refused with an error. The completion routes through the
@@ -109,12 +122,9 @@ impl Signex {
     ) -> Result<Option<Task<Message>>> {
         self.refuse_save_while_path_op(&path)?;
         self.refuse_while_project_moves(&path, "save")?;
-        let tab = self
-            .document_state
-            .tabs
-            .iter()
-            .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
-            .with_context(|| format!("no open PCB at {}", path.display()))?;
+        if !self.document_state.holds_pcb(&path) {
+            anyhow::bail!("no open PCB at {}", path.display());
+        }
         if !self.document_state.is_document_dirty(&path) {
             return Ok(None);
         }
@@ -124,17 +134,13 @@ impl Signex {
             .get(&path)
             .copied()
             .unwrap_or(0);
-        let board = tab
-            .cached_document
-            .as_ref()
-            .and_then(|doc| doc.as_pcb())
-            .with_context(|| {
-                format!(
-                    "{} could not be re-read after a History restore, so the board in memory \
+        let board = self.document_state.pcb_board(&path).with_context(|| {
+            format!(
+                "{} could not be re-read after a History restore, so the board in memory \
                      is stale; close and reopen the tab (saving now would undo the restore)",
-                    path.display()
-                )
-            })?;
+                path.display()
+            )
+        })?;
         if board.unknown.newer_minor_source.is_some() {
             anyhow::bail!(
                 "{} opened read-only (newer format) — not saved",
@@ -154,9 +160,8 @@ impl Signex {
             .begin(path.clone(), bytes)
             .expecting(expected);
         let hold = self.document_state.autosave.hold_for_save();
-        // Net colours are a schematic concern; a board has none, so 0.
         Ok(Some(Self::spawn_document_write(
-            job, path, revision, 0, None, hold,
+            job, path, revision, None, hold,
         )))
     }
 
@@ -164,7 +169,6 @@ impl Signex {
         job: crate::persist::DocumentSaveJob,
         target: PathBuf,
         revision: u64,
-        net_color_revision: u64,
         save_as_from: Option<PathBuf>,
         hold: crate::autosave::SaveHold,
     ) -> Task<Message> {
@@ -181,7 +185,6 @@ impl Signex {
                 Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
                     path: target.clone(),
                     revision,
-                    net_color_revision,
                     save_as_from: save_as_from.clone(),
                     bytes: Arc::clone(&bytes),
                     sequence,
@@ -201,7 +204,6 @@ impl Signex {
         let DocumentSaveDone {
             path,
             revision,
-            net_color_revision,
             save_as_from,
             bytes,
             sequence,
@@ -253,13 +255,21 @@ impl Signex {
         let mut project_write = Task::none();
         match save_as_from {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision, saved),
-            None => self.mark_saved(&path, revision, net_color_revision, saved),
+            None => self.mark_saved(&path, revision, saved),
             Some(from) => {
                 self.document_state
                     .document_saves
                     .forget_disk_records(&from);
                 self.record_real_path_of(&path);
-                project_write = self.apply_saved_as(&from, path, revision, net_color_revision);
+                let owner = self.waiver_owner_of(&from);
+                project_write = self.apply_saved_as(&from, path.clone(), revision);
+                // Only when the tab was re-keyed onto the copy; a Save As
+                // that bailed leaves the document, and the id, as they were.
+                let rekeyed = self.document_state.engines.contains_key(&path)
+                    && !self.document_state.engines.contains_key(&from);
+                if rekeyed {
+                    self.adopt_saved_copy_id(&path, &saved, owner);
+                }
             }
         }
         self.warn_unwritten_spellings(&outcome_path);
@@ -271,6 +281,34 @@ impl Signex {
             .collect();
         tasks.push(project_write);
         Task::batch(tasks)
+    }
+
+    /// A Save As landed and the engine now stands for the new file: it takes
+    /// the document id the written copy carries, so the document in memory is
+    /// the one on disk (#2172).
+    fn adopt_saved_copy_id(
+        &mut self,
+        path: &std::path::Path,
+        saved: &crate::app::state::CommitBytes,
+        owner: Option<crate::app::state::ProjectId>,
+    ) {
+        let Some(id) = signex_types::format::document_id_in_header("snxsch", &saved.bytes) else {
+            return;
+        };
+        let Some(engine) = self.document_state.engines.get_mut(path) else {
+            return;
+        };
+        let old = engine.document().uuid;
+        engine.reassign_document_id(id.as_uuid());
+        // The project follows the copy; its net waivers name the sheet by id.
+        if !old.is_nil() && old != id.as_uuid() {
+            self.follow_waivers(
+                owner,
+                old,
+                id.as_uuid(),
+                crate::app::document_ids::Follow::Move,
+            );
+        }
     }
 
     /// Once no write to the file `path` names (under any spelling) is still owed, warn about
@@ -315,7 +353,6 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
         revision: u64,
-        net_color_revision: u64,
         saved: crate::app::state::CommitBytes,
     ) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
@@ -339,16 +376,6 @@ impl Signex {
                 engine.forget_save_point();
             }
             self.document_state.sync_history_dirty(path);
-            return;
-        }
-        // The engine's document is what is on disk, even if a colour change
-        // keeps the sheet dirty below.
-        if let Some(engine) = self.document_state.engines.get_mut(path) {
-            engine.mark_saved();
-        }
-        // A colour changed while the write ran: the file lacks it, so the
-        // sheet stays dirty and the next save writes it.
-        if self.net_color_revision_of(path) != net_color_revision {
             return;
         }
         self.finish_clean_save(path, saved);
@@ -387,7 +414,6 @@ impl Signex {
         // The tab closed mid-save and parked the engine because it was
         // dirty; now it is clean nothing needs it.
         if !self.document_is_held_open(path) {
-            self.forget_net_colors_of(path);
             self.document_state.remove_engine(path);
             self.document_state.document_saves.forget_disk_records(path);
         }
@@ -412,16 +438,15 @@ impl Signex {
         from: &std::path::Path,
         to: PathBuf,
         revision: u64,
-        net_color_revision: u64,
     ) -> Task<Message> {
         // The window that started the Save As shows the document, whichever
         // tab the main window has active now (#1794).
         if let Some(window) = self.undocked_schematic_window(from) {
             return self.run_in_window_document(window, |app| {
-                app.apply_saved_as_to_active(from, to.clone(), revision, net_color_revision)
+                app.apply_saved_as_to_active(from, to.clone(), revision)
             });
         }
-        self.apply_saved_as_to_active(from, to, revision, net_color_revision)
+        self.apply_saved_as_to_active(from, to, revision)
     }
 
     fn apply_saved_as_to_active(
@@ -429,7 +454,6 @@ impl Signex {
         from: &std::path::Path,
         to: PathBuf,
         revision: u64,
-        net_color_revision: u64,
     ) -> Task<Message> {
         let still_active = matches!(
             self.document_state.tabs.get(self.document_state.active_tab),
@@ -465,14 +489,6 @@ impl Signex {
             session.finish_save_as(to.clone(), revision);
         });
         if renamed.is_some() {
-            let colours_moved_on = self.net_color_revision_of(from) != net_color_revision;
-            // The colour revision and the net-colour / net-class pick history
-            // follow the re-pathed engine; dirty and disk records are Save As's own.
-            self.rekey_path_keyed_records(from, &to);
-            if colours_moved_on {
-                self.document_state.mark_document_dirty(&to);
-                self.refresh_panel_ctx();
-            }
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
             return self.follow_save_as_in_project(owner, from, &to);
         }

@@ -31,7 +31,7 @@ fn land(app: &mut Signex, path: &Path, revision: u64) {
     let _ = app.update(Message::File(FileMsg::DocumentSaved(DocumentSaveDone {
         path: path.to_path_buf(),
         revision,
-        net_color_revision: 0,
+
         save_as_from: None,
         bytes: std::sync::Arc::new(b"saved".to_vec()),
         sequence: 0,
@@ -407,14 +407,72 @@ fn a_restore_that_reads_as_non_utf8_refuses_to_undo_it() {
     );
 }
 
+/// A discard close (Discard All, Close Project after its prompt) keeps
+/// nothing of the board.
 #[test]
-fn closing_a_pcb_tab_drops_its_dirty_marker() {
+fn discarding_a_pcb_tab_drops_its_dirty_marker_and_board() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_pcb(dir.path());
     mark_dirty(&mut app, &path);
     assert!(app.document_state.is_document_dirty(&path));
     let _ = app.close_tab_now(0);
     assert!(!app.document_state.is_document_dirty(&path));
+    assert!(!app.document_state.holds_pcb(&path));
+}
+
+/// #2149 — the user's own close of a dirty board parks it: still dirty,
+/// still held, so quit and Save All find it.
+#[test]
+fn closing_a_dirty_pcb_tab_parks_its_board() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    mark_dirty(&mut app, &path);
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(app.document_state.tabs.is_empty());
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(app.document_state.pcb_board(&path).is_some());
+    assert_eq!(
+        app.document_state.document_key_for_path(&path),
+        Some(crate::app::document::DocumentKey::Pcb(path.clone()))
+    );
+}
+
+#[test]
+fn closing_a_clean_pcb_tab_parks_nothing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(!app.document_state.holds_pcb(&path));
+    assert_eq!(app.document_state.document_key_for_path(&path), None);
+}
+
+/// A parked board's write lands: it is clean and nothing stays parked, so a
+/// reopen reads the file.
+#[test]
+fn a_parked_board_that_saves_is_released() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    mark_dirty(&mut app, &path);
+    let revision = app.document_state.pcb_revisions[&path];
+    let _ = app.close_tab_parking_dirty(0);
+    land(&mut app, &path, revision);
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert!(!app.document_state.holds_pcb(&path));
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+/// A rename moves a parked board with its dirty mark.
+#[test]
+fn a_renamed_parked_board_follows_its_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_pcb(dir.path());
+    mark_dirty(&mut app, &path);
+    let _ = app.close_tab_parking_dirty(0);
+    let renamed = dir.path().join("renamed.snxpcb");
+    app.rekey_document(&path, &renamed);
+    assert!(!app.document_state.holds_pcb(&path));
+    assert!(app.document_state.pcb_board(&renamed).is_some());
+    assert!(app.document_state.is_document_dirty(&renamed));
 }
 
 #[test]
@@ -479,7 +537,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
     assert_eq!(log.lines().count(), 3, "two revisions plus the restore");
 }
 
-pub(super) fn empty_board() -> signex_types::pcb::PcbBoard {
+pub(crate) fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),

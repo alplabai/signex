@@ -516,7 +516,7 @@ fn save_as_completion(f: &Fixture, to: &Path) -> Message {
         crate::persist::DocumentSaveDone {
             path: to.to_path_buf(),
             revision: 0,
-            net_color_revision: 0,
+
             save_as_from: Some(f.undocked_path.clone()),
             bytes: std::sync::Arc::new(b"saved".to_vec()),
             sequence: 0,

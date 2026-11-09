@@ -590,7 +590,19 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
     });
     app.document_state.active_tab = 1;
     app.document_state.active_path = Some(b);
-    app.ui_state.net_color_redo.insert(a.clone(), Vec::new());
+    // A colour step undone on A leaves a redo branch.
+    let engine = app.document_state.engines.get_mut(&a).unwrap();
+    let colors = [(
+        Uuid::now_v7(),
+        signex_types::theme::Color::new(9, 0, 0, 255),
+    )]
+    .into_iter()
+    .collect();
+    engine
+        .execute(signex_engine::Command::SetNetColors { colors })
+        .unwrap();
+    engine.undo().unwrap();
+    assert!(engine.can_redo());
     apply_team_updates(&mut app);
     let parked = app.document_state.engines[&a].document();
     assert_eq!(
@@ -599,7 +611,7 @@ fn team_apply_on_a_parked_sheet_updates_it_and_clears_net_color_redo() {
     );
     assert_eq!(parked.symbols[0].library_version, "1.2.3");
     assert!(app.document_state.is_document_dirty(&a));
-    assert!(!app.ui_state.net_color_redo.contains_key(&a));
+    assert!(!app.document_state.engines[&a].can_redo());
 }
 
 // ---- #950 round 4: map key, scan failure, open identity, apply-time rows ----

@@ -19,11 +19,11 @@
 
 use iced::{
     Border, Color, Element, Length, Theme, Widget,
-    widget::{Space, column, container, pick_list, row, scrollable, text, text_input},
+    widget::{Space, column, container, pick_list, row, scrollable},
 };
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::theme_ext;
+use signex_widgets::{raw, text, text_input, theme_ext};
 
 use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -107,13 +107,13 @@ fn view_dof<'a>(
     let iters = last.map(|o| o.result.iterations).unwrap_or(0);
 
     column![
-        text("DOF").size(TS.body).color(text_c),
-        text(format!(
+        text(raw("DOF")).size(TS.body).color(text_c),
+        text(raw(format!(
             "state={n_state}  residual={m_residual}  over={n_over}"
-        ))
+        )))
         .size(TS.caption)
         .color(muted),
-        text(format!("iters={iters}  elapsed={elapsed}ms"))
+        text(raw(format!("iters={iters}  elapsed={elapsed}ms")))
             .size(TS.caption)
             .color(muted),
     ]
@@ -130,12 +130,12 @@ fn view_params<'a>(
 ) -> Element<'a, LibraryMessage> {
     let input_bg = tokens::input_bg(tokens);
     let selection = tokens::selection_tint(tokens);
-    let mut col = column![text("Parameters").size(TS.body).color(text_c)].spacing(SP.xs);
+    let mut col = column![text(raw("Parameters")).size(TS.body).color(text_c)].spacing(SP.xs);
 
     if let Some(sketch) = editor.primitive().sketch.as_ref() {
         if sketch.parameters.is_empty() {
             col = col.push(
-                text("(no parameters yet)")
+                text(raw("(no parameters yet)"))
                     .size(TS.caption)
                     .color(muted)
                     .boxed(),
@@ -145,11 +145,11 @@ fn view_params<'a>(
                 let name_clone = name.clone();
                 let path = editor.path.clone();
                 let row = row![
-                    text(name)
+                    text(raw(name))
                         .size(TS.caption)
                         .color(text_c)
                         .width(Length::Fixed(110.0)),
-                    text_input("expression…", src)
+                    text_input(raw("expression…"), src)
                         .size(TS.caption)
                         .padding(SP.xs)
                         .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -181,7 +181,7 @@ fn view_params<'a>(
         }
     } else {
         col = col.push(
-            text("(no sketch — switch to Sketch mode)")
+            text(raw("(no sketch — switch to Sketch mode)"))
                 .size(TS.caption)
                 .color(muted)
                 .boxed(),
@@ -196,19 +196,22 @@ fn view_warnings<'a>(
     text_c: Color,
     muted: Color,
 ) -> Element<'a, LibraryMessage> {
-    let mut col = column![text("Solve warnings").size(TS.body).color(text_c)].spacing(SP.xs);
+    let mut col = column![text(raw("Solve warnings")).size(TS.body).color(text_c)].spacing(SP.xs);
     if editor.state.solve_warnings.is_empty() {
-        col = col.push(text("(none)").size(TS.caption).color(muted).boxed());
+        col = col.push(text(raw("(none)")).size(TS.caption).color(muted).boxed());
     } else {
         for w in editor.state.solve_warnings.iter().take(8) {
-            col = col.push(text(w).size(TS.caption).color(muted).boxed());
+            col = col.push(text(raw(w)).size(TS.caption).color(muted).boxed());
         }
         if editor.state.solve_warnings.len() > 8 {
             col = col.push(
-                text(format!("… +{} more", editor.state.solve_warnings.len() - 8))
-                    .size(TS.caption)
-                    .color(muted)
-                    .boxed(),
+                text(raw(format!(
+                    "… +{} more",
+                    editor.state.solve_warnings.len() - 8
+                )))
+                .size(TS.caption)
+                .color(muted)
+                .boxed(),
             );
         }
     }
@@ -242,13 +245,13 @@ fn view_role<'a>(
             .find(|e| e.id == id)
     });
 
-    let mut col = column![text("Role").size(TS.body).color(text_c)].spacing(SP.s);
+    let mut col = column![text(raw("Role")).size(TS.body).color(text_c)].spacing(SP.s);
 
     let entity = match selected_entity {
         Some(e) => e,
         None => {
             col = col.push(
-                text("(select a sketch entity in Sketch mode)")
+                text(raw("(select a sketch entity in Sketch mode)"))
                     .size(TS.caption)
                     .color(muted)
                     .boxed(),
@@ -268,7 +271,7 @@ fn view_role<'a>(
         EntityKind::Circle { .. } => "Circle",
     };
     col = col.push(
-        text(format!("Selection: {kind_label}"))
+        text(raw(format!("Selection: {kind_label}")))
             .size(TS.caption)
             .color(muted)
             .boxed(),
@@ -291,7 +294,7 @@ fn view_role<'a>(
     let is_point = matches!(entity.kind, EntityKind::Point { .. });
     if !is_point {
         col = col.push(
-            text("Pad role applies to Points only")
+            text(raw("Pad role applies to Points only"))
                 .size(TS.caption)
                 .color(muted)
                 .boxed(),

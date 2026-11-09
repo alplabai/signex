@@ -6,7 +6,8 @@ use super::*;
 use crate::numeric_field::{FieldNumber, parse_field_number};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use iced::widget::{checkbox, text_input};
+use signex_widgets::{checkbox, raw, text_input};
+
 use signex_engine::{MultiEdit, Shared};
 use signex_types::schematic::{HAlign, SCHEMATIC_PT_TO_MM};
 
@@ -125,7 +126,7 @@ impl MultiView<'_> {
         container(
             row![
                 property_label(label.to_string(), muted),
-                text_input(if mixed { MIXED } else { "" }, shown)
+                text_input(raw(if mixed { MIXED } else { "" }), shown)
                     .on_input(move |s| {
                         PanelMsg::MultiEdit(MultiEditMsg::DraftChanged(changed.clone(), s))
                     })
@@ -188,7 +189,7 @@ fn flag_row<'a>(
                     .on_toggle(move |on| PanelMsg::MultiEdit(MultiEditMsg::Picked(edit(on))))
                     .size(TS.heading)
                     .spacing(SP.s),
-                text(state)
+                text(raw(state))
                     .size(TS.body)
                     .color(if checked { primary } else { muted }),
             ]
@@ -297,7 +298,7 @@ pub fn view_multi_selection<'a>(
     };
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text("Multi-Selection").size(TS.body).color(primary))
+        container(text(raw("Multi-Selection")).size(TS.body).color(primary))
             .padding([6.0, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -305,7 +306,7 @@ pub fn view_multi_selection<'a>(
     col = col.push(thin_sep(border_c));
     col = col.push(
         container(
-            text(format!("{} objects selected", ctx.selection_count))
+            text(raw(format!("{} objects selected", ctx.selection_count)))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -383,9 +384,11 @@ pub fn view_multi_selection<'a>(
     if ctx.multi_groups.is_empty() {
         col = col.push(
             container(
-                text("Nothing in this selection has fields shared for editing")
-                    .size(TS.caption)
-                    .color(muted),
+                text(raw(
+                    "Nothing in this selection has fields shared for editing",
+                ))
+                .size(TS.caption)
+                .color(muted),
             )
             .padding([SP.s, SP.m])
             .boxed(),

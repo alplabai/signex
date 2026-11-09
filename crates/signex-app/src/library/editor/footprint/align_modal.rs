@@ -20,8 +20,9 @@
 
 use std::path::Path;
 
-use iced::widget::{button, column, container, row, text};
+use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget};
+use signex_widgets::{button, raw, text};
 
 use signex_types::theme::ThemeTokens;
 
@@ -95,7 +96,7 @@ pub fn view_align_modal<'a>(
                 tokens,
             ));
         }
-        column![text(caption).size(ts.body).color(text_muted), chips,]
+        column![text(raw(caption)).size(ts.body).color(text_muted), chips,]
             .spacing(sp.s)
             .boxed()
     };
@@ -163,9 +164,10 @@ fn option_chip<'a>(
     } else {
         tokens::muted_text(tokens)
     };
-    let chip =
-        button(container(text(label.to_string()).size(ts.body).color(fg)).padding([sp.s, sp.m]))
-            .on_press(message);
+    let chip = button(
+        container(text(raw(label.to_string())).size(ts.body).color(fg)).padding([sp.s, sp.m]),
+    )
+    .on_press(message);
     if selected {
         chip.style(crate::styles::accent_button(tokens)).boxed()
     } else {

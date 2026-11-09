@@ -77,7 +77,7 @@ fn footprint_card<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Elem
     let mut text_col: Column<Element<'a, PanelMsg>> = Column::new().spacing(3).width(Length::Fill);
     if let Some(name) = lines.next() {
         text_col = text_col.push(
-            text(name)
+            text(raw(name))
                 .size(TS.dense)
                 .font(iced::Font {
                     weight: iced::font::Weight::Medium,
@@ -90,7 +90,7 @@ fn footprint_card<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Elem
     for (i, line) in lines.enumerate() {
         // The summary reads in ink3, any later line (the 3D note) in ink4.
         let ink = if i == 0 { r.ink3 } else { r.ink4 };
-        text_col = text_col.push(text(line).size(TS.caption).color(ink).boxed());
+        text_col = text_col.push(text(raw(line)).size(TS.caption).color(ink).boxed());
     }
     let mut body: Row<Element<'a, PanelMsg>> = Row::new()
         .spacing(CARD_GAP)

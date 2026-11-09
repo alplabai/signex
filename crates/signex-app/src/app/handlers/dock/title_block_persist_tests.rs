@@ -829,3 +829,39 @@ fn a_refused_discard_all_leaves_a_field_typed_behind_the_prompt_a_draft() {
         .cloned();
     assert_eq!(stored, None, "not an engine edit");
 }
+
+/// A committed title-block draft is one undo step: undoing it brings the
+/// sheet back to its save point, and the sheet reads clean again, whether the
+/// draft was committed while the sheet was active (the mutation gateway) or
+/// while another sheet was (`apply_title_block_field_to_sheet`) (#2163).
+#[test]
+fn undoing_a_committed_title_block_draft_makes_the_sheet_clean_again() {
+    for committed_while_active in [true, false] {
+        let (mut app, _t) = Signex::new();
+        let a = open(&mut app, "a", SchematicSheet::default());
+        app.document_state.mark_document_clean(&a); // as loaded from disk
+        type_drawn_by(&mut app, "X");
+        if !committed_while_active {
+            let _b = open(&mut app, "b", SchematicSheet::default());
+        }
+        app.commit_pending_title_block_drafts();
+        assert_eq!(drawn_by_in_engine(&app, &a).as_deref(), Some("X"));
+        assert!(app.document_state.is_document_dirty(&a), "edited");
+
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(a.clone());
+        let undo = crate::keymap::AppCommandId::new("undo").expect("id");
+        let task = app.dispatch_command(&undo, crate::app::command::CommandArgs::none(), None);
+        settle(&mut app, task);
+
+        assert_eq!(drawn_by_in_engine(&app, &a), None, "undone");
+        assert!(
+            app.document_state.engines[&a].is_at_save_point(),
+            "back at the save point"
+        );
+        assert!(
+            !app.document_state.is_document_dirty(&a),
+            "committed_while_active={committed_while_active}: still dirty after undo"
+        );
+    }
+}

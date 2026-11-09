@@ -29,7 +29,7 @@ mod widgets;
 pub(crate) use header::{
     PREFERENCES_HEADER_H, graphite_header, graphite_header_closing, scrim_style,
 };
-pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size, wrap_modal};
+pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size};
 pub(crate) use widgets::{modal_title_header, os_title_bar_slot};
 
 #[cfg(test)]

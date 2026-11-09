@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use super::super::super::*;
+use crate::app::document::DocumentKey;
 
 /// Messages trims an entry to this many bytes.
 const MESSAGES_ENTRY_BYTES: usize = 160;
@@ -67,68 +68,68 @@ pub(crate) fn log_foreign_column_offenders(error: &anyhow::Error) {
 }
 
 impl Signex {
+    /// Ctrl+S: the active tab's document is named once as a [`DocumentKey`]
+    /// and saved by its kind (ADR-0001 A2). The active project's `.snxprj`
+    /// is saved beside every kind but a Project tab.
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         if let Some(path) = self.document_state.active_path.clone() {
             self.commit_title_block_drafts_where(|sheet| sheet == path);
         }
-        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            // Refused before any branch below could ask for a Save As dialog
-            // for a path that is only missing because it is being renamed.
-            self.refuse_save_while_path_op(&tab.path)?;
-            self.refuse_save_while_restoring(&tab.path)?;
-        }
-        // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
-        // through `save_primitive_tab_at` so JSON persistence happens
-        // before the generic schematic-save handler runs (it would
-        // no-op for these tabs but the diagnostic log line would be
-        // misleading). When the file doesn't exist on disk yet (the
-        // tab was minted in-memory by `Add New ▸ Symbol` /
-        // `Add New ▸ Footprint`), return a Task that opens an
-        // AsyncFileDialog so the user can pick where the new
-        // primitive lands — including a global library directory
-        // outside the active project. The dialog result dispatches
-        // `Message::File(FileMsg::SavePrimitiveAs { from, to })` which
-        // re-keys the editor + tab and writes the file.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
-            match &active_tab.kind {
-                // A Project tab writes its `.snxprj` off the UI thread.
-                super::super::super::TabKind::Project(project_id) => {
-                    let project_id = *project_id;
-                    return self.begin_project_save(project_id);
-                }
-                super::super::super::TabKind::SymbolEditor(path)
-                | super::super::super::TabKind::FootprintEditor(path) => {
-                    let path = path.clone();
-                    if !path.exists() {
-                        return Ok(super::spawn_save_as_for_primitive(
-                            self.ui_state.io.picker.clone(),
-                            path,
-                        ));
-                    }
-                    // The write runs off the UI thread; the completion logs
-                    // it, clears the dirty marker and queues the git commit.
-                    let task = match self.save_primitive_tab_at(&path) {
-                        Ok(task) => task,
-                        Err(e) => {
-                            self.report_save_failure("Save failed", &e);
-                            iced::Task::none()
-                        }
-                    };
-                    // v0.14.2: also save the active project's
-                    // `.snxprj` if it's dirty + refresh panel ctx so
-                    // the project-root red dot drops. Adding a
-                    // `.snxsym` / `.snxfpt` to `Project::libraries`
-                    // marks the `.snxprj` dirty separately from the
-                    // primitive itself; without these calls the
-                    // project-root row stays red after a primitive
-                    // save even though the primitive's row is clean.
-                    let project_save = self.save_active_project_if_dirty();
-                    self.refresh_panel_ctx();
-                    return Ok(iced::Task::batch([task, project_save]));
-                }
-                _ => {}
+        let key = match self.document_state.tabs.get(self.document_state.active_tab) {
+            Some(tab) => {
+                // Refused before any branch below could ask for a Save As
+                // dialog for a path that is only missing because it is being
+                // renamed.
+                self.refuse_save_while_path_op(&tab.path)?;
+                self.refuse_save_while_restoring(&tab.path)?;
+                DocumentKey::of(tab)
             }
+            None => None,
+        };
+        match key {
+            // A Project tab writes its `.snxprj` off the UI thread.
+            Some(DocumentKey::Project(project_id)) => self.begin_project_save(project_id),
+            Some(DocumentKey::Symbol(path) | DocumentKey::Footprint(path)) => {
+                Ok(self.save_primitive_document(path))
+            }
+            key => self.save_sheet_pcb_and_project(key),
         }
+    }
+
+    /// Ctrl+S on a standalone `.snxsym` / `.snxfpt` tab: persist the JSON
+    /// through `save_primitive_tab_at`, or, when the file does not exist
+    /// yet (the tab was minted in memory by `Add New`), open a dialog for
+    /// where the primitive lands, including a global library directory
+    /// outside the active project. Its result dispatches
+    /// `FileMsg::SavePrimitiveAs`, which re-keys the editor and tab and
+    /// writes the file.
+    fn save_primitive_document(&mut self, path: PathBuf) -> iced::Task<Message> {
+        if !path.exists() {
+            return super::spawn_save_as_for_primitive(self.ui_state.io.picker.clone(), path);
+        }
+        // The write runs off the UI thread; the completion logs it, clears
+        // the dirty marker and queues the git commit.
+        let task = match self.save_primitive_tab_at(&path) {
+            Ok(task) => task,
+            Err(e) => {
+                self.report_save_failure("Save failed", &e);
+                iced::Task::none()
+            }
+        };
+        // Adding a primitive to `Project::libraries` marks the `.snxprj`
+        // dirty apart from the primitive; saving it here drops the
+        // project-root red dot with the primitive's own.
+        let project_save = self.save_active_project_if_dirty();
+        self.refresh_panel_ctx();
+        iced::Task::batch([task, project_save])
+    }
+
+    /// Ctrl+S on a sheet, a PCB or any tab with no file of its own: write
+    /// the active sheet and the PCB `key` names, then the dirty project.
+    fn save_sheet_pcb_and_project(
+        &mut self,
+        key: Option<DocumentKey>,
+    ) -> Result<iced::Task<Message>> {
         // The write runs off the UI thread; the git auto-commit and the
         // dirty-marker clear follow its completion (`handle_document_saved`).
         let mut saves = Vec::new();
@@ -144,24 +145,17 @@ impl Signex {
                 super::dir_case::SaveGuard::Waiting(probe) => saves.push(probe),
             }
         }
-        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && matches!(tab.kind, super::super::super::TabKind::Pcb)
-        {
-            let path = tab.path.clone();
+        if let Some(DocumentKey::Pcb(path)) = key {
             match self.begin_pcb_save(path) {
                 Ok(task) => saves.extend(task),
                 Err(e) => self.report_save_failure("Failed to save PCB", &e),
             }
         }
-        // Save the active project's `.snxprj` if it's dirty (right-
-        // click → Add Existing flips the dirty bit). Best-effort: a
-        // failure here is logged but doesn't block the schematic save.
+        // Best-effort: a failure saving the project file is logged but does
+        // not block the document save.
         saves.push(self.save_active_project_if_dirty());
-        // Refresh the panel context so the project-tree red dirty dot
-        // (which reads `panel_ctx.projects[*].sheets[*].is_dirty`)
-        // sees the cleared dirty mark after the save. Without this the
-        // tree row stays red even though the title (which counts the
-        // dirty documents directly each frame) clears.
+        // The project tree's red dirty dot reads the panel context, so it
+        // must be refreshed to see the cleared dirty mark.
         self.refresh_panel_ctx();
         Ok(iced::Task::batch(saves))
     }
@@ -223,6 +217,33 @@ impl Signex {
         self.begin_project_save(project_id)
     }
 
+    /// Start the write of the document at `path`, by the kind that holds it
+    /// (a sheet, a symbol or footprint draft, a project file), without
+    /// asking which tab is active (#2172). Like Save All's per-file write,
+    /// but a sheet also keeps the case-variant guard of Ctrl+S.
+    pub(crate) fn begin_document_path_save(
+        &mut self,
+        path: &std::path::Path,
+    ) -> Result<iced::Task<Message>> {
+        self.refuse_save_while_path_op(path)?;
+        self.refuse_save_while_restoring(path)?;
+        match self.document_state.document_key_for_path(path) {
+            Some(DocumentKey::Schematic(_)) => match self.guard_spelling_save(path)? {
+                super::dir_case::SaveGuard::Clear => {
+                    self.begin_schematic_save(path.to_path_buf(), None)
+                }
+                super::dir_case::SaveGuard::Waiting(probe) => Ok(probe),
+            },
+            Some(DocumentKey::Symbol(_) | DocumentKey::Footprint(_)) => {
+                self.save_primitive_tab_at(path)
+            }
+            Some(DocumentKey::Project(_)) => self.save_project_at_path(path),
+            Some(DocumentKey::Pcb(_) | DocumentKey::Row(_)) | None => anyhow::bail!(
+                "no open editor, engine or project backs this file, so it cannot be saved"
+            ),
+        }
+    }
+
     /// Schematic Save As. `from_path` is the tab the dialog was opened
     /// for; the dialog is not modal, so refuse when the active tab is no
     /// longer that schematic instead of writing another document to
@@ -233,6 +254,17 @@ impl Signex {
         path: PathBuf,
     ) -> Result<iced::Task<Message>> {
         self.commit_title_block_drafts_where(|sheet| sheet == from_path);
+        self.save_sheet_as(from_path, path)
+    }
+
+    /// [`Self::save_active_document_as`] without taking the person's
+    /// title-block drafts into the sheet first: an agent's Save As writes the
+    /// document as it is (#2172).
+    pub(crate) fn save_sheet_as(
+        &mut self,
+        from_path: &std::path::Path,
+        path: PathBuf,
+    ) -> Result<iced::Task<Message>> {
         self.refuse_save_while_restoring(from_path)?;
         // A name typed without an extension gets `.snxsch`, like the
         // symbol / footprint Save As; if that file exists the user was never
@@ -257,8 +289,9 @@ impl Signex {
         // one cancelled): the restore would overwrite what this writes.
         self.refuse_save_while_restoring(&path)?;
         self.refuse_save_as_target(&path, "snxsch")?;
+        let from_key = DocumentKey::Schematic(from_path.to_path_buf());
         match self.document_state.tabs.get(self.document_state.active_tab) {
-            Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
+            Some(tab) if DocumentKey::of(tab).as_ref() == Some(&from_key) => {}
             _ => anyhow::bail!(
                 "save as {}: the active tab is no longer the schematic {} (it was \
                  switched or closed while the dialog was open) — nothing was written",
@@ -281,6 +314,11 @@ impl Signex {
                  again once it finishes: {}",
                 file_label(&path)
             );
+        }
+        // Onto its own file it is a plain save: no new document, so the id
+        // stays (#2172).
+        if path == from_path {
+            return self.begin_schematic_save_unchecked(path);
         }
         // The tab keeps its old path and title until the write succeeds.
         self.begin_schematic_save(path, Some(from_path.to_path_buf()))

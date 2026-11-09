@@ -7,6 +7,7 @@ use signex_library::primitive::{
     Drill, Footprint, FpGraphic, FpGraphicKind, Pad, PadKind, PadShape, Polygon,
 };
 
+use super::footprint_scale::{length_label, round_length_mm, scale_bar, size_label};
 use super::{FootprintPreview, PreviewState};
 use crate::layout_probe::headless_renderer;
 use crate::library::editor::footprint::canvas::{FootprintCanvas, FootprintCanvasState};
@@ -186,7 +187,22 @@ fn preview_paints_the_same_primitives_as_the_editor() {
     let preview = draw_preview(&model, &state);
     let editor = draw_editor(&fp, &state);
     assert!(preview.paths() > 10, "a real drawing, not an empty frame");
-    assert_eq!(preview.dump, editor.dump);
+    // The preview adds only its readouts (size text first, then the scale
+    // bar in a later section). Cut them off at the size text and close the
+    // dump the way the editor's ends; what is left must equal the editor.
+    // So `draw_readouts` must stay the preview's last draw call: anything
+    // drawn after it would be cut off here and never compared.
+    let tail = editor.dump.rsplit("inf } }").next().unwrap();
+    let head = preview
+        .dump
+        .split(", Cached { content: \"4.2 x 4.6 mm\"")
+        .next()
+        .unwrap();
+    assert!(
+        head.len() < preview.dump.len(),
+        "the size readout is painted"
+    );
+    assert_eq!(format!("{head}{tail}"), editor.dump);
 }
 
 #[test]
@@ -195,8 +211,13 @@ fn preview_shows_drill_hole_pad_shapes_and_silk_text() {
     let model = preview_of(&fp);
     let with_all = draw_preview(&model, &show(&model));
 
-    // Pad numbers 1..3 plus the silk string "REF**".
-    assert_eq!(with_all.texts(), 4, "3 pad numbers + 1 silk text");
+    // Pad numbers 1..3, the silk string "REF**", the size readout and the
+    // scale-bar label (the last two are new readouts, so 4 became 6).
+    assert_eq!(
+        with_all.texts(),
+        6,
+        "3 pad numbers + silk text + 2 readouts"
+    );
     assert!(with_all.has_text("REF**"));
     assert!(with_all.has_text("2"));
 
@@ -218,7 +239,7 @@ fn preview_shows_drill_hole_pad_shapes_and_silk_text() {
     let mut no_text = fp.clone();
     no_text.silk_f.pop();
     let model = preview_of(&no_text);
-    assert_eq!(draw_preview(&model, &show(&model)).texts(), 3);
+    assert_eq!(draw_preview(&model, &show(&model)).texts(), 5);
 }
 
 #[test]
@@ -627,4 +648,75 @@ fn theme_tokens_pick_the_preview_palette() {
         palette(ThemeId::GraphiteDark),
         Some(LayerPalette::PreviewDark)
     );
+}
+
+fn graphic_line(from: [f64; 2], to: [f64; 2]) -> FpGraphic {
+    FpGraphic {
+        kind: FpGraphicKind::Line { from, to },
+        stroke_width: 0.1,
+        filled: false,
+        sketch_entity: None,
+    }
+}
+
+#[test]
+fn back_silk_and_back_fab_are_drawn_and_fitted() {
+    let mut fp = fixture();
+    let plain_model = preview_of(&fp);
+    let plain = draw_preview(&plain_model, &show(&plain_model));
+    fp.silk_b.push(graphic_line([-9.0, 0.0], [9.0, 0.0]));
+    fp.fab_b.push(graphic_line([0.0, -6.0], [0.0, 6.0]));
+    let model = preview_of(&fp);
+    let drawn = draw_preview(&model, &show(&model));
+    assert_eq!(
+        drawn.paths(),
+        plain.paths() + 2,
+        "one back silk, one back fab"
+    );
+    let (min_x, min_y, max_x, max_y) = model.bbox_mm().expect("bbox");
+    assert!(min_x <= -9.0 && max_x >= 9.0 && min_y <= -6.0 && max_y >= 6.0);
+}
+
+#[test]
+fn size_readout_and_scale_bar_are_labelled() {
+    let model = preview_of(&fixture());
+    let state = show(&model);
+    let drawn = draw_preview(&model, &state);
+    assert!(drawn.has_text(&size_label(model.bbox_mm().expect("bbox"))));
+    let (mm, _) = scale_bar(state.scale(), BOX.width).expect("bar");
+    assert!(drawn.has_text(&length_label(mm)));
+}
+
+#[test]
+fn round_length_is_one_two_or_five_times_a_power_of_ten() {
+    for (target, want) in [(1.0, 1.0), (1.4, 1.0), (1.6, 2.0), (3.4, 5.0), (7.9, 10.0)] {
+        assert_eq!(round_length_mm(target), Some(want), "target {target}");
+    }
+    assert_eq!(round_length_mm(0.036), Some(0.05));
+    assert_eq!(round_length_mm(0.0), None);
+    assert_eq!(round_length_mm(-2.0), None);
+    assert_eq!(round_length_mm(f64::NAN), None);
+}
+
+#[test]
+fn scale_bar_spans_about_a_fifth_of_the_pane() {
+    for scale in [0.5_f32, 3.0, 17.0, 120.0, 900.0] {
+        let (_, px) = scale_bar(scale, 320.0).expect("bar");
+        let share = px / 320.0;
+        assert!(
+            (0.08..=0.5).contains(&share),
+            "scale {scale}: share {share}"
+        );
+    }
+    assert!(scale_bar(0.0, 320.0).is_none());
+    assert!(scale_bar(10.0, 0.0).is_none());
+}
+
+#[test]
+fn size_and_length_labels_trim_trailing_zeros() {
+    assert_eq!(size_label((-1.0, -0.5, 1.0, 0.5)), "2 x 1 mm");
+    assert_eq!(size_label((0.0, 0.0, 3.25, 1.5)), "3.25 x 1.5 mm");
+    assert_eq!(length_label(0.5), "0.5 mm");
+    assert_eq!(length_label(10.0), "10 mm");
+    assert_eq!(length_label(0.01), "0.01 mm");
 }

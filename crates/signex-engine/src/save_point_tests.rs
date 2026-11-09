@@ -124,3 +124,89 @@ fn forgetting_the_save_point_leaves_nothing_clean() {
     engine.forget_save_point();
     assert!(!engine.is_at_save_point());
 }
+
+/// How many recorded edits the engine keeps; read off the behaviour so the
+/// guard does not depend on where the cap lives.
+const KEPT: usize = 100;
+
+fn undo_all(engine: &mut Engine) -> usize {
+    let mut steps = 0;
+    while engine.undo().unwrap().is_some() {
+        steps += 1;
+    }
+    steps
+}
+
+#[test]
+fn undo_position_counts_up_past_the_cap_and_back_down_to_the_evicted_floor() {
+    let mut engine = saved_engine();
+    for i in 0..KEPT + 7 {
+        edit(&mut engine, i);
+        assert_eq!(engine.undo_position(), i + 1, "monotonic across eviction");
+    }
+    assert_eq!(
+        undo_all(&mut engine),
+        KEPT,
+        "only the cap's worth is undoable"
+    );
+    assert_eq!(engine.undo_position(), 7, "the evicted count is the floor");
+    engine.redo().unwrap();
+    assert_eq!(engine.undo_position(), 8);
+}
+
+#[test]
+fn a_save_point_evicted_by_the_cap_is_never_clean_again() {
+    let mut engine = saved_engine();
+    for i in 0..3 {
+        edit(&mut engine, i);
+    }
+    engine.mark_saved(); // position 3
+    for i in 3..3 + KEPT + 5 {
+        edit(&mut engine, i); // evicts 105 - 100 = 5 steps; 3 < 5
+    }
+    assert!(!engine.is_at_save_point());
+    undo_all(&mut engine);
+    assert!(
+        !engine.is_at_save_point(),
+        "undo cannot reach an evicted point"
+    );
+    engine.mark_saved();
+    assert!(engine.is_at_save_point(), "a save re-anchors it");
+}
+
+#[test]
+fn a_save_point_on_the_oldest_kept_state_stays_reachable() {
+    let mut engine = saved_engine();
+    for i in 0..5 {
+        edit(&mut engine, i);
+    }
+    engine.mark_saved(); // position 5
+    for i in 5..5 + KEPT {
+        edit(&mut engine, i); // evicts exactly 5: the floor equals the point
+    }
+    assert!(!engine.is_at_save_point());
+    assert_eq!(undo_all(&mut engine), KEPT);
+    assert_eq!(engine.undo_position(), 5);
+    assert!(
+        engine.is_at_save_point(),
+        "the bottom of the stack is the file"
+    );
+}
+
+#[test]
+fn a_save_point_that_survives_eviction_moves_with_the_positions() {
+    let mut engine = saved_engine();
+    for i in 0..KEPT {
+        edit(&mut engine, i);
+    }
+    engine.mark_saved(); // position 100
+    for i in 0..3 {
+        edit(&mut engine, 200 + i); // evicts 3, the point is now 97 deep
+    }
+    for _ in 0..3 {
+        engine.undo().unwrap();
+    }
+    assert!(engine.is_at_save_point());
+    engine.undo().unwrap();
+    assert!(!engine.is_at_save_point());
+}

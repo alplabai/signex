@@ -20,10 +20,26 @@ action yet — the ones that do not are pinned in
 `crates/signex-app/src/app/command/bridge.rs`, and that set may only
 shrink.
 
+## Running a command from a script or an agent
+
+A command run by id can take `key=value` operands in place of a click or a
+dialog answer. A command that acts on a document (`undo`, `redo`,
+`save_document`, `save_document_as`, `close_active_document`, `color_net`,
+`clear_all_net_colors`) names it with the required `document` operand, an
+id or an absolute path, and acts on that document alone: never the active
+one, and it changes no tab, focus, panel or selection. A person's palette or
+keybinding call has no operands and keeps the active document.
+
+`list_documents`, `document_info`, `resolve`, `find_items` and `read_document` are
+read-only queries that answer with data (`CommandOutcome::Answered`); `find` is
+still the Find dialog. Ids and where each file kind stores
+one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
+
 ## General
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `apply_edits` | Apply edits (agent) | edit | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `break_wire` | Break wire | modify | `E W` | — |
 | `bring_drawings_forward` | Bring drawings forward | edit | — | — |
@@ -43,6 +59,7 @@ shrink.
 | `cycle_wire_bus_graphic_mode` | Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees | interactive | — | `Shift+Space` |
 | `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space` | — |
 | `delete_selection` | Delete selection | edit | `Delete` | `Delete` |
+| `document_info` | Document info | file | — | — |
 | `drag_keep_connections` | Drag while keeping connections | modify | — | `G` |
 | `duplicate` | Duplicate | edit | `Ctrl+D` | `Ctrl+D` |
 | `edit_footprint_field` | Edit footprint field | edit | — | `F` |
@@ -57,11 +74,13 @@ shrink.
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
 | `find` | Find | search | `Ctrl+F` | `Ctrl+F` |
 | `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
+| `find_items` | Find documents or items | search | — | — |
 | `find_next` | Find next | search | `F3` | `F3` |
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
 | `find_text` | Find text | search | — | — |
 | `import_graphics` | Import graphics | library | — | `Ctrl+Shift+F` |
+| `list_documents` | List documents | file | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | — |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
@@ -85,12 +104,15 @@ shrink.
 | `previous_document_tab` | Previous open document tab | window | `Ctrl+Shift+Tab` | — |
 | `previous_grid` | Previous grid | view | — | `Shift+N` |
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
+| `read_document` | Read document | file | — | — |
 | `redo` | Redo | edit | `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
 | `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
 | `report_manager_bom` | Report Manager / BOM | reports | `R I` | — |
 | `reset_local_coordinates` | Reset local coordinates | view | — | `Space` |
+| `resolve` | Resolve id | file | — | — |
+| `revert` | Revert an agent's edit step | edit | — | — |
 | `rotate_clockwise` | Rotate clockwise by 90 degrees | modify | `Shift+Space` | `Shift+R` |
 | `rotate_counterclockwise` | Rotate counterclockwise by 90 degrees | modify | `Space` | `R` |
 | `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Ctrl+R` | — |
@@ -138,12 +160,14 @@ shrink.
 | `align_vertical_centers` | Align vertical centers | modify | — | — |
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
+| `assign_net_class` | Assign net to class | design | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
 | `change_component` | Change the selected part's component | edit | — | — |
 | `clear_all_net_colors` | Clear all net colors | view | — | — |
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
+| `color_net` | Color net | view | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |

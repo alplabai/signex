@@ -6,14 +6,13 @@
 //! code motion — no behaviour change.
 
 use super::*;
-use iced::widget::{Space, container, row, text};
+use iced::widget::{Space, container, row};
 use iced::{Background, Color, Element, Length, Theme};
+use signex_widgets::{raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, crate::styles::tokens::BACKDROP_ALPHA);
 
 /// Gap kept between a modal and the window edge, in logical px.
 pub(in crate::app::view) const MODAL_WINDOW_MARGIN: f32 = 24.0;
@@ -35,17 +34,8 @@ pub(in crate::app::view) fn modal_card_width(window_size: (f32, f32), px: f32) -
     fit_modal_size(window_size, (px, 0.0)).0
 }
 
-pub(in crate::app::view) fn wrap_modal<'a>(
-    inner: Element<'a, Message>,
-    offset: (f32, f32),
-    window_size: (f32, f32),
-    modal_size: (f32, f32),
-) -> Element<'a, Message> {
-    wrap_modal_scrim(inner, offset, window_size, modal_size, BACKDROP)
-}
-
-/// [`wrap_modal`] with the scrim colour chosen by the caller (the themed
-/// one from [`super::header::dialog_scrim`]).
+/// Place `inner` over a backdrop with the scrim colour chosen by the caller
+/// (the themed one from [`super::header::dialog_scrim`]).
 pub(in crate::app::view) fn wrap_modal_scrim<'a>(
     inner: Element<'a, Message>,
     offset: (f32, f32),
@@ -54,7 +44,7 @@ pub(in crate::app::view) fn wrap_modal_scrim<'a>(
     scrim: Color,
 ) -> Element<'a, Message> {
     // Absolute top-left = centre + drag offset. The Translate widget (see
-    // view/translate.rs) passes full parent limits to the child and then
+    // signex_widgets::Translate) passes full parent limits to the child and then
     // translates the child's layout node, so the modal keeps its fixed
     // width/height even when positioned partially off-screen. No clamp is
     // applied here — Altium lets modals drag completely off the client
@@ -79,7 +69,7 @@ pub(in crate::app::view) fn wrap_modal_scrim<'a>(
         .boxed();
 
     let positioned: Element<'a, Message> =
-        super::super::translate::Translate::new(inner, (left, top)).into();
+        signex_widgets::Translate::new(inner, (left, top)).into();
 
     iced::widget::stack![backdrop, positioned].boxed()
 }
@@ -101,6 +91,38 @@ pub(in crate::app::view) fn draggable_header<'a>(
 }
 
 impl Signex {
+    /// The click-outside layer for `on_dismiss`, then `card` as drawn (it
+    /// positions itself).
+    pub(in crate::app::view) fn dismiss_over<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+    ) -> Vec<Element<'a, Message>> {
+        vec![Self::dismiss_layer(on_dismiss), card]
+    }
+
+    /// [`Self::dismiss_over`] with `card` placed at the absolute `at`.
+    pub(in crate::app::view) fn dismiss_and_place<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+        at: (f32, f32),
+    ) -> Vec<Element<'a, Message>> {
+        Self::dismiss_over(on_dismiss, signex_widgets::Translate::new(card, at).boxed())
+    }
+
+    /// [`Self::dismiss_over`] with `card` centred in the window.
+    pub(in crate::app::view) fn dismiss_and_centre<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+    ) -> Vec<Element<'a, Message>> {
+        let centred = container(card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .boxed();
+        Self::dismiss_over(on_dismiss, centred)
+    }
+
     /// `body` as the in-window modal `modal`: sized to `desired`, capped to
     /// fit the window (#1227), centred, then moved by the modal's drag offset.
     pub(in crate::app::view) fn wrap_dialog<'a>(
@@ -202,9 +224,9 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
 pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> {
     container(
         row![
-            text("\u{25BE}").size(TS.caption).color(muted),
+            text(raw("\u{25BE}")).size(TS.caption).color(muted),
             Space::new().width(6),
-            text(title.to_string()).size(TS.body).color(muted),
+            text(raw(title.to_string())).size(TS.body).color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -215,4 +237,21 @@ pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> 
         ..container::Style::default()
     })
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dismiss_helpers_stack_the_backdrop_under_one_card() {
+        let card = || Space::new().boxed();
+        let msg = Message::noop;
+        assert_eq!(Signex::dismiss_over(msg(), card()).len(), 2);
+        assert_eq!(
+            Signex::dismiss_and_place(msg(), card(), (3.0, 4.0)).len(),
+            2
+        );
+        assert_eq!(Signex::dismiss_and_centre(msg(), card()).len(), 2);
+    }
 }

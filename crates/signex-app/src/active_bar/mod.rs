@@ -3,9 +3,10 @@
 //! 13 icon buttons, each with an optional dropdown menu.
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
-use iced::widget::{Widget, button, svg, text};
+use iced::widget::{Widget, svg};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_widgets::{button, raw, text};
 
 use crate::styles::{self, TypeScale};
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -620,21 +621,24 @@ fn bar_items(
         };
         let pill_text = styles::ti(tokens.text);
         let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
-        let pill: Element<'static, ActiveBarMsg> =
-            button(text(mode_label.to_string()).size(TS.label).color(pill_text))
-                .padding([5, 7])
-                .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
-                .style(move |_: &Theme, _| button::Style {
-                    background: Some(Background::Color(pill_bg)),
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        color: Color::TRANSPARENT,
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                })
-                .boxed();
+        let pill: Element<'static, ActiveBarMsg> = button(
+            text(raw(mode_label.to_string()))
+                .size(TS.label)
+                .color(pill_text),
+        )
+        .padding([5, 7])
+        .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
+        .style(move |_: &Theme, _| button::Style {
+            background: Some(Background::Color(pill_bg)),
+            border: Border {
+                width: 0.0,
+                radius: 3.0.into(),
+                color: Color::TRANSPARENT,
+                ..Border::default()
+            },
+            ..button::Style::default()
+        })
+        .boxed();
         // Declared width (see `DRAW_MODE_PILL_WIDTH_PX`), not measured
         // because `slot_offsets` places every dropdown from these
         // widths — see `ActiveBarItem::Custom`. This pill sits AFTER

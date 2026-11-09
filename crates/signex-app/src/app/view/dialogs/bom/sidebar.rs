@@ -5,8 +5,9 @@
 //! byte-for-byte, so the rendered sidebar is pixel-identical.
 
 use super::super::*;
-use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::{button, raw, text};
 
 use super::super::widgets::section_header;
 
@@ -37,7 +38,7 @@ impl Signex {
         let hover_c = crate::styles::tokens::hover_overlay(tokens);
         let field_c = crate::styles::tokens::resolve(tokens).field;
         let row_pill = |label: String, on: bool, msg: Message| -> Element<'_, Message> {
-            button(text(label).size(TS.body).color(text_c))
+            button(text(raw(label)).size(TS.body).color(text_c))
                 .padding([SP.s, 10.0])
                 .on_press(msg)
                 .style(move |_: &Theme, status: button::Status| {
@@ -66,7 +67,7 @@ impl Signex {
         };
 
         let grouping_row: Element<'_, Message> = row![
-            text("Grouping:").size(TS.body).color(text_muted),
+            text(raw("Grouping:")).size(TS.body).color(text_muted),
             Space::new().width(8),
             row_pill(
                 "Grouped".to_string(),
@@ -90,7 +91,7 @@ impl Signex {
         .boxed();
 
         let format_row: Element<'_, Message> = row![
-            text("Format:").size(TS.body).color(text_muted),
+            text(raw("Format:")).size(TS.body).color(text_muted),
             Space::new().width(8),
             row_pill(
                 "CSV".to_string(),
@@ -142,7 +143,7 @@ impl Signex {
                 .clone()
                 .unwrap_or_else(|| "Base".to_string());
             let mut r = row![
-                text("Variant:").size(TS.body).color(text_muted),
+                text(raw("Variant:")).size(TS.body).color(text_muted),
                 Space::new().width(8),
                 row_pill(
                     "Base".to_string(),
@@ -195,7 +196,7 @@ impl Signex {
         let sidebar_tab = preview.sidebar_tab;
         let tab_pill = |label: &'static str, target: BomSidebarTab| -> Element<'_, Message> {
             let on = sidebar_tab == target;
-            button(text(label.to_string()).size(TS.body).color(text_c))
+            button(text(raw(label.to_string())).size(TS.body).color(text_c))
                 .padding([SP.s, SP.l])
                 .on_press(Message::BomPreview(BomPreviewMsg::SetSidebarTab(target)))
                 .style(move |_: &iced::Theme, status: button::Status| {
@@ -259,9 +260,9 @@ impl Signex {
                 field_c
             };
             let inner = if on {
-                text("\u{2713}").size(TS.caption).color(Color::WHITE)
+                text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
             } else {
-                text(" ").size(TS.caption)
+                text(raw(" ")).size(TS.caption)
             };
             let pip = container(inner)
                 .width(14)
@@ -282,7 +283,7 @@ impl Signex {
                 row![
                     pip,
                     Space::new().width(8),
-                    text(label).size(TS.body).color(text_c),
+                    text(raw(label)).size(TS.body).color(text_c),
                     Space::new().width(Length::Fill),
                 ]
                 .align_y(iced::Alignment::Center),
@@ -324,7 +325,7 @@ impl Signex {
             BomSidebarTab::Rules => self.bom_rules_pane(),
         };
         let sidebar = column![
-            container(text("Properties").size(TS.title).color(text_c))
+            container(text(raw("Properties")).size(TS.title).color(text_c))
                 .padding([10.0, SP.l])
                 .width(Length::Fill),
             container(

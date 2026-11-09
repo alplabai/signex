@@ -288,11 +288,16 @@ impl Signex {
         let current = self.library.editors.get(&address).is_some_and(|state| {
             state.saving_row.is_some() && state.saving_generation == generation
         });
+        let mut cleanup = Task::none();
         match outcome {
             Ok(revision) => {
                 if current {
                     let row = written.map_or(saved.row, |row| *row);
                     self.apply_row_written(&address, row, &saved.saved_hashes, revision);
+                    // The library holds what the recovery copy held (#2141).
+                    if self.library.editors.get(&address).is_some_and(|s| !s.dirty) {
+                        cleanup = self.autosave_after_save(&address.synthetic_tab_path());
+                    }
                 }
             }
             Err(failure) => {
@@ -310,7 +315,7 @@ impl Signex {
         // the refresh shows what is stored. Built before the resume: a
         // resumed Close Library unmounts at once.
         let refresh = self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing);
-        Task::batch([refresh, self.resume_parked_settle(batch)])
+        Task::batch([refresh, cleanup, self.resume_parked_settle(batch)])
     }
 
     /// Everything a row save needs, taken from the editor: the copy to
