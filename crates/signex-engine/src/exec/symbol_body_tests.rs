@@ -171,6 +171,7 @@ fn replacing_a_lib_symbol_that_loses_the_wired_alternate_pin_is_refused() {
     let fresh = lib_symbol(vec![lib_pin(1, "1", -2.54)]);
     let err = e
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![],
         })
@@ -192,6 +193,7 @@ fn replacing_a_lib_symbol_that_loses_an_unwired_alternate_keeps_the_stored_body(
     let fresh = lib_symbol(vec![lib_pin(0, "1", 2.54), lib_pin(1, "2", -2.54)]);
     assert!(
         e.execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![],
         })

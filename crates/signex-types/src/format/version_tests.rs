@@ -66,6 +66,7 @@ fn pad(uuid: &str, number: &str) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        rotation: 0.0,
         net_locked: false,
     }
 }
@@ -175,6 +176,23 @@ fn newer_minor_sheet_is_read_only() {
     assert!(newer.sheet.is_read_only());
     // Re-wrapped (as the engine does), the sheet still says read-only.
     assert!(SnxSchematic::new(newer.sheet).is_from_newer_minor());
+}
+
+/// #2209: the re-keyed `lib_symbols` table is `snxsch/1.1`. A file at the old
+/// `snxsch/1` loads and saves as 1.1; a 1.1 file loads; a build that only
+/// knows `snxsch/1` sees 1.1 as a newer minor, so it opens it read-only
+/// instead of finding no bodies.
+#[test]
+fn snxsch_1_1_loads_and_the_old_token_upgrades_on_save() {
+    assert_eq!(SNXSCH_FORMAT_V1, "snxsch/1.1");
+    let new = SnxSchematic::parse(&format!("format = \"snxsch/1.1\"\n{SCH_ID}")).unwrap();
+    assert!(!new.is_from_newer_minor());
+    let old = SnxSchematic::parse(&format!("format = \"snxsch/1\"\n{SCH_ID}")).unwrap();
+    assert!(!old.is_from_newer_minor());
+    let out = old.write_string().unwrap();
+    assert!(out.starts_with("format = \"snxsch/1.1\""), "{out}");
+    assert!(version::is_newer_minor("snxsch/1.1", "snxsch/1"));
+    assert!(version::refuse_save("snxsch/1.1", "snxsch/1").is_err());
 }
 
 /// #2172 guard: the sheet's and the board's own uuid is the first stored key

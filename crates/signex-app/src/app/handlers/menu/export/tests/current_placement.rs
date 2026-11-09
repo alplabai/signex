@@ -38,7 +38,10 @@ pub(crate) fn placed_twice_on_disk(dir: &tempfile::TempDir) -> (Signex, PathBuf,
 }
 
 /// [`placed_twice_on_disk`] with `listed` as the project's declared pages.
-fn placed_twice_listing(dir: &tempfile::TempDir, listed: &[&str]) -> (Signex, PathBuf, PathBuf) {
+pub(crate) fn placed_twice_listing(
+    dir: &tempfile::TempDir,
+    listed: &[&str],
+) -> (Signex, PathBuf, PathBuf) {
     let _ = crate::diagnostics::init_logging();
     let (top, child) = (
         dir.path().join("top.snxsch"),

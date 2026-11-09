@@ -22,6 +22,8 @@ mod content_tests;
 #[cfg(test)]
 mod engine_tests;
 #[cfg(test)]
+mod pad_shape_tests;
+#[cfg(test)]
 mod tests;
 
 pub use batch::BatchRefusal;

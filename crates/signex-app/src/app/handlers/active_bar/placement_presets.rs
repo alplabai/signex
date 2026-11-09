@@ -207,6 +207,7 @@ impl Signex {
                 unknown: Default::default(),
                 uuid: uuid::Uuid::now_v7(),
                 lib_id: lib_id.to_string(),
+                body_ref: String::new(),
                 reference: String::new(),
                 value: net_name.to_string(),
                 footprint: String::new(),

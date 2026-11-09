@@ -10,6 +10,16 @@ const TOL: f32 = 1e-4;
 
 /// One footprint at the origin holding one 2.0 x 1.0 mm pad at the origin.
 fn pad_polygon(shape: &str, footprint_rotation_deg: f64) -> Vec<[f32; 2]> {
+    pad_polygon_with(shape, footprint_rotation_deg, 0.0, 0.0)
+}
+
+/// As [`pad_polygon`], with the pad's own turn and round-rect corner ratio.
+fn pad_polygon_with(
+    shape: &str,
+    footprint_rotation_deg: f64,
+    pad_rotation_deg: f64,
+    ratio: f64,
+) -> Vec<[f32; 2]> {
     let board: PcbBoard = serde_json::from_str(&format!(
         r#"{{
           "uuid": "8d15b2f9-8f86-41d7-9ec4-0f54a4f3a651", "version": 1,
@@ -25,6 +35,7 @@ fn pad_polygon(shape: &str, footprint_rotation_deg: f64) -> Vec<[f32; 2]> {
               "pad_type": "smd", "shape": "{shape}",
               "position": {{ "x": 0.0, "y": 0.0 }},
               "size": {{ "x": 2.0, "y": 1.0 }},
+              "rotation": {pad_rotation_deg}, "roundrect_ratio": {ratio},
               "drill": null, "layers": ["F.Cu"], "net": null
             }}]
           }}],
@@ -88,12 +99,31 @@ fn rect_pad_45_degrees_lies_on_the_diagonal() {
 }
 
 #[test]
-fn oval_pad_follows_footprint_rotation() {
+fn oval_pad_stays_a_stadium_along_the_turned_axis() {
+    // A 2 x 1 mm stadium: end-cap centres at (+-0.5, 0), radius 0.5.
     for rotation in [90.0_f32, 45.0] {
         for vertex in pad_polygon("oval", f64::from(rotation)) {
             let local = to_pad_frame(vertex, rotation);
-            let on_ellipse = local[0].powi(2) / 1.0 + local[1].powi(2) / 0.25;
-            assert!((on_ellipse - 1.0).abs() < TOL, "{rotation}: {local:?}");
+            let cap = [local[0].clamp(-0.5, 0.5), 0.0];
+            let gap = ((local[0] - cap[0]).powi(2) + local[1].powi(2)).sqrt();
+            assert!((gap - 0.5).abs() < 1e-3, "{rotation}: {local:?}");
         }
     }
+}
+
+#[test]
+fn round_rect_pad_keeps_its_corners_round_and_turns_with_both_rotations() {
+    // Footprint 30 + pad 60 = 90: the 2 x 1 mm pad stands upright.
+    let vertices = pad_polygon_with("round_rect", 30.0, 60.0, 0.25);
+    let extent = extent(&vertices);
+    assert!(
+        (extent[0] - 1.0).abs() < TOL && (extent[1] - 2.0).abs() < TOL,
+        "{extent:?}"
+    );
+    // The square corner (0.5, 1.0) is cut off by the 0.25 mm radius.
+    assert!(
+        vertices
+            .iter()
+            .all(|v| (v[0].abs() - 0.5).abs() > 1e-3 || (v[1].abs() - 1.0).abs() > 1e-3)
+    );
 }

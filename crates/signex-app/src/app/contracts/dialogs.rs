@@ -451,12 +451,6 @@ pub enum SelectionFilterMsg {
 /// `Message::File` and routed to `dispatch_file_message`.
 #[derive(Debug, Clone)]
 pub enum FileMsg {
-    /// The local agent channel (#1924): an agent's request on a project's
-    /// documents (read, edit), or the listener reporting. It joins this family
-    /// because its work is on documents, from outside the window, like the
-    /// other asynchronous document events here. Routed to
-    /// `dispatch_agent_message`.
-    Agent(crate::app::agent::AgentMsg),
     Opened(Option<PathBuf>),
     /// File ▸ New Project — destination picked by the Save-As dialog.
     /// `None` when the user cancelled the picker; on `Some(path)` the

@@ -24,8 +24,8 @@ whatever its config root says.
 The listener is an iced `Subscription` (`listener.rs`). One future owns the
 socket, every connection and the files, so ending the subscription ends all of
 them. A connection only frames lines; each request line becomes
-`Message::File(FileMsg::Agent(AgentMsg::Request { .. }))` (the File family: the
-work is on documents, from outside the window) and runs inside `Signex::update`,
+`Message::Agent(AgentMsg::Request { .. })` (its own root family, routed to
+`dispatch_agent_message`) and runs inside `Signex::update`,
 like a click. That is one sequential queue: a person's edit and an agent's
 request never interleave inside an edit. The reply goes back to the connection
 when `update` has run the request. No window is created and nothing in
@@ -65,7 +65,7 @@ shared with `signex-cli`: one mapping, never a fake `ran`.
 Derived from the command catalog (`allow.rs`), not listed by hand:
 
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
-  `read_document`;
+  `read_document`, `query_pins`;
 - a command that names its document with the `document` operand and takes no
   file path, except the three held back below: today `apply_edits`, `revert`,
   `color_net` and `clear_all_net_colors`. A test pins the final set, so a

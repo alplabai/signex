@@ -35,7 +35,7 @@ fn saved_linked_sheet(f: &Fixture) -> SchematicSheet {
 
 /// Pin count of the first placed symbol's embedded copy.
 fn pins(sheet: &SchematicSheet) -> usize {
-    sheet.lib_symbols[&sheet.symbols[0].lib_id].pins.len()
+    sheet.body_of(&sheet.symbols[0]).expect("body").pins.len()
 }
 
 fn reopen(app: &mut Signex, sheet: SchematicSheet) -> PathBuf {

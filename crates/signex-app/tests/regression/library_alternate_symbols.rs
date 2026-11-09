@@ -83,11 +83,12 @@ pub(crate) fn write_alternate_symbol(f: &Fixture, symbol: &signex_library::primi
 fn bind_placed_symbol_to(app: &mut Signex, lib_id: &str) {
     let engine = app.document_state.active_engine_mut().unwrap();
     let mut d = engine.document().clone();
-    let old = d.symbols[0].lib_id.clone();
-    let mut copy = d.lib_symbols[&old].clone();
+    let mut copy = d.body_of(&d.symbols[0]).expect("body").clone();
     copy.id = lib_id.to_string();
-    d.lib_symbols.insert(lib_id.to_string(), copy);
+    let key = copy.body_ref();
+    d.lib_symbols.insert(key.clone(), copy);
     d.symbols[0].lib_id = lib_id.to_string();
+    d.symbols[0].body_ref = key;
     d.symbols[0].library_version = "0.0.1".into();
     engine.set_document(d);
     let path = app.document_state.active_path.clone().unwrap();
@@ -164,7 +165,9 @@ fn wire_pin(app: &mut Signex, number: &str) {
     let tip = {
         let sheet = doc(app);
         let sym = &sheet.symbols[0];
-        let pin = sheet.lib_symbols[&sym.lib_id]
+        let pin = sheet
+            .body_of(sym)
+            .expect("body")
             .pins
             .iter()
             .find(|p| p.pin.number == number)
@@ -216,7 +219,7 @@ fn switching_to_an_alternate_is_one_undoable_step() {
 
     switch_to(&mut app, id, &alt.lib_id);
     assert_eq!(doc(&app).symbols[0].lib_id, alt.lib_id);
-    assert!(doc(&app).lib_symbols.contains_key(&alt.lib_id));
+    assert!(doc(&app).lib_symbols.values().any(|b| b.id == alt.lib_id));
     assert_eq!(
         choices(&app),
         vec![("Default".to_string(), false), ("IEC".to_string(), true)]
@@ -224,7 +227,7 @@ fn switching_to_an_alternate_is_one_undoable_step() {
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(doc(&app).symbols[0].lib_id, default_lib_id);
-    assert!(!doc(&app).lib_symbols.contains_key(&alt.lib_id));
+    assert!(!doc(&app).lib_symbols.values().any(|b| b.id == alt.lib_id));
     assert_eq!(
         choices(&app),
         vec![("Default".to_string(), true), ("IEC".to_string(), false)]
@@ -421,7 +424,7 @@ fn a_switch_that_moves_a_connected_pin_is_refused() {
     switch_to(&mut app, id, &alt.lib_id);
 
     assert_eq!(doc(&app).symbols[0].lib_id, before);
-    assert!(!doc(&app).lib_symbols.contains_key(&alt.lib_id));
+    assert!(!doc(&app).lib_symbols.values().any(|b| b.id == alt.lib_id));
     assert!(
         logged("U1: switching to IEC would disconnect pin 1; not switched"),
         "the refusal must name the reference and the pin"
@@ -543,7 +546,9 @@ fn a_switch_that_lands_a_pin_on_a_foreign_wire_end_is_refused() {
     let landing = {
         let sheet = doc(&app);
         let sym = &sheet.symbols[0];
-        let pin = sheet.lib_symbols[&sym.lib_id]
+        let pin = sheet
+            .body_of(sym)
+            .expect("body")
             .pins
             .iter()
             .find(|p| p.pin.number == "3")
