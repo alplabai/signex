@@ -53,7 +53,7 @@ impl Signex {
             self.after_sheet_change(path, RenderInvalidation::NET_COLORS);
             return Ok(true);
         }
-        let Some(engine) = self.document_state.engines.get_mut(path) else {
+        let Some(engine) = self.document_state.engines.get(path) else {
             return Err(format!("{} is not loaded", path.display()));
         };
         let group = if undo {
@@ -61,13 +61,20 @@ impl Signex {
         } else {
             engine.next_redo_group()
         };
-        if group.is_some() {
+        if let Some(group) = group {
             return Err(
-                "the next step belongs to a project-wide run (annotate, replace or re-prefix) \
+                if self.document_state.agent_edits.labels.contains_key(&group) {
+                    "the next step is an agent's edit step; take it back with `revert`".to_string()
+                } else {
+                    "the next step belongs to a project-wide run (annotate, replace or re-prefix) \
                  and moves other sheets too; undo it from the sheet it was run on"
-                    .to_string(),
+                        .to_string()
+                },
             );
         }
+        let Some(engine) = self.document_state.engines.get_mut(path) else {
+            return Err(format!("{} is not loaded", path.display()));
+        };
         let stepped = if undo { engine.undo() } else { engine.redo() };
         let invalidation = match stepped {
             Ok(Some(pair)) => Self::render_invalidation_for_patch(pair.document),
@@ -93,7 +100,12 @@ impl Signex {
     /// mark, ERC's epoch, the windows that show it, the panel context. When
     /// the sheet is also the main window's active one the same refresh keeps
     /// that canvas current.
-    fn after_sheet_change(&mut self, path: &Path, invalidation: RenderInvalidation) {
+    pub(crate) fn after_sheet_change(&mut self, path: &Path, invalidation: RenderInvalidation) {
+        // Inside an agent's edit list the refresh is owed once, at its end.
+        if self.document_state.agent_edits.target.as_deref() == Some(path) {
+            self.document_state.agent_edits.owed |= invalidation;
+            return;
+        }
         let display_only = invalidation == RenderInvalidation::NET_COLORS;
         if !display_only {
             self.document_state.note_sheet_edit();
@@ -121,5 +133,43 @@ impl Signex {
                 || !interaction.arc_points.is_empty()
                 || !interaction.polyline_points.is_empty()
                 || interaction.shape_anchor.is_some())
+    }
+
+    /// What the person is in the middle of on the sheet at `path`, in the main
+    /// window or an undocked one, that an agent's `revert` must not cut under:
+    /// drawing, typing into an item of the sheet, or a move armed (#2178).
+    pub(crate) fn person_busy_on(&self, path: &Path) -> Option<&'static str> {
+        let windows = &self.ui_state.windows;
+        let undocked = self.interaction_state.canvases.iter().filter(|(id, _)| {
+            matches!(
+                windows.get(id),
+                Some(crate::app::state::WindowKind::UndockedTab { path: shown, .. })
+                    if shown == path
+            )
+        });
+        let main_shows = self.document_state.active_path.as_deref() == Some(path);
+        let slots: Vec<&crate::canvas::CanvasSlot> = undocked
+            .map(|(_, slot)| slot)
+            .chain(main_shows.then_some(&self.interaction_state.canvas))
+            .collect();
+        let drawing = |slot: &crate::canvas::CanvasSlot| {
+            slot.drawing_mode
+                || !slot.wire_preview.is_empty()
+                || !slot.arc_points.is_empty()
+                || !slot.polyline_points.is_empty()
+                || slot.shape_anchor.is_some()
+        };
+        if self.is_drawing_on(path) || slots.iter().copied().any(drawing) {
+            return Some("the person is drawing on this sheet; try again when the wire is done");
+        }
+        if self.text_edit_targets_sheet_at(path) {
+            return Some("the person is typing into an item of this sheet; try again when done");
+        }
+        // A move is armed on the slot of the window it was armed from
+        // (`arm_move_pick`); `ui_state.move_pick` is one for the whole app.
+        if slots.iter().any(|slot| slot.move_pick.is_some()) {
+            return Some("the person has a move armed on this sheet; try again when it is done");
+        }
+        None
     }
 }

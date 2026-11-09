@@ -53,6 +53,10 @@ the active document. `list_documents`, `document_info`, `resolve`,
 with the answer in `data`. `open_document` and `new_document` answer with the
 new document's `{id, path, kind}`.
 
+`apply_edits` takes a list of edit commands as its `edits` argument and
+applies them to one sheet as one undo step, and `revert` takes that step back;
+both answer in `data`. See [AGENT_EDITS.md](AGENT_EDITS.md).
+
 ```
 {"run": "<uuid>", "seq": 2, "id": "color_net", "status": "ran",
  "messages": [{"level": "INFO", "message": "..."}], "changed": ["<path>"]}
@@ -119,8 +123,8 @@ is enforced before the app sees a command.
   test. `delete` has no command yet: it exists so the first file-removing
   command cannot run unnamed.
 - **Honest results.** A command whose only effect was a window the headless
-  driver dropped (`report_manager_bom`, `annotate_schematic`) is `refused`
-  ("needs a window"), and so is a dialog that could not be answered. Closing a
+  driver dropped is `refused` ("needs a window"; the catalog already refuses
+  the known ones, see `gui_only` below), and so is a dialog that could not be answered. Closing a
   document with unsaved changes closes its tab and parks the edits in memory,
   as in the GUI; the end-of-run log lists the sheet as unsaved.
 - **No code execution, no network.** The run uses a throwaway config root,
@@ -129,8 +133,12 @@ is enforced before the app sees a command.
   runnable headless (every `library` command is `gui_only`).
 - **Same enablement as the GUI.** `dispatch_command`'s enablement gate
   applies; a command the GUI would grey out is `refused` with its reason.
-- **`gui_only` commands** (no operand form yet) are `refused` with the
-  catalog's reason; `commands --json` lists them as `"headless": "gui_only"`.
+- **`gui_only` commands** (their whole effect is window UI, or they need a
+  pointer and have no operand form) are `refused` with "`<id>` only works in
+  a window"; `commands --json` lists them as `"headless": "gui_only"` with
+  that reason. Every catalog command is one or the other (#2170): window
+  only, or it runs (a document change, operands, or the `runs_headless`
+  flag); `every_command_is_classified_for_headless_use` fails otherwise.
 - **Input limits.** A line over `--max-line-bytes` (default 64 KiB), more than
   `--max-commands` (10000) lines, or a path argument to a file over
   `--max-file-bytes` (64 MiB) is refused. Malformed JSON, an unknown field or

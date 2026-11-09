@@ -87,6 +87,10 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("fields", OperandKind::Text),
     ("offset", OperandKind::Text),
     ("limit", OperandKind::Text),
+    ("expect_revision", OperandKind::Text),
+    ("edits", OperandKind::Text),
+    ("summary", OperandKind::Text),
+    ("group", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -192,7 +196,22 @@ pub const ASSIGN_NET_CLASS: &[Operand] = &[
     optional("class", OperandKind::Text),
 ];
 
-/// The golden column: `name:kind` with `/unit`, `?` when optional, comma
+/// `apply_edits` (#2178): a JSON list of catalog edit commands, applied to the
+/// named document as one undo step if its revision is still `expect_revision`.
+pub const APPLY_EDITS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("expect_revision", OperandKind::Text),
+    required("edits", OperandKind::Text),
+    optional("summary", OperandKind::Text),
+];
+/// `revert` (#2178): take back the agent step `group` of the named document,
+/// while it is that document's newest step.
+pub const REVERT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("group", OperandKind::Text),
+];
+
+/// The golden column:`name:kind` with `/unit`, `?` when optional, comma
 /// separated; `-` when the command takes none.
 #[cfg(test)]
 pub fn describe(operands: &[Operand]) -> String {

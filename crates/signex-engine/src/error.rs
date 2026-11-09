@@ -74,6 +74,12 @@ pub enum EngineError {
     UnrecordedEditRefused,
     #[error("this sheet was written by a newer Signex and is read-only; edit it in that version")]
     ReadOnly,
+    #[error("a transaction or batch is already running on this sheet")]
+    TransactionOpen,
+    #[error("no transaction is open on this sheet")]
+    NoTransaction,
+    #[error("a command inside the transaction failed, so it can only be rolled back")]
+    TransactionFailed,
     #[error("the clipboard fragment could not be converted: {0}")]
     ClipboardFragment(String),
 }

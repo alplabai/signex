@@ -45,6 +45,11 @@
     "category": "design"
   },
   {
+    "id": "apply_edits",
+    "group": "General",
+    "category": "edit"
+  },
+  {
     "id": "assign_net_class",
     "group": "Schematic",
     "category": "design"
@@ -828,6 +833,11 @@
     "id": "resolve",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "revert",
+    "group": "General",
+    "category": "edit"
   },
   {
     "id": "rotate_clockwise",

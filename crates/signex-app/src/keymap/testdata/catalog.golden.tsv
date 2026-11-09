@@ -1,4 +1,5 @@
 # id	category	label	menu_label	group	icon	keybind	enablement	flags	operands
+apply_edits	edit	Apply edits (agent)	-	General	-	-	Always	mutates_doc,undoable	document:document,expect_revision:text,edits:text,summary:text?
 autoplace_fields	edit	Autoplace fields	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -9,13 +10,13 @@ cancel_current_tool	interactive	Cancel current stage / exit placement mode	-	Gen
 center_on_cursor	view	Center on cursor	-	General	-	-	Always	gui_only	-
 center_view_at_cursor	view	Center/redraw view around cursor	-	General	-	-	Always	gui_only	-
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
-copy	edit	Copy	-	General	-	-	RequiresSelection	-	-
+copy	edit	Copy	-	General	-	-	RequiresSelection	runs_headless	-
 copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 cut	edit	Cut	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only	-
-cycle_unit	view	Cycle display unit	-	General	-	-	Always	-	-
+cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only	-
 cycle_snap_grid_backward	view	Cycle backward through snap grids	-	General	-	-	Always	gui_only	-
-cycle_selection_mode	select	Cycle selection mode	-	General	-	-	Always	-	-
+cycle_selection_mode	select	Cycle selection mode	-	General	-	-	Always	gui_only	-
 cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	-	General	-	-	Always	gui_only	-
 cycle_wire_bus_graphic_mode	interactive	Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees	-	General	-	-	Always	gui_only	-
 cycle_wiring_mode	interactive	Change wiring mode while dragging connected electrical objects	-	General	-	-	Always	gui_only	-
@@ -57,8 +58,8 @@ open_grid_picker	view	Open grid picker	-	General	-	-	Always	gui_only	-
 open_grid_properties	view	Open grid properties	-	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-
-paste	edit	Paste	-	General	-	-	Always	mutates_doc,undoable	-
-paste_array	edit	Paste array	-	General	-	-	Always	mutates_doc,undoable	-
+paste	edit	Paste	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
+paste_array	edit	Paste array	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 paste_special	edit	Paste special	-	General	-	-	Always	mutates_doc,undoable	-
 placement_accept	interactive	Accept current placement or move stage	-	General	-	-	Always	gui_only	-
 placement_properties	interactive	Edit properties of the object being placed or moved	-	General	-	-	Always	gui_only	-
@@ -70,15 +71,16 @@ redo	edit	Redo	-	General	-	-	Always	mutates_doc	document:document
 refresh_view	view	Refresh/redraw	-	General	-	-	Always	gui_only	-
 remove_last_vertex	interactive	Remove last placed vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 repeat_last_item	edit	Repeat last item	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
-report_manager_bom	reports	Report Manager / BOM	-	General	-	-	Always	-	-
+report_manager_bom	reports	Report Manager / BOM	-	General	-	-	Always	gui_only	-
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
+revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text
 rotate_clockwise	modify	Rotate clockwise by 90 degrees	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 save_document	file	Save document	Save	General	-	-	Always	-	document:document
 save_document_as	file	Save as	Save As...	General	-	-	Always	-	document:document,path:path,overwrite:bool?
-select_all	select	Select all	Select All	General	-	-	Always	-	-
+select_all	select	Select all	Select All	General	-	-	Always	runs_headless	-
 select_expand_connection	select	Select / expand connection	-	General	-	-	Always	gui_only	-
 select_node_or_connection_item	select	Select node / connection item under cursor	-	General	-	-	Always	gui_only	-
 show_all_design_objects	view	Show all design objects	-	General	-	-	Always	gui_only	-
@@ -86,27 +88,27 @@ show_current_command_hotkeys	help	Show graphical editing hotkey list for current
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
 smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	-
 switch_segment_posture	interactive	Switch current segment posture	-	General	-	-	Always	gui_only	-
-toggle_cross_select_mode	select	Toggle Cross Select Mode	-	General	-	-	Always	-	-
-toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	-	-
+toggle_cross_select_mode	select	Toggle Cross Select Mode	-	General	-	-	Always	gui_only	-
+toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only	-
 toggle_search_panel	search	Show/hide search panel	-	General	-	-	Always	gui_only	-
 toggle_selection	select	Add/remove object from selection	Toggle Selection	General	-	-	Always	gui_only	-
-toggle_auto_focus	view	Toggle AutoFocus	AutoFocus (dim unselected)	General	-	-	Always	-	-
-toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	-	-
+toggle_auto_focus	view	Toggle AutoFocus	AutoFocus (dim unselected)	General	-	-	Always	gui_only	-
+toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	gui_only	-
 undo	edit	Undo	-	General	-	-	Always	mutates_doc	document:document
 undo_last_segment	interactive	Undo last segment while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
-unselect_all	select	Unselect all	-	General	-	-	Always	-	-
+unselect_all	select	Unselect all	-	General	-	-	Always	runs_headless	-
 zoom_in_at_cursor	view	Zoom in at cursor	Zoom In	General	-	-	Always	gui_only	-
 zoom_out_at_cursor	view	Zoom out at cursor	Zoom Out	General	-	-	Always	gui_only	-
 zoom_to_all_objects	view	Zoom to all objects	-	General	-	-	Always	gui_only	-
 zoom_to_fit	view	Zoom to fit	Fit All	General	-	-	Always	gui_only	-
 zoom_to_selection_area	view	Zoom to selection area	-	General	-	-	RequiresSelection	gui_only	-
-annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
+annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
-clear_net_highlighting	select	Clear net highlighting	-	Schematic	-	-	RequiresDocument(Schematic)	-	-
+clear_net_highlighting	select	Clear net highlighting	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 draw_graphic_line	place	Draw graphic line	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm
 draw_hierarchical_sheet	place	Draw hierarchical sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 force_annotate_all_schematics	design	Force annotate all schematics	Force Annotate All Schematics	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
@@ -138,10 +140,10 @@ place_wire	place	Place wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutat
 place_wire_to_bus_entry	place	Place wire-to-bus entry	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 previous_highlighted_net_item	select	Previous item on highlighted net	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
-run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	-	-
-open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	-	-
-open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	-	-
-reset_schematic_designators	design	Reset schematic designators	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
+run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	runs_headless	-
+open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+reset_schematic_designators	design	Reset schematic designators	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child sheet	Sync Sheet Pins	Schematic	-	-	RequiresSelection	gui_only	-
@@ -161,8 +163,8 @@ flip_selected_x	modify	Flip selected x	Flip Selected Sheet Symbols Along X	Schem
 flip_selected_y	modify	Flip selected y	Flip Selected Sheet Symbols Along Y	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_to_front	modify	Bring to front	Bring To Front	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 send_to_back	modify	Send to back	Send To Back	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
-bring_to_front_of	modify	Bring to front of	Bring To Front Of	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
-send_to_back_of	modify	Send to back of	Send To Back Of	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
+bring_to_front_of	modify	Bring to front of	Bring To Front Of	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
+send_to_back_of	modify	Send to back of	Send To Back Of	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 place_sheet_symbol	place	Place sheet symbol	Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_sheet_entry	place	Place sheet entry	Sheet Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_device_sheet_symbol	place	Place device sheet symbol	Device Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -200,7 +202,7 @@ draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	Re
 draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_graphic	place	Place graphic	Graphic...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocument(Schematic)	-	-
+clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 color_net	view	Color net	Custom Color...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,color:color,document:document
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
 assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?

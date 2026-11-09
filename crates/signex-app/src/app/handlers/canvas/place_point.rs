@@ -68,7 +68,7 @@ impl Signex {
     /// 1 um key) joins nothing new and would only stack in the file, so it
     /// is not placed.
     pub(crate) fn place_junction_at(&mut self, at: Point) -> bool {
-        let already_there = self.document_state.active_engine().is_some_and(|engine| {
+        let already_there = self.document_state.edit_engine().is_some_and(|engine| {
             engine
                 .document()
                 .junctions

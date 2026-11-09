@@ -21,7 +21,8 @@ struct Wire {
 }
 
 /// One input line: `{"id": "...", "args": {...}}`. An argument is a string,
-/// a number, a boolean, or `[x, y]` for a point; anything else is refused.
+/// a number, a boolean, `[x, y]` for a point, or the list of edit objects of
+/// `apply_edits`; anything else is refused.
 pub fn parse_request(line: &str) -> Result<Request, String> {
     let wire: Wire =
         serde_json::from_str(line).map_err(|error| format!("malformed command line: {error}"))?;
@@ -53,22 +54,10 @@ pub fn request_from_args(id: &str, args: &[String]) -> Result<Request, String> {
     })
 }
 
+/// The text of one argument: the app reads the same forms inside the edits of
+/// `apply_edits`, so there is one rule for it.
 fn operand_text(name: &str, value: &Value) -> Result<String, String> {
-    if name.contains('=') {
-        return Err(format!("operand name `{name}` must not contain `=`"));
-    }
-    match value {
-        Value::String(text) => Ok(text.clone()),
-        Value::Bool(flag) => Ok(flag.to_string()),
-        Value::Number(number) => Ok(number.to_string()),
-        Value::Array(point) => match point.as_slice() {
-            [Value::Number(x), Value::Number(y)] => Ok(format!("{x},{y}")),
-            _ => Err(format!("operand `{name}` must be [x, y] when it is a list")),
-        },
-        Value::Null | Value::Object(_) => Err(format!(
-            "operand `{name}` must be a string, number, boolean or [x, y]"
-        )),
-    }
+    signex_app::headless::operand_text(name, value)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

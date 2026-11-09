@@ -6,6 +6,17 @@ use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 
 pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
+        id: "apply_edits",
+        category: "edit",
+        label: "Apply edits (agent)",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::APPLY_EDITS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "autoplace_fields",
         category: "edit",
         label: "Autoplace fields",
@@ -113,7 +124,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -153,7 +164,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -173,7 +184,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -600,7 +611,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -610,7 +621,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -732,7 +743,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -754,6 +765,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::RESOLVE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "revert",
+        category: "edit",
+        label: "Revert an agent's edit step",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: operands::REVERT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -815,7 +837,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("Select All"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -895,7 +917,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -905,7 +927,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -975,7 +997,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("AutoFocus (dim unselected)"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -985,7 +1007,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("Toggle Grid"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -1016,7 +1038,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

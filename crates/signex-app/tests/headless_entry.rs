@@ -283,11 +283,20 @@ fn run() {
     app.ui_state.io.git = signex_app::io_ports::GitCommits::Skip;
 
     let grid_before = app.ui_state.grid_visible;
-    let (outcome, task) =
+    // A command that only works in a window is refused and changes nothing
+    // (#2170).
+    let (outcome, _task) =
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(
+        outcome,
+        CommandOutcome::Disabled {
+            reason: "`toggle_visible_grid` only works in a window".into()
+        }
+    );
+    assert_eq!(app.ui_state.grid_visible, grid_before, "nothing ran");
+    let (outcome, task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::Ran);
     driver.settle(&mut app, task).expect("command settled");
-    assert_eq!(app.ui_state.grid_visible, !grid_before, "the command ran");
 
     // One answered dialog: Open takes the `path` answer, so the open of a
     // file that is not there reports that file.
@@ -335,7 +344,7 @@ fn run() {
     driver.settle(&mut app, end).expect("session ended");
     assert!(driver.has_exited());
     let written = std::fs::read_to_string(isolated.path().join("prefs.json")).expect("prefs");
-    assert!(written.contains("grid_visible"), "{written}");
+    assert!(written.contains("first_run_tour_dismissed"), "{written}");
     assert_eq!(snapshot(&real), before, "the real config root changed");
 }
 
@@ -525,8 +534,7 @@ fn undo_depth_dispatch() {
         .expect("engine");
     assert_eq!(engine.undo_depth(), 100);
     app.document_state.engines.insert(path.clone(), engine);
-    let (outcome, _task) =
-        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    let (outcome, _task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::Ran);
     assert_eq!(app.document_state.engines[&path].undo_depth(), 3);
 }
