@@ -131,9 +131,13 @@ fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
         && endpoint_answers(&entry.socket)
 }
 
-/// Does a socket answer a connection? The connect does not block: a peer that
-/// is too busy to accept (a full backlog, a stopped process) answers `EAGAIN`
-/// or `EINPROGRESS` and counts as there. The connection is closed at once.
+/// Does a socket answer a connection? The connect does not block, so a peer
+/// that does not accept cannot hang it. Where it would block, Linux answers
+/// `EAGAIN` (or `EINPROGRESS`), which counts as there. macOS answers
+/// `ECONNREFUSED` for a full backlog, so a stalled peer whose backlog has
+/// filled may be taken for a dead one there; the only effect is that the
+/// registry then points at this instance. The connection is closed at once and
+/// the descriptor is close-on-exec.
 #[cfg(unix)]
 fn endpoint_answers(socket: &str) -> bool {
     let path = socket.as_bytes();
@@ -148,27 +152,55 @@ fn endpoint_answers(socket: &str) -> bool {
         for (slot, byte) in address.sun_path.iter_mut().zip(path) {
             *slot = *byte as libc::c_char;
         }
-        let fd = libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0);
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let kind = libc::SOCK_STREAM | libc::SOCK_CLOEXEC;
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        let kind = libc::SOCK_STREAM;
+        let fd = libc::socket(libc::AF_UNIX, kind, 0);
         if fd < 0 {
             return false;
         }
+        // Close-on-exec at once where `socket` could not set it, and
+        // non-blocking; either failing ends the probe.
         let flags = libc::fcntl(fd, libc::F_GETFL);
-        libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        let prepared = flags >= 0
+            && libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) >= 0
+            && libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) >= 0;
+        if !prepared {
+            libc::close(fd);
+            return false;
+        }
         let size = std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t;
         let connected = libc::connect(fd, (&raw const address).cast(), size) == 0;
         let error = std::io::Error::last_os_error().raw_os_error();
         libc::close(fd);
-        connected || matches!(error, Some(libc::EINPROGRESS | libc::EAGAIN))
+        connect_answered(connected, error)
     }
 }
 
+/// What a non-blocking connect's result says: it connected, or it would
+/// block (the peer exists but is busy). Anything else (no file, refused) is
+/// no peer.
+#[cfg(unix)]
+fn connect_answered(connected: bool, error: Option<i32>) -> bool {
+    connected || matches!(error, Some(libc::EINPROGRESS | libc::EAGAIN))
+}
+
+/// Does a pipe answer a connection? The pipe is opened for identification
+/// only: with the default (impersonation) a server that squats a stale
+/// entry's name could act as the probing user.
 #[cfg(windows)]
 fn endpoint_answers(pipe: &str) -> bool {
+    use std::os::windows::fs::OpenOptionsExt as _;
     /// `ERROR_PIPE_BUSY`: the pipe exists and all its instances are in use.
     const PIPE_BUSY: i32 = 231;
+    /// `SECURITY_IDENTIFICATION` (`SecurityIdentification << 16`); `std` adds
+    /// `SECURITY_SQOS_PRESENT` itself.
+    const SECURITY_IDENTIFICATION: u32 = 0x0001_0000;
     match std::fs::OpenOptions::new()
         .read(true)
         .write(true)
+        .security_qos_flags(SECURITY_IDENTIFICATION)
         .open(pipe)
     {
         Ok(_connected) => true,
@@ -455,6 +487,20 @@ mod tests {
         sync(dir.path(), &planted, std::slice::from_ref(&a)).unwrap();
         sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).expect("taken over");
         assert_eq!(entry_pid(dir.path(), &a), 41);
+    }
+
+    /// A full backlog cannot be driven the same way on every system (macOS
+    /// answers `ECONNREFUSED`, Linux `EAGAIN`), so the reading of the connect's
+    /// result is tested alone.
+    #[cfg(unix)]
+    #[test]
+    fn a_connect_that_would_block_means_a_peer_is_there_and_a_refusal_does_not() {
+        assert!(connect_answered(true, None));
+        assert!(connect_answered(false, Some(libc::EAGAIN)));
+        assert!(connect_answered(false, Some(libc::EINPROGRESS)));
+        assert!(!connect_answered(false, Some(libc::ECONNREFUSED)));
+        assert!(!connect_answered(false, Some(libc::ENOENT)));
+        assert!(!connect_answered(false, None));
     }
 
     #[cfg(unix)]

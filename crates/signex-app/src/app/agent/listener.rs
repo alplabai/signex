@@ -93,7 +93,8 @@ impl Drop for Guard {
 }
 
 /// Remove the token, the socket and the registry entries of `boot_id`, under
-/// the registry lock so a write in flight cannot bring an entry back. Safe to
+/// the registry lock so it does not interleave with a write. A write that
+/// runs after it can still land; the quit path cleans the id again. Safe to
 /// repeat; what cannot be removed is said in Messages.
 pub(super) fn cleanup(dir: &std::path::Path, boot_id: &str, registry_lock: &Mutex<()>) {
     let owner = Owner {

@@ -10,6 +10,10 @@ use super::listener::ListenerConfig;
 use super::registry::Owner;
 use super::token::{Token, boot_id};
 
+/// How many boot ids the quit path remembers (restarts and toggles each add
+/// one); cleaning an id twice is harmless.
+pub(super) const MAX_TOUCHED: usize = 32;
+
 pub(crate) struct AgentState {
     /// `None` when the system gave no randomness: the listener never starts.
     ids: Option<(String, Token)>,
@@ -96,12 +100,22 @@ impl AgentState {
     /// New ids for the next time the setting goes on. A listener that is
     /// being dropped removes the files named by its own boot id, which a new
     /// one must not share, and an old token never works again. The old id
-    /// leaves `touched`: its listener cleans its own files as it ends.
+    /// stays in `touched`: a registry write of that listener can still land
+    /// after its cleanup, and the quit path removes it.
     pub(super) fn rotate_ids(&mut self) {
-        if let Some((old, _)) = &self.ids {
-            self.touched.retain(|id| id != old);
-        }
         self.ids = boot_id().zip(Token::generate());
+    }
+
+    /// Remember that the listener `boot_id` ran, for the quit path. The list
+    /// is bounded: past [`MAX_TOUCHED`] the oldest id is dropped.
+    pub(super) fn note_touched(&mut self, boot_id: String) {
+        if self.touched.contains(&boot_id) {
+            return;
+        }
+        self.touched.push(boot_id);
+        if self.touched.len() > MAX_TOUCHED {
+            self.touched.remove(0);
+        }
     }
 
     /// The id of the listener the app wants now.

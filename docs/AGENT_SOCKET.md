@@ -192,14 +192,20 @@ listener that has gone). An entry file is data another process wrote, so
 only the endpoint its boot id gives is probed: the boot id must be 16
 lowercase hex characters and `socket` must equal the endpoint that boot id
 names in the runtime folder, or the entry is stale and nothing it names is
-touched. The probe does not block (a peer too busy to accept counts as
-there), connects and closes at once without sending a byte, so the other
-instance logs nothing. The entry of another
+touched. The probe does not block, connects and closes at once without
+sending a byte (the descriptor is close-on-exec), so the other instance logs
+nothing. Where the connect would block, Linux answers `EAGAIN`, which counts
+as there. macOS answers `ECONNREFUSED` for a full backlog, so there a stalled
+peer whose backlog has filled may be taken for a dead one; the only effect is
+that the registry then points at this instance. On Windows the pipe is opened
+for identification only (`SECURITY_IDENTIFICATION`), so a server that squats a
+stale entry's name cannot impersonate the user probing it. The entry of another
 live instance is kept and Messages says the project is also open there;
 closing the project in one instance never unregisters the other. An entry
 that is already ours and unchanged is not rewritten. The registry is written
-and removed under one lock, so a write in flight cannot bring back an entry
-the exit removed.
+and removed under one lock, so those never interleave. A write that runs after
+its listener's cleanup can still land, so the quit path cleans every boot id
+this run reported (the last 32), not only the current one.
 
 A write that fails, or leaves a project to another instance, is tried again:
 while a listener is up and a project is unregistered, a timer asks for
@@ -215,7 +221,7 @@ new subscription; after those five restarts it stays off and Messages says to
 turn the setting off and on in Preferences. Only a listener that has served a
 connection earns the count back (a listener that binds and then fails again
 does not), and turning the setting on resets it. The boot ids of listeners
-that have ended are forgotten, so the quit path's list stays short.
+that have ended stay in the quit path's list, which keeps the last 32.
 
 ## Known limits
 

@@ -17,6 +17,7 @@ use super::super::AgentMsg;
 use super::super::listener::token_path;
 use super::super::listener::{ListenerConfig, serve};
 use super::super::registry::{self, FORMAT};
+use super::super::state::MAX_TOUCHED;
 use super::super::wire::MAX_REQUEST_BYTES;
 use super::{app_at_work, line, path, revision, snapshot};
 use crate::app::{Message, Signex};
@@ -701,11 +702,67 @@ fn a_listener_that_starts_and_fails_every_time_is_restarted_at_most_five_times()
         let _t = app.update(Message::Agent(AgentMsg::RestartListener { boot_id }));
     }
     assert_eq!(scheduled, MAX_RESTARTS, "no endless restart loop");
-    assert!(
-        app.agent.touched.len() <= 1,
-        "boot ids of ended listeners are forgotten: {:?}",
-        app.agent.touched
-    );
+    // The ids of the listeners that ended stay for the quit path, bounded.
+    assert!(app.agent.touched.len() > 1, "{:?}", app.agent.touched);
+    assert!(app.agent.touched.len() <= MAX_TOUCHED);
+}
+
+#[test]
+fn the_quit_path_remembers_the_last_boot_ids_and_forgets_the_oldest() {
+    let mut app = app_at_work();
+    let mut ids = Vec::new();
+    for _ in 0..(MAX_TOUCHED + 8) {
+        let boot_id = app.agent.boot_id().unwrap().to_string();
+        let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+            boot_id: boot_id.clone(),
+            endpoint: "/live.sock".into(),
+        }));
+        ids.push(boot_id);
+        app.agent.rotate_ids();
+    }
+    assert_eq!(app.agent.touched.len(), MAX_TOUCHED);
+    assert_eq!(app.agent.touched.first(), ids.get(8), "the oldest are gone");
+    assert_eq!(app.agent.touched.last(), ids.last(), "the newest stays");
+}
+
+/// A registry write of a listener that has ended can land after that
+/// listener's cleanup; the quit path still removes what it wrote.
+#[test]
+fn a_late_registry_write_of_an_ended_listener_is_removed_on_quit() {
+    let root = scratch();
+    let (mut app, _config, dir) = app_and_config(root.path());
+    let project = app.document_state.projects[0].path.clone();
+    std::fs::create_dir_all(project.parent().unwrap()).unwrap();
+    std::fs::write(&project, "{}").unwrap();
+    let entry = dir
+        .join(super::super::files::REGISTRY_DIR)
+        .join(registry::entry_file_name(
+            &std::fs::canonicalize(&project).unwrap(),
+        ));
+    super::super::files::prepare_dir(&dir).unwrap();
+    let old = app.agent.boot_id().unwrap().to_string();
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: old.clone(),
+        endpoint: "/run/old.sock".into(),
+    }));
+    // The listener fails and is replaced; its slow write lands afterwards.
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: old.clone(),
+        reason: "gone".into(),
+    }));
+    app.agent.rotate_ids();
+    let late = registry::Owner {
+        pid: std::process::id(),
+        boot_id: old,
+        endpoint: "/run/old.sock".into(),
+    };
+    registry::sync(&dir, &late, std::slice::from_ref(&project)).unwrap();
+    assert!(entry.exists());
+
+    let mut driver = crate::task_driver::TaskDriver::new();
+    let quit = app.flush_quit_writes_then(iced::Task::none());
+    driver.settle(&mut app, quit).unwrap();
+    assert!(!entry.exists(), "the quit path removed it");
 }
 
 #[test]

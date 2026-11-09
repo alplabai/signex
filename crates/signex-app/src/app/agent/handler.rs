@@ -74,9 +74,7 @@ impl Signex {
                 // The last listener's registry trouble is not this one's.
                 self.agent.registry_retry = false;
                 self.agent.registry_in_flight = false;
-                if !self.agent.touched.contains(&boot_id) {
-                    self.agent.touched.push(boot_id);
-                }
+                self.agent.note_touched(boot_id);
                 self.sync_agent_registry().unwrap_or_else(Task::none)
             }
             AgentMsg::ListenerHealthy { boot_id } => {
@@ -92,8 +90,6 @@ impl Signex {
                     return Task::none();
                 }
                 self.agent.listener_closed();
-                // Its future ended and cleaned its own files.
-                self.agent.touched.retain(|id| *id != boot_id);
                 let Some(delay) = restart_delay(self.agent.restarts) else {
                     crate::diagnostics::log_warning(format!(
                         "Agent connections: stopped: {reason}; it failed {MAX_RESTARTS} times, so it stays off. Turn \"Allow agent connections\" off and on in Preferences to try again"
