@@ -81,7 +81,9 @@ netlist). It sees `1.1` as a newer minor, so it opens the file read-only and
 refuses to save it (`is_newer_minor`, `refuse_save`). A `snxsch/1` file loads
 and is saved as `1.1`. The clipboard fragment marker is
 `signex-clipboard-fragment/2` for the same reason: an older build ignores the
-text instead of pasting pinless parts.
+text instead of pasting pinless parts. This build still reads the `/1` marker
+an older build wrote: the same parser upgrades its bodies to versions, so the
+pasted parts resolve. It keeps writing `/2`.
 
 ### One-time upgrade of old files
 
@@ -94,6 +96,18 @@ serde shape) and keeps the old key rather than overwrite a different body. This
 is the single exception to the
 no-legacy rule. It is removable: delete that function and its call in
 `SnxSchematic::parse` when old files are no longer expected.
+
+### A `body_ref` that names no body
+
+A merge or a hand edit can leave a symbol with `body_ref = "L:A#00000000"`
+while the table holds no such key. On load, after the upgrade,
+`SchematicSheet::repair_dangling_body_refs` finds each such symbol and records
+one `SheetLoadRepair::BodyRefDangling` per symbol (shown in Messages with the
+file name, the designator, its position and the missing key; the sheet opens
+modified). Fallback: when the sheet embeds exactly one body of that library
+symbol, the symbol is re-pointed to it and the repair says so. With none or
+several, the symbol is left dangling and only reported, because no version is
+picked for the user; Update from library fixes it.
 
 ## Units on different versions
 

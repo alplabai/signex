@@ -980,6 +980,52 @@ fn an_old_form_sheet_upgrades_on_load_and_saves_in_the_new_form() {
     );
 }
 
+/// A sheet whose one symbol U7 names `L:A#00000000` while the table holds the
+/// bodies `held`; parsed back, with the repairs it reports.
+fn load_with_dangling_ref(held: &[&str]) -> (SnxSchematic, Vec<String>) {
+    let mut sheet = empty_sheet();
+    for tag in held {
+        sheet.embed_body(lib_body("L:A", tag)).unwrap();
+    }
+    let mut sym = sample_symbol();
+    sym.lib_id = "L:A".into();
+    sym.reference = "U7".into();
+    sym.body_ref = "L:A#00000000".into();
+    sheet.symbols.push(sym);
+    let text = SnxSchematic::new(sheet).write_string().unwrap();
+    let mut loaded = SnxSchematic::parse(&text).unwrap();
+    let repairs = loaded
+        .sheet
+        .take_load_repairs()
+        .iter()
+        .map(SheetLoadRepair::describe)
+        .collect();
+    (loaded, repairs)
+}
+
+#[test]
+fn a_dangling_body_ref_among_several_versions_is_reported_and_left_alone() {
+    let (loaded, repairs) = load_with_dangling_ref(&["1", "2"]);
+    assert_eq!(loaded.sheet.symbols[0].body_ref, "L:A#00000000");
+    assert!(loaded.sheet.body_of(&loaded.sheet.symbols[0]).is_none());
+    assert_eq!(repairs.len(), 1, "{repairs:?}");
+    assert!(repairs[0].contains("symbol U7 #1"), "{}", repairs[0]);
+    assert!(repairs[0].contains("L:A#00000000"), "{}", repairs[0]);
+    assert!(repairs[0].contains("2 other versions"), "{}", repairs[0]);
+}
+
+#[test]
+fn a_dangling_body_ref_with_one_candidate_is_repointed_and_reported() {
+    let (loaded, repairs) = load_with_dangling_ref(&["1"]);
+    let only = lib_body("L:A", "1").body_ref();
+    assert_eq!(loaded.sheet.symbols[0].body_ref, only);
+    assert!(loaded.sheet.body_of(&loaded.sheet.symbols[0]).is_some());
+    assert_eq!(repairs.len(), 1, "{repairs:?}");
+    assert!(repairs[0].contains("symbol U7 #1"), "{}", repairs[0]);
+    assert!(repairs[0].contains("L:A#00000000"), "{}", repairs[0]);
+    assert!(repairs[0].contains(&only), "{}", repairs[0]);
+}
+
 #[test]
 fn the_shared_resolver_gives_each_instance_the_version_it_draws_with() {
     // ERC, the netlist and the output writers all read a placed symbol's body

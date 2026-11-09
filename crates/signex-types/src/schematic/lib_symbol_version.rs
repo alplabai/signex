@@ -240,4 +240,49 @@ impl SchematicSheet {
             }
         }
     }
+
+    /// Report every symbol whose non-empty `body_ref` is not a key of
+    /// `lib_symbols`, after [`Self::upgrade_unversioned_bodies`] (#2209). A
+    /// merge or a hand edit can leave one, and `body_of` would then draw the
+    /// part without pins and drop it from the netlist and ERC.
+    ///
+    /// Fallback: when the sheet holds exactly one body of that library
+    /// symbol, the symbol is re-pointed to it; with none or several it stays
+    /// dangling (no version is picked for the user). Either way it is
+    /// reported.
+    pub(crate) fn repair_dangling_body_refs(&mut self) -> Vec<crate::format::SheetLoadRepair> {
+        use crate::format::{RepairedObject, SheetLoadRepair};
+        let mut repairs = Vec::new();
+        for i in 0..self.symbols.len() {
+            let sym = &self.symbols[i];
+            if sym.body_ref.is_empty() || self.lib_symbols.contains_key(&sym.body_ref) {
+                continue;
+            }
+            let missing = sym.body_ref.clone();
+            let lib_id = lib_id_of_body_ref(&missing);
+            let mut same: Vec<&String> = self
+                .lib_symbols
+                .keys()
+                .filter(|k| lib_id_of_body_ref(k) == lib_id)
+                .collect();
+            same.sort();
+            let repointed = (same.len() == 1).then(|| same[0].clone());
+            let versions = same.len();
+            let object = RepairedObject {
+                kind: "symbol",
+                name: sym.reference.clone(),
+                position: i + 1,
+            };
+            if let Some(to) = &repointed {
+                self.symbols[i].body_ref = to.clone();
+            }
+            repairs.push(SheetLoadRepair::BodyRefDangling {
+                object,
+                missing,
+                repointed,
+                versions,
+            });
+        }
+        repairs
+    }
 }

@@ -626,7 +626,9 @@ impl SnxSchematic {
             },
         };
         sheet.upgrade_unversioned_bodies();
+        let body_repairs = sheet.repair_dangling_body_refs();
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
+        sheet.unknown.load_repairs.splice(0..0, body_repairs);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
 
