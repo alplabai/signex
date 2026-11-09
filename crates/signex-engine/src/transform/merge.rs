@@ -155,6 +155,14 @@ impl Engine {
     /// `at` to `far`, where the dropped wire ended: `far` joins `dirty`
     /// (that is how a chain of new neighbours cascades), the loop runs until
     /// no foldable pair is left, and the result is the full pass's result.
+    ///
+    /// One step of that needs saying: only `far` is added, not the survivor's
+    /// other end `o`. When the survivor was unchanged and `o` is not dirty,
+    /// the wires ending at `o` and their straight-through-ness there must be
+    /// as before. That holds because a fold extends the survivor collinearly,
+    /// away from `o` (`far` lies past `at`, on the far side from `o`): the
+    /// survivor still ends at `o` with the same direction. A fold that bent,
+    /// or extended toward `o`, would break this and the proof with it.
     /// When `pre` or the wires now cannot be told apart by uuid, the full
     /// pass runs.
     pub(crate) fn merge_collinear_wires_near(&mut self, pre: &PreWires) -> bool {
@@ -364,7 +372,7 @@ impl PreWires {
     /// The endpoint keys of every wire that differs between these wires and
     /// `now` (as it was and as it is), added or removed. `None` when `now`
     /// has two wires of one uuid, or these do.
-    fn changed_keys(&self, now: &[Wire]) -> Option<HashSet<Key>> {
+    pub(crate) fn changed_keys(&self, now: &[Wire]) -> Option<HashSet<Key>> {
         if !self.unique {
             return None;
         }
