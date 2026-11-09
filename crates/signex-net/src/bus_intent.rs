@@ -106,6 +106,31 @@ impl<'a> Analysed<'a> {
     }
 }
 
+/// The bus runs whose names change from `before` to `after` (a label or a
+/// junction merging two differently named runs, or a named run gaining a
+/// name): the bus half of the point placement check.
+pub(crate) fn bus_name_changes(
+    before: &SchematicSheet,
+    after: &SchematicSheet,
+) -> Vec<crate::build::NameChange> {
+    let (b, a) = (Analysed::of(before), Analysed::of(after));
+    let pairs: Vec<(usize, usize)> = before
+        .buses
+        .iter()
+        .enumerate()
+        .filter_map(|(i, bus)| {
+            let j = after.buses.iter().position(|x| x.uuid == bus.uuid)?;
+            Some((b.seg_group[i], a.seg_group[j]))
+        })
+        .collect();
+    let names = |side: &Analysed<'_>| -> std::collections::HashMap<usize, Vec<String>> {
+        (0..side.analysis.groups.len())
+            .map(|g| (g, side.names_of(g)))
+            .collect()
+    };
+    crate::build::name_changes(&pairs, &names(&b), &names(&a), true)
+}
+
 /// Judge the bus run from `start` to `end` that turned `before` into `after`
 /// (the run's own segments are the ones of `after` that `before` lacks).
 pub fn bus_intent(

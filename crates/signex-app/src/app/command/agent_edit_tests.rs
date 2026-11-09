@@ -217,6 +217,14 @@ fn an_edit_naming_another_document_than_the_list_is_refused() {
         json!([{"id": "place_junction", "args": {"at": [20, 20], "document": own}}]),
     );
     assert_eq!(answer["changed"], true);
+    // The call names the sheet by path; an edit may name it by id.
+    let id = uuid::Uuid::from_u128(B).to_string();
+    let answer = applied(
+        &mut app,
+        "b.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [24, 24], "document": id}}]),
+    );
+    assert_eq!(answer["changed"], true);
 }
 
 /// #2199: a pin reference in an edit resolves on the call's `document`, not on

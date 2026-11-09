@@ -225,7 +225,9 @@ fn a_label_that_would_rename_the_net_at_its_point_is_refused_unless_allowed() {
                 &mut app,
                 id,
                 &[at, "text=GND"],
-                "is on net VCC; a GND label there would short VCC and GND; pass allow_merge=true",
+                // Joined by name for a net label, a plain rename for a
+                // hierarchical one: both shorts VCC with GND.
+                "pass allow_merge=true to merge on purpose",
             );
         }
         let before = sheet_shape(&app);
@@ -262,7 +264,7 @@ fn a_power_port_that_would_rename_the_net_is_refused_unless_allowed() {
         &mut app,
         "place_power_symbol",
         &["at=R1.2", gnd[0], gnd[1]],
-        "a GND power port there would short VCC and GND",
+        "would add GND to the net {VCC}",
     );
     let outcome = run(
         &mut app,
@@ -417,7 +419,7 @@ fn a_name_the_net_already_carries_is_no_short() {
         &mut app,
         "place_net_label",
         &["at=R1.2", "text=GND"],
-        "is on net VCC, X; a GND label there would short VCC, X and GND",
+        "would join the nets {VCC, X} and {GND}",
     );
 }
 
@@ -716,6 +718,98 @@ fn a_bus_that_touches_another_run_an_entry_or_a_bend_target_is_refused() {
     );
     let reason = refusal(outcome);
     assert!(reason.contains("the bus also touches"), "{reason}");
+}
+
+#[test]
+fn a_junction_or_label_that_ties_a_loose_port_to_a_net_is_refused_unless_allowed() {
+    // A VCC wire with a GND port on its interior (no junction ties it yet).
+    let mut sheet = two_parts();
+    sheet
+        .wires
+        .push(wire(Point::new(16.51, 12.7), Point::new(34.29, 12.7)));
+    sheet.labels.push(label("VCC", Point::new(16.51, 12.7)));
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::now_v7(),
+        lib_id: "power:GND".into(),
+        reference: "#PWR01".into(),
+        value: "GND".into(),
+        is_power: true,
+        position: Point::new(25.4, 12.7),
+        unit: 1,
+        ..Symbol::default()
+    });
+    for (id, operands) in [
+        ("place_junction", vec!["at=25.4,12.7"]),
+        ("place_net_label", vec!["at=25.4,12.7", "text=VCC"]),
+    ] {
+        let mut app = app_with(sheet.clone());
+        refused_with(&mut app, id, &operands, "pass allow_merge=true");
+        let mut allowed = operands.clone();
+        allowed.push("allow_merge=true");
+        assert_eq!(run(&mut app, id, &allowed), CommandOutcome::Ran, "{id}");
+    }
+}
+
+#[test]
+fn a_sheet_pin_on_a_referenced_tip_is_refused_for_every_pin_reference_placement() {
+    use signex_types::schematic::{ChildSheet, FillType, SheetPin};
+    let mut sheet = two_parts();
+    sheet.child_sheets.push(ChildSheet {
+        uuid: Uuid::now_v7(),
+        name: "Sub".into(),
+        filename: "sub.snxsch".into(),
+        position: Point::new(16.51, 40.0),
+        size: (10.0, 10.0),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: vec![SheetPin {
+            uuid: Uuid::now_v7(),
+            name: "SDA".into(),
+            direction: "input".into(),
+            position: Point::new(16.51, 12.7),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        }],
+        instances: Vec::new(),
+    });
+    for (id, operands) in [
+        ("place_wire", vec!["start=R1.2", "end=C1.1"]),
+        ("place_net_label", vec!["at=R1.2", "text=X"]),
+        ("place_no_connect", vec!["at=R1.2"]),
+        ("place_junction", vec!["at=R1.2"]),
+    ] {
+        let mut app = app_with(sheet.clone());
+        refused_with(&mut app, id, &operands, "sheet pin SDA of Sub");
+    }
+}
+
+#[test]
+fn a_label_that_gives_a_bus_run_another_runs_name_is_refused_unless_allowed() {
+    let mut app = app_with(two_named_buses(true));
+    refused_with(
+        &mut app,
+        "place_net_label",
+        &["at=57.15,38.1", "text=D[0..7]"],
+        "would add D[0..7] to the bus {A[0..15]}",
+    );
+    let outcome = run(
+        &mut app,
+        "place_net_label",
+        &["at=57.15,38.1", "text=D[0..7]", "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    // Its own name is no change.
+    let mut app = app_with(two_named_buses(true));
+    let outcome = run(
+        &mut app,
+        "place_net_label",
+        &["at=57.15,38.1", "text=A[0..15]"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
 }
 
 #[test]

@@ -16,11 +16,14 @@
 //! (`wire_runs`); they still commit through the click's `apply_engine_commands`.
 
 use iced::Task;
-use signex_net::TipAnchor;
+use signex_net::NameChange;
 use signex_types::schematic::{LabelType, Point};
 
 use super::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::handlers::canvas::{GLOBAL_PORT_SHAPE, pre_placement_shape};
+use crate::app::handlers::canvas::{
+    GLOBAL_PORT_SHAPE, junction_command, label_command, no_connect_command, power_commands,
+    pre_placement_shape,
+};
 use crate::app::{Message, Signex};
 use crate::schematic_runtime::RenderInvalidation;
 
@@ -166,6 +169,39 @@ fn text(args: &CommandArgs, name: &str) -> Result<String, String> {
     }
 }
 
+/// Why a placement that changes the names of a net or bus is refused.
+fn name_change_refusal(what: &str, at: Point, change: &NameChange) -> String {
+    let kind = if change.bus { "bus" } else { "net" };
+    let set = |names: &[String]| format!("{{{}}}", names.join(", "));
+    let tail = "pass allow_merge=true to merge on purpose (see docs/CLI.md, \"Why allow_merge\")";
+    match change.before.as_slice() {
+        [only] => {
+            let added: Vec<&str> = change
+                .after
+                .iter()
+                .filter(|n| !only.contains(n))
+                .map(String::as_str)
+                .collect();
+            format!(
+                "a {what} at {},{} would add {} to the {kind} {}; {tail}",
+                at.x,
+                at.y,
+                added.join(", "),
+                set(only)
+            )
+        }
+        sets => {
+            let named: Vec<String> = sets.iter().map(|s| set(s)).collect();
+            format!(
+                "a {what} at {},{} would join the {kind}s {}; {tail}",
+                at.x,
+                at.y,
+                named.join(" and ")
+            )
+        }
+    }
+}
+
 fn placed(was_placed: bool) -> Result<(), String> {
     if was_placed {
         Ok(())
@@ -237,94 +273,46 @@ impl Signex {
         ))
     }
 
-    /// A junction that would join two differently named nets is refused unless
-    /// `allow_merge=true`: the name sets of the nets under the point are
-    /// compared before the junction ties them (#2199, "Why allow_merge" in
-    /// `docs/CLI.md`). Unnamed nets are what a junction is for.
-    fn refuse_junction_short(&self, args: &CommandArgs, at: Point) -> Result<(), String> {
-        if matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
-            return Ok(());
-        }
+    /// The one check of a point placement (#2199): its real commands are
+    /// applied to a copy of the edit target and the copy is judged against the
+    /// sheet by the netlist and the bus analysis (`signex_net::placement_intent`).
+    /// By pin reference, anything not on the pin's net that would end up on it
+    /// is refused with no escape; a name change (two named nets or buses made
+    /// one, or a named one gaining a name) is refused unless `allow_merge=true`.
+    /// Rules: `docs/CLI.md`, "Labels, power ports, junctions and no-connects".
+    fn check_placement(
+        &self,
+        args: &CommandArgs,
+        at: Point,
+        commands: &[signex_engine::Command],
+        what: &str,
+    ) -> Result<(), String> {
         let Some(engine) = self.document_state.edit_engine() else {
             return Ok(());
         };
-        let nets = signex_net::junction_nets(engine.document(), at);
-        if !signex_net::names_short(&nets) {
-            return Ok(());
-        }
-        let named: Vec<String> = nets
-            .iter()
-            .filter(|n| !n.is_empty())
-            .map(|n| format!("{{{}}}", n.join(", ")))
-            .collect();
-        Err(format!(
-            "a junction at {},{} would join the nets {}; pass allow_merge=true to merge on purpose (see docs/CLI.md, \"Why allow_merge\")",
-            at.x,
-            at.y,
-            named.join(" and ")
-        ))
-    }
-
-    /// A label, power port, junction or no-connect on a pin reference is
-    /// refused, with no escape,
-    /// when it would pull another net onto the pin's: a wire passing under the
-    /// tip joins through the label (the same end rules as a wire run).
-    fn refuse_joins(
-        &self,
-        args: &CommandArgs,
-        at: Point,
-        what: &str,
-        anchor: TipAnchor,
-    ) -> Result<(), String> {
-        let Some(OperandValue::PinRef { designator, pin }) = args.operand("at") else {
-            return Ok(());
+        let before = engine.document();
+        let after = Self::sheet_after(before, commands)?;
+        let (pin, subject) = match args.operand("at") {
+            Some(OperandValue::PinRef { designator, pin }) => (
+                self.pin_ref(designator, pin)
+                    .ok()
+                    .map(|resolved| signex_net::EndSpec {
+                        at,
+                        pin: Some((resolved.symbol, resolved.pin)),
+                    }),
+                format!("{what} on {designator}.{pin}"),
+            ),
+            _ => (None, what.to_string()),
         };
-        let (Some(engine), Ok(resolved)) = (
-            self.document_state.edit_engine(),
-            self.pin_ref(designator, pin),
-        ) else {
-            return Ok(());
-        };
-        let spec = signex_net::EndSpec {
-            at,
-            pin: Some((resolved.symbol, resolved.pin)),
-        };
-        let extra = signex_net::joins_at_pin(engine.document(), spec, anchor);
-        if extra.is_empty() {
-            return Ok(());
+        let intent = signex_net::placement_intent(before, &after, pin);
+        if !intent.extra.is_empty() {
+            return Err(super::wire_runs::extra_refusal(&subject, &intent.extra));
         }
-        Err(super::wire_runs::extra_refusal(
-            &format!("{what} on {designator}.{pin}"),
-            &extra,
-        ))
-    }
-
-    /// A label or power port named `new_name` at `at` is refused when the net
-    /// already there carries other names and not this one, unless
-    /// `allow_merge=true`: it would short them (#2199; rules in `docs/CLI.md`,
-    /// "Labels and power ports").
-    fn refuse_rename(
-        &self,
-        args: &CommandArgs,
-        at: Point,
-        new_name: &str,
-        what: &str,
-    ) -> Result<(), String> {
-        if matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
-            return Ok(());
+        let allowed = matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true)));
+        match intent.changes.first() {
+            Some(change) if !allowed => Err(name_change_refusal(what, at, change)),
+            _ => Ok(()),
         }
-        let Some(sheet) = self.document_state.edit_engine().map(|e| e.document()) else {
-            return Ok(());
-        };
-        let names = signex_net::net_names_at(sheet, at);
-        if names.is_empty() || names.iter().any(|n| n == new_name) {
-            return Ok(());
-        }
-        let existing = names.join(", ");
-        Err(format!(
-            "`at` {},{} is on net {existing}; a {new_name} {what} there would short {existing} and {new_name}; pass allow_merge=true to merge on purpose",
-            at.x, at.y
-        ))
     }
 
     fn place_from_operands(
@@ -353,11 +341,10 @@ impl Signex {
                 spec.label_type = kind;
                 spec.shape = shape.to_string();
                 spec.text = text(args, "text")?;
-                self.refuse_joins(args, at, "label", TipAnchor::Label)?;
-                self.refuse_rename(args, at, &spec.text, "label")?;
                 if let Some(OperandValue::Angle(degrees)) = args.operand("rotation") {
                     spec.rotation = *degrees;
                 }
+                self.check_placement(args, at, &[label_command(at, spec.clone())], "label")?;
                 placed(self.place_label_at(at, spec))
             }
             Placement::Power => {
@@ -372,22 +359,19 @@ impl Signex {
                 }
                 let net_name = text(args, "net_name")?;
                 self.refuse_unconnected_pin(args, at, "power port")?;
-                self.refuse_joins(args, at, "power port", TipAnchor::Label)?;
-                // A flag marks a net as driven and never names it.
-                if !signex_net::is_power_flag(&lib_id) {
-                    self.refuse_rename(args, at, &net_name, "power port")?;
-                }
+                // A power flag never names a net, so the check finds no rename.
+                let commands = power_commands(at, &net_name, &lib_id);
+                self.check_placement(args, at, &commands, "power port")?;
                 placed(self.place_power_at(at, &net_name, &lib_id))
             }
             Placement::NoConnect => {
                 let at = self.grid_point(args, "at")?;
-                self.refuse_joins(args, at, "no-connect", TipAnchor::NoConnect)?;
+                self.check_placement(args, at, &[no_connect_command(at)], "no-connect")?;
                 placed(self.place_no_connect_at(at))
             }
             Placement::Junction => {
                 let at = self.grid_point(args, "at")?;
-                self.refuse_joins(args, at, "junction", TipAnchor::Junction)?;
-                self.refuse_junction_short(args, at)?;
+                self.check_placement(args, at, &[junction_command(at)], "junction")?;
                 placed(self.place_junction_at(at))
             }
             Placement::NoErc => {

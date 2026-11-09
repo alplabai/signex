@@ -106,46 +106,6 @@ fn a_power_port_touching_a_referenced_pin_is_extra() {
 }
 
 #[test]
-fn a_label_on_a_referenced_pin_under_a_passing_wire_would_join_that_wire() {
-    use crate::build::{TipAnchor, joins_at_pin};
-    // An unnamed wire carrying C1.1 passes under R1.1's tip: no end or
-    // junction there, so R1.1 is on no net until a label anchors the tip.
-    let mut before = parts(&[("R1", (0.0, 0.0)), ("C1", (0.0, 10.0))]);
-    before.wires.push(wire(pt(0.0, 10.0), pt(0.0, -10.0)));
-    for anchor in [TipAnchor::Label, TipAnchor::Junction] {
-        let extra = joins_at_pin(&before, pin_ref(&before, "R1"), anchor);
-        assert!(
-            extra
-                .iter()
-                .any(|i| i.kind == ExtraKind::Pin && i.identity == "C1.1"),
-            "{extra:?}"
-        );
-    }
-    // On a tip nothing passes under, nothing is pulled in.
-    let alone = parts(&[("R1", (0.0, 0.0))]);
-    assert!(joins_at_pin(&alone, pin_ref(&alone, "R1"), TipAnchor::Junction).is_empty());
-}
-
-#[test]
-fn a_no_connect_on_a_pin_butted_on_another_pin_would_join_them() {
-    use crate::build::{TipAnchor, joins_at_pin};
-    let before = parts(&[("R1", (0.0, 0.0)), ("C2", (0.0, 0.0))]);
-    let extra = joins_at_pin(&before, pin_ref(&before, "R1"), TipAnchor::NoConnect);
-    assert_eq!(identities_of(&extra, ExtraKind::Pin), ["C2.1"], "{extra:?}");
-    // Alone on its tip the flag joins nothing.
-    let alone = parts(&[("R1", (0.0, 0.0))]);
-    assert!(joins_at_pin(&alone, pin_ref(&alone, "R1"), TipAnchor::NoConnect).is_empty());
-}
-
-fn identities_of(extra: &[crate::build::ExtraItem], kind: ExtraKind) -> Vec<&str> {
-    extra
-        .iter()
-        .filter(|i| i.kind == kind)
-        .map(|i| i.identity.as_str())
-        .collect()
-}
-
-#[test]
 fn a_no_connect_flag_is_no_connection_anchor() {
     use crate::build::has_connection_anchor;
     let mut sheet = parts(&[("R1", (0.0, 0.0))]);
@@ -317,29 +277,6 @@ fn nets_with_different_name_sets_are_a_short_even_with_a_shared_best_name() {
 }
 
 #[test]
-fn a_junction_merges_named_nets_only_when_their_names_differ() {
-    use crate::build::{junction_nets, names_short};
-    // VCC along y = 0, GND across it with no junction.
-    let mut sheet = empty_sheet();
-    sheet.wires.push(wire(pt(0.0, 0.0), pt(20.0, 0.0)));
-    sheet.wires.push(wire(pt(10.0, -5.0), pt(10.0, 5.0)));
-    sheet
-        .labels
-        .push(label("VCC", pt(0.0, 0.0), LabelType::Net));
-    // One named, one unnamed: a junction is what ties them, allowed.
-    assert!(!names_short(&junction_nets(&sheet, pt(10.0, 0.0))));
-    sheet
-        .labels
-        .push(label("GND", pt(10.0, 5.0), LabelType::Net));
-    let nets = junction_nets(&sheet, pt(10.0, 0.0));
-    assert_eq!(nets.len(), 2);
-    assert!(names_short(&nets));
-    // Nothing under the point, or a single wire: nothing merges.
-    assert!(!names_short(&junction_nets(&sheet, pt(5.0, 0.0))));
-    assert!(!names_short(&junction_nets(&sheet, pt(50.0, 50.0))));
-}
-
-#[test]
 fn a_start_on_a_wire_interior_is_intended() {
     let mut before = parts(&[
         ("R1", (0.0, 0.0)),
@@ -413,27 +350,20 @@ fn a_run_ending_on_a_sheet_pin_is_attached_and_names_nothing_extra() {
 }
 
 #[test]
-fn the_net_names_at_a_point_are_every_name_best_first_or_none() {
-    use crate::build::net_names_at;
-    let mut sheet = parts(&[("R1", (0.0, 0.0))]);
-    sheet.wires.push(wire(pt(0.0, 0.0), pt(0.0, 10.0)));
-    assert!(net_names_at(&sheet, pt(0.0, 5.0)).is_empty(), "unnamed");
-    sheet
-        .labels
-        .push(label("SIG", pt(0.0, 10.0), LabelType::Net));
-    sheet
-        .labels
-        .push(label("VCC", pt(0.0, 10.0), LabelType::Global));
-    // A wire interior and a pin tip both read the net's names, the best first.
-    assert_eq!(net_names_at(&sheet, pt(0.0, 5.0)), ["VCC", "SIG"]);
-    assert_eq!(net_names_at(&sheet, pt(0.0, 0.0)), ["VCC", "SIG"]);
-    assert!(
-        net_names_at(&sheet, pt(50.0, 50.0)).is_empty(),
-        "nothing there"
+fn a_sheet_pin_butted_on_a_referenced_pin_is_extra_but_not_for_a_coordinate_end() {
+    let mut before = parts(&[("R1", (0.0, 0.0)), ("C1", (20.0, 0.0))]);
+    with_sheet_pin(&mut before, (0.0, 0.0));
+    let after = run(&before, &[((0.0, 0.0), (20.0, 0.0))], &[]);
+    let got = wire_intent(
+        &before,
+        &after,
+        pin_ref(&before, "R1"),
+        pin_ref(&before, "C1"),
     );
-    // A power-port value is a name too.
-    place_power(&mut sheet, "#PWR1", "P", "GND", pt(0.0, 10.0));
-    assert!(net_names_at(&sheet, pt(0.0, 5.0)).contains(&"GND".to_string()));
+    assert_eq!(identities(&got, ExtraKind::SheetPin), ["SDA of Sub"]);
+    // A coordinate on the same tip is the caller attaching to it on purpose.
+    let got = intent(&before, &after, (0.0, 0.0), (20.0, 0.0));
+    assert!(identities(&got, ExtraKind::SheetPin).is_empty(), "{got:?}");
 }
 
 #[test]

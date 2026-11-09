@@ -76,7 +76,7 @@ both answer in `data`. See [AGENT_EDITS.md](AGENT_EDITS.md).
 |---|---|
 | `run`, `seq` | the run id (also in the audit log) and the line's 1-based place in the run |
 | `id` | the command id, `null` when the line was not a command |
-| `status` | `ran`, `answered` (a query; the answer is in `data`), `refused` (nothing ran; `reason` says why) or `failed` (it ran and did not succeed; `reason`) |
+| `status` | `ran`, `answered` (a query, or a wire or bus run; the answer is in `data`), `refused` (nothing ran; `reason` says why) or `failed` (it ran and did not succeed; `reason`) |
 | `messages` | what the app logged to its Messages panel during the command |
 | `changed` | documents whose content or unsaved state differs after the command |
 
@@ -183,35 +183,35 @@ short differently named nets is refused with the names it would join. It is
 not an escape for the other refusals: touching things the run was not drawn to
 (extra connections) has no escape.
 
-## Labels and power ports
+## Labels, power ports, junctions and no-connects
 
 `place_net_label`, `place_local_net_label`, `place_global_label`,
-`place_hierarchical_label` and `place_power_symbol` from operands, at a
-coordinate or a pin reference, take every name the net already at `at` carries
-(label texts and power-port values: `signex_net::net_names_at`). If the net has
-names and the new label text or power `net_name` is not one of them, the
-placement is refused as a short ("`at` 16.51,12.7 is on net VCC, X; a GND label
-there would short VCC, X and GND; pass allow_merge=true to merge on purpose").
-A name the net already carries, an unnamed net, or nothing at `at` is allowed.
-`allow_merge=true` places it anyway ([Why `allow_merge`](#why-allow_merge)).
-There is no `dry_run` for these commands. A power flag (`power:PWR_FLAG`) never
-names a net, so it is not checked for a short.
+`place_hierarchical_label`, `place_power_symbol`, `place_junction` and
+`place_no_connect` from operands, at a coordinate or a pin reference, are all
+checked by one rule, the way a wire is: the placement's real engine command is
+applied to a copy of the sheet, and the copy is compared with the sheet by the
+netlist's own connectivity and by the bus analysis (`signex_net::placement_intent`).
 
-`place_junction` has the same check at its point, by coordinate or pin
-reference: it compares the name sets of every net the junction would join (the
-wires under the point) and refuses when two named nets carry different names
-("a junction at 12.7,25.4 would join the nets {VCC} and {GND}"), unless
-`allow_merge=true`. Unnamed nets are what a junction is for and stay allowed.
+- **Name change.** Two nets (or bus runs) with different non-empty name sets
+  end up as one, or a named net or bus gains a name it did not carry (a label
+  text or power value not already among its names): refused ("a label at 12.7,25.4
+  would join the nets {VCC} and {GND}", "a label at 57.15,38.1 would add D[0..7]
+  to the bus {A[0..15]}"), unless `allow_merge=true`
+  ([Why `allow_merge`](#why-allow_merge)). A name the net already carries
+  (an alias), an unnamed net, nothing at `at`, and unnamed nets tied by a
+  junction stay allowed. A power flag (`power:PWR_FLAG`) never names a net.
+- **Extra, by pin reference only (no escape).** Anything not on the pin's net
+  before that ends up on it: another pin on the tip, a power port, a sheet pin,
+  a wire passing under the tip, a bus entry ("the label on R1.2 also touches
+  pin C1.1 ... would join them to the net"). This is the end rule of "Wire
+  intent", applied to the tip. A coordinate has no extra check: it is the
+  caller's own T.
 
-Two more refusals apply to a pin reference only (a coordinate is unchanged),
-and have no escape. The pin-reference placements that are join-checked are the
-wire, the label, the power port, the junction and the no-connect:
+There is no `dry_run` for these commands, and they answer `ran`. The
+pin-reference placements that are join-checked are the wire, the label, the
+power port, the junction and the no-connect.
 
-- A label, power port, junction or no-connect whose tip lies under a wire the
-  pin is not on (no end or junction there), or on which another pin is butted,
-  is refused ("the label on R1.2 also touches pin C1.1 ... would join them to
-  the net"): it would anchor the tip and join that net. This is rule 3 of
-  "Wire intent", applied to the tip.
+One more refusal is for a power port by pin reference:
 - A power port on a pin whose tip has no wire end, junction or label is refused
   ("would touch the pin without connecting"): pin to pin is no connection, so
   draw a wire to it first or place a label. A no-connect flag does not count as
@@ -236,8 +236,8 @@ to the sheet before and after the run (`signex_net::bus_intent`):
   One name and one unnamed run is allowed.
 
 There is no net diff: bus connectivity is the bus analysis, not the netlist.
-`dry_run` works as for a wire; the answer is `{"dry_run", "segments", "bus":
-[names of the run], "merged": [names]}`.
+`dry_run` works as for a wire; the answer is `{"dry_run", "ends", "segments",
+"bus": [names of the run], "merged": [names]}`.
 
 ## Security
 

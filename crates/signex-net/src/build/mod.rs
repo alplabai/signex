@@ -35,9 +35,12 @@ mod segment_index;
 pub use segment_index::SegmentIndex;
 mod wire_intent;
 pub use wire_intent::{
-    EndSpec, ExtraItem, ExtraKind, IntentNet, RunEnd, TipAnchor, WireIntent, has_connection_anchor,
-    joins_at_pin, junction_nets, names_short, net_names_at, wire_intent,
+    EndSpec, ExtraItem, ExtraKind, IntentNet, RunEnd, WireIntent, has_connection_anchor,
+    wire_intent,
 };
+mod placement_intent;
+pub(crate) use placement_intent::name_changes;
+pub use placement_intent::{NameChange, PlacementIntent, placement_intent};
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
 

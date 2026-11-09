@@ -157,7 +157,7 @@ impl Signex {
     }
 
     /// The edit target with `commands` applied, on a copy: nothing real moves.
-    fn sheet_after(
+    pub(super) fn sheet_after(
         sheet: &SchematicSheet,
         commands: &[signex_engine::Command],
     ) -> Result<SchematicSheet, String> {

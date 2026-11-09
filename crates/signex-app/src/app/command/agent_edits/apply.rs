@@ -38,9 +38,21 @@ fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
 }
 
 /// Every edit parsed against its descriptor, before any of them runs, so a
-/// typo in the last one changes nothing. An edit never names its document: it
-/// acts on the call's, which is filled in where the command takes one.
-fn prepare(specs: &[EditSpec], document: &str) -> Result<Vec<Prepared>, String> {
+/// typo in the last one changes nothing. An edit acts on the call's document,
+/// which is filled in where the command takes one; it may name that document
+/// again (an id or a path, compared as the resolved document), never another.
+fn prepare(
+    app: &Signex,
+    specs: &[EditSpec],
+    document: &str,
+    call_path: Option<&std::path::Path>,
+) -> Result<Vec<Prepared>, String> {
+    let names_the_call = |value: &str| {
+        crate::app::document_ids::DocumentTarget::parse(value)
+            .ok()
+            .and_then(|target| app.resolve_document_target(&target).ok())
+            .is_some_and(|entry| entry.path.as_deref() == call_path)
+    };
     specs
         .iter()
         .enumerate()
@@ -50,12 +62,11 @@ fn prepare(specs: &[EditSpec], document: &str) -> Result<Vec<Prepared>, String> 
             if let Some(reason) = edit_refusal(&id) {
                 return Err(at(reason));
             }
-            // An edit may repeat the call's document, never name another: a
-            // list is one transaction on one sheet.
+            // A list is one transaction on one sheet.
             if spec
                 .operands
                 .iter()
-                .any(|(name, value)| name == "document" && value != document)
+                .any(|(name, value)| name == "document" && !names_the_call(value))
             {
                 return Err(at(
                     "an edit names another document than the list; leave out its `document`".into(),
@@ -113,7 +124,7 @@ pub(in crate::app::command) fn apply_edits(app: &mut Signex, args: &CommandArgs)
         Ok(specs) => specs,
         Err(reason) => return refused(reason),
     };
-    let edits = match prepare(&specs, &target.to_string()) {
+    let edits = match prepare(app, &specs, &target.to_string(), Some(path.as_path())) {
         Ok(edits) => edits,
         Err(reason) => return refused(reason),
     };
