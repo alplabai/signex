@@ -228,6 +228,66 @@ fn exit_with_nothing_unsaved_closes_the_window() {
     assert!(has_work(&task), "no window close was requested");
 }
 
+/// #2224: a system quit request (Command+Q, Dock Quit, logout) takes the same
+/// unsaved-changes guard as File ▸ Exit.
+#[test]
+fn a_system_quit_request_asks_to_confirm_while_something_is_unsaved() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _path) = dirty_app_in(dir.path());
+    let before = probe(&app);
+    let _ = app.update(Message::Window(crate::app::WindowMsg::QuitRequested));
+    assert_eq!(
+        probe(&app),
+        Probe {
+            quit_confirm: true,
+            ..before
+        }
+    );
+}
+
+#[test]
+fn a_system_quit_request_with_nothing_unsaved_closes_the_window() {
+    let mut app = one_symbol_selected();
+    let task = app.update(Message::Window(crate::app::WindowMsg::QuitRequested));
+    assert!(has_work(&task), "no window close was requested");
+}
+
+/// The prompt's Cancel answers the pending system request with a cancel, and
+/// does not exit: macOS waits (and logout stalls) until it is answered.
+#[test]
+fn cancelling_the_quit_prompt_answers_the_system_request() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _path) = dirty_app_in(dir.path());
+    let _ = app.update(Message::Window(crate::app::WindowMsg::QuitRequested));
+    assert!(app.ui_state.app_quit_confirm.is_some());
+
+    let answer = app.handle_app_quit_confirm(crate::app::ProjectCloseChoice::Cancel);
+
+    assert!(app.ui_state.app_quit_confirm.is_none());
+    assert_eq!(answer.units(), 1, "Cancel did not answer the request");
+    let mut driver = crate::task_driver::TaskDriver::new();
+    assert!(driver.outputs(answer).expect("settled").is_empty());
+    assert!(!driver.has_exited(), "Cancel must not exit");
+}
+
+/// A quit held back by a running rename or delete leaves the app open, so the
+/// pending system request is declined too.
+#[test]
+fn a_held_quit_request_is_declined() {
+    let _ = crate::diagnostics::init_logging();
+    let mut app = one_symbol_selected();
+    app.document_state.pending_path_ops.begin(
+        crate::app::path_ops::PathOpKind::Delete,
+        vec![std::path::PathBuf::from("/w/x.snxsch")],
+        crate::app::CaseFold::PRESERVE,
+    );
+    let answer = app.handle_app_quit_requested();
+    assert_eq!(answer.units(), 1, "the held quit was not answered");
+    let mut driver = crate::task_driver::TaskDriver::new();
+    assert!(driver.outputs(answer).expect("settled").is_empty());
+    assert!(!driver.has_exited());
+}
+
 #[test]
 fn rows_without_a_document_are_greyed() {
     let app = bare_app();

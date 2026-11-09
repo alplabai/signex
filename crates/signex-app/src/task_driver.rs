@@ -367,12 +367,12 @@ mod tests {
     /// delivers them: both of a batch, then their follow-ups in order.
     #[test]
     fn messages_run_first_in_first_out() {
-        let tag = |n: u32| Message::Window(WindowMsg::NativeMenuItemActivated(n.to_string()));
+        let tag = |n: u32| Message::Window(WindowMsg::NativeMenuFailed(n.to_string()));
         let mut seen = Vec::new();
         TaskDriver::new()
             .settle_with(
                 |message| {
-                    let Message::Window(WindowMsg::NativeMenuItemActivated(n)) = &message else {
+                    let Message::Window(WindowMsg::NativeMenuFailed(n)) = &message else {
                         return Task::none();
                     };
                     seen.push(n.clone());

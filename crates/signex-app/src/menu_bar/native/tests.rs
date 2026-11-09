@@ -1,16 +1,15 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use super::state::{MenuInputs, Refresh, plan_refresh};
+use iced::menu::{Action, Item, Predefined};
+
+use super::probe::{action_at, root_titles, row_message};
 use super::*;
-use crate::app::command::CommandContext;
 use crate::menu_bar::MenuContext;
 use crate::menu_bar::golden_tests::variants;
 use crate::menu_bar::model::menu_bar_model;
 
-fn en() -> std::sync::Arc<signex_i18n::I18n> {
-    signex_i18n::I18n::en_us()
-}
+type NativeMenu = iced_menu::Menu<Message>;
 
 fn recent_paths() -> Vec<PathBuf> {
     ["/a/one/p.snxprj", "/b/two/p.snxprj", "/c/three/q.snxprj"]
@@ -30,50 +29,51 @@ fn contexts(recent: &[PathBuf]) -> Vec<MenuContext<'_>> {
     all
 }
 
-fn ids(menu: &NativeMenu, out: &mut Vec<String>) {
-    for node in &menu.nodes {
-        match node {
-            NativeNode::Item(item) => out.push(item.id.clone()),
-            NativeNode::Submenu(sub) => ids(sub, out),
-            NativeNode::Predefined(_) | NativeNode::Separator => {}
-        }
+fn built(ctx: &MenuContext) -> NativeMenu {
+    build(&menu_bar_model(ctx), false)
+}
+
+/// The model row a native row carries, with the shortcut text appended.
+fn label_of(item: &MenuItem) -> String {
+    match &item.shortcut {
+        Some(shortcut) => format!("{}{SHORTCUT_GAP}{}", item.label, shortcut.text),
+        None => item.label.clone(),
     }
 }
 
-fn all_ids(spec: &NativeMenuSpec) -> Vec<String> {
-    let mut out = Vec::new();
-    spec.menus.iter().for_each(|m| ids(m, &mut out));
-    out
-}
-
-/// Spec nodes mirror model entries: same order, separators, submenus,
-/// labels and enablement; a placeholder is disabled.
-fn assert_mirrors(menu: &Menu, native: &NativeMenu) {
-    assert_eq!(menu.title, native.title);
+/// Native items mirror model entries: same order, separators, submenus,
+/// labels, enablement and check marks; a placeholder is disabled.
+fn assert_mirrors(menu: &Menu, native: &Item<Message>, is_root: bool) {
+    let Item::Submenu(sub) = native else {
+        panic!("{} is not a submenu", menu.title);
+    };
+    assert_eq!(menu.title, sub.label);
     // The app menu carries Quit, so the native File menu drops Exit and the
     // separator above it.
-    let entries: Vec<&MenuEntry> = if menu.title == "File" {
+    let entries: Vec<&MenuEntry> = if is_root && menu.title == "File" {
         let mut kept: Vec<&MenuEntry> = menu.entries.iter().collect();
         kept.truncate(kept.len() - 2);
         kept
     } else {
         menu.entries.iter().collect()
     };
-    assert_eq!(entries.len(), native.nodes.len(), "{}", menu.title);
-    for (entry, node) in entries.into_iter().zip(&native.nodes) {
+    assert_eq!(entries.len(), sub.items.len(), "{}", menu.title);
+    for (entry, node) in entries.into_iter().zip(&sub.items) {
         match (entry, node) {
-            (MenuEntry::Separator, NativeNode::Separator) => {}
-            (MenuEntry::Submenu(sub), NativeNode::Submenu(inner)) => assert_mirrors(sub, inner),
-            (MenuEntry::Item(item), NativeNode::Item(native)) => {
-                assert_eq!(item.label, native.label);
-                assert_eq!(item.is_enabled(), native.enabled, "{}", item.label);
-                assert!(native.accelerator.is_none(), "model rows carry no key");
+            (MenuEntry::Separator, Item::Separator) => {}
+            (MenuEntry::Submenu(inner), node @ Item::Submenu(_)) => {
+                assert_mirrors(inner, node, false)
+            }
+            (MenuEntry::Item(item), Item::Action(native)) => {
+                assert_eq!(label_of(item), native.label);
                 assert_eq!(
-                    item.shortcut.as_ref().map(|s| s.text.as_str()),
-                    native.shortcut.as_deref(),
+                    item.is_enabled(),
+                    native.on_activate.is_some(),
                     "{}",
                     item.label
                 );
+                assert_eq!(item.checked, native.checked, "{}", item.label);
+                assert!(native.shortcut.is_none(), "model rows register no key");
             }
             (entry, node) => panic!("shape differs: {entry:?} vs {node:?}"),
         }
@@ -81,175 +81,169 @@ fn assert_mirrors(menu: &Menu, native: &NativeMenu) {
 }
 
 #[test]
-fn spec_mirrors_the_model_for_every_variant() {
+fn menu_mirrors_the_model_for_every_variant() {
     let recent = recent_paths();
     for ctx in contexts(&recent) {
         let model = menu_bar_model(&ctx);
-        let built = build(&model, false);
-        assert_eq!(built.spec.menus.len(), model.menus.len() + 1);
-        assert_eq!(built.spec.menus[0].title, APP_MENU_TITLE);
-        for (menu, native) in model.menus.iter().zip(&built.spec.menus[1..]) {
-            assert_mirrors(menu, native);
+        let menu = build(&model, false);
+        assert_eq!(menu.items().len(), model.menus.len() + 1);
+        assert_eq!(root_titles(&menu)[0], APP_MENU_TITLE);
+        for (model_menu, native) in model.menus.iter().zip(&menu.items()[1..]) {
+            assert_mirrors(model_menu, native, true);
         }
     }
 }
 
-/// id -> (label, message kind if live) of every row built for `ctx`.
-fn rows_by_id(ctx: &MenuContext) -> HashMap<String, (String, Option<String>)> {
-    fn walk(
-        menu: &NativeMenu,
-        actions: &ActionMap,
-        out: &mut HashMap<String, (String, Option<String>)>,
-    ) {
-        for node in &menu.nodes {
-            match node {
-                NativeNode::Item(item) => {
-                    let kind = actions.get(&item.id).map(|action| {
-                        let text = format!("{action:?}");
-                        text.split('(').next().unwrap_or_default().to_owned()
-                    });
-                    out.insert(item.id.clone(), (item.label.clone(), kind));
-                }
-                NativeNode::Submenu(sub) => walk(sub, actions, out),
-                NativeNode::Predefined(_) | NativeNode::Separator => {}
-            }
+/// `path -> row label` of every action row, recursing through submenus.
+fn rows(items: &[Item<Message>], path: &str, out: &mut Vec<(String, Action<Message>)>) {
+    for item in items {
+        match item {
+            Item::Action(action) => out.push((format!("{path}/{}", action.label), action.clone())),
+            Item::Submenu(sub) => rows(&sub.items, &format!("{path}/{}", sub.label), out),
+            Item::Separator | Item::Predefined(_) => {}
         }
     }
-    let built = build(&menu_bar_model(ctx), false);
-    let mut out = HashMap::new();
-    for menu in &built.spec.menus {
-        walk(menu, &built.actions, &mut out);
-    }
+}
+
+fn all_rows(menu: &NativeMenu) -> Vec<(String, Action<Message>)> {
+    let mut out = Vec::new();
+    rows(menu.items(), "", &mut out);
     out
 }
 
+/// Row labels are unique within one submenu, so the fork's id (the label
+/// path) never needs a suffix; the one exception is Open Recent, where two
+/// projects can share a file name and the fork suffixes the repeat.
 #[test]
-fn ids_are_unique_and_stable_across_variants() {
+fn row_paths_are_unique_outside_open_recent() {
     let recent = recent_paths();
-    let mut seen: HashMap<String, String> = HashMap::new();
     for ctx in contexts(&recent) {
-        let found = all_ids(&build(&menu_bar_model(&ctx), false).spec);
-        let unique: HashSet<&String> = found.iter().collect();
-        assert_eq!(unique.len(), found.len(), "duplicate id in {found:?}");
-        // The same id always names the same row: its label never changes.
-        for (id, (label, _)) in rows_by_id(&ctx) {
-            if let Some(before) = seen.insert(id.clone(), label.clone()) {
-                assert_eq!(before, label, "id {id} names two rows");
-            }
-        }
+        let rows: Vec<String> = all_rows(&built(&ctx))
+            .into_iter()
+            .map(|(path, _)| path)
+            .filter(|path| !path.starts_with("/File/Open Recent/"))
+            .collect();
+        let unique: HashSet<&String> = rows.iter().collect();
+        assert_eq!(unique.len(), rows.len(), "duplicate row path in {rows:?}");
     }
-    assert!(seen.contains_key("File/Save"));
-    assert!(seen.contains_key("Help/About Signex"));
 }
 
-/// Whenever a row is live its message kind is the same in every context: an
-/// id never changes what it does.
+/// Whenever a row is live its message kind is the same in every context: a
+/// row path never changes what it does.
 #[test]
-fn a_live_id_always_dispatches_the_same_message_kind() {
+fn a_live_row_always_sends_the_same_message_kind() {
     let recent = recent_paths();
     let mut kinds: HashMap<String, String> = HashMap::new();
     for ctx in contexts(&recent) {
-        for (id, (_, kind)) in rows_by_id(&ctx) {
-            let Some(kind) = kind else { continue };
-            if let Some(before) = kinds.insert(id.clone(), kind.clone()) {
-                assert_eq!(before, kind, "id {id} changed message");
+        for (path, action) in all_rows(&built(&ctx)) {
+            let Some(message) = &action.on_activate else {
+                continue;
+            };
+            let kind = model_kind(message);
+            if let Some(before) = kinds.insert(path.clone(), kind.clone()) {
+                assert_eq!(before, kind, "row {path} changed message");
             }
         }
     }
     assert!(kinds.len() > 40);
 }
 
-#[test]
-fn a_locked_bar_greys_the_model_rows_and_keeps_the_app_menu() {
-    let ctx = variants().remove(1);
-    let built = build(&menu_bar_model(&ctx), true);
-    assert_eq!(built.actions.len(), 3, "only the app menu stays live");
-    assert!(built.actions.keys().all(|id| is_app_menu_id(id)));
-    assert!(!is_app_menu_id("File/Save"));
-    assert!(!is_app_menu_id("Signexx/File"));
-    let unlocked = spec_for(&ctx);
-    match plan_refresh(Some(&unlocked), &built.spec) {
-        Refresh::Enablement(changes) => assert!(changes.iter().all(|change| !change.enabled)),
-        other => panic!("locking must only flip enablement, got {other:?}"),
+/// The model action's variant name, without its payload.
+fn model_kind(message: &Message) -> String {
+    match message {
+        Message::Window(WindowMsg::NativeMenuRowChosen(action)) => {
+            let text = format!("{action:?}");
+            text.split('(').next().unwrap_or_default().to_owned()
+        }
+        Message::Menu(action) => format!("{action:?}"),
+        other => panic!("a native row sent {other:?}"),
     }
 }
 
 #[test]
-fn recent_projects_get_distinct_path_ids() {
+fn a_locked_bar_greys_the_model_rows_and_keeps_the_app_menu() {
+    let ctx = variants().remove(1);
+    let unlocked = built(&ctx);
+    assert!(row_message(&unlocked, "File/Save").is_some());
+
+    let locked = build(&menu_bar_model(&ctx), true);
+    let live: Vec<String> = all_rows(&locked)
+        .into_iter()
+        .filter(|(_, action)| action.on_activate.is_some())
+        .map(|(path, _)| path)
+        .collect();
+    assert_eq!(
+        live,
+        ["/Signex/About Signex", "/Signex/Preferences..."],
+        "only the app menu stays live"
+    );
+    assert!(row_message(&locked, "File/Save").is_none());
+}
+
+#[test]
+fn recent_projects_send_their_own_path() {
     let recent = recent_paths();
     let ctx = MenuContext {
         recent_projects: &recent,
         ..MenuContext::default()
     };
-    let built = build(&menu_bar_model(&ctx), false);
-    for path in &recent {
-        let id = format!("File/Open Recent/{}", path.display());
-        assert!(
-            matches!(
-                built.actions.get(&id),
-                Some(MenuMessage::OpenRecentProject(p)) if p == path
-            ),
-            "no live row for {id}"
-        );
+    let menu = built(&ctx);
+    let sent: Vec<PathBuf> = all_rows(&menu)
+        .into_iter()
+        .filter_map(|(_, action)| match action.on_activate {
+            Some(Message::Window(WindowMsg::NativeMenuRowChosen(
+                MenuMessage::OpenRecentProject(path),
+            ))) => Some(path),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent, recent, "each row opens its own project, in order");
+}
+
+fn chosen(menu: &NativeMenu, path: &str) -> Option<MenuMessage> {
+    match row_message(menu, path)? {
+        Message::Window(WindowMsg::NativeMenuRowChosen(action)) => Some(action),
+        other => panic!("{path} sent {other:?}"),
     }
 }
 
 #[test]
-fn only_enabled_live_rows_activate() {
-    let model = menu_bar_model(&MenuContext::default());
-    let built = build(&model, false);
+fn only_enabled_live_rows_send_a_message() {
+    let menu = built(&MenuContext::default());
     // New Project is always enabled; Save needs an open document; the
     // placeholder "No recent projects" has no handler at all.
     assert!(matches!(
-        built.actions.get("File/New Project"),
+        chosen(&menu, "File/New Project"),
         Some(MenuMessage::Command(id)) if id.as_str() == "new_document"
     ));
-    assert!(!built.actions.contains_key("File/Save"));
+    assert!(chosen(&menu, "File/Save").is_none());
     assert!(
-        !built
-            .actions
-            .contains_key("File/Open Recent/No recent projects")
+        action_at(&menu, "File/Save").is_some(),
+        "greyed, not absent"
     );
-    assert!(!built.actions.contains_key("File/Open Recent"));
-    assert!(!built.actions.contains_key("nonsense/id"));
-    let enabled = variants().remove(1);
-    let built = build(&menu_bar_model(&enabled), false);
+    assert!(chosen(&menu, "File/Open Recent/No recent projects").is_none());
+    assert!(action_at(&menu, "nonsense/row").is_none());
+    let menu = built(&variants().remove(1));
     assert!(matches!(
-        built.actions.get("File/Save"),
+        chosen(&menu, "File/Save"),
         Some(MenuMessage::Command(id)) if id.as_str() == "save_document"
     ));
 }
 
 #[test]
-fn a_stale_id_misses_after_the_row_goes_away() {
-    let recent = recent_paths();
-    let with = MenuContext {
-        recent_projects: &recent,
-        ..MenuContext::default()
-    };
-    let id = format!("File/Open Recent/{}", recent[0].display());
-    assert!(
-        build(&menu_bar_model(&with), false)
-            .actions
-            .contains_key(&id)
-    );
-    let cleared = build(&menu_bar_model(&MenuContext::default()), false);
-    assert!(!cleared.actions.contains_key(&id));
-}
-
-#[test]
 fn app_menu_has_the_approved_content() {
-    let app = &build(&menu_bar_model(&MenuContext::default()), false)
-        .spec
-        .menus[0];
+    let menu = built(&MenuContext::default());
+    let Item::Submenu(app) = &menu.items()[0] else {
+        panic!("the first item is the app menu");
+    };
     let shape: Vec<String> = app
-        .nodes
+        .items
         .iter()
-        .map(|node| match node {
-            NativeNode::Item(i) => format!("{} {:?}", i.label, i.accelerator),
-            NativeNode::Predefined(p) => format!("{p:?}"),
-            NativeNode::Separator => "-".into(),
-            NativeNode::Submenu(_) => "submenu".into(),
+        .map(|item| match item {
+            Item::Action(a) => format!("{} {:?}", a.label, a.shortcut),
+            Item::Predefined(p) => format!("{p:?}"),
+            Item::Separator => "-".into(),
+            Item::Submenu(_) => "submenu".into(),
         })
         .collect();
     assert_eq!(
@@ -257,144 +251,45 @@ fn app_menu_has_the_approved_content() {
         [
             "About Signex None",
             "-",
-            "Preferences... Some(CommandComma)",
+            "Preferences... Some(\"CmdOrCtrl+,\")",
             "-",
             "Hide",
             "HideOthers",
             "ShowAll",
             "-",
-            "Quit Signex Some(CommandQ)",
+            "Quit",
         ]
     );
-    let actions = build(&menu_bar_model(&MenuContext::default()), false).actions;
     assert!(matches!(
-        actions.get("Signex/Quit Signex"),
-        Some(MenuMessage::Exit)
+        app.items.last(),
+        Some(Item::Predefined(Predefined::Quit))
     ));
     assert!(matches!(
-        actions.get("Signex/Preferences..."),
-        Some(MenuMessage::Command(id)) if id.as_str() == "open_preferences"
+        row_message(&menu, "Signex/About Signex"),
+        Some(Message::Menu(MenuMessage::OpenAbout))
     ));
     assert!(matches!(
-        actions.get("Signex/About Signex"),
-        Some(MenuMessage::OpenAbout)
+        row_message(&menu, "Signex/Preferences..."),
+        Some(Message::Menu(MenuMessage::Command(id))) if id.as_str() == "open_preferences"
     ));
 }
 
-fn spec_for(ctx: &MenuContext) -> NativeMenuSpec {
-    build(&menu_bar_model(ctx), false).spec
-}
-
+/// #103 - the panel rows' check marks follow the model.
 #[test]
-fn refresh_plan_follows_what_changed() {
-    let base = spec_for(&MenuContext::default());
-    assert_eq!(plan_refresh(None, &base), Refresh::Rebuild);
-    assert_eq!(plan_refresh(Some(&base), &base.clone()), Refresh::Unchanged);
-
-    // Enablement only: in place, and exactly the rows that moved.
-    let open = spec_for(&variants().remove(1));
-    match plan_refresh(Some(&base), &open) {
-        Refresh::Enablement(changes) => {
-            assert!(changes.iter().any(|c| c.id == "File/Save" && c.enabled));
-            assert!(changes.iter().all(|c| !c.id.is_empty()));
-        }
-        other => panic!("expected an enablement update, got {other:?}"),
-    }
-
-    // Recent projects change the rows themselves.
-    let recent = recent_paths();
-    let listed = spec_for(&MenuContext {
-        recent_projects: &recent,
+fn the_native_menu_carries_the_check_mark() {
+    let closed = built(&MenuContext::default());
+    let open = built(&MenuContext {
+        open_panels: vec![crate::panels::PanelKind::Properties],
         ..MenuContext::default()
     });
-    assert_eq!(plan_refresh(Some(&base), &listed), Refresh::Rebuild);
-
-    // A relabelled row is a rebuild too.
-    let mut renamed = base.clone();
-    if let NativeNode::Item(item) = &mut renamed.menus[1].nodes[0] {
-        item.label.push('!');
-    }
-    assert_eq!(plan_refresh(Some(&base), &renamed), Refresh::Rebuild);
-}
-
-#[test]
-fn inputs_compare_by_what_the_menu_reads() {
-    let recent = recent_paths();
-    let a = MenuInputs::new(CommandContext::default(), &recent, false, Vec::new(), en());
+    let checked_of = |menu: &NativeMenu| action_at(menu, "View/Properties").unwrap().checked;
+    assert_eq!(checked_of(&closed), Some(false));
+    assert_eq!(checked_of(&open), Some(true));
     assert_eq!(
-        a,
-        MenuInputs::new(CommandContext::default(), &recent, false, Vec::new(), en())
+        action_at(&closed, "File/New Project").unwrap().checked,
+        None,
+        "a plain row shows no mark"
     );
-    assert_ne!(
-        a,
-        MenuInputs::new(CommandContext::default(), &recent, true, Vec::new(), en())
-    );
-    assert_ne!(
-        a,
-        MenuInputs::new(
-            CommandContext::default(),
-            &recent[1..],
-            false,
-            Vec::new(),
-            en()
-        )
-    );
-    let dirty = CommandContext {
-        project_dirty: true,
-        ..CommandContext::default()
-    };
-    assert_ne!(a, MenuInputs::new(dirty, &recent, false, Vec::new(), en()));
-    let panels = vec![crate::panels::PanelKind::Properties];
-    assert_ne!(
-        a,
-        MenuInputs::new(CommandContext::default(), &recent, false, panels, en())
-    );
-}
-
-#[test]
-fn nothing_syncs_before_the_main_window_opens() {
-    let inputs = MenuInputs::new(CommandContext::default(), &[], false, Vec::new(), en());
-    let mut state = NativeMenuState::default();
-    assert!(!state.needs_sync(&inputs));
-    state.arm();
-    assert!(state.needs_sync(&inputs));
-}
-
-/// #103 - the panel rows' check marks reach the native spec and refresh in place.
-#[test]
-fn the_native_menu_carries_and_refreshes_the_check_mark() {
-    let closed = build(&menu_bar_model(&MenuContext::default()), false);
-    let open = build(
-        &menu_bar_model(&MenuContext {
-            open_panels: vec![crate::panels::PanelKind::Properties],
-            ..MenuContext::default()
-        }),
-        false,
-    );
-    let checked_of = |spec: &NativeMenuSpec| {
-        spec.menus
-            .iter()
-            .find(|m| m.title == "View")
-            .unwrap()
-            .nodes
-            .iter()
-            .find_map(|node| match node {
-                NativeNode::Item(i) if i.label == "Properties" => Some(i.checked),
-                _ => None,
-            })
-            .unwrap()
-    };
-    assert_eq!(checked_of(&closed.spec), Some(false));
-    assert_eq!(checked_of(&open.spec), Some(true));
-
-    match plan_refresh(Some(&closed.spec), &open.spec) {
-        Refresh::Enablement(changes) => {
-            assert_eq!(changes.len(), 1);
-            assert_eq!(changes[0].id, "View/Properties");
-            assert_eq!(changes[0].checked, Some(true));
-        }
-        other => panic!("a check mark moving must refresh in place, got {other:?}"),
-    }
 }
 
 fn built_in_keymap_context() -> MenuContext<'static> {
@@ -407,112 +302,80 @@ fn built_in_keymap_context() -> MenuContext<'static> {
     }
 }
 
-fn file_menu(spec: &NativeMenuSpec) -> &NativeMenu {
-    spec.menus.iter().find(|m| m.title == "File").unwrap()
-}
-
-fn item_labelled<'a>(menu: &'a NativeMenu, label: &str) -> Option<&'a NativeItem> {
-    menu.nodes.iter().find_map(|node| match node {
-        NativeNode::Item(item) if item.label == label => Some(item),
-        _ => None,
-    })
-}
-
-/// #1765: a native row shows its keymap shortcut but registers no key
-/// equivalent, so AppKit cannot take the key before the keymap sees it.
+/// #1765: a native row shows its keymap shortcut as label text but registers
+/// no key equivalent, so AppKit cannot take the key before the keymap sees
+/// it. Only Preferences keeps a real Command+comma.
 #[test]
 fn native_rows_show_the_keymap_shortcut_without_a_key_equivalent() {
-    let spec = build(&menu_bar_model(&built_in_keymap_context()), false).spec;
-    let save = item_labelled(file_menu(&spec), "Save").unwrap();
-    assert_eq!(save.shortcut.as_deref(), Some("Ctrl+S"));
-    assert!(save.accelerator.is_none());
-    let redo = spec.menus.iter().find(|m| m.title == "Edit").unwrap();
-    assert_eq!(
-        item_labelled(redo, "Redo").unwrap().shortcut.as_deref(),
-        Some("Ctrl+Y")
-    );
-}
-
-/// The shortcut is part of what is on screen: a rebind must rebuild.
-#[test]
-fn a_changed_shortcut_rebuilds_the_native_menu() {
-    let with = build(&menu_bar_model(&built_in_keymap_context()), false).spec;
-    let mut rebound = with.clone();
-    for menu in &mut rebound.menus {
-        for node in &mut menu.nodes {
-            if let NativeNode::Item(item) = node
-                && item.shortcut.is_some()
-            {
-                item.shortcut = Some("F2".into());
-            }
-        }
-    }
-    assert_ne!(with, rebound);
-    assert_eq!(plan_refresh(Some(&with), &rebound), Refresh::Rebuild);
-}
-
-#[test]
-fn the_menu_inputs_follow_the_active_keymap() {
-    let first = std::sync::Arc::new(
-        crate::keymap::ShortcutProfileSet::built_ins()
-            .unwrap()
-            .compile_active(),
-    );
-    let again = std::sync::Arc::new(
-        crate::keymap::ShortcutProfileSet::built_ins()
-            .unwrap()
-            .compile_active(),
-    );
-    let base = || MenuInputs::new(CommandContext::default(), &[], false, Vec::new(), en());
-    assert_eq!(
-        base().with_keymap(first.clone()),
-        base().with_keymap(first.clone())
-    );
-    assert_ne!(base().with_keymap(first), base().with_keymap(again));
+    let menu = built(&built_in_keymap_context());
+    let save = action_at(&menu, "File/Save").unwrap();
+    assert_eq!(save.label, format!("Save{SHORTCUT_GAP}Ctrl+S"));
+    assert!(save.shortcut.is_none());
+    let redo = action_at(&menu, "Edit/Redo").unwrap();
+    assert_eq!(redo.label, format!("Redo{SHORTCUT_GAP}Ctrl+Y"));
+    assert!(redo.shortcut.is_none());
+    let preferences = action_at(&menu, "Signex/Preferences...").unwrap();
+    assert_eq!(preferences.shortcut.as_deref(), Some("CmdOrCtrl+,"));
+    // No model row anywhere registers a key.
+    let model_keys = all_rows(&menu)
+        .into_iter()
+        .filter(|(path, _)| !path.starts_with("/Signex/"))
+        .filter(|(_, action)| action.shortcut.is_some())
+        .count();
+    assert_eq!(model_keys, 0);
 }
 
 /// #1765: File gains Close Document, Close Project and Print, and loses Exit
 /// natively (Quit Signex lives in the app menu).
 #[test]
 fn the_native_file_menu_has_the_approved_rows() {
-    let built = build(&menu_bar_model(&variants().remove(1)), false);
-    let file = file_menu(&built.spec);
-    for label in ["Close Document", "Close Project", "Print..."] {
-        assert!(item_labelled(file, label).is_some(), "{label}");
+    let menu = built(&variants().remove(1));
+    for path in ["File/Close Document", "File/Close Project", "File/Print..."] {
+        assert!(action_at(&menu, path).is_some(), "{path}");
     }
-    assert!(item_labelled(file, "Exit").is_none());
-    assert!(!matches!(file.nodes.last(), Some(NativeNode::Separator)));
-    let at = |id: &str| built.actions.get(id);
+    assert!(action_at(&menu, "File/Exit").is_none());
+    let Some(Item::Submenu(file)) = menu
+        .items()
+        .iter()
+        .find(|item| matches!(item, Item::Submenu(sub) if sub.label == "File"))
+    else {
+        panic!("no File menu");
+    };
+    assert!(!matches!(file.items.last(), Some(Item::Separator)));
     assert!(matches!(
-        at("File/Close Document"),
+        chosen(&menu, "File/Close Document"),
         Some(MenuMessage::Command(id)) if id.as_str() == "close_active_document"
     ));
     assert!(matches!(
-        at("File/Close Project"),
+        chosen(&menu, "File/Close Project"),
         Some(MenuMessage::CloseProject)
     ));
     assert!(matches!(
-        at("File/Print..."),
+        chosen(&menu, "File/Print..."),
         Some(MenuMessage::Command(id)) if id.as_str() == "print"
     ));
-    let print = item_labelled(file, "Print...").unwrap();
-    assert!(print.accelerator.is_none());
+    assert!(
+        action_at(&menu, "File/Print...")
+            .unwrap()
+            .shortcut
+            .is_none()
+    );
 }
 
-/// #2055: a new language changes a root title, a change of shape, so the
-/// native menu is rebuilt rather than patched in place.
+/// #2055: a new language changes the root titles, which the fork sees as a
+/// different menu and rebuilds.
 #[test]
-fn a_new_language_title_rebuilds_the_native_menu() {
-    let spec_in = |tag: &str| {
+fn a_new_language_changes_the_native_titles() {
+    let titles_in = |tag: &str| {
         let ctx = MenuContext {
             i18n: std::sync::Arc::new(signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale(
                 tag.to_owned(),
             ))),
             ..MenuContext::default()
         };
-        build(&menu_bar_model(&ctx), false).spec
+        root_titles(&built(&ctx))
     };
-    let (en, xa) = (spec_in("en-US"), spec_in("en-XA"));
-    assert_eq!(plan_refresh(Some(&en), &en.clone()), Refresh::Unchanged);
-    assert_eq!(plan_refresh(Some(&en), &xa), Refresh::Rebuild);
+    let (en, xa) = (titles_in("en-US"), titles_in("en-XA"));
+    assert_eq!(en, titles_in("en-US"));
+    assert_ne!(en, xa);
 }

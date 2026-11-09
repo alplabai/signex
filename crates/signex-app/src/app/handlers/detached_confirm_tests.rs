@@ -111,8 +111,9 @@ fn cancel_leaves_everything_open_and_discard_all_exits() {
         app.document_state
             .is_document_dirty(std::path::Path::new("/p/board.snxsch"))
     );
-    // The confirm window closes; nothing else runs.
-    assert!(task.units() <= 1);
+    // The confirm window closes and the pending system quit request is
+    // cancelled; nothing else runs.
+    assert!(task.units() <= 2);
 
     let (mut app, main) = quit_app();
     raise_quit_confirm(&mut app, main);

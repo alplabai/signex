@@ -750,9 +750,14 @@ impl Signex {
     /// app-quit confirmation modal instead of exiting; otherwise closes
     /// the main window, which the daemon turns into process exit via
     /// `SecondaryWindowClosed`.
+    ///
+    /// A system quit request (`WindowMsg::QuitRequested`) stays pending
+    /// until the app exits or answers `iced::system::cancel_quit()`; every
+    /// path here that keeps the app open and ends the prompt answers it
+    /// (`cancel_quit` does nothing when no request is pending).
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
         if !self.prepare_quit() {
-            return Task::none();
+            return iced::system::cancel_quit();
         }
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
@@ -779,21 +784,26 @@ impl Signex {
     /// Save made while it is up wrote them — and close the prompt once
     /// nothing is left (#1833). Entries are only ever removed here: an edit
     /// made behind the prompt is caught by the Discard All re-check instead.
-    pub(crate) fn prune_settled_quit_confirm(&mut self) {
+    ///
+    /// The app stays open then, so a system quit request still waiting is
+    /// answered with a cancel (`QuitRequested`).
+    pub(crate) fn prune_settled_quit_confirm(&mut self) -> Task<Message> {
         if self.ui_state.app_quit_confirm.is_none() {
-            return;
+            return Task::none();
         }
         let live = self.unsaved_set();
         let live_paths = live.paths();
         let Some(confirm) = self.ui_state.app_quit_confirm.as_mut() else {
-            return;
+            return Task::none();
         };
         confirm.dirty_paths.retain(|p| live_paths.contains(p));
         confirm.dirty_rows.retain(|r| live.rows.contains(r));
         if confirm.dirty_paths.is_empty() && confirm.dirty_rows.is_empty() {
             self.ui_state.app_quit_confirm = None;
             self.ui_state.quit_confirm_refreshed = false;
+            return iced::system::cancel_quit();
         }
+        Task::none()
     }
 
     /// Actually close the main window. In `iced::daemon` this fires a
@@ -852,7 +862,7 @@ impl Signex {
             return Task::none();
         };
         match choice {
-            ProjectCloseChoice::Cancel => Task::none(),
+            ProjectCloseChoice::Cancel => iced::system::cancel_quit(),
             ProjectCloseChoice::DiscardAll => {
                 // Discard only what the user was shown. An edit made since
                 // (a window that was not locked, a route nobody thought of)

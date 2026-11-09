@@ -620,7 +620,7 @@ mod layout_tests {
     #[test]
     fn the_in_window_menu_row_shows_when_the_system_menu_bar_is_not_in_use() {
         let (mut app, window) = main_window_app();
-        app.native_menu.mark_failed_for_test();
+        app.native_menu.fall_back("test");
         let texts = main_window_texts(&app, window);
         for root in crate::menu_bar::model::ROOT_TITLES {
             assert!(texts.iter().any(|t| t.text == root), "no {root} root");

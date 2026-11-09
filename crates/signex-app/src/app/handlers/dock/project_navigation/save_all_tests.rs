@@ -277,9 +277,10 @@ fn a_save_all_write_superseded_by_a_later_ctrl_s_does_not_quit_before_that_save_
     );
 
     let after = feed_then_settle(&mut app, save_all_messages);
+    // One unit: the cancel answering a pending system quit request, no close.
     assert_eq!(
         after.units(),
-        0,
+        1,
         "no quit while the sheet's save is unreported"
     );
     assert!(app.document_state.is_document_dirty(&sheet));
@@ -298,7 +299,8 @@ fn save_all_over_a_running_primitive_ctrl_s_keeps_signex_open_until_it_lands() {
     let save_all_task = save_all(&mut app, &[symbol.clone(), sheet]);
 
     let after = feed_then_settle(&mut app, outputs(save_all_task));
-    assert_eq!(after.units(), 0, "the symbol has not reported back yet");
+    // One unit: the cancel answering a pending system quit request, no close.
+    assert_eq!(after.units(), 1, "the symbol has not reported back yet");
     assert!(app.document_state.is_document_dirty(&symbol));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("Lib.snxsym"), "{notice:?}");
@@ -599,9 +601,10 @@ fn an_undecided_directory_writes_once_and_keeps_the_other_spelling_dirty() {
     assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()], "one write");
     assert!(!app.document_state.is_document_dirty(&upper));
     assert!(app.document_state.is_document_dirty(&lower));
+    // One unit: the cancel answering a pending system quit request, no close.
     assert_eq!(
         after.units(),
-        0,
+        1,
         "Signex must not quit over the unsaved file"
     );
     let notice = app.document_state.error_notice.as_ref().expect("notice");
@@ -639,9 +642,10 @@ fn an_undecided_project_keeps_the_other_spelling_dirty_too() {
 
     assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
     assert!(app.document_state.is_document_dirty(&lower));
+    // One unit: the cancel answering a pending system quit request, no close.
     assert_eq!(
         after.units(),
-        0,
+        1,
         "Signex must not quit over the unsaved file"
     );
 }

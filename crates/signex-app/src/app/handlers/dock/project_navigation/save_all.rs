@@ -376,6 +376,10 @@ impl Signex {
         };
         crate::diagnostics::log_warning(&message);
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(message));
+        // The app stays open: a system quit request still waiting is declined.
+        if matches!(next, SaveAllNext::Quit) {
+            return iced::system::cancel_quit();
+        }
         Task::none()
     }
 

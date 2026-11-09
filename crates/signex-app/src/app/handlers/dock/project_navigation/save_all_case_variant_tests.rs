@@ -17,7 +17,8 @@ fn only_lower_dirty(dir: &Path, differ: bool) -> (Signex, PathBuf, PathBuf) {
 }
 
 fn assert_quit_held_open(app: &Signex, after: &iced::Task<crate::app::Message>, name: &str) {
-    assert_eq!(after.units(), 0, "Signex must not close over unsaved edits");
+    // One unit: the cancel answering a pending system quit request, no close.
+    assert_eq!(after.units(), 1, "Signex must not close over unsaved edits");
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains(name), "{notice:?}");
 }
@@ -132,7 +133,8 @@ fn three_spellings_with_two_dirty_stay_dirty_when_the_write_fails() {
     );
     assert!(app.document_state.is_document_dirty(&upper));
     assert!(app.document_state.is_document_dirty(&lower));
-    assert_eq!(after.units(), 0, "Signex must not close over unsaved edits");
+    // One unit: the cancel answering a pending system quit request, no close.
+    assert_eq!(after.units(), 1, "Signex must not close over unsaved edits");
 }
 
 #[test]
