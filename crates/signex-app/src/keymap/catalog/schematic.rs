@@ -236,7 +236,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
-        operands: operands::AT,
+        operands: operands::JUNCTION,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

@@ -16,11 +16,13 @@
 //! (`wire_runs`); they still commit through the click's `apply_engine_commands`.
 
 use iced::Task;
+use signex_net::TipAnchor;
 use signex_types::schematic::{LabelType, Point};
 
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{GLOBAL_PORT_SHAPE, pre_placement_shape};
 use crate::app::{Message, Signex};
+use crate::schematic_runtime::RenderInvalidation;
 
 /// What a placement id commits.
 #[derive(Clone, Copy)]
@@ -41,6 +43,43 @@ enum Placement {
 type Ran = (CommandOutcome, Task<Message>);
 
 fn run(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
+    if args.operand("document").is_some() {
+        return run_on_document(app, args, placement);
+    }
+    run_on_target(app, args, placement)
+}
+
+/// A placement that names its `document` (#2199): the edit target is that
+/// sheet for the length of the run, as an agent's edit list sets it, so pin
+/// references, the checks, the commit, undo and dirty all go to it and never to
+/// the active tab. The target and the repaint it owes are put back on every
+/// path, a refusal included; no tab or focus changes.
+fn run_on_document(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
+    let path = match super::document_operands::named_sheet(app, args, "a placement") {
+        Ok(path) => path,
+        Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
+    };
+    let targets = &mut app.document_state.agent_edits;
+    let previous = targets.target.replace(path.clone());
+    // Inside an edit list the list owns the repaint; on its own the run does.
+    let own_repaint = previous.is_none();
+    if own_repaint {
+        targets.owed = RenderInvalidation::NONE;
+    }
+    let ran = run_on_target(app, args, placement);
+    let owed = if own_repaint {
+        std::mem::take(&mut app.document_state.agent_edits.owed)
+    } else {
+        RenderInvalidation::NONE
+    };
+    app.document_state.agent_edits.target = previous;
+    if owed != RenderInvalidation::NONE {
+        app.after_sheet_change(&path, owed);
+    }
+    ran
+}
+
+fn run_on_target(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
     let outcome = if app.document_state.edit_engine().is_none() {
         CommandOutcome::disabled("no schematic is open")
     } else if let Some(reason) = app.refuse_if_active_read_only() {
@@ -198,7 +237,36 @@ impl Signex {
         ))
     }
 
-    /// A label or power port on a pin reference is refused, with no escape,
+    /// A junction that would join two differently named nets is refused unless
+    /// `allow_merge=true`: the name sets of the nets under the point are
+    /// compared before the junction ties them (#2199, "Why allow_merge" in
+    /// `docs/CLI.md`). Unnamed nets are what a junction is for.
+    fn refuse_junction_short(&self, args: &CommandArgs, at: Point) -> Result<(), String> {
+        if matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
+            return Ok(());
+        }
+        let Some(engine) = self.document_state.edit_engine() else {
+            return Ok(());
+        };
+        let nets = signex_net::junction_nets(engine.document(), at);
+        if !signex_net::names_short(&nets) {
+            return Ok(());
+        }
+        let named: Vec<String> = nets
+            .iter()
+            .filter(|n| !n.is_empty())
+            .map(|n| format!("{{{}}}", n.join(", ")))
+            .collect();
+        Err(format!(
+            "a junction at {},{} would join the nets {}; pass allow_merge=true to merge on purpose (see docs/CLI.md, \"Why allow_merge\")",
+            at.x,
+            at.y,
+            named.join(" and ")
+        ))
+    }
+
+    /// A label, power port, junction or no-connect on a pin reference is
+    /// refused, with no escape,
     /// when it would pull another net onto the pin's: a wire passing under the
     /// tip joins through the label (the same end rules as a wire run).
     fn refuse_joins(
@@ -206,7 +274,7 @@ impl Signex {
         args: &CommandArgs,
         at: Point,
         what: &str,
-        junction: bool,
+        anchor: TipAnchor,
     ) -> Result<(), String> {
         let Some(OperandValue::PinRef { designator, pin }) = args.operand("at") else {
             return Ok(());
@@ -221,7 +289,7 @@ impl Signex {
             at,
             pin: Some((resolved.symbol, resolved.pin)),
         };
-        let extra = signex_net::joins_at_pin(engine.document(), spec, junction);
+        let extra = signex_net::joins_at_pin(engine.document(), spec, anchor);
         if extra.is_empty() {
             return Ok(());
         }
@@ -285,7 +353,7 @@ impl Signex {
                 spec.label_type = kind;
                 spec.shape = shape.to_string();
                 spec.text = text(args, "text")?;
-                self.refuse_joins(args, at, "label", false)?;
+                self.refuse_joins(args, at, "label", TipAnchor::Label)?;
                 self.refuse_rename(args, at, &spec.text, "label")?;
                 if let Some(OperandValue::Angle(degrees)) = args.operand("rotation") {
                     spec.rotation = *degrees;
@@ -304,17 +372,22 @@ impl Signex {
                 }
                 let net_name = text(args, "net_name")?;
                 self.refuse_unconnected_pin(args, at, "power port")?;
-                self.refuse_joins(args, at, "power port", false)?;
+                self.refuse_joins(args, at, "power port", TipAnchor::Label)?;
                 // A flag marks a net as driven and never names it.
                 if !signex_net::is_power_flag(&lib_id) {
                     self.refuse_rename(args, at, &net_name, "power port")?;
                 }
                 placed(self.place_power_at(at, &net_name, &lib_id))
             }
-            Placement::NoConnect => placed(self.place_no_connect_at(self.grid_point(args, "at")?)),
+            Placement::NoConnect => {
+                let at = self.grid_point(args, "at")?;
+                self.refuse_joins(args, at, "no-connect", TipAnchor::NoConnect)?;
+                placed(self.place_no_connect_at(at))
+            }
             Placement::Junction => {
                 let at = self.grid_point(args, "at")?;
-                self.refuse_joins(args, at, "junction", true)?;
+                self.refuse_joins(args, at, "junction", TipAnchor::Junction)?;
+                self.refuse_junction_short(args, at)?;
                 placed(self.place_junction_at(at))
             }
             Placement::NoErc => {

@@ -192,6 +192,33 @@ fn r1_sheet(id: u128, x: f64) -> signex_types::schematic::SchematicSheet {
     sheet
 }
 
+/// #2199: an edit may repeat the call's document, never name another.
+#[test]
+fn an_edit_naming_another_document_than_the_list_is_refused() {
+    let mut app = app_idle();
+    let other = format!("document={}", path("a.snxsch").display());
+    let before = state(&app, "b.snxsch");
+    let reason = refusal(apply(
+        &mut app,
+        "b.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [20, 20], "document": path("a.snxsch").display().to_string()}}]),
+    ));
+    assert!(
+        reason.contains("names another document than the list"),
+        "{reason}"
+    );
+    assert_eq!(state(&app, "b.snxsch"), before);
+    drop(other);
+    // The same document repeated is fine.
+    let own = path("b.snxsch").display().to_string();
+    let answer = applied(
+        &mut app,
+        "b.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [20, 20], "document": own}}]),
+    );
+    assert_eq!(answer["changed"], true);
+}
+
 /// #2199: a pin reference in an edit resolves on the call's `document`, not on
 /// the sheet that is active.
 #[test]
@@ -235,8 +262,9 @@ fn a_pin_reference_in_an_edit_resolves_on_the_target_sheet_not_the_active_one() 
 #[test]
 fn a_wire_edit_answers_its_report_in_results_and_a_refused_one_rolls_the_list_back() {
     let mut app = app_idle();
+    // A no-connect first: its undo label differs from the rolled-back list's.
     let edits = json!([
-        {"id": "place_junction", "args": {"at": [20, 20]}},
+        {"id": "place_no_connect", "args": {"at": [20, 20]}},
         {"id": "place_wire", "args": {"start": [26, 26], "end": [28, 26], "allow_open": true}},
         {"id": "place_wire", "args": {"start": [26, 40], "end": [28, 40], "allow_open": true, "dry_run": true}},
     ]);

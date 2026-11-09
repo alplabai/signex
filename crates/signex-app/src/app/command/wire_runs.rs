@@ -6,7 +6,8 @@
 
 use serde_json::{Value, json};
 use signex_net::{
-    EndSpec, ExtraItem, ExtraKind, RunEnd, WireIntent, dangling_bus_ends, wire_intent,
+    BusExtra, BusExtraKind, EndSpec, ExtraItem, ExtraKind, RunEnd, WireIntent, bus_intent,
+    dangling_bus_ends, wire_intent,
 };
 use signex_types::schematic::{Point, SchematicSheet, symbol_crossed_by};
 
@@ -54,6 +55,30 @@ pub(super) fn extra_refusal(what: &str, extra: &[ExtraItem]) -> String {
     )
 }
 
+fn bus_extra_refusal(extra: &[BusExtra]) -> String {
+    let named: Vec<String> = extra
+        .iter()
+        .take(NAMED_EXTRAS)
+        .map(|item| {
+            let what = match item.kind {
+                BusExtraKind::Bus | BusExtraKind::Label => item.identity.clone(),
+                BusExtraKind::Entry => "a bus entry".to_string(),
+            };
+            format!("{what} at {}", at(item.position))
+        })
+        .collect();
+    let more = extra.len().saturating_sub(NAMED_EXTRAS);
+    let tail = if more > 0 {
+        format!(" and {more} more")
+    } else {
+        String::new()
+    };
+    format!(
+        "the bus also touches {}{tail}, which would join them to the run; route around them",
+        named.join(", ")
+    )
+}
+
 fn open_refusal(open: &[RunEnd], start: Point, end: Point, what: &str) -> String {
     let ends: Vec<String> = open
         .iter()
@@ -67,6 +92,18 @@ fn open_refusal(open: &[RunEnd], start: Point, end: Point, what: &str) -> String
         ends.join(" and "),
         if open.len() == 1 { "has" } else { "have" }
     )
+}
+
+/// Both ends as the caller named them: the reference (when it was a pin
+/// reference) and the point it resolved to, so a journal records both.
+fn ends_json(args: &CommandArgs, start: Point, end: Point) -> Value {
+    let one = |name: &str, p: Point| match args.operand(name) {
+        Some(OperandValue::PinRef { designator, pin }) => {
+            json!({"ref": format!("{designator}.{pin}"), "at": [p.x, p.y]})
+        }
+        _ => json!({"at": [p.x, p.y]}),
+    };
+    json!([one("start", start), one("end", end)])
 }
 
 fn segments_json(segments: &[(Point, Point)]) -> Value {
@@ -158,33 +195,40 @@ impl Signex {
         let segments = self.checked_segments(before, start, end, "wire")?;
         let commands = wire_commands(&segments);
         let after = Self::sheet_after(before, &commands)?;
-        let WireIntent {
-            extra,
-            names,
-            open,
-            joined,
-            net,
-        } = wire_intent(
+        let intent = wire_intent(
             before,
             &after,
             self.end_spec(args, "start", start),
             self.end_spec(args, "end", end),
         );
+        let short = intent.short();
+        let names = intent.merged_names();
+        let end_names = intent.end_names.clone();
+        let WireIntent {
+            extra,
+            open,
+            joined,
+            net,
+            ..
+        } = intent;
         if !extra.is_empty() {
             return Err(extra_refusal("wire", &extra));
         }
         if !joined {
             return Err("the wire does not connect its two ends; nothing was placed".to_string());
         }
-        let short = names.len() > 1;
         if short && !flag(args, "allow_merge") {
-            return Err(format!(
-                "the wire would join the nets {}; pass allow_merge=true if that is intended",
+            let set = |names: &[String]| {
                 names
                     .iter()
                     .map(|n| format!("`{n}`"))
                     .collect::<Vec<_>>()
-                    .join(" and ")
+                    .join(", ")
+            };
+            return Err(format!(
+                "the wire would join the nets {} and {}; pass allow_merge=true if that is intended (see docs/CLI.md, \"Why allow_merge\")",
+                set(&end_names[0]),
+                set(&end_names[1])
             ));
         }
         if !open.is_empty() && !flag(args, "allow_open") {
@@ -196,6 +240,7 @@ impl Signex {
             ));
         }
         let report = json!({
+            "ends": ends_json(args, start, end),
             "segments": segments_json(&segments),
             "net": net.map(|n| json!({ "name": n.name, "pins": n.pins })),
             "merged": if short { names } else { Vec::new() },
@@ -217,12 +262,31 @@ impl Signex {
             .ok_or("no schematic is open")?
             .document();
         let segments = self.checked_segments(sheet, start, end, "bus")?;
+        let commands = bus_commands(&segments);
+        let after = Self::sheet_after(sheet, &commands)?;
+        let intent = bus_intent(sheet, &after, start, end);
+        if !intent.extra.is_empty() {
+            return Err(bus_extra_refusal(&intent.extra));
+        }
+        let merge = intent.names.len() > 1;
+        if merge && !flag(args, "allow_merge") {
+            let named: Vec<String> = intent.names.iter().map(|n| format!("`{n}`")).collect();
+            return Err(format!(
+                "the bus would join the buses {}; pass allow_merge=true if that is intended (see docs/CLI.md, \"Why allow_merge\")",
+                named.join(" and ")
+            ));
+        }
         let open = dangling_bus_ends(sheet, start, end);
         if !open.is_empty() && !flag(args, "allow_open") {
             return Err(open_refusal(&open, start, end, "a bus, bus entry or label"));
         }
-        let report = json!({ "segments": segments_json(&segments) });
-        Ok((bus_commands(&segments), report))
+        let report = json!({
+            "ends": ends_json(args, start, end),
+            "segments": segments_json(&segments),
+            "bus": intent.resulting,
+            "merged": if merge { intent.names } else { Vec::new() },
+        });
+        Ok((commands, report))
     }
 
     /// Run a wire (`bus` false) or bus run from its operands: refuse, report

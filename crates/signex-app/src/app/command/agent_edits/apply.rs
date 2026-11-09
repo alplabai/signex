@@ -50,9 +50,15 @@ fn prepare(specs: &[EditSpec], document: &str) -> Result<Vec<Prepared>, String> 
             if let Some(reason) = edit_refusal(&id) {
                 return Err(at(reason));
             }
-            if spec.operands.iter().any(|(name, _)| name == "document") {
+            // An edit may repeat the call's document, never name another: a
+            // list is one transaction on one sheet.
+            if spec
+                .operands
+                .iter()
+                .any(|(name, value)| name == "document" && value != document)
+            {
                 return Err(at(
-                    "an edit acts on the call's document; leave out its `document`".into(),
+                    "an edit names another document than the list; leave out its `document`".into(),
                 ));
             }
             let takes_document = metadata_for(&id)
@@ -60,6 +66,7 @@ fn prepare(specs: &[EditSpec], document: &str) -> Result<Vec<Prepared>, String> 
             let mut texts: Vec<String> = spec
                 .operands
                 .iter()
+                .filter(|(name, _)| name != "document")
                 .map(|(name, value)| format!("{name}={value}"))
                 .collect();
             if takes_document {

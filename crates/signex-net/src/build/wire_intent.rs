@@ -57,13 +57,31 @@ pub struct IntentNet {
 pub struct WireIntent {
     /// Items pulled in that the two ends did not name.
     pub extra: Vec<ExtraItem>,
-    /// The distinct net names at the two ends before the run; two are a short.
-    pub names: Vec<String>,
+    /// Every name of the net at each end before the run (empty: unnamed).
+    pub end_names: [Vec<String>; 2],
     /// The ends with nothing under them before the run.
     pub open: Vec<RunEnd>,
     /// Whether the run's two ends are on one net after it.
     pub joined: bool,
     pub net: Option<IntentNet>,
+}
+
+impl WireIntent {
+    /// Whether the run joins two named nets that carry different names.
+    pub fn short(&self) -> bool {
+        names_short(&self.end_names)
+    }
+
+    /// Every name of the two ends, distinct, in order.
+    pub fn merged_names(&self) -> Vec<String> {
+        let mut all: Vec<String> = Vec::new();
+        for name in self.end_names.iter().flatten() {
+            if !all.contains(name) {
+                all.push(name.clone());
+            }
+        }
+        all
+    }
 }
 
 /// What the caller named at one end of the run: a point, and the pin when it
@@ -125,7 +143,10 @@ pub fn wire_intent(
         b.root_of_anchored_in(p, &before_index);
     }
     let wanted: HashSet<Key> = ends.iter().map(|e| b.root_of(&e.at)).collect();
-    let names = names_at(before, &mut b.parent, [start, end]);
+    let end_names = [
+        names_at_point(before, &mut b.parent, &start),
+        names_at_point(before, &mut b.parent, &end),
+    ];
     let before_terminal_root: HashMap<(Uuid, String), Key> =
         collect_terminals_at(before, &root, &mut b.parent)
             .into_iter()
@@ -234,7 +255,7 @@ pub fn wire_intent(
     let joined = on_new(&mut a, &end);
     WireIntent {
         extra,
-        names,
+        end_names,
         open,
         joined,
         net: net_of_run(after, start),
@@ -255,25 +276,78 @@ pub fn net_names_at(sheet: &SchematicSheet, p: Point) -> Vec<String> {
     );
     let mut conn = merged_connectivity(sheet);
     conn.root_of_anchored_in(&p, &index);
-    let mut names = names_at(sheet, &mut conn.parent, [p, p]);
-    let root = crate::uf::find(&mut conn.parent, pt_key(&p));
-    let labels = collect_net_labels(sheet, &mut conn.parent);
-    let carriers = power_name_carriers(sheet, &mut conn.parent);
-    let on_net = labels
-        .get(&root)
-        .into_iter()
-        .flatten()
-        .map(|l| l.text.clone());
-    let power = carriers
+    names_at_point(sheet, &mut conn.parent, &p)
+}
+
+/// Every name of the net the key of `p` is in, best first.
+fn names_at_point(
+    sheet: &SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+    p: &Point,
+) -> Vec<String> {
+    let root = crate::uf::find(parent, pt_key(p));
+    names_of_root(sheet, parent, root)
+}
+
+/// Every name of the net `root` (label texts and power-port values), the best
+/// name by the netlist's rule first.
+fn names_of_root(sheet: &SchematicSheet, parent: &mut HashMap<Key, Key>, root: Key) -> Vec<String> {
+    let labels = collect_net_labels(sheet, parent);
+    let carriers = power_name_carriers(sheet, parent);
+    let on_net: Vec<&signex_types::schematic::Label> =
+        labels.get(&root).cloned().unwrap_or_default();
+    let power: Vec<&str> = carriers
         .iter()
         .filter(|(r, ..)| *r == root)
-        .map(|(_, value, ..)| value.clone());
-    for name in on_net.chain(power) {
+        .map(|(_, value, ..)| value.as_str())
+        .collect();
+    let mut names: Vec<String> = best_net_name(&on_net, &power)
+        .map(|(_, name)| name)
+        .into_iter()
+        .collect();
+    let all = on_net
+        .iter()
+        .map(|l| l.text.clone())
+        .chain(power.iter().map(|v| (*v).to_string()));
+    for name in all {
         if !name.is_empty() && !names.contains(&name) {
             names.push(name);
         }
     }
     names
+}
+
+/// The name sets of the distinct nets a junction at `p` would join: one entry
+/// per net the wires under `p` are on, each the net's names (empty when it is
+/// unnamed). More than one entry means the junction merges nets.
+pub fn junction_nets(sheet: &SchematicSheet, p: Point) -> Vec<Vec<String>> {
+    let segments: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+    let index = SegmentIndex::new(&segments);
+    let mut conn = merged_connectivity(sheet);
+    let mut roots: Vec<Key> = index
+        .containing(pt_key(&p))
+        .map(|(a, _)| crate::uf::find(&mut conn.parent, a))
+        .collect();
+    roots.sort_unstable();
+    roots.dedup();
+    roots
+        .into_iter()
+        .map(|root| names_of_root(sheet, &mut conn.parent, root))
+        .collect()
+}
+
+/// Whether `a` and `b` carry the same set of names.
+fn same_names(a: &[String], b: &[String]) -> bool {
+    a.iter().all(|n| b.contains(n)) && b.iter().all(|n| a.contains(n))
+}
+
+/// Whether joining nets with these name sets shorts named nets: two that are
+/// both named and carry different sets of names.
+pub fn names_short(sets: &[Vec<String>]) -> bool {
+    let named: Vec<&Vec<String>> = sets.iter().filter(|s| !s.is_empty()).collect();
+    named
+        .iter()
+        .any(|s| named.iter().any(|t| !same_names(s, t)))
 }
 
 /// Whether a wire end, a junction or a label sits at `p`: what makes a pin tip
@@ -288,56 +362,37 @@ pub fn has_connection_anchor(sheet: &SchematicSheet, p: Point) -> bool {
         || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
 }
 
-/// What a label, power port or (`junction`) junction placed on the pin `at`
-/// would pull onto that pin's net: it anchors the tip to a wire passing under
-/// it (end or interior), joining that wire's net. The same end rules as a wire
-/// run (`wire_intent`), with the item added to a copy of the sheet.
-pub fn joins_at_pin(before: &SchematicSheet, at: EndSpec, junction: bool) -> Vec<ExtraItem> {
-    let mut after = before.clone();
-    if junction {
-        after.junctions.push(signex_types::schematic::Junction {
-            position: at.at,
-            ..Default::default()
-        });
-    } else {
-        // An empty text anchors the tip but joins no same-name net: a short by
-        // name is the rename check's, with its own escape.
-        after.labels.push(signex_types::schematic::Label::new(
-            "",
-            at.at,
-            signex_types::schematic::LabelType::Net,
-        ));
-    }
-    wire_intent(before, &after, at.clone(), at).extra
+/// What an item placed on a pin tip anchors there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipAnchor {
+    /// A label or a power port.
+    Label,
+    Junction,
+    NoConnect,
 }
 
-/// The distinct best names of the nets under `points`, in order.
-fn names_at(
-    sheet: &SchematicSheet,
-    parent: &mut HashMap<Key, Key>,
-    points: [Point; 2],
-) -> Vec<String> {
-    let roots: Vec<Key> = points
-        .iter()
-        .map(|p| crate::uf::find(parent, pt_key(p)))
-        .collect();
-    let labels = collect_net_labels(sheet, parent);
-    let carriers = power_name_carriers(sheet, parent);
-    let mut names: Vec<String> = Vec::new();
-    for root in roots {
-        let on_net = labels.get(&root).map(Vec::as_slice).unwrap_or(&[]);
-        let power: Vec<&str> = carriers
-            .iter()
-            .filter(|(r, ..)| *r == root)
-            .map(|(_, value, ..)| value.as_str())
-            .collect();
-        if let Some((_, name)) = best_net_name(on_net, &power)
-            && !names.contains(&name)
-        {
-            names.push(name);
-        }
+/// What a label, power port, junction or no-connect placed on the pin `at`
+/// would pull onto that pin's net: it anchors the tip to a wire passing under
+/// it (end or interior), or to a pin butted on the tip, joining their net. The
+/// same end rules as a wire run (`wire_intent`), with the item added to a copy
+/// of the sheet.
+pub fn joins_at_pin(before: &SchematicSheet, at: EndSpec, anchor: TipAnchor) -> Vec<ExtraItem> {
+    use signex_types::schematic::{Junction, Label, LabelType, NoConnect};
+    let mut after = before.clone();
+    match anchor {
+        TipAnchor::Junction => after.junctions.push(Junction {
+            position: at.at,
+            ..Default::default()
+        }),
+        TipAnchor::NoConnect => after.no_connects.push(NoConnect {
+            uuid: Uuid::nil(),
+            position: at.at,
+        }),
+        // An empty text anchors the tip but joins no same-name net: a short by
+        // name is the rename check's, with its own escape.
+        TipAnchor::Label => after.labels.push(Label::new("", at.at, LabelType::Net)),
     }
-    names
+    wire_intent(before, &after, at.clone(), at).extra
 }
 
 /// The 1 um keys of every pin tip on `sheet`.

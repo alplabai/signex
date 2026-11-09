@@ -48,7 +48,8 @@ Two commands, both with capability `edit` in `signex-cli`:
   is what it was.
 - The answer is `{changed, revision, group, label, edits, results}`; `results`
   holds each edit's own answer by index (a wire or bus run answers its report,
-  see [CLI.md](CLI.md) "Wire intent"), `null` for an edit that only ran. A
+  see [CLI.md](CLI.md) "Wire intent"; its `ends` field holds each end's `ref`
+  and resolved `at`), `null` for an edit that only ran. A
   wire edit sees the edits before it. `changed: false`
   comes only from an empty list or a list of dry runs: it records no step and keeps the person's
   redo. An edit that changes nothing (a junction already there, a net already

@@ -175,6 +175,11 @@ fn a_wire_between_two_pin_references_equals_two_clicks_on_the_tips() {
         assert_eq!(report["dry_run"], false);
         assert_eq!(report["net"]["pins"], json!(["C1.1", "R1.2"]));
         assert_eq!(report["merged"], json!([]));
+        // Both ends carry the reference and the point it resolved to.
+        assert_eq!(report["ends"][0]["ref"], "R1.2");
+        assert_eq!(report["ends"][1]["ref"], "C1.1");
+        assert_eq!(report["ends"][0]["at"], json!([a.x, a.y]));
+        assert_eq!(report["ends"][1]["at"], json!([b.x, b.y]));
         let segment = report["segments"][0].as_array().unwrap();
         let wanted = [a.x, a.y, b.x, b.y];
         assert!(
@@ -430,6 +435,287 @@ fn a_power_port_on_a_pin_that_only_has_a_no_connect_flag_is_refused() {
         &["at=R1.2", "net_name=GND", "lib_id=power:GND"],
         "would touch the pin without connecting",
     );
+}
+
+/// The active sheet `a` (R1 and C1 elsewhere) and a second loaded sheet `b`
+/// (`two_parts`), with the document operand naming `b`.
+fn a_active_b_loaded() -> (Signex, std::path::PathBuf, String) {
+    let mut a_sheet = two_parts();
+    for sym in &mut a_sheet.symbols {
+        sym.position.y += 50.8;
+    }
+    let mut app = app_with(a_sheet);
+    let b = std::env::temp_dir().join("snx-2199-b.snxsch");
+    app.document_state.engines.insert(
+        b.clone(),
+        signex_engine::Engine::new(two_parts()).expect("engine"),
+    );
+    let operand = format!("document={}", b.display());
+    (app, b, operand)
+}
+
+fn wires_of(app: &Signex, path: &std::path::Path) -> usize {
+    app.document_state.engines[path].document().wires.len()
+}
+
+#[test]
+fn a_placement_with_a_document_runs_on_that_sheet_and_never_on_the_active_tab() {
+    let (mut app, b, document) = a_active_b_loaded();
+    let active = app.document_state.active_path.clone().expect("active");
+    let tabs = app.document_state.tabs.len();
+
+    // The pin references resolve on `b`; the checks and the commit go to `b`.
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1", &document],
+    ));
+    assert_eq!(report["ends"][0]["ref"], "R1.2");
+    assert_eq!(wires_of(&app, &b), 1);
+    let a_sheet = app.document_state.engines[&active].document();
+    assert!(
+        a_sheet.wires.is_empty() && a_sheet.junctions.is_empty() && a_sheet.labels.is_empty(),
+        "the active sheet is untouched"
+    );
+    assert!(app.document_state.is_document_dirty(&b));
+    assert!(!app.document_state.is_document_dirty(&active));
+    // No tab or focus change, and the target is put back.
+    assert_eq!(app.document_state.active_path.as_ref(), Some(&active));
+    assert_eq!(app.document_state.tabs.len(), tabs);
+    assert!(app.document_state.agent_edits.target.is_none());
+    // One undo on `b` takes it back.
+    app.document_state
+        .engines
+        .get_mut(&b)
+        .unwrap()
+        .undo()
+        .expect("an undo")
+        .expect("an undo step");
+    assert_eq!(wires_of(&app, &b), 0);
+}
+
+#[test]
+fn a_placement_naming_a_document_it_cannot_use_is_refused_and_the_target_restored() {
+    let (mut app, b, document) = a_active_b_loaded();
+    let unknown = format!(
+        "document={}",
+        std::env::temp_dir().join("snx-2199-none.snxsch").display()
+    );
+    for (operands, fragment) in [
+        (vec!["at=R1.2", "text=X", &unknown[..]], ""),
+        (
+            vec!["start=R1.2", "end=R9.1", &document[..]],
+            "no part `R9`",
+        ),
+    ] {
+        let id = if operands[0].starts_with("at") {
+            "place_net_label"
+        } else {
+            "place_wire"
+        };
+        let reason = refusal(run(&mut app, id, &operands));
+        assert!(reason.contains(fragment), "{reason}");
+        assert!(app.document_state.agent_edits.target.is_none());
+    }
+    // A sheet from a newer Signex is read-only.
+    let mut newer = two_parts();
+    newer.unknown.newer_minor_source = Some("snxsch/9.9".into());
+    app.document_state.engines.insert(
+        b.clone(),
+        signex_engine::Engine::new(newer).expect("engine"),
+    );
+    let reason = refusal(run(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1", &document],
+    ));
+    assert!(reason.contains("read-only"), "{reason}");
+    assert!(app.document_state.agent_edits.target.is_none());
+    assert_eq!(wires_of(&app, &b), 0);
+}
+
+/// Two stubs on R1.2 and C1.1, each with the hierarchical label DATA (the best
+/// name of both) and a net label of its own: `p` and `q`.
+fn stubs_with_data(p: &str, q: &str) -> SchematicSheet {
+    let mut sheet = two_parts();
+    for (x, own) in [(16.51, p), (34.29, q)] {
+        sheet
+            .wires
+            .push(wire(Point::new(x, 12.7), Point::new(x, 7.62)));
+        sheet.labels.push(signex_types::schematic::Label::new(
+            "DATA",
+            Point::new(x, 7.62),
+            LabelType::Hierarchical,
+        ));
+        sheet.labels.push(label(own, Point::new(x, 10.16)));
+    }
+    sheet
+}
+
+#[test]
+fn a_wire_between_nets_with_different_name_sets_is_a_short_even_with_a_shared_name() {
+    let mut app = app_with(stubs_with_data("P", "Q"));
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1"],
+        "would join the nets `DATA`, `P` and `DATA`, `Q`",
+    );
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1", "allow_merge=true"],
+    ));
+    assert_eq!(report["merged"], json!(["DATA", "P", "Q"]));
+    // The same names on both sides are no short.
+    let mut same = app_with(stubs_with_data("P", "P"));
+    answered(run(&mut same, "place_wire", &["start=R1.2", "end=C1.1"]));
+}
+
+/// A VCC wire crossed by a GND wire with no junction at the crossing.
+fn crossing_nets(gnd_named: bool) -> SchematicSheet {
+    let mut sheet = SchematicSheet::default();
+    sheet
+        .wires
+        .push(wire(Point::new(0.0, 25.4), Point::new(25.4, 25.4)));
+    sheet
+        .wires
+        .push(wire(Point::new(12.7, 19.05), Point::new(12.7, 31.75)));
+    sheet.labels.push(label("VCC", Point::new(0.0, 25.4)));
+    if gnd_named {
+        sheet.labels.push(label("GND", Point::new(12.7, 19.05)));
+    }
+    sheet
+}
+
+#[test]
+fn a_junction_that_joins_two_named_nets_is_a_short_unless_allowed() {
+    let mut app = app_with(crossing_nets(true));
+    refused_with(
+        &mut app,
+        "place_junction",
+        &["at=12.7,25.4"],
+        "a junction at 12.7,25.4 would join the nets {VCC} and {GND}",
+    );
+    let outcome = run(
+        &mut app,
+        "place_junction",
+        &["at=12.7,25.4", "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    // One named net and one unnamed: what a junction is for.
+    let mut app = app_with(crossing_nets(false));
+    let outcome = run(&mut app, "place_junction", &["at=12.7,25.4"]);
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn a_no_connect_on_a_pin_butted_on_another_pin_is_refused() {
+    // C2.1's tip sits on R1.2's: the flag would make the pair one net.
+    let mut sheet = two_parts();
+    sheet.symbols.push(part("C2", Point::new(20.32, 12.7)));
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_no_connect",
+        &["at=R1.2"],
+        "no-connect on R1.2 also touches pin C2.1",
+    );
+}
+
+/// Bus D[0..7] on y = 38.1 from x 12.7 to 25.4, and A[0..15] from 50.8 to 63.5.
+fn two_named_buses(second_named: bool) -> SchematicSheet {
+    let mut sheet = two_parts();
+    for (a, b) in [(12.7, 25.4), (50.8, 63.5)] {
+        sheet.buses.push(Bus {
+            uuid: Uuid::now_v7(),
+            start: Point::new(a, 38.1),
+            end: Point::new(b, 38.1),
+        });
+    }
+    sheet.labels.push(label("D[0..7]", Point::new(12.7, 38.1)));
+    if second_named {
+        sheet.labels.push(label("A[0..15]", Point::new(63.5, 38.1)));
+    }
+    sheet
+}
+
+#[test]
+fn a_bus_between_two_differently_named_buses_is_a_merge_unless_allowed() {
+    let ends = ["start=25.4,38.1", "end=50.8,38.1"];
+    let mut app = app_with(two_named_buses(true));
+    refused_with(
+        &mut app,
+        "place_bus",
+        &ends,
+        "would join the buses `D[0..7]` and `A[0..15]`",
+    );
+    let report = answered(run(
+        &mut app,
+        "place_bus",
+        &[ends[0], ends[1], "allow_merge=true"],
+    ));
+    assert_eq!(report["merged"], json!(["D[0..7]", "A[0..15]"]));
+    // One name and one unnamed run: allowed, and the report names the result.
+    let mut app = app_with(two_named_buses(false));
+    let report = answered(run(&mut app, "draw_bus", &ends));
+    assert_eq!(report["bus"], json!(["D[0..7]"]));
+    assert_eq!(report["merged"], json!([]));
+    // A coordinate end carries its point only.
+    assert_eq!(report["ends"][0], json!({"at": [25.4, 38.1]}));
+}
+
+#[test]
+fn a_bus_that_touches_another_run_an_entry_or_a_bend_target_is_refused() {
+    // Mid-path: a stub run ends on the path.
+    let mut sheet = two_named_buses(false);
+    sheet.buses.push(Bus {
+        uuid: Uuid::now_v7(),
+        start: Point::new(38.1, 38.1),
+        end: Point::new(38.1, 44.45),
+    });
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_bus",
+        &["start=25.4,38.1", "end=50.8,38.1"],
+        "the bus also touches an unnamed bus at 38.1,38.1",
+    );
+    // A bus entry on the path.
+    let mut sheet = two_named_buses(false);
+    sheet.bus_entries.push(BusEntry {
+        uuid: Uuid::now_v7(),
+        position: Point::new(38.1, 38.1),
+        size: (2.54, 2.54),
+    });
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_bus",
+        &["start=25.4,38.1", "end=50.8,38.1"],
+        "a bus entry at 38.1,38.1",
+    );
+    // A bend that lands on another run: the bend of (25.4,38.1)..(50.8,50.8)
+    // is (50.8,38.1), the end of the second bus, and the end sits on a third.
+    let mut sheet = two_named_buses(false);
+    sheet.buses.push(Bus {
+        uuid: Uuid::now_v7(),
+        start: Point::new(44.45, 50.8),
+        end: Point::new(57.15, 50.8),
+    });
+    sheet.buses.push(Bus {
+        uuid: Uuid::now_v7(),
+        start: Point::new(38.1, 44.45),
+        end: Point::new(38.1, 50.8),
+    });
+    let mut app = app_with(sheet);
+    let outcome = run(
+        &mut app,
+        "place_bus",
+        &["start=25.4,38.1", "end=50.8,50.8", "allow_open=true"],
+    );
+    let reason = refusal(outcome);
+    assert!(reason.contains("the bus also touches"), "{reason}");
 }
 
 #[test]

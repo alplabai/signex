@@ -96,10 +96,14 @@ pub(super) fn handled_ids() -> impl Iterator<Item = &'static str> {
     HANDLERS.iter().map(|(id, _)| *id)
 }
 
-/// Does `command` name its document with the `document` operand?
+/// Does `command` always name its document (a required `document` operand)?
+/// A placement takes an optional one and keeps the active tab's gate without it.
 pub(crate) fn names_its_document(command: &AppCommandId) -> bool {
-    crate::keymap::metadata_for(command)
-        .is_some_and(|meta| meta.operands.iter().any(|op| op.name == "document"))
+    crate::keymap::metadata_for(command).is_some_and(|meta| {
+        meta.operands
+            .iter()
+            .any(|op| op.name == "document" && op.required)
+    })
 }
 
 impl Signex {
@@ -112,7 +116,7 @@ impl Signex {
         let Some(handler) = operand_handler(command) else {
             return refused("operands are declared but not run yet (#1934)");
         };
-        if names_its_document(command) {
+        if names_its_document(command) || args.operand("document").is_some() {
             self.reconcile_document_ids();
         } else if let Some(reason) =
             enablement::disabled_reason(command, &self.command_context(None))

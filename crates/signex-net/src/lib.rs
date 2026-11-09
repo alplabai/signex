@@ -23,14 +23,16 @@ mod build;
 mod bus;
 mod bus_ends;
 pub use bus_ends::dangling_bus_ends;
+mod bus_intent;
+pub use bus_intent::{BusExtra, BusExtraKind, BusIntent, bus_intent};
 #[cfg(test)]
 mod fixtures;
 pub use build::{
     ConnectedPoints, EndSpec, ExtraItem, ExtraKind, FloodElements, IntentNet, NetExtent, RunEnd,
-    SegmentIndex, SheetConnectivity, SheetPinContacts, WireIntent, best_net_name_of, build_netlist,
-    connected_net_items, connected_points, flood_net_elements, has_connection_anchor,
-    is_power_flag, joins_at_pin, name_carrying_ports, net_extent_at, net_names_at,
-    point_on_segment, pt_key, wire_intent,
+    SegmentIndex, SheetConnectivity, SheetPinContacts, TipAnchor, WireIntent, best_net_name_of,
+    build_netlist, connected_net_items, connected_points, flood_net_elements,
+    has_connection_anchor, is_power_flag, joins_at_pin, junction_nets, name_carrying_ports,
+    names_short, net_extent_at, net_names_at, point_on_segment, pt_key, wire_intent,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 

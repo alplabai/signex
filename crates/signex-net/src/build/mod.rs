@@ -35,8 +35,8 @@ mod segment_index;
 pub use segment_index::SegmentIndex;
 mod wire_intent;
 pub use wire_intent::{
-    EndSpec, ExtraItem, ExtraKind, IntentNet, RunEnd, WireIntent, has_connection_anchor,
-    joins_at_pin, net_names_at, wire_intent,
+    EndSpec, ExtraItem, ExtraKind, IntentNet, RunEnd, TipAnchor, WireIntent, has_connection_anchor,
+    joins_at_pin, junction_nets, names_short, net_names_at, wire_intent,
 };
 
 use crate::uf::{Key, find as uf_find, union as uf_union};

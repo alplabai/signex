@@ -89,6 +89,23 @@ or new that makes nothing, with an error notice, is `failed` with that notice.
 A command with no operand that opens a dialog is `refused`, never `ran`, when
 the dialog cannot be answered.
 
+## Naming the sheet of a placement
+
+The placements (`place_net_label` and the other labels, `place_power_symbol`,
+`place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
+`place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
+`draw_graphic_line`, `draw_rectangle`) take an optional `document`, an id or a
+path as for `apply_edits`. Given, the command runs on that sheet and never on
+the active tab: pin references, the intent checks and their scratch copies, the
+commit, undo and the dirty flag all go to it, and no tab or focus changes. An
+unknown, unloaded, non-schematic or read-only document is refused with its
+reason. Without it, the command acts on the sheet the edit targets (the
+`apply_edits` document, else the session's own active sheet). Inside
+`apply_edits` an edit may repeat the call's `document` but not name another
+("an edit names another document than the list"). The optional `document` does
+not put the placements on the agent channel: they stay reachable through
+`apply_edits` only.
+
 ## Pin references
 
 A point operand (`at`, `start`, `end`) also takes `<designator>.<pin>`, split at
@@ -133,8 +150,10 @@ sheet first and judge the result with the netlist derivation
    or end on a wire's interior is a T the caller asked for only for a
    coordinate with no pin tip there; for a pin reference, or any end on a pin
    tip, a wire passing under the tip is not intended, so its net is extra.
-4. **Short**: the two ends are on differently named nets (labels and power
-   ports, by the netlist's naming rule); refused unless `allow_merge=true`.
+4. **Short**: both ends are on named nets and the two nets carry different
+   sets of names (every label text and power-port value of each net, not only
+   the best name: `{DATA, P}` and `{DATA, Q}` are two nets that share a name);
+   refused unless `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)).
 5. **Open end**: an end with no pin tip, wire, junction, label, sheet pin or
    bus entry (either end of it) under it; refused unless `allow_open=true`.
 6. The two ends must be on one net afterwards; a run that is not is refused
@@ -143,10 +162,26 @@ sheet first and judge the result with the netlist derivation
 
 `dry_run=true` (`--dry-run`) answers the report and changes nothing: no undo
 step, no dirty flag, no Messages line. A run that lands answers
-`{"dry_run": false, "segments": [[x1,y1,x2,y2],...], "net": {"name": "N$3",
-"pins": ["C1.1","R1.2"]} | null, "merged": [names]}`; `net` is `null` when no
-pin is on the run's net. `place_wire` and `draw_wire` answer `answered`, not
-`ran`.
+`{"dry_run": false, "ends": [{"ref": "R1.2", "at": [x, y]}, {"at": [x, y]}],
+"segments": [[x1,y1,x2,y2],...], "net": {"name": "N$3", "pins":
+["C1.1","R1.2"]} | null, "merged": [names]}`; `net` is `null` when no pin is on
+the run's net. `ends` records both ends as given: the pin reference (`ref`,
+only for an end given as one) and the point it resolved to (`at`), so a
+journal of the run holds both; it carries no file path. `dry_run` is in every
+answer, dry or not. A bus answers the same with `"bus": [names]` for `net`.
+`place_wire`, `draw_wire`, `place_bus` and `draw_bus` answer `answered`, not
+`ran`; the point placements (label, power port, junction, no-connect) still
+answer `ran`.
+
+## Why `allow_merge`
+
+Merging two named nets or buses on purpose does happen: giving a signal a
+second name, or tying AGND to GND at a single point. An agent must never do it
+silently, so the caller states it: `allow_merge=true` is the explicit "yes, join
+them". Without it a wire, a bus, a junction, a label or a power port that would
+short differently named nets is refused with the names it would join. It is
+not an escape for the other refusals: touching things the run was not drawn to
+(extra connections) has no escape.
 
 ## Labels and power ports
 
@@ -158,18 +193,25 @@ names and the new label text or power `net_name` is not one of them, the
 placement is refused as a short ("`at` 16.51,12.7 is on net VCC, X; a GND label
 there would short VCC, X and GND; pass allow_merge=true to merge on purpose").
 A name the net already carries, an unnamed net, or nothing at `at` is allowed.
-`allow_merge=true` places it anyway. There is no `dry_run` for these commands.
-A power flag (`power:PWR_FLAG`) never names a net, so it is not checked for a
-short.
+`allow_merge=true` places it anyway ([Why `allow_merge`](#why-allow_merge)).
+There is no `dry_run` for these commands. A power flag (`power:PWR_FLAG`) never
+names a net, so it is not checked for a short.
+
+`place_junction` has the same check at its point, by coordinate or pin
+reference: it compares the name sets of every net the junction would join (the
+wires under the point) and refuses when two named nets carry different names
+("a junction at 12.7,25.4 would join the nets {VCC} and {GND}"), unless
+`allow_merge=true`. Unnamed nets are what a junction is for and stay allowed.
 
 Two more refusals apply to a pin reference only (a coordinate is unchanged),
 and have no escape. The pin-reference placements that are join-checked are the
-wire, the label, the power port and the junction:
+wire, the label, the power port, the junction and the no-connect:
 
-- A label, power port or junction whose tip lies under a wire the pin is not on
-  (no end or junction there) is refused ("the label on R1.2 also touches pin
-  C1.1 ... would join them to the net"): it would anchor the tip to that wire
-  and join its net. This is rule 3 of "Wire intent", applied to the tip.
+- A label, power port, junction or no-connect whose tip lies under a wire the
+  pin is not on (no end or junction there), or on which another pin is butted,
+  is refused ("the label on R1.2 also touches pin C1.1 ... would join them to
+  the net"): it would anchor the tip and join that net. This is rule 3 of
+  "Wire intent", applied to the tip.
 - A power port on a pin whose tip has no wire end, junction or label is refused
   ("would touch the pin without connecting"): pin to pin is no connection, so
   draw a wire to it first or place a label. A no-connect flag does not count as
@@ -178,11 +220,24 @@ wire, the label, the power port and the junction:
 ## Bus geometry
 
 `place_bus` and `draw_bus` from operands follow the geometry rules of a wire
-(orthogonal segments, no body crossing) and refuse a dangling end: an end must
-sit on an existing bus (an end or its interior), a bus entry or a label, unless
-`allow_open=true`. They have no net check, because bus connectivity is the bus
-analysis, not the netlist. `dry_run` works as for a wire; the answer is
-`{"dry_run", "segments"}`.
+(orthogonal segments, no body crossing, no pin references) and refuse a
+dangling end: an end must sit on an existing bus (an end or its interior), a
+bus entry (either end) or a bus-name label, unless `allow_open=true`.
+
+They are intent-checked too, with the one bus analysis (`analyse_buses`) applied
+to the sheet before and after the run (`signex_net::bus_intent`):
+
+- **Extra connection** (never allowed): another bus run touched by its end or
+  interior along the path or at a bend, a bus entry, or a bus-name label that
+  ends up on the new run and was not on a run an end attaches to ("the bus also
+  touches bus D[0..7] at 12.7,38.1 ..."). What an end attaches to is the intent.
+- **Merge**: the runs the two ends attach to carry different bus names;
+  refused unless `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)).
+  One name and one unnamed run is allowed.
+
+There is no net diff: bus connectivity is the bus analysis, not the netlist.
+`dry_run` works as for a wire; the answer is `{"dry_run", "segments", "bus":
+[names of the run], "merged": [names]}`.
 
 ## Security
 
