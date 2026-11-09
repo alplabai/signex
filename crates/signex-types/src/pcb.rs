@@ -82,9 +82,7 @@ pub enum PadShape {
     Circle,
     Rect,
     Oval,
-    Trapezoid,
     RoundRect,
-    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -193,8 +191,15 @@ pub struct Pad {
     #[serde(default)]
     pub layers: Vec<String>,
     pub net: Option<PadNet>,
+    /// RoundRect corner radius as a fraction of the shorter side, in
+    /// `0.0..=0.5`; read only for [`PadShape::RoundRect`].
     #[serde(default)]
     pub roundrect_ratio: f64,
+    /// The pad's own turn in degrees, counter-clockwise in the footprint's
+    /// frame, composed with the footprint's rotation. Saved in the optional
+    /// `rotation` pad column (`snxpcb/1.3`).
+    #[serde(default)]
+    pub rotation: f64,
     /// The net was set by hand and the schematic never changes it.
     /// Saved in the optional `net_locked` pad column.
     #[serde(default)]

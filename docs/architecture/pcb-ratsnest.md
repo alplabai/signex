@@ -17,10 +17,10 @@ crate would be the "kept in step" pair ADR-0005 bans.
   the same net, on a shared copper layer. Pads, tracks and vias all join
   by shape: a track across a pad joins it, and two overlapping pads join,
   with no end or centre inside the other. A pad is its real outline
-  as `pad_shape` gives it (round-rect, trapezoid and custom pads are their
-  bounding rectangle); an oval
-  ellipse is read as a 32-point polygon, so it is under-read by its
-  sagitta (about 0.5% of the radius). Through-hole pads and through vias
+  as `pad_shape` gives it, turned by the footprint's rotation and the pad's
+  own: an oval is a stadium along its longer side, a round-rect keeps its
+  corner radius and is read exactly, as its rectangle inset by the radius
+  plus that radius. Through-hole pads and through vias
   reach every layer; blind and micro vias the layers between the ones they
   name.
 - Per net, each connected group of copper holding a pad is an island. Up to
@@ -38,8 +38,8 @@ crate would be the "kept in step" pair ADR-0005 bans.
   everything that joins one zone is one island. The polygon is the zone's
   OUTLINE, because the model stores no filled polygon (the fill is not
   computed or saved); it may be concave. The test is integer nm
-  (`Shape::overlaps_polygon`); the only float is the 32-point ellipse
-  outline above. A via joins a zone on any copper layer of its span that
+  (`Shape::overlaps_polygon`); the only float is the round-rect
+  corner-arc outline above. A via joins a zone on any copper layer of its span that
   the zone is on; a through pad or via reaches every layer.
 - Zone to zone: two same-net zones on a shared copper layer whose
   outlines meet (an edge crossing or touching, or one wholly inside the

@@ -15,6 +15,8 @@ mod footprint;
 mod items;
 
 #[cfg(test)]
+mod pad_shape_tests;
+#[cfg(test)]
 mod tests;
 
 pub use command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
