@@ -109,7 +109,7 @@ fn flip_reverses_a_pads_own_non_zero_turn() {
     else {
         panic!("round-rect expected");
     };
-    // On the bottom the pad's own turn runs the other way: -20 = 340.
-    assert_eq!(rotation_deg, 340.0);
+    // On the bottom the pad's own turn runs the other way.
+    assert_eq!(rotation_deg, -20.0);
     assert_eq!(center, PointNm::new(-2_000_000, 0));
 }
