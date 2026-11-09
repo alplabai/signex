@@ -39,7 +39,8 @@ fn describe(item: &ExtraItem) -> String {
     format!("{what} at {}", at(item.position))
 }
 
-fn extra_refusal(extra: &[ExtraItem]) -> String {
+/// The refusal for items `what` (a wire, or a label on a pin) would pull in.
+pub(super) fn extra_refusal(what: &str, extra: &[ExtraItem]) -> String {
     let named: Vec<String> = extra.iter().take(NAMED_EXTRAS).map(describe).collect();
     let more = extra.len().saturating_sub(NAMED_EXTRAS);
     let tail = if more > 0 {
@@ -48,7 +49,7 @@ fn extra_refusal(extra: &[ExtraItem]) -> String {
         String::new()
     };
     format!(
-        "the wire also touches {}{tail}, which would join them to the net; route around them",
+        "the {what} also touches {}{tail}, which would join them to the net; route around them",
         named.join(", ")
     )
 }
@@ -170,7 +171,7 @@ impl Signex {
             self.end_spec(args, "end", end),
         );
         if !extra.is_empty() {
-            return Err(extra_refusal(&extra));
+            return Err(extra_refusal("wire", &extra));
         }
         if !joined {
             return Err("the wire does not connect its two ends; nothing was placed".to_string());

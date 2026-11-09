@@ -152,17 +152,25 @@ pin is on the run's net. `place_wire` and `draw_wire` answer `answered`, not
 
 `place_net_label`, `place_local_net_label`, `place_global_label`,
 `place_hierarchical_label` and `place_power_symbol` from operands, at a
-coordinate or a pin reference, take the best name of the net already at `at`
-(labels and power-port values, by the netlist's naming rule:
-`signex_net::net_name_at`). If that net has a name other than the new label
-text or power `net_name`, the placement is refused as a short ("`at` 16.51,12.7
-is on net VCC; a GND label there would short VCC and GND; pass
-allow_merge=true to merge on purpose"). The same name, an unnamed net, or
-nothing at `at` is allowed. `allow_merge=true` places it anyway. There is no
-`dry_run` for these commands. A power port on a pin reference whose tip has no
-wire end, junction or label is refused ("would touch the pin without
-connecting"): pin to pin is no connection, so draw a wire to it first or place
-a label. A coordinate is unchanged.
+coordinate or a pin reference, take every name the net already at `at` carries
+(label texts and power-port values: `signex_net::net_names_at`). If the net has
+names and the new label text or power `net_name` is not one of them, the
+placement is refused as a short ("`at` 16.51,12.7 is on net VCC, X; a GND label
+there would short VCC, X and GND; pass allow_merge=true to merge on purpose").
+A name the net already carries, an unnamed net, or nothing at `at` is allowed.
+`allow_merge=true` places it anyway. There is no `dry_run` for these commands.
+
+Two more refusals apply to a pin reference only (a coordinate is unchanged),
+and have no escape:
+
+- A label or power port whose tip lies under a wire the pin is not on (no end
+  or junction there) is refused ("the label on R1.2 also touches pin C1.1 ...
+  would join them to the net"): the label would anchor the tip to that wire
+  and join its net. This is rule 3 of "Wire intent", applied to the tip.
+- A power port on a pin whose tip has no wire end, junction or label is refused
+  ("would touch the pin without connecting"): pin to pin is no connection, so
+  draw a wire to it first or place a label. A no-connect flag does not count as
+  a connection.
 
 ## Bus geometry
 

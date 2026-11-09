@@ -307,6 +307,112 @@ fn a_wire_passing_under_a_referenced_pin_is_not_joined_silently() {
 }
 
 #[test]
+fn a_label_on_a_referenced_pin_under_a_passing_wire_is_refused_with_no_escape() {
+    // An unnamed wire that carries C1.1 runs vertically through R1.2's tip with
+    // no end or junction there: R1.2 is on no net, a label there would join it.
+    let mut sheet = two_parts();
+    for (a, b) in [
+        ((16.51, 5.08), (16.51, 20.32)),
+        ((16.51, 20.32), (34.29, 20.32)),
+        ((34.29, 20.32), (34.29, 12.7)),
+    ] {
+        sheet
+            .wires
+            .push(wire(Point::new(a.0, a.1), Point::new(b.0, b.1)));
+    }
+    let mut app = app_with(sheet);
+    for operands in [
+        vec!["at=R1.2", "text=SIG"],
+        vec!["at=R1.2", "text=SIG", "allow_merge=true"],
+    ] {
+        refused_with(
+            &mut app,
+            "place_net_label",
+            &operands,
+            "label on R1.2 also touches pin C1.1",
+        );
+    }
+    // By coordinate the label is the caller's own T onto the wire.
+    let outcome = run(&mut app, "place_net_label", &["at=16.51,12.7", "text=SIG"]);
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn a_wire_to_a_pin_that_shares_its_tip_with_a_connected_power_port_is_accepted() {
+    use signex_types::schematic::Symbol;
+    // A stub wire on R1.2 and a GND port on the same tip: they are one net.
+    let mut sheet = two_parts();
+    sheet
+        .wires
+        .push(wire(Point::new(16.51, 12.7), Point::new(16.51, 7.62)));
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::now_v7(),
+        lib_id: "power:GND".into(),
+        reference: "#PWR01".into(),
+        value: "GND".into(),
+        is_power: true,
+        position: Point::new(16.51, 12.7),
+        unit: 1,
+        ..Symbol::default()
+    });
+    let mut by_ref = app_with(sheet.clone());
+    let mut by_point = app_with(sheet);
+    let report = answered(run(&mut by_ref, "place_wire", &["start=R1.2", "end=C1.1"]));
+    assert_eq!(report["dry_run"], false);
+    answered(run(
+        &mut by_point,
+        "place_wire",
+        &["start=16.51,12.7", "end=C1.1"],
+    ));
+}
+
+#[test]
+fn a_name_the_net_already_carries_is_no_short() {
+    // VCC (net label) and X on one net.
+    let mut sheet = two_named_nets();
+    sheet.labels.push(label("X", Point::new(16.51, 10.16)));
+    for operands in [vec!["at=R1.2", "text=X"], vec!["at=R1.2", "text=VCC"]] {
+        let mut app = app_with(sheet.clone());
+        assert_eq!(
+            run(&mut app, "place_net_label", &operands),
+            CommandOutcome::Ran,
+            "{operands:?}"
+        );
+    }
+    let mut app = app_with(sheet.clone());
+    let outcome = run(
+        &mut app,
+        "place_power_symbol",
+        &["at=R1.2", "net_name=X", "lib_id=power:X"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    // Another name is still a short, and the refusal lists what the net has.
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_net_label",
+        &["at=R1.2", "text=GND"],
+        "is on net VCC, X; a GND label there would short VCC, X and GND",
+    );
+}
+
+#[test]
+fn a_power_port_on_a_pin_that_only_has_a_no_connect_flag_is_refused() {
+    let mut sheet = two_parts();
+    sheet.no_connects.push(signex_types::schematic::NoConnect {
+        uuid: Uuid::now_v7(),
+        position: Point::new(16.51, 12.7),
+    });
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_power_symbol",
+        &["at=R1.2", "net_name=GND", "lib_id=power:GND"],
+        "would touch the pin without connecting",
+    );
+}
+
+#[test]
 fn a_wire_may_start_on_either_end_of_a_bus_entry() {
     let mut sheet = two_parts();
     sheet.bus_entries.push(BusEntry {

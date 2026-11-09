@@ -185,10 +185,11 @@ impl Signex {
         let Some(OperandValue::PinRef { designator, pin }) = args.operand("at") else {
             return Ok(());
         };
+        // A wire end, junction or label: a no-connect flag is no connection.
         let connected = self
             .document_state
             .edit_engine()
-            .is_none_or(|e| signex_net::connected_points(e.document()).contains(&at));
+            .is_none_or(|e| signex_net::has_connection_anchor(e.document(), at));
         if connected {
             return Ok(());
         }
@@ -197,9 +198,37 @@ impl Signex {
         ))
     }
 
+    /// A label or power port on a pin reference is refused, with no escape,
+    /// when it would pull another net onto the pin's: a wire passing under the
+    /// tip joins through the label (the same end rules as a wire run).
+    fn refuse_joins(&self, args: &CommandArgs, at: Point, what: &str) -> Result<(), String> {
+        let Some(OperandValue::PinRef { designator, pin }) = args.operand("at") else {
+            return Ok(());
+        };
+        let (Some(engine), Ok(resolved)) = (
+            self.document_state.edit_engine(),
+            self.pin_ref(designator, pin),
+        ) else {
+            return Ok(());
+        };
+        let spec = signex_net::EndSpec {
+            at,
+            pin: Some((resolved.symbol, resolved.pin)),
+        };
+        let extra = signex_net::joins_at_pin(engine.document(), spec);
+        if extra.is_empty() {
+            return Ok(());
+        }
+        Err(super::wire_runs::extra_refusal(
+            &format!("{what} on {designator}.{pin}"),
+            &extra,
+        ))
+    }
+
     /// A label or power port named `new_name` at `at` is refused when the net
-    /// already there carries another name, unless `allow_merge=true`: it would
-    /// short the two (#2199; rules in `docs/CLI.md`, "Labels and power ports").
+    /// already there carries other names and not this one, unless
+    /// `allow_merge=true`: it would short them (#2199; rules in `docs/CLI.md`,
+    /// "Labels and power ports").
     fn refuse_rename(
         &self,
         args: &CommandArgs,
@@ -213,13 +242,15 @@ impl Signex {
         let Some(sheet) = self.document_state.edit_engine().map(|e| e.document()) else {
             return Ok(());
         };
-        match signex_net::net_name_at(sheet, at) {
-            Some(existing) if existing != new_name => Err(format!(
-                "`at` {},{} is on net {existing}; a {new_name} {what} there would short {existing} and {new_name}; pass allow_merge=true to merge on purpose",
-                at.x, at.y
-            )),
-            _ => Ok(()),
+        let names = signex_net::net_names_at(sheet, at);
+        if names.is_empty() || names.iter().any(|n| n == new_name) {
+            return Ok(());
         }
+        let existing = names.join(", ");
+        Err(format!(
+            "`at` {},{} is on net {existing}; a {new_name} {what} there would short {existing} and {new_name}; pass allow_merge=true to merge on purpose",
+            at.x, at.y
+        ))
     }
 
     fn place_from_operands(
@@ -248,6 +279,7 @@ impl Signex {
                 spec.label_type = kind;
                 spec.shape = shape.to_string();
                 spec.text = text(args, "text")?;
+                self.refuse_joins(args, at, "label")?;
                 self.refuse_rename(args, at, &spec.text, "label")?;
                 if let Some(OperandValue::Angle(degrees)) = args.operand("rotation") {
                     spec.rotation = *degrees;
@@ -266,6 +298,7 @@ impl Signex {
                 }
                 let net_name = text(args, "net_name")?;
                 self.refuse_unconnected_pin(args, at, "power port")?;
+                self.refuse_joins(args, at, "power port")?;
                 self.refuse_rename(args, at, &net_name, "power port")?;
                 placed(self.place_power_at(at, &net_name, &lib_id))
             }

@@ -158,11 +158,6 @@ pub fn wire_intent(
 
     let mut extra = Vec::new();
     let named: HashSet<(Uuid, String)> = ends.iter().filter_map(|e| e.pin.clone()).collect();
-    let ref_keys: HashSet<Key> = ends
-        .iter()
-        .filter(|e| e.pin.is_some())
-        .map(|e| pt_key(&e.at))
-        .collect();
     let coord_keys: HashSet<Key> = ends
         .iter()
         .filter(|e| e.pin.is_none())
@@ -175,18 +170,14 @@ pub fn wire_intent(
         for (t, tip) in found {
             let id = (t.symbol, t.pin.clone());
             let key = pt_key(&tip);
-            let intended = if named.contains(&id) {
-                true
-            } else if ref_keys.contains(&key) {
-                // Another pin on a referenced tip is not the pin named.
-                false
-            } else if coord_keys.contains(&key) {
-                true
-            } else {
-                before_terminal_root
-                    .get(&id)
-                    .is_some_and(|r| wanted.contains(r))
-            };
+            // A pin already on a wanted net is no surprise, wherever it sits.
+            // Otherwise only the pin a reference named, or the pins at a
+            // coordinate end, are intended: another pin on a referenced tip is
+            // not the pin named.
+            let on_wanted = before_terminal_root
+                .get(&id)
+                .is_some_and(|r| wanted.contains(r));
+            let intended = named.contains(&id) || on_wanted || coord_keys.contains(&key);
             if !intended {
                 extra.push(ExtraItem {
                     kind: ExtraKind::Pin,
@@ -250,10 +241,11 @@ pub fn wire_intent(
     }
 }
 
-/// The best name of the net at `p` on `sheet` (labels and power-port values,
-/// by the netlist's naming rule), or `None` when the net is unnamed or nothing
-/// is at `p`. Used to refuse a label or power port that would rename it.
-pub fn net_name_at(sheet: &SchematicSheet, p: Point) -> Option<String> {
+/// Every name the net at `p` on `sheet` carries (label texts and power-port
+/// values), the best name by the netlist's rule first; empty when the net is
+/// unnamed or nothing is at `p`. Used to refuse a label or power port that
+/// would short it: a name the net already carries is no short.
+pub fn net_names_at(sheet: &SchematicSheet, p: Point) -> Vec<String> {
     let index = SegmentIndex::new(
         &sheet
             .wires
@@ -263,7 +255,53 @@ pub fn net_name_at(sheet: &SchematicSheet, p: Point) -> Option<String> {
     );
     let mut conn = merged_connectivity(sheet);
     conn.root_of_anchored_in(&p, &index);
-    names_at(sheet, &mut conn.parent, [p, p]).into_iter().next()
+    let mut names = names_at(sheet, &mut conn.parent, [p, p]);
+    let root = crate::uf::find(&mut conn.parent, pt_key(&p));
+    let labels = collect_net_labels(sheet, &mut conn.parent);
+    let carriers = power_name_carriers(sheet, &mut conn.parent);
+    let on_net = labels
+        .get(&root)
+        .into_iter()
+        .flatten()
+        .map(|l| l.text.clone());
+    let power = carriers
+        .iter()
+        .filter(|(r, ..)| *r == root)
+        .map(|(_, value, ..)| value.clone());
+    for name in on_net.chain(power) {
+        if !name.is_empty() && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
+/// Whether a wire end, a junction or a label sits at `p`: what makes a pin tip
+/// there a connection (a no-connect flag does not).
+pub fn has_connection_anchor(sheet: &SchematicSheet, p: Point) -> bool {
+    let key = pt_key(&p);
+    sheet
+        .wires
+        .iter()
+        .any(|w| pt_key(&w.start) == key || pt_key(&w.end) == key)
+        || sheet.junctions.iter().any(|j| pt_key(&j.position) == key)
+        || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
+}
+
+/// What a label or power port placed on the pin `at` names would pull onto
+/// that pin's net: the label anchors the tip to a wire passing under it (end
+/// or interior), joining that wire's net. The same end rules as a wire run
+/// (`wire_intent`), with a label added to a copy of the sheet.
+pub fn joins_at_pin(before: &SchematicSheet, at: EndSpec) -> Vec<ExtraItem> {
+    let mut after = before.clone();
+    // An empty text anchors the tip but joins no same-name net: a short by
+    // name is the rename check's, with its own escape.
+    after.labels.push(signex_types::schematic::Label::new(
+        "",
+        at.at,
+        signex_types::schematic::LabelType::Net,
+    ));
+    wire_intent(before, &after, at.clone(), at).extra
 }
 
 /// The distinct best names of the nets under `points`, in order.
