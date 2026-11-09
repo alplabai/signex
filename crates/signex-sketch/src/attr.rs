@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::PcbLayer;
 
 use crate::id::SketchEntityId;
 
@@ -426,7 +426,8 @@ pub enum PasteAperturePattern {
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SilkAttr {
-    pub layer: SignexLayer,
+    #[serde(with = "crate::layer_serde")]
+    pub layer: PcbLayer,
 }
 
 /// Closed sketch profile bakes as the courtyard polygon.
@@ -438,27 +439,31 @@ pub struct CourtyardAttr {}
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MaskOpeningAttr {
-    pub layer: SignexLayer,
+    #[serde(with = "crate::layer_serde")]
+    pub layer: PcbLayer,
 }
 
 /// Closed sketch profile bakes as an explicit mask cover.
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MaskExcludeAttr {
-    pub layer: SignexLayer,
+    #[serde(with = "crate::layer_serde")]
+    pub layer: PcbLayer,
 }
 
 /// Closed sketch profile bakes as a stencil paste aperture.
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PasteApertureAttr {
-    pub layer: SignexLayer,
+    #[serde(with = "crate::layer_serde")]
+    pub layer: PcbLayer,
 }
 
 /// Closed sketch profile bakes as a copper-fill region.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PourAttr {
-    pub layer: SignexLayer,
+    #[serde(with = "crate::layer_serde")]
+    pub layer: PcbLayer,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub net: Option<String>,
     #[serde(default)]
@@ -546,7 +551,8 @@ fn default_thermal_spoke_count() -> u8 {
 /// Closed sketch profile bakes as a keepout region.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct KeepoutAttr {
-    pub layer: SignexLayer,
+    #[serde(with = "crate::layer_serde")]
+    pub layer: PcbLayer,
     pub kinds: KeepoutKinds,
 }
 

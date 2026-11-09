@@ -235,7 +235,7 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         PasteAperturePattern, PourAttr, SilkAttr, ThermalRelief,
     };
     use signex_sketch::entity::EntityKind;
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
     let sketch = match footprint.sketch.as_mut() {
         Some(s) => s,
@@ -302,12 +302,12 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         }
         RoleTag::SilkTop => {
             entity.silk = Some(SilkAttr {
-                layer: SignexLayer::TopSilk,
+                layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
             });
         }
         RoleTag::SilkBottom => {
             entity.silk = Some(SilkAttr {
-                layer: SignexLayer::BottomSilk,
+                layer: PcbLayer::Technical(TechnicalLayer::SilkscreenBottom),
             });
         }
         RoleTag::Courtyard => {
@@ -315,7 +315,7 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         }
         RoleTag::Keepout => {
             entity.keepout = Some(KeepoutAttr {
-                layer: SignexLayer::TopCopper,
+                layer: PcbLayer::Copper(CopperLayer::Top),
                 kinds: KeepoutKinds::NO_ROUTING,
             });
         }
@@ -327,27 +327,27 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         }
         RoleTag::MaskOpeningTop => {
             entity.mask_opening = Some(MaskOpeningAttr {
-                layer: SignexLayer::TopSolderMask,
+                layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
             });
         }
         RoleTag::MaskOpeningBottom => {
             entity.mask_opening = Some(MaskOpeningAttr {
-                layer: SignexLayer::BottomSolderMask,
+                layer: PcbLayer::Technical(TechnicalLayer::SolderMaskBottom),
             });
         }
         RoleTag::MaskExcludeTop => {
             entity.mask_exclude = Some(MaskExcludeAttr {
-                layer: SignexLayer::TopSolderMask,
+                layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
             });
         }
         RoleTag::MaskExcludeBottom => {
             entity.mask_exclude = Some(MaskExcludeAttr {
-                layer: SignexLayer::BottomSolderMask,
+                layer: PcbLayer::Technical(TechnicalLayer::SolderMaskBottom),
             });
         }
         RoleTag::PourTop => {
             entity.pour = Some(PourAttr {
-                layer: SignexLayer::TopCopper,
+                layer: PcbLayer::Copper(CopperLayer::Top),
                 net: None,
                 fill_type: Default::default(),
                 thermal_relief: ThermalRelief::default(),
@@ -358,7 +358,7 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         }
         RoleTag::PourBottom => {
             entity.pour = Some(PourAttr {
-                layer: SignexLayer::BottomCopper,
+                layer: PcbLayer::Copper(CopperLayer::Bottom),
                 net: None,
                 fill_type: Default::default(),
                 thermal_relief: ThermalRelief::default(),
@@ -369,12 +369,12 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         }
         RoleTag::PasteApertureTop => {
             entity.paste_aperture = Some(PasteApertureAttr {
-                layer: SignexLayer::TopPaste,
+                layer: PcbLayer::Technical(TechnicalLayer::PasteTop),
             });
         }
         RoleTag::PasteApertureBottom => {
             entity.paste_aperture = Some(PasteApertureAttr {
-                layer: SignexLayer::BottomPaste,
+                layer: PcbLayer::Technical(TechnicalLayer::PasteBottom),
             });
         }
     }
@@ -385,15 +385,15 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
 /// role attr is set (the default for fresh entities). Used by the
 /// inspector to highlight the active dropdown value.
 pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
     if entity.pad.is_some() {
         return RoleTag::Pad;
     }
     if let Some(silk) = entity.silk.as_ref() {
         return match silk.layer {
-            SignexLayer::TopSilk => RoleTag::SilkTop,
-            SignexLayer::BottomSilk => RoleTag::SilkBottom,
+            PcbLayer::Technical(TechnicalLayer::SilkscreenTop) => RoleTag::SilkTop,
+            PcbLayer::Technical(TechnicalLayer::SilkscreenBottom) => RoleTag::SilkBottom,
             _ => RoleTag::SilkTop,
         };
     }
@@ -408,29 +408,29 @@ pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
     }
     if let Some(m) = entity.mask_opening.as_ref() {
         return match m.layer {
-            SignexLayer::TopSolderMask => RoleTag::MaskOpeningTop,
-            SignexLayer::BottomSolderMask => RoleTag::MaskOpeningBottom,
+            PcbLayer::Technical(TechnicalLayer::SolderMaskTop) => RoleTag::MaskOpeningTop,
+            PcbLayer::Technical(TechnicalLayer::SolderMaskBottom) => RoleTag::MaskOpeningBottom,
             _ => RoleTag::MaskOpeningTop,
         };
     }
     if let Some(m) = entity.mask_exclude.as_ref() {
         return match m.layer {
-            SignexLayer::TopSolderMask => RoleTag::MaskExcludeTop,
-            SignexLayer::BottomSolderMask => RoleTag::MaskExcludeBottom,
+            PcbLayer::Technical(TechnicalLayer::SolderMaskTop) => RoleTag::MaskExcludeTop,
+            PcbLayer::Technical(TechnicalLayer::SolderMaskBottom) => RoleTag::MaskExcludeBottom,
             _ => RoleTag::MaskExcludeTop,
         };
     }
     if let Some(p) = entity.pour.as_ref() {
         return match p.layer {
-            SignexLayer::TopCopper => RoleTag::PourTop,
-            SignexLayer::BottomCopper => RoleTag::PourBottom,
+            PcbLayer::Copper(CopperLayer::Top) => RoleTag::PourTop,
+            PcbLayer::Copper(CopperLayer::Bottom) => RoleTag::PourBottom,
             _ => RoleTag::PourTop,
         };
     }
     if let Some(p) = entity.paste_aperture.as_ref() {
         return match p.layer {
-            SignexLayer::TopPaste => RoleTag::PasteApertureTop,
-            SignexLayer::BottomPaste => RoleTag::PasteApertureBottom,
+            PcbLayer::Technical(TechnicalLayer::PasteTop) => RoleTag::PasteApertureTop,
+            PcbLayer::Technical(TechnicalLayer::PasteBottom) => RoleTag::PasteApertureBottom,
             _ => RoleTag::PasteApertureTop,
         };
     }

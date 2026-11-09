@@ -160,6 +160,9 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// The open transaction, if any (`exec/transaction.rs`, #2178): history
+    /// stays suppressed while it is open.
+    transaction: Option<exec::transaction::Transaction>,
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
@@ -300,6 +303,7 @@ impl Engine {
             path,
             history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -332,6 +336,7 @@ impl Engine {
             path: Some(path.to_path_buf()),
             history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -349,11 +354,19 @@ impl Engine {
 
     /// The pins the last commands could not keep connected (drained).
     pub fn take_unkept_pins(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.unkept_pins)
     }
 
-    /// Drain the notices raised since the last call.
+    /// Drain the notices raised since the last call. While a transaction is
+    /// open they are held: they are shown after its commit, and dropped by its
+    /// rollback.
     pub fn take_warnings(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.warnings)
     }
 

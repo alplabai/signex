@@ -20,7 +20,10 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_types::project::RuleProfile;
 
-pub use crate::app::command::{CommandArgs, CommandOutcome, OperandError, OperandValue};
+pub use crate::app::command::{
+    CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
+    edit_refusal, operand_text, parse_edit_list,
+};
 pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, Picker};
@@ -183,6 +186,13 @@ impl Signex {
             || self.ui_state.io.git != crate::io_ports::GitCommits::Skip
         {
             return (CommandOutcome::NotHeadless, Task::none());
+        }
+        // A command whose whole effect is window UI is refused, never `Ran`
+        // (#2170). The GUI dispatch never reads this.
+        if let Some(reason) =
+            crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
+        {
+            return (CommandOutcome::Disabled { reason }, Task::none());
         }
         // Operands run only through the command's own operand handler; one
         // without a handler is refused, never run as if it had none (#2155).

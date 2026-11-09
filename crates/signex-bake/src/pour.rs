@@ -8,7 +8,7 @@
 //! lands with the PCB Routing plan (Copper Pour).
 
 use signex_library::primitive::footprint::{
-    FpPour, LayerId, NetRef, Polygon, PourFillType as LibPourFill, ThermalReliefStyle as LibThermal,
+    FpPour, NetRef, Polygon, PourFillType as LibPourFill, ThermalReliefStyle as LibThermal,
 };
 use signex_sketch::SketchError;
 use signex_sketch::attr::PourFillType as SkPourFill;
@@ -18,6 +18,7 @@ use signex_sketch::solver::FullSolveOutput;
 use std::collections::HashMap;
 
 use crate::eval_util::{build_ctx, opt_eval_mm};
+use crate::layer_label::layer_id;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -102,7 +103,7 @@ pub fn bake_pours(
 
         out.push(FpPour {
             boundary: Polygon::new(vertices),
-            layer: LayerId::new(attr.layer.altium_label()),
+            layer: layer_id(attr.layer),
             net: NetRef(attr.net.clone()),
             fill_type: map_fill(attr.fill_type),
             thermal_relief: map_thermal(&attr.thermal_relief),
@@ -141,7 +142,7 @@ mod tests {
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_sketch::solver::Solver;
     use signex_sketch::solver::residual::ResolvedParams;
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -193,7 +194,7 @@ mod tests {
     #[test]
     fn bake_pour_records_metadata() {
         let attr = PourAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             net: Some("GND".into()),
             fill_type: PourFillType::Solid,
             thermal_relief: ThermalRelief::default(),
@@ -222,7 +223,7 @@ mod tests {
     #[test]
     fn bake_pour_thermal_disabled_maps_to_direct() {
         let mut attr = PourAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             net: None,
             fill_type: PourFillType::Hatched,
             thermal_relief: ThermalRelief::default(),
@@ -243,7 +244,7 @@ mod tests {
     #[test]
     fn bake_pour_outline_fill_maps_to_none() {
         let attr = PourAttr {
-            layer: SignexLayer::BottomCopper,
+            layer: PcbLayer::Copper(CopperLayer::Bottom),
             net: None,
             fill_type: PourFillType::Outline,
             thermal_relief: ThermalRelief::default(),
@@ -263,7 +264,7 @@ mod tests {
     #[test]
     fn tagging_every_edge_bakes_the_loop_once() {
         let attr = PourAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             net: None,
             fill_type: PourFillType::Solid,
             thermal_relief: ThermalRelief::default(),
@@ -287,7 +288,7 @@ mod tests {
         assert!(warnings.is_empty(), "{warnings:?}");
     }
 
-    fn pour_attr(layer: SignexLayer, clearance: Option<&str>) -> PourAttr {
+    fn pour_attr(layer: PcbLayer, clearance: Option<&str>) -> PourAttr {
         PourAttr {
             layer,
             net: None,
@@ -301,14 +302,14 @@ mod tests {
 
     #[test]
     fn one_loop_tagged_with_two_layers_bakes_once_per_layer() {
-        let mut data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, None));
+        let mut data = rectangle_with_pour(pour_attr(PcbLayer::Copper(CopperLayer::Top), None));
         let third = data
             .entities
             .iter_mut()
             .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
             .nth(2)
             .unwrap();
-        third.pour = Some(pour_attr(SignexLayer::BottomCopper, None));
+        third.pour = Some(pour_attr(PcbLayer::Copper(CopperLayer::Bottom), None));
         let solved = solve(&data);
         let mut out = Vec::new();
         let mut warnings = Vec::new();
@@ -320,7 +321,7 @@ mod tests {
 
     #[test]
     fn a_bare_number_clearance_is_read_as_millimetres() {
-        let data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, Some("0.2")));
+        let data = rectangle_with_pour(pour_attr(PcbLayer::Copper(CopperLayer::Top), Some("0.2")));
         let solved = solve(&data);
         let mut out = Vec::new();
         let mut warnings = Vec::new();
@@ -331,7 +332,10 @@ mod tests {
 
     #[test]
     fn a_pour_with_an_unevaluable_clearance_is_skipped_not_baked_at_zero() {
-        let data = rectangle_with_pour(pour_attr(SignexLayer::TopCopper, Some("= no_such_param")));
+        let data = rectangle_with_pour(pour_attr(
+            PcbLayer::Copper(CopperLayer::Top),
+            Some("= no_such_param"),
+        ));
         let solved = solve(&data);
         let mut out = Vec::new();
         let mut warnings = Vec::new();

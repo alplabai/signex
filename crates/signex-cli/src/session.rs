@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use signex_app::app::Signex;
 use signex_app::diagnostics;
-use signex_app::headless::{CommandArgs, CommandOutcome};
+use signex_app::headless::{CommandArgs, CommandOutcome, edit_list_text, parse_edit_list};
 use signex_app::io_ports::HeadlessAnswers;
 use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
@@ -138,13 +138,16 @@ impl Session {
     }
 
     fn run(&mut self, request: &Request) -> (Status, Option<String>, Option<Value>) {
-        let approved = match self
+        let mut approved = match self
             .policy
             .authorize(request, &self.project_dir, &self.roots)
         {
             Ok(approved) => approved,
             Err(reason) => return (Status::Refused, Some(reason), None),
         };
+        if let Err(reason) = self.authorize_edits(&mut approved) {
+            return (Status::Refused, Some(reason), None);
+        }
         let args = match operands_for(&approved) {
             Ok(args) => args,
             Err(reason) => return (Status::Refused, Some(reason), None),
@@ -192,6 +195,40 @@ impl Session {
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
         )
+    }
+
+    /// The edits of an `apply_edits` call, each authorized as a command of its
+    /// own (not `gui_only`, the `edit` capability held, every path operand
+    /// confined, every `document` resolved and checked), then written back
+    /// with the checked paths. Any other command has no edits.
+    fn authorize_edits(&mut self, approved: &mut Approved) -> Result<(), String> {
+        if approved.command.as_str() != "apply_edits" {
+            return Ok(());
+        }
+        let Some(at) = approved
+            .operands
+            .iter()
+            .position(|(name, _)| name == "edits")
+        else {
+            return Ok(());
+        };
+        let mut edits = parse_edit_list(&approved.operands[at].1)?;
+        for (index, edit) in edits.iter_mut().enumerate() {
+            let why = |reason: String| format!("edit {} (`{}`): {reason}", index + 1, edit.id);
+            let request = Request {
+                id: edit.id.clone(),
+                operands: edit.operands.clone(),
+            };
+            let checked = self
+                .policy
+                .authorize(&request, &self.project_dir, &self.roots)
+                .map_err(&why)?;
+            self.policy.recheck(&checked, &self.roots).map_err(&why)?;
+            self.named_document_paths(&checked).map_err(&why)?;
+            edit.operands = checked.operands;
+        }
+        approved.operands[at].1 = edit_list_text(&edits);
+        Ok(())
     }
 
     /// The files the `document` operands of `approved` name, resolved by the

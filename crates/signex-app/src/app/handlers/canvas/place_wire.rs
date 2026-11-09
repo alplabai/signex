@@ -62,7 +62,7 @@ impl Signex {
     pub(crate) fn place_bus_entry_at(&mut self, at: Point, size: (f64, f64)) -> bool {
         let position = self
             .document_state
-            .active_engine()
+            .edit_engine()
             .and_then(|engine| {
                 signex_types::schematic::snap_to_bus(
                     &engine.document().buses,

@@ -902,7 +902,7 @@ fn footprint_file_toml_round_trip_with_every_sketch_marker() {
     use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
     let plane = PlaneId::new();
     let mut sketch = signex_sketch::SketchData {
@@ -926,16 +926,16 @@ fn footprint_file_toml_round_trip_with_every_sketch_marker() {
     );
     line.courtyard = Some(CourtyardAttr {});
     line.silk = Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     });
     line.mask_opening = Some(MaskOpeningAttr {
-        layer: SignexLayer::TopSolderMask,
+        layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
     });
     line.mask_exclude = Some(MaskExcludeAttr {
-        layer: SignexLayer::TopSolderMask,
+        layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
     });
     line.paste_aperture = Some(PasteApertureAttr {
-        layer: SignexLayer::TopPaste,
+        layer: PcbLayer::Technical(TechnicalLayer::PasteTop),
     });
     sketch.entities.push(line);
 

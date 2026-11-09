@@ -26,24 +26,25 @@ pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
     }
 }
 
-pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> PadInput {
-    let local = point_to_xy(pad.position);
-    let rotated = rotate_local(local, footprint.rotation as f32);
-    let footprint_origin = point_to_xy(footprint.position);
+/// A pad as drawn. Centre and rotation come from `pcb-geom` (a bottom-side
+/// footprint is mirrored there, ADR-0005 §7), so a hit-test and a ratsnest end
+/// land on what is drawn. A pad `pcb-geom` refuses (non-finite or beyond
+/// 1 km) is not drawn; `BoardIndex::rejected` reports it.
+pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> Option<PadInput> {
+    let placement = pcb_geom::Placement::of_footprint(footprint).ok()?;
+    let center = pcb_geom::pad_world_center(footprint, pad).ok()?.to_mm();
 
-    PadInput {
-        center: [
-            footprint_origin[0] + rotated[0],
-            footprint_origin[1] + rotated[1],
-        ],
+    // Size floor is a renderer rule, not geometry (ADR-0005, "Drawn size").
+    Some(PadInput {
+        center: point_to_xy(center),
         size_mm: [
             mm_with_floor(pad.size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
             mm_with_floor(pad.size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
         ],
-        rotation_deg: footprint.rotation as f32,
+        rotation_deg: placement.rotation_deg as f32,
         shape: pad.shape,
         pad_type: pad.pad_type,
-    }
+    })
 }
 
 pub(super) fn zone_from_board_zone(
@@ -132,17 +133,6 @@ pub(super) fn point_to_xy(point: Point) -> [f32; 2] {
 pub(super) fn mm_with_floor(value: f64, fallback: f64, floor: f64) -> f32 {
     let candidate = if value > 0.0 { value } else { fallback };
     candidate.max(floor) as f32
-}
-
-pub(super) fn rotate_local(point: [f32; 2], rotation_deg: f32) -> [f32; 2] {
-    let angle = rotation_deg.to_radians();
-    let cos_a = angle.cos();
-    let sin_a = angle.sin();
-
-    [
-        point[0] * cos_a - point[1] * sin_a,
-        point[0] * sin_a + point[1] * cos_a,
-    ]
 }
 
 pub(super) fn ellipse_vertices(

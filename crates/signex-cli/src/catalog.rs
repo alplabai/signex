@@ -6,11 +6,6 @@ use signex_app::keymap::{CommandMetadata, all_command_ids, metadata_for_str};
 
 use crate::capability::capability_of;
 
-/// Why a `gui_only` command is refused. The catalog defines the flag as "has
-/// no operand form"; #2170 makes the classification structural.
-pub const GUI_ONLY_REASON: &str =
-    "not runnable headless: it has no operand form yet (gui_only in the command catalog)";
-
 fn entry(command: &CommandMetadata) -> Value {
     let operands: Vec<Value> = command
         .operands
@@ -29,11 +24,11 @@ fn entry(command: &CommandMetadata) -> Value {
         "category": command.category,
         "label": command.label,
         "capability": capability_of(command),
-        "headless": if command.flags.gui_only { "gui_only" } else { "runnable" },
+        "headless": if command.headless_refusal().is_some() { "gui_only" } else { "runnable" },
         "operands": operands,
     });
-    if command.flags.gui_only {
-        entry["reason"] = json!(GUI_ONLY_REASON);
+    if let Some(reason) = command.headless_refusal() {
+        entry["reason"] = json!(reason);
     }
     entry
 }
@@ -50,6 +45,7 @@ pub fn catalog_json() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_app::keymap::HeadlessUse;
 
     fn find<'a>(catalog: &'a Value, id: &str) -> &'a Value {
         catalog["commands"]
@@ -86,7 +82,13 @@ mod tests {
 
         let gui = find(&catalog, "toggle_properties_panel");
         assert_eq!(gui["headless"], "gui_only");
-        assert_eq!(gui["reason"], GUI_ONLY_REASON);
+        assert_eq!(
+            gui["reason"],
+            "`toggle_properties_panel` only works in a window"
+        );
+        // A command the catalog newly classified as window only (#2170).
+        assert_eq!(find(&catalog, "open_erc_dialog")["headless"], "gui_only");
+        assert_eq!(find(&catalog, "run_erc")["headless"], "runnable");
         assert_eq!(find(&catalog, "save_document")["capability"], "save");
     }
 
@@ -109,9 +111,14 @@ mod tests {
         let catalog = catalog_json();
         for command in catalog["commands"].as_array().unwrap() {
             let id = command["id"].as_str().unwrap();
-            let gui_only = metadata_for_str(id).unwrap().flags.gui_only;
-            assert_eq!(command["headless"] == "gui_only", gui_only, "{id}");
-            assert_eq!(command.get("reason").is_some(), gui_only, "{id}");
+            let meta = metadata_for_str(id).unwrap();
+            let window_only = meta.headless_use() == Some(HeadlessUse::WindowOnly);
+            assert_eq!(command["headless"] == "gui_only", window_only, "{id}");
+            assert_eq!(
+                command.get("reason").and_then(Value::as_str),
+                meta.headless_refusal().as_deref(),
+                "{id}"
+            );
         }
     }
 }

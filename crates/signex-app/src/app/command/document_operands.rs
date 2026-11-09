@@ -41,7 +41,7 @@ fn named(app: &Signex, args: &CommandArgs) -> Result<DocumentEntry, String> {
 }
 
 /// The path of the loaded sheet `args` names.
-fn named_sheet(app: &Signex, args: &CommandArgs, what: &str) -> Result<PathBuf, String> {
+pub(super) fn named_sheet(app: &Signex, args: &CommandArgs, what: &str) -> Result<PathBuf, String> {
     let entry = named(app, args)?;
     match entry.key {
         Some(DocumentKey::Schematic(path)) => Ok(path),

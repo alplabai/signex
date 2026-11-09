@@ -11,6 +11,7 @@
 
 use iced::Task;
 
+use super::agent_edits as agent;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::placement_operands as place;
@@ -39,6 +40,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("open_document", file::open),
     ("new_document", file::new_project),
     ("assign_net_class", doc::assign_net_class),
+    ("apply_edits", agent::apply_edits),
+    ("revert", agent::revert),
     ("place_net_label", place::net_label),
     ("place_local_net_label", place::net_label),
     ("place_global_label", place::global_label),
@@ -74,6 +77,14 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "assign_net_class" => Some(
             "`assign_net_class` needs the operand `net_name` — \
              use the Net Class row in Properties",
+        ),
+        "apply_edits" => Some(
+            "`apply_edits` needs the operands `document`, `expect_revision` and `edits` — \
+             it has no surface but an agent's call",
+        ),
+        "revert" => Some(
+            "`revert` needs the operands `document` and `group` — \
+             Undo is the person's way back",
         ),
         _ => None,
     }

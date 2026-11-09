@@ -31,10 +31,12 @@ fn a_command_outside_the_default_capabilities_names_the_one_it_needs() {
         "`save_document_as` needs the `save` capability; pass --save"
     );
 
+    // The export commands only work in a window (#2170): refused for that
+    // before their capability is asked.
     let bom = run_cli(&["run", project], one(json!({"id": "report_manager_bom"})));
     assert_eq!(
         refusal(&bom, 0),
-        "`report_manager_bom` needs the `export` capability; pass --allow export"
+        "`report_manager_bom` only works in a window"
     );
     assert_eq!(snapshot(&root), before);
 }
@@ -115,10 +117,7 @@ fn a_gui_only_command_is_refused_with_the_catalogs_reason() {
     );
     assert_eq!(
         refusal(&out, 0),
-        format!(
-            "`toggle_properties_panel` is {}",
-            signex_cli::catalog::GUI_ONLY_REASON
-        )
+        "`toggle_properties_panel` only works in a window"
     );
 }
 
@@ -225,14 +224,6 @@ fn allow_and_save_grant_exactly_the_capability_they_name() {
     let (_guard, root) = temp_root();
     let fx = fixture(&root);
     let project = fx.project.to_str().unwrap();
-    let bom = one(json!({"id": "report_manager_bom"}));
-
-    let granted = run_cli(&["run", project, "--allow", "export"], &bom);
-    let reason = granted.lines[0]["reason"].as_str().unwrap_or_default();
-    assert!(!reason.contains("capability"), "{}", granted.stdout);
-    let wrong = run_cli(&["run", project, "--allow", "delete,library-write"], &bom);
-    assert!(refusal(&wrong, 0).contains("`export` capability"));
-
     let save_as = jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
         json!({"id": "save_document_as", "args": {"document": "main.snxsch", "path": "copy.snxsch"}}),

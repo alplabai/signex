@@ -17,6 +17,7 @@ pub mod courtyard;
 pub mod cutout;
 mod eval_util;
 pub mod keepout;
+pub mod layer_label;
 pub mod mask;
 pub mod pad;
 pub(crate) mod params;

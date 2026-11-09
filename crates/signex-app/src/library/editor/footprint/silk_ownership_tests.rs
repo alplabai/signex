@@ -9,7 +9,7 @@ use signex_library::primitive::footprint::{Footprint, FpGraphic, FpGraphicKind};
 use signex_sketch::attr::SilkAttr;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 use super::sketch_bake_tests::{delete_all_entities, entity_mut, hand_text, rebuild, square};
 use super::sketch_dispatch::apply_sketch_edit;
@@ -20,8 +20,9 @@ use super::updates::apply_footprint_primitive_edit;
 use crate::app::FootprintDocument;
 use crate::library::messages::FootprintEditorMsg;
 
-/// The stock polarised 0805 as trunk wrote it before #1718: one baked,
-/// unmarked cathode bar from (-1.7, -0.7) to (-1.7, 0.7) on top silk.
+/// The stock polarised 0805 in its pre-#1718 shape (silk without markers,
+/// layer token rewritten for #2195): one baked, unmarked cathode bar from
+/// (-1.7, -0.7) to (-1.7, 0.7) on top silk.
 const PRE_1718_STOCK: &str = include_str!(
     "../../../../../signex-library/tests/fixtures/snxfpt/pre_1718_chip_0805_polarised.snxfpt"
 );
@@ -33,7 +34,7 @@ fn bar_start() -> SketchEntityId {
 
 fn top_silk() -> Option<SilkAttr> {
     Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     })
 }
 
