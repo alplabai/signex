@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadNet, PcbBoard, SymbolLink};
 use signex_types::pcb_layer::BoardSide;
+use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -33,8 +34,9 @@ fn patch(kind: BoardPatchKind, id: Uuid) -> BoardPatch {
 
 /// Swap footprint `id` for `template`, a library footprint in its top-side
 /// form. The board keeps the old footprint's uuid, position, rotation, side,
-/// lock, schematic link, designator, value and preserved unknown data; the
-/// template brings the footprint name, pads, graphics and properties. A
+/// lock, schematic link, designator, value and preserved unknown data, and its
+/// library link when the template has none; the template brings the footprint
+/// name, pads, graphics and property values ([`merge_properties`]). A
 /// bottom-side footprint flips the template with `pcb_geom::flip_footprint`.
 /// The n-th new pad of a number takes the net and net lock of the n-th old pad
 /// of that number, so a locked net survives; a number the old footprint lacks
@@ -69,6 +71,10 @@ pub(super) fn replace(
     new.value = old.value.clone();
     new.unknown = old.unknown.clone();
     new.unknown_columns = old.unknown_columns.clone();
+    if new.library_ref.is_none() {
+        new.library_ref = old.library_ref.clone();
+    }
+    new.properties = merge_properties(&old.properties, std::mem::take(&mut new.properties));
     sync_text_properties(&mut new);
     let previous = std::mem::replace(old, new);
     Ok(Applied {
@@ -224,6 +230,35 @@ pub(crate) fn carry_would_lose(old: &Footprint, new: &Footprint) -> Option<Board
         }
     }
     None
+}
+
+/// The properties of a replaced footprint: each template property takes the
+/// placement (position, rotation, layer, size, hidden flag) of the first old
+/// property of its key not yet matched, so a moved or hidden designator stays
+/// as the user left it; a template-only key comes as the template has it; an
+/// old property left unmatched (a user-added MPN, say) is kept after them.
+/// Runs on the board-side template, after any flip.
+fn merge_properties(old: &[PcbProperty], template: Vec<PcbProperty>) -> Vec<PcbProperty> {
+    let mut unmatched: Vec<Option<&PcbProperty>> = old.iter().map(Some).collect();
+    let mut merged: Vec<PcbProperty> = template
+        .into_iter()
+        .map(|mut property| {
+            let previous = unmatched
+                .iter_mut()
+                .find(|slot| slot.is_some_and(|p| p.key == property.key))
+                .and_then(Option::take);
+            if let Some(previous) = previous {
+                property.position = previous.position;
+                property.rotation = previous.rotation;
+                property.layer.clone_from(&previous.layer);
+                property.font_size = previous.font_size;
+                property.hidden = previous.hidden;
+            }
+            property
+        })
+        .collect();
+    merged.extend(unmatched.into_iter().flatten().cloned());
+    merged
 }
 
 fn sync_text_properties(fp: &mut Footprint) {
