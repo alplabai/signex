@@ -62,6 +62,9 @@ impl Signex {
         };
         state.generation += 1;
         state.target = TargetStatus::Unchecked;
+        // The name, location or folder choice changed: a reason given for
+        // the old target no longer applies.
+        state.create_error = None;
         if !state.wants_target_check() {
             return Task::none();
         }

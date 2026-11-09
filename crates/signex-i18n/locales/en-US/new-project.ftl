@@ -178,4 +178,4 @@ dialog-new-project-creating = Creating…
 dialog-new-project-err-create-pending = This project is already being created.
 
 # Project Options, Project setup section: the stored section is not usable.
-dialog-new-project-setup-unreadable = The project's setup defaults are not readable by this version of Signex; they are kept unchanged and not applied. The values below are not stored.
+dialog-new-project-setup-unreadable = The project's setup defaults are not readable by this version of Signex; they are kept unchanged and not applied. Editing a value here replaces that section when you save.

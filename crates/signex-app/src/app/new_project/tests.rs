@@ -470,3 +470,27 @@ fn a_create_that_cannot_start_says_why_and_does_not_hang() {
     assert!(state.creating.is_none(), "not left waiting");
     assert!(state.create_error.is_some(), "the reason is shown");
 }
+
+#[test]
+fn changing_the_name_location_or_folder_clears_a_stale_create_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    for change in [
+        NewProjectMsg::NameEdited("Other".into()),
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+        NewProjectMsg::MakeFolderToggled(false),
+    ] {
+        app.ui_state.new_project.as_mut().unwrap().create_error = Some("old reason".into());
+        dialog(&mut app, change.clone());
+        assert!(
+            app.ui_state
+                .new_project
+                .as_ref()
+                .unwrap()
+                .create_error
+                .is_none(),
+            "{change:?} left the old reason"
+        );
+    }
+}
