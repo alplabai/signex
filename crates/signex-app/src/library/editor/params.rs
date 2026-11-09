@@ -21,6 +21,7 @@ use std::collections::BTreeSet;
 
 use iced::widget::{Column, Widget, column, row, scrollable};
 use iced::{Element, Length};
+use signex_i18n::{I18n, ids, t};
 use signex_library::{
     ParamKind, ParamMap, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation,
 };
@@ -33,13 +34,28 @@ use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
 use super::super::unit_picker::{unit_of_token, unit_picker};
 use super::kit::{self, SP, TS};
 
-const COLUMNS: [(&str, Length); 6] = [
-    ("Scope", Length::FillPortion(2)),
-    ("Name", Length::FillPortion(3)),
-    ("Value", Length::FillPortion(6)),
-    ("Unit", Length::FillPortion(2)),
-    ("Status", Length::FillPortion(3)),
-    ("", Length::FillPortion(2)),
+const COLUMNS: [kit::TableColumn; 6] = [
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_SCOPE),
+        Length::FillPortion(2),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_NAME),
+        Length::FillPortion(3),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_VALUE),
+        Length::FillPortion(6),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_UNIT),
+        Length::FillPortion(2),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_STATUS),
+        Length::FillPortion(3),
+    ),
+    (None, Length::FillPortion(2)),
 ];
 
 /// Where a grid row comes from.
@@ -197,6 +213,7 @@ pub fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let template = resolve_template(state, library_state);
@@ -211,7 +228,7 @@ pub fn view<'a>(
 
     let specs = row_specs(template, &state.row.parameters);
     let mut grid: Column<Element<'a, LibraryMessage>> =
-        column![kit::table_header(&COLUMNS, tokens)];
+        column![kit::table_header(&COLUMNS, i18n, tokens)];
     if specs.is_empty() {
         grid = grid.push(kit::empty_state(
             empty_text(template.is_some()),
@@ -231,9 +248,13 @@ pub fn view<'a>(
     }
 
     let body = column![
-        kit::section_header("Parameters", Some(class_note.boxed()), tokens),
+        kit::section_header(
+            t!(i18n, ids::EDITORS_COMPONENT_PARAMETERS_HEADING),
+            Some(class_note.boxed()),
+            tokens
+        ),
         kit::card(grid.boxed(), tokens),
-        add_custom_card(state, tokens, &address),
+        add_custom_card(state, tokens, i18n, &address),
     ]
     .spacing(SP.l)
     .width(Length::Fill)
@@ -518,6 +539,7 @@ fn display_param(v: &ParamValue) -> String {
 fn add_custom_card<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let name_input = {
@@ -550,7 +572,11 @@ fn add_custom_card<'a>(
     .boxed();
 
     column![
-        kit::section_header("Add custom parameter", None, tokens),
+        kit::section_header(
+            t!(i18n, ids::EDITORS_COMPONENT_ADD_PARAMETER_HEADING),
+            None,
+            tokens
+        ),
         kit::card(controls, tokens),
     ]
     .spacing(SP.m)

@@ -101,11 +101,12 @@ pub type LoadedLibrary = (String, usize);
 
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
+    i18n: &'a signex_i18n::I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
     libraries: &[LoadedLibrary],
 ) -> Element<'a, Message> {
-    graphite::view(tokens, open_shortcut, recent, libraries)
+    graphite::view(tokens, i18n, open_shortcut, recent, libraries)
 }
 
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {

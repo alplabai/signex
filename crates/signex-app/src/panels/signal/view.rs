@@ -3,10 +3,11 @@
 
 use iced::widget::{column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
+use signex_i18n::{ids, t};
 use signex_widgets::segmented::{SegmentedStyle, segmented};
-use signex_widgets::{button, raw, text, text_input, tooltip};
+use signex_widgets::{button, text, text_input, tooltip};
 
-use super::{COMING_SOON, SignalMode, SignalMsg, coming_soon};
+use super::{SignalMode, SignalMsg, coming_soon};
 use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::{self, ChromeMetrics, TypeScale, ti, tokens::resolve};
 
@@ -54,15 +55,20 @@ fn empty_state<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let (title, body) = match ctx.signal_mode {
         SignalMode::Assistant => (
-            "Signex AI is not available yet",
-            "Ask about this sheet and review proposed changes before anything is applied.",
+            ids::PANELS_SIGNAL_ASSISTANT_TITLE,
+            ids::PANELS_SIGNAL_ASSISTANT_BODY,
         ),
         SignalMode::Generator => (
-            "The Generator is not available yet",
-            "Describe a board and approve each stage before anything is drawn.",
+            ids::PANELS_SIGNAL_GENERATOR_TITLE,
+            ids::PANELS_SIGNAL_GENERATOR_BODY,
         ),
     };
-    let card = crate::panels::empty_state_card(tokens, title, body, Some(COMING_SOON));
+    let card = crate::panels::empty_state_card(
+        tokens,
+        t!(ctx.i18n, title),
+        t!(ctx.i18n, body),
+        Some(t!(ctx.i18n, ids::PANELS_COMING_SOON)),
+    );
     container(card)
         .padding(12)
         .width(Length::Fill)
@@ -76,7 +82,7 @@ fn ask_footer<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
     let (ink4, ink) = (r.ink4, ti(tokens.text));
     // No `on_input`: the field is inert.
     let input: iced::widget::TextInput<'a, PanelMsg> =
-        text_input(raw("Ask about this sheet, or describe a change"), "")
+        text_input(t!(ctx.i18n, ids::PANELS_SIGNAL_ASK), "")
             .padding(iced::Padding::ZERO)
             .size(TS.dense)
             .width(Length::Fill)
@@ -88,7 +94,7 @@ fn ask_footer<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
                 selection: Color { a: 0.4, ..ink },
             });
     let send: Element<'a, PanelMsg> = button(
-        text(raw("\u{2192}"))
+        text(t!(ctx.i18n, ids::PANELS_SIGNAL_SEND))
             .size(TS.dense)
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
@@ -99,7 +105,7 @@ fn ask_footer<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
     .boxed();
     let line = row![
         container(input).width(Length::Fill),
-        coming_soon(send, tokens, tooltip::Position::Top),
+        coming_soon(send, tokens, &ctx.i18n, tooltip::Position::Top),
     ]
     .spacing(6)
     .align_y(Alignment::Center);
@@ -112,11 +118,16 @@ fn ask_footer<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
         })
         .width(Length::Fill)
         .style(styles::field(tokens, false));
-    container(coming_soon(frame.boxed(), tokens, tooltip::Position::Top))
-        .padding([10.0, 12.0])
-        .width(Length::Fill)
-        .style(rule(r.line_soft, false))
-        .boxed()
+    container(coming_soon(
+        frame.boxed(),
+        tokens,
+        &ctx.i18n,
+        tooltip::Position::Top,
+    ))
+    .padding([10.0, 12.0])
+    .width(Length::Fill)
+    .style(rule(r.line_soft, false))
+    .boxed()
 }
 
 /// The Signex AI panel on a Graphite theme.

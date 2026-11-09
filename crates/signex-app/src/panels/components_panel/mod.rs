@@ -22,6 +22,7 @@ use iced::widget::{Column, Space, column, container, row};
 use iced::{Background, Color, Element, Length, Theme, Widget};
 use signex_widgets::{button, raw, text};
 
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_library::ComponentRow;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -81,19 +82,23 @@ pub(crate) fn view<'a>(
     let counts = SourceCounts::of(&libraries);
     let panel = &state.components_panel;
     let selected = counts.effective(panel.source_filter);
+    let i18n = &*ctx.i18n;
 
     // ── Header: search + "+ Add", its menu, the source chips ─────
     let mut col: Column<Element<'a, LibraryMessage>> = column![]
         .spacing(0)
         .width(Length::Fill)
         .push(look::header_row(
-            look::filter_field(&panel.filter, tokens),
+            look::filter_field(&panel.filter, tokens, i18n),
             tokens,
+            i18n,
         ));
     if panel.add_menu_open {
-        col = col.push(look::add_menu(tokens));
+        col = col.push(look::add_menu(tokens, i18n));
     }
-    col = col.push(look::chip_row(source_chips(&counts, selected, tokens)));
+    col = col.push(look::chip_row(source_chips(
+        &counts, selected, tokens, i18n,
+    )));
     col = col.push(Space::new().height(6.0).boxed());
     col = col.push(thin_sep(look::separator(tokens)));
     if !state.id_clash_notices.is_empty() {
@@ -110,14 +115,16 @@ pub(crate) fn view<'a>(
             continue;
         }
         shown += 1;
-        col = col.push(view_library_block(lib, *source, panel, &needle, tokens));
+        col = col.push(view_library_block(
+            lib, *source, panel, &needle, tokens, i18n,
+        ));
     }
     if shown == 0 {
         let message = match selected {
             Some(source) => empty_source_text(source, project_libs),
-            None => NOTHING_MOUNTED,
+            None => ids::PANELS_COMPONENTS_NOTHING_MOUNTED,
         };
-        col = col.push(look::empty_line(message, tokens));
+        col = col.push(look::empty_line(t!(i18n, message), tokens));
     }
 
     // List (fixed height) | draggable divider | details (the rest).
@@ -144,6 +151,7 @@ pub(crate) fn view<'a>(
             &ctx.canvas_colors,
             grid,
             ctx.device_px_per_logical_px,
+            i18n,
         ))
         .height(Length::Fill)
         .width(Length::Fill),
@@ -155,7 +163,6 @@ pub(crate) fn view<'a>(
 }
 
 /// What the list says when nothing is mounted.
-const NOTHING_MOUNTED: &str = "No libraries mounted. Use \"+ Add\" or open a project.";
 
 /// Every mounted library with its source, in list order: Stock, Project,
 /// Installed, Global; within a source, in mount order.
@@ -232,21 +239,23 @@ fn source_chips<'a>(
     counts: &SourceCounts,
     selected: Option<ComponentsMountSource>,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Vec<Element<'a, LibraryMessage>> {
     counts
         .chips()
         .into_iter()
         .map(|chip| {
             let (label, count) = match chip {
-                None => ("All", counts.all),
-                Some(source) => (source.label(), counts.of_source(source)),
+                None => (ids::PANELS_COMPONENTS_SOURCE_ALL, counts.all),
+                Some(source) => (source.message(), counts.of_source(source)),
             };
             look::source_chip(
-                label,
+                t!(i18n, label),
                 count,
                 chip == selected,
                 LibraryMessage::ComponentsPanelSourceFilterChanged(chip),
                 tokens,
+                i18n,
             )
         })
         .collect()
@@ -303,28 +312,16 @@ impl ProjectLibraries {
 
 /// What an empty source says. Project tells apart no project,
 /// a project without libraries and a project whose libraries are not mounted.
-fn empty_source_text(src: ComponentsMountSource, project: ProjectLibraries) -> &'static str {
+fn empty_source_text(src: ComponentsMountSource, project: ProjectLibraries) -> MessageId {
     match src {
         ComponentsMountSource::Project => match project {
-            ProjectLibraries::NoProject => {
-                "No project libraries. Open a project to populate this section."
-            }
-            ProjectLibraries::NoneDeclared => {
-                "This project has no libraries yet. Right-click the project, then Add New to Project > Component Library."
-            }
-            ProjectLibraries::DeclaredNotMounted => {
-                "This project's libraries are not mounted. See the project tree."
-            }
+            ProjectLibraries::NoProject => ids::PANELS_COMPONENTS_EMPTY_NO_PROJECT,
+            ProjectLibraries::NoneDeclared => ids::PANELS_COMPONENTS_EMPTY_NONE_DECLARED,
+            ProjectLibraries::DeclaredNotMounted => ids::PANELS_COMPONENTS_EMPTY_NOT_MOUNTED,
         },
-        ComponentsMountSource::Installed => {
-            "No session libraries. Click \"+ Add Library…\" to mount one."
-        }
-        ComponentsMountSource::Global => {
-            "No global libraries. Click \"+ Add Library…\" or promote an installed library."
-        }
-        ComponentsMountSource::Stock => {
-            "Stock library not found. Reinstall Signex to restore the bundled parts."
-        }
+        ComponentsMountSource::Installed => ids::PANELS_COMPONENTS_EMPTY_INSTALLED,
+        ComponentsMountSource::Global => ids::PANELS_COMPONENTS_EMPTY_GLOBAL,
+        ComponentsMountSource::Stock => ids::PANELS_COMPONENTS_EMPTY_STOCK,
     }
 }
 
@@ -345,6 +342,7 @@ fn view_library_block<'a>(
     panel: &'a crate::library::state::ComponentsPanelState,
     needle: &str,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = crate::styles::tokens::resolve(tokens).ink4;
@@ -362,6 +360,7 @@ fn view_library_block<'a>(
         lib.total_rows(),
         collapsed,
         tokens,
+        i18n,
     ));
     if collapsed {
         return col.boxed();
@@ -473,7 +472,7 @@ fn view_row_button<'a>(
     let label_left = component_row_label(row_data.internal_pn.as_str(), &row_data.primary_mpn.mpn);
     let label_right = row_data.primary_mpn.manufacturer.clone();
 
-    let part = text(raw(label_left))
+    let part = text(signex_i18n::UserText::new(label_left))
         .size(ROW_TEXT_SIZE)
         .color(text_c)
         .width(Length::FillPortion(3))
@@ -829,7 +828,9 @@ mod tests {
 
     #[test]
     fn the_project_section_tells_its_three_states_apart() {
-        let project = |state| empty_source_text(ComponentsMountSource::Project, state);
+        let en = I18n::en_us();
+        let project =
+            |state| t!(en, empty_source_text(ComponentsMountSource::Project, state)).into_string();
         let none = project(ProjectLibraries::NoProject);
         let empty = project(ProjectLibraries::NoneDeclared);
         let unmounted = project(ProjectLibraries::DeclaredNotMounted);
@@ -976,7 +977,7 @@ mod tests {
         );
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let texts = crate::layout_probe::lay_out_texts(
-            look::add_menu(&tokens),
+            look::add_menu(&tokens, &I18n::en_us()),
             iced::Size::new(300.0, 300.0),
         );
         for source in ComponentsMountSource::ADDABLE {

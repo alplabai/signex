@@ -3,8 +3,9 @@
 
 use iced::widget::{container, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text, text_input};
+use signex_widgets::{button, text, text_input};
 
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsMountSource;
@@ -49,10 +50,11 @@ fn glyph(bytes: &'static [u8], side: f32, ink: Color) -> iced::widget::Svg<'stat
 pub(super) fn filter_field<'a>(
     value: &'a str,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
     let (ink, ink4, accent) = (ti(tokens.text), r.ink4, ti(tokens.accent));
-    let input = text_input(raw("Filter components…"), value)
+    let input = text_input(t!(i18n, ids::PANELS_COMPONENTS_FILTER), value)
         .on_input(LibraryMessage::ComponentsPanelSetFilter)
         .padding(Padding::ZERO)
         .size(TS.body)
@@ -87,12 +89,15 @@ const CHIP_HEIGHT: f32 = 22.0;
 pub(super) fn header_row<'a>(
     filter: Element<'a, LibraryMessage>,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let ink = ti(tokens.text);
     let add = button(
         row![
             glyph(PLUS_GLYPH, 12.0, ink),
-            text(raw("Add")).size(TS.caption).color(ink)
+            text(t!(i18n, ids::PANELS_COMPONENTS_ADD))
+                .size(TS.caption)
+                .color(ink)
         ]
         .spacing(4)
         .align_y(Alignment::Center),
@@ -112,13 +117,13 @@ pub(super) fn header_row<'a>(
 }
 
 /// The menu "+ Add" opens: where to add the library.
-pub(super) fn add_menu<'a>(tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+pub(super) fn add_menu<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, LibraryMessage> {
     let ink = ti(tokens.text);
     let hover = hover_overlay(tokens);
     let mut items = iced::widget::Column::new().spacing(0);
     for source in ComponentsMountSource::ADDABLE {
         items = items.push(
-            button(text(raw(source.label())).size(TS.body).color(ink))
+            button(text(t!(i18n, source.message())).size(TS.body).color(ink))
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
                 .on_press(LibraryMessage::ComponentsPanelAddLibrary(*source))
@@ -147,11 +152,12 @@ pub(super) fn add_menu<'a>(tokens: &ThemeTokens) -> Element<'a, LibraryMessage> 
 
 /// One source chip: its name and library count; the chosen one is lit.
 pub(super) fn source_chip<'a>(
-    label: &'static str,
+    label: Localized,
     count: usize,
     selected: bool,
     on_press: LibraryMessage,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
     let ink = if selected { ti(tokens.text) } else { r.ink3 };
@@ -163,8 +169,8 @@ pub(super) fn source_chip<'a>(
     let hover = r.accent_soft;
     button(
         row![
-            text(raw(label)).size(TS.caption).color(ink),
-            text(raw(count.to_string()))
+            text(label).size(TS.caption).color(ink),
+            text(t!(i18n, ids::PANELS_COMPONENTS_COUNT, "count" => count))
                 .size(TS.caption)
                 .font(mono())
                 .color(r.ink4),
@@ -208,22 +214,18 @@ pub(super) fn chip_row<'a>(chips: Vec<Element<'a, LibraryMessage>>) -> Element<'
 
 /// A secondary empty-state line.
 pub(super) fn empty_line<'a>(
-    message: &'a str,
+    message: Localized,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    container(
-        text(raw(message))
-            .size(TS.caption)
-            .color(resolve(tokens).ink4),
-    )
-    .padding(Padding {
-        top: 0.0,
-        right: EDGE,
-        bottom: 8.0,
-        left: LIBRARY_INSET,
-    })
-    .width(Length::Fill)
-    .boxed()
+    container(text(message).size(TS.caption).color(resolve(tokens).ink4))
+        .padding(Padding {
+            top: 0.0,
+            right: EDGE,
+            bottom: 8.0,
+            left: LIBRARY_INSET,
+        })
+        .width(Length::Fill)
+        .boxed()
 }
 
 /// A library row: expand chevron, name, source badge and component count.
@@ -234,6 +236,7 @@ pub(super) fn library_header<'a>(
     rows: usize,
     collapsed: bool,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
     let hover = hover_overlay(tokens);
@@ -246,12 +249,11 @@ pub(super) fn library_header<'a>(
             .width(Length::Fill)
             .wrapping(iced::widget::text::Wrapping::None),
         crate::library::editor::kit::toned_pill(
-            // user-visible: migrate to the #2063 casemap
-            source.label().to_uppercase(),
+            t!(i18n, source.badge()).into_string(),
             PillTone::Neutral,
             tokens
         ),
-        text(raw(rows.to_string()))
+        text(t!(i18n, ids::PANELS_COMPONENTS_COUNT, "count" => rows))
             .size(TS.caption)
             .font(mono())
             .color(r.ink4),

@@ -101,6 +101,7 @@ impl Signex {
                             self.sheet_grid(),
                             self.ui_state.device_px_per_logical_px(window_id),
                             address,
+                            &self.ui_state.i18n,
                         )
                         .map(Message::Library)
                         .boxed()
@@ -267,6 +268,7 @@ impl Signex {
             document.inflight_git_commits.len(),
             altium_import_name.as_deref(),
             self.status_activity(window_id).as_deref(),
+            &ui.i18n,
         )
         .map(|req| Message::Ui(UiMsg::StatusBar(req)))
         .boxed();
@@ -358,6 +360,7 @@ impl Signex {
                         project_name: document
                             .active_document_project()
                             .map(|p| p.data.name.as_str()),
+                        i18n: &ui.i18n,
                     },
                     &document.panel_ctx.tokens,
                 )
@@ -497,6 +500,7 @@ impl Signex {
                     self.sheet_grid(),
                     self.ui_state.device_px_per_logical_px(window_id),
                     address,
+                    &self.ui_state.i18n,
                 )
                 .map(Message::Library)
                 .boxed()
@@ -556,7 +560,10 @@ impl Signex {
                 let tokens = &self.document_state.panel_ctx.tokens;
                 let theme_id = self.ui_state.effective_theme_id();
                 return crate::library::editor::standalone::view_footprint(
-                    editor, tokens, theme_id,
+                    editor,
+                    tokens,
+                    theme_id,
+                    &self.ui_state.i18n,
                 )
                 .map(Message::Library)
                 .boxed();
@@ -568,9 +575,15 @@ impl Signex {
             if let Some(path) = active_tab.kind.as_library_browser() {
                 let tokens = &self.document_state.panel_ctx.tokens;
                 if let Some(browser) = self.library.library_browsers.get(path) {
-                    return crate::library::browser::view(path, &self.library, browser, tokens)
-                        .map(Message::Library)
-                        .boxed();
+                    return crate::library::browser::view(
+                        path,
+                        &self.library,
+                        browser,
+                        tokens,
+                        &self.ui_state.i18n,
+                    )
+                    .map(Message::Library)
+                    .boxed();
                 } else {
                     // Fallback when somehow the browser-state map is
                     // out of sync with the tabs vector. Keeps the tab
@@ -720,6 +733,7 @@ impl Signex {
                         .collect();
                     start_screen::view(
                         tokens,
+                        &self.ui_state.i18n,
                         &open_shortcut,
                         self.ui_state.recent_projects.entries(),
                         &libraries,

@@ -174,7 +174,11 @@ pub(super) fn snap_label(snapping: bool) -> &'static str {
 /// the tool at the left; the selection, zoom, unit and the bordered Panels
 /// button at the right.
 /// No separators; the spans are spaced apart.
-pub(super) fn view<'a>(r: &Readout<'_>, tokens: &ThemeTokens) -> Element<'a, StatusBarRequest> {
+pub(super) fn view<'a>(
+    r: &Readout<'_>,
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, StatusBarRequest> {
     let ink = ti(tokens.text);
     let muted = resolve(tokens).ink3;
     let unit = r.unit;
@@ -233,11 +237,18 @@ pub(super) fn view<'a>(r: &Readout<'_>, tokens: &ThemeTokens) -> Element<'a, Sta
         .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())
         .push(mono_button(format!("{unit}"), muted, StatusBarRequest::CycleUnit).boxed())
         .push(
-            button(text(raw("Panels")).size(TS.section).color(ink))
-                .padding([1.5, 10.0])
-                .style(panels_button(tokens))
-                .on_press(StatusBarRequest::TogglePanelList)
-                .boxed(),
+            button(
+                text(signex_i18n::t!(
+                    i18n,
+                    signex_i18n::ids::PANELS_STATUS_BAR_PANELS
+                ))
+                .size(TS.section)
+                .color(ink),
+            )
+            .padding([1.5, 10.0])
+            .style(panels_button(tokens))
+            .on_press(StatusBarRequest::TogglePanelList)
+            .boxed(),
         )
         .spacing(SP.xl)
         .align_y(iced::Alignment::Center);

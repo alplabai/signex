@@ -36,6 +36,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
     primary: Color,
     border_c: Color,
     tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
@@ -56,12 +57,12 @@ pub(super) fn view_symbol_editor_properties<'a>(
     // The symbol-level form opens on its own "Symbol" section label, so the
     // generic header would only repeat it.
     if !matches!(sym.selected, SymbolEditorSelection::None) {
-        col = col.push(section_title(header_label, tokens));
+        col = col.push(section_title(header_label, tokens, i18n));
     }
 
     match &sym.selected {
         SymbolEditorSelection::None => {
-            col = symbol::view_symbol_selection(col, sym, muted, primary, border_c, tokens);
+            col = symbol::view_symbol_selection(col, sym, muted, primary, border_c, tokens, i18n);
         }
         SymbolEditorSelection::Pin(pin) => {
             col = pin::view_pin_selection(col, pin, draft, muted, primary, border_c);
@@ -157,6 +158,10 @@ fn prop_row_static<'a>(
 }
 
 /// A section heading: the uppercase label.
-fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
-    form_look::section_label(title, tokens)
+fn section_title<'a>(
+    title: &str,
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, PanelMsg> {
+    form_look::section_label(title, tokens, i18n)
 }

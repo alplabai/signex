@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 
 use iced::widget::{Column, Space, column, container, mouse_area, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_library::{ComponentRow, LifecycleState, RowId};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -75,6 +76,7 @@ pub fn view<'a>(
     library_state: &'a LibraryState,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
+    i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -113,7 +115,7 @@ pub fn view<'a>(
     // Empty library — no tables yet. Show a centred CTA card.
     if lib.tables.is_empty() {
         return column![
-            view_uncommitted_banner(library_path, library_state, tokens),
+            view_uncommitted_banner(library_path, library_state, tokens, i18n),
             view_empty_state(library_path, lib, tokens, read_only),
         ]
         .width(Length::Fill)
@@ -125,8 +127,8 @@ pub fn view<'a>(
     // pane = filters/search + grid + actions + preview. Mirrors a DB
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
-    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, read_only);
-    let header = view_header(library_path, lib, browser, tokens, read_only);
+    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, i18n, read_only);
+    let header = view_header(library_path, lib, browser, tokens, i18n, read_only);
 
     // Body — left grid, right preview pane.
     let active_table = active_table(lib, browser);
@@ -179,6 +181,7 @@ pub fn view<'a>(
             names: names::PrimitiveNames::of(lib),
         },
         tokens,
+        i18n,
         read_only,
     );
 
@@ -217,7 +220,7 @@ pub fn view<'a>(
         && let Some(picked) = rows.iter().find(|r| RowId::from_uuid(r.row_id) == selected)
     {
         let names = names::PrimitiveNames::of(lib);
-        body = body.push(preview::view_preview(picked, &names, tokens));
+        body = body.push(preview::view_preview(picked, &names, tokens, i18n));
     }
     let body = body.width(Length::Fill).height(Length::Fill);
 
@@ -227,6 +230,7 @@ pub fn view<'a>(
         &cache.filter_columns,
         &cache.range_excluded,
         tokens,
+        i18n,
         {
             let library_path = library_path.to_path_buf();
             move |msg| LibraryMessage::BrowserRangeFilter {
@@ -238,7 +242,7 @@ pub fn view<'a>(
     .map(|bar| container(bar).padding([4, 10]).boxed());
 
     // The uncommitted banner lives in the sidebar footer.
-    let footer = view_uncommitted_banner(library_path, library_state, tokens);
+    let footer = view_uncommitted_banner(library_path, library_state, tokens, i18n);
     let mut right = column![header, Space::new().boxed()].spacing(0);
     if let Some(bar) = range_bar {
         right = right.push(bar);
@@ -263,7 +267,7 @@ pub fn view<'a>(
             ..iced::widget::container::Style::default()
         });
     let table_sidebar = column![
-        tree::view_libraries_tree(library_path, library_state, tokens),
+        tree::view_libraries_tree(library_path, library_state, tokens, i18n),
         container(table_sidebar).height(Length::Fill).boxed(),
         container(footer)
             .padding(SP.m)

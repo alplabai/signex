@@ -170,7 +170,9 @@ impl Signex {
                     ((&title, &text), (&ref_title, &ref_text)),
                 );
                 if let Some(previous) = c.previous_unavailable.as_deref() {
-                    let note = crate::library::stock_copy::previous_note(previous);
+                    let note =
+                        crate::library::stock_copy::previous_note(&self.ui_state.i18n, previous)
+                            .into_string();
                     wrapped += note_growth(fixed.width, pad, &note);
                 }
                 if let Some(error) = c.error.as_deref() {

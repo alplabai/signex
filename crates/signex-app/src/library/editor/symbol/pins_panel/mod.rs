@@ -7,34 +7,37 @@
 
 use iced::widget::{Column, Row, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text, text_input};
+use signex_widgets::{Label, button, text, text_input};
 
+use crate::library::editor::pin_labels;
 use crate::panels::{PanelContext, PanelMsg, SymbolEditorSelection, SymbolPinSummary};
 use crate::styles::{Radii, Spacing, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Column weights: number, name, electrical type, part, hidden, length,
-/// orientation.
-const COLUMNS: [(&str, u16); 7] = [
-    ("#", 1),
-    ("Name", 4),
-    ("Electrical type", 4),
-    ("Part", 1),
-    ("Hidden", 2),
-    ("Length (mm)", 2),
-    ("Orientation", 3),
+/// Column headings (written in capitals in the catalog) and weights:
+/// number, name, electrical type, part, hidden, length, orientation.
+const COLUMNS: [(MessageId, u16); 7] = [
+    (ids::EDITORS_PINS_COLUMN_NUMBER, 1),
+    (ids::EDITORS_PINS_COLUMN_NAME, 4),
+    (ids::EDITORS_PINS_COLUMN_ELECTRICAL, 4),
+    (ids::EDITORS_PINS_COLUMN_PART, 1),
+    (ids::EDITORS_PINS_COLUMN_HIDDEN, 2),
+    (ids::EDITORS_PINS_COLUMN_LENGTH, 2),
+    (ids::EDITORS_PINS_COLUMN_ORIENTATION, 3),
 ];
 
 /// Render the table for the active symbol editor.
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
+    let i18n = &*ctx.i18n;
     let muted = ti(tokens.text_secondary);
     let Some(sym) = ctx.symbol_editor.as_ref() else {
         return container(
-            text(raw("Open a `.snxsym` to see its pins here."))
+            text(t!(i18n, ids::EDITORS_PINS_NO_SYMBOL))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -47,38 +50,36 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         _ => None,
     };
     let hidden = sym.pins.iter().filter(|p| p.details.hidden).count();
-    let summary = format!(
-        "{} pins \u{00B7} {} hidden \u{00B7} {} parts",
-        sym.pins.len(),
-        hidden,
-        sym.active_max_part,
+    let summary = t!(
+        i18n,
+        ids::EDITORS_PINS_SUMMARY,
+        "pins" => sym.pins.len(),
+        "hidden" => hidden,
+        "parts" => u32::from(sym.active_max_part)
     );
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text(raw(summary)).size(TS.body).color(muted))
+        container(text(summary).size(TS.body).color(muted))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
             .boxed(),
     );
-    col = col.push(header_row(tokens));
+    col = col.push(header_row(tokens, i18n));
     for pin in &sym.pins {
-        col = col.push(pin_row(pin, selected_idx == Some(pin.idx), tokens));
+        col = col.push(pin_row(pin, selected_idx == Some(pin.idx), tokens, i18n));
     }
     col.boxed()
 }
 
-/// The column headings, uppercase and muted.
-fn header_row<'a>(tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+/// The column headings, in capitals and muted.
+fn header_row<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, PanelMsg> {
     let ink = resolve(tokens).ink3;
     let mut cells: Row<Element<'a, PanelMsg>> =
         Row::new().spacing(SP.m).align_y(iced::Alignment::Center);
     for (label, portion) in COLUMNS {
         cells = cells.push(cell(
-            text(raw(label.to_uppercase()))
-                .size(TS.section)
-                .color(ink)
-                .boxed(),
+            text(t!(i18n, label)).size(TS.section).color(ink).boxed(),
             portion,
         ));
     }
@@ -97,6 +98,7 @@ fn pin_row<'a>(
     pin: &'a SymbolPinSummary,
     is_selected: bool,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let ink = ti(tokens.text);
     let muted = resolve(tokens).ink3;
@@ -125,20 +127,30 @@ fn pin_row<'a>(
         border: Border::default(),
         ..button::Style::default()
     });
-    let name = text_input(raw("name"), pin.name.as_str())
-        .padding([SP.xs, SP.s])
-        .size(TS.dense)
-        .font(mono)
-        .style(crate::panels::form_look::text_input_style)
-        .on_input(move |value| PanelMsg::SymEditorSetPinName {
-            pin_idx: idx,
-            value,
-        });
+    let name = text_input(
+        t!(i18n, ids::EDITORS_PINS_NAME_PLACEHOLDER),
+        pin.name.as_str(),
+    )
+    .padding([SP.xs, SP.s])
+    .size(TS.dense)
+    .font(mono)
+    .style(crate::panels::form_look::text_input_style)
+    .on_input(move |value| PanelMsg::SymEditorSetPinName {
+        pin_idx: idx,
+        value,
+    });
     let hidden = pin.details.hidden;
     let hidden_toggle = button(
-        text(raw(if hidden { "Hidden" } else { "Shown" }))
-            .size(TS.body)
-            .color(if hidden { ink } else { muted }),
+        text(t!(
+            i18n,
+            if hidden {
+                ids::EDITORS_PINS_HIDDEN
+            } else {
+                ids::EDITORS_PINS_SHOWN
+            }
+        ))
+        .size(TS.body)
+        .color(if hidden { ink } else { muted }),
     )
     .padding([SP.xs, SP.m])
     .on_press(PanelMsg::SymEditorTogglePinHidden(idx))
@@ -163,14 +175,18 @@ fn pin_row<'a>(
         cell(number.boxed(), COLUMNS[0].1),
         cell(name.boxed(), COLUMNS[1].1),
         cell(
-            text(raw(electrical_label(&pin.electrical)))
-                .size(TS.dense)
-                .color(ink)
-                .boxed(),
+            text(enum_label(
+                i18n,
+                electrical_message(&pin.electrical),
+                &pin.electrical
+            ))
+            .size(TS.dense)
+            .color(ink)
+            .boxed(),
             COLUMNS[2].1,
         ),
         cell(
-            text(raw(part_label(pin.details.part_number)))
+            text(UserText::new(part_label(pin.details.part_number)))
                 .size(TS.dense)
                 .font(mono)
                 .color(muted)
@@ -179,7 +195,7 @@ fn pin_row<'a>(
         ),
         cell(hidden_toggle.boxed(), COLUMNS[4].1),
         cell(
-            text(raw(format!("{:.2}", pin.length)))
+            text(UserText::new(format!("{:.2}", pin.length)))
                 .size(TS.dense)
                 .font(mono)
                 .color(ink)
@@ -187,10 +203,14 @@ fn pin_row<'a>(
             COLUMNS[5].1,
         ),
         cell(
-            text(raw(pin.orientation.as_str()))
-                .size(TS.dense)
-                .color(ink)
-                .boxed(),
+            text(enum_label(
+                i18n,
+                orientation_message(&pin.orientation),
+                &pin.orientation
+            ))
+            .size(TS.dense)
+            .color(ink)
+            .boxed(),
             COLUMNS[6].1,
         ),
     ]
@@ -213,17 +233,50 @@ fn cell<'a>(content: Element<'a, PanelMsg>, portion: u16) -> Element<'a, PanelMs
         .boxed()
 }
 
-/// `PowerInput` -> `Power Input`: the debug name of a pin direction with a
-/// space before each inner capital.
-fn electrical_label(debug_name: &str) -> String {
-    let mut out = String::with_capacity(debug_name.len() + 2);
-    for (i, ch) in debug_name.chars().enumerate() {
-        if i > 0 && ch.is_ascii_uppercase() {
-            out.push(' ');
-        }
-        out.push(ch);
+/// The catalog label of an enum the pin summary carries by its debug name,
+/// or the name itself for a variant this panel does not know yet.
+fn enum_label<'a>(i18n: &I18n, message: Option<MessageId>, debug_name: &str) -> Label<'a> {
+    match message {
+        Some(id) => t!(i18n, id).into(),
+        None => UserText::new(debug_name).into(),
     }
-    out
+}
+
+/// The label of a pin direction, by its debug name (`PowerInput`), as the
+/// pin summary carries it.
+fn electrical_message(debug_name: &str) -> Option<MessageId> {
+    use signex_types::schematic::PinDirection as D;
+    let direction = match debug_name {
+        "Input" => D::Input,
+        "Output" => D::Output,
+        "Bidirectional" => D::Bidirectional,
+        "ThreeStatable" => D::ThreeStatable,
+        "Passive" => D::Passive,
+        "PowerInput" => D::PowerInput,
+        "PowerOutput" => D::PowerOutput,
+        "GroundReference" => D::GroundReference,
+        "OpenDrainLow" => D::OpenDrainLow,
+        "OpenDrainHigh" => D::OpenDrainHigh,
+        "Differential" => D::Differential,
+        "Clock" => D::Clock,
+        "DoNotConnect" => D::DoNotConnect,
+        "Unclassified" => D::Unclassified,
+        _ => return None,
+    };
+    Some(pin_labels::direction_message(direction))
+}
+
+/// The label of a pin orientation, by its debug name (`Right`).
+fn orientation_message(debug_name: &str) -> Option<MessageId> {
+    use signex_library::PinOrientation as O;
+    let orientation = match debug_name {
+        "Up" => O::Up,
+        "Down" => O::Down,
+        "Left" => O::Left,
+        "Right" => O::Right,
+        _ => return None,
+    };
+    Some(pin_labels::orientation_message(orientation))
 }
 
 /// Part column: the letter of part 1..=26, `*` for the shared part 0.
@@ -240,9 +293,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn electrical_label_splits_camel_case() {
-        assert_eq!(electrical_label("PowerInput"), "Power Input");
-        assert_eq!(electrical_label("Passive"), "Passive");
+    fn every_pin_direction_has_a_catalog_label() {
+        use signex_types::schematic::PinDirection as D;
+        for d in [
+            D::Input,
+            D::Output,
+            D::Bidirectional,
+            D::ThreeStatable,
+            D::Passive,
+            D::PowerInput,
+            D::PowerOutput,
+            D::GroundReference,
+            D::OpenDrainLow,
+            D::OpenDrainHigh,
+            D::Differential,
+            D::Clock,
+            D::DoNotConnect,
+            D::Unclassified,
+        ] {
+            assert!(electrical_message(&format!("{d:?}")).is_some(), "{d:?}");
+        }
+        assert_eq!(electrical_message("NotAVariant"), None);
+    }
+
+    #[test]
+    fn every_pin_orientation_has_a_catalog_label() {
+        use signex_library::PinOrientation as O;
+        for o in [O::Up, O::Down, O::Left, O::Right] {
+            assert!(orientation_message(&format!("{o:?}")).is_some(), "{o:?}");
+        }
     }
 
     #[test]

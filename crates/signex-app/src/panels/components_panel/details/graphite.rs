@@ -4,7 +4,7 @@
 use iced::widget::{Column, column, container, row};
 use iced::{Alignment, Element, Font, Length, Padding, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use super::ComponentDetails;
 use crate::library::editor::kit::{lifecycle_label, lifecycle_tone, toned_pill};
@@ -58,7 +58,12 @@ pub(super) fn header_card<'a>(
         );
     }
     if !maker.is_empty() {
-        card = card.push(text(raw(maker)).size(TS.body).color(ink).boxed());
+        card = card.push(
+            text(signex_i18n::UserText::new(maker))
+                .size(TS.body)
+                .color(ink)
+                .boxed(),
+        );
     }
     if !d.description.trim().is_empty() {
         card = card.push(
@@ -75,23 +80,18 @@ pub(super) fn header_card<'a>(
         .boxed()
 }
 
-/// An uppercase section label over a preview or the parameters.
+/// A section label over a preview or the parameters; the catalog writes it
+/// in capitals.
 pub(super) fn section_label<'a>(
-    label: &'a str,
+    label: signex_i18n::Localized,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    container(
-        // user-visible: migrate to the #2063 casemap
-        // ast-grep-ignore: no-case-in-view
-        text(raw(label.to_uppercase()))
-            .size(TS.section)
-            .color(resolve(tokens).ink4),
-    )
-    .padding(Padding {
-        top: 6.0,
-        ..Padding::ZERO
-    })
-    .boxed()
+    container(text(label).size(TS.section).color(resolve(tokens).ink4))
+        .padding(Padding {
+            top: 6.0,
+            ..Padding::ZERO
+        })
+        .boxed()
 }
 
 /// One parameter: muted name, mono value.
@@ -108,7 +108,7 @@ pub(super) fn parameter_row<'a>(
                 .width(Length::FillPortion(2))
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
-            text(raw(value))
+            text(signex_i18n::UserText::new(value))
                 .size(TS.caption)
                 .font(mono())
                 .color(ti(tokens.text))

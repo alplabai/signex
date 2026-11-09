@@ -23,6 +23,7 @@ pub(super) fn view_sections<'a>(
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -280,7 +281,7 @@ pub(super) fn view_sections<'a>(
                 .boxed(),
         );
         if !is_section_collapsed("fp_other", collapsed_sections) {
-            col = render_other_section(col, fp, palette, unit);
+            col = render_other_section(col, fp, palette, unit, i18n);
         }
     }
 

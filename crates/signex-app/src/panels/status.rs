@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
+use signex_i18n::{MessageId, UserText, ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -222,9 +223,9 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ErcSeverityLite::Info => theme_ext::accent(&ctx.tokens),
         };
         let sev_label = match v.severity {
-            ErcSeverityLite::Error => "E",
-            ErcSeverityLite::Warning => "W",
-            ErcSeverityLite::Info => "I",
+            ErcSeverityLite::Error => ids::PANELS_ERC_SEVERITY_ERROR,
+            ErcSeverityLite::Warning => ids::PANELS_ERC_SEVERITY_WARNING,
+            ErcSeverityLite::Info => ids::PANELS_ERC_SEVERITY_INFO,
         };
         let is_focused = ctx.erc_focus_index == Some(v.global_index);
         let (label_c, detail_c) = erc_row_text(&ctx.tokens, is_focused);
@@ -249,7 +250,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             row![
                 signex_widgets::button(
                     row![
-                        erc_severity_pill(&ctx.tokens, v.severity, sev_label),
+                        erc_severity_pill(&ctx.tokens, v.severity, t!(ctx.i18n, sev_label)),
                         Space::new().width(4).height(Length::Shrink),
                         text(raw(v.rule_label.clone())).size(TS.body).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
@@ -434,18 +435,31 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .clip(true)
             .boxed()
     };
-    let caps = move |label: &'static str| -> Element<'a, PanelMsg> {
-        text(raw(label)).size(TS.section).color(ink3).boxed()
+    let i18n = &*ctx.i18n;
+    let caps = move |label: MessageId| -> Element<'a, PanelMsg> {
+        text(t!(i18n, label)).size(TS.section).color(ink3).boxed()
     };
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
     col = col.push(
         container(
             row![
-                cell(caps("CLASS"), Length::Fixed(MSG_CLASS_W)),
-                cell(caps("DOCUMENT"), Length::Fixed(MSG_DOCUMENT_W)),
-                cell(caps("SOURCE"), Length::Fixed(MSG_SOURCE_W)),
-                cell(caps("MESSAGE"), Length::Fill),
-                cell(caps("TIME"), Length::Fixed(MSG_TIME_W)),
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_CLASS),
+                    Length::Fixed(MSG_CLASS_W)
+                ),
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_DOCUMENT),
+                    Length::Fixed(MSG_DOCUMENT_W)
+                ),
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_SOURCE),
+                    Length::Fixed(MSG_SOURCE_W)
+                ),
+                cell(caps(ids::PANELS_MESSAGES_COLUMN_MESSAGE), Length::Fill),
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_TIME),
+                    Length::Fixed(MSG_TIME_W)
+                ),
             ]
             .width(Length::Fill),
         )
@@ -462,14 +476,12 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             container(
                 row![
-                    text(raw("No runtime messages yet"))
+                    text(t!(i18n, ids::PANELS_MESSAGES_EMPTY))
                         .size(TS.body)
                         .color(ink3),
-                    text(raw(
-                        "Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output",
-                    ))
-                    .size(TS.caption)
-                    .color(ink4),
+                    text(t!(i18n, ids::PANELS_MESSAGES_VERBOSE_HINT))
+                        .size(TS.caption)
+                        .color(ink4),
                 ]
                 .spacing(SP.m)
                 .align_y(iced::Alignment::Center),
@@ -486,16 +498,22 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 
     let dash = move || -> Element<'a, PanelMsg> {
-        text(raw("\u{2014}")).size(TS.body).color(ink4).boxed()
+        text(t!(i18n, ids::PANELS_MESSAGES_NO_VALUE))
+            .size(TS.body)
+            .color(ink4)
+            .boxed()
     };
     for entry in ctx.diagnostics.iter().rev() {
         col = col.push(
             container(
                 row![
-                    cell(level_pill(tokens, entry.level), Length::Fixed(MSG_CLASS_W)),
+                    cell(
+                        level_pill(tokens, i18n, entry.level),
+                        Length::Fixed(MSG_CLASS_W)
+                    ),
                     cell(dash(), Length::Fixed(MSG_DOCUMENT_W)),
                     cell(
-                        text(raw(entry.code.as_str().to_string()))
+                        text(UserText::new(entry.code.as_str()))
                             .size(TS.body)
                             .font(mono)
                             .color(ink3)
@@ -504,7 +522,7 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         Length::Fixed(MSG_SOURCE_W),
                     ),
                     cell(
-                        text(raw(entry.message.as_str().to_string()))
+                        text(UserText::new(entry.message.as_str()))
                             .size(TS.body)
                             .color(ink)
                             .wrapping(iced::widget::text::Wrapping::None)
@@ -530,7 +548,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 fn erc_severity_pill<'a>(
     tokens: &ThemeTokens,
     severity: ErcSeverityLite,
-    label: &'static str,
+    label: signex_i18n::Localized,
 ) -> Element<'a, PanelMsg> {
     use crate::styles::PillTone;
     let tone = match severity {
@@ -538,7 +556,7 @@ fn erc_severity_pill<'a>(
         ErcSeverityLite::Warning => PillTone::Warn,
         ErcSeverityLite::Info => PillTone::Info,
     };
-    container(text(raw(label)).size(TS.caption))
+    container(text(label).size(TS.caption))
         .padding([1.0, 7.0])
         .style(crate::styles::pill(tokens, tone))
         .boxed()
@@ -547,17 +565,19 @@ fn erc_severity_pill<'a>(
 /// Severity pill of a Messages row (Graphite): error, warning, info tones.
 fn level_pill<'a>(
     tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
     level: crate::diagnostics::DiagnosticLevel,
 ) -> Element<'a, PanelMsg> {
     use crate::diagnostics::DiagnosticLevel as L;
     use crate::styles::PillTone;
-    let tone = match level {
-        L::Error => PillTone::Err,
-        L::Warning => PillTone::Warn,
-        L::Info => PillTone::Info,
-        L::Debug | L::Trace => PillTone::Neutral,
+    let (tone, label) = match level {
+        L::Error => (PillTone::Err, ids::PANELS_MESSAGES_LEVEL_ERROR),
+        L::Warning => (PillTone::Warn, ids::PANELS_MESSAGES_LEVEL_WARNING),
+        L::Info => (PillTone::Info, ids::PANELS_MESSAGES_LEVEL_INFO),
+        L::Debug => (PillTone::Neutral, ids::PANELS_MESSAGES_LEVEL_DEBUG),
+        L::Trace => (PillTone::Neutral, ids::PANELS_MESSAGES_LEVEL_TRACE),
     };
-    container(text(raw(level.label().to_string())).size(TS.caption))
+    container(text(t!(i18n, label)).size(TS.caption))
         .padding([1.0, 7.0])
         .style(crate::styles::pill(tokens, tone))
         .boxed()

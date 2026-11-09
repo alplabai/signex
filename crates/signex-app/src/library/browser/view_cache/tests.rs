@@ -125,6 +125,7 @@ fn drawing_frames_with_a_synced_cache_computes_nothing() {
             &state,
             browser(&state, &root),
             &tokens,
+            &signex_i18n::I18n::en_us(),
         ));
     }
 
@@ -142,6 +143,7 @@ fn a_view_without_a_current_cache_computes_for_that_frame_only() {
         &state,
         browser(&state, &root),
         &tokens,
+        &signex_i18n::I18n::en_us(),
     ));
 
     assert_eq!(builds(), before + 1, "a miss recomputes, and never panics");

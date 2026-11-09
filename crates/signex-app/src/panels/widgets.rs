@@ -101,10 +101,12 @@ pub fn prop_kv_row<'a>(
     .boxed()
 }
 
-pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
-    // user-visible: migrate to the #2063 casemap
-    // ast-grep-ignore: no-case-in-view
-    text(raw(title.to_uppercase()))
+pub fn section_title<'a>(
+    title: &str,
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> iced::widget::Text<'a> {
+    text(raw(i18n.upper_for_display(title)))
         .size(TS.section)
         .style(crate::styles::section_label(tokens))
 }
@@ -120,7 +122,7 @@ pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
 pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, PanelMsg> {
     container(
         column![
-            section_title(title, &ctx.tokens),
+            section_title(title, &ctx.tokens, &ctx.i18n),
             separator(&ctx.tokens),
             text(raw(crate::active_bar::PLANNED_TOOLTIP))
                 .size(TS.caption)

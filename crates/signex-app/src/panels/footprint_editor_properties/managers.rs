@@ -176,6 +176,7 @@ pub(super) fn render_other_section<'a>(
     _fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,
     unit: signex_types::coord::Unit,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -187,7 +188,10 @@ pub(super) fn render_other_section<'a>(
     // Units row — mm/mils segmented selector (Altium parity). Reuses
     // the schematic Properties panel's `seg_btn` widget so the chrome
     // matches byte-for-byte.
-    col = col.push(super::super::form_label("Units"));
+    col = col.push(super::super::form_label(signex_i18n::t!(
+        i18n,
+        signex_i18n::ids::PANELS_PROPERTIES_UNITS
+    )));
     col = col.push(
         container(
             row![
