@@ -16,6 +16,7 @@ pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
 pub mod history;
+mod pcb_layers;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
@@ -104,6 +105,7 @@ pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
     paper_size_options,
 };
+pub use pcb_layers::PcbLayersPanel;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 #[cfg(test)]
@@ -137,6 +139,8 @@ pub enum PanelKind {
     Signal,
     Drc,
     LayerStack,
+    /// Show or hide each board layer and pick the active copper layer (#2223).
+    Layers,
     NetClasses,
     Variants,
     OutputJobs,
@@ -186,6 +190,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Favorites,
     PanelKind::Snippets,
     PanelKind::LayerStack,
+    PanelKind::Layers,
     PanelKind::NetClasses,
     PanelKind::Variants,
     PanelKind::OutputJobs,
@@ -218,7 +223,10 @@ impl PanelKind {
 
     /// Whether this panel requires a PCB document to be open.
     pub fn needs_pcb(self) -> bool {
-        matches!(self, PanelKind::LayerStack | PanelKind::NetClasses)
+        matches!(
+            self,
+            PanelKind::LayerStack | PanelKind::Layers | PanelKind::NetClasses
+        )
     }
 
     pub fn label(self) -> &'static str {
@@ -233,6 +241,7 @@ impl PanelKind {
             PanelKind::Signal => "Signal",
             PanelKind::Drc => "DRC",
             PanelKind::LayerStack => "Layer Stack",
+            PanelKind::Layers => "Layers",
             PanelKind::NetClasses => "Net Classes",
             PanelKind::Variants => "Variants",
             PanelKind::SchFilter => "SCH Filter",
@@ -269,6 +278,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Signal => view_stub("Signex AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
+        PanelKind::Layers => pcb_layers::view(ctx),
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
         PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
         PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),

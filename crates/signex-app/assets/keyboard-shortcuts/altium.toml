@@ -98,6 +98,18 @@ context = "global"
 "Ctrl+Shift+Tab" = "previous_document_tab"
 "F4" = "toggle_floating_panels"
 
+# The board view (PCB tabs only): `+` and `*` step to the next copper layer,
+# `-` to the previous. A shifted `+` or `*` is its own stroke on a US layout.
+[[keyboard_shortcuts.sections]]
+context = "pcb"
+
+[keyboard_shortcuts.sections.bindings]
+"+" = "next_layer"
+"Shift++" = "next_layer"
+"*" = "next_layer"
+"Shift+*" = "next_layer"
+"-" = "prev_layer"
+
 [[keyboard_shortcuts.sections]]
 context = "footprint"
 

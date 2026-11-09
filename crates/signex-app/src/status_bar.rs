@@ -2,6 +2,7 @@
 
 use iced::widget::{Widget, container, row, space};
 use iced::{Element, Length};
+use signex_i18n::Localized;
 use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 use signex_types::theme::ThemeTokens;
@@ -62,7 +63,7 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "13 arguments: the status bar reads thirteen independent slices of app state and owns none of them"
+    reason = "14 arguments: the status bar reads fourteen independent slices of app state and owns none of them"
 )]
 pub fn view<'a>(
     x: f64,
@@ -78,6 +79,7 @@ pub fn view<'a>(
     pending_git_commits: usize,
     altium_import: Option<&str>,
     activity: Option<&str>,
+    active_layer: Option<(Localized, Localized)>,
 ) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
@@ -128,6 +130,23 @@ pub fn view<'a>(
                 .size(TS.body)
                 .color(muted_c)
                 .boxed(),
+        );
+    }
+    // The active copper layer of an open board; a click steps to the next.
+    if let Some((caption, name)) = active_layer {
+        bar = bar.push(sep().boxed());
+        bar = bar.push(
+            button(
+                row![
+                    text(caption).size(TS.body).color(muted_c),
+                    text(name).size(TS.body).color(text_c)
+                ]
+                .spacing(SP.xs),
+            )
+            .padding([1.0, SP.s])
+            .style(button::text)
+            .on_press(StatusBarRequest::ActiveLayerStepRequested)
+            .boxed(),
         );
     }
     if let Some(summary) = selection_summary(selected) {

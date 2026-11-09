@@ -36,6 +36,7 @@ pub mod paste;
 pub mod pcb_drc;
 mod pcb_parking;
 pub mod pcb_select;
+pub mod pcb_view;
 pub mod placed_part;
 pub mod placement_session;
 pub mod preferences;

@@ -15,6 +15,10 @@ use super::{
 pub const DEFAULT_BOTTOM_PANEL_HEIGHT: f32 = 220.0;
 
 pub struct UiState {
+    /// What each open board shows of its layers and ratsnest (#2223). Session
+    /// only: never written to the `.snxpcb`.
+    pub pcb_layer_views:
+        std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
     /// The file picker and the opener the returned tasks use (#1931).
     pub io: crate::io_ports::IoPorts,
     pub theme_id: ThemeId,

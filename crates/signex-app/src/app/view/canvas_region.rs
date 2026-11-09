@@ -134,6 +134,7 @@ mod tests {
             0,
             None,
             None,
+            None,
         );
         let real = crate::layout_probe::root_size::<crate::app::StatusBarRequest>(
             bar,

@@ -277,6 +277,7 @@ impl Signex {
                 preferences_draft_component_classes: component_classes.clone(),
                 keymap_profiles,
                 active_keymap,
+                pcb_layer_views: Default::default(),
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,
                 keymap_chord_wait: None,
@@ -543,6 +544,7 @@ impl Signex {
 
                     properties_tab: 0,
                     net_classes: Default::default(),
+                    pcb_layers: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,

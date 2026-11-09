@@ -266,6 +266,8 @@ pub(super) struct Probe {
     pub tour_open: bool,
     pub pcb_camera: (f32, f32, f32),
     pub pcb_fit_queued: bool,
+    /// What each open board shows of its layers and ratsnest (#2223).
+    pub pcb_views: String,
     pub error_notice: bool,
     pub refs: Vec<String>,
 }
@@ -320,6 +322,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         tour_open: app.ui_state.first_run_tour_open,
         pcb_camera: app.interaction_state.pcb_canvas.live_camera(),
         pcb_fit_queued: app.interaction_state.pcb_canvas.pending_fit.get().is_some(),
+        pcb_views: format!("{:?}", app.ui_state.pcb_layer_views),
         window_fit_queued: app
             .interaction_state
             .canvases

@@ -91,6 +91,12 @@ impl Signex {
         let revision = docs.pcb_revisions.get(&tab.path).copied().unwrap_or(0);
         let selection = &mut self.interaction_state.pcb_selection;
         selection.sync(Some(tab.path.as_path()), revision);
+        selection.set_view(
+            self.ui_state
+                .pcb_layer_views
+                .get(&tab.path)
+                .unwrap_or(&Default::default()),
+        );
         let out = f(selection, board);
         for line in selection.take_report() {
             crate::diagnostics::log_warning(line);

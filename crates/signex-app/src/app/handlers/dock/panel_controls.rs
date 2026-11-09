@@ -259,6 +259,9 @@ impl Signex {
             crate::panels::PanelMsg::ToggleSnap => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
             }
+            crate::panels::PanelMsg::PcbLayers(msg) => {
+                self.apply_pcb_view_event(None, *msg);
+            }
             crate::panels::PanelMsg::NetClass(msg) => {
                 self.handle_net_class_message(msg);
             }

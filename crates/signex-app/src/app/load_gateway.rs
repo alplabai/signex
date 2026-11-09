@@ -416,7 +416,7 @@ impl Signex {
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
         // Selection is routed for the main window's board only.
         canvas.selectable = false;
-        canvas.set_renderer_snapshot(Some(signex_renderer::pcb::PcbSnapshot::from_board(board)));
+        canvas.set_renderer_snapshot(Some(self.pcb_snapshot_for(path, board)));
         canvas.fit_to_board();
         Some(canvas)
     }
@@ -438,12 +438,15 @@ impl Signex {
         let ratsnest_key = self.active_pcb_ratsnest_key();
         let board_path = self.active_tab_path().unwrap_or_default();
         let mut ratsnest = std::mem::take(&mut self.interaction_state.pcb_ratsnest);
+        let ratsnest_visible = self.pcb_layer_view(&board_path).ratsnest_visible();
         let renderer_snapshot = self.active_pcb().map(|board| {
             ratsnest.refresh(ratsnest_key, board);
-            ratsnest.apply(
-                &board_path,
-                signex_renderer::pcb::PcbSnapshot::from_board(board),
-            )
+            let snapshot = self.pcb_snapshot_for(&board_path, board);
+            if ratsnest_visible {
+                ratsnest.apply(&board_path, snapshot)
+            } else {
+                snapshot
+            }
         });
         self.interaction_state.pcb_ratsnest = ratsnest;
 

@@ -30,6 +30,8 @@ pub struct TraceInput {
     pub p1: [f32; 2],
     pub width_mm: f32,
     pub net: u32,
+    /// Copper off the active layer, drawn faint.
+    pub dimmed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +40,8 @@ pub struct ViaInput {
     pub diameter_mm: f32,
     pub drill_mm: f32,
     pub net: u32,
+    /// Copper off the active layer, drawn faint.
+    pub dimmed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -48,6 +52,8 @@ pub struct PadInput {
     pub rotation_deg: f32,
     pub shape: PadShape,
     pub pad_type: PadType,
+    /// Copper off the active layer, drawn faint.
+    pub dimmed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +67,8 @@ pub struct ZonePolygonInput {
     pub layer_rank: u16,
     pub layer_name: String,
     pub source_order: usize,
+    /// Copper off the active layer, drawn faint.
+    pub dimmed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -91,42 +99,7 @@ pub struct PcbSnapshot {
 
 impl PcbSnapshot {
     pub fn from_board(board: &PcbBoard) -> Self {
-        let traces = board.segments.iter().map(trace_from_segment).collect();
-        let vias = board.vias.iter().map(via_from_board_via).collect();
-        let layer_ranks = layer_rank_index(board);
-
-        let mut pads = Vec::new();
-        for footprint in &board.footprints {
-            for pad in &footprint.pads {
-                pads.extend(pad_from_footprint(footprint, pad));
-            }
-        }
-
-        let mut zones = Vec::new();
-        let mut rule_areas = Vec::new();
-
-        for (source_order, zone) in board.zones.iter().enumerate() {
-            if let Some(zone_polygon) = zone_from_board_zone(zone, source_order, &layer_ranks) {
-                if zone_polygon.rule_area {
-                    rule_areas.push(zone_polygon);
-                } else {
-                    zones.push(zone_polygon);
-                }
-            }
-        }
-
-        sort_zone_stack(&mut zones);
-        sort_zone_stack(&mut rule_areas);
-
-        Self {
-            traces,
-            vias,
-            pads,
-            zones,
-            rule_areas,
-            ratsnest_lines: Vec::new(),
-            drc_markers: Vec::new(),
-        }
+        Self::from_board_filtered(board, None)
     }
 
     pub fn with_ratsnest_lines(mut self, ratsnest_lines: Vec<RatsnestInput>) -> Self {
@@ -141,8 +114,12 @@ impl PcbSnapshot {
 }
 
 mod emit;
+mod layer_view;
 mod ratsnest;
 use emit::*;
+pub use layer_view::{
+    DIMMED_ALPHA, Emphasis, LayerGroup, LayerRow, PcbLayerView, board_copper_layers, layer_rows,
+};
 pub use ratsnest::ratsnest_inputs;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -467,6 +444,7 @@ mod tests {
                     p1: [5.0, net as f32],
                     width_mm: 0.25,
                     net,
+                    dimmed: false,
                 })
                 .collect(),
             ..PcbSnapshot::default()
@@ -492,6 +470,7 @@ mod tests {
                     diameter_mm: 0.6,
                     drill_mm,
                     net: 1,
+                    dimmed: false,
                 }],
                 ..PcbSnapshot::default()
             };
@@ -525,6 +504,7 @@ mod tests {
                     diameter_mm: 0.6,
                     drill_mm,
                     net: 1,
+                    dimmed: false,
                 }],
                 ..PcbSnapshot::default()
             };
@@ -628,6 +608,7 @@ mod tests {
                 layer_rank: 0,
                 layer_name: "f.cu".to_string(),
                 source_order: 2,
+                dimmed: false,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -638,6 +619,7 @@ mod tests {
                 layer_rank: 0,
                 layer_name: "f.cu".to_string(),
                 source_order: 1,
+                dimmed: false,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -648,6 +630,7 @@ mod tests {
                 layer_rank: 0,
                 layer_name: "f.cu".to_string(),
                 source_order: 0,
+                dimmed: false,
             },
         ];
 

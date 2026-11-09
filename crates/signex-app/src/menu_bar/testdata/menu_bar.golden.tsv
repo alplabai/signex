@@ -55,6 +55,12 @@ View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11
 View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
 View/---	separator	-	-	-	-	-	-
+View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle_ratsnest
+View/Next Layer	item	Next Layer	-	-	NextLayer	01100000	cmd:next_layer
+View/Previous Layer	item	Previous Layer	-	-	PreviousLayer	01100000	cmd:prev_layer
+View/Toggle Layer Visibility	item	Toggle Layer Visibility	-	-	ToggleLayerVisibility	01100000	cmd:toggle_layer_visibility
+View/Show All Layers	item	Show All Layers	-	-	ShowAllLayers	01100000	cmd:show_all_layers
+View/---	separator	-	-	-	-	-	-
 View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
 View/Components	item	Components	-	-	OpenComponentsPanel	11111111	always
 View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
@@ -62,6 +68,7 @@ View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
 View/Signal	item	Signal	-	-	OpenSignalPanel	11111111	always
+View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
 Place	menu	Place	-	-	-	-	-
 Place/Wire	item	Wire	place_wire	W	PlaceWire	01000000	cmd:place_wire
 Place/Bus	item	Bus	place_bus	B	PlaceBus	01000000	cmd:place_bus

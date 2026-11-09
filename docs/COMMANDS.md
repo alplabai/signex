@@ -255,7 +255,15 @@ one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## PCB
 
-_No commands in this group yet._
+| command id | label | category | Altium | Classic |
+| --- | --- | --- | --- | --- |
+| `next_layer` | Make the next copper layer active | view | `+`, `Shift++`, `*`, `Shift+*` | `+`, `Shift++`, `*`, `Shift+*` |
+| `prev_layer` | Make the previous copper layer active | view | `-` | `-` |
+| `run_drc` | Run the design rule check on the board | pcb | — | — |
+| `show_all_layers` | Show every layer | view | — | — |
+| `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
+| `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
+| `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 
 ## 3D
 
