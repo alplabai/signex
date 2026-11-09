@@ -22,10 +22,7 @@ impl Signex {
                 continue;
             };
             for reference in engine.document().mixed_version_parts_among(ids) {
-                crate::diagnostics::log_warning(format!(
-                    "{reference} on {}: its units use different versions of the library symbol;                      use Update from library to bring them together",
-                    path.display()
-                ));
+                crate::diagnostics::log_warning(mixed_version_text(&reference, path));
             }
         }
     }
@@ -52,5 +49,23 @@ impl Signex {
             })
             .collect();
         self.warn_mixed_version_parts(&touched);
+    }
+}
+
+/// The Messages line for a part whose units draw with different versions.
+fn mixed_version_text(reference: &str, path: &std::path::Path) -> String {
+    format!(
+        "{reference} on {}: its units use different versions of the library symbol;          use Update from library to bring them together",
+        path.display()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_warning_is_one_sentence_with_no_run_of_spaces() {
+        let text = super::mixed_version_text("U1", std::path::Path::new("a.snxsch"));
+        assert!(!text.contains("  "), "{text:?}");
+        assert!(text.contains("symbol; use Update from library"));
     }
 }

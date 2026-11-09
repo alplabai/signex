@@ -26,16 +26,12 @@ use signex_types::schematic::{LinkStamp, RowStamp};
 mod check;
 pub(crate) use check::PartSyncCheck;
 
-/// Stable content hash of a `LibSymbol` (FNV-1a 64 over the serde JSON of
-/// the in-memory value, whose field order is the struct's declaration
-/// order; the JSON is only a hash input, never stored). `LibSymbol` has no
-/// `PartialEq`, and `std`'s `DefaultHasher` is not stable across releases.
-pub fn content_hash(symbol: &LibSymbol) -> u64 {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-    let json = serde_json::to_vec(symbol).unwrap_or_default();
-    json.iter()
-        .fold(OFFSET, |h, b| (h ^ u64::from(*b)).wrapping_mul(PRIME))
+/// Whether the library's current body is a different version from the
+/// embedded one. The one rule versioning uses (`LibSymbol::same_version`), so
+/// a body that differs only by `-0.0` or float noise is no drift: Update
+/// would be a no-op and the row could never clear.
+fn is_newer_version(fresh: &LibSymbol, embedded: &LibSymbol) -> bool {
+    !fresh.same_version(embedded)
 }
 
 /// A mounted library the worker may read.
@@ -175,7 +171,7 @@ pub fn compute_drift(
                 continue;
             };
             report.names.insert(lib_id.clone(), name.clone());
-            if content_hash(fresh) != content_hash(embedded) {
+            if is_newer_version(fresh, embedded) {
                 drifted.insert(lib_id.clone());
                 report
                     .stale_bodies
@@ -900,9 +896,14 @@ mod tests {
     }
 
     #[test]
-    fn hash_is_stable_and_content_sensitive() {
-        assert_eq!(content_hash(&sym("a")), content_hash(&sym("a")));
-        assert_ne!(content_hash(&sym("a")), content_hash(&sym("b")));
+    fn a_body_differing_only_by_negative_zero_is_not_drift() {
+        let mut a = sym("a");
+        let mut b = a.clone();
+        a.pin_name_offset = 0.0;
+        b.pin_name_offset = -0.0;
+        assert!(!is_newer_version(&a, &b));
+        b.description = "b".into();
+        assert!(is_newer_version(&a, &b));
     }
 
     #[test]

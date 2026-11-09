@@ -124,20 +124,6 @@ fn build_with_class(
     )
 }
 
-/// [`fixture`] whose row carries the internal part number `pn`, so a test
-/// can match a log line that only its own part can produce.
-pub(crate) fn fixture_with_part_number(pn: &str) -> Fixture {
-    build_in_mode(
-        "lib",
-        None,
-        two_unit_symbol(),
-        "IC",
-        ParamMap::new(),
-        WorkflowMode::Personal,
-        pn,
-    )
-}
-
 /// A library named `name` whose manifest runs the Team workflow.
 pub(crate) fn team_fixture(name: &str) -> Fixture {
     build_in_mode(
