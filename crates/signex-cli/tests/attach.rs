@@ -482,6 +482,54 @@ fn every_query_answer_is_filtered_to_the_runs_folders() {
     }
 }
 
+/// A sheet never saved has no path to check. It is shown only when the project
+/// that owns it is this run's; its elements carry no project, so they are
+/// hidden (documented in `docs/CLI.md`). Nothing of another project's unsaved
+/// sheet shows, whatever the query.
+#[test]
+fn an_unsaved_sheet_of_another_project_and_its_elements_never_show() {
+    let w = world();
+    let sheet = w.fx.sheet.to_str().unwrap().to_string();
+    let project = w.project().to_string();
+    let doc = |id: &str, name: &str, owner: &str| json!({"id": id, "path": null, "name": name, "project": {"path": owner}});
+    let element = json!({"id": "e", "text": "SECRET-UNSAVED",
+        "document": {"id": "u", "path": null, "name": "SECRET-UNSAVED"}});
+    let reply = |id: &str, data: Value| json!({"id": id, "status": "answered", "data": data, "messages": [], "changed": []});
+    let app = w.app(&[
+        reply(
+            "list_documents",
+            json!({"count": 3, "documents": [
+                {"id": SHEET_A, "path": sheet, "name": "a", "project": {"path": project}},
+                doc("66666666-6666-4666-8666-666666666666", "mine-unsaved", &project),
+                doc(SHEET_B, "SECRET-UNSAVED", "/somewhere/else/B.snxprj")]}),
+        ),
+        reply(
+            "find_items",
+            json!({"count": 1, "elements": [element], "not_loaded": []}),
+        ),
+        reply(
+            "resolve",
+            json!({"found": true, "what": "element", "element": element}),
+        ),
+    ]);
+    let commands = jsonl(&[
+        json!({"id": "list_documents"}),
+        json!({"id": "find_items", "args": {"kind": "symbol"}}),
+        json!({"id": "resolve", "args": {"id": "77777777-7777-4777-8777-777777777777"}}),
+    ]);
+    let out = w.cli(&["run", w.project()], &commands);
+    app.finish();
+
+    assert_eq!(out.lines.len(), 3, "{}", out.stdout);
+    assert!(!out.stdout.contains("SECRET-UNSAVED"), "{}", out.stdout);
+    assert!(!out.stdout.contains("somewhere/else"), "{}", out.stdout);
+    let listed = &out.lines[0]["data"];
+    assert_eq!(listed["count"], 2);
+    assert_eq!(listed["documents"][1]["name"], "mine-unsaved");
+    assert_eq!(out.lines[1]["data"]["count"], 0);
+    assert_eq!(out.lines[2]["data"]["what"], "unknown");
+}
+
 /// Sent with no `document`, the app would act on the person's active
 /// document, which the run's folders were never checked against.
 #[test]

@@ -28,12 +28,29 @@ fn scrub_items(items: Vec<Value>, inside: &dyn Fn(&str) -> bool) -> Vec<Value> {
 }
 
 fn scrub_object(map: Map<String, Value>, inside: &dyn Fn(&str) -> bool) -> Option<Value> {
-    if matches!(map.get("path"), Some(Value::String(path)) if !inside(path)) {
+    if !proven_inside(&map, inside) {
         return None;
     }
     let mut out = Map::new();
     for (key, child) in map {
         let kept = match child {
+            // Fail closed: a listed document or element is kept only if it
+            // says whose it is (a document names a `path`, an element a
+            // `document` with one), and what it says is then proven.
+            Value::Array(items) if key == "documents" => Some(Value::Array(scrub_items(
+                items
+                    .into_iter()
+                    .filter(|item| item.get("path").is_some())
+                    .collect(),
+                inside,
+            ))),
+            Value::Array(items) if key == "elements" => Some(Value::Array(scrub_items(
+                items
+                    .into_iter()
+                    .filter(|item| item.get("document").and_then(|d| d.get("path")).is_some())
+                    .collect(),
+                inside,
+            ))),
             Value::Array(items) if key == "not_loaded" => Some(Value::Array(
                 items
                     .into_iter()
@@ -60,6 +77,23 @@ fn scrub_object(map: Map<String, Value>, inside: &dyn Fn(&str) -> bool) -> Optio
         out.insert("count".into(), json!(len));
     }
     Some(Value::Object(out))
+}
+
+/// Whether an object that names a document may be shown. One without a `path`
+/// key names none. One with a string `path` is inside if that path is. One
+/// whose `path` is null (a sheet never saved) or of another shape is shown only
+/// if the project that owns it (`project.path`) is inside; with no proof it is
+/// hidden, not shown.
+fn proven_inside(map: &Map<String, Value>, inside: &dyn Fn(&str) -> bool) -> bool {
+    match map.get("path") {
+        None => true,
+        Some(Value::String(path)) => inside(path),
+        Some(_) => map
+            .get("project")
+            .and_then(|project| project.get("path"))
+            .and_then(Value::as_str)
+            .is_some_and(inside),
+    }
 }
 
 /// The files a `changed` list names that `inside` accepts.
@@ -116,6 +150,30 @@ mod tests {
         let mine = json!({"found": true, "what": "document", "document": {"path": "/a/y"}});
         assert_eq!(scrub_data(mine.clone(), &inside), Some(mine));
         assert_eq!(unknown_id("u")["what"], "unknown");
+    }
+
+    /// An unsaved sheet has a null `path`: it is shown only if its project is
+    /// proven inside; its elements say no project, so they are hidden.
+    #[test]
+    fn a_sheet_never_saved_is_shown_only_when_its_project_is_proven_inside() {
+        let element = |text: &str| json!({"id": "e", "text": text, "document": {"id": "d", "path": null, "name": "n"}});
+        let data = json!({"count": 4, "documents": [
+            {"id": "mine", "path": null, "project": {"path": "/a/P.snxprj"}},
+            {"id": "theirs", "path": null, "project": {"path": "/b/Q.snxprj"}},
+            {"id": "loose", "path": null, "project": null},
+            {"id": "nokey"},
+        ]});
+        let kept = scrub_data(data, &inside).unwrap();
+        assert_eq!(kept["count"], 1);
+        assert_eq!(kept["documents"][0]["id"], "mine");
+
+        let elements = json!({"count": 2, "elements": [element("SECRET"), json!({"id": "x"})],
+            "not_loaded": []});
+        let kept = scrub_data(elements, &inside).unwrap();
+        assert_eq!(kept["count"], 0);
+        assert!(!kept.to_string().contains("SECRET"));
+        let unsaved = json!({"found": true, "what": "element", "element": element("SECRET")});
+        assert!(scrub_data(unsaved, &inside).is_none());
     }
 
     #[test]

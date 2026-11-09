@@ -120,7 +120,13 @@ in the middle of continues.
   `resolve` of an id outside answers `{"found": false, "what": "unknown"}`,
   the same as for an id that does not exist. `changed` keeps only files
   inside. The app's log lines (`messages`) of a query are not shown at all:
-  they are free text that may name any open project's files.
+  they are free text that may name any open project's files. The filter fails
+  closed: a document is shown only if it can be proven this run's, by its own
+  `path` or, for a sheet never saved (a null `path`), by its owning
+  `project.path`; a listed document or element that says neither is hidden.
+  So a never-saved sheet of this project shows in `list_documents`, but its
+  elements (their `document` names no project) are hidden from `find_items`
+  and `resolve` until the sheet is saved.
 - **Policy first, the app's allowlist on top.** Capabilities, `--save`,
   `--allow-path` and the input limits are applied to every command, and to
   every edit inside `apply_edits`, before anything is sent. The app then
