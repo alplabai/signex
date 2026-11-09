@@ -2,7 +2,7 @@ use signex_types::part::FootprintResolveError;
 use signex_types::pcb::{self, PadType};
 
 use super::*;
-use crate::primitive::footprint::{ChamferedCorners, FpCutout, Polygon};
+use crate::primitive::footprint::{ChamferedCorners, FpCutout, Polygon, StepAttachment};
 
 fn pad(number: &str, kind: PadKind, shape: PadShape, layers: &[&str]) -> Pad {
     Pad {
@@ -376,31 +376,44 @@ fn margins_are_not_carried_and_do_not_refuse() {
 }
 
 #[test]
-fn a_3d_body_a_step_model_and_an_anchor_are_refused() {
-    use crate::primitive::footprint::StepAttachment;
-    let mut body = library(Vec::new());
-    body.body_3d.height_mm = 2.5;
-    let mut step = library(Vec::new());
-    step.step_attachment = Some(StepAttachment {
+fn a_non_zero_anchor_is_refused() {
+    let mut anchor = library(Vec::new());
+    anchor.anchor = [0.5, 0.0];
+    assert_eq!(
+        board_footprint(&anchor),
+        Err(FootprintResolveError::Unconvertible {
+            what: "footprint anchor",
+            value: "[0.5, 0.0]".into()
+        })
+    );
+}
+
+/// Maintainer decision (Caner, 2026-11-09): a 3D body or STEP model is not
+/// copied to the board and does not refuse the footprint; the board reaches
+/// it through `library_ref`.
+#[test]
+fn a_3d_body_and_a_step_model_convert_without_being_copied() {
+    let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
+    fp.body_3d.height_mm = 2.5;
+    fp.step_attachment = Some(StepAttachment {
         content_hash: "ab".into(),
         filename: "SOT-23.step".into(),
         offset_xyz: [0.0; 3],
         rotation_xyz: [0.0; 3],
     });
-    let mut anchor = library(Vec::new());
-    anchor.anchor = [0.5, 0.0];
-    let cases = [
-        (body, "footprint 3D body", "set"),
-        (step, "footprint STEP model", "SOT-23.step"),
-        (anchor, "footprint anchor", "[0.5, 0.0]"),
-    ];
-    for (fp, what, value) in cases {
-        assert_eq!(
-            board_footprint(&fp),
-            Err(FootprintResolveError::Unconvertible {
-                what,
-                value: value.into()
-            })
-        );
-    }
+    let plain = board_footprint(&library(vec![pad(
+        "1",
+        PadKind::Smd,
+        PadShape::Rect,
+        &["F.Cu"],
+    )]))
+    .unwrap();
+    let board = board_footprint(&fp).unwrap();
+    assert_eq!(board.pads.len(), 1);
+    assert_eq!(
+        (&board.graphics, &board.properties, &board.footprint_id),
+        (&plain.graphics, &plain.properties, &plain.footprint_id),
+        "nothing of the 3D model is copied into the board footprint"
+    );
+    assert!(board.unknown.is_empty() && board.unknown_columns.is_empty());
 }

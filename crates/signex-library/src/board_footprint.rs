@@ -3,11 +3,15 @@
 //! runs here; the footprint is what its last bake stored.
 //!
 //! Nothing is guessed. A layer token, pad shape, drill or pad setting the
-//! board cannot hold, and a footprint feature it has no place for (3D body,
-//! STEP model, anchor, pours and the like), refuse the whole footprint with
-//! [`FootprintResolveError::Unconvertible`]. The one exception: pad solder
-//! mask and paste margins (global and per side) are not carried, because the
-//! board model has no field for them yet; the board uses its own rules.
+//! board cannot hold, and a footprint feature it has no place for (anchor,
+//! pours and the like), refuse the whole footprint with
+//! [`FootprintResolveError::Unconvertible`]. Two things are not carried and
+//! do not refuse:
+//! - pad solder mask and paste margins (global and per side): the board model
+//!   has no field for them yet, so the board uses its own rules;
+//! - the 3D body and STEP model (maintainer decision, Caner, 2026-11-09): the
+//!   board footprint keeps `library_ref` to the library footprint, and the 3D
+//!   view reads the model from there. Nothing is copied, nothing is lost.
 //! Mapping rules:
 //! `docs/architecture/library-footprint-bindings.md`, "Board footprints".
 
@@ -19,7 +23,7 @@ use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
 use crate::primitive::footprint::{
-    Body3D, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
+    Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
 };
 
 /// The board form of `footprint`: top side, origin at (0, 0), rotation 0,
@@ -85,12 +89,6 @@ fn refuse_unheld_features(footprint: &Footprint) -> Result<(), FootprintResolveE
             "footprint anchor",
             format!("{:?}", footprint.anchor),
         ));
-    }
-    if footprint.body_3d != Body3D::default() {
-        return Err(unconvertible("footprint 3D body", "set"));
-    }
-    if let Some(step) = &footprint.step_attachment {
-        return Err(unconvertible("footprint STEP model", step.filename.clone()));
     }
     let features = [
         ("footprint copper pours", footprint.pours.len()),

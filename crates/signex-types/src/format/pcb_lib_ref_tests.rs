@@ -104,19 +104,35 @@ fn the_cell_is_library_colon_footprint_at_version() {
 fn a_library_identity_that_would_not_read_back_is_refused_on_save() {
     // An empty version writes `<lib>:<fp>@`, which the reader refuses.
     let empty = source(7, "");
-    assert_eq!(FootprintSourceRef::parse(&empty.to_string()), None);
+    let cell = empty.to_string();
+    assert_eq!(FootprintSourceRef::parse(&cell), None);
     let error = SnxPcb::new(board([None, Some(empty)]))
         .write_string()
         .unwrap_err();
+    let message = error.to_string();
     match error {
-        FormatError::NonFiniteField { block, row, field } => {
+        FormatError::UnwritableField {
+            block,
+            row,
+            field,
+            value,
+            ..
+        } => {
             assert_eq!(
-                (block.as_str(), row, field.as_str()),
-                ("footprints", 1, "lib_ref")
+                (block.as_str(), row, field.as_str(), value.as_str()),
+                ("footprints", 1, "lib_ref", cell.as_str())
             );
         }
         other => panic!("expected the save to be refused at lib_ref, got {other:?}"),
     }
+    // The message names the field and the value and says why, not a number.
+    assert!(
+        message.contains("lib_ref") && message.contains(&cell),
+        "{message}"
+    );
+    assert!(message.contains("cannot be saved"), "{message}");
+    assert!(message.contains("with a version"), "{message}");
+    assert!(!message.contains("non-finite"), "{message}");
 }
 
 #[test]

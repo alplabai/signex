@@ -480,9 +480,38 @@ fn split_layers(s: &str) -> Vec<String> {
 // Footprint / Pad / Segment / Via translation
 // ---------------------------------------------------------------------------
 
+/// Why a footprint row cannot be written.
+#[derive(Debug)]
+pub(in crate::format) enum FootprintRowError {
+    NonFinite(NonFiniteField),
+    /// The `lib_ref` cell would not read back; it holds the cell.
+    UnreadableLibRef(String),
+}
+
+impl From<NonFiniteField> for FootprintRowError {
+    fn from(e: NonFiniteField) -> Self {
+        Self::NonFinite(e)
+    }
+}
+
+impl FootprintRowError {
+    pub(in crate::format) fn at(self, block: &str, row: usize) -> FormatError {
+        match self {
+            Self::NonFinite(e) => super::non_finite_error(block, row, e),
+            Self::UnreadableLibRef(value) => FormatError::UnwritableField {
+                block: block.to_string(),
+                row,
+                field: LIB_REF_COLUMN.to_string(),
+                value,
+                why: "a library footprint must be <library uuid>:<footprint uuid>@<version> with a version".to_string(),
+            },
+        }
+    }
+}
+
 pub(in crate::format) fn footprint_to_row(
     fp: &Footprint,
-) -> Result<PcbFootprintRow, NonFiniteField> {
+) -> Result<PcbFootprintRow, FootprintRowError> {
     let unknown_columns = with_lib_ref_cell(
         with_link_cell(fp.unknown_columns.clone(), fp.schematic_link.as_ref()),
         fp.library_ref.as_ref(),
@@ -590,11 +619,11 @@ pub(in crate::format) const LIB_REF_COLUMN: &str = "lib_ref";
 fn with_lib_ref_cell(
     mut columns: UnknownColumns,
     library_ref: Option<&FootprintSourceRef>,
-) -> Result<UnknownColumns, NonFiniteField> {
+) -> Result<UnknownColumns, FootprintRowError> {
     if let Some(library_ref) = library_ref {
         let cell = library_ref.to_string();
         if FootprintSourceRef::parse(&cell).as_ref() != Some(library_ref) {
-            return Err(NonFiniteField(LIB_REF_COLUMN));
+            return Err(FootprintRowError::UnreadableLibRef(cell));
         }
         columns.set(LIB_REF_COLUMN, cell);
     }

@@ -139,6 +139,31 @@ fn a_row_without_a_footprint_an_unoffered_one_and_a_missing_one_are_refused() {
     );
 }
 
+/// Maintainer decision (Caner, 2026-11-09): a footprint with a 3D body and a
+/// STEP model converts, and the board reaches the model through `library_ref`.
+#[test]
+fn a_footprint_with_a_3d_model_resolves_and_keeps_its_library_ref() {
+    use crate::primitive::footprint::StepAttachment;
+    let (row, _, mut library) = fixture();
+    let default = row.footprint_ref.unwrap();
+    let fp = library.get_mut(&default).unwrap();
+    fp.body_3d.height_mm = 1.1;
+    fp.step_attachment = Some(StepAttachment {
+        content_hash: "cd".into(),
+        filename: "R0805.step".into(),
+        offset_xyz: [0.0; 3],
+        rotation_xyz: [0.0, 0.0, 90.0],
+    });
+    let resolved = resolve_part_footprint(&row, None, lookup(&library)).unwrap();
+    let source = FootprintSourceRef {
+        library: default.library_id,
+        footprint: default.uuid,
+        version: "1.4.0".into(),
+    };
+    assert_eq!(resolved.footprint.library_ref, Some(source.clone()));
+    assert_eq!(resolved.source, source);
+}
+
 #[test]
 fn a_library_footprint_with_an_empty_version_is_refused() {
     let (row, _, mut library) = fixture();
