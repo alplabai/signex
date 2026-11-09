@@ -1,4 +1,4 @@
-format = "snxsch/1"
+format = "snxsch/1.1"
 schematic_id = "00000000-0000-0000-0000-000000000000"
 version = 1
 generator = "signex-test"
@@ -78,7 +78,7 @@ date = "2026-07-18"
 revision = "A"
 title = "Regulator stage"
 
-[extras.sheet.lib_symbols.alpha]
+[extras.sheet.lib_symbols."alpha#ad7ce7a7"]
 id = "alpha"
 reference = "U"
 value = "alpha"
@@ -97,7 +97,7 @@ show_pin_numbers = true
 show_pin_names = true
 pin_name_offset = 0.0
 
-[extras.sheet.lib_symbols.middle]
+[extras.sheet.lib_symbols."middle#93fa79d8"]
 id = "middle"
 reference = "U"
 value = "middle"
@@ -116,7 +116,7 @@ show_pin_numbers = true
 show_pin_names = true
 pin_name_offset = 0.0
 
-[extras.sheet.lib_symbols.zeta]
+[extras.sheet.lib_symbols."zeta#ca505ceb"]
 id = "zeta"
 reference = "U"
 value = "zeta"

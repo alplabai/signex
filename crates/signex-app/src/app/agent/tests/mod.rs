@@ -96,9 +96,7 @@ pub(super) fn ask_raw(app: &mut Signex, input: Input) -> Value {
         input,
         reply,
     };
-    let _task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::Request(call),
-    )));
+    let _task = app.update(Message::Agent(AgentMsg::Request(call)));
     let line = answer
         .try_recv()
         .expect("the app did not drop the reply")

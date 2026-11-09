@@ -400,6 +400,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "close_active_document",
         "document_info",
         "read_document",
+        "query_pins",
         "apply_edits",
         "revert",
     ] {
@@ -426,6 +427,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "close_active_document",
                     "document_info",
                     "read_document",
+                    "query_pins",
                     "find_items",
                     "apply_edits",
                     "revert",

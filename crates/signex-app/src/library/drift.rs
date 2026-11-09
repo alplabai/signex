@@ -26,16 +26,12 @@ use signex_types::schematic::{LinkStamp, RowStamp};
 mod check;
 pub(crate) use check::PartSyncCheck;
 
-/// Stable content hash of a `LibSymbol` (FNV-1a 64 over the serde JSON of
-/// the in-memory value, whose field order is the struct's declaration
-/// order; the JSON is only a hash input, never stored). `LibSymbol` has no
-/// `PartialEq`, and `std`'s `DefaultHasher` is not stable across releases.
-pub fn content_hash(symbol: &LibSymbol) -> u64 {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-    let json = serde_json::to_vec(symbol).unwrap_or_default();
-    json.iter()
-        .fold(OFFSET, |h, b| (h ^ u64::from(*b)).wrapping_mul(PRIME))
+/// Whether the library's current body is a different version from the
+/// embedded one. The one rule versioning uses (`LibSymbol::same_version`), so
+/// a body that differs only by `-0.0` or float noise is no drift: Update
+/// would be a no-op and the row could never clear.
+fn is_newer_version(fresh: &LibSymbol, embedded: &LibSymbol) -> bool {
+    !fresh.same_version(embedded)
 }
 
 /// A mounted library the worker may read.
@@ -53,6 +49,10 @@ pub struct DriftReport {
     /// Per sheet: the `lib_id`s whose embedded copy differs from the
     /// library's current symbol.
     pub sheets: Vec<(PathBuf, BTreeSet<String>)>,
+    /// Per sheet: the embedded body versions (`lib_symbols` keys) that differ
+    /// from the library's current symbol. A placed symbol is on an older
+    /// version when its `body_key` is among them.
+    pub stale_bodies: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` for every entry whose library is
     /// mounted and whose symbol was readable.
     pub names: HashMap<String, String>,
@@ -72,9 +72,10 @@ pub struct DriftReport {
     pub generation: u64,
 }
 
-/// One sheet's embedded entries: `(sheet path, [(lib_id, embedded copy)])`.
+/// One sheet's embedded entries: `(sheet path, [(body_ref, lib_id of an instance drawing with it, embedded copy)])`,
+/// only the bodies some symbol on the sheet draws with.
 /// The copies are cloned on the UI thread and hashed in the worker.
-pub type SheetEntries = (PathBuf, Vec<(String, LibSymbol)>);
+pub type SheetEntries = (PathBuf, Vec<(String, String, LibSymbol)>);
 
 /// One sheet's library-backed parts: `(sheet path, [(lib_id, stamp)])`, to
 /// compare with their rows (#1867).
@@ -117,7 +118,12 @@ pub fn compute_drift(
     let mut removed: HashSet<String> = HashSet::new();
     for (sheet, entries) in sheets {
         let mut drifted = BTreeSet::new();
-        for (lib_id, embedded) in entries {
+        for (body_key, instance_lib_id, embedded) in entries {
+            // Entries are versions of a library symbol: judge each against
+            // the library's current one.
+            // The library symbol is the one an instance names, not what the key
+            // spells: a hand-edited or re-keyed entry may not spell it.
+            let lib_id = instance_lib_id;
             let Some((library_id, symbol_id)) = split_lib_id(lib_id) else {
                 continue;
             };
@@ -165,8 +171,13 @@ pub fn compute_drift(
                 continue;
             };
             report.names.insert(lib_id.clone(), name.clone());
-            if content_hash(fresh) != content_hash(embedded) {
+            if is_newer_version(fresh, embedded) {
                 drifted.insert(lib_id.clone());
+                report
+                    .stale_bodies
+                    .entry(sheet.clone())
+                    .or_default()
+                    .insert(body_key.clone());
             }
         }
         if let Some((_, placed)) = parts.iter().find(|(p, _)| p == sheet) {
@@ -327,6 +338,9 @@ pub struct ApplyInput {
     pub tracks_pending: bool,
     /// Per `lib_id`, the instances to stamp.
     pub wanted: Vec<(String, Vec<ApplyStamp>)>,
+    /// `Some`: move only the parts these symbols belong to ("Only this
+    /// one"); `None`: every instance of the library symbol on the sheet.
+    pub only: Option<Vec<Uuid>>,
 }
 
 /// Every instance of `lib_id` on `doc` that has a library row, as worker
@@ -410,6 +424,7 @@ pub fn apply_input(
         scan_failed: state.scan_failed,
         tracks_pending: true,
         wanted,
+        only: None,
     })
 }
 
@@ -458,6 +473,8 @@ pub struct SymbolsRead {
     /// The worker itself failed (panicked); logged on completion.
     pub problem: Option<String>,
     pub reads: Vec<SymbolRead>,
+    /// See [`ApplyInput::only`].
+    pub only: Option<Vec<Uuid>>,
 }
 
 impl SymbolsRead {
@@ -471,6 +488,7 @@ impl SymbolsRead {
             tracks_pending: input.tracks_pending,
             problem: Some(problem),
             reads: Vec::new(),
+            only: input.only.clone(),
         }
     }
 }
@@ -763,6 +781,7 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
         tracks_pending: input.tracks_pending,
         problem: None,
         reads,
+        only: input.only,
     }
 }
 
@@ -813,6 +832,9 @@ pub struct DriftState {
     pub generation: u64,
     /// Per sheet: the `lib_id`s whose embedded copy has drifted.
     pub drifted: HashMap<PathBuf, BTreeSet<String>>,
+    /// Per sheet: the embedded body versions (`lib_symbols` keys) older than
+    /// the library's current symbol; per-instance drift (#2209).
+    pub stale_bodies: HashMap<PathBuf, BTreeSet<String>>,
     /// Per sheet: the `lib_id`s whose library symbol was deleted (#1845).
     pub missing: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
@@ -826,6 +848,14 @@ pub struct DriftState {
 impl DriftState {
     pub fn is_drifted(&self, sheet: &Path, lib_id: &str) -> bool {
         self.drifted.get(sheet).is_some_and(|d| d.contains(lib_id))
+    }
+
+    /// Whether the placed symbol draws with an embedded version older than
+    /// the library's current one.
+    pub fn is_stale_body(&self, sheet: &Path, body_key: &str) -> bool {
+        self.stale_bodies
+            .get(sheet)
+            .is_some_and(|d| d.contains(body_key))
     }
 
     pub fn is_missing(&self, sheet: &Path, lib_id: &str) -> bool {
@@ -866,9 +896,14 @@ mod tests {
     }
 
     #[test]
-    fn hash_is_stable_and_content_sensitive() {
-        assert_eq!(content_hash(&sym("a")), content_hash(&sym("a")));
-        assert_ne!(content_hash(&sym("a")), content_hash(&sym("b")));
+    fn a_body_differing_only_by_negative_zero_is_not_drift() {
+        let mut a = sym("a");
+        let mut b = a.clone();
+        a.pin_name_offset = 0.0;
+        b.pin_name_offset = -0.0;
+        assert!(!is_newer_version(&a, &b));
+        b.description = "b".into();
+        assert!(is_newer_version(&a, &b));
     }
 
     #[test]
@@ -913,8 +948,11 @@ mod tests {
     #[test]
     fn an_unopenable_library_is_reported_once_for_all_its_placed_parts() {
         let library = Uuid::now_v7();
-        let entries: Vec<(String, LibSymbol)> = (0..40)
-            .map(|_| (format!("{library}:{}", Uuid::now_v7()), sym("a")))
+        let entries: Vec<(String, String, LibSymbol)> = (0..40)
+            .map(|_| {
+                let id = format!("{library}:{}", Uuid::now_v7());
+                (id.clone(), id, sym("a"))
+            })
             .collect();
         let sheets = vec![(PathBuf::from("/tmp/a.snxsch"), entries)];
         let libs = vec![MountedLibrary {

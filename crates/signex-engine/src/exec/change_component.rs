@@ -122,7 +122,7 @@ fn unit_preview(
     sym: &Symbol,
     new_drawing: &LibSymbol,
 ) -> ComponentChangePreview {
-    let old_pins = shown_pins(doc.lib_symbols.get(&sym.lib_id), sym);
+    let old_pins = shown_pins(doc.body_of(sym), sym);
     let new_pins = shown_pins(Some(new_drawing), sym);
     let mapping = map_pins(&old_pins, &new_pins);
     let xform = SymbolTransform::from_symbol(sym);
@@ -219,10 +219,7 @@ pub fn change_component_preview(
     if units.is_empty() {
         return ComponentChangePreview::default();
     }
-    let new_drawing = doc
-        .lib_symbols
-        .get(&replacement.lib_symbol.id)
-        .unwrap_or(&replacement.lib_symbol);
+    let new_drawing = &replacement.lib_symbol;
     let gate = connected_points(doc);
     let mut preview = ComponentChangePreview::default();
     for unit in &units {
@@ -308,6 +305,9 @@ impl Engine {
         replacement: ComponentReplacement,
     ) -> Result<CommandResult, EngineError> {
         let new_id = replacement.lib_symbol.id.clone();
+        // Refuse a body-ref collision first, even when the body is already
+        // embedded: a different body under the ref is never drawn silently.
+        let new_ref = self.document.check_body(&replacement.lib_symbol)?;
         let doc = &self.document;
         let units: Vec<Uuid> = placed_units(doc, symbol_id)
             .iter()
@@ -316,11 +316,8 @@ impl Engine {
         if units.is_empty() {
             return Ok(CommandResult::unchanged());
         }
-        let registered = doc.lib_symbols.contains_key(&new_id);
-        let drawing = doc
-            .lib_symbols
-            .get(&new_id)
-            .unwrap_or(&replacement.lib_symbol);
+        let registered = doc.lib_symbols.contains_key(&new_ref);
+        let drawing = &replacement.lib_symbol;
         let placed = placed_units(doc, symbol_id);
         let gone = missing_units(&placed, drawing);
         if !gone.is_empty() {
@@ -328,11 +325,12 @@ impl Engine {
         }
         let mut updated: Vec<Symbol> = Vec::new();
         for sym in &placed {
-            let old_pins = shown_pins(doc.lib_symbols.get(&sym.lib_id), sym);
+            let old_pins = shown_pins(doc.body_of(sym), sym);
             let new_pins = shown_pins(Some(drawing), sym);
             let mapping = map_pins(&old_pins, &new_pins);
             let mut next = (*sym).clone();
             next.lib_id = new_id.clone();
+            next.body_ref = new_ref.clone();
             next.library_id = replacement.library_id;
             next.row_id = replacement.row_id;
             next.library_version = replacement.library_version.clone();
@@ -364,9 +362,7 @@ impl Engine {
             return Ok(CommandResult::unchanged());
         }
         if !registered {
-            self.document
-                .lib_symbols
-                .insert(new_id, replacement.lib_symbol);
+            self.document.embed_body(replacement.lib_symbol)?;
         }
         for next in updated {
             if let Some(slot) = self

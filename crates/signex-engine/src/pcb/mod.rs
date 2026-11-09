@@ -18,6 +18,8 @@ mod items;
 #[cfg(test)]
 mod engine_tests;
 #[cfg(test)]
+mod pad_shape_tests;
+#[cfg(test)]
 mod tests;
 
 pub use command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};

@@ -78,6 +78,8 @@ mod pcb_layer_tests;
 #[cfg(test)]
 mod pcb_lock_name_tests;
 #[cfg(test)]
+mod pcb_pad_shape_tests;
+#[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
@@ -129,13 +131,21 @@ use tsv::{parse_optional_block, write_tsv_section};
 /// Current `.snxsch` format version. The token is `<kind>/<major>[.<minor>]`;
 /// see `version.rs` for the load/save policy. A major bump is a wire-format
 /// break: older Signex versions refuse to open the file.
-pub const SNXSCH_FORMAT_V1: &str = "snxsch/1";
+///
+/// 1.1 (#2209): `lib_symbols` is keyed by body ref (`<lib_id>#<hash>`) and a
+/// symbol names its body in `body_ref`. A 1.0 build reads that table by
+/// `lib_id` and would show parts without pins, so 1.0 builds open 1.1 files
+/// read-only (`is_newer_minor`) instead.
+pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
-/// `layer_types`. 1.2: the stackup carries `layer_ids`. Builds that predate
-/// the policy refuse 1.1 outright; 1.1 builds open 1.2 files read-only.
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.2";
+/// `layer_types`. 1.2: the stackup carries `layer_ids`. 1.3: pads may
+/// carry a `rotation` column (their own turn), `trapezoid` and `custom` pad
+/// shapes are gone, and an unknown shape token or a roundrect ratio outside
+/// `0..=0.5` is a load error. Builds that predate the policy refuse 1.1
+/// outright; a build opens a file one minor newer than itself read-only.
+pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.3";
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -620,7 +630,10 @@ impl SnxSchematic {
                 load_repairs: Vec::new(),
             },
         };
+        sheet.upgrade_unversioned_bodies();
+        let body_repairs = sheet.repair_dangling_body_refs();
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
+        sheet.unknown.load_repairs.splice(0..0, body_repairs);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
 

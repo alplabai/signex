@@ -12,7 +12,6 @@ pub mod net;
 pub mod net_class;
 pub mod numeric;
 pub mod object_id;
-pub mod pad_outline;
 pub mod pcb;
 pub mod pcb_layer;
 pub mod project;

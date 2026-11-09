@@ -78,6 +78,7 @@ mod tests {
             unknown: Default::default(),
             uuid: uuid::Uuid::nil(),
             lib_id: String::new(),
+            body_ref: String::new(),
             reference: String::new(),
             value: String::new(),
             footprint: String::new(),

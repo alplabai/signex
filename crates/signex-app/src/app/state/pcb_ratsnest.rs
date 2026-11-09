@@ -93,6 +93,7 @@ mod tests {
                 name: "N1".into(),
             }),
             roundrect_ratio: 0.0,
+            rotation: 0.0,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
