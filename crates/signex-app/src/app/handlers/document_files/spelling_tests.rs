@@ -292,8 +292,10 @@ fn a_parked_pcb_holds_its_spelling_for_a_case_variant() {
     app.document_state.projects[0].case_probed = true;
     app.document_state.projects[0].case_decided = true;
     let held = PathBuf::from("/w/proj/Board.snxpcb");
-    app.document_state
-        .park_pcb_board(held.clone(), super::save_async_tests::empty_board());
+    app.document_state.park_pcb_board(
+        held.clone(),
+        signex_engine::pcb::BoardEngine::new(super::save_async_tests::empty_board(), 1),
+    );
     assert_eq!(
         app.held_spelling(Path::new("/w/proj/board.snxpcb")),
         Some(held),

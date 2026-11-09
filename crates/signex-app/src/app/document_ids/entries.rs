@@ -186,8 +186,10 @@ impl Signex {
             ));
         }
         for tab in &docs.tabs {
-            if let (TabKind::Pcb, Some(TabDocument::Pcb(board))) = (&tab.kind, &tab.cached_document)
+            if let (TabKind::Pcb, Some(TabDocument::Pcb(engine))) =
+                (&tab.kind, &tab.cached_document)
             {
+                let board = engine.board();
                 entries.push(self.entry_of_held(
                     DocumentKey::Pcb(tab.path.clone()),
                     DocumentId::from_uuid(board.uuid),
@@ -200,7 +202,8 @@ impl Signex {
         }
         // A board parked by its closed dirty tab is still a loaded, dirty
         // document: it holds the unsaved edits (#2149).
-        for (path, board) in &docs.parked_pcb_boards {
+        for (path, engine) in &docs.parked_pcb_boards {
+            let board = engine.board();
             entries.push(self.entry_of_held(
                 DocumentKey::Pcb(path.clone()),
                 DocumentId::from_uuid(board.uuid),

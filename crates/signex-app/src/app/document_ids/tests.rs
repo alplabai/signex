@@ -1015,7 +1015,9 @@ fn parked_board(app: &mut Signex, path: &Path, id: uuid::Uuid) {
         .iter_mut()
         .find(|t| t.path == path)
         .unwrap();
-    tab.cached_document = Some(crate::app::TabDocument::Pcb(board_with(id, 2.4)));
+    tab.cached_document = Some(crate::app::TabDocument::Pcb(
+        signex_engine::pcb::BoardEngine::new(board_with(id, 2.4), 1),
+    ));
     app.document_state.mark_document_dirty(path);
     let index = app
         .document_state
@@ -1061,8 +1063,13 @@ fn a_parked_board_is_listed_loaded_and_dirty_and_read_with_its_unsaved_edits() {
         .parked_pcb_boards
         .get_mut(&board)
         .unwrap()
-        .vias
-        .push(via);
+        .execute(signex_engine::pcb::BoardCommand::RestoreItems {
+            items: vec![signex_engine::pcb::RemovedItem {
+                index: 0,
+                item: signex_engine::pcb::BoardItem::Via(via),
+            }],
+        })
+        .unwrap();
     let found = headless(
         &mut app,
         "find_items",
@@ -1084,7 +1091,10 @@ fn a_copy_opened_while_a_board_is_parked_does_not_take_its_id() {
 
     app.open_pcb_tab(b.clone(), "Copy".into(), board_with(uid(900), 1.6));
 
-    assert_eq!(app.document_state.parked_pcb_boards[&a].uuid, uid(900));
+    assert_eq!(
+        app.document_state.parked_pcb_boards[&a].board().uuid,
+        uid(900)
+    );
     let copy = app
         .document_state
         .pcb_board(&b)
@@ -1156,11 +1166,14 @@ fn a_parked_board_that_repeats_an_id_is_given_a_new_one() {
         .parked_pcb_boards
         .get_mut(&parked)
         .unwrap()
-        .uuid = uid(901);
+        .reassign_document_id(uid(901));
 
     let repaired = app.reconcile_document_ids();
 
     assert_eq!(repaired.len(), 1, "{repaired:?}");
-    assert_ne!(app.document_state.parked_pcb_boards[&parked].uuid, uid(901));
+    assert_ne!(
+        app.document_state.parked_pcb_boards[&parked].board().uuid,
+        uid(901)
+    );
     assert_eq!(app.document_state.pcb_board(&first).unwrap().uuid, uid(901));
 }

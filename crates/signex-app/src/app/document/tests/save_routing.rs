@@ -79,7 +79,10 @@ fn setup(kind: Kind, project_dirty: bool, missing: bool) -> Fx {
     std::fs::create_dir(dir.path().join("lib.snxlib")).unwrap();
     let (mut app, mut t) = fixture(dir.path(), kind, true);
     if matches!(kind, Kind::Pcb) {
-        t.cached_document = Some(TabDocument::Pcb(board()));
+        t.cached_document = Some(TabDocument::Pcb(signex_engine::pcb::BoardEngine::new(
+            board(),
+            1,
+        )));
     }
     let project = app.document_state.projects[0].path.clone();
     std::fs::write(&project, OLD).unwrap();
