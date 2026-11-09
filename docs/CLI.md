@@ -49,9 +49,17 @@ document id (the hyphenated uuid, as `list_documents` prints it) or a path. A
 `document` given as a path is confined and refused outside the project like a
 `path`; an id is not a path and is never confined. A run never falls back to
 the active document. `list_documents`, `document_info`, `resolve`,
-`find_items` and `read_document` are queries: their result line is `answered`
-with the answer in `data`. `open_document` and `new_document` answer with the
-new document's `{id, path, kind}`.
+`find_items`, `read_document` and `query_pins` are queries: their result line is
+`answered` with the answer in `data`. `query_pins document=<doc> designator=U1`
+answers with `pins`, one entry per pin of every placed unit of that part
+(`number`, `name`, `electrical_type`, `hidden`, `unit`, `shared`, `position` as
+`[x, y]` in mm; `shared` is true for a pin every unit of a multi-unit part
+carries, which has an entry at each placed unit's tip). The designator is the
+one the netlist prints, matched exactly. An unknown or ambiguous designator, a
+power port, a document that is not a schematic or one that cannot be read, or
+a project whose sheet hierarchy is not read yet, is refused with the reason.
+`open_document` and `new_document` answer with the new document's
+`{id, path, kind}`.
 
 `apply_edits` takes a list of edit commands as its `edits` argument and
 applies them to one sheet as one undo step, and `revert` takes that step back;

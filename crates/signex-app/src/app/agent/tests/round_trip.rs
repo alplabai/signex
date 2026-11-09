@@ -64,3 +64,25 @@ fn every_request_is_logged_with_the_client_pid_the_command_and_the_outcome() {
     );
     assert_eq!(crate::diagnostics::logged_count(refused_line), refused + 1);
 }
+
+#[test]
+fn query_pins_answers_on_the_agent_channel_and_changes_nothing() {
+    use crate::app::handlers::menu::export::tests::current_placement::placed_twice_on_disk;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, _child) = placed_twice_on_disk(&dir);
+    app.ui_state.agent_connections_enabled = true;
+    app.agent.endpoint = Some("test-endpoint".into());
+    // The project's sheet hierarchy lands with its first probe.
+    crate::app::runtime::sheet_tree_tests::settle(&mut app, true);
+
+    let reply = call(
+        &mut app,
+        "query_pins",
+        json!({"document": top.display().to_string(), "designator": "R_TOP"}),
+    );
+
+    assert_eq!(reply["status"], "answered", "{reply}");
+    assert_eq!(reply["data"]["count"], 1, "{reply}");
+    assert_eq!(reply["changed"], json!([]));
+}

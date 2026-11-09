@@ -66,6 +66,7 @@ placement_properties	interactive	Edit properties of the object being placed or m
 previous_document_tab	window	Previous open document tab	-	General	-	-	Always	gui_only	-
 previous_grid	view	Previous grid	-	General	-	-	Always	gui_only	-
 print	file	Print	Print...	General	-	-	Always	gui_only	-
+query_pins	file	Query pins	-	General	-	-	Always	-	document:document,designator:text
 read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:text?,kinds:text?,region:text?,fields:text?,offset:text?,limit:text?
 redo	edit	Redo	-	General	-	-	Always	mutates_doc	document:document
 refresh_view	view	Refresh/redraw	-	General	-	-	Always	gui_only	-

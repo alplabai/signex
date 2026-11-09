@@ -790,6 +790,11 @@
     "category": "file"
   },
   {
+    "id": "query_pins",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "read_document",
     "group": "General",
     "category": "file"

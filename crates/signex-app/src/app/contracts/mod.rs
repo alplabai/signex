@@ -71,6 +71,10 @@ pub enum Message {
     /// Edit-command message family (ADR-0001 D3). Namespaced under
     /// `Message::Edit` and routed to `dispatch_edit_message`.
     Edit(EditMsg),
+    /// The local agent channel (#1924): an agent's request on a project's
+    /// documents, or the listener reporting. Routed to
+    /// `dispatch_agent_message`.
+    Agent(crate::app::agent::AgentMsg),
     Selection(SelectionRequest),
     /// Keyboard-input family (ADR-0001 D3): Esc, unclaimed keys, and the
     /// footprint-editor mode shortcut. Routed to `dispatch_input_message`.
@@ -173,23 +177,85 @@ pub use state::*;
 
 #[cfg(test)]
 mod tests {
-    /// ADR-0001 D3: the root `Message` stays a thin router over namespaced
-    /// sub-enums. A new flat leaf must join a family instead.
-    #[test]
-    fn root_message_stays_namespaced() {
+    /// Last path segments that wrap a sub-enum although they carry none of the
+    /// usual suffixes. Empty today; add a name here rather than loosening the
+    /// suffix rule.
+    const SUB_ENUM_TYPES: &[&str] = &[];
+    const SUB_ENUM_SUFFIXES: &[&str] = &["Msg", "Message", "Event", "Request"];
+    /// Ratchet: flat leaves on the root `Message` may only go down.
+    const MAX_FLAT_LEAVES: usize = 2;
+    /// Sanity cap on all variants, so a wall of wrapped enums is still noticed.
+    const MAX_VARIANTS: usize = 60;
+
+    /// Is this variant line (one level of indent, first letter upper-case) a
+    /// flat leaf? Only a single-field tuple variant whose type names a message
+    /// sub-enum is namespaced; unit, struct and plain-value variants are leaves.
+    // shortcut: goes by name only (`*Msg`/`*Message`/`*Event`/`*Request` is trusted to be a
+    // sub-enum per house naming) and a variant wrapped across lines counts as a leaf (errs strict).
+    fn is_flat_leaf(line: &str) -> bool {
+        let rest = line.trim_start();
+        let Some(open) = rest.find('(') else {
+            return true;
+        };
+        if rest[..open].contains(['{', ',', ' ']) {
+            return true;
+        }
+        let Some(inner) = rest[open + 1..].trim_end().strip_suffix("),") else {
+            return true;
+        };
+        if inner.contains([',', '(', '<', '&']) {
+            return true;
+        }
+        let ty = inner.rsplit("::").next().unwrap_or(inner).trim();
+        !(SUB_ENUM_TYPES.contains(&ty) || SUB_ENUM_SUFFIXES.iter().any(|s| ty.ends_with(s)))
+    }
+
+    fn root_variant_lines() -> Vec<&'static str> {
         let src = include_str!("mod.rs");
         let start = src.find("pub enum Message {").expect("Message enum");
         let body = &src[start..];
         let end = body.find("\n}\n").expect("enum end");
-        let variants = body[..end]
+        body[..end]
             .lines()
             .filter(|l| {
                 l.starts_with("    ") && l[4..].starts_with(|c: char| c.is_ascii_uppercase())
             })
-            .count();
-        assert!(
-            variants <= 40,
-            "root Message has {variants} variants (max 40)"
+            .collect()
+    }
+
+    /// ADR-0001 D3: the root `Message` wraps one sub-enum per surface and
+    /// carries no flat leaf tail. A new flat leaf must join a family instead.
+    #[test]
+    fn root_message_stays_namespaced() {
+        let variants = root_variant_lines();
+        let leaves: Vec<_> = variants.iter().filter(|l| is_flat_leaf(l)).collect();
+        assert_eq!(
+            leaves.len(),
+            MAX_FLAT_LEAVES,
+            "root Message flat leaves are {leaves:?}: add none, and lower MAX_FLAT_LEAVES when a leaf is removed"
         );
+        assert!(
+            variants.len() <= MAX_VARIANTS,
+            "root Message has {} variants (max {MAX_VARIANTS})",
+            variants.len()
+        );
+    }
+
+    #[test]
+    fn the_flat_leaf_classifier_tells_leaves_from_sub_enum_wrappers() {
+        assert!(is_flat_leaf("    Noop,"));
+        assert!(is_flat_leaf("    Tab {"));
+        assert!(is_flat_leaf("    CanvasEventInWindow {"));
+        assert!(is_flat_leaf("    Count(usize),"));
+        assert!(is_flat_leaf("    Pair(UiMsg, u8),"));
+        assert!(is_flat_leaf("    Pair(u8, UiMsg),"));
+        assert!(is_flat_leaf("    Ref(&'static UiMsg),"));
+        assert!(is_flat_leaf("    Gen(Foo<Bar>::UiMsg),"));
+        assert!(is_flat_leaf("    Fun(fn(u8) -> UiMsg),"));
+        assert!(!is_flat_leaf("    Menu(MenuMessage),"));
+        assert!(!is_flat_leaf("    Ui(UiMsg),"));
+        assert!(!is_flat_leaf("    CanvasEvent(CanvasEvent),"));
+        assert!(!is_flat_leaf("    Selection(SelectionRequest),"));
+        assert!(!is_flat_leaf("    Agent(crate::app::agent::AgentMsg),"));
     }
 }
