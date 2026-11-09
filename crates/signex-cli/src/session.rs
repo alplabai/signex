@@ -9,11 +9,10 @@ use serde_json::Value;
 use signex_app::app::Signex;
 use signex_app::diagnostics;
 use signex_app::headless::{
-    ChangeSnapshot as Snapshot, CommandArgs, OperandValue, changed_between, messages_since,
+    ChangeSnapshot as Snapshot, CommandArgs, changed_between, messages_since,
     outcome_verdict as verdict,
 };
 use signex_app::io_ports::HeadlessAnswers;
-use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
@@ -135,8 +134,8 @@ impl Session {
         if let Err(reason) = self.authorize_edits(&mut approved) {
             return (Status::Refused, Some(reason), None);
         }
-        let (args, answers) = match operands_for(&approved) {
-            Ok(split) => split,
+        let args = match operands_for(&approved) {
+            Ok(args) => args,
             Err(reason) => return (Status::Refused, Some(reason), None),
         };
         // The last check before the app gets the paths.
@@ -169,7 +168,8 @@ impl Session {
         let Some(dialogs) = self.app.headless_answers() else {
             return (Status::Failed, Some("the app is not headless".into()), None);
         };
-        dialogs.replace_all(answers);
+        // No command is answered through a dialog: drop what an earlier one left.
+        dialogs.replace_all([]);
         let (outcome, task) = self.app.dispatch_command_headless(&approved.command, args);
         let settled = self.driver.settle(&mut self.app, task);
         let notice = self.app.document_state.error_notice.take();
@@ -280,42 +280,17 @@ impl Session {
     }
 }
 
-/// The operands of an approved command, read against its catalog descriptor,
-/// split into what is dispatched and the dialog answers. A command with a
-/// required path (open, save as, new) is a dialog in the GUI, so its path and
-/// `overwrite` go to the dialog and the command runs with none.
-fn operands_for(approved: &Approved) -> Result<(CommandArgs, Vec<(String, String)>), String> {
+/// The operands of an approved command, read against its catalog descriptor.
+/// Every command that declares operands runs them through its operand handler
+/// (open and new included), so none is turned into a dialog answer.
+fn operands_for(approved: &Approved) -> Result<CommandArgs, String> {
     let texts: Vec<String> = approved
         .operands
         .iter()
         .map(|(name, text)| format!("{name}={text}"))
         .collect();
     let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-    let args = CommandArgs::parse_operands(&approved.command, &refs).map_err(|e| e.to_string())?;
-    // A command that names its document takes its operands whole: `path` is
-    // then the target of `save_document_as`, not a dialog answer.
-    let names_document = approved
-        .meta
-        .operands
-        .iter()
-        .any(|operand| operand.kind == OperandKind::Document);
-    let is_dialog = !names_document
-        && approved
-            .meta
-            .operands
-            .iter()
-            .any(|operand| operand.required && operand.kind == OperandKind::Path);
-    if !is_dialog {
-        return Ok((args, Vec::new()));
-    }
-    let mut answers = Vec::new();
-    if let Some(OperandValue::Path(path)) = args.operand("path") {
-        answers.push(("path".to_string(), path.clone()));
-    }
-    if let Some(OperandValue::Bool(replace)) = args.operand("overwrite") {
-        answers.push(("overwrite".to_string(), replace.to_string()));
-    }
-    Ok((CommandArgs::none(), answers))
+    CommandArgs::parse_operands(&approved.command, &refs).map_err(|e| e.to_string())
 }
 
 /// A command whose only effect was a window the task driver dropped, or a
