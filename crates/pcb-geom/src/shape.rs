@@ -131,6 +131,34 @@ impl Shape {
         }
     }
 
+    /// The outline of a rectangle (4 corners) or an ellipse (`steps`
+    /// points), counter-clockwise, for drawing; empty for a disc or a track.
+    pub fn outline(&self, steps: usize) -> Vec<PointNm> {
+        match *self {
+            Shape::Rect { .. } => self.box_corners().to_vec(),
+            Shape::Ellipse {
+                center,
+                half_w,
+                half_h,
+                rotation_deg,
+            } => {
+                let (sin, cos) = sin_cos_deg(rotation_deg);
+                let steps = steps.max(8);
+                (0..steps)
+                    .map(|i| {
+                        let t = std::f64::consts::TAU * i as f64 / steps as f64;
+                        let local = PointNm::new(
+                            (half_w as f64 * t.cos()).round() as i64,
+                            (half_h as f64 * t.sin()).round() as i64,
+                        );
+                        rotate(local, sin, cos).plus(center)
+                    })
+                    .collect()
+            }
+            Shape::Disc { .. } | Shape::Capsule { .. } => Vec::new(),
+        }
+    }
+
     /// The corners of a rectangle or of an ellipse's frame box,
     /// counter-clockwise; for other shapes, of the bounding box.
     fn box_corners(&self) -> [PointNm; 4] {
@@ -158,7 +186,7 @@ impl Shape {
 }
 
 /// Whether a squared distance is at most `limit` (negative limits as 0).
-fn within(distance_sq: i128, limit: i64) -> bool {
+pub(crate) fn within(distance_sq: i128, limit: i64) -> bool {
     let limit = i128::from(limit.max(0));
     distance_sq <= limit * limit
 }
@@ -182,7 +210,7 @@ fn inside_ellipse(local: PointNm, half_w: i64, half_h: i64) -> bool {
 }
 
 /// The point of segment `a`–`b` nearest to `p`.
-fn closest_on_segment(a: PointNm, b: PointNm, p: PointNm) -> PointNm {
+pub(crate) fn closest_on_segment(a: PointNm, b: PointNm, p: PointNm) -> PointNm {
     let ab = b.minus(a);
     let len_sq = ab.dot(ab);
     let along = p.minus(a).dot(ab);
@@ -218,7 +246,7 @@ fn capsule_touches_rect(a: PointNm, b: PointNm, radius: i64, rect: &RectNm) -> b
 }
 
 /// Sign of the turn `a` → `b` → `c`: 1 left, -1 right, 0 collinear.
-fn orientation(a: PointNm, b: PointNm, c: PointNm) -> i8 {
+pub(crate) fn orientation(a: PointNm, b: PointNm, c: PointNm) -> i8 {
     match b.minus(a).cross(c.minus(a)) {
         0 => 0,
         v if v > 0 => 1,
@@ -231,7 +259,7 @@ fn on_segment(a: PointNm, b: PointNm, p: PointNm) -> bool {
 }
 
 /// Whether closed segments `p1`–`p2` and `q1`–`q2` share a point.
-fn segments_intersect(p1: PointNm, p2: PointNm, q1: PointNm, q2: PointNm) -> bool {
+pub(crate) fn segments_intersect(p1: PointNm, p2: PointNm, q1: PointNm, q2: PointNm) -> bool {
     let (d1, d2) = (orientation(q1, q2, p1), orientation(q1, q2, p2));
     let (d3, d4) = (orientation(p1, p2, q1), orientation(p1, p2, q2));
     if d1 * d2 < 0 && d3 * d4 < 0 {

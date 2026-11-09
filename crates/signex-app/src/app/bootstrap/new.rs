@@ -171,6 +171,7 @@ impl Signex {
         let window_controls_placement =
             crate::fonts::read_window_controls_placement_pref_from(prefs);
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
+        let agent_connections_enabled = crate::fonts::read_agent_connections_pref_from(prefs);
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let default_rule_profile = crate::fonts::read_default_rule_profile_pref_from(prefs);
@@ -352,6 +353,8 @@ impl Signex {
                 main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,
+                agent_connections_enabled,
+                preferences_draft_agent_connections_enabled: agent_connections_enabled,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
                 symbol_grid_style,
@@ -633,6 +636,8 @@ impl Signex {
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
                 pcb_canvases: std::collections::HashMap::new(),
+                pcb_selection: Default::default(),
+                pcb_ratsnest: Default::default(),
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,
@@ -693,6 +698,7 @@ impl Signex {
                 ..Default::default()
             },
             native_menu: Default::default(),
+            agent: crate::app::agent::AgentState::new(),
         };
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).

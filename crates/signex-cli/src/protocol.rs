@@ -60,31 +60,9 @@ fn operand_text(name: &str, value: &Value) -> Result<String, String> {
     signex_app::headless::operand_text(name, value)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Status {
-    /// The command ran and changed or did what it names.
-    Ran,
-    /// A query ran; its answer is in `data`.
-    Answered,
-    /// Nothing ran: the runner's policy or the app said no, with a reason.
-    Refused,
-    /// The command ran and did not succeed, or never finished.
-    Failed,
-}
-
-impl Status {
-    pub const fn is_ok(self) -> bool {
-        matches!(self, Self::Ran | Self::Answered)
-    }
-}
-
-/// One entry of the app's Messages log, as it was logged during a command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct MessageLine {
-    pub level: &'static str,
-    pub message: String,
-}
+/// The statuses and the log line are the app's: the running app's agent
+/// channel (#1924) answers with the same ones.
+pub use signex_app::headless::{MessageLine, Status};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResultLine {

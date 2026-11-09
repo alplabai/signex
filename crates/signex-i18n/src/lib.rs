@@ -52,6 +52,8 @@ define_ids! {
     PROPERTIES_LIBRARY_OLDER_INSTANCES = "properties-library-older-instances";
     PROPERTIES_LIBRARY_ONLY_THIS_ONE = "properties-library-only-this-one";
     PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP = "properties-library-only-this-one-tip";
+    PREFERENCES_AGENT_CONNECTIONS_LABEL = "preferences-agent-connections-label";
+    PREFERENCES_AGENT_CONNECTIONS_HELP = "preferences-agent-connections-help";
 }
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,

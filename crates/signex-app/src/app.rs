@@ -12,6 +12,7 @@ use crate::tab_bar::{self, TabMessage};
 use crate::toolbar::ToolMessage;
 
 mod actions;
+pub(crate) mod agent;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
@@ -71,7 +72,7 @@ pub use contracts::{
     EnableVersionControlOutcome, EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg,
     FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
     LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg,
-    ParameterManagerMsg, PasteIntent, PasteRequest, PreferencesMsg, PrintPreviewMsg,
+    ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg, PreferencesMsg, PrintPreviewMsg,
     ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
     ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
     RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
@@ -144,6 +145,10 @@ impl Signex {
         // And the symbol and footprint summaries of the selected library row.
         if let Some(read) = self.start_row_summary_read() {
             tasks.push(read);
+        }
+        // The projects an agent can reach are listed in the registry (#1924).
+        if let Some(registry) = self.sync_agent_registry() {
+            tasks.push(registry);
         }
         if tasks.len() == 1 {
             return tasks.pop().expect("one task");

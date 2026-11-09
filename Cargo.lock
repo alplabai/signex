@@ -5638,6 +5638,7 @@ dependencies = [
  "dirs",
  "fontdb 0.23.0",
  "futures",
+ "getrandom 0.4.2",
  "git2",
  "iced",
  "iced_aw",
@@ -5650,6 +5651,7 @@ dependencies = [
  "muda",
  "num-traits",
  "objc2",
+ "pcb-geom",
  "rfd",
  "same-file",
  "serde",
@@ -5895,6 +5897,7 @@ dependencies = [
 name = "signex-renderer"
 version = "26.11.0-rc.1"
 dependencies = [
+ "pcb-geom",
  "regex",
  "serde",
  "serde_json",

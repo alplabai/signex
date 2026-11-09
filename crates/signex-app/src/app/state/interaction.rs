@@ -28,6 +28,11 @@ pub struct InteractionState {
     /// its own camera, viewport and caches (#494). Populated and drained
     /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.
     pub pcb_canvases: std::collections::HashMap<iced::window::Id, PcbCanvas>,
+    /// Hover, selection and the cached spatial index of the board in view
+    /// (#2191).
+    pub pcb_selection: crate::pcb_canvas::PcbSelectionState,
+    /// The active board's ratsnest lines and the nets hidden from them.
+    pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,

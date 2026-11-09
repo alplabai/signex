@@ -119,6 +119,8 @@ impl Signex {
         self.ui_state.preferences_draft_window_controls_placement =
             self.ui_state.window_controls_placement;
         self.ui_state.preferences_draft_autosave_enabled = self.ui_state.autosave_enabled;
+        self.ui_state.preferences_draft_agent_connections_enabled =
+            self.ui_state.agent_connections_enabled;
         // #629 — the three Symbol Editor settings. Before they had
         // committed fields there was nothing to seed them from, so a
         // Discard left them showing (and rendering) the abandoned value.
@@ -327,6 +329,7 @@ impl Signex {
                 self.ui_state.window_controls_placement =
                     self.ui_state.preferences_draft_window_controls_placement;
                 self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;
+                self.commit_agent_connections_pref();
                 // #629 — the three Symbol Editor settings commit here like
                 // every other appearance draft, instead of writing
                 // themselves to disk the moment the picker moved.
@@ -520,6 +523,10 @@ impl Signex {
             }
             PrefMsg::DraftAutosaveEnabled(enabled) => {
                 self.ui_state.preferences_draft_autosave_enabled = enabled;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftAgentConnectionsEnabled(enabled) => {
+                self.ui_state.preferences_draft_agent_connections_enabled = enabled;
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftDragDirectionSelect(enabled) => {

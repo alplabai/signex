@@ -35,6 +35,7 @@ signex-widgets = { workspace = true }
 signex-i18n = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
+pcb-geom = { path = "../pcb-geom" }
 signex-net = { workspace = true }
 signex-output = { workspace = true }
 signex-library = { workspace = true, features = [
@@ -77,6 +78,9 @@ tokio = { workspace = true }
 # review).
 tempfile = "3"
 same-file = "1"
+# The agent channel's session token and boot id (#1924): OS randomness. Already
+# in the lock file at this version through `tempfile`.
+getrandom = "0.4"
 
 [features]
 # Redirects all four prefs resolvers (`fonts::prefs_path()`,
@@ -147,6 +151,12 @@ windows-sys = { version = "0.61", features = [
     # WM_SYSCOMMAND ourselves bypasses that timing window.
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
+    # The agent channel's named pipe (#1924): the current user's SID in the
+    # pipe's security descriptor, and the client's process token read at accept.
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
 ] }
 
 # NOT `[lints] workspace = true` — cargo rejects mixing inheritance with

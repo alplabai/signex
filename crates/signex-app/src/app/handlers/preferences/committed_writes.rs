@@ -18,6 +18,7 @@ impl Signex {
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
         let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
         let antialiasing = ui.antialiasing;
+        let agent_connections = ui.agent_connections_enabled;
         let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
             ui.grid_style,
             ui.annotate_undo,
@@ -71,6 +72,9 @@ impl Signex {
             }),
             write("autosave_enabled", move || {
                 crate::fonts::write_autosave_enabled_pref(autosave)
+            }),
+            write("agent_connections_enabled", move || {
+                crate::fonts::write_agent_connections_pref(agent_connections)
             }),
             write("antialiasing", move || {
                 crate::fonts::write_antialiasing_pref(antialiasing)

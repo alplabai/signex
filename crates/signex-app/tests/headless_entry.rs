@@ -58,8 +58,30 @@ fn probe() {
         "undo_depth_dispatch" => undo_depth_dispatch(),
         "net_colors" => net_colors(),
         "net_class_assign" => net_class_assign(),
+        "agent_pref_ignored" => agent_pref_ignored(),
         other => panic!("unknown scenario {other}"),
     }
+}
+
+#[test]
+fn a_headless_boot_never_listens_whatever_the_config_root_says() {
+    run_probe("agent_pref_ignored");
+}
+
+/// #1924: "Allow agent connections" is on in the config root, and a headless
+/// run still keeps it off: it owns no listener.
+fn agent_pref_ignored() {
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    std::fs::write(
+        isolated.path().join("prefs.json"),
+        r#"{"agent_connections_enabled":true}"#,
+    )
+    .expect("seed prefs");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    let (app, _boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+    assert!(!app.ui_state.agent_connections_enabled);
+    assert!(!app.ui_state.preferences_draft_agent_connections_enabled);
 }
 
 #[test]
