@@ -224,6 +224,7 @@ pub(super) fn plain_board() -> PcbBoard {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        rotation: 0.0,
         net_locked: false,
     };
     let footprint = Footprint {

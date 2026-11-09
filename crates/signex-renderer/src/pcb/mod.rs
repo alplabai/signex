@@ -14,13 +14,14 @@ use signex_gfx::style::ColorSlot;
 use signex_types::pcb::{
     Footprint, PCB_DEFAULT_PAD_SIZE_MM, PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM,
     PCB_DEFAULT_VIA_DRILL_MM, PCB_TRACK_MIN_MM, PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM, Pad,
-    PadShape, PadType, PcbBoard, Segment, Via, Zone,
+    PadType, PcbBoard, Segment, Via, Zone,
 };
 use signex_types::schematic::Point;
 use signex_types::violation::{DrcViolationType, Severity};
 use std::collections::HashMap;
 
-const PAD_ELLIPSE_SEGMENTS: usize = 18;
+/// Points per quarter turn of a round pad part.
+const PAD_ARC_STEPS: usize = 5;
 const MARKER_POLYGON_SEGMENTS: usize = 14;
 const RATSNEST_STYLE_DASHED: u32 = 1;
 
@@ -44,9 +45,8 @@ pub struct ViaInput {
 pub struct PadInput {
     pub center: [f32; 2],
     pub size_mm: [f32; 2],
-    /// Counter-clockwise turn of the pad's own axes (the footprint's rotation).
-    pub rotation_deg: f32,
-    pub shape: PadShape,
+    /// The copper outline in board mm, counter-clockwise, from `pcb-geom`.
+    pub outline: Vec<[f32; 2]>,
     pub pad_type: PadType,
 }
 
