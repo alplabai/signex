@@ -23,10 +23,7 @@ fn every_sample_power_port_shows_its_net_name_and_no_designator() {
             port.value
         );
         assert!(
-            sheet
-                .lib_symbols
-                .get(&port.lib_id)
-                .is_some_and(|lib| !lib.pins.is_empty()),
+            sheet.body_of(port).is_some_and(|lib| !lib.pins.is_empty()),
             "power port {} needs its pin or it joins no net by name",
             port.value
         );

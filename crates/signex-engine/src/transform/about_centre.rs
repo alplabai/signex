@@ -411,7 +411,7 @@ impl Engine {
             .iter_mut()
             .filter(|s| ids.contains(&s.uuid))
         {
-            if let Some(lib) = snapshot.lib_symbols.get(&symbol.lib_id) {
+            if let Some(lib) = snapshot.body_of(symbol) {
                 autoplace_fields(symbol, lib, &snapshot);
             }
         }

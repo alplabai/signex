@@ -1,4 +1,5 @@
 mod pcb_layer_corpus;
+mod pre_2209_upgrade;
 mod round_trip_corpus;
 mod round_trip_project_corpus;
 mod sheet_size_round_trip;
