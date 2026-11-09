@@ -299,6 +299,39 @@ fn resolve_an_unknown_uuid_is_answered_as_unknown() {
     assert!(refusal(&mut app, "resolve", &["id=not-a-uuid"]).contains("not an id"));
 }
 
+/// #2209: a placed part's body is found by its version ref, so a pin read
+/// from a query carries the library pin's name, not null.
+#[test]
+fn resolve_a_pin_names_it_from_the_versioned_body() {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle};
+    let mut body: LibSymbol =
+        serde_json::from_value(serde_json::json!({ "id": "Amp:LM358" })).expect("lib symbol");
+    body.pins.push(LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            length: 0.0,
+            name: "Pin_1".into(),
+            number: "1".into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    });
+    let mut doc = sheet(SHEET);
+    let key = doc.embed_body(body).expect("embeds");
+    doc.symbols[0].body_ref = key;
+    let mut app = app_with(&[]);
+    fixture::add_sheet_with(&mut app, &path("a.snxsch"), doc);
+    app.document_state.mark_document_clean(&path("a.snxsch"));
+    let pin = answer(&mut app, "resolve", &[&format!("id={}", uid(U3_PIN_1))]);
+    assert_eq!(element(&pin)["name"], "Pin_1");
+}
+
 #[test]
 fn resolve_each_kind_of_element_gives_its_document_and_human_fields() {
     let mut app = app_with(&[("a.snxsch", SHEET)]);

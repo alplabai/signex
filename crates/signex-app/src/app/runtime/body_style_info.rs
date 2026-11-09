@@ -9,7 +9,7 @@ use uuid::Uuid;
 /// is not a placed symbol with an embedded library symbol.
 pub(super) fn body_style_info(sheet: &SchematicSheet, symbol: Uuid) -> Option<(String, String)> {
     let sym = sheet.symbols.iter().find(|s| s.uuid == symbol)?;
-    let lib = sheet.lib_symbols.get(&sym.lib_id)?;
+    let lib = sheet.body_of(sym)?;
     let has_alternate = lib.has_alternate_body(sym.unit);
     let state = match (sym.body_style, has_alternate) {
         (BodyStyle::Alternate, true) => BODY_ALTERNATE,

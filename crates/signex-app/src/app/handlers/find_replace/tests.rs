@@ -344,7 +344,7 @@ fn set_replacement(app: &mut Signex, text: &str) {
 
 fn make_newer_minor(path: &Path) {
     let text = std::fs::read_to_string(path).unwrap();
-    let newer = text.replacen("format = \"snxsch/1\"", "format = \"snxsch/1.7\"", 1);
+    let newer = text.replacen("format = \"snxsch/1.1\"", "format = \"snxsch/1.7\"", 1);
     assert_ne!(text, newer, "the header was rewritten");
     std::fs::write(path, newer).unwrap();
 }

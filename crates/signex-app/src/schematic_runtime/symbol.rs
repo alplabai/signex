@@ -29,7 +29,7 @@ pub(super) fn symbol_geometry(
 ) -> (Vec<SymbolPrimitive>, Aabb) {
     let family = resolve_family(None, snapshot.font_family.as_deref());
     symbol_geometry_of(
-        snapshot.lib_symbols.get(&symbol.lib_id),
+        snapshot.body_of(symbol),
         symbol,
         family.as_deref(),
         defaults,
@@ -74,7 +74,7 @@ pub(crate) fn symbols_without_geometry(snapshot: &SchematicRenderSnapshot) -> Ve
         .iter()
         .filter(|symbol| {
             let lowered = lower_placed_symbol(
-                snapshot.lib_symbols.get(&symbol.lib_id),
+                snapshot.body_of(symbol),
                 symbol,
                 &SchematicDefaults::BUILT_IN,
             );

@@ -253,15 +253,15 @@ impl Signex {
         // library", so content and version move together and a connectivity
         // refusal leaves both. No undo step: opening a sheet must not leave
         // something for the first Ctrl+Z to revert.
-        for (lib_id, (fresh, stamps)) in personal_apply {
+        for (_, (fresh, stamps)) in personal_apply {
             // A late mount can land after the user's first edit, which the
             // unrecorded path refuses, so it becomes one normal undo step.
             any_failed |= !self.adopt_library_symbol(
                 &schematic_path,
-                &lib_id,
                 fresh,
                 stamps,
                 Vec::new(),
+                None,
                 only.is_some(),
             );
         }
@@ -560,6 +560,7 @@ impl Signex {
             tracks_pending,
             problem,
             reads,
+            only,
         } = read;
         let same_open = self
             .document_state
@@ -578,7 +579,7 @@ impl Signex {
             }
             return Task::none();
         }
-        let all_applied = self.apply_reads(&sheet, reads) && problem.is_none();
+        let all_applied = self.apply_reads(&sheet, reads, only.as_deref()) && problem.is_none();
         // The drift rows adopted above no longer show on the selection.
         self.update_selection_info();
         if !tracks_pending {
@@ -593,7 +594,12 @@ impl Signex {
 
     /// Adopt each read's symbol on `sheet` and report what was left alone.
     /// `true` when every `lib_id` landed with every instance stamped.
-    fn apply_reads(&mut self, sheet: &std::path::Path, reads: Vec<SymbolRead>) -> bool {
+    fn apply_reads(
+        &mut self,
+        sheet: &std::path::Path,
+        reads: Vec<SymbolRead>,
+        only: Option<&[uuid::Uuid]>,
+    ) -> bool {
         let mut all_applied = true;
         for r in reads {
             for why in &r.skipped {
@@ -623,8 +629,14 @@ impl Signex {
                     }
                     let part_syncs = self.revalidated_part_syncs(sheet, part_syncs, &mut stamps);
                     let lines: Vec<String> = part_syncs.iter().flat_map(PartSync::lines).collect();
-                    let landed = self
-                        .adopt_library_symbol(sheet, &r.lib_id, fresh, stamps, part_syncs, true);
+                    let landed = self.adopt_library_symbol(
+                        sheet,
+                        fresh,
+                        stamps,
+                        part_syncs,
+                        only.map(<[uuid::Uuid]>::to_vec),
+                        true,
+                    );
                     if landed {
                         lines.iter().for_each(crate::diagnostics::log_info);
                     }
@@ -723,17 +735,20 @@ impl Signex {
     fn adopt_library_symbol(
         &mut self,
         sheet: &std::path::Path,
-        lib_id: &str,
         fresh: LibSymbol,
         stamps: Vec<(uuid::Uuid, LinkStamp)>,
         part_syncs: Vec<PartSync>,
+        only: Option<Vec<uuid::Uuid>>,
         record_history: bool,
     ) -> bool {
+        let only_all = only.is_none();
+        let lib_id = fresh.id.clone();
         // The copy, the version stamps and the parts' footprint / MPN /
         // manufacturer edits are one undo step (#1867).
         let mut commands = vec![signex_engine::Command::ReplaceLibSymbol {
             lib_symbol: fresh,
             library_versions: stamps,
+            only,
         }];
         if record_history {
             commands.extend(part_syncs.iter().flat_map(PartSync::commands));
@@ -759,8 +774,10 @@ impl Signex {
         if refused {
             return false;
         }
-        if let Some(d) = self.library.drift.drifted.get_mut(sheet) {
-            d.remove(lib_id);
+        // Instances left on an older version (an "Only this one" update)
+        // keep the sheet's pending update; the recheck below re-decides it.
+        if only_all && let Some(d) = self.library.drift.drifted.get_mut(sheet) {
+            d.remove(&lib_id);
         }
         self.library.drift.check_pending = true;
         true
