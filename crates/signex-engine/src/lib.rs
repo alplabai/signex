@@ -220,6 +220,10 @@ pub struct Engine {
     /// compared only the nets a move reaches.
     #[cfg(test)]
     full_scan_guard: bool,
+    /// Test switch: the rubber-band pass asks every question of the whole
+    /// sheet, as it did before it asked only of what is near.
+    #[cfg(test)]
+    full_scan_follow: bool,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -245,6 +249,9 @@ pub struct MovePreview {
     /// Test switch: the net guard compares over every net.
     #[cfg(test)]
     full_scan_guard: bool,
+    /// Test switch: the rubber-band pass scans the whole sheet.
+    #[cfg(test)]
+    full_scan_follow: bool,
 }
 
 impl MovePreview {
@@ -261,6 +268,8 @@ impl MovePreview {
             full_scan_moves: false,
             #[cfg(test)]
             full_scan_guard: false,
+            #[cfg(test)]
+            full_scan_follow: false,
             sheet: std::sync::Arc::new(sheet.clone()),
         }
     }
@@ -323,6 +332,7 @@ impl MovePreview {
         {
             engine.full_scan_moves = self.full_scan_moves;
             engine.full_scan_guard = self.full_scan_guard;
+            engine.full_scan_follow = self.full_scan_follow;
         }
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
@@ -389,6 +399,8 @@ impl Engine {
             full_scan_moves: false,
             #[cfg(test)]
             full_scan_guard: false,
+            #[cfg(test)]
+            full_scan_follow: false,
         })
     }
 
@@ -428,6 +440,8 @@ impl Engine {
             full_scan_moves: false,
             #[cfg(test)]
             full_scan_guard: false,
+            #[cfg(test)]
+            full_scan_follow: false,
         })
     }
 

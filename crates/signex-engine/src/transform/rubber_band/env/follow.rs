@@ -4,6 +4,8 @@ use signex_net::uf::Key;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
+#[cfg(test)]
+use super::grid;
 use super::{Env, Plan, key, zero_length};
 use crate::transform::rubber_band::Follow;
 
@@ -16,24 +18,45 @@ impl Env {
         new: Point,
         out: &mut Follow,
     ) -> bool {
+        // What a failed follow undoes: the wire ends it moved and the wires it
+        // added (kept in `undo` and the length), and the small sets.
         let saved = (
-            self.wires.clone(),
+            self.wires.len(),
             self.removed.clone(),
             self.placed.clone(),
             out.touched.len(),
         );
+        self.undo = Some(Vec::new());
+        // The reference the journal is held to: the whole wire list, copied.
+        #[cfg(test)]
+        let whole = grid::scan_all_requested().then(|| self.wires.clone());
         let skip: Vec<usize> = attached.iter().map(|(index, _)| *index).collect();
         for &(index, follow_start) in attached {
             if self.removed.contains(&index) {
                 continue;
             }
             if !self.follow_wire(at, index, follow_start, new, &skip, out) {
-                (self.wires, self.removed, self.placed, _) = saved;
+                self.rewind(saved.0);
+                #[cfg(test)]
+                if let Some(whole) = whole {
+                    self.wires = whole;
+                }
+                (_, self.removed, self.placed, _) = saved;
                 out.touched.truncate(saved.3);
                 return false;
             }
         }
+        self.undo = None;
         true
+    }
+
+    /// Put back the wire ends a failed follow moved and drop the wires it added.
+    fn rewind(&mut self, len: usize) {
+        for (index, start, end) in self.undo.take().unwrap_or_default().into_iter().rev() {
+            self.wires[index].start = start;
+            self.wires[index].end = end;
+        }
+        self.wires.truncate(len);
     }
 
     /// Move one end of wire `index` to the pin's `new` tip with the first
@@ -128,8 +151,7 @@ impl Env {
     /// fixed end, else it stays (the pin lands on that end).
     fn drop_if_held(&mut self, index: usize, kf: Key, ignore: &[usize], out: &mut Follow) {
         let others = self.probe(kf, ignore).anything()
-            || self
-                .live()
+            || (self.wires_near(kf, kf).into_iter())
                 .any(|(i, w)| i != index && (key(&w.start) == kf || key(&w.end) == kf));
         if others {
             self.removed.insert(index);
@@ -155,8 +177,7 @@ impl Env {
         {
             return None;
         }
-        let (leg, wire) = self
-            .live()
+        let (leg, wire) = (self.wires_near(kf, kf).into_iter())
             .find(|(i, w)| *i != index && (key(&w.start) == kf || key(&w.end) == kf))?;
         let far = if key(&wire.start) == kf {
             wire.end
@@ -216,11 +237,15 @@ impl Env {
         for &index in &replace {
             match segs.next() {
                 Some((a, b)) => {
+                    if let Some(undo) = &mut self.undo {
+                        undo.push((index, self.wires[index].start, self.wires[index].end));
+                    }
                     let wire = &mut self.wires[index];
                     wire.start = a;
                     wire.end = b;
                     out.touched
                         .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
+                    self.refile_wire(index);
                     self.place_ends(index, &joins);
                 }
                 None => {
@@ -241,6 +266,7 @@ impl Env {
             out.touched
                 .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
             self.wires.push(wire);
+            self.refile_wire(self.wires.len() - 1);
             self.place_ends(self.wires.len() - 1, &joins);
         }
     }

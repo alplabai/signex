@@ -722,9 +722,20 @@ fn random_edits_give_a_delta_that_rebuilds_the_full_derive() {
                 local += usize::from(delta.added.len() * 2 <= full.len().max(1));
                 removed_and_added +=
                     usize::from(!delta.removed.is_empty() && !delta.added.is_empty());
-                // A net rebuilt with a cluster the edit did not touch: it
-                // holds more than one base net's worth of labels.
-                far_joined += usize::from(delta.added.iter().any(|net| net.labels.len() >= 2));
+                // A net rebuilt from clusters of two or more base nets: joined
+                // by name to something the edit did not touch.
+                let home = |net: &crate::NetSignature| {
+                    let mut homes = std::collections::BTreeSet::new();
+                    for (at, base_net) in base.nets().iter().enumerate() {
+                        let shares = net.labels.iter().any(|l| base_net.labels.contains(l))
+                            || net.terminals.iter().any(|t| base_net.terminals.contains(t));
+                        if shares {
+                            homes.insert(at);
+                        }
+                    }
+                    homes.len()
+                };
+                far_joined += usize::from(delta.added.iter().any(|net| home(net) >= 2));
             }
         }
     }

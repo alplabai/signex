@@ -23,7 +23,8 @@ impl Env {
                 if i >= self.wires.len() || self.removed.contains(&i) {
                     continue;
                 }
-                for (j, other) in self.live() {
+                let (a, b) = (key(&self.wires[i].start), key(&self.wires[i].end));
+                for (j, other) in self.wires_near(a, b) {
                     // A locked wire is never edited (defence in depth: the pass
                     // only edits free wires); an overlap with one is trimmed
                     // off the other wire below.
@@ -57,6 +58,7 @@ impl Env {
             if let Some((lo, hi)) = pieces.next() {
                 let wire = &mut self.wires[survivor];
                 (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
+                self.refile_wire(survivor);
             }
             for (lo, hi) in pieces {
                 let mut wire = template.clone();
@@ -66,6 +68,7 @@ impl Env {
                 out.touched
                     .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
                 self.wires.push(wire);
+                self.refile_wire(self.wires.len() - 1);
                 self.edited.insert(self.wires.len() - 1);
             }
             self.removed.insert(loser);
@@ -116,6 +119,7 @@ impl Env {
             Some((lo, hi)) => {
                 let wire = &mut self.wires[free];
                 (wire.start, wire.end) = if oriented { (lo, hi) } else { (hi, lo) };
+                self.refile_wire(free);
             }
             None => {
                 self.removed.insert(free);
@@ -128,6 +132,7 @@ impl Env {
             out.touched
                 .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
             self.wires.push(wire);
+            self.refile_wire(self.wires.len() - 1);
             self.edited.insert(self.wires.len() - 1);
         }
         out.touched

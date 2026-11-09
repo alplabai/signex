@@ -28,7 +28,10 @@
 //!
 //! The delta is only offered when the base's pins identify one net each (no
 //! `(symbol, pin)` in two base nets), so a caller can find the base net a pin
-//! sits on by that pin alone.
+//! sits on by that pin alone. A sheet that breaks this (two pins of one symbol
+//! with the same number, wired to different nets) turns the delta off for the
+//! whole sheet: the drag then compares over every net, as it did before the
+//! delta. That is a cliff, not an error; give the pins distinct numbers.
 
 use std::collections::{HashMap, HashSet};
 
@@ -191,7 +194,10 @@ impl NetBase {
             .map(|(i, (root, _))| (*root, i))
             .collect();
         let found = Self::locate(at, &mut parent, &index, &rebuilt_at, &merged);
-        let occupied = at.iter().map(|(key, _)| occupied(&sub, *key)).collect();
+        let occupied = at
+            .iter()
+            .map(|(key, _)| point_is_occupied(&sub, *key))
+            .collect();
         Some(NetDelta {
             removed,
             added: merged.nets,
@@ -215,8 +221,10 @@ impl NetBase {
     }
 }
 
-/// Whether a wire, label, junction dot or no-connect of `sheet` lies on `key`.
-fn occupied(sheet: &SchematicSheet, key: Key) -> bool {
+/// Whether a wire (end or interior), label, junction dot or no-connect of
+/// `sheet` lies on `key`.
+#[must_use]
+pub fn point_is_occupied(sheet: &SchematicSheet, key: Key) -> bool {
     sheet
         .wires
         .iter()

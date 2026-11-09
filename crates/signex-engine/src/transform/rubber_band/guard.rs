@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use signex_net::{
     NetBase, NetSignature, best_net_name_of, name_carrying_ports, net_signatures,
-    net_signatures_at, point_on_segment, pt_key, uf::Key,
+    net_signatures_at, pt_key, uf::Key,
 };
 use signex_types::schematic::{LabelType, SchematicSheet};
 use uuid::Uuid;
@@ -123,7 +123,10 @@ impl PlainView {
             .iter()
             .map(|tip| nets.iter().position(|net| holds(net, tip.ident())))
             .collect();
-        let carried = keys.iter().map(|(k, _)| !something_at(sheet, *k)).collect();
+        let carried = keys
+            .iter()
+            .map(|(k, _)| !signex_net::point_is_occupied(sheet, *k))
+            .collect();
         Self {
             nets,
             at_old,
@@ -149,16 +152,6 @@ pub(super) fn insert_ident(net: &mut NetSignature, ident: &PinIdent) {
             net.sheet_pins.insert(*uuid);
         }
     }
-}
-
-/// Whether a wire end or interior, label, dot or no-connect sits on `key`.
-fn something_at(sheet: &SchematicSheet, key: Key) -> bool {
-    sheet.wires.iter().any(|w| {
-        let (a, b) = (pt_key(&w.start), pt_key(&w.end));
-        point_on_segment(key, a, b)
-    }) || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
-        || sheet.junctions.iter().any(|j| pt_key(&j.position) == key)
-        || sheet.no_connects.iter().any(|n| pt_key(&n.position) == key)
 }
 
 /// Whether wires, labels, dots and no-connects sit where they did.
@@ -300,7 +293,7 @@ impl<'a> Guard<'a> {
             // only if something is at its tip.
             PinIdent::SheetPin(uuid) => {
                 self.seen_sheet_pins().contains(uuid)
-                    && something_at(self.before_sheet, tip.old_key())
+                    && signex_net::point_is_occupied(self.before_sheet, tip.old_key())
             }
         }
     }
@@ -375,53 +368,17 @@ impl<'a> Guard<'a> {
         };
         let mut nets = view.nets.clone();
         Self::clear_moved(&mut nets, tips);
-        let mut extra = Exclusions {
-            terminals: BTreeSet::new(),
-            sheet_pins: BTreeSet::new(),
-            power_out: HashSet::new(),
-        };
-        let mut lone: BTreeMap<Key, NetSignature> = BTreeMap::new();
-        for (i, tip) in tips.iter().enumerate() {
-            let skipped = match tip.ident() {
-                PinIdent::Terminal(s, p) => skip.terminals.contains(&(*s, p.clone())),
-                PinIdent::SheetPin(u) => skip.sheet_pins.contains(u),
-            };
-            if skipped || !self.was_connected(tip) {
-                // A pin that is not rubber-banded (plain, or never on a net)
-                // is expected exactly where the plain move left it, so a
-                // wire the pass stretched or added under it shows up.
-                if let Some(n) = view.home[i].filter(|_| !tip.is_power()) {
-                    insert_ident(&mut nets[n], tip.ident());
-                }
-                continue;
-            }
-            let target = if view.carried[i] {
-                // The wire that carried this pin moved with it: the plain
-                // move defines the net the pin lands on.
-                match view.home[i] {
-                    Some(n) => Some(&mut nets[n]),
-                    None => {
-                        match tip.ident() {
-                            PinIdent::Terminal(s, p) => {
-                                extra.terminals.insert((*s, p.clone()));
-                            }
-                            PinIdent::SheetPin(u) => {
-                                extra.sheet_pins.insert(*u);
-                            }
-                        }
-                        None
-                    }
-                }
-            } else {
-                match view.at_old[i] {
-                    (_, Some(n)) => Some(&mut nets[n]),
-                    (root, None) => Some(lone.entry(root).or_insert_with(empty_net)),
-                }
-            };
-            if let Some(net) = target {
-                insert_ident(net, tip.ident());
-            }
-        }
+        let (extra, lone) = place_moved_pins(
+            tips,
+            skip,
+            &mut nets,
+            &Placement {
+                home: &view.home,
+                carried: &view.carried,
+                at_old: &view.at_old,
+            },
+            |tip| self.was_connected(tip),
+        );
         let mut want: Vec<NetSignature> = nets
             .into_iter()
             .chain(lone.into_values())
@@ -680,6 +637,79 @@ impl<'a> Guard<'a> {
         blamed.dedup();
         Some(blamed)
     }
+}
+
+/// Where each moved pin sits among the plain-moved sheet's nets.
+pub(super) struct Placement<'a> {
+    /// Per tip: the net its pin is on in the plain-moved sheet.
+    pub(super) home: &'a [Option<usize>],
+    /// Per tip: nothing stays at the old tip to carry the connection.
+    pub(super) carried: &'a [bool],
+    /// Per tip: the net its old tip sits on (opaque id, index when named).
+    pub(super) at_old: &'a [(Key, Option<usize>)],
+}
+
+/// Put every moved pin back on the net the user's move asks for, in `nets`
+/// (the plain-moved nets with the moved pins taken out); returns the pins
+/// whose plain-move connection is undefined and so stay out of the comparison
+/// on both sides, and the nets that exist only at an old tip. The one place
+/// the placement rules live: the comparison over every net and the one over
+/// the nets a move reaches both call it.
+pub(super) fn place_moved_pins(
+    tips: &[PinTip],
+    skip: &Exclusions,
+    nets: &mut [NetSignature],
+    at: &Placement,
+    was_connected: impl Fn(&PinTip) -> bool,
+) -> (Exclusions, BTreeMap<Key, NetSignature>) {
+    let mut extra = Exclusions {
+        terminals: BTreeSet::new(),
+        sheet_pins: BTreeSet::new(),
+        power_out: HashSet::new(),
+    };
+    let mut lone: BTreeMap<Key, NetSignature> = BTreeMap::new();
+    for (i, tip) in tips.iter().enumerate() {
+        let skipped = match tip.ident() {
+            PinIdent::Terminal(s, p) => skip.terminals.contains(&(*s, p.clone())),
+            PinIdent::SheetPin(u) => skip.sheet_pins.contains(u),
+        };
+        if skipped || !was_connected(tip) {
+            // A pin that is not rubber-banded (plain, or never on a net)
+            // is expected exactly where the plain move left it, so a
+            // wire the pass stretched or added under it shows up.
+            if let Some(n) = at.home[i].filter(|_| !tip.is_power()) {
+                insert_ident(&mut nets[n], tip.ident());
+            }
+            continue;
+        }
+        let target = if at.carried[i] {
+            // The wire that carried this pin moved with it: the plain
+            // move defines the net the pin lands on.
+            match at.home[i] {
+                Some(n) => Some(&mut nets[n]),
+                None => {
+                    match tip.ident() {
+                        PinIdent::Terminal(s, p) => {
+                            extra.terminals.insert((*s, p.clone()));
+                        }
+                        PinIdent::SheetPin(u) => {
+                            extra.sheet_pins.insert(*u);
+                        }
+                    }
+                    None
+                }
+            }
+        } else {
+            match at.at_old[i] {
+                (_, Some(n)) => Some(&mut nets[n]),
+                (root, None) => Some(lone.entry(root).or_insert_with(empty_net)),
+            }
+        };
+        if let Some(net) = target {
+            insert_ident(net, tip.ident());
+        }
+    }
+    (extra, lone)
 }
 
 pub(super) fn empty_net() -> NetSignature {

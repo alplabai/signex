@@ -1,4 +1,6 @@
 //! A symbol drag's net guard compares only the nets the move reaches
+//! (the reference derives incrementally too, `derive_at` from the base, with the
+//! inline self-check off so only this differential can tell them apart)
 //! (`transform/rubber_band/guard_local.rs`). These tests hold it to the guard
 //! that compares every net (`full_scan_guard`): the sheet a ghost step leaves,
 //! the execute result and its patch, the warnings and unkept pins, the lock's
@@ -51,6 +53,8 @@ struct Floors {
     nets_changed: usize,
     warned: usize,
     named_nets_moved: usize,
+    /// Cases where the pass rerouted, added or dropped a wire.
+    rewired: usize,
 }
 
 impl Floors {
@@ -63,7 +67,7 @@ fn run(
     preview: &MovePreview,
     original: &SchematicSheet,
     moves: &Moves,
-) -> (Outcome, tally::Tally, bool) {
+) -> (Outcome, tally::Tally, bool, bool) {
     let _ = tally::take();
     let moved = preview.moved_report(moves, true);
     let counts = tally::take();
@@ -78,7 +82,8 @@ fn run(
     };
     let changed =
         signex_net::net_signatures(engine.document()) != signex_net::net_signatures(original);
-    (outcome, counts, changed)
+    let rewired = engine.document().wires != original.wires;
+    (outcome, counts, changed, rewired)
 }
 
 /// One ghost step both ways from two previews of `sheet`.
@@ -92,8 +97,8 @@ fn step_both_ways(
 ) {
     // The differential alone must tell the two apart: no inline cross-check.
     let _off = self_check::off();
-    let (a, counts, changed) = run(local, sheet, moves);
-    let (b, full_counts, _) = run(full, sheet, moves);
+    let (a, counts, changed, rewired) = run(local, sheet, moves);
+    let (b, full_counts, _, _) = run(full, sheet, moves);
     assert_eq!(a, b, "{what}");
     assert_eq!(full_counts.local_checks, 0, "{what}");
     floors.cases += 1;
@@ -103,6 +108,7 @@ fn step_both_ways(
     floors.blamed += usize::from(counts.blames > 0 && counts.local_checks > 0);
     floors.nets_changed += usize::from(changed && counts.local_checks > 0);
     floors.warned += usize::from(!a.warnings.is_empty());
+    floors.rewired += usize::from(rewired && counts.local_checks > 0);
     let symbols = (moves.iter())
         .filter(|(item, _, _)| item.kind == SelectedKind::Symbol)
         .count();
@@ -117,7 +123,9 @@ fn step_both_ways(
 fn previews(sheet: &SchematicSheet) -> (MovePreview, MovePreview) {
     let local = MovePreview::new(sheet);
     let mut full = MovePreview::new(sheet);
+    // The reference compares every net and asks every question of the sheet.
     full.full_scan_guard = true;
+    full.full_scan_follow = true;
     (local, full)
 }
 
@@ -141,6 +149,7 @@ fn the_local_guard_equals_the_full_guard_on_random_sheets() {
     assert!(floors.nets_changed >= 150, "{floors:?}");
     assert!(floors.multi_symbol >= 300, "{floors:?}");
     assert!(floors.warned >= 20, "{floors:?}");
+    assert!(floors.rewired >= 600, "{floors:?}");
     assert!(floors.named_nets_moved >= 200, "{floors:?}");
 }
 
@@ -277,6 +286,7 @@ fn the_local_guard_equals_the_full_guard_on_grids_with_far_name_joins() {
     assert!(floors.nets_changed >= 150, "{floors:?}");
     assert!(floors.multi_symbol >= 700, "{floors:?}");
     assert!(floors.named_nets_moved >= 600, "{floors:?}");
+    assert!(floors.rewired >= 700, "{floors:?}");
 }
 
 /// A drag: one preview serves a run of cursor steps over a growing delta.
@@ -388,4 +398,93 @@ fn a_power_port_or_a_child_sheet_pin_is_compared_over_every_net() {
         child += usize::from(has_child);
     }
     assert!(power >= 20 && child >= 20, "{power} power, {child} child");
+}
+
+/// A net the plain move did not reach, which the candidate touches and leaves
+/// as it was (a far wire split in two with a new id), is no difference: the
+/// local comparison must restore it on the intent's side, as the comparison
+/// over every net does by comparing every net.
+#[test]
+fn a_far_net_the_candidate_touches_and_leaves_as_it_was_is_no_difference() {
+    use crate::rubber_band_tests::add_resistor;
+    use crate::{Guard, Policy, follow_moved_pins, moved_pin_tips};
+    use std::sync::Arc;
+
+    let mut before = test_sheet();
+    let r1 = add_resistor(&mut before, "R1", Point::new(50.0, 50.0));
+    let r2 = add_resistor(&mut before, "R2", Point::new(150.0, 50.0));
+    add_wire(&mut before, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut before, (130.0, 50.0), (145.0, 50.0));
+    let items = [SelectedItem::new(r1, SelectedKind::Symbol)];
+    let tips = moved_pin_tips(&before, &items);
+    let mut plain = before.clone();
+    plain
+        .symbols
+        .iter_mut()
+        .find(|s| s.uuid == r1)
+        .unwrap()
+        .position
+        .y += 10.0;
+    let mut candidate = plain.clone();
+    let follow = follow_moved_pins(&mut candidate, &tips, &items, &Policy::default());
+    // The far net (R2's) is split at its middle, the halves as good as one.
+    let far = candidate
+        .wires
+        .iter()
+        .position(|w| w.start.x == 130.0)
+        .expect("the far wire");
+    let mut tail = candidate.wires[far].clone();
+    tail.uuid = Uuid::now_v7();
+    tail.start = Point::new(137.5, 50.0);
+    candidate.wires[far].end = Point::new(137.5, 50.0);
+    candidate.wires.push(tail);
+    assert!(before.symbols.iter().any(|s| s.uuid == r2));
+
+    let base = Arc::new(signex_net::NetBase::new(&before));
+    let nets = Arc::new(base.derive(&before));
+    let policy = Policy::default();
+    let guard = || {
+        Guard::with_base(
+            &before,
+            &plain,
+            &tips,
+            Some(nets.clone()),
+            Some(base.clone()),
+        )
+    };
+    let _ = tally::take();
+    let local = guard().check(&candidate, &tips, &policy, &follow.edited_tips);
+    let local_counts = tally::take();
+    let full = guard()
+        .without_local()
+        .check(&candidate, &tips, &policy, &follow.edited_tips);
+    let full_counts = tally::take();
+    assert_eq!(local_counts.local_checks, 1, "the comparison was not local");
+    assert_eq!(local, full);
+    assert_eq!(local_counts.decisions, full_counts.decisions);
+    assert!(local_counts.decisions[0].0, "the nets are as asked");
+}
+
+/// A pin with two wires on it, the second of which cannot follow (a label
+/// sits on its route): the first wire's move is undone and the pin gets a
+/// new path. The rollback is held to the whole-list copy it replaced.
+#[test]
+fn a_follow_that_fails_on_its_second_wire_puts_the_first_back() {
+    use crate::rubber_band_tests::add_resistor;
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (45.0, 30.0), (45.0, 50.0));
+    add_label(&mut sheet, "X", (45.0, 55.0));
+    let (local, full) = previews(&sheet);
+    let mut floors = Floors::default();
+    for (dx, dy) in [(0.0, 10.0), (0.0, 7.5), (2.5, 10.0), (-5.0, 10.0)] {
+        let moves: Moves = vec![(SelectedItem::new(r1, SelectedKind::Symbol), dx, dy)];
+        let what = format!("rollback {dx},{dy}");
+        step_both_ways(&local, &full, &sheet, &moves, &what, &mut floors);
+    }
+    assert!(
+        floors.local_checks >= 4 && floors.rewired >= 1,
+        "{floors:?}"
+    );
 }

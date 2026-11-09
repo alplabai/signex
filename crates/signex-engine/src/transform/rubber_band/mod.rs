@@ -71,7 +71,7 @@ use std::collections::{BTreeMap, HashSet};
 use env::Env;
 
 #[cfg(test)]
-pub(crate) use env::wires_overlap;
+pub(crate) use env::{scan_all_on, wires_overlap};
 
 use signex_net::{pt_key, uf::Key};
 use signex_types::schematic::{

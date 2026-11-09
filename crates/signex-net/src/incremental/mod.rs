@@ -19,7 +19,7 @@ mod level1;
 mod merge;
 mod records;
 
-pub use delta::NetDelta;
+pub use delta::{NetDelta, point_is_occupied};
 
 use std::collections::HashMap;
 

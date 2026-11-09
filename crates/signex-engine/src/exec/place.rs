@@ -188,6 +188,8 @@ impl Engine {
         fresh: impl Fn(&mut Self),
     ) -> DocumentPatch {
         const MAX_ROUNDS: usize = 6;
+        #[cfg(test)]
+        let _scan = crate::transform::rubber_band::scan_all_on(self.full_scan_follow);
         let guard = crate::Guard::with_base(
             before,
             plain_reference,
