@@ -26,6 +26,8 @@ pub enum BoardCommandError {
         "footprint {0} no longer has the pads, graphics and properties the face was taken from"
     )]
     FaceMismatch(Uuid),
+    #[error("footprint {0} no longer has the properties the text was taken from")]
+    TextMismatch(Uuid),
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
     #[error(

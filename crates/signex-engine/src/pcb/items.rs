@@ -145,6 +145,35 @@ pub(super) fn delete(
     })
 }
 
+/// Append `items` to the end of their lists, in the order given. Refused
+/// whole when an item is named twice or is already on the board.
+pub(super) fn add(
+    board: &mut PcbBoard,
+    items: Vec<BoardItem>,
+) -> Result<Applied, BoardCommandError> {
+    let ids: Vec<BoardItemId> = items.iter().map(BoardItem::id).collect();
+    let mut seen = HashSet::with_capacity(ids.len());
+    for &id in &ids {
+        if !seen.insert(id) {
+            return Err(BoardCommandError::DuplicateItem(id));
+        }
+        if position(board, id).is_some() {
+            return Err(BoardCommandError::ItemAlreadyPresent(id));
+        }
+    }
+    for item in items {
+        let end = list_len(board, item.id().split().0);
+        put(board, end, item);
+    }
+    Ok(Applied {
+        inverse: BoardCommand::DeleteItems { items: ids.clone() },
+        patch: BoardPatch {
+            kind: BoardPatchKind::ItemsAdded,
+            items: ids,
+        },
+    })
+}
+
 pub(super) fn restore(
     board: &mut PcbBoard,
     mut removed: Vec<RemovedItem>,

@@ -149,7 +149,7 @@ pub struct PcbSetup {
 // Net definition
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NetDef {
     pub number: u32,
     pub name: String,

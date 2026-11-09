@@ -23,7 +23,7 @@ pub struct ZoneNetName {
 
 /// The board's net table plus the pads whose net changes. Pure data: it
 /// holds no reference to the board and can be applied, stored or undone.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BoardNetEdit {
     pub nets: Vec<NetDef>,
     pub pads: Vec<PadNetChange>,

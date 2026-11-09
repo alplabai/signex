@@ -10,19 +10,19 @@ use std::path::Path;
 use signex_engine::pcb::{BoardCommand, BoardPatch};
 
 use crate::app::Signex;
-use crate::app::state::pcb_edit::{AgentStep, BoardEditError};
+use crate::app::state::pcb_edit::{BoardEditError, CheckedStep};
 
 impl Signex {
     /// Run `commands` on the board at `path` as one undo step, all or
-    /// nothing. With `agent`, the step is labelled and refused when the board
-    /// moved past the revision the agent read.
+    /// nothing. With `checked`, the step is labelled and refused when the board
+    /// moved past the revision it was built from.
     pub fn execute_board_commands(
         &mut self,
         path: &Path,
         commands: Vec<BoardCommand>,
-        agent: Option<AgentStep<'_>>,
+        checked: Option<CheckedStep<'_>>,
     ) -> Result<Vec<BoardPatch>, BoardEditError> {
-        let patches = self.document_state.execute_board(path, commands, agent)?;
+        let patches = self.document_state.execute_board(path, commands, checked)?;
         if !patches.is_empty() {
             self.after_board_change(path);
         }

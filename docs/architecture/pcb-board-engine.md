@@ -62,6 +62,36 @@ through operand handlers, and no board command has an id yet. When the first
 board editing command gets one, its handler calls `execute_board_commands`.
 `read_document` already reports the board's revision.
 
+## Forward annotation (#1312)
+
+Update PCB from schematic runs its change list as one `execute_labelled` step
+(through `CheckedStep`, the labelled and revision-checked form of
+`execute_board_commands`), so it is all or nothing, one undo step, and
+refused when the board moved since the list was built. The commands it uses,
+each with an exact inverse:
+
+- `AddItems` appends items to the end of their lists; refused with
+  `ItemAlreadyPresent` or `DuplicateItem`. Inverse: `DeleteItems`.
+- `ReplaceFootprint { footprint, with }` swaps in a library footprint given
+  in its top-side form. The board footprint keeps its uuid, position,
+  rotation, side, lock, schematic link, designator, value and preserved
+  unknown data; it takes the template's name, pads, graphics and
+  properties. On the bottom side the template is flipped with
+  `pcb_geom::flip_footprint` first. Inverse: `RestoreFootprint`, the whole
+  old footprint.
+- `SetFootprintText` sets the designator and value and the Reference and
+  Value property texts. Inverse: `RestoreFootprintText`, which puts back
+  every property text as it was.
+- `SetFootprintLink` sets or clears the `SymbolLink`. Its inverse is itself.
+- `SetNets(BoardNetEdit)` wraps `signex_net::board::BoardNetEdit::apply`;
+  the inverse is the edit `apply` returns. A change naming a pad that is
+  gone is skipped, as `apply` skips it.
+
+`check_batch(board, commands)` runs a list on a copy of the board, for the
+dialog's Validate: `BatchRefusal { index, error }` names the first command
+that would be refused. The library identity of a footprint (`library_ref`)
+is not carried yet.
+
 ## Collab leases
 
 `BoardEngine::check_lease` runs before every execute, undo and redo and
