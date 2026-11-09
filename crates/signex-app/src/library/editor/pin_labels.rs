@@ -32,6 +32,8 @@ pub(crate) fn orientation_message(orientation: PinOrientation) -> MessageId {
         PinOrientation::Down => ids::EDITORS_PIN_ORIENTATION_DOWN,
         PinOrientation::Left => ids::EDITORS_PIN_ORIENTATION_LEFT,
         PinOrientation::Right => ids::EDITORS_PIN_ORIENTATION_RIGHT,
+        // `PinOrientation` is non_exhaustive; Right is its default.
+        _ => ids::EDITORS_PIN_ORIENTATION_RIGHT,
     }
 }
 

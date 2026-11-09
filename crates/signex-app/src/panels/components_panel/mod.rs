@@ -162,8 +162,6 @@ pub(crate) fn view<'a>(
     .boxed()
 }
 
-/// What the list says when nothing is mounted.
-
 /// Every mounted library with its source, in list order: Stock, Project,
 /// Installed, Global; within a source, in mount order.
 fn listed_libraries<'a>(
