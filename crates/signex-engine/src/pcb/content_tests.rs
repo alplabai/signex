@@ -4,6 +4,7 @@
 use signex_net::board::{BoardNetEdit, PadNetChange, ZoneNetName};
 use signex_types::pcb::{Footprint, NetDef, PadNet, PcbBoard, Point, Segment, SymbolLink};
 use signex_types::schematic::InstancePath;
+use uuid::Uuid;
 
 use super::tests::{FP_A, FP_B, SEG_1, ZONE_1, board, id, snapshot};
 use super::*;
@@ -14,9 +15,16 @@ const PAD_A1: &str = "00000000-0000-0000-0000-0000000000a1";
 const GHOST: &str = "00000000-0000-0000-0000-00000000dead";
 
 /// A library footprint in its top-side form: two pads, a silk line, a fab
-/// line and Reference/Value texts carrying library placeholders.
+/// line and Reference/Value texts carrying library placeholders. Its pads are
+/// `0xc1` and `0xc2`.
 fn template(uuid: &str) -> Footprint {
-    serde_json::from_value(serde_json::json!({
+    template_with_pads(uuid, 0xc0)
+}
+
+/// [`template`] with pads `pads + 1` and `pads + 2`, so several templates can
+/// share one board.
+fn template_with_pads(uuid: &str, pads: u128) -> Footprint {
+    let mut fp: Footprint = serde_json::from_value(serde_json::json!({
         "uuid": uuid, "reference": "REF**", "value": "lib value",
         "footprint_id": "SOT-23", "position": {"x": 0.0, "y": 0.0},
         "rotation": 0.0, "layer": "TopCopper",
@@ -47,7 +55,11 @@ fn template(uuid: &str) -> Footprint {
              "rotation": 0.0, "layer": "TopFab"}
         ]
     }))
-    .unwrap()
+    .unwrap();
+    for (n, pad) in fp.pads.iter_mut().enumerate() {
+        pad.uuid = Uuid::from_u128(pads + 1 + n as u128);
+    }
+    fp
 }
 
 fn new_segment() -> Segment {
@@ -105,14 +117,14 @@ fn new_commands() -> Vec<(&'static str, BoardCommand)> {
             "replace top",
             BoardCommand::ReplaceFootprint {
                 footprint: id(FP_A),
-                with: Box::new(template(NEW_FP)),
+                with: Box::new(template_with_pads(NEW_FP, 0xd0)),
             },
         ),
         (
             "replace bottom",
             BoardCommand::ReplaceFootprint {
                 footprint: id(FP_B),
-                with: Box::new(template(NEW_FP)),
+                with: Box::new(template_with_pads(NEW_FP, 0xe0)),
             },
         ),
         (
@@ -399,8 +411,8 @@ fn refused_new_commands_leave_the_board_untouched() {
 
 #[test]
 fn check_batch_runs_on_a_copy_and_names_the_first_refusal() {
-    let b = board();
-    let before = snapshot(&b);
+    let engine = BoardEngine::new(board(), 1);
+    let before = snapshot(engine.board());
     // The move needs the footprint the add brings: commands see the board
     // the earlier ones left.
     let ok = vec![
@@ -413,7 +425,7 @@ fn check_batch_runs_on_a_copy_and_names_the_first_refusal() {
         },
         BoardCommand::SetNets(net_edit()),
     ];
-    assert_eq!(check_batch(&b, &ok), Ok(()));
+    assert_eq!(engine.check_batch(&ok), Ok(()));
     let ghost = id(GHOST);
     let refused = vec![
         BoardCommand::SetNets(net_edit()),
@@ -427,21 +439,27 @@ fn check_batch_runs_on_a_copy_and_names_the_first_refusal() {
         },
     ];
     assert_eq!(
-        check_batch(&b, &refused),
+        engine.check_batch(&refused),
         Err(BatchRefusal {
             index: 1,
             error: BoardCommandError::FootprintNotFound(ghost),
         })
     );
-    assert_eq!(snapshot(&b), before, "the dry run never writes the board");
+    assert_eq!(
+        snapshot(engine.board()),
+        before,
+        "the dry run never writes the board"
+    );
+    assert_eq!(engine.revision(), 1);
+    assert!(!engine.can_undo());
 }
 
 #[test]
 fn an_update_batch_is_one_engine_step_that_undoes_exactly() {
     let mut engine = BoardEngine::new(board(), 1);
     let before = snapshot(engine.board());
-    let batch: Vec<BoardCommand> = new_commands().into_iter().map(|(_, c)| c).collect();
-    assert_eq!(check_batch(engine.board(), &batch), Ok(()));
+    let batch = update_batch();
+    assert_eq!(engine.check_batch(&batch), Ok(()));
     engine.execute_batch(batch).unwrap();
     let after = snapshot(engine.board());
     assert_eq!(engine.undo_len(), 1);
@@ -464,4 +482,254 @@ fn replace_ignores_the_template_uuid() {
     .unwrap();
     assert_eq!(b.footprints[0].uuid, id(FP_A));
     assert!(b.footprints.iter().all(|f| f.uuid != id(GHOST)));
+}
+
+/// Every new command as one update, the net edit aimed at a pad the replace
+/// brought (FP_A's old pad `0xa1` is gone by then).
+fn update_batch() -> Vec<BoardCommand> {
+    let mut edit = net_edit();
+    edit.pads[0].pad = Uuid::from_u128(0xd1);
+    new_commands()
+        .into_iter()
+        .map(|(name, command)| match name {
+            "nets" => BoardCommand::SetNets(edit.clone()),
+            _ => command,
+        })
+        .collect()
+}
+
+#[test]
+fn a_net_edit_aimed_at_a_pad_the_batch_replaced_is_refused_whole() {
+    let mut engine = BoardEngine::new(board(), 1);
+    let before = snapshot(engine.board());
+    let stale = vec![
+        BoardCommand::ReplaceFootprint {
+            footprint: id(FP_A),
+            with: Box::new(template_with_pads(NEW_FP, 0xd0)),
+        },
+        BoardCommand::SetNets(net_edit()),
+    ];
+    let refused = BoardCommandError::PadNotFound {
+        footprint: id(FP_A),
+        pad: id(PAD_A1),
+    };
+    assert_eq!(
+        engine.check_batch(&stale),
+        Err(BatchRefusal {
+            index: 1,
+            error: refused.clone()
+        })
+    );
+    assert_eq!(engine.execute_batch(stale), Err(refused));
+    assert_eq!(snapshot(engine.board()), before, "nothing ran");
+    assert!(!engine.can_undo());
+}
+
+#[test]
+fn a_net_edit_naming_something_missing_or_twice_is_refused() {
+    use BoardCommandError as E;
+    let ghost = id(GHOST);
+    let mut ghost_pad = net_edit();
+    ghost_pad.pads[0].pad = ghost;
+    let mut ghost_footprint = net_edit();
+    ghost_footprint.pads[0].footprint = ghost;
+    let mut ghost_zone = net_edit();
+    ghost_zone.zones[0].zone = ghost;
+    let mut twice_pad = net_edit();
+    twice_pad.pads.push(twice_pad.pads[0].clone());
+    twice_pad.pads[1].locked = false;
+    let mut twice_zone = net_edit();
+    twice_zone.zones.push(ZoneNetName {
+        zone: id(ZONE_1),
+        name: "VCC".into(),
+    });
+    let cases = [
+        (
+            ghost_pad,
+            E::PadNotFound {
+                footprint: id(FP_A),
+                pad: ghost,
+            },
+        ),
+        (ghost_footprint, E::FootprintNotFound(ghost)),
+        (ghost_zone, E::ItemNotFound(BoardItemId::Zone(ghost))),
+        (
+            twice_pad,
+            E::DuplicatePadChange {
+                footprint: id(FP_A),
+                pad: id(PAD_A1),
+            },
+        ),
+        (twice_zone, E::DuplicateItem(BoardItemId::Zone(id(ZONE_1)))),
+    ];
+    for (edit, expected) in cases {
+        let mut b = board();
+        let before = snapshot(&b);
+        assert_eq!(
+            BoardCommand::SetNets(edit.clone()).apply(&mut b),
+            Err(expected),
+            "{edit:?}"
+        );
+        assert_eq!(snapshot(&b), before);
+    }
+}
+
+#[test]
+fn a_locked_pad_keeps_its_net_and_lock_through_a_replace_and_the_next_sync() {
+    use signex_net::board::{SymbolPadKey, assign_pad_nets};
+    use signex_types::net::{Net, NetId, Netlist, Terminal};
+    let symbol = id(GHOST);
+    let mut b = board();
+    let fp = &mut b.footprints[0];
+    fp.schematic_link = Some(SymbolLink::new(InstancePath::root(), [symbol]));
+    fp.pads[0].net = Some(PadNet {
+        number: 7,
+        name: "HAND".into(),
+    });
+    fp.pads[0].net_locked = true;
+    fp.pads[1].net = Some(PadNet {
+        number: 8,
+        name: "OLD".into(),
+    });
+    let mut lib = template_with_pads(NEW_FP, 0xd0);
+    lib.pads.push(lib.pads[1].clone());
+    lib.pads[2].uuid = Uuid::from_u128(0xd3);
+    lib.pads[2].number = "3".into();
+    BoardCommand::ReplaceFootprint {
+        footprint: id(FP_A),
+        with: Box::new(lib),
+    }
+    .apply(&mut b)
+    .unwrap();
+    let pads = &b.footprints[0].pads;
+    assert_eq!(pads[0].net.as_ref().map(|n| n.name.as_str()), Some("HAND"));
+    assert!(pads[0].net_locked, "the lock is carried by pad number");
+    assert_eq!(pads[1].net.as_ref().map(|n| n.name.as_str()), Some("OLD"));
+    assert!(!pads[1].net_locked);
+    assert_eq!(pads[2].net, None, "a number the old footprint lacks");
+
+    // The schematic puts pin 1 on SIG; the sync leaves the locked pad alone.
+    let netlist = Netlist {
+        nets: vec![Net {
+            id: NetId(1),
+            name: "SIG".into(),
+            class: None,
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            terminals: vec![Terminal {
+                symbol,
+                reference: "U1".into(),
+                pin: "1".into(),
+                occurrence: InstancePath::root(),
+            }],
+        }],
+    };
+    let sync = assign_pad_nets(&netlist, &b, &SymbolPadKey::for_board(&b));
+    BoardCommand::SetNets(sync.edit).apply(&mut b).unwrap();
+    let pad = &b.footprints[0].pads[0];
+    assert_eq!(pad.net.as_ref().map(|n| n.name.as_str()), Some("HAND"));
+    assert!(pad.net_locked);
+}
+
+#[test]
+fn pad_uuids_stay_unique_board_wide() {
+    use BoardCommandError as E;
+    let a1 = id(PAD_A1);
+    let mut clash = template_with_pads(NEW_FP, 0xd0);
+    clash.pads[0].uuid = a1;
+    let mut twice = template_with_pads(NEW_FP, 0xd0);
+    twice.pads[1].uuid = twice.pads[0].uuid;
+    let mut second = template_with_pads(GHOST, 0xd0);
+    second.uuid = Uuid::from_u128(0xbeef);
+    let cases = [
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Footprint(clash.clone())],
+            },
+            E::PadAlreadyPresent(a1),
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![
+                    BoardItem::Footprint(template_with_pads(NEW_FP, 0xd0)),
+                    BoardItem::Footprint(second),
+                ],
+            },
+            E::PadAlreadyPresent(Uuid::from_u128(0xd1)),
+        ),
+        (
+            BoardCommand::ReplaceFootprint {
+                footprint: id(FP_B),
+                with: Box::new(clash.clone()),
+            },
+            E::PadAlreadyPresent(a1),
+        ),
+        (
+            BoardCommand::ReplaceFootprint {
+                footprint: id(FP_B),
+                with: Box::new(twice),
+            },
+            E::PadAlreadyPresent(Uuid::from_u128(0xd1)),
+        ),
+    ];
+    for (command, expected) in cases {
+        let mut b = board();
+        let before = snapshot(&b);
+        assert_eq!(command.clone().apply(&mut b), Err(expected), "{command:?}");
+        assert_eq!(snapshot(&b), before);
+    }
+    // A footprint may keep its own pad uuids through a replace.
+    let mut b = board();
+    BoardCommand::ReplaceFootprint {
+        footprint: id(FP_A),
+        with: Box::new(clash),
+    }
+    .apply(&mut b)
+    .unwrap();
+}
+
+#[test]
+fn a_new_item_off_the_number_line_and_a_bottom_template_are_refused() {
+    use BoardCommandError as E;
+    let mut at_nan = template(NEW_FP);
+    at_nan.position.y = f64::NAN;
+    let mut turned_inf = template(NEW_FP);
+    turned_inf.rotation = f64::INFINITY;
+    let mut segment = new_segment();
+    segment.end.x = f64::NEG_INFINITY;
+    let mut bottom = template(NEW_FP);
+    bottom.layer = "BottomCopper".into();
+    let cases = [
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Footprint(at_nan)],
+            },
+            E::NonFinite { field: "position" },
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Footprint(turned_inf)],
+            },
+            E::NonFinite { field: "rotation" },
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Segment(segment)],
+            },
+            E::NonFinite { field: "position" },
+        ),
+        (
+            BoardCommand::ReplaceFootprint {
+                footprint: id(FP_A),
+                with: Box::new(bottom),
+            },
+            E::TemplateNotTopSide(id(NEW_FP)),
+        ),
+    ];
+    for (command, expected) in cases {
+        let mut b = board();
+        let before = snapshot(&b);
+        assert_eq!(command.clone().apply(&mut b), Err(expected), "{command:?}");
+        assert_eq!(snapshot(&b), before);
+    }
 }

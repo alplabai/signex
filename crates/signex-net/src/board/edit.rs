@@ -1,6 +1,6 @@
 //! The board edit net assignment produces: applied, it returns its inverse.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::pcb::{NetDef, PadNet, PcbBoard};
 use uuid::Uuid;
@@ -31,7 +31,48 @@ pub struct BoardNetEdit {
     pub zones: Vec<ZoneNetName>,
 }
 
+/// Why an edit cannot be written whole: it names something the board does not
+/// hold, or names one pad or zone twice (its inverse would then not be exact).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetEditRefusal {
+    FootprintNotFound(Uuid),
+    PadNotFound { footprint: Uuid, pad: Uuid },
+    ZoneNotFound(Uuid),
+    DuplicatePad { footprint: Uuid, pad: Uuid },
+    DuplicateZone(Uuid),
+}
+
 impl BoardNetEdit {
+    /// Whether [`Self::apply`] would write every change: each footprint, pad
+    /// and zone is on `board`, and none is named twice.
+    pub fn check(&self, board: &PcbBoard) -> Result<(), NetEditRefusal> {
+        let mut pads = HashSet::with_capacity(self.pads.len());
+        for change in &self.pads {
+            let (footprint, pad) = (change.footprint, change.pad);
+            if !pads.insert((footprint, pad)) {
+                return Err(NetEditRefusal::DuplicatePad { footprint, pad });
+            }
+            let fp = board
+                .footprints
+                .iter()
+                .find(|f| f.uuid == footprint)
+                .ok_or(NetEditRefusal::FootprintNotFound(footprint))?;
+            if !fp.pads.iter().any(|p| p.uuid == pad) {
+                return Err(NetEditRefusal::PadNotFound { footprint, pad });
+            }
+        }
+        let mut zones = HashSet::with_capacity(self.zones.len());
+        for change in &self.zones {
+            if !zones.insert(change.zone) {
+                return Err(NetEditRefusal::DuplicateZone(change.zone));
+            }
+            if !board.zones.iter().any(|z| z.uuid == change.zone) {
+                return Err(NetEditRefusal::ZoneNotFound(change.zone));
+            }
+        }
+        Ok(())
+    }
+
     /// An edit that changes nothing: the board's own net table, no pads.
     pub fn unchanged(board: &PcbBoard) -> Self {
         BoardNetEdit {

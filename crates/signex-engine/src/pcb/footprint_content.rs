@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
-use super::items::BoardItemId;
+use super::items::{self, BoardItemId};
 
 const REFERENCE_KEY: &str = "Reference";
 const VALUE_KEY: &str = "Value";
@@ -32,13 +32,23 @@ fn patch(kind: BoardPatchKind, id: Uuid) -> BoardPatch {
 /// lock, schematic link, designator, value and preserved unknown data; the
 /// template brings the footprint name, pads, graphics and properties. A
 /// bottom-side footprint flips the template with `pcb_geom::flip_footprint`.
+/// Each new pad takes the net and net lock of the old pad with its number, so
+/// a locked net survives; a number the old footprint lacks gets no net.
+/// Refused for a template that is not top-side or whose pad uuids another
+/// footprint already uses.
 pub(super) fn replace(
     board: &mut PcbBoard,
     id: Uuid,
     template: Footprint,
 ) -> Result<Applied, BoardCommandError> {
+    if pcb_geom::Side::of_layer(&template.layer) != pcb_geom::Side::Top {
+        return Err(BoardCommandError::TemplateNotTopSide(template.uuid));
+    }
+    find(board, id)?;
+    items::check_pad_uuids(board, template.pads.iter(), Some(id))?;
     let old = find(board, id)?;
     let mut new = template;
+    carry_pad_nets(old, &mut new);
     if pcb_geom::Side::of_layer(&old.layer) == pcb_geom::Side::Bottom {
         pcb_geom::flip_footprint(&mut new);
     }
@@ -134,6 +144,16 @@ pub(super) fn set_link(
         },
         patch: patch(BoardPatchKind::FootprintLinkSet, id),
     })
+}
+
+/// Give each pad of `new` the net and lock of the first pad of `old` with its
+/// number; a pad whose number `old` lacks has none.
+fn carry_pad_nets(old: &Footprint, new: &mut Footprint) {
+    for pad in &mut new.pads {
+        let from = old.pads.iter().find(|p| p.number == pad.number);
+        pad.net = from.and_then(|p| p.net.clone());
+        pad.net_locked = from.is_some_and(|p| p.net_locked);
+    }
 }
 
 fn sync_text_properties(fp: &mut Footprint) {

@@ -14,6 +14,14 @@ pub enum BoardCommandError {
     DuplicateItem(BoardItemId),
     #[error("{0:?} is already on the board")]
     ItemAlreadyPresent(BoardItemId),
+    #[error("no pad {pad} on footprint {footprint}")]
+    PadNotFound { footprint: Uuid, pad: Uuid },
+    #[error("pad {pad} of footprint {footprint} is named more than once")]
+    DuplicatePadChange { footprint: Uuid, pad: Uuid },
+    #[error("a pad with uuid {0} is already on the board")]
+    PadAlreadyPresent(Uuid),
+    #[error("footprint template {0} is not top-side")]
+    TemplateNotTopSide(Uuid),
     #[error("{id:?} cannot be restored at index {index}: the list holds {len} items")]
     RestoreIndexOutOfRange {
         id: BoardItemId,

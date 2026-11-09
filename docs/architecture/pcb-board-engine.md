@@ -71,24 +71,32 @@ refused when the board moved since the list was built. The commands it uses,
 each with an exact inverse:
 
 - `AddItems` appends items to the end of their lists; refused with
-  `ItemAlreadyPresent` or `DuplicateItem`. Inverse: `DeleteItems`.
+  `ItemAlreadyPresent`, `DuplicateItem`, `NonFinite` (a position or angle
+  that is not a number) or `PadAlreadyPresent` (a pad uuid already on the
+  board: pad uuids are unique board-wide). Inverse: `DeleteItems`.
 - `ReplaceFootprint { footprint, with }` swaps in a library footprint given
   in its top-side form. The board footprint keeps its uuid, position,
   rotation, side, lock, schematic link, designator, value and preserved
   unknown data; it takes the template's name, pads, graphics and
-  properties. On the bottom side the template is flipped with
-  `pcb_geom::flip_footprint` first. Inverse: `RestoreFootprint`, the whole
-  old footprint.
+  properties. Each new pad takes the net and net lock of the old pad with
+  its number (a number the old footprint lacks gets no net), so a locked
+  net survives. On the bottom side the template is flipped with
+  `pcb_geom::flip_footprint` first. Refused for a template that is not
+  top-side (`TemplateNotTopSide`) or whose pad uuids another footprint
+  uses. Inverse: `RestoreFootprint`, the whole old footprint.
 - `SetFootprintText` sets the designator and value and the Reference and
   Value property texts. Inverse: `RestoreFootprintText`, which puts back
   every property text as it was.
 - `SetFootprintLink` sets or clears the `SymbolLink`. Its inverse is itself.
 - `SetNets(BoardNetEdit)` wraps `signex_net::board::BoardNetEdit::apply`;
-  the inverse is the edit `apply` returns. A change naming a pad that is
-  gone is skipped, as `apply` skips it.
+  refused whole (`BoardNetEdit::check`) when a change names a footprint,
+  pad or zone the board does not hold (`FootprintNotFound`, `PadNotFound`,
+  `ItemNotFound`) or names one twice, so a stale list is never a silent
+  no-op. The inverse is the edit `apply` returns, holding only what was
+  written, so undo is never refused.
 
-`check_batch(board, commands)` runs a list on a copy of the board, for the
-dialog's Validate: `BatchRefusal { index, error }` names the first command
+`BoardEngine::check_batch(commands)` runs the lease check and then the list
+on a copy of the board, for the dialog's Validate: `BatchRefusal { index, error }` names the first command
 that would be refused. The library identity of a footprint (`library_ref`)
 is not carried yet.
 

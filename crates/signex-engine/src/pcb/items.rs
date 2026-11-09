@@ -1,8 +1,8 @@
-//! Delete board items and put them back where they were.
+//! Add board items, delete them and put them back where they were.
 
 use std::collections::HashSet;
 
-use signex_types::pcb::{BoardText, Footprint, PcbBoard, Segment, Via, Zone};
+use signex_types::pcb::{BoardText, Footprint, Pad, PcbBoard, Point, Segment, Via, Zone};
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -161,6 +161,12 @@ pub(super) fn add(
             return Err(BoardCommandError::ItemAlreadyPresent(id));
         }
     }
+    items.iter().try_for_each(check_finite)?;
+    let new_pads = items.iter().flat_map(|item| match item {
+        BoardItem::Footprint(fp) => fp.pads.as_slice(),
+        _ => &[],
+    });
+    check_pad_uuids(board, new_pads, None)?;
     for item in items {
         let end = list_len(board, item.id().split().0);
         put(board, end, item);
@@ -172,6 +178,47 @@ pub(super) fn add(
             items: ids,
         },
     })
+}
+
+/// A pad uuid names one pad board-wide (selection, the pick index and net
+/// edits key on it): refuse `pads` if one repeats or is already on a board
+/// footprint other than `except`.
+pub(super) fn check_pad_uuids<'a>(
+    board: &PcbBoard,
+    pads: impl Iterator<Item = &'a Pad>,
+    except: Option<Uuid>,
+) -> Result<(), BoardCommandError> {
+    let mut taken: HashSet<Uuid> = board
+        .footprints
+        .iter()
+        .filter(|fp| Some(fp.uuid) != except)
+        .flat_map(|fp| fp.pads.iter().map(|p| p.uuid))
+        .collect();
+    for pad in pads {
+        if !taken.insert(pad.uuid) {
+            return Err(BoardCommandError::PadAlreadyPresent(pad.uuid));
+        }
+    }
+    Ok(())
+}
+
+/// A new item's position and angle must be numbers, as for a move or turn.
+fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
+    let finite = |p: Point| p.x.is_finite() && p.y.is_finite();
+    let (position_ok, rotation_ok) = match item {
+        BoardItem::Footprint(fp) => (finite(fp.position), fp.rotation.is_finite()),
+        BoardItem::Segment(s) => (finite(s.start) && finite(s.end), true),
+        BoardItem::Via(v) => (finite(v.position), true),
+        BoardItem::Zone(z) => (z.outline.iter().all(|p| finite(*p)), true),
+        BoardItem::Text(t) => (finite(t.position), t.rotation.is_finite()),
+    };
+    if !position_ok {
+        return Err(BoardCommandError::NonFinite { field: "position" });
+    }
+    if !rotation_ok {
+        return Err(BoardCommandError::NonFinite { field: "rotation" });
+    }
+    Ok(())
 }
 
 pub(super) fn restore(

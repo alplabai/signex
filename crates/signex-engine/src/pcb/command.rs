@@ -37,14 +37,17 @@ pub enum BoardCommand {
     /// of [`BoardCommand::DeleteItems`].
     RestoreItems { items: Vec<RemovedItem> },
     /// Append new items to the end of their lists. Refused when one is
-    /// already on the board or named twice. The inverse is a
+    /// already on the board or named twice, when a position or angle is
+    /// not a number, or when a pad uuid is already on the board. The inverse is a
     /// [`BoardCommand::DeleteItems`].
     AddItems { items: Vec<BoardItem> },
     /// Swap the footprint's pads, graphics, properties and name for those of
     /// `with`, a library footprint in its top-side form. The board footprint
     /// keeps its uuid, position, rotation, side (a bottom one flips the
-    /// template), lock, schematic link, designator and value. The inverse is
-    /// a [`BoardCommand::RestoreFootprint`].
+    /// template), lock, schematic link, designator and value; each new pad
+    /// takes the net and lock of the old pad with its number. Refused for a
+    /// template that is not top-side or whose pad uuids are taken. The
+    /// inverse is a [`BoardCommand::RestoreFootprint`].
     ReplaceFootprint {
         footprint: Uuid,
         with: Box<Footprint>,
@@ -71,8 +74,8 @@ pub enum BoardCommand {
         link: Option<SymbolLink>,
     },
     /// Write a net table and pad nets (`signex_net::board`); its inverse is
-    /// the edit [`BoardNetEdit::apply`] returns. A change whose footprint,
-    /// pad or zone is gone is skipped, as `apply` skips it.
+    /// the edit [`BoardNetEdit::apply`] returns. Refused whole when a change
+    /// names a footprint, pad or zone that is gone, or one twice.
     SetNets(BoardNetEdit),
 }
 
@@ -146,7 +149,7 @@ impl BoardCommand {
                 footprint: id,
                 link,
             } => footprint_content::set_link(board, id, link),
-            Self::SetNets(edit) => Ok(batch::set_nets(board, edit)),
+            Self::SetNets(edit) => batch::set_nets(board, edit),
         }
     }
 }

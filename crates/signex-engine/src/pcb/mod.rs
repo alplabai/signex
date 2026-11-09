@@ -24,7 +24,7 @@ mod engine_tests;
 #[cfg(test)]
 mod tests;
 
-pub use batch::{BatchRefusal, check_batch};
+pub use batch::BatchRefusal;
 pub use command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 pub use engine::BoardEngine;
 pub use error::BoardCommandError;
