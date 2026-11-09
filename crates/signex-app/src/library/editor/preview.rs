@@ -28,6 +28,10 @@ const PREVIEW_PANE_HEIGHT: f32 = TS.body * 20.0;
 const NOT_SET: &str = "Not set";
 const NO_DESCRIPTION: &str = "No description";
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
+)]
 pub(crate) fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
@@ -220,6 +224,10 @@ fn editor_event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
+)]
 fn render_panes<'a>(
     state: &'a ComponentPreviewState,
     library_state: &LibraryState,

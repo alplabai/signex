@@ -54,6 +54,10 @@ const READ_ONLY_VEIL_ALPHA: f32 = 0.55;
 /// / Supply / Datasheet / Simulation), all read-only for Symbol+
 /// Footprint. The active tab body fills the panel; the header strip
 /// and footer give the row's identity + save controls.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
+)]
 pub(crate) fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
@@ -330,6 +334,10 @@ fn read_only_veil(tokens: &ThemeTokens) -> Color {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
+)]
 fn view_active_tab<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
