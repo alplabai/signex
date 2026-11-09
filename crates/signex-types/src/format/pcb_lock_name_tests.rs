@@ -21,6 +21,7 @@ fn pad(n: u128, locked: bool) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        rotation: 0.0,
         net_locked: locked,
         unknown: Default::default(),
         unknown_columns: Default::default(),

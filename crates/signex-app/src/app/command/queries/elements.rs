@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 use signex_types::pcb::PcbBoard;
+use signex_types::schematic::InstancePath;
 
 use super::sheet_view::{Element, sheet_elements};
 use crate::app::Signex;
@@ -71,23 +72,24 @@ impl Signex {
     /// The placements of a sheet document within its project, as instance
     /// paths from the top-level page; empty for anything else.
     pub(super) fn placements_of(&self, entry: &DocumentEntry) -> Vec<String> {
-        let docs = &self.document_state;
-        entry
-            .path
-            .as_deref()
-            .zip(entry.project.as_ref())
-            .and_then(|(path, project)| {
-                let project = docs.projects.iter().find(|p| p.path == project.path)?;
-                let hierarchy = docs.project_fs.facts.hierarchy_of(project.id)?;
-                Some(
-                    hierarchy
-                        .placements_of(path)
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect(),
-                )
-            })
+        self.instance_paths_of(entry)
             .unwrap_or_default()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    /// [`Self::placements_of`] as instance paths.
+    /// `None` when the sheet belongs to a project whose hierarchy has not
+    /// been walked; empty for a sheet no project names.
+    pub(super) fn instance_paths_of(&self, entry: &DocumentEntry) -> Option<Vec<InstancePath>> {
+        let docs = &self.document_state;
+        let (Some(path), Some(named)) = (entry.path.as_deref(), entry.project.as_ref()) else {
+            return Some(Vec::new());
+        };
+        let project = docs.projects.iter().find(|p| p.path == named.path)?;
+        let hierarchy = docs.project_fs.facts.hierarchy_of(project.id)?;
+        Some(hierarchy.placements_of(path))
     }
 
     /// Every element of every loaded sheet and board in `scope`, with its

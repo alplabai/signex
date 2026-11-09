@@ -158,6 +158,11 @@ pub(in crate::format) struct SymbolExtras {
     /// stamp goes out as an unknown table (`stamp_for_write`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(in crate::format) library_stamp: Option<toml::Value>,
+    /// Key of the embedded library body this symbol draws with (#2209),
+    /// `"<lib_id>#<hash>"`. Absent in a file saved before versioned bodies;
+    /// the decoder upgrades that on load.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(in crate::format) body_ref: String,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -192,6 +197,7 @@ impl Default for SymbolExtras {
             row_id: None,
             library_version: String::new(),
             library_stamp: None,
+            body_ref: String::new(),
             unknown: UnknownFields::default(),
         }
     }
@@ -228,6 +234,7 @@ impl SymbolExtras {
             && self.row_id.is_none()
             && self.library_version.is_empty()
             && self.library_stamp.is_none()
+            && self.body_ref.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -269,6 +276,7 @@ impl SymbolExtras {
             row_id: s.row_id,
             library_version: s.library_version.clone(),
             library_stamp: None,
+            body_ref: s.body_ref.clone(),
             unknown: {
                 // A chosen body owns the key; a preserved unreadable value
                 // must not be written beside it.

@@ -35,7 +35,10 @@ fn engine(app: &mut Signex, path: &Path, dirty: bool, with_tab: bool) {
 
 fn pcb(app: &mut Signex, path: &Path, dirty: bool) {
     let mut t = tab(path, TabKind::Pcb);
-    t.cached_document = Some(TabDocument::Pcb(super::save_routing::board()));
+    t.cached_document = Some(TabDocument::Pcb(signex_engine::pcb::BoardEngine::new(
+        super::save_routing::board(),
+        1,
+    )));
     app.document_state.tabs.push(t);
     if dirty {
         app.document_state.mark_document_dirty(path);

@@ -112,7 +112,7 @@ pub(super) fn sheet_elements(sheet: &SchematicSheet) -> Vec<Element> {
                 .field("lib_id", symbol.lib_id.clone())
                 .field("footprint", symbol.footprint.clone()),
         );
-        let lib = sheet.lib_symbols.get(&symbol.lib_id);
+        let lib = sheet.body_of(symbol);
         let mut pins: Vec<(&String, &Uuid)> = symbol.pin_uuids.iter().collect();
         pins.sort();
         for (key, id) in pins {

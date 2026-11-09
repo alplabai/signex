@@ -133,7 +133,7 @@ fn a_locked_unannotated_unit_keeps_its_siblings_unannotated() {
 fn make_child_newer_minor(dir: &std::path::Path) -> String {
     let path = dir.join("z_child.snxsch");
     let text = std::fs::read_to_string(&path).expect("child on disk");
-    let newer = text.replacen("format = \"snxsch/1\"", "format = \"snxsch/1.7\"", 1);
+    let newer = text.replacen("format = \"snxsch/1.1\"", "format = \"snxsch/1.7\"", 1);
     assert_ne!(newer, text, "fixture must carry the newer token");
     std::fs::write(&path, &newer).expect("write newer child");
     newer
