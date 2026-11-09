@@ -369,6 +369,12 @@ fn a_document_of_another_open_project_is_refused_by_id_and_this_projects_is_not(
         reason(4)
     );
     assert!(sent.is_empty(), "a command reached the app: {sent:?}");
+    // A refusal does not tell where the other project's file is.
+    assert!(
+        !out.stdout.contains("somewhere/else") && !out.stdout.contains("ProjectB"),
+        "a refusal named the other project's file: {}",
+        out.stdout
+    );
 
     // A document of this project, by id, goes through.
     let w = world();

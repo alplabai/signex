@@ -86,13 +86,17 @@ impl Attached {
         // like any path: the app only knows which projects are open, and
         // another open project is not this run's to touch.
         authorize_edits(policy, &self.project_dir, roots, &mut approved, |checked| {
-            named_document_paths(policy, roots, checked, |text| resolve(connection, text)).map(drop)
+            named_document_paths(policy, roots, checked, true, |text| {
+                resolve(connection, text)
+            })
+            .map(drop)
         })
         .map_err(refused)?;
         policy.recheck(&approved, roots).map_err(refused)?;
-        let named =
-            named_document_paths(policy, roots, &approved, |text| resolve(connection, text))
-                .map_err(refused)?;
+        let named = named_document_paths(policy, roots, &approved, true, |text| {
+            resolve(connection, text)
+        })
+        .map_err(refused)?;
         // A save is refused by the app for an agent; the side writes of a save
         // (the project file, other sheets) are therefore never reached.
         if capability_of(approved.meta).writes_files() {

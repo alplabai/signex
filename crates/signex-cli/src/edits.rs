@@ -15,10 +15,14 @@ use crate::protocol::Request;
 /// (`resolve`: an id or a path to the file it is held as, or the app's reason)
 /// and each checked like a path operand (inside the allowed folders, no link
 /// out, within the size cap). An operand that names no document is refused.
+/// With `hide_path` a refusal does not name the file the app resolved: an
+/// attached run asked about an id of another open project must not learn where
+/// that project's file is.
 pub(crate) fn named_document_paths(
     policy: &Policy,
     roots: &[PathBuf],
     approved: &Approved,
+    hide_path: bool,
     mut resolve: impl FnMut(&str) -> Result<PathBuf, String>,
 ) -> Result<Vec<PathBuf>, String> {
     let writes = capability_of(approved.meta).writes_files();
@@ -33,9 +37,16 @@ pub(crate) fn named_document_paths(
             continue;
         }
         let path = resolve(text).map_err(|why| format!("operand `{name}`: {why}"))?;
-        policy
-            .check_resolved(&path, roots, writes)
-            .map_err(|why| format!("operand `{name}`: {why}"))?;
+        policy.check_resolved(&path, roots, writes).map_err(|why| {
+            if hide_path {
+                format!(
+                    "operand `{name}`: the document it names is not inside the folders \
+                         this run may use (--allow-path adds one)"
+                )
+            } else {
+                format!("operand `{name}`: {why}")
+            }
+        })?;
         paths.push(path);
     }
     Ok(paths)

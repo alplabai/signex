@@ -203,7 +203,7 @@ impl Session {
     /// no link out, within the size cap). An operand that names no document
     /// is refused with the app's reason.
     fn named_document_paths(&mut self, approved: &Approved) -> Result<Vec<PathBuf>, String> {
-        named_document_paths(&self.policy, &self.roots, approved, |text| {
+        named_document_paths(&self.policy, &self.roots, approved, false, |text| {
             self.app.document_path(text)
         })
     }
