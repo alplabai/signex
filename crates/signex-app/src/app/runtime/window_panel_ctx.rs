@@ -49,7 +49,6 @@ impl PanelContext {
         if self.pcb_drc != main.pcb_drc {
             self.pcb_drc.clone_from(&main.pcb_drc);
         }
-        self.i18n = main.i18n.clone();
         if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
         }

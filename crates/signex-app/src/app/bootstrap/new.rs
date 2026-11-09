@@ -587,7 +587,6 @@ impl Signex {
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     pcb_drc: None,
-                    i18n: i18n.clone(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL
                         .iter()
                         .copied()
