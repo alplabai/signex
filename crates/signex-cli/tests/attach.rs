@@ -30,6 +30,8 @@ const DEAD_PID: u32 = 2_000_000_000;
 const SHEET_A: &str = "11111111-1111-4111-8111-111111111111";
 const SHEET_B: &str = "22222222-2222-4222-8222-222222222222";
 const OTHER_PROJECT_SHEET: &str = "/somewhere/else/ProjectB/b.snxsch";
+/// The run's own project file, as a document.
+const PROJECT_DOC: &str = "88888888-8888-4888-8888-888888888888";
 
 /// A runtime folder (`$XDG_RUNTIME_DIR/signex-agent`) and a project.
 struct World {
@@ -113,6 +115,7 @@ impl World {
             (sheet.clone(), sheet.clone()),
             (SHEET_A.into(), sheet),
             (SHEET_B.into(), OTHER_PROJECT_SHEET.into()),
+            (PROJECT_DOC.into(), self.project().to_string()),
         ];
         FakeApp::serve(listener, replies, docs)
     }
@@ -152,7 +155,9 @@ impl FakeApp {
                         let asked = request["args"]["document"].as_str().unwrap_or_default();
                         match docs.iter().find(|(text, _)| text == asked) {
                             Some((_, path)) => json!({"id": "document_info", "status": "answered",
-                                "data": {"path": path}, "messages": [], "changed": []}),
+                                "data": {"path": path,
+                                    "kind": if asked == PROJECT_DOC { "project" } else { "schematic" }},
+                                "messages": [], "changed": []}),
                             None => json!({"id": "document_info", "status": "refused",
                                 "reason": "no document has the id", "messages": [], "changed": []}),
                         }
@@ -584,6 +589,58 @@ fn an_edits_log_lines_are_not_shown() {
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     assert_eq!(out.lines[0]["messages"], json!([]));
     assert!(!out.stdout.contains("somewhere/else"), "{}", out.stdout);
+}
+
+/// `save_document` is on the agent channel (#2231): the CLI's `--save` gate and
+/// its confinement still apply first, and a project file, whose save writes
+/// libraries the CLI cannot list, is not saved from an attached run.
+#[test]
+fn an_attached_save_needs_save_and_stays_inside_the_runs_folders() {
+    let w = world();
+    let done = json!({"id": "save_document", "status": "ran", "messages": [], "changed": []});
+    let app = w.app(&[done]);
+    let save = |document: &str, flags: &[&str]| {
+        let arg = format!("document={document}");
+        let mut args = vec!["run", w.project(), "save_document", "--arg", &arg];
+        args.extend_from_slice(flags);
+        w.cli(&args, "")
+    };
+    // No --save: refused here, and the document is not even asked about.
+    let plain = save(SHEET_A, &[]);
+    assert_eq!(plain.lines[0]["status"], "refused", "{}", plain.stdout);
+    assert!(
+        plain.lines[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("pass --save")
+    );
+    // A document of another open project: refused, its file is not named.
+    let other = save(SHEET_B, &["--save"]);
+    assert_eq!(other.lines[0]["status"], "refused", "{}", other.stdout);
+    assert!(
+        other.lines[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("--allow-path")
+    );
+    assert!(!other.stdout.contains("somewhere/else"), "{}", other.stdout);
+    // The project file: its save writes libraries the CLI cannot check.
+    let project = save(PROJECT_DOC, &["--save"]);
+    assert_eq!(project.lines[0]["status"], "refused", "{}", project.stdout);
+    assert!(
+        project.lines[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("save its sheets")
+    );
+    // A sheet of this project, with --save, is sent.
+    let sheet = save(SHEET_A, &["--save"]);
+    assert_eq!(sheet.code, Some(0), "{}", sheet.stderr);
+    assert_eq!(sheet.lines[0]["status"], "ran");
+    let sent = app.finish();
+    assert_eq!(sent.len(), 1, "only the sheet's save was sent: {sent:?}");
+    assert_eq!(sent[0]["id"], "save_document");
+    assert_eq!(sent[0]["args"]["document"], SHEET_A);
 }
 
 /// `query_pins` reads one named sheet: another open project's part cannot be

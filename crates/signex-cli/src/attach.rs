@@ -97,10 +97,9 @@ impl Attached {
             resolve(connection, text)
         })
         .map_err(refused)?;
-        // A save is refused by the app for an agent; the side writes of a save
-        // (the project file, other sheets) are therefore never reached.
         if capability_of(approved.meta).writes_files() {
             policy.check_write_targets(&named, roots).map_err(refused)?;
+            refuse_unchecked_side_writes(connection, &approved).map_err(refused)?;
         }
         let mut reply = connection
             .ask(approved.command.as_str(), &approved.operands)
@@ -171,6 +170,41 @@ fn names_its_document(approved: &Approved) -> Result<(), String> {
             "`{}` needs an explicit `document`: name the document; an attached run never acts on the person's active one",
             approved.command.as_str()
         ));
+    }
+    Ok(())
+}
+
+/// A save writes more than the document it names when that is a project file
+/// (the libraries it has pending); the headless run lists them with the app's
+/// `save_side_writes` and confines each. The running app does not tell them, so
+/// an attached save of a project file is refused: a sheet's plain save writes
+/// nothing else. Any other file-writing command is not on the agent channel.
+fn refuse_unchecked_side_writes(
+    connection: &mut Connection,
+    approved: &Approved,
+) -> Result<(), String> {
+    for (name, text) in &approved.operands {
+        let is_document = approved
+            .meta
+            .operands
+            .iter()
+            .any(|operand| operand.name == *name && operand.kind == OperandKind::Document);
+        if !is_document {
+            continue;
+        }
+        let reply = connection.ask(
+            "document_info",
+            &[("document".to_string(), text.to_string())],
+        )?;
+        let kind = reply.data.as_ref().and_then(|data| data["kind"].as_str());
+        if matches!(kind, None | Some("project")) {
+            return Err(format!(
+                "`{}` of a {} is not available to an attached run: the files its save writes \
+                 besides it cannot be checked here; save its sheets, or run headless",
+                approved.command.as_str(),
+                kind.unwrap_or("document of unknown kind"),
+            ));
+        }
     }
     Ok(())
 }

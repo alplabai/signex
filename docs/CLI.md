@@ -148,9 +148,9 @@ in the middle of continues.
   every edit inside `apply_edits`, before anything is sent. The app then
   applies its agent allowlist and refuses what an agent may not do, and its
   reason comes back as the result line's `reason` (`undo` and `redo`, which
-  are the person's; `save_document`, `close_active_document` and
-  `assign_net_class`, held back; a command with a file path; anything that
-  does not name its document). A command that acts on a document (it has a
+  are the person's; a command with a file path; anything that does not name
+  its document; a close of the person's active tab or of a document with a
+  pending draft). A command that acts on a document (it has a
   `document` operand and is not a query) and is sent without one is refused
   here with "name the document": the app would use the person's active
   document, which is never checked against the run's folders. Every `document` operand, an id or a path, in
@@ -159,14 +159,21 @@ in the middle of continues.
   that file is confined like a path operand: inside the project folder or
   an `--allow-path`, no link out. A document of another project the same app has
   open is refused, as in a headless run; an id the app does not know is refused
-  with the app's reason. The side writes of a save are not checked here: the app
-  refuses every file-writing command for an agent. The resolve and the command
+  with the app's reason. `close_active_document` and `assign_net_class` name
+  their document and are confined the same way. `save_document` also needs
+  `--save`, and its named file is checked as a write target as in a headless
+  run. A save of a project file writes libraries besides it (the headless run
+  lists them with the app's `save_side_writes` and confines each); the running
+  app does not tell them, so an attached save of a project file is refused
+  ("save its sheets, or run headless"). A sheet's plain save writes nothing
+  else. The resolve and the command
   are two requests, so a document that is re-pointed between them (a person
   saving as, closing and reopening) is the same residual race as above.
-- **Dry run.** Nothing is written to disk by the CLI when attached. What a
-  command changes stays in the person's open app as unsaved changes; the
-  person saves, or undoes it. (`--save` lets a `save_document` through the CLI's
-  own policy, but the app refuses it for an agent today.)
+- **Dry run.** Without `--save`, nothing is written to disk by the CLI when
+  attached. What a command changes stays in the person's open app as unsaved
+  changes; the person saves, or undoes it. With `--save`, a `save_document` of a
+  sheet asks the app to save that sheet, which writes the person's unsaved work
+  on it too.
 - **Audit.** The app lists every request, with the CLI's process id, in its
   Messages panel. The CLI itself logs nothing when attached.
 - **`--attach`** fails with exit 2 and no output if no running Signex has the
