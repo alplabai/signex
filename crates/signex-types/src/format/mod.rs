@@ -76,6 +76,8 @@ mod pcb_footprints_tests;
 #[cfg(test)]
 mod pcb_layer_tests;
 #[cfg(test)]
+mod pcb_lib_ref_tests;
+#[cfg(test)]
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;

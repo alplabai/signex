@@ -14,6 +14,7 @@ use super::tsv::{format_f64, parse_f64, parse_nm, parse_uuid};
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
+use crate::part::FootprintSourceRef;
 use crate::pcb::{
     DrillDef, Footprint, Pad, PadNet, PadShape, PadType, Point as PcbPoint, Segment, SymbolLink,
     Via, ViaType,
@@ -312,7 +313,7 @@ fn parse_pad_shape(text: &str, block: &str, row: usize) -> Result<PadShape, Form
         "oval" => PadShape::Oval,
         "roundrect" => PadShape::RoundRect,
         other => {
-            return Err(pad_field_error(
+            return Err(row_field_error(
                 block,
                 row,
                 "shape",
@@ -323,7 +324,7 @@ fn parse_pad_shape(text: &str, block: &str, row: usize) -> Result<PadShape, Form
     })
 }
 
-fn pad_field_error(block: &str, row: usize, field: &str, value: &str, why: &str) -> FormatError {
+fn row_field_error(block: &str, row: usize, field: &str, value: &str, why: &str) -> FormatError {
     FormatError::TsvFieldParse {
         block: block.to_string(),
         row,
@@ -357,7 +358,7 @@ fn take_rotation_cell(
         Some(cell) if cell.is_empty() => Ok(0.0),
         Some(cell) => match cell.trim().parse::<f64>() {
             Ok(degrees) if degrees.is_finite() => Ok(degrees),
-            _ => Err(pad_field_error(
+            _ => Err(row_field_error(
                 block,
                 row,
                 PAD_ROTATION_COLUMN,
@@ -482,7 +483,10 @@ fn split_layers(s: &str) -> Vec<String> {
 pub(in crate::format) fn footprint_to_row(
     fp: &Footprint,
 ) -> Result<PcbFootprintRow, NonFiniteField> {
-    let unknown_columns = with_link_cell(fp.unknown_columns.clone(), fp.schematic_link.as_ref());
+    let unknown_columns = with_lib_ref_cell(
+        with_link_cell(fp.unknown_columns.clone(), fp.schematic_link.as_ref()),
+        fp.library_ref.as_ref(),
+    );
     Ok(PcbFootprintRow {
         uuid: fp.uuid,
         ref_des: fp.reference.clone(),
@@ -499,9 +503,12 @@ pub(in crate::format) fn footprint_to_row(
 pub(in crate::format) fn row_to_footprint(
     mut row: PcbFootprintRow,
     extras: FootprintExtras,
-) -> Footprint {
+    block: &str,
+    index: usize,
+) -> Result<Footprint, FormatError> {
     let schematic_link = take_link_cell(&mut row.unknown_columns);
-    Footprint {
+    let library_ref = take_lib_ref_cell(&mut row.unknown_columns, block, index)?;
+    Ok(Footprint {
         uuid: row.uuid,
         reference: row.ref_des,
         value: row.value,
@@ -521,9 +528,10 @@ pub(in crate::format) fn row_to_footprint(
         graphics: extras.graphics,
         properties: extras.properties,
         schematic_link,
+        library_ref,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
-    }
+    })
 }
 
 /// Header of the optional `sch_link` footprint column: the footprint's
@@ -567,6 +575,46 @@ fn take_link_cell(columns: &mut UnknownColumns) -> Option<SymbolLink> {
     }
     columns.take(SCH_LINK_COLUMN);
     Some(link)
+}
+
+/// Header of the optional `lib_ref` footprint column: the library footprint
+/// the board footprint was built from, as `<library uuid>:<footprint
+/// uuid>@<version>` (ADR-0005 section 13). Like `sch_link` it is absent when
+/// no footprint carries one, and an empty cell for a footprint without one in
+/// a block that has some.
+pub(in crate::format) const LIB_REF_COLUMN: &str = "lib_ref";
+
+fn with_lib_ref_cell(
+    mut columns: UnknownColumns,
+    library_ref: Option<&FootprintSourceRef>,
+) -> UnknownColumns {
+    if let Some(library_ref) = library_ref {
+        columns.set(LIB_REF_COLUMN, library_ref.to_string());
+    }
+    columns
+}
+
+/// An empty cell is "no library footprint". Any other cell must read back
+/// exactly; a malformed one is a load error naming the field and value, as
+/// a wrong library identity would update the footprint from the wrong part.
+fn take_lib_ref_cell(
+    columns: &mut UnknownColumns,
+    block: &str,
+    row: usize,
+) -> Result<Option<FootprintSourceRef>, FormatError> {
+    match columns.take(LIB_REF_COLUMN) {
+        None => Ok(None),
+        Some(cell) if cell.is_empty() => Ok(None),
+        Some(cell) => FootprintSourceRef::parse(&cell).map(Some).ok_or_else(|| {
+            row_field_error(
+                block,
+                row,
+                LIB_REF_COLUMN,
+                &cell,
+                "a library footprint must be <library uuid>:<footprint uuid>@<version>",
+            )
+        }),
+    }
 }
 
 /// Header of the optional `net_locked` pad column. Like the schematic's
@@ -662,7 +710,7 @@ pub(in crate::format) fn row_to_pad(
     let shape = parse_pad_shape(&row.shape, block, index)?;
     let ratio = row.roundrect_ratio;
     if !roundrect_ratio_fits(shape, ratio) {
-        return Err(pad_field_error(
+        return Err(row_field_error(
             block,
             index,
             "roundrect_ratio",

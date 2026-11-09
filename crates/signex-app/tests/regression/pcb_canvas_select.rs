@@ -54,6 +54,7 @@ fn board() -> PcbBoard {
         layer: "TopCopper".into(),
         locked: false,
         schematic_link: None,
+        library_ref: None,
         pads: vec![pad],
         graphics: Vec::new(),
         properties: Vec::new(),

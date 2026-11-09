@@ -4,9 +4,12 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use signex_types::net::Terminal;
+use signex_types::part::PinPadMap;
 use signex_types::pcb::{Footprint, Pad, PcbBoard};
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
+
+use crate::parts::PartAnchor;
 
 /// The link between a schematic terminal and a board pad: two sides that
 /// produce the same key are the same electrical terminal.
@@ -55,6 +58,8 @@ pub struct SymbolPadKey {
     /// Unit -> its part's anchor, for every unit some footprint links to.
     /// A unit named by two different links belongs to the first.
     anchor_of: HashMap<(InstancePath, Uuid), Uuid>,
+    /// Which pad each pin of a part lands on; a part with no map is 1:1.
+    pin_maps: HashMap<PartAnchor, PinPadMap>,
 }
 
 impl SymbolPadKey {
@@ -76,7 +81,17 @@ impl SymbolPadKey {
                     .or_insert(anchor);
             }
         }
-        Self { anchor_of }
+        Self {
+            anchor_of,
+            pin_maps: HashMap::new(),
+        }
+    }
+
+    /// Land each pin of a part on the pad its map names (a library part's
+    /// pin-to-pad overrides). Parts not in `pin_maps` stay 1:1.
+    pub fn with_pin_maps(mut self, pin_maps: HashMap<PartAnchor, PinPadMap>) -> Self {
+        self.pin_maps = pin_maps;
+        self
     }
 }
 
@@ -93,10 +108,19 @@ impl PadLinkKey for SymbolPadKey {
             .get(&(terminal.occurrence.clone(), terminal.symbol))
             .copied()
             .unwrap_or(terminal.symbol);
-        Some(SymbolPad {
+        let anchor = PartAnchor {
             sheet: terminal.occurrence.clone(),
             part,
-            pad: pad.to_string(),
+        };
+        let pad = self
+            .pin_maps
+            .get(&anchor)
+            .map_or(pad, |map| map.pad_for(pad))
+            .to_string();
+        Some(SymbolPad {
+            sheet: anchor.sheet,
+            part,
+            pad,
         })
     }
 
