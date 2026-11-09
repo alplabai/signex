@@ -193,6 +193,11 @@ jobs:
           SIGNEX_GOLDEN_CANDIDATES: ${{ github.workspace }}/target/golden-candidates
         run: cargo nextest run --workspace --profile ci
 
+      # vendor/iced_aw is excluded from the workspace (a path dependency only),
+      # so --workspace never runs its tests (#2206). -p still resolves it.
+      - name: Test vendored iced_aw
+        run: cargo nextest run -p iced_aw --profile ci
+
       # nextest does not run doctests.
       - name: Doctests
         run: cargo test --workspace --doc

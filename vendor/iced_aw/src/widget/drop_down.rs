@@ -738,9 +738,10 @@ mod tests {
 
         let size =
             Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::size(&dropdown);
-        // Text widget has Shrink for both dimensions by default
-        assert_eq!(size.width, Length::Shrink);
-        assert_eq!(size.height, Length::Shrink);
+        // Text widget has Fit for both dimensions by default in the pinned
+        // iced fork; the dropdown reports the underlay's size unchanged.
+        assert_eq!(size.width, Length::Fit);
+        assert_eq!(size.height, Length::Fit);
     }
 
     // ============================================================================
