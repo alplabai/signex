@@ -64,7 +64,10 @@ impl Policy {
                     .map_err(|why| format!("operand `{name}`: {why}"))?;
                 Ok((name.clone(), checked))
             })
-            .collect::<Result<_, String>>()?;
+            .collect::<Result<Vec<_>, String>>()?;
+        if writes {
+            check_project_folder(command.as_str(), &operands, &allowed)?;
+        }
         Ok(Approved {
             command,
             meta,
@@ -96,6 +99,9 @@ impl Policy {
                     now.display()
                 ));
             }
+        }
+        if writes {
+            check_project_folder(approved.command.as_str(), &approved.operands, &allowed)?;
         }
         Ok(())
     }
@@ -188,6 +194,38 @@ fn check_derived_folder(target: &Path, allowed: &[PathBuf]) -> Result<(), String
     refuse_link(&folder)
         .and_then(|()| confine(&folder, allowed).map(|_| ()))
         .map_err(|why| format!("the folder it creates beside it: {why}"))
+}
+
+/// `new_project_with_profile location=<dir> name=<n>` creates the folder
+/// `<dir>/<n>` (unless `make_folder=false`) and writes into it: like the
+/// folder [`check_derived_folder`] covers, it is a write target, so it may not
+/// be a link and must stay inside the allowed folders (a `..` in the name
+/// cannot climb out).
+fn check_project_folder(
+    command: &str,
+    operands: &[(String, String)],
+    allowed: &[PathBuf],
+) -> Result<(), String> {
+    if command != "new_project_with_profile" {
+        return Ok(());
+    }
+    let get = |key: &str| {
+        operands
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.as_str())
+    };
+    let (Some(location), Some(name)) = (get("location"), get("name")) else {
+        return Ok(());
+    };
+    let folder = if get("make_folder") == Some("false") {
+        Path::new(location).join(format!("{name}.snxprj"))
+    } else {
+        Path::new(location).join(name)
+    };
+    refuse_link(&folder)
+        .and_then(|()| confine(&folder, allowed).map(|_| ()))
+        .map_err(|why| format!("the project it creates in `location`: {why}"))
 }
 
 /// Whether the operand `name` with value `text` names a file: a path operand,

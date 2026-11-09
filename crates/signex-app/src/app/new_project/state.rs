@@ -74,7 +74,7 @@ impl RuleDrafts {
             PcbField::TrackWidth => &self.track,
             PcbField::ViaSize => &self.via,
             PcbField::ViaDrill => &self.drill,
-            PcbField::CopperLayers => "",
+            PcbField::CopperLayers | PcbField::Thickness => "",
         }
     }
 
@@ -84,7 +84,7 @@ impl RuleDrafts {
             PcbField::TrackWidth => Some(&mut self.track),
             PcbField::ViaSize => Some(&mut self.via),
             PcbField::ViaDrill => Some(&mut self.drill),
-            PcbField::CopperLayers => None,
+            PcbField::CopperLayers | PcbField::Thickness => None,
         }
     }
 
@@ -122,7 +122,13 @@ pub struct NewProjectState {
     pub(crate) customize_open: bool,
     pub(crate) drafts: RuleDrafts,
     /// Why the last imported rule file was not used.
-    pub(crate) import_error: Option<String>,
+    pub(crate) import_error: Option<super::RuleReadError>,
+    /// The `.snxprj` a Create is writing; Create is off meanwhile.
+    pub(crate) creating: Option<PathBuf>,
+    /// Why the last Create failed, shown in the dialog.
+    pub(crate) create_error: Option<String>,
+    /// A dropdown list is open.
+    pub(crate) dropdown_open: bool,
     pub(crate) target: TargetStatus,
     /// Bumped by every edit that changes the target; a check result for an
     /// older value is dropped.
@@ -141,6 +147,9 @@ impl NewProjectState {
             setup,
             customize_open: false,
             import_error: None,
+            creating: None,
+            create_error: None,
+            dropdown_open: false,
             target: TargetStatus::Unchecked,
             generation: 0,
         }
@@ -195,6 +204,7 @@ impl NewProjectState {
     /// valid rule values.
     pub(crate) fn can_create(&self) -> bool {
         self.blocked_by().is_none()
+            && self.creating.is_none()
             && self.rules_valid()
             && matches!(self.target, TargetStatus::Clear)
     }
@@ -214,7 +224,7 @@ impl NewProjectState {
                 PcbField::TrackWidth => self.setup.pcb.track_width_mm = v,
                 PcbField::ViaSize => self.setup.pcb.via_diameter_mm = v,
                 PcbField::ViaDrill => self.setup.pcb.via_drill_mm = v,
-                PcbField::CopperLayers => {}
+                PcbField::CopperLayers | PcbField::Thickness => {}
             }
         }
     }
@@ -270,6 +280,7 @@ impl NewProjectState {
             M::SheetSizePicked(size) => self.setup.sheet.paper_size = size,
             M::TitleBlockPicked(on) => self.setup.sheet.show_title_block = on,
             M::DesignatorsPicked(standard) => self.setup.designators = standard,
+            M::DropdownToggled(open) => self.dropdown_open = open,
             _ => return false,
         }
         true

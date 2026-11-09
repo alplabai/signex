@@ -18,9 +18,11 @@ use crate::schematic::SchematicSheet;
 pub const COPPER_LAYERS: std::ops::RangeInclusive<u8> = 1..=32;
 
 /// One PCB rule field, for validation messages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PcbField {
     CopperLayers,
+    Thickness,
     Clearance,
     TrackWidth,
     ViaSize,
@@ -32,6 +34,7 @@ impl PcbField {
     pub const fn key(self) -> &'static str {
         match self {
             Self::CopperLayers => "copper_layers",
+            Self::Thickness => "thickness_mm",
             Self::Clearance => "clearance_mm",
             Self::TrackWidth => "track_width_mm",
             Self::ViaSize => "via_diameter_mm",
@@ -43,6 +46,7 @@ impl PcbField {
     pub const fn range(self) -> (f64, f64) {
         match self {
             Self::CopperLayers => (1.0, 32.0),
+            Self::Thickness => (0.1, 10.0),
             Self::Clearance => (0.05, 5.0),
             Self::TrackWidth => (0.05, 25.0),
             Self::ViaSize => (0.1, 10.0),
@@ -116,6 +120,7 @@ impl PcbDefaults {
             }
         };
         push(PcbField::CopperLayers, f64::from(self.copper_layers));
+        push(PcbField::Thickness, self.thickness_mm);
         push(PcbField::Clearance, self.clearance_mm);
         push(PcbField::TrackWidth, self.track_width_mm);
         push(PcbField::ViaSize, self.via_diameter_mm);
@@ -163,7 +168,7 @@ impl PcbDefaults {
             outline: Vec::new(),
             layers,
             setup: Some(PcbSetup {
-                grid_size: 0.0,
+                grid_size: NEW_BOARD_GRID_MM,
                 trace_width: self.track_width_mm,
                 via_diameter: self.via_diameter_mm,
                 via_drill: self.via_drill_mm,
@@ -183,6 +188,9 @@ impl PcbDefaults {
         }
     }
 }
+
+/// Snap grid of a new board, in mm.
+pub const NEW_BOARD_GRID_MM: f64 = 0.1;
 
 /// Copper layers top to bottom for a count; one layer is the top only.
 pub fn copper_layers(count: u8) -> Vec<CopperLayer> {
@@ -259,5 +267,43 @@ impl super::ProjectData {
         if let Some(defaults) = &self.project_defaults.sheet {
             defaults.apply(sheet);
         }
+    }
+}
+
+/// The `.snxprj` key of the project defaults.
+pub(super) const PROJECT_DEFAULTS_KEY: &str = "project_defaults";
+
+/// Interpret a `project_defaults` section, or keep it verbatim for re-save
+/// when it cannot be used: a shape this build does not read, or PCB values
+/// out of range. The project opens either way; the section is not applied
+/// and a warning says so (as for `rules` and `annotation`, #1180).
+pub(super) fn take_project_defaults(data: &mut super::ProjectData, raw: serde_json::Value) {
+    let why = match serde_json::from_value::<ProjectDefaults>(raw.clone()) {
+        Ok(defaults) => match defaults.pcb.as_ref().map(PcbDefaults::problems) {
+            Some(problems) if !problems.is_empty() => problems
+                .iter()
+                .map(|(field, why)| format!("{} {why}", field.key()))
+                .collect::<Vec<_>>()
+                .join(", "),
+            _ => {
+                data.project_defaults = defaults;
+                return;
+            }
+        },
+        Err(err) => err.to_string(),
+    };
+    tracing::warn!(
+        target: "signex::project",
+        "The project's setup defaults are not usable ({why}); they are kept unchanged \
+         and not applied."
+    );
+    data.unknown.insert(PROJECT_DEFAULTS_KEY.into(), raw);
+}
+
+impl super::ProjectData {
+    /// The file has a `project_defaults` section this build could not use:
+    /// kept verbatim for re-save, not applied.
+    pub fn has_unreadable_project_defaults(&self) -> bool {
+        self.project_defaults.is_empty() && self.unknown.get(PROJECT_DEFAULTS_KEY).is_some()
     }
 }

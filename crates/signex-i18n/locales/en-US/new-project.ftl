@@ -65,8 +65,6 @@ dialog-new-project-fab-import = Import rules…
 
 dialog-new-project-fab-note = Generic capability class. Values below are its minimums; any of them can be tightened.
 
-dialog-new-project-fab-note-import = Load a rule file from your fabricator. It fills every value below.
-
 dialog-new-project-fab-note-imported = Rule file loaded. It filled the values below.
 
 # $why is the reason from the rule file parser.
@@ -149,3 +147,26 @@ dialog-new-project-err-not-number = Enter a number in mm.
 dialog-new-project-err-range = Use a value from { $min } to { $max } mm.
 
 dialog-new-project-err-drill = Must be smaller than the via size.
+
+# OS folder picker title, from Browse...
+dialog-new-project-pick-location-title = Choose the project location
+
+# OS file picker title and filter name, from Import rules...
+dialog-new-project-pick-rules-title = Import rules
+dialog-new-project-pick-rules-filter = Rule file
+
+# Projects panel, empty-area context menu row that opens this dialog.
+dialog-new-project-entry-row = New Project...
+
+dialog-new-project-field-thickness = Board thickness
+
+# Create failed; $why is the reason the file writer gave.
+dialog-new-project-err-create-failed = The project was not created: { $why }
+
+# Rule-file problems, shown after "Rule file not used:".
+dialog-new-project-err-rules-read = { $path } could not be read ({ $detail }).
+dialog-new-project-err-rules-syntax = it is not valid TOML ({ $detail }).
+dialog-new-project-err-rules-no-pcb = it has no [pcb] table.
+dialog-new-project-err-rules-missing = { $key } is missing from [pcb].
+dialog-new-project-err-rules-value = { $key }: { $why }
+dialog-new-project-err-rules-too-large = it is larger than { $max } bytes.

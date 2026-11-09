@@ -141,7 +141,11 @@ impl Signex {
         let Some(key) = ctx.key.as_ref() else {
             v.push(dd_msg(
                 None,
-                "New Project...",
+                &signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_NEW_PROJECT_ENTRY_ROW
+                )
+                .into_string(),
                 &self.keymap_shortcut_label("new_document"),
                 Message::Menu(crate::menu_bar::MenuMessage::NewProject),
             ));

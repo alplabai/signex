@@ -92,3 +92,79 @@ fn the_section_builds_from_the_stored_values() {
     let id = app.document_state.projects[0].id;
     let _ = app.view_project_tab(id);
 }
+
+#[test]
+fn each_pick_is_its_own_undo_step() {
+    let mut app = app();
+    edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hobby));
+    edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
+    let id = app.document_state.projects[0].id;
+    assert!(app.step_project_tab_history(id, true));
+    let pcb = app.document_state.projects[0]
+        .data
+        .project_defaults
+        .pcb
+        .clone();
+    assert_eq!(
+        pcb.map(|p| p.copper_layers),
+        Some(2),
+        "Ctrl+Z returns Hobby"
+    );
+}
+
+#[test]
+fn the_selected_card_and_the_designator_store_only_what_changed() {
+    let mut app = app();
+    // Standard is shown selected for a project with no defaults.
+    edit(
+        &mut app,
+        NewProjectMsg::ProfilePicked(SetupProfile::Standard),
+    );
+    assert!(
+        app.document_state.projects[0]
+            .data
+            .project_defaults
+            .is_empty()
+    );
+    assert!(
+        !project_dirty(&app),
+        "clicking the selected card changes nothing"
+    );
+
+    edit(
+        &mut app,
+        NewProjectMsg::DesignatorsPicked(signex_types::designator::DesignatorStandard::Iec81346_2),
+    );
+    let data = &app.document_state.projects[0].data;
+    assert!(
+        data.project_defaults.is_empty(),
+        "no unchosen defaults stored"
+    );
+    assert_eq!(
+        data.designator_standard(),
+        Some(signex_types::designator::DesignatorStandard::Iec81346_2)
+    );
+    let id = app.document_state.projects[0].id;
+    assert!(app.step_project_tab_history(id, true));
+    assert_eq!(
+        app.document_state.projects[0].data.designator_standard(),
+        None
+    );
+    assert!(!app.step_project_tab_history(id, true), "it was one step");
+}
+
+#[test]
+fn a_pick_is_stored_while_a_rule_field_holds_a_bad_value() {
+    let mut app = app();
+    edit(
+        &mut app,
+        NewProjectMsg::RuleEdited(PcbField::Clearance, "abc".into()),
+    );
+    edit(&mut app, NewProjectMsg::SheetSizePicked("A2".into()));
+    let sheet = app.document_state.projects[0]
+        .data
+        .project_defaults
+        .sheet
+        .clone();
+    assert_eq!(sheet.map(|s| s.paper_size), Some("A2".to_string()));
+}

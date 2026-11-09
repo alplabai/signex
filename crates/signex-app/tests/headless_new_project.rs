@@ -155,4 +155,14 @@ fn refusals() {
         0,
         "nothing written"
     );
+
+    // Without its own folder, a location that is itself a project is refused.
+    let taken = tempfile::tempdir().expect("project folder");
+    std::fs::write(taken.path().join("Old.snxprj"), b"").expect("old project");
+    let location = format!("location={}", taken.path().display());
+    match session.run(&["name=New", &location, "make_folder=false"]) {
+        CommandOutcome::Disabled { .. } => {}
+        other => panic!("a project folder was not refused: {other:?}"),
+    }
+    assert!(!taken.path().join("New.snxprj").exists());
 }

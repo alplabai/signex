@@ -445,10 +445,18 @@ impl Signex {
     /// Enter creates the project while the New Project dialog is open. Every
     /// other key is left to the dialog's fields and the keymap.
     fn claim_new_project(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
-        if self.ui_state.new_project.is_none() || !target.paints_overlay_stack() {
+        let Some(state) = self.ui_state.new_project.as_ref() else {
+            return Claim::Pass;
+        };
+        if !target.paints_overlay_stack() {
             return Claim::Pass;
         }
         match event {
+            // An open dropdown list owns Enter: it never submits the dialog.
+            keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(keyboard::key::Named::Enter),
+                ..
+            } if state.dropdown_open => Claim::Swallow,
             keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(keyboard::key::Named::Enter),
                 ..
@@ -877,6 +885,12 @@ mod tests {
         assert!(
             !submit(&app.route_key(w, &character("a", keyboard::Modifiers::default()))),
             "other keys reach the fields"
+        );
+        app.ui_state.new_project.as_mut().unwrap().dropdown_open = true;
+        assert!(
+            app.route_key(w, &named(keyboard::key::Named::Enter))
+                .is_none(),
+            "an open dropdown owns Enter"
         );
     }
 

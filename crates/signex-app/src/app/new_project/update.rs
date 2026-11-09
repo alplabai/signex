@@ -105,7 +105,9 @@ impl Signex {
                 self.with_new_project(|s| s.make_folder = on);
                 self.recheck_new_project_target()
             }
-            M::ImportRequested => import_rule_file(&self.ui_state.io.picker, Message::from),
+            M::ImportRequested => {
+                import_rule_file(&self.ui_state.io.picker, &self.ui_state.i18n, Message::from)
+            }
             M::TargetChecked { generation, status } => {
                 self.with_new_project(|s| {
                     if s.generation == generation {
@@ -141,9 +143,14 @@ impl Signex {
             .new_project
             .as_ref()
             .and_then(NewProjectState::location_path);
+        let title = signex_i18n::t!(
+            self.ui_state.i18n,
+            signex_i18n::ids::DIALOG_NEW_PROJECT_PICK_LOCATION_TITLE
+        )
+        .into_string();
         Task::perform(
             async move {
-                let mut dialog = picker.dialog().set_title("New Project location");
+                let mut dialog = picker.dialog().set_title(title);
                 if let Some(dir) = start.filter(|d| d.is_dir()) {
                     dialog = dialog.set_directory(dir);
                 }
@@ -175,21 +182,61 @@ impl Signex {
             setup: Some(state.setup.clone()),
         };
         let chosen = location.join(format!("{name}.snxprj"));
-        self.ui_state.new_project = None;
+        // The dialog stays open, its Create off, until the writes land: a
+        // failure keeps the setup and shows why (`finish_dialog_create`).
+        if let Some(state) = self.ui_state.new_project.as_mut() {
+            state.creating = Some(chosen.clone());
+            state.create_error = None;
+        }
         self.start_new_project(chosen, plan)
+    }
+
+    /// The writes of the dialog's Create landed. `true` when they failed and
+    /// were the dialog's: it stays open with the reason, and the caller
+    /// raises no error card. On success the dialog closes.
+    pub(crate) fn finish_dialog_create(
+        &mut self,
+        path: &std::path::Path,
+        result: &Result<PathBuf, String>,
+    ) -> bool {
+        let Some(state) = self.ui_state.new_project.as_mut() else {
+            return false;
+        };
+        if state.creating.as_deref() != Some(path) {
+            return false;
+        }
+        state.creating = None;
+        match result {
+            Ok(_) => {
+                self.ui_state.new_project = None;
+                false
+            }
+            Err(why) => {
+                state.create_error = Some(why.clone());
+                crate::diagnostics::log_error(
+                    "Failed to create new project",
+                    &anyhow::anyhow!(why.clone()),
+                );
+                true
+            }
+        }
     }
 }
 
-/// Read a rule file (at most the size cap) and parse it; the error is
-/// worded for the dialog.
-fn read_rule_file(path: &std::path::Path) -> Result<signex_types::project::RuleTemplate, String> {
+/// Read a rule file (at most the size cap) and parse it.
+fn read_rule_file(
+    path: &std::path::Path,
+) -> Result<signex_types::project::RuleTemplate, super::RuleReadError> {
     use std::io::Read as _;
     let cap = signex_types::project::MAX_RULE_FILE_BYTES as u64 + 1;
     let mut text = String::new();
     std::fs::File::open(path)
         .and_then(|f| f.take(cap).read_to_string(&mut text))
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    signex_types::project::RuleTemplate::parse(&text).map_err(|e| e.to_string())
+        .map_err(|e| super::RuleReadError::Read {
+            path: path.display().to_string(),
+            detail: e.to_string(),
+        })?;
+    signex_types::project::RuleTemplate::parse(&text).map_err(super::RuleReadError::File)
 }
 
 /// Import rules: pick a rule file and read it off the update thread. `wrap`
@@ -197,18 +244,31 @@ fn read_rule_file(path: &std::path::Path) -> Result<signex_types::project::RuleT
 /// tab).
 pub(crate) fn import_rule_file(
     picker: &crate::io_ports::Picker,
+    i18n: &signex_i18n::I18n,
     wrap: impl Fn(NewProjectMsg) -> Message + Send + 'static,
 ) -> Task<Message> {
+    use signex_i18n::{ids, t};
     let picker = picker.clone();
+    let title = t!(i18n, ids::DIALOG_NEW_PROJECT_PICK_RULES_TITLE).into_string();
+    let filter = t!(i18n, ids::DIALOG_NEW_PROJECT_PICK_RULES_FILTER).into_string();
     Task::perform(
         async move {
             let path = picker
                 .dialog()
-                .set_title("Import rules")
-                .add_filter("Rule file", &["toml"])
+                .set_title(title)
+                .add_filter(filter, &["toml"])
                 .pick_file()
                 .await?;
-            Some(on_blocking_pool(move || read_rule_file(&path)).await)
+            let shown = path.display().to_string();
+            let read = on_blocking_pool(move || Ok(read_rule_file(&path)))
+                .await
+                .unwrap_or_else(|detail| {
+                    Err(super::RuleReadError::Read {
+                        path: shown,
+                        detail,
+                    })
+                });
+            Some(read)
         },
         move |read| wrap(NewProjectMsg::RulesFileRead(read)),
     )

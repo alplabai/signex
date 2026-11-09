@@ -24,8 +24,8 @@ mod tests;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
-/// Width of the preview column.
-const PREVIEW_W: f32 = 236.0 * 11.0 / 12.0;
+/// Width of the preview column: about 24 em of body text.
+const PREVIEW_W: f32 = TS.body * 24.0;
 
 fn np(msg: NewProjectMsg) -> Message {
     Message::from(msg)
@@ -167,6 +167,18 @@ fn fields<'a>(
         make_folder,
     ]
     .spacing(SP.m);
+    if let Some(why) = &state.create_error {
+        col = col.push(
+            text(t!(
+                i18n,
+                ids::DIALOG_NEW_PROJECT_ERR_CREATE_FAILED,
+                "why" => why.as_str()
+            ))
+            .size(TS.body)
+            .color(tokens::danger(tokens))
+            .boxed(),
+        );
+    }
     if let Some(reason) = blocker_text(state, i18n) {
         col = col.push(
             text(reason)
@@ -181,7 +193,9 @@ fn fields<'a>(
 /// The inline reason Create is off. A blank name is not nagged about.
 fn blocker_text(state: &NewProjectState, i18n: &I18n) -> Option<Label<'static>> {
     Some(match state.blocked_by()? {
-        Blocker::Name(NameProblem::Empty) => return None,
+        Blocker::Name(NameProblem::Empty) => {
+            t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_NAME_EMPTY).into()
+        }
         Blocker::Name(NameProblem::Invalid) => {
             t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_NAME_INVALID).into()
         }

@@ -32,8 +32,8 @@ pub use schematic_defaults::{
     SchematicDefaultOverrides,
 };
 pub use setup::{
-    COPPER_LAYERS, DEFAULT_DESIGNATORS, PcbDefaults, PcbField, PcbValueError, ProjectDefaults,
-    SHEET_SIZES, SheetDefaults, copper_layers,
+    COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
+    ProjectDefaults, SHEET_SIZES, SheetDefaults, copper_layers,
 };
 pub use setup_profile::{FabTemplate, ProjectSetup, SetupProfile, designator_token};
 pub use unknown::UnknownJson;
@@ -670,7 +670,13 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let defaults = value
             .as_object_mut()
             .and_then(|map| map.remove(schematic_defaults::SCHEMATIC_DEFAULTS_KEY));
+        let project_defaults = value
+            .as_object_mut()
+            .and_then(|map| map.remove(setup::PROJECT_DEFAULTS_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = project_defaults {
+            setup::take_project_defaults(&mut data, raw);
+        }
         if let Some(raw) = defaults {
             schematic_defaults::take_schematic_defaults(&mut data, raw);
         }
@@ -786,6 +792,13 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
         stamped.insert(
             schematic_defaults::SCHEMATIC_DEFAULTS_KEY.into(),
             serde_json::to_value(&data.schematic_defaults)?,
+        );
+    }
+    // Defaults chosen in this session replace an unusable section kept.
+    if !data.project_defaults.is_empty() {
+        stamped.insert(
+            setup::PROJECT_DEFAULTS_KEY.into(),
+            serde_json::to_value(&data.project_defaults)?,
         );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))

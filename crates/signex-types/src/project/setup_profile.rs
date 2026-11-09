@@ -253,13 +253,7 @@ impl ProjectSetup {
                 }
                 self.set_layers(n);
             }
-            "thickness" => {
-                self.pcb.thickness_mm = value
-                    .parse::<f64>()
-                    .ok()
-                    .filter(|t| t.is_finite() && (0.1..=10.0).contains(t))
-                    .ok_or_else(|| format!("override `thickness`: {value} must be 0.1 to 10"))?;
-            }
+            "thickness" => self.pcb.thickness_mm = mm(PcbField::Thickness)?,
             "clearance" => self.pcb.clearance_mm = mm(PcbField::Clearance)?,
             "track" => self.pcb.track_width_mm = mm(PcbField::TrackWidth)?,
             "via" => self.pcb.via_diameter_mm = mm(PcbField::ViaSize)?,

@@ -364,27 +364,46 @@ fn depth_one_and_a_thousand_are_honoured() {
 }
 
 #[test]
-fn project_defaults_are_one_undoable_run() {
-    use signex_types::project::{ProjectSetup, SetupProfile};
+fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
+    use signex_types::project::{PcbField, ProjectSetup, SetupProfile};
+    let pick = |setup: &ProjectSetup| ProjectGeneralCommand::SetProjectDefaults {
+        defaults: setup.defaults(),
+        designators: None,
+        typing: None,
+    };
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    let mut setup = ProjectSetup::from_profile(SetupProfile::Hobby);
-    assert!(history.apply(
-        &mut data,
-        ProjectGeneralCommand::SetProjectDefaults(setup.defaults())
-    ));
-    setup.set_layers(10);
-    assert!(history.apply(
-        &mut data,
-        ProjectGeneralCommand::SetProjectDefaults(setup.defaults())
-    ));
-    assert_eq!(
-        data.project_defaults.pcb.as_ref().map(|p| p.copper_layers),
-        Some(10)
-    );
+    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby);
+    let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
+    assert!(history.apply(&mut data, pick(&hobby)));
+    assert!(history.apply(&mut data, pick(&hdi)));
     assert!(history.undo(&mut data));
-    assert!(
-        data.project_defaults.is_empty(),
-        "one undo takes the run back"
+    assert_eq!(
+        data.project_defaults,
+        hobby.defaults(),
+        "Ctrl+Z returns Hobby"
+    );
+
+    // Typing in one rule field is one step; a pick after it is another.
+    let mut typed = hobby.clone();
+    for clearance in [0.3, 0.31, 0.315] {
+        typed.pcb.clearance_mm = clearance;
+        history.apply(
+            &mut data,
+            ProjectGeneralCommand::SetProjectDefaults {
+                defaults: typed.defaults(),
+                designators: None,
+                typing: Some(PcbField::Clearance),
+            },
+        );
+    }
+    assert!(history.apply(&mut data, pick(&hdi)));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.project_defaults, typed.defaults());
+    assert!(history.undo(&mut data));
+    assert_eq!(
+        data.project_defaults,
+        hobby.defaults(),
+        "the typing was one step"
     );
 }

@@ -25,6 +25,17 @@ impl From<NewProjectMsg> for crate::app::Message {
     }
 }
 
+/// Why an imported rule file was not used.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuleReadError {
+    /// The file could not be read; `detail` is the system reason.
+    Read {
+        path: String,
+        detail: String,
+    },
+    File(signex_types::project::RuleFileError),
+}
+
 /// What happened in the New Project dialog.
 #[derive(Debug, Clone)]
 pub enum NewProjectMsg {
@@ -38,7 +49,10 @@ pub enum NewProjectMsg {
     FabPicked(FabTemplate),
     ImportRequested,
     /// The picked rule file was read: `None` when the pick was cancelled.
-    RulesFileRead(Option<Result<RuleTemplate, String>>),
+    RulesFileRead(Option<Result<RuleTemplate, RuleReadError>>),
+    /// A dropdown of the dialog opened (`true`) or closed: while one is open,
+    /// Enter belongs to it and does not submit.
+    DropdownToggled(bool),
     /// The stepper moved by this many layers.
     LayersStepped(i8),
     RuleEdited(PcbField, String),

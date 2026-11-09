@@ -73,7 +73,6 @@ define_ids! {
     DIALOG_NEW_PROJECT_FAB_HDI = "dialog-new-project-fab-hdi";
     DIALOG_NEW_PROJECT_FAB_IMPORT = "dialog-new-project-fab-import";
     DIALOG_NEW_PROJECT_FAB_NOTE = "dialog-new-project-fab-note";
-    DIALOG_NEW_PROJECT_FAB_NOTE_IMPORT = "dialog-new-project-fab-note-import";
     DIALOG_NEW_PROJECT_FAB_NOTE_IMPORTED = "dialog-new-project-fab-note-imported";
     DIALOG_NEW_PROJECT_IMPORT_FAILED = "dialog-new-project-import-failed";
     DIALOG_NEW_PROJECT_LAYERS_LABEL = "dialog-new-project-layers-label";
@@ -113,6 +112,18 @@ define_ids! {
     DIALOG_NEW_PROJECT_ERR_NOT_NUMBER = "dialog-new-project-err-not-number";
     DIALOG_NEW_PROJECT_ERR_RANGE = "dialog-new-project-err-range";
     DIALOG_NEW_PROJECT_ERR_DRILL = "dialog-new-project-err-drill";
+    DIALOG_NEW_PROJECT_PICK_LOCATION_TITLE = "dialog-new-project-pick-location-title";
+    DIALOG_NEW_PROJECT_PICK_RULES_TITLE = "dialog-new-project-pick-rules-title";
+    DIALOG_NEW_PROJECT_PICK_RULES_FILTER = "dialog-new-project-pick-rules-filter";
+    DIALOG_NEW_PROJECT_ENTRY_ROW = "dialog-new-project-entry-row";
+    DIALOG_NEW_PROJECT_FIELD_THICKNESS = "dialog-new-project-field-thickness";
+    DIALOG_NEW_PROJECT_ERR_CREATE_FAILED = "dialog-new-project-err-create-failed";
+    DIALOG_NEW_PROJECT_ERR_RULES_READ = "dialog-new-project-err-rules-read";
+    DIALOG_NEW_PROJECT_ERR_RULES_SYNTAX = "dialog-new-project-err-rules-syntax";
+    DIALOG_NEW_PROJECT_ERR_RULES_NO_PCB = "dialog-new-project-err-rules-no-pcb";
+    DIALOG_NEW_PROJECT_ERR_RULES_MISSING = "dialog-new-project-err-rules-missing";
+    DIALOG_NEW_PROJECT_ERR_RULES_VALUE = "dialog-new-project-err-rules-value";
+    DIALOG_NEW_PROJECT_ERR_RULES_TOO_LARGE = "dialog-new-project-err-rules-too-large";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
     OVERLAY_PLACEMENT_PAUSED_ESC_HINT = "overlay-placement-paused-esc-hint";

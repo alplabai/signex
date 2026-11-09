@@ -337,9 +337,8 @@ fn an_imported_rule_file_fills_the_fields_and_a_bad_one_reports_the_key() {
         ("0.127", 6)
     );
     assert!(s.setup.imported);
-    let bad = RuleTemplate::parse("[pcb]\nclearance_mm=0.1")
-        .unwrap_err()
-        .to_string();
+    let bad =
+        super::RuleReadError::File(RuleTemplate::parse("[pcb]\nclearance_mm=0.1").unwrap_err());
     dialog(
         &mut app,
         NewProjectMsg::RulesFileRead(Some(Err(bad.clone()))),
@@ -356,4 +355,57 @@ fn a_dialog_message_with_no_dialog_open_does_nothing() {
     dialog(&mut app, NewProjectMsg::SubmitRequested);
     dialog(&mut app, NewProjectMsg::NameEdited("x".into()));
     assert!(app.ui_state.new_project.is_none());
+}
+
+#[test]
+fn a_failed_create_keeps_the_dialog_and_its_setup_and_says_why() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Raced".into()));
+    dialog(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
+    // The target is taken after the check said it was clear.
+    let task = app.update(Message::from(NewProjectMsg::SubmitRequested));
+    let state = app
+        .ui_state
+        .new_project
+        .as_ref()
+        .expect("still open while writing");
+    assert!(
+        state.creating.is_some() && !state.can_create(),
+        "Create is off meanwhile"
+    );
+    std::fs::create_dir(tmp.path().join("Raced")).unwrap();
+    std::fs::write(tmp.path().join("Raced").join("theirs.txt"), b"x").unwrap();
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+    let state = app
+        .ui_state
+        .new_project
+        .as_ref()
+        .expect("the dialog stays open");
+    assert!(
+        state.create_error.is_some(),
+        "the reason is shown in the dialog"
+    );
+    assert!(state.creating.is_none());
+    assert_eq!(state.setup.profile, SetupProfile::Hdi, "the setup is kept");
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "no error card over the dialog"
+    );
+}
+
+#[test]
+fn a_location_that_is_itself_a_project_is_refused_without_the_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("Old.snxprj"), b"").unwrap();
+    let status = check_target("New", &tmp.path().display().to_string(), false);
+    assert!(
+        matches!(&status, TargetStatus::Problem(TargetProblem::Other(why)) if why.contains("a project already exists")),
+        "{status:?}"
+    );
 }

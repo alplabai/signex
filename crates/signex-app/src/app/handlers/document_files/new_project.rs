@@ -96,6 +96,14 @@ fn resolve_in_place(
             outer.display()
         );
     }
+    // `enclosing_project` looks above the folder; the folder itself may be a
+    // project already.
+    if holds_a_project(parent)? {
+        anyhow::bail!(
+            "a project already exists in {} — open it instead of creating a new one over it",
+            parent.display()
+        );
+    }
     let project_path = parent.join(marker);
     if project_path.exists() {
         anyhow::bail!("{} already exists", project_path.display());
@@ -250,15 +258,14 @@ pub(crate) fn write_new_project_files_with(
     let (_, stem) = new_project_parts(chosen)?;
     let target = resolve_new_project(chosen, plan.layout)?;
     let mut created = Created::default();
-    let sheet = plan.setup.as_ref().map(|setup| &setup.sheet);
-    let result = write_into(&target, &stem, &mut created, sheet, &|dir| {
+    let result = write_into(&target, &stem, &mut created, plan.setup.as_ref(), &|dir| {
         signex_types::project_vcs_files::ensure_project_gitignore(dir)
     });
     if result.is_err() {
         created.roll_back(&target.folder);
     }
     if result.is_ok() {
-        seed_project_rules(&target.project_path, seed, plan.setup.as_ref());
+        seed_project_rules(&target.project_path, seed);
     }
     if result.is_ok() && target.nested_in_same_named_parent {
         crate::diagnostics::log_info(format!(
@@ -291,11 +298,7 @@ pub(crate) struct RuleSeed {
 /// provenance. The project already exists, so a failure here is reported and
 /// the project is left as created: it then uses the machine's rules until
 /// the user stores some.
-fn seed_project_rules(
-    project_path: &Path,
-    seed: &RuleSeed,
-    setup: Option<&signex_types::project::ProjectSetup>,
-) {
+fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
     if let Some(dir) = seed.dir.as_deref()
         && let Err(why) = crate::app::rule_profile_ui::run_all(dir, &seed.pending)
     {
@@ -310,13 +313,6 @@ fn seed_project_rules(
     }
     let stored = signex_types::project::parse_project(project_path).and_then(|mut data| {
         data.rules = Some(rules);
-        if let Some(setup) = setup {
-            data.project_defaults = setup.defaults();
-            data.annotation = Some(signex_types::project::AnnotationSettings {
-                designator_standard: Some(setup.designators),
-                ..Default::default()
-            });
-        }
         data.document_id
             .get_or_insert_with(signex_types::document_id::DocumentId::new);
         signex_types::project::write_project(project_path, &data)
@@ -329,13 +325,30 @@ fn seed_project_rules(
     }
 }
 
+/// The first content of a dialog-made `.snxprj`: the project as the folder
+/// shows it, with the chosen defaults and designator standard and its id.
+/// Part of the creation: a failure takes the project back.
+fn write_setup(project_path: &Path, setup: &signex_types::project::ProjectSetup) -> Result<()> {
+    let mut data = signex_types::project::parse_project_bytes(project_path, b"")
+        .with_context(|| format!("read the new project {}", project_path.display()))?;
+    data.project_defaults = setup.defaults();
+    data.annotation = Some(signex_types::project::AnnotationSettings {
+        designator_standard: Some(setup.designators),
+        ..Default::default()
+    });
+    data.document_id
+        .get_or_insert_with(signex_types::document_id::DocumentId::new);
+    signex_types::project::write_project(project_path, &data)
+        .with_context(|| format!("write project file {}", project_path.display()))
+}
+
 /// `ensure_gitignore` writes the managed `.gitignore` block; it is a
 /// parameter so a failing writer can be tested.
 fn write_into(
     target: &NewProjectTarget,
     stem: &str,
     created: &mut Created,
-    sheet_defaults: Option<&signex_types::project::SheetDefaults>,
+    setup: Option<&signex_types::project::ProjectSetup>,
     ensure_gitignore: &dyn Fn(
         &Path,
     ) -> Result<(), signex_types::project_vcs_files::ManagedFileError>,
@@ -359,8 +372,8 @@ fn write_into(
 
     let sch_path = dir.join(format!("{stem}.snxsch"));
     let mut sheet = super::blank_schematic_sheet();
-    if let Some(defaults) = sheet_defaults {
-        defaults.apply(&mut sheet);
+    if let Some(setup) = setup {
+        setup.sheet.apply(&mut sheet);
     }
     let serialised = signex_types::format::SnxSchematic::new(sheet)
         .write_string()
@@ -371,6 +384,9 @@ fn write_into(
     })
     .map_err(|e| anyhow::anyhow!("write blank schematic {}: {e}", sch_path.display()))?;
     created.files.push(sch_path);
+    if let Some(setup) = setup {
+        write_setup(&target.project_path, setup)?;
+    }
     // The project exists now; a `.gitignore` problem is reported but never
     // fails the creation.
     if let Err(e) = ensure_gitignore(dir) {
@@ -613,6 +629,43 @@ mod tests {
                 resolve_new_project_with(&chosen, &known, NewProjectLayout::Picked).unwrap();
             assert!(target.folder.ends_with(chosen.file_stem().unwrap()));
         }
+    }
+
+    #[test]
+    fn without_its_own_folder_a_project_is_not_created_in_a_project_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("Old.snxprj"), b"").unwrap();
+        let err = resolve_new_project_with(
+            &tmp.path().join("New.snxprj"),
+            &KnownFolders::default(),
+            NewProjectLayout::InPlace,
+        );
+        assert!(
+            err.is_err_and(|e| e.to_string().contains("a project already exists")),
+            "the location is itself a project"
+        );
+    }
+
+    #[test]
+    fn the_setup_is_in_the_first_write_of_the_project_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = resolve_new_project_with(
+            &tmp.path().join("First.snxprj"),
+            &KnownFolders::default(),
+            NewProjectLayout::NamedFolder,
+        )
+        .unwrap();
+        let mut setup = signex_types::project::ProjectSetup::default();
+        setup.set_layers(6);
+        let mut created = Created::default();
+        write_into(&target, "First", &mut created, Some(&setup), &|_| Ok(())).unwrap();
+        let data = signex_types::project::parse_project(&target.project_path).unwrap();
+        assert_eq!(data.project_defaults, setup.defaults());
+        assert!(data.designator_standard().is_some());
+        assert!(
+            data.rules.is_none(),
+            "the rules are added after, best effort"
+        );
     }
 
     #[test]

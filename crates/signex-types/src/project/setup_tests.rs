@@ -265,3 +265,46 @@ fn a_stored_setup_reads_back_as_the_profile_it_matches() {
         ProjectSetup::default()
     );
 }
+
+fn opened(json: &str) -> ProjectData {
+    parse_project_bytes(std::path::Path::new("P.snxprj"), json.as_bytes()).expect("opens")
+}
+
+const BASE: &str = r#""name":"P","dir":"","schematic_root":null,"pcb_file":null"#;
+
+#[test]
+fn an_unusable_project_defaults_section_is_kept_and_not_applied() {
+    let good_pcb = r#""copper_layers":4,"thickness_mm":1.6,"clearance_mm":0.15,"track_width_mm":0.2,"via_diameter_mm":0.5,"via_drill_mm":0.25"#;
+    for pcb in [
+        // u8 overflow
+        good_pcb.replace("\"copper_layers\":4", "\"copper_layers\":300"),
+        // a missing field
+        good_pcb.replace(",\"via_drill_mm\":0.25", ""),
+        // a negative clearance
+        good_pcb.replace("0.15", "-0.15"),
+    ] {
+        let json = format!(r#"{{{BASE},"project_defaults":{{"pcb":{{{pcb}}}}}}}"#);
+        let data = opened(&json);
+        assert!(data.project_defaults.is_empty(), "{pcb}");
+        assert!(data.has_unreadable_project_defaults(), "{pcb}");
+        // Kept verbatim for the next save.
+        let bytes = encode_project(&data).unwrap();
+        let back: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let wanted: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            back["project_defaults"], wanted["project_defaults"],
+            "{pcb}"
+        );
+    }
+    let json = format!(r#"{{{BASE},"project_defaults":{{"pcb":{{{good_pcb}}}}}}}"#);
+    let data = opened(&json);
+    assert_eq!(data.project_defaults.pcb.map(|p| p.copper_layers), Some(4));
+}
+
+#[test]
+fn a_new_board_has_a_real_grid() {
+    let board = SetupProfile::Standard.pcb(4).new_board();
+    let grid = board.setup.unwrap().grid_size;
+    assert_eq!(grid, NEW_BOARD_GRID_MM);
+    assert!(grid > 0.0);
+}

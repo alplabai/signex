@@ -113,8 +113,45 @@ fn field_caption(field: PcbField, i18n: &I18n) -> Localized {
             PcbField::ViaSize => ids::DIALOG_NEW_PROJECT_FIELD_VIA,
             PcbField::ViaDrill => ids::DIALOG_NEW_PROJECT_FIELD_DRILL,
             PcbField::CopperLayers => ids::DIALOG_NEW_PROJECT_LAYERS_LABEL,
+            PcbField::Thickness => ids::DIALOG_NEW_PROJECT_FIELD_THICKNESS,
         }
     )
+}
+
+/// Why an imported rule file was not used, in words.
+fn rule_error_text(error: &crate::app::new_project::RuleReadError, i18n: &I18n) -> Localized {
+    use crate::app::new_project::RuleReadError;
+    use signex_types::project::RuleFileError as F;
+    match error {
+        RuleReadError::Read { path, detail } => t!(
+            i18n,
+            ids::DIALOG_NEW_PROJECT_ERR_RULES_READ,
+            "path" => path.as_str(),
+            "detail" => detail.as_str()
+        ),
+        RuleReadError::File(F::Syntax(detail)) => t!(
+            i18n,
+            ids::DIALOG_NEW_PROJECT_ERR_RULES_SYNTAX,
+            "detail" => detail.as_str()
+        ),
+        RuleReadError::File(F::NoPcbTable) => t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_RULES_NO_PCB),
+        RuleReadError::File(F::Missing(key)) => t!(
+            i18n,
+            ids::DIALOG_NEW_PROJECT_ERR_RULES_MISSING,
+            "key" => *key
+        ),
+        RuleReadError::File(F::Value { field, why }) => t!(
+            i18n,
+            ids::DIALOG_NEW_PROJECT_ERR_RULES_VALUE,
+            "key" => field.key(),
+            "why" => value_error_text(why, *field, i18n).into_string()
+        ),
+        RuleReadError::File(F::TooLarge(max)) => t!(
+            i18n,
+            ids::DIALOG_NEW_PROJECT_ERR_RULES_TOO_LARGE,
+            "max" => *max
+        ),
+    }
 }
 
 /// The inline reason a rule value is refused.
@@ -252,7 +289,7 @@ pub(crate) fn pcb_rules<'a>(
             text(t!(
                 i18n,
                 ids::DIALOG_NEW_PROJECT_IMPORT_FAILED,
-                "why" => why.as_str()
+                "why" => rule_error_text(why, i18n).into_string()
             ))
             .size(TS.caption)
             .color(tokens::danger(tokens))
@@ -298,6 +335,8 @@ where
     let picker = pick_list(current, options, |o: &Opt<T>| o.label.clone())
         .graphite()
         .on_select(move |o: Opt<T>| on_select(o.value))
+        .on_open(NewProjectMsg::DropdownToggled(true))
+        .on_close(NewProjectMsg::DropdownToggled(false))
         .width(Length::Fixed(VALUE_W * 2.2));
     labelled_row(t!(i18n, caption), picker.boxed(), tokens)
 }

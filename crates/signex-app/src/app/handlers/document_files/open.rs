@@ -113,6 +113,9 @@ impl Signex {
         self.document_state
             .pending_opens
             .remove_untracked(&project_path);
+        if self.finish_dialog_create(&project_path, &result) {
+            return iced::Task::none();
+        }
         let written = match result {
             Ok(written) => written,
             Err(error) => {

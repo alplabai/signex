@@ -58,10 +58,37 @@ pub(super) fn view<'a>(
     container(body.map(wrap)).padding([sp.xl, sp.xl]).boxed()
 }
 
+/// Which stored part an edit of the section touches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SetupPart {
+    Pcb,
+    Sheet,
+    Designators,
+}
+
+impl SetupPart {
+    fn of(msg: &NewProjectMsg) -> Option<Self> {
+        use NewProjectMsg as M;
+        Some(match msg {
+            M::ProfilePicked(_)
+            | M::FabPicked(_)
+            | M::RulesFileRead(_)
+            | M::LayersStepped(_)
+            | M::RuleEdited(..) => Self::Pcb,
+            M::SheetSizePicked(_) | M::TitleBlockPicked(_) => Self::Sheet,
+            M::DesignatorsPicked(_) => Self::Designators,
+            _ => return None,
+        })
+    }
+}
+
 impl Signex {
-    /// An edit in the Project setup section. A valid draft is stored in the
-    /// project's data as one General-history step; a draft with a bad value
-    /// keeps its text and its inline reason and stores nothing.
+    /// An edit in the Project setup section: only the part it changed is
+    /// stored, as one General-history step. Typing in one rule field joins
+    /// one step; every pick is its own. A pick that changes nothing (the
+    /// card already selected) stores nothing, and a rule value that does not
+    /// parse keeps its text and inline reason while the last good value
+    /// stays stored, so the other picks are never dropped.
     pub(crate) fn edit_project_setup(
         &mut self,
         project_id: ProjectId,
@@ -74,41 +101,51 @@ impl Signex {
             return iced::Task::none();
         };
         if matches!(msg, NewProjectMsg::ImportRequested) {
-            return import_rule_file(&self.ui_state.io.picker, edited(project_id));
+            return import_rule_file(
+                &self.ui_state.io.picker,
+                &self.ui_state.i18n,
+                edited(project_id),
+            );
         }
+        let stored = project.data.project_defaults.clone();
         let stored_designators = project.data.designator_standard();
         let fresh = NewProjectState::of_project(&project.data);
+        let part = SetupPart::of(&msg);
+        let typing = match &msg {
+            NewProjectMsg::RuleEdited(field, _) => Some(*field),
+            _ => None,
+        };
         let tab = self
             .document_state
             .project_tabs
             .entry(project_id)
             .or_default();
         let draft = tab.setup_draft.get_or_insert(fresh);
-        if !draft.apply_setup(msg) || !draft.rules_valid() {
+        let before = draft.setup.clone();
+        if !draft.apply_setup(msg) || draft.setup == before {
             return iced::Task::none();
         }
-        let defaults = draft.setup.defaults();
-        let designators = draft.setup.designators;
-        self.apply_project_setup_change(project_id, defaults, designators, stored_designators);
-        iced::Task::none()
-    }
-
-    fn apply_project_setup_change(
-        &mut self,
-        project_id: ProjectId,
-        defaults: signex_types::project::ProjectDefaults,
-        designators: signex_types::designator::DesignatorStandard,
-        stored_designators: Option<signex_types::designator::DesignatorStandard>,
-    ) {
+        let Some(part) = part else {
+            return iced::Task::none();
+        };
+        let mut defaults = stored;
+        let mut designators = None;
+        match part {
+            SetupPart::Pcb => defaults.pcb = Some(draft.setup.pcb.clone()),
+            SetupPart::Sheet => defaults.sheet = Some(draft.setup.sheet.clone()),
+            SetupPart::Designators => {
+                designators = (stored_designators != Some(draft.setup.designators))
+                    .then_some(draft.setup.designators);
+            }
+        }
         self.apply_project_general(
             project_id,
-            ProjectGeneralCommand::SetProjectDefaults(defaults),
+            ProjectGeneralCommand::SetProjectDefaults {
+                defaults,
+                designators,
+                typing,
+            },
         );
-        if stored_designators != Some(designators) {
-            self.apply_project_general(
-                project_id,
-                ProjectGeneralCommand::SetDesignatorStandard(Some(designators)),
-            );
-        }
+        iced::Task::none()
     }
 }

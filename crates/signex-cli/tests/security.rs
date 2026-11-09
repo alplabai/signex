@@ -807,3 +807,40 @@ fn a_save_as_by_id_names_a_project_sheet_that_is_a_link_out() {
     assert_eq!(std::fs::read(&outside).unwrap(), before);
     live.finish();
 }
+
+#[test]
+fn new_project_with_profile_needs_save_and_writes_nothing_without_it() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let project = fx.project.to_str().unwrap();
+    let before = snapshot(&root);
+    let create = one(json!({"id": "new_project_with_profile", "args": {
+        "name": "Made",
+        "location": root.join("proj"),
+    }}));
+    let out = run_cli(&["run", project], &create);
+    assert_eq!(
+        refusal(&out, 0),
+        "`new_project_with_profile` needs the `save` capability; pass --save"
+    );
+    assert_eq!(snapshot(&root), before, "nothing was written");
+}
+
+#[test]
+fn new_project_with_profile_may_not_create_its_folder_outside_the_project() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let project = fx.project.to_str().unwrap();
+    let before = snapshot(&root);
+    let climb = one(json!({"id": "new_project_with_profile", "args": {
+        "name": "../../escaped",
+        "location": root.join("proj"),
+    }}));
+    let out = run_cli(&["run", project, "--save"], &climb);
+    assert!(
+        refusal(&out, 0).contains("the project it creates in `location`"),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(snapshot(&root), before, "nothing was written");
+}

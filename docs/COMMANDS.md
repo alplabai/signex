@@ -87,6 +87,7 @@ one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
 | `new_document` | New | file | `Ctrl+N` | `Ctrl+N` |
+| `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
 | `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+K`, `Ctrl+Shift+P` |

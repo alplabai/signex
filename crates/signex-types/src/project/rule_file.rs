@@ -26,8 +26,8 @@ pub enum RuleFileError {
     NoPcbTable,
     #[error("`{0}` is missing from `[pcb]`")]
     Missing(&'static str),
-    #[error("`{key}` {why}")]
-    Value { key: &'static str, why: String },
+    #[error("`{}` {why}", .field.key())]
+    Value { field: PcbField, why: PcbValueError },
     #[error("the rule file is larger than {0} bytes")]
     TooLarge(usize),
 }
@@ -53,11 +53,8 @@ struct RawPcb {
     thickness_mm: Option<f64>,
 }
 
-fn value_error(key: &'static str, why: impl ToString) -> RuleFileError {
-    RuleFileError::Value {
-        key,
-        why: why.to_string(),
-    }
+fn value_error(field: PcbField, why: PcbValueError) -> RuleFileError {
+    RuleFileError::Value { field, why }
 }
 
 impl RuleTemplate {
@@ -71,9 +68,7 @@ impl RuleTemplate {
         let pcb = raw.pcb.ok_or(RuleFileError::NoPcbTable)?;
         let need = |field: PcbField, value: Option<f64>| {
             let value = value.ok_or(RuleFileError::Missing(field.key()))?;
-            field
-                .check(value)
-                .map_err(|why| value_error(field.key(), why))
+            field.check(value).map_err(|why| value_error(field, why))
         };
         let clearance_mm = need(PcbField::Clearance, pcb.clearance_mm)?;
         let track_width_mm = need(PcbField::TrackWidth, pcb.track_width_mm)?;
@@ -81,7 +76,7 @@ impl RuleTemplate {
         let via_drill_mm = need(PcbField::ViaDrill, pcb.via_drill_mm)?;
         if via_drill_mm >= via_diameter_mm {
             return Err(value_error(
-                PcbField::ViaDrill.key(),
+                PcbField::ViaDrill,
                 PcbValueError::DrillNotSmallerThanVia,
             ));
         }
@@ -91,15 +86,21 @@ impl RuleTemplate {
                 u8::try_from(n)
                     .ok()
                     .filter(|n| COPPER_LAYERS.contains(n))
-                    .ok_or_else(|| value_error(PcbField::CopperLayers.key(), "must be 1 to 32"))
+                    .ok_or_else(|| {
+                        let (min, max) = PcbField::CopperLayers.range();
+                        value_error(
+                            PcbField::CopperLayers,
+                            PcbValueError::OutOfRange { min, max },
+                        )
+                    })
             })
             .transpose()?;
         let thickness_mm = pcb
             .thickness_mm
             .map(|t| {
-                (t.is_finite() && (0.1..=10.0).contains(&t))
-                    .then_some(t)
-                    .ok_or_else(|| value_error("thickness_mm", "must be 0.1 to 10"))
+                PcbField::Thickness
+                    .check(t)
+                    .map_err(|why| value_error(PcbField::Thickness, why))
             })
             .transpose()?;
         Ok(Self {
