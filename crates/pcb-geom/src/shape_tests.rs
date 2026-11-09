@@ -148,3 +148,18 @@ fn rotated_rect_touches_rect_by_separating_axes() {
     assert!(tilted.touches_rect(&r(700_000, 700_000, 2 * MM, 2 * MM)));
     assert!(tilted.touches_rect(&r(-10, -10, 10, 10)));
 }
+
+#[test]
+fn a_ratio_half_round_rect_outline_repeats_no_vertex() {
+    let pad = Shape::RoundRect {
+        center: p(0, 0),
+        half_w: MM,
+        half_h: MM,
+        radius: MM,
+        rotation_deg: 0.0,
+    };
+    let ring = pad.outline(4);
+    for (i, a) in ring.iter().enumerate() {
+        assert_ne!(*a, ring[(i + 1) % ring.len()], "vertex {i} repeats");
+    }
+}

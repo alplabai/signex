@@ -75,7 +75,11 @@ fn text_with_row(shape: &str, ratio: &str) -> String {
     let text = SnxPcb::new(board_with(vec![pad(1, PadShape::RoundRect, 0.25, 0.0)]))
         .write_string()
         .unwrap();
-    text.replace("roundrect", shape).replace("0.25", ratio)
+    // Only the shape cell: the `roundrect_ratio` header column stays.
+    text.replace("roundrect_ratio", "@@")
+        .replace("roundrect", shape)
+        .replace("@@", "roundrect_ratio")
+        .replace("0.25", ratio)
 }
 
 #[test]
@@ -85,7 +89,10 @@ fn an_unknown_shape_fails_naming_the_field_and_the_value() {
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains("pads") && err.contains("\"shape\"") && err.contains(token),
+            err.contains("row 0")
+                && err.contains("\"shape\"")
+                && err.contains(token)
+                && err.contains("not a pad shape"),
             "{err}"
         );
     }

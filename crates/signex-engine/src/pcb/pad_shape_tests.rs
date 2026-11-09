@@ -10,6 +10,11 @@ use super::BoardCommand;
 const FP: &str = "00000000-0000-0000-0000-00000000000a";
 
 fn board(shape: &str) -> PcbBoard {
+    board_turned(shape, 0.0)
+}
+
+/// A board whose pad carries its own turn of `own` degrees.
+fn board_turned(shape: &str, own: f64) -> PcbBoard {
     serde_json::from_value(serde_json::json!({
         "uuid": "00000000-0000-0000-0000-000000000001",
         "footprints": [{
@@ -19,7 +24,7 @@ fn board(shape: &str) -> PcbBoard {
                 "uuid": "00000000-0000-0000-0000-0000000000a1", "number": "1",
                 "pad_type": "smd", "shape": shape, "roundrect_ratio": 0.25,
                 "position": {"x": 2.0, "y": 0.0}, "size": {"x": 3.0, "y": 1.0},
-                "rotation": 0.0, "drill": null, "layers": ["TopCopper"], "net": null
+                "rotation": own, "drill": null, "layers": ["TopCopper"], "net": null
             }]
         }]
     }))
@@ -85,4 +90,26 @@ fn rotate_keeps_a_round_rect_radius_and_flip_mirrors_its_angle() {
     assert_eq!((radius, rotation_deg), (250_000, 330.0));
     assert_eq!(center, PointNm::new(-1_732_051, 1_000_000));
     assert_ne!(flipped.inverse, BoardCommand::Flip { footprint: id });
+}
+
+#[test]
+fn flip_reverses_a_pads_own_non_zero_turn() {
+    let mut b = board_turned("round_rect", 20.0);
+    let id = Uuid::parse_str(FP).unwrap();
+    let Shape::RoundRect { rotation_deg, .. } = copper(&b) else {
+        panic!("round-rect expected");
+    };
+    assert_eq!(rotation_deg, 20.0);
+    BoardCommand::Flip { footprint: id }.apply(&mut b).unwrap();
+    let Shape::RoundRect {
+        center,
+        rotation_deg,
+        ..
+    } = copper(&b)
+    else {
+        panic!("round-rect expected");
+    };
+    // On the bottom the pad's own turn runs the other way: -20 = 340.
+    assert_eq!(rotation_deg, 340.0);
+    assert_eq!(center, PointNm::new(-2_000_000, 0));
 }

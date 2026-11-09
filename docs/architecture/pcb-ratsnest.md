@@ -19,8 +19,8 @@ crate would be the "kept in step" pair ADR-0005 bans.
   with no end or centre inside the other. A pad is its real outline
   as `pad_shape` gives it, turned by the footprint's rotation and the pad's
   own: an oval is a stadium along its longer side, a round-rect keeps its
-  corner radius and is read as a polygon of its corner arcs, so it is
-  under-read by the sagitta. Through-hole pads and through vias
+  corner radius and is read exactly, as its rectangle inset by the radius
+  plus that radius. Through-hole pads and through vias
   reach every layer; blind and micro vias the layers between the ones they
   name.
 - Per net, each connected group of copper holding a pad is an island. Up to

@@ -9,9 +9,6 @@ use crate::rect::RectNm;
 use crate::transform::{rotate, sin_cos_deg};
 use crate::units::{GeomError, MAX_ABS_NM, PointNm};
 
-/// Points per corner arc when a rounded rectangle is read as a polygon.
-pub(crate) const ROUND_STEPS: usize = 8;
-
 /// One item's copper on the board.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Shape {
@@ -72,10 +69,26 @@ impl Shape {
         match *self {
             Shape::Disc { center, radius } => RectNm::around(center, radius, radius),
             Shape::Capsule { a, b, radius } => RectNm::new(a, b).inflate(radius),
-            Shape::Rect { .. } | Shape::RoundRect { .. } => {
+            Shape::Rect { .. } => {
                 let [c0, c1, c2, c3] = self.box_corners();
                 RectNm::new(c0, c1).union(&RectNm::new(c2, c3))
             }
+            // The inset rectangle grown by the corner radius is the exact
+            // extent, however the pad is turned.
+            Shape::RoundRect {
+                center,
+                half_w,
+                half_h,
+                radius,
+                rotation_deg,
+            } => Shape::Rect {
+                center,
+                half_w: half_w - radius,
+                half_h: half_h - radius,
+                rotation_deg,
+            }
+            .aabb()
+            .inflate(radius),
         }
     }
 
@@ -121,9 +134,8 @@ impl Shape {
         }
     }
 
-    /// Whether the shape shares a point with `rect`. Exact for discs,
-    /// tracks and rectangles; a rounded rectangle is tested as the ring of
-    /// its corner arcs, under-read by less than the sagitta.
+    /// Whether the shape shares a point with `rect`. Exact integer nm for
+    /// every shape, a rounded rectangle included.
     pub fn touches_rect(&self, rect: &RectNm) -> bool {
         match *self {
             Shape::Disc { center, radius } => {
@@ -152,7 +164,7 @@ impl Shape {
                 let (sin, cos) = sin_cos_deg(rotation_deg);
                 let steps = steps.max(2);
                 // Corner arcs counter-clockwise from the +x,+y corner.
-                [(1, 1, 0.0), (-1, 1, 0.25), (-1, -1, 0.5), (1, -1, 0.75)]
+                let mut pts = [(1, 1, 0.0), (-1, 1, 0.25), (-1, -1, 0.5), (1, -1, 0.75)]
                     .into_iter()
                     .flat_map(|(sx, sy, turn)| {
                         (0..=steps).map(move |i| {
@@ -164,7 +176,13 @@ impl Shape {
                         })
                     })
                     .map(|local| rotate(local, sin, cos).plus(center))
-                    .collect()
+                    .collect::<Vec<_>>();
+                // Where one arc meets the next (ratio 0.5), the points repeat.
+                pts.dedup();
+                if pts.len() > 1 && pts.first() == pts.last() {
+                    pts.pop();
+                }
+                pts
             }
             Shape::Disc { .. } | Shape::Capsule { .. } => Vec::new(),
         }
@@ -185,9 +203,9 @@ impl Shape {
         };
         match *self {
             Shape::Rect { .. } | Shape::RoundRect { .. } => self.outline(steps),
-            Shape::Disc { center, radius } => arc(center, radius, 0.0, 4 * steps)
-                .take(4 * steps)
-                .chain(arc(center, radius, std::f64::consts::PI, 4 * steps).take(4 * steps))
+            Shape::Disc { center, radius } => arc(center, radius, 0.0, 2 * steps)
+                .take(2 * steps)
+                .chain(arc(center, radius, std::f64::consts::PI, 2 * steps).take(2 * steps))
                 .collect(),
             Shape::Capsule { a, b, radius } => {
                 let axis = ((b.y - a.y) as f64).atan2((b.x - a.x) as f64);

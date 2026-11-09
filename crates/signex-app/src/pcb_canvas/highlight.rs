@@ -11,8 +11,8 @@ use super::PcbCanvas;
 use crate::app::Message;
 use crate::canvas::Camera;
 
-/// Ellipse outline resolution.
-const ELLIPSE_STEPS: usize = 32;
+/// Points per quarter turn of a pad corner or end cap.
+const CORNER_STEPS: usize = 32;
 /// Narrowest stroke for a highlighted track, in pixels.
 const MIN_BAND_PX: f32 = 3.0;
 
@@ -120,7 +120,7 @@ fn paint(
             frame.stroke(&path, stroke);
         }
         Shape::Rect { .. } | Shape::RoundRect { .. } => {
-            let points = shape.outline(ELLIPSE_STEPS);
+            let points = shape.outline(CORNER_STEPS);
             let path = Path::new(|b| {
                 let mut ring = points.iter().map(|p| screen(camera, *p));
                 if let Some(first) = ring.next() {
