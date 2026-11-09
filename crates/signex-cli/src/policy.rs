@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use signex_app::keymap::{AppCommandId, CommandMetadata, OperandKind, metadata_for};
 
 use crate::capability::{Capability, capability_of};
-use crate::catalog::GUI_ONLY_REASON;
+
 use crate::confine::confine;
 use crate::input::Limits;
 use crate::protocol::Request;
@@ -43,8 +43,8 @@ impl Policy {
         let command = AppCommandId::new(request.id.as_str())?;
         let meta = metadata_for(&command)
             .ok_or_else(|| format!("unknown command `{}`", command.as_str()))?;
-        if meta.flags.gui_only {
-            return Err(format!("`{}` is {GUI_ONLY_REASON}", command.as_str()));
+        if let Some(reason) = meta.headless_refusal() {
+            return Err(reason);
         }
         let needed = capability_of(meta);
         if !self.capabilities.contains(&needed) {
@@ -305,7 +305,10 @@ mod tests {
         let bad = authorize(&all, &fx, &request("Not An Id", &[])).unwrap_err();
         assert!(bad.contains("snake_case"), "{bad}");
         let gui = authorize(&all, &fx, &request("toggle_properties_panel", &[])).unwrap_err();
-        assert!(gui.contains(GUI_ONLY_REASON), "{gui}");
+        assert_eq!(gui, "`toggle_properties_panel` only works in a window");
+        // A modal the catalog classified as window only in #2170.
+        let erc = authorize(&all, &fx, &request("open_erc_dialog", &[])).unwrap_err();
+        assert_eq!(erc, "`open_erc_dialog` only works in a window");
     }
 
     #[test]

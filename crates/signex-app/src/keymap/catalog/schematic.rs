@@ -31,7 +31,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -363,7 +363,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Electrical Rules Check"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -373,7 +373,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Electrical Rules Check"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -383,7 +383,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Parameter Manager..."),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

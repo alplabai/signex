@@ -115,10 +115,7 @@ fn a_gui_only_command_is_refused_with_the_catalogs_reason() {
     );
     assert_eq!(
         refusal(&out, 0),
-        format!(
-            "`toggle_properties_panel` is {}",
-            signex_cli::catalog::GUI_ONLY_REASON
-        )
+        "`toggle_properties_panel` only works in a window"
     );
 }
 

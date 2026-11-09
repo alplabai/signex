@@ -187,6 +187,13 @@ impl Signex {
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
+        // A command whose whole effect is window UI is refused, never `Ran`
+        // (#2170). The GUI dispatch never reads this.
+        if let Some(reason) =
+            crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
+        {
+            return (CommandOutcome::Disabled { reason }, Task::none());
+        }
         // Operands run only through the command's own operand handler; one
         // without a handler is refused, never run as if it had none (#2155).
         let missing = (!args.has_operands())

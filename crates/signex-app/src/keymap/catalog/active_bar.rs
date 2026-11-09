@@ -548,7 +548,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Clear Net Color"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

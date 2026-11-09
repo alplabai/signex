@@ -124,7 +124,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -164,7 +164,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -184,7 +184,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -743,7 +743,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -837,7 +837,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("Select All"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -917,7 +917,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -927,7 +927,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -997,7 +997,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("AutoFocus (dim unselected)"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -1007,7 +1007,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: Some("Toggle Grid"),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -1038,7 +1038,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
