@@ -268,6 +268,9 @@ pub enum LibraryMessage {
     /// `TabKind::LibraryBrowser(path)` tab (or activates the existing
     /// one when the path is already open).
     OpenLibraryBrowser(PathBuf),
+    /// Tools ▸ Library Editor was chosen: focus an open Library Browser
+    /// tab, else open the first open library's (#2247).
+    LibraryEditorRequested,
     /// A `.snxlib` mount prepared off the UI thread has finished — issue
     /// #99 part 2c. Produced by
     /// `library::mount::prepare_mount_off_thread`, handled in

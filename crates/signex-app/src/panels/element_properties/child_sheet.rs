@@ -51,6 +51,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     let fill_advanced_open = ctx.child_sheet_fill_advanced_open;
     let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
     let palette = PanelPalette::from_tokens(&ctx.tokens);
+    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
@@ -123,10 +124,16 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                 ));
                 c = c.push(
                     container(
-                        signex_widgets::button(text(raw("Reset to Default")).size(TS.caption))
-                            .padding([SP.s, 10.0])
-                            .on_press(PanelMsg::ResetChildSheetStyle(id))
-                            .style(crate::panels::form_look::option_tile(false)),
+                        signex_widgets::button(
+                            text(signex_i18n::t!(
+                                i18n,
+                                signex_i18n::ids::PANELS_PROPERTIES_RESET_STYLE
+                            ))
+                            .size(TS.caption),
+                        )
+                        .padding([SP.s, 10.0])
+                        .on_press(PanelMsg::ResetChildSheetStyle(id))
+                        .style(crate::panels::form_look::option_tile(false)),
                     )
                     .padding([6.0, SP.m])
                     .width(Length::Fill)

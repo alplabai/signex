@@ -10,6 +10,7 @@ cancel_current_tool	interactive	Cancel current stage / exit placement mode	-	Gen
 center_on_cursor	view	Center on cursor	-	General	-	-	Always	gui_only	-
 center_view_at_cursor	view	Center/redraw view around cursor	-	General	-	-	Always	gui_only	-
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
+close_all_documents	window	Close all documents	Close All Documents	General	-	-	Always	gui_only	-
 copy	edit	Copy	-	General	-	-	RequiresSelection	runs_headless	-
 copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 cross_probe	select	Cross probe the selection to the board or schematic	Cross Probe	General	-	-	RequiresSelection	gui_only	-
@@ -50,6 +51,7 @@ mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutat
 move_object	modify	Move object	Move	General	-	-	Always	gui_only,mutates_doc,undoable	-
 move_selection	modify	Move selection	Move Selection	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 new_document	file	New	New Project	General	-	-	Always	-	path:path,overwrite:bool?
+new_project_with_profile	file	New project from a profile	-	General	-	-	Always	-	name:text,location:path,make_folder:bool?,profile:text?,overrides:text?
 next_document_tab	window	Next open document tab	-	General	-	-	Always	gui_only	-
 next_grid	view	Next grid	Cycle Grid Size	General	-	-	Always	gui_only	-
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only	-
@@ -57,6 +59,7 @@ open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	
 open_document	file	Open document	Open...	General	-	-	Always	-	path:path
 open_grid_picker	view	Open grid picker	-	General	-	-	Always	gui_only	-
 open_grid_properties	view	Open grid properties	-	General	-	-	Always	gui_only	-
+open_library_browser	library	Open library browser	Library Editor	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-
 paste	edit	Paste	-	General	-	-	Always	gui_only,mutates_doc,undoable	-

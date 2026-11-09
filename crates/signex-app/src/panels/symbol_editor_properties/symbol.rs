@@ -62,6 +62,7 @@ pub(super) fn view_symbol_selection<'a>(
     primary: Color,
     border_c: Color,
     tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     // The .snxsym editor is a SYMBOL editor — symbol-level
     // visual / geometric properties only. Component metadata
@@ -98,7 +99,7 @@ pub(super) fn view_symbol_selection<'a>(
     };
 
     // ── ▾ Symbol ──
-    col = col.push(super::section_title("Symbol", tokens));
+    col = col.push(super::section_title("Symbol", tokens, i18n));
     col = col.push(text_field(
         "Design Item ID",
         sym.symbol_name.as_str(),
@@ -138,7 +139,7 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(super::prop_row_static("Part", part_label, muted, primary));
 
     // ── ▾ Graphical ──
-    col = col.push(super::section_title("Graphical", tokens));
+    col = col.push(super::section_title("Graphical", tokens, i18n));
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text(raw("Mirrored"))
@@ -159,7 +160,7 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(mirrored_row);
 
     // ── Local Colors (Fills / Lines / Pins) ──
-    col = col.push(super::section_title("Local Colors", tokens));
+    col = col.push(super::section_title("Local Colors", tokens, i18n));
     col = col.push(local_color_field(
         "Fills",
         crate::app::LocalColorSlot::Fill,

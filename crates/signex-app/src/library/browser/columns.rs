@@ -287,20 +287,10 @@ pub(super) fn derive_columns(
                 // resistors, 4.7µF in capacitors), so the column
                 // header must be unit-agnostic; the cell renders the
                 // unit inline via `ParamValue::Measurement.display()`.
-                // Capitalises the first letter so "value" → "Value" /
-                // "tolerance" → "Tolerance" without bringing a
-                // heavy-weight casing crate in.
-                let label = {
-                    let mut chars = slot.name.chars();
-                    match chars.next() {
-                        // user-visible: migrate to the #2063 casemap
-                        // ast-grep-ignore: no-case-in-view
-                        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                        None => String::new(),
-                    }
-                };
+                // Views capitalise it ("value" shows as "Value") with
+                // `range_filter::parameter_caption`.
                 columns.push(GridColumn {
-                    label,
+                    label: slot.name.clone(),
                     kind: ColumnKind::Parameter(slot.name.clone()),
                     width: 110.0,
                 });

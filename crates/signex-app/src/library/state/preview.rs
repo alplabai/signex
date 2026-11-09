@@ -73,11 +73,16 @@ impl PreviewTab {
     ];
 
     /// The label the Graphite tab strip shows.
-    pub fn graphite_label(self) -> &'static str {
+    pub fn graphite_label(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
         match self {
-            PreviewTab::Preview => "General",
-            PreviewTab::PinMap => "Pin Map",
-            other => other.label(),
+            PreviewTab::Preview => ids::EDITORS_COMPONENT_TAB_GENERAL,
+            PreviewTab::Parameters => ids::EDITORS_COMPONENT_TAB_PARAMETERS,
+            PreviewTab::Supply => ids::EDITORS_COMPONENT_TAB_SUPPLY,
+            PreviewTab::Datasheet => ids::EDITORS_COMPONENT_TAB_DATASHEET,
+            PreviewTab::Simulation => ids::EDITORS_COMPONENT_TAB_SIMULATION,
+            PreviewTab::PinMap => ids::EDITORS_COMPONENT_TAB_PIN_MAP,
+            PreviewTab::Alternates => ids::EDITORS_COMPONENT_TAB_ALTERNATES,
         }
     }
 

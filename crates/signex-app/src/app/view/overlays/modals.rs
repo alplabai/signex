@@ -293,6 +293,13 @@ impl Signex {
         .then(|| self.view_grid_properties_dialog())
     }
 
+    pub(in crate::app::view) fn new_project_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .new_project
+            .is_some()
+            .then(|| self.view_new_project_dialog())
+    }
+
     pub(in crate::app::view) fn selection_filter_custom_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
@@ -358,11 +365,14 @@ impl Signex {
         // In a dialog's own window the card fills the window.
         let windowed = owner.is_some() || self.modal_detached(modal);
         let card: Element<'_, Message> = match modal {
-            ModalId::LibraryPicker => {
-                crate::library::picker::view(lib.picker.as_ref()?, tokens, windowed)
-                    .map(Message::Library)
-                    .boxed()
-            }
+            ModalId::LibraryPicker => crate::library::picker::view(
+                lib.picker.as_ref()?,
+                tokens,
+                &self.ui_state.i18n,
+                windowed,
+            )
+            .map(Message::Library)
+            .boxed(),
             ModalId::LibraryPrimitivePicker => crate::library::primitive_picker::view(
                 lib,
                 lib.primitive_picker.as_ref()?,
@@ -383,11 +393,15 @@ impl Signex {
                     .map(Message::Library)
                     .boxed()
             }
-            ModalId::LibraryStockCopy => {
-                crate::library::stock_copy::view(lib, lib.stock_copy.as_ref()?, tokens, windowed)
-                    .map(Message::Library)
-                    .boxed()
-            }
+            ModalId::LibraryStockCopy => crate::library::stock_copy::view(
+                lib,
+                lib.stock_copy.as_ref()?,
+                tokens,
+                &self.ui_state.i18n,
+                windowed,
+            )
+            .map(Message::Library)
+            .boxed(),
             ModalId::LibraryCloseConfirm => crate::library::close_prompt::view(
                 lib,
                 lib.close_library_confirm.as_ref()?,

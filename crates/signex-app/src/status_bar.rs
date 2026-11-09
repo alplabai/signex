@@ -97,6 +97,7 @@ pub fn view<'a>(
     altium_import: Option<&str>,
     activity: Option<&str>,
     active_layer: Option<(Localized, Localized)>,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
     graphite::view(
         &Readout {
@@ -115,5 +116,6 @@ pub fn view<'a>(
             active_layer,
         },
         tokens,
+        i18n,
     )
 }

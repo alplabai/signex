@@ -199,7 +199,9 @@ pub(crate) fn view<'a>(
     canvas_colors: &signex_types::theme::CanvasColors,
     grid: symbol_canvas::SheetGrid,
     device_px_per_logical_px: f32,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
+    use signex_i18n::{ids, t};
     let muted = crate::styles::tokens::resolve(tokens).ink4;
 
     let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
@@ -234,9 +236,9 @@ pub(crate) fn view<'a>(
         (m, p) => format!("{m} — {p}"),
     };
     col = col.push(graphite::header_card(d, maker, tokens));
-    let title = |label: &'a str| graphite::section_label(label, tokens);
+    let title = |label| graphite::section_label(t!(i18n, label), tokens);
 
-    col = col.push(title("Symbol"));
+    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_SYMBOL));
     col = col.push(match &d.symbol {
         Some(symbol) => preview_box(
             symbol_canvas::symbol_preview(
@@ -254,7 +256,7 @@ pub(crate) fn view<'a>(
         None => empty("No symbol.", muted),
     });
 
-    col = col.push(title("Footprint"));
+    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT));
     // The pick belongs to the selected row only (#1234).
     let pick = panel
         .footprint_pick
@@ -304,7 +306,7 @@ pub(crate) fn view<'a>(
         );
     }
 
-    col = col.push(title("Parameters"));
+    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_PARAMETERS));
     if d.parameters.is_empty() {
         col = col.push(
             text(raw("No parameters."))

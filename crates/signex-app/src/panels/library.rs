@@ -524,50 +524,60 @@ fn view_footprint_library_button_row<'a>(
 
     let wash = super::graphite::wash_fn(&ctx.tokens);
     let corner = super::graphite::button_radius(&ctx.tokens);
-    let mk_btn = |label: &'static str, on_press: Option<PanelMsg>| -> Element<'a, PanelMsg> {
-        let enabled = on_press.is_some();
-        let label_color = if enabled { primary } else { muted };
-        let mut btn = signex_widgets::button(
-            text(raw(label))
-                .size(TS.body)
-                .color(label_color)
-                .align_x(iced::alignment::Horizontal::Center),
-        )
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .style(move |_: &Theme, status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered if enabled => wash(0.06),
-                _ => wash(0.02),
-            };
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg)),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: corner.into(),
-                    color: border_c,
-                    ..Default::default()
-                },
-                ..iced::widget::button::Style::default()
+    let mk_btn =
+        |label: signex_i18n::MessageId, on_press: Option<PanelMsg>| -> Element<'a, PanelMsg> {
+            let enabled = on_press.is_some();
+            let label_color = if enabled { primary } else { muted };
+            let mut btn = signex_widgets::button(
+                text(signex_i18n::t!(ctx.i18n, label))
+                    .size(TS.body)
+                    .color(label_color)
+                    .align_x(iced::alignment::Horizontal::Center),
+            )
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .style(move |_: &Theme, status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered if enabled => wash(0.06),
+                    _ => wash(0.02),
+                };
+                iced::widget::button::Style {
+                    background: Some(iced::Background::Color(bg)),
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: corner.into(),
+                        color: border_c,
+                        ..Default::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            });
+            if let Some(msg) = on_press {
+                btn = btn.on_press(msg);
             }
-        });
-        if let Some(msg) = on_press {
-            btn = btn.on_press(msg);
-        }
-        btn.boxed()
-    };
+            btn.boxed()
+        };
 
     let place = mk_btn(
-        "Place",
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_PLACE,
         // PCB integration not wired yet — keep the button visible
         // but disabled to advertise the intended affordance.
         selected
             .map(PanelMsg::FpLibraryPlaceInternal)
             .filter(|_| false),
     );
-    let add = mk_btn("Add", Some(PanelMsg::FpLibraryAddInternal));
-    let delete = mk_btn("Delete", selected.map(PanelMsg::FpLibraryDeleteInternal));
-    let edit = mk_btn("Edit", selected.map(PanelMsg::FpLibraryEditInternal));
+    let add = mk_btn(
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_ADD,
+        Some(PanelMsg::FpLibraryAddInternal),
+    );
+    let delete = mk_btn(
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_DELETE,
+        selected.map(PanelMsg::FpLibraryDeleteInternal),
+    );
+    let edit = mk_btn(
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_EDIT,
+        selected.map(PanelMsg::FpLibraryEditInternal),
+    );
 
     container(
         row![place, add, delete, edit]
@@ -689,50 +699,65 @@ pub struct ComponentSheet {
 pub fn view_component_sheet<'a>(
     sheet: &'a ComponentSheet,
     tokens: &signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let r = crate::styles::tokens::resolve(tokens);
     let ink = crate::styles::ti(tokens.text);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let line = |label: &'static str, value: &'a str, is_mono: bool| -> Element<'a, PanelMsg> {
-        let shown = if value.trim().is_empty() {
-            "\u{2014}"
-        } else {
-            value
+    use signex_i18n::{ids, t};
+    let line =
+        |label: signex_i18n::MessageId, value: &'a str, is_mono: bool| -> Element<'a, PanelMsg> {
+            let shown: signex_widgets::Label<'a> = if value.trim().is_empty() {
+                t!(i18n, ids::PANELS_COMPONENT_SHEET_NO_VALUE).into()
+            } else {
+                signex_i18n::UserText::new(value).into()
+            };
+            let mut v = text(shown).size(TS.body).color(ink);
+            if is_mono {
+                v = v.font(mono);
+            }
+            container(
+                iced::widget::row![
+                    text(t!(i18n, label))
+                        .size(TS.body)
+                        .color(r.ink3)
+                        .width(Length::FillPortion(2))
+                        .boxed(),
+                    container(v)
+                        .width(Length::FillPortion(3))
+                        .clip(true)
+                        .boxed(),
+                ]
+                .spacing(SP.m)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([SP.s, 12.0])
+            .width(Length::Fill)
+            .boxed()
         };
-        let mut v = text(raw(shown)).size(TS.body).color(ink);
-        if is_mono {
-            v = v.font(mono);
-        }
-        container(
-            iced::widget::row![
-                text(raw(label))
-                    .size(TS.body)
-                    .color(r.ink3)
-                    .width(Length::FillPortion(2))
-                    .boxed(),
-                container(v)
-                    .width(Length::FillPortion(3))
-                    .clip(true)
-                    .boxed(),
-            ]
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([SP.s, 12.0])
-        .width(Length::Fill)
-        .boxed()
-    };
     let body: Column<Element<'a, PanelMsg>> = column![
-        super::form_look::section_label("Component", tokens),
-        line("Internal PN", &sheet.internal_pn, true),
-        line("MPN", &sheet.mpn, true),
-        line("Manufacturer", &sheet.manufacturer, false),
-        line("Lifecycle", &sheet.lifecycle, false),
-        line("Version", &sheet.version, true),
-        super::form_look::section_label("Storage", tokens),
-        line("Library", &sheet.library, true),
-        line("Table", &sheet.table, true),
-        line("Updated", &sheet.updated, false),
+        super::form_look::section_label("Component", tokens, i18n),
+        line(
+            ids::PANELS_COMPONENT_SHEET_INTERNAL_PN,
+            &sheet.internal_pn,
+            true
+        ),
+        line(ids::PANELS_COMPONENT_SHEET_MPN, &sheet.mpn, true),
+        line(
+            ids::PANELS_COMPONENT_SHEET_MANUFACTURER,
+            &sheet.manufacturer,
+            false
+        ),
+        line(
+            ids::PANELS_COMPONENT_SHEET_LIFECYCLE,
+            &sheet.lifecycle,
+            false
+        ),
+        line(ids::PANELS_COMPONENT_SHEET_VERSION, &sheet.version, true),
+        super::form_look::section_label("Storage", tokens, i18n),
+        line(ids::PANELS_COMPONENT_SHEET_LIBRARY, &sheet.library, true),
+        line(ids::PANELS_COMPONENT_SHEET_TABLE, &sheet.table, true),
+        line(ids::PANELS_COMPONENT_SHEET_UPDATED, &sheet.updated, false),
     ]
     .width(Length::Fill);
     iced::widget::scrollable(body)

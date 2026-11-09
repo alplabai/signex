@@ -13,6 +13,7 @@ use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::TreeIcon;
 
+mod new_project_row;
 mod row_effects;
 
 const TID: ThemeId = ThemeId::GraphiteDark;

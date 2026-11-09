@@ -339,7 +339,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    col = col.push(section_title("Sheets", &ctx.tokens).boxed());
+    col = col.push(section_title("Sheets", &ctx.tokens, &ctx.i18n).boxed());
     col = col.push(separator(&ctx.tokens).boxed());
 
     // The tree is the whole project hierarchy, built from the project's root

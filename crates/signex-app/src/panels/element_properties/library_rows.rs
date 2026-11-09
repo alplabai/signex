@@ -113,7 +113,7 @@ pub(super) fn library_id_row<'a>(
 ) -> Element<'a, PanelMsg> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let value = container(
-        signex_widgets::text(signex_widgets::raw(lib_id.to_string()))
+        signex_widgets::text(signex_i18n::UserText::new(lib_id))
             .size(TS.body)
             .font(mono)
             .color(crate::styles::tokens::readable_on(input_bg))
@@ -140,7 +140,7 @@ pub(super) fn library_id_row<'a>(
     let tip = signex_widgets::tooltip(
         value,
         container(
-            signex_widgets::text(signex_widgets::raw(lib_id.to_string()))
+            signex_widgets::text(signex_i18n::UserText::new(lib_id))
                 .size(TS.body)
                 .font(mono),
         )

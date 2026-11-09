@@ -85,6 +85,8 @@ pub struct TabMarks<'p> {
     /// Name of the active document's project, shown at the right end of a
     /// Graphite strip.
     pub project_name: Option<&'p str>,
+    /// The language the tab marks read in.
+    pub i18n: &'p signex_i18n::I18n,
 }
 
 pub fn view<'a>(
@@ -100,6 +102,7 @@ pub fn view<'a>(
         read_only_paths,
         tooltips_enabled,
         project_name,
+        i18n,
     } = *marks;
     // Tabs sit flush against each other — Altium parity. The active
     // pill's accent underline distinguishes it from neighbours; no
@@ -149,6 +152,7 @@ pub fn view<'a>(
                 read_only: is_read_only,
             },
             tokens,
+            i18n,
         );
         // Cursor: default Pointer on hover so the bar reads as
         // "clickable tabs", switching to Grabbing only while a tab
@@ -212,9 +216,6 @@ pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
         })
         .boxed()
 }
-
-/// Muted marker before the title of a read-only sheet (#1402).
-const READ_ONLY_LABEL: &str = "read-only";
 
 /// Tooltip line saying why a sheet is read-only.
 const READ_ONLY_TOOLTIP: &str = "Read-only: written by a newer Signex. Edit it in that version.";
@@ -304,6 +305,7 @@ mod tests {
             read_only_paths: &none,
             tooltips_enabled: true,
             project_name: Some("Sensor node rev B"),
+            i18n: &signex_i18n::I18n::en_us(),
         };
         let strip = super::view(&[], 0, None, &none, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);

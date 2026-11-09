@@ -51,6 +51,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
 | `close_active_document` | Close active document | file | `Ctrl+F4` | — |
+| `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Ctrl+C` | `Ctrl+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
 | `cross_probe` | Cross probe the selection to the board or schematic | select | — | — |
@@ -91,6 +92,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
 | `new_document` | New | file | `Ctrl+N` | `Ctrl+N` |
+| `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
 | `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+K`, `Ctrl+Shift+P` |
@@ -98,6 +100,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_document` | Open document | file | `Ctrl+O` | `Ctrl+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
+| `open_library_browser` | Open library browser | library | — | — |
 | `open_preferences` | Open preferences | preferences | `Ctrl+,` | `Ctrl+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
 | `paste` | Paste | edit | `Ctrl+V` | `Ctrl+V` |

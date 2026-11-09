@@ -34,7 +34,7 @@ pub fn parameter_table<'a>(tokens: &ThemeTokens, rows: &[(&str, &str)]) -> Eleme
             ..container::Style::default()
         });
         let value_cell = container(
-            text(raw(value.to_string()))
+            text(signex_i18n::UserText::new(*value))
                 .size(TS.dense)
                 .color(ink)
                 .font(mono)

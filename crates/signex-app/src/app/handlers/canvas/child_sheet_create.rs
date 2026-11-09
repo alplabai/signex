@@ -292,10 +292,12 @@ impl Signex {
             .document_state
             .document_project(&confirm.parent)
             .map(|p| p.id);
-        let document = signex_engine::child_document_for_symbol(
-            crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc(),
-            &symbol,
-        );
+        // A new sheet starts from its project's sheet defaults (#2232).
+        let mut blank = crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc();
+        if let Some(project) = project_id.and_then(|id| self.document_state.project_by_id(id)) {
+            project.data.apply_sheet_defaults(&mut blank);
+        }
+        let document = signex_engine::child_document_for_symbol(blank, &symbol);
         Some(ChildSheetPlan {
             parent: confirm.parent,
             symbol: confirm.symbol,

@@ -7,7 +7,7 @@ use crate::styles::key_cap;
 use iced::widget::{container, row};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 /// The keys of `label`, or `None` when it is not one plain stroke.
 pub(super) fn stroke_keys(label: &str) -> Option<Vec<&str>> {
@@ -25,7 +25,7 @@ pub(super) fn key_caps<'a>(label: &str, tokens: &ThemeTokens) -> Option<Element<
     let mut line = row![].spacing(crate::styles::Spacing::DEFAULT.s);
     for key in keys {
         line = line.push(
-            container(text(raw(key.to_string())).size(TS.dense))
+            container(text(signex_i18n::UserText::new(key)).size(TS.dense))
                 .padding([2.0, crate::styles::Spacing::DEFAULT.m])
                 .width(Length::Shrink)
                 .style(key_cap(tokens))

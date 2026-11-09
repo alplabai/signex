@@ -83,7 +83,14 @@ fn each_library_row_shows_its_source_badge_then_its_component_count() {
     assert_eq!(listed.len(), expected.len());
     for ((source, lib), (name, badge, count)) in listed.into_iter().zip(expected) {
         assert_eq!(lib.display_name, name);
-        let header = view_library_block(lib, source, &state.components_panel, "", &tokens);
+        let header = view_library_block(
+            lib,
+            source,
+            &state.components_panel,
+            "",
+            &tokens,
+            &signex_i18n::I18n::en_us(),
+        );
         let texts = crate::layout_probe::lay_out_texts(header, window);
         let at = |label| crate::layout_probe::find(&texts, label).bounds;
         let (n, b, c) = (at(name), at(badge), at(count));

@@ -18,8 +18,6 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const TRACKPAD_PAN_HELP: &str = "When on, a two-finger trackpad scroll pans the schematic, PCB, symbol and footprint canvases instead of zooming them. Pinching and Ctrl/Cmd + scroll still zoom, and a mouse wheel notch still zooms. Off by default.";
 
-const WHEEL_MODE_HELP: &str = "Zoom: the mouse wheel zooms the canvas. Scroll: the wheel and a two-finger scroll pan vertically, Shift + wheel pans horizontally, and Ctrl/Cmd + wheel or a pinch zooms. Default: Zoom.";
-
 const REMEMBER_GEOMETRY_HELP: &str = "When on, Signex reopens the main window at the size and position it had when you last closed it. Off by default.";
 
 pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
@@ -48,6 +46,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(super::theme_cards::theme_section(
         draft_theme,
         v.panel_tokens,
+        v.i18n,
     ));
     col = col.push(Space::new().height(10).boxed());
 
@@ -377,10 +376,18 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Mouse wheel")).size(TS.label).style(text_primary),
-                text(raw(WHEEL_MODE_HELP))
-                    .size(TS.caption)
-                    .style(text_muted),
+                text(signex_i18n::t!(
+                    v.i18n,
+                    signex_i18n::ids::PREFERENCES_WHEEL_MODE_LABEL
+                ))
+                .size(TS.label)
+                .style(text_primary),
+                text(signex_i18n::t!(
+                    v.i18n,
+                    signex_i18n::ids::PREFERENCES_WHEEL_MODE_HELP
+                ))
+                .size(TS.caption)
+                .style(text_muted),
             ]
             .spacing(3)
             .width(320),

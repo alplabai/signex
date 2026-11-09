@@ -4,8 +4,9 @@
 
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Background, Element, Length, Theme, Widget as _};
+use signex_i18n::{MessageId, UserText, ids, t};
 use signex_types::pcb::PcbBoard;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
@@ -81,12 +82,13 @@ impl PcbNetsSummary {
 /// Render the panel for the active PCB tab.
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
+    let i18n = &*ctx.i18n;
     let r = resolve(tokens);
     let (ink, muted) = (ti(tokens.text), r.ink3);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let Some(summary) = ctx.pcb_nets.as_ref() else {
         return container(
-            text(raw("Open a `.snxpcb` to see its nets here."))
+            text(t!(i18n, ids::PANELS_PCB_NETS_NO_BOARD))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -103,8 +105,9 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .clip(true)
             .boxed()
     };
-    let head =
-        |s: &'static str, w: Length| cell(text(raw(s)).size(TS.section).color(muted).boxed(), w);
+    let head = |id: MessageId, w: Length| {
+        cell(text(t!(i18n, id)).size(TS.section).color(muted).boxed(), w)
+    };
     let separator = move || -> Element<'a, PanelMsg> {
         container(Space::new())
             .width(Length::Fill)
@@ -117,9 +120,9 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     };
     let mut table: Column<Element<'a, PanelMsg>> = column![
         row![
-            head("NET", Length::Fill),
-            head("NODES", Length::Fixed(NUM_W)),
-            head("LENGTH", Length::Fixed(NUM_W)),
+            head(ids::PANELS_PCB_NETS_COLUMN_NET, Length::Fill),
+            head(ids::PANELS_PCB_NETS_COLUMN_NODES, Length::Fixed(NUM_W)),
+            head(ids::PANELS_PCB_NETS_COLUMN_LENGTH, Length::Fixed(NUM_W)),
         ]
         .padding([0.0, SP.l]),
         separator(),
@@ -128,7 +131,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if summary.nets.is_empty() {
         table = table.push(
             container(
-                text(raw("This board has no nets."))
+                text(t!(i18n, ids::PANELS_PCB_NETS_EMPTY))
                     .size(TS.body)
                     .color(muted),
             )
@@ -137,10 +140,11 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         );
     }
     for net in &summary.nets {
-        let length = if net.length_mm > 0.0 {
-            format!("{:.2}", net.length_mm)
+        // A length is an engineering value: `.` in every locale.
+        let length: signex_widgets::Label<'a> = if net.length_mm > 0.0 {
+            UserText::new(format!("{:.2}", net.length_mm)).into()
         } else {
-            "\u{2014}".to_string()
+            t!(i18n, ids::PANELS_PCB_NETS_NO_LENGTH).into()
         };
         table = table.push(
             row![
@@ -153,7 +157,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     Length::Fill
                 ),
                 cell(
-                    text(raw(net.nodes.to_string()))
+                    text(t!(i18n, ids::PANELS_PCB_NETS_NODES, "count" => net.nodes))
                         .size(TS.body)
                         .font(mono)
                         .color(ink)
@@ -161,11 +165,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     Length::Fixed(NUM_W)
                 ),
                 cell(
-                    text(raw(length))
-                        .size(TS.body)
-                        .font(mono)
-                        .color(ink)
-                        .boxed(),
+                    text(length).size(TS.body).font(mono).color(ink).boxed(),
                     Length::Fixed(NUM_W)
                 ),
             ]
@@ -175,13 +175,12 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         table = table.push(separator());
     }
     let footer = container(
-        text(raw(format!(
-            "{} net{} \u{00B7} {} pad{}",
-            summary.nets.len(),
-            if summary.nets.len() == 1 { "" } else { "s" },
-            summary.pads,
-            if summary.pads == 1 { "" } else { "s" },
-        )))
+        text(t!(
+            i18n,
+            ids::PANELS_PCB_NETS_SUMMARY,
+            "nets" => summary.nets.len(),
+            "pads" => summary.pads
+        ))
         .size(TS.caption)
         .color(muted),
     )

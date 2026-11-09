@@ -14,6 +14,7 @@ mod edit_rows;
 mod file_rows;
 mod help_tools_rows;
 mod language_switch;
+mod library_window_rows;
 mod place_design_rows;
 mod view_rows;
 mod walk;
@@ -432,6 +433,7 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

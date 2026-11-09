@@ -350,11 +350,15 @@ pub fn form_font_link_row<'a>(
     container(
         row![
             property_label(label, label_c),
-            signex_widgets::button(text(raw(summary)).size(TS.body).width(Length::Fill))
-                .on_press(PanelMsg::OpenCanvasFontPopup)
-                .padding([SP.xs, 6.0])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(form_look::value_field_button),
+            signex_widgets::button(
+                text(signex_i18n::UserText::new(summary))
+                    .size(TS.body)
+                    .width(Length::Fill),
+            )
+            .on_press(PanelMsg::OpenCanvasFontPopup)
+            .padding([SP.xs, 6.0])
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
+            .style(form_look::value_field_button),
         ]
         .spacing(SP.s)
         .width(Length::Fill)
@@ -483,9 +487,9 @@ pub fn form_edit_row<'a>(
 }
 
 /// Subsection label: muted caption with room above, no divider.
-pub fn form_label<'a, M: 'a>(label: &str) -> Element<'a, M> {
+pub fn form_label<'a, M: 'a>(label: signex_i18n::Localized) -> Element<'a, M> {
     container(
-        text(raw(label.to_string()))
+        text(label)
             .size(TS.caption)
             .style(move |theme: &Theme| iced::widget::text::Style {
                 color: Some(form_look::FormLook::of(theme).ink3),

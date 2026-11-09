@@ -119,6 +119,7 @@ mod flows {
                 rules: None,
                 annotation: None,
                 schematic_defaults: Default::default(),
+                project_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

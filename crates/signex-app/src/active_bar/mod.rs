@@ -264,6 +264,25 @@ impl SelectionFilter {
         Self::Other,
     ];
 
+    /// The catalog message of [`Self::label`].
+    pub fn message(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            Self::Components => ids::PANELS_FILTER_COMPONENTS,
+            Self::Wires => ids::PANELS_FILTER_WIRES,
+            Self::Buses => ids::PANELS_FILTER_BUSES,
+            Self::SheetSymbols => ids::PANELS_FILTER_SHEET_SYMBOLS,
+            Self::SheetEntries => ids::PANELS_FILTER_SHEET_ENTRIES,
+            Self::NetLabels => ids::PANELS_FILTER_NET_LABELS,
+            Self::Parameters => ids::PANELS_FILTER_PARAMETERS,
+            Self::Ports => ids::PANELS_FILTER_PORTS,
+            Self::PowerPorts => ids::PANELS_FILTER_POWER_PORTS,
+            Self::Texts => ids::PANELS_FILTER_TEXTS,
+            Self::DrawingObjects => ids::PANELS_FILTER_DRAWING_OBJECTS,
+            Self::Other => ids::PANELS_FILTER_OTHER,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Components => "Components",

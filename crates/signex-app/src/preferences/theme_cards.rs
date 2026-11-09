@@ -6,56 +6,59 @@ use super::{PrefMsg, SP, TS};
 use crate::styles::{self, Radii, chrome_px, ti, tokens};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 /// A theme card: id, card title, tag on the right, description.
-const FEATURED: [(ThemeId, &str, &str, &str); 2] = [
+const FEATURED: [(ThemeId, MessageId, MessageId, MessageId); 2] = [
     (
         ThemeId::GraphiteLight,
-        "Graphite Light",
-        "Default",
-        "Warm paper canvas, graphite ink, copper accent.",
+        ids::PREFERENCES_THEME_LIGHT_NAME,
+        ids::PREFERENCES_THEME_LIGHT_TAG,
+        ids::PREFERENCES_THEME_LIGHT_DESCRIPTION,
     ),
     (
         ThemeId::GraphiteDark,
-        "Graphite Dark",
-        "Dark",
-        "Low-glare charcoal for long routing sessions.",
+        ids::PREFERENCES_THEME_DARK_NAME,
+        ids::PREFERENCES_THEME_DARK_TAG,
+        ids::PREFERENCES_THEME_DARK_DESCRIPTION,
     ),
 ];
 
 /// The Theme heading and one preview card per theme.
 /// `active` carries the dialog's own tokens (labels, card chrome).
-pub(super) fn theme_section<'a>(draft: ThemeId, active: &ThemeTokens) -> Element<'a, PrefMsg> {
+pub(super) fn theme_section<'a>(
+    draft: ThemeId,
+    active: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PrefMsg> {
     let r = tokens::resolve(active);
-    let label = |s: &str| {
-        // user-visible: migrate to the #2063 casemap
-        // ast-grep-ignore: no-case-in-view
-        text(raw(s.to_uppercase()))
-            .size(TS.section)
-            .style(styles::section_label(active))
-            .boxed()
-    };
     let mut col = column![
-        text(raw("Theme"))
+        text(t!(i18n, ids::PREFERENCES_THEME_HEADING))
             .size(TS.heading)
             .color(ti(active.text))
             .boxed(),
-        text(raw(
-            "Colours, density and canvas text. Changes preview live; Apply keeps them."
-        ))
-        .size(TS.label)
-        .color(r.ink3)
-        .boxed(),
+        text(t!(i18n, ids::PREFERENCES_THEME_INTRO))
+            .size(TS.label)
+            .color(r.ink3)
+            .boxed(),
         Space::new().height(SP.l).boxed(),
-        label("Application theme"),
+        text(t!(i18n, ids::PREFERENCES_THEME_APPLICATION))
+            .size(TS.section)
+            .style(styles::section_label(active))
+            .boxed(),
     ]
     .spacing(SP.s);
 
     let mut featured = row![].spacing(SP.l);
     for (id, name, tag, desc) in FEATURED {
-        featured = featured.push(preview_card(id, name, tag, desc, draft, active));
+        featured = featured.push(preview_card(
+            id,
+            [t!(i18n, name), t!(i18n, tag), t!(i18n, desc)],
+            draft,
+            active,
+        ));
     }
     col = col.push(featured.boxed());
     col.boxed()
@@ -74,9 +77,7 @@ fn card_border(selected: bool, accent: Color, line: Color, radius: f32) -> Borde
 /// mark, the name, a tag and a one-line description.
 fn preview_card<'a>(
     id: ThemeId,
-    name: &str,
-    tag: &str,
-    desc: &str,
+    [name, tag, desc]: [Localized; 3],
     draft: ThemeId,
     active: &ThemeTokens,
 ) -> Element<'a, PrefMsg> {
@@ -102,23 +103,14 @@ fn preview_card<'a>(
         mini_preview(&t),
         row![
             radio,
-            text(raw(name.to_string()))
-                .size(TS.title)
-                .color(ink)
-                .boxed(),
+            text(name).size(TS.title).color(ink).boxed(),
             Space::new().width(Length::Fill).boxed(),
-            text(raw(tag.to_string()))
-                .size(TS.caption)
-                .color(a.ink3)
-                .boxed(),
+            text(tag).size(TS.caption).color(a.ink3).boxed(),
         ]
         .spacing(SP.m)
         .align_y(Alignment::Center)
         .boxed(),
-        text(raw(desc.to_string()))
-            .size(TS.body)
-            .color(a.ink3)
-            .boxed(),
+        text(desc).size(TS.body).color(a.ink3).boxed(),
     ]
     .spacing(SP.m);
     let raised = a.raised;

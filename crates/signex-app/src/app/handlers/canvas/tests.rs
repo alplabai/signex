@@ -51,6 +51,7 @@ fn app_focused_on(focused: &str) -> Signex {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

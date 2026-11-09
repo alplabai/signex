@@ -602,6 +602,9 @@ pub struct SaveAsProjectPatched {
 /// `Message::Project` and routed to `dispatch_project_message`.
 #[derive(Debug, Clone)]
 pub enum ProjectMsg {
+    /// The New Project setup dialog (#2232); routed to
+    /// `dispatch_new_project_message`.
+    Setup(crate::app::NewProjectMsg),
     /// User picked an option in the project-close confirmation modal
     /// (Save All / Discard All / Cancel) shown when closing a
     /// project that still has dirty documents.

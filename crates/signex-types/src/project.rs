@@ -11,12 +11,18 @@ use crate::document_id::DocumentId;
 
 mod annotation;
 mod erc_waiver;
+mod rule_file;
 mod rule_profile;
 mod rules;
 mod schematic_defaults;
+mod setup;
+mod setup_profile;
+#[cfg(test)]
+mod setup_tests;
 mod unknown;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
+pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };
@@ -25,6 +31,11 @@ pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
     SchematicDefaultOverrides,
 };
+pub use setup::{
+    COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
+    ProjectDefaults, SHEET_SIZES, SheetDefaults, copper_layers,
+};
+pub use setup_profile::{FabTemplate, ProjectSetup, SetupProfile, designator_token};
 pub use unknown::UnknownJson;
 
 /// Reads a stored `document_id`; a value that is not one reads as absent, so
@@ -232,6 +243,10 @@ pub struct ProjectData {
     /// re-saves without a `schematic_defaults` key.
     #[serde(default, skip_serializing_if = "SchematicDefaultOverrides::is_empty")]
     pub schematic_defaults: SchematicDefaultOverrides,
+    /// What a new PCB or sheet in this project starts from (#2232). Set when the project is created; skipped on save when
+    /// nothing is set.
+    #[serde(default, skip_serializing_if = "ProjectDefaults::is_empty")]
+    pub project_defaults: ProjectDefaults,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -469,6 +484,7 @@ mod tests {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -502,6 +518,7 @@ mod tests {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -653,7 +670,13 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let defaults = value
             .as_object_mut()
             .and_then(|map| map.remove(schematic_defaults::SCHEMATIC_DEFAULTS_KEY));
+        let project_defaults = value
+            .as_object_mut()
+            .and_then(|map| map.remove(setup::PROJECT_DEFAULTS_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = project_defaults {
+            setup::take_project_defaults(&mut data, raw);
+        }
         if let Some(raw) = defaults {
             schematic_defaults::take_schematic_defaults(&mut data, raw);
         }
@@ -715,6 +738,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
     })
@@ -768,6 +792,13 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
         stamped.insert(
             schematic_defaults::SCHEMATIC_DEFAULTS_KEY.into(),
             serde_json::to_value(&data.schematic_defaults)?,
+        );
+    }
+    // Defaults chosen in this session replace an unusable section kept.
+    if !data.project_defaults.is_empty() {
+        stamped.insert(
+            setup::PROJECT_DEFAULTS_KEY.into(),
+            serde_json::to_value(&data.project_defaults)?,
         );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))

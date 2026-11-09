@@ -203,7 +203,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // symbol-editor branches so when a Library Browser tab is active
     // the panel stays focused on it.
     if let Some(sheet) = ctx.component_sheet.as_ref() {
-        return super::view_component_sheet(sheet, &ctx.tokens);
+        return super::view_component_sheet(sheet, &ctx.tokens, &ctx.i18n);
     }
     if let Some(detail) = ctx.library_row_detail.as_ref() {
         return view_library_row_properties(
@@ -228,6 +228,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             primary,
             border_c,
             &ctx.tokens,
+            &ctx.i18n,
         );
     }
 
@@ -236,7 +237,13 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // properties; Sketch-mode entity selected → sketch entity
     // properties; nothing selected → footprint summary + solve stats.
     if let Some(fp) = ctx.footprint_editor.as_ref() {
-        return view_footprint_editor_properties(fp, palette, &ctx.collapsed_sections, ctx.unit);
+        return view_footprint_editor_properties(
+            fp,
+            palette,
+            &ctx.collapsed_sections,
+            ctx.unit,
+            &ctx.i18n,
+        );
     }
 
     if !ctx.has_schematic {
@@ -282,10 +289,17 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     col = col.push(
-        container(text(raw("Document Options")).size(TS.title).color(primary))
-            .padding([10.0, 12.0])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text(signex_i18n::t!(
+                ctx.i18n,
+                signex_i18n::ids::PANELS_PROPERTIES_DOCUMENT_OPTIONS
+            ))
+            .size(TS.title)
+            .color(primary),
+        )
+        .padding([10.0, 12.0])
+        .width(Length::Fill)
+        .boxed(),
     );
 
     // ── General | Parameters tab bar ──
@@ -324,6 +338,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 muted,
                 primary,
                 crate::styles::ti(ctx.tokens.selection),
+                &ctx.i18n,
             )
             .boxed(),
         );
@@ -362,6 +377,7 @@ fn view_pre_placement<'a>(
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
+    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     let label_text = pp.label_text.clone();
     let designator = pp.designator.clone();
     let rotation = pp.rotation;
@@ -510,7 +526,10 @@ fn view_pre_placement<'a>(
                             muted,
                         ));
                         c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                        c = c.push(form_label("Justification"));
+                        c = c.push(form_label(signex_i18n::t!(
+                            i18n,
+                            signex_i18n::ids::PANELS_PROPERTIES_JUSTIFICATION
+                        )));
                         c = c.push(
                             container(preplacement_justification_grid(
                                 justify_h,

@@ -709,8 +709,7 @@ the default Altium profile; the menu path always works.
 9. **Export a PDF.** Press `Ctrl+P` or choose **File ▸ Export ▸ PDF…**, check
    the preview, press **Export PDF** and pick where to save (section 11).
 
-*Not working yet:* the **Place ▸ Sheet Entry** menu row is a placeholder
-(greyed out). Place sheet entries with the **Sheet Entry** tool of the Active
+**Place ▸ Sheet Entry** selects the same **Sheet Entry** tool as the Active
 Bar's sheet-symbol menu. **Place ▸ Power Port**, **Text** and **No Connect**
 select their tools. A pin can also be marked as intentionally unconnected with
 **Add No-Connect** in the **ERC** panel (section 9).

@@ -97,6 +97,7 @@ fn fixture() -> Fixture {
         net_classes: Default::default(),
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

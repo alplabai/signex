@@ -118,6 +118,16 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "close_all_documents",
+        category: "window",
+        label: "Close all documents",
+        menu_label: Some("Close All Documents"),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "copy",
         category: "edit",
         label: "Copy",
@@ -526,6 +536,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "new_project_with_profile",
+        category: "file",
+        label: "New project from a profile",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::NEW_PROJECT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "next_document_tab",
         category: "window",
         label: "Next open document tab",
@@ -591,6 +612,16 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         category: "view",
         label: "Open grid properties",
         menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "open_library_browser",
+        category: "library",
+        label: "Open library browser",
+        menu_label: Some("Library Editor"),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
