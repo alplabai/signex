@@ -31,7 +31,7 @@ pub use build::{
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
 mod incremental;
-pub use incremental::NetBase;
+pub use incremental::{NetBase, NetDelta, point_is_occupied};
 
 mod signature;
 pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at};

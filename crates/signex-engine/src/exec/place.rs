@@ -188,6 +188,8 @@ impl Engine {
         fresh: impl Fn(&mut Self),
     ) -> DocumentPatch {
         const MAX_ROUNDS: usize = 6;
+        #[cfg(test)]
+        let _scan = crate::transform::rubber_band::scan_all_on(self.full_scan_follow);
         let guard = crate::Guard::with_base(
             before,
             plain_reference,
@@ -195,6 +197,12 @@ impl Engine {
             self.preset_before.clone(),
             self.preset_base.clone(),
         );
+        #[cfg(test)]
+        let guard = if self.full_scan_guard {
+            guard.without_local()
+        } else {
+            guard
+        };
         let mut policy = crate::Policy::default();
         for round in 0.. {
             fresh(self);
