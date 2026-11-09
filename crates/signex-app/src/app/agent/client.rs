@@ -49,6 +49,9 @@ pub enum Lookup {
     Gui(GuiPeer),
     /// A live headless run holds the project.
     Headless { pid: u32 },
+    /// A running app has the project open and does not listen (agent
+    /// connections are off): nothing to attach to, and not to be edited behind.
+    GuiNotListening { pid: u32 },
 }
 
 /// A stale entry that may be removed with [`StaleEntry::remove`].
@@ -119,6 +122,7 @@ pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
     }
     Ok(match entry.kind {
         Kind::Headless => Lookup::Headless { pid: entry.pid },
+        Kind::Gui if entry.socket.is_empty() => Lookup::GuiNotListening { pid: entry.pid },
         Kind::Gui => Lookup::Gui(GuiPeer {
             pid: entry.pid,
             dir: dir.to_path_buf(),
@@ -150,8 +154,24 @@ pub fn hold(dir: &Path, project: &Path) -> Result<Hold, String> {
     // The lock first: with it no other run holds the project, so an entry of a
     // headless run found here is a dead run's and is replaced.
     let lock_path = registry::lock_path(dir, &canonical);
-    let lock = registry::acquire_lock(&lock_path)?;
     let entry_file = registry.join(registry::entry_file_name(&canonical));
+    let lock = match registry::acquire_lock(&lock_path) {
+        Ok(lock) => lock,
+        // An app has the project open, whether or not it listens: it holds the
+        // lock too.
+        Err(why) => {
+            let app = registry::read_entry(&entry_file)
+                .filter(|entry| registry::is_known(entry) && entry.kind == Kind::Gui);
+            return Err(match app {
+                Some(entry) => format!(
+                    "{} is also open in process {}, which keeps its entry",
+                    canonical.display(),
+                    entry.pid
+                ),
+                None => why,
+            });
+        }
+    };
     if let Some(existing) = registry::read_entry(&entry_file) {
         if !registry::is_known(&existing) {
             return Err(format!(
@@ -193,7 +213,8 @@ impl Drop for Hold {
     /// Removes the entry. The lock file stays: deleting a locked file lets a
     /// second run lock the unlinked one (see `registry::acquire_lock`).
     fn drop(&mut self) {
-        if let Err(why) = registry::remove_all(&self.dir, &self.owner) {
+        if let Err(why) = registry::remove_all(&self.dir, &self.owner, &mut registry::Locks::new())
+        {
             crate::diagnostics::log_warning(format!("could not remove the project hold: {why}"));
         }
     }

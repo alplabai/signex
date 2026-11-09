@@ -16,8 +16,16 @@ use super::token::is_boot_id;
 use super::transport::endpoint_name;
 
 /// The version of the entry format. A change that breaks a reader moves it.
-/// 2 added `kind`; an entry without one is a format 1 entry of a GUI.
-pub(super) const FORMAT: u32 = 2;
+/// 2 added `kind`; an entry without one is a format 1 entry of a GUI. 3: a
+/// `gui` entry with an empty `socket` is an app that has the project open and
+/// does not listen (agent connections off); a reader of format 2 would take it
+/// for a stale one, so it must not read it at all.
+pub(super) const FORMAT: u32 = 3;
+
+/// The locks this app holds, one per open project, by entry file name. A lock
+/// is held while its project is open and dropped (never deleted) when it
+/// closes; see [`acquire_lock`].
+pub(super) type Locks = std::collections::BTreeMap<String, std::fs::File>;
 
 /// The largest entry this app reads back while cleaning up.
 const MAX_ENTRY_BYTES: u64 = 64 * 1024;
@@ -63,11 +71,17 @@ pub(super) fn entry_file_name(canonical: &Path) -> String {
     format!("{hex}.json")
 }
 
-/// Write the entry of every project in `projects` and remove this run's other
-/// entries (a closed project). Entries of other processes are never touched.
-/// A project that cannot be resolved is named in the error, after the rest
-/// was done.
-pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<(), String> {
+/// Write the entry of every project in `projects`, holding each one's lock, and
+/// remove this run's other entries and locks (a closed project). Entries of
+/// other processes are never touched. With an empty `owner.endpoint` the entry
+/// says the app has the project open and does not listen. A project that
+/// cannot be resolved is named in the error, after the rest was done.
+pub(super) fn sync(
+    dir: &Path,
+    owner: &Owner,
+    projects: &[PathBuf],
+    locks: &mut Locks,
+) -> Result<(), String> {
     let registry = dir.join(REGISTRY_DIR);
     files::prepare_dir(&registry)?;
     let mut wanted = BTreeSet::new();
@@ -99,17 +113,35 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
             socket: owner.endpoint.clone(),
             boot_id: owner.boot_id.clone(),
         };
+        // The project's lock, held while it is open: it is what says this app
+        // is alive when the entry has no socket. Another holder keeps the project.
+        let held_elsewhere = format!(
+            "{} is also open in process {}, which keeps its entry",
+            canonical.display(),
+            existing.as_ref().map_or(0, |entry| entry.pid)
+        );
+        if !locks.contains_key(&name) {
+            match acquire_lock(&lock_path(dir, &canonical)) {
+                Ok(lock) => {
+                    locks.insert(name.clone(), lock);
+                }
+                Err(_) => {
+                    problems.push(held_elsewhere);
+                    continue;
+                }
+            }
+        }
         if existing.as_ref() == Some(&entry) {
             // Already written: a retry does not rewrite it.
             wanted.insert(name);
             continue;
         }
-        if !may_take_over(existing.as_ref(), owner, |entry| entry_is_live(dir, entry)) {
-            let held = existing.map_or(0, |entry| entry.pid);
-            problems.push(format!(
-                "{} is also open in process {held}, which keeps its entry",
-                canonical.display()
-            ));
+        // With the lock held, an entry with no socket (a headless run, an app
+        // that does not listen) is a dead one's; one with a socket is judged by
+        // its socket.
+        let live = |entry: &Entry| !entry.socket.is_empty() && entry_is_live(dir, entry);
+        if !may_take_over(existing.as_ref(), owner, live) {
+            problems.push(held_elsewhere);
             continue;
         }
         let text = serde_json::to_string_pretty(&entry).map_err(|error| error.to_string())?;
@@ -121,6 +153,8 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
         }
     }
     problems.extend(remove_own_except(&registry, owner, &wanted));
+    // A project no longer open releases its lock (the lock file stays).
+    locks.retain(|name, _| wanted.contains(name));
     if problems.is_empty() {
         Ok(())
     } else {
@@ -158,6 +192,11 @@ pub(super) fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
     match entry.kind {
         Kind::Headless => {
             entry.socket.is_empty() && lock_is_held(&lock_path(dir, Path::new(&entry.project)))
+        }
+        // An app that has the project open and does not listen (agent
+        // connections off) holds the project's lock, as a headless run does.
+        Kind::Gui if entry.socket.is_empty() => {
+            lock_is_held(&lock_path(dir, Path::new(&entry.project)))
         }
         Kind::Gui => {
             entry.socket == endpoint_name(dir, &entry.boot_id)
@@ -415,9 +454,10 @@ fn pid_alive(pid: u32) -> bool {
     }
 }
 
-/// Remove every entry of this run (the listener closed, or the app is
-/// quitting).
-pub(super) fn remove_all(dir: &Path, owner: &Owner) -> Result<(), String> {
+/// Remove every entry of this run and release its locks (the app is quitting,
+/// or a headless run ends). The lock files stay.
+pub(super) fn remove_all(dir: &Path, owner: &Owner, locks: &mut Locks) -> Result<(), String> {
+    locks.clear();
     let registry = dir.join(REGISTRY_DIR);
     if !registry.is_dir() {
         return Ok(());
@@ -444,9 +484,10 @@ fn remove_own_except(registry: &Path, owner: &Owner, keep: &BTreeSet<String>) ->
             continue;
         }
         let path = item.path();
-        if read_entry(&path).is_some_and(|entry| {
-            is_known(&entry) && entry.pid == owner.pid && entry.boot_id == owner.boot_id
-        }) && let Err(why) = files::remove_if_ours(&path)
+        // By process: an entry this process wrote under an earlier boot id (the
+        // setting went off and on) is still its own.
+        if read_entry(&path).is_some_and(|entry| is_known(&entry) && entry.pid == owner.pid)
+            && let Err(why) = files::remove_if_ours(&path)
         {
             problems.push(why);
         }
@@ -486,6 +527,16 @@ pub(super) fn read_entry(path: &Path) -> Option<Entry> {
 mod tests {
     use super::*;
 
+    /// [`super::sync`] with locks that last only for the call: most of these
+    /// tests list apps that listen, whose liveness is their socket.
+    fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<(), String> {
+        super::sync(dir, owner, projects, &mut Locks::new())
+    }
+
+    fn remove_all(dir: &Path, owner: &Owner) -> Result<(), String> {
+        super::remove_all(dir, owner, &mut Locks::new())
+    }
+
     fn owner(pid: u32, boot: &str) -> Owner {
         Owner {
             pid,
@@ -515,6 +566,8 @@ mod tests {
             .unwrap()
             .flatten()
             .map(|item| item.file_name().to_string_lossy().into_owned())
+            // The entries; a project's (empty) lock file stays once made.
+            .filter(|name| name.ends_with(".json"))
             .collect();
         names.sort();
         names

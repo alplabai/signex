@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::super::client::{Hold, hold};
 use super::super::files;
-use super::super::registry::{Owner, entry_file_name, sync};
+use super::super::registry::{Locks, Owner, entry_file_name, sync};
 use super::super::transport::endpoint_name;
 use crate::app::Signex;
 
@@ -55,7 +55,13 @@ impl Fixture {
             boot_id: HOLDER_BOOT.into(),
             endpoint: endpoint_name(&self.dir, HOLDER_BOOT),
         };
-        sync(&self.dir, &owner, std::slice::from_ref(&self.project)).expect("an entry");
+        sync(
+            &self.dir,
+            &owner,
+            std::slice::from_ref(&self.project),
+            &mut Locks::new(),
+        )
+        .expect("an entry");
     }
 
     fn open(&mut self) {

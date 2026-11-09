@@ -203,6 +203,22 @@ cannot write its entry, it fails with exit 2. If a running Signex registered
 the project between the look and the hold, a default run attaches to it; a
 forced `--headless` fails.
 
+### A project open in Signex that does not listen
+
+A Signex lists every open project in the registry and holds its lock even
+while "Allow agent connections" is off; its entry then names no socket. A run
+that finds such an entry does not run headless on the same files (two copies
+of the document would diverge). On any route (`--attach` too) it stops with
+exit 2 and no output:
+
+```
+<project> is open in Signex (pid N). To let an agent work on it, turn on Preferences > Allow agent connections.
+```
+
+Once the person turns the setting on, the same entry names the socket and the
+run attaches. A Signex that crashed leaves its entry, but its lock is gone, so
+the entry is stale and the run goes on.
+
 ## Security
 
 The input may come from an agent that read untrusted text, so every rule below

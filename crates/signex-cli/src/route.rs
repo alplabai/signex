@@ -47,6 +47,7 @@ pub(crate) fn place_in(
             peer.pid
         )),
         Lookup::Gui(peer) => Ok(Placement::Attach(peer)),
+        Lookup::GuiNotListening { pid } => Err(not_listening(&name, pid)),
         Lookup::Headless { pid } if route == Route::Attach => {
             Err(no_gui(format!("a headless run, process {pid}, holds it")))
         }
@@ -67,19 +68,25 @@ pub(crate) fn place_in(
     }
 }
 
+/// A Signex has the project open and does not listen: the run does not edit
+/// the same files behind it, for any route.
+fn not_listening(project: &impl std::fmt::Display, pid: u32) -> String {
+    format!(
+        "{project} is open in Signex (pid {pid}). To let an agent work on it, turn on \
+         Preferences > Allow agent connections."
+    )
+}
+
 /// Take the hold. If that fails under `Auto` because a running Signex
 /// registered the project in between, attach to it; otherwise fail.
 fn held(route: Route, dir: &Path, project: &Path) -> Result<Placement, String> {
     match agent_client::hold(dir, project) {
         Ok(hold) => Ok(Placement::Headless(hold)),
-        Err(why) => {
-            if route == Route::Auto
-                && let Ok(Lookup::Gui(peer)) = agent_client::lookup(dir, project)
-            {
-                return Ok(Placement::Attach(peer));
-            }
-            Err(format!("cannot hold {}: {why}", project.display()))
-        }
+        Err(why) => match agent_client::lookup(dir, project) {
+            Ok(Lookup::Gui(peer)) if route == Route::Auto => Ok(Placement::Attach(peer)),
+            Ok(Lookup::GuiNotListening { pid }) => Err(not_listening(&project.display(), pid)),
+            _ => Err(format!("cannot hold {}: {why}", project.display())),
+        },
     }
 }
 

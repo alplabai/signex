@@ -9,6 +9,8 @@ mod hold;
 #[cfg(unix)]
 mod live;
 mod opened;
+#[cfg(unix)]
+mod presence;
 mod refusals;
 mod round_trip;
 

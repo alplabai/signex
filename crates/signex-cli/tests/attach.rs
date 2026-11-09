@@ -81,9 +81,25 @@ impl World {
 
     fn plant(&self, kind: &str, pid: u32, boot: &str, socket: &Path) {
         let project = std::fs::canonicalize(&self.fx.project).unwrap();
-        let entry = json!({"format": 2, "kind": kind, "project": project,
+        let entry = json!({"format": 3, "kind": kind, "project": project,
             "pid": pid, "socket": socket, "boot_id": boot});
         std::fs::write(self.entry_file(), entry.to_string()).unwrap();
+    }
+
+    /// What a Signex with the project open and agent connections off leaves:
+    /// an entry with no socket, and the app's lock on the project, held by the
+    /// returned file.
+    fn open_without_listening(&self) -> std::fs::File {
+        self.plant("gui", std::process::id(), CC, Path::new(""));
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(self.entry_file().with_extension("lock"))
+            .unwrap();
+        lock.try_lock().expect("the app's lock");
+        lock
     }
 
     fn socket(&self, boot: &str) -> PathBuf {
@@ -706,6 +722,46 @@ fn a_command_that_acts_on_a_document_must_name_it_and_is_never_sent_without_one(
     assert_eq!(out.lines[3]["status"], "answered");
     assert_eq!(sent.len(), 1, "only the query was sent: {sent:?}");
     assert_eq!(sent[0]["id"], "list_documents");
+}
+
+/// With agent connections off the app lists its open project with no socket:
+/// nothing to attach to, and the same files are not edited behind it, whatever
+/// the route.
+#[test]
+fn a_project_open_in_a_signex_that_does_not_listen_stops_every_route() {
+    let w = world();
+    let _app_lock = w.open_without_listening();
+    let theirs = w.entry().unwrap();
+    let want = format!(
+        "{} is open in Signex (pid {}). To let an agent work on it, turn on Preferences > \
+         Allow agent connections.",
+        std::fs::canonicalize(&w.fx.project).unwrap().display(),
+        std::process::id()
+    );
+    for flags in [&[][..], &["--headless"][..], &["--attach"][..]] {
+        let mut args = vec!["run", w.project(), "list_documents"];
+        args.extend_from_slice(flags);
+        let out = w.cli(&args, "");
+        assert_eq!(out.code, Some(2), "{flags:?}: {}", out.stderr);
+        assert!(out.stderr.contains(&want), "{flags:?}: {}", out.stderr);
+        assert!(out.lines.is_empty(), "{flags:?}: it ran anyway");
+        assert_eq!(
+            w.entry().unwrap(),
+            theirs,
+            "{flags:?}: the app's entry was touched"
+        );
+    }
+}
+
+/// The app crashed: its entry is left, its lock is gone, and a living process
+/// may even have its pid. The run is not stopped by a ghost.
+#[test]
+fn an_entry_left_by_a_crashed_signex_is_stale_and_the_run_goes_on() {
+    let w = world();
+    w.plant("gui", std::process::id(), CC, Path::new(""));
+    let out = w.cli(&["run", w.project(), "list_documents"], "");
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(out.lines[0]["mode"], "headless");
 }
 
 #[test]

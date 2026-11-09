@@ -208,7 +208,13 @@ fn the_client_attaches_through_the_registry_and_its_query_and_edit_change_the_ru
         let (server, mut messages, _socket) = start(&mut app, &config).await;
         // The write the app's own worker makes once the listener is up.
         let owner = app.agent.owner().expect("the app is listening");
-        registry::sync(&dir, &owner, std::slice::from_ref(&project)).unwrap();
+        registry::sync(
+            &dir,
+            &owner,
+            std::slice::from_ref(&project),
+            &mut registry::Locks::new(),
+        )
+        .unwrap();
 
         let (client_dir, client_project, client_doc) = (dir.clone(), project.clone(), doc.clone());
         let attached = std::thread::spawn(move || -> Result<Vec<Reply>, String> {
@@ -530,13 +536,13 @@ fn quitting_with_the_setting_off_removes_an_entry_of_this_run_that_outlived_its_
 fn cleanup_waits_for_a_registry_write_in_flight() {
     use std::sync::{Arc, Mutex, mpsc};
     let dir = scratch();
-    let lock = Arc::new(Mutex::new(()));
+    let lock = Arc::new(Mutex::new(registry::Locks::new()));
     let held = lock.lock().unwrap();
     let (done, finished) = mpsc::channel();
     let worker = {
         let (dir, lock) = (dir.path().to_path_buf(), lock.clone());
         std::thread::spawn(move || {
-            super::super::listener::cleanup(&dir, "0123456789abcdef", &lock);
+            super::super::listener::cleanup(&dir, "0123456789abcdef", &lock, true);
             done.send(()).unwrap();
         })
     };
@@ -637,7 +643,13 @@ fn a_project_another_instance_held_is_registered_once_it_quits() {
         boot_id: boot_id.into(),
         endpoint: socket,
     };
-    registry::sync(&dir, &other, std::slice::from_ref(&project)).unwrap();
+    registry::sync(
+        &dir,
+        &other,
+        std::slice::from_ref(&project),
+        &mut registry::Locks::new(),
+    )
+    .unwrap();
     let pid_in = |entry: &Path| {
         serde_json::from_str::<registry::Entry>(&std::fs::read_to_string(entry).unwrap())
             .unwrap()
@@ -684,6 +696,8 @@ fn a_project_another_instance_held_is_registered_once_it_quits() {
 fn a_failed_listener_is_restarted_with_new_ids_a_few_times_and_then_stays_off() {
     use super::super::handler::{MAX_RESTARTS, restart_delay};
     let mut app = app_at_work();
+    // Listing the open project is another task of an update: no folder, no task.
+    app.agent.runtime_dir = Err("not under test".into());
     assert_eq!(restart_delay(0), Some(Duration::from_secs(2)));
     assert_eq!(restart_delay(4), Some(Duration::from_secs(32)));
     assert_eq!(restart_delay(MAX_RESTARTS), None);
@@ -755,6 +769,7 @@ fn a_failed_listener_is_restarted_with_new_ids_a_few_times_and_then_stays_off() 
 fn a_listener_that_starts_and_fails_every_time_is_restarted_at_most_five_times() {
     use super::super::handler::MAX_RESTARTS;
     let mut app = app_at_work();
+    app.agent.runtime_dir = Err("not under test".into());
     let mut scheduled = 0;
     for _round in 0..12 {
         let boot_id = app.agent.boot_id().unwrap().to_string();
@@ -826,7 +841,13 @@ fn a_late_registry_write_of_an_ended_listener_is_removed_on_quit() {
         boot_id: old,
         endpoint: "/run/old.sock".into(),
     };
-    registry::sync(&dir, &late, std::slice::from_ref(&project)).unwrap();
+    registry::sync(
+        &dir,
+        &late,
+        std::slice::from_ref(&project),
+        &mut registry::Locks::new(),
+    )
+    .unwrap();
     assert!(entry.exists());
 
     let mut driver = crate::task_driver::TaskDriver::new();

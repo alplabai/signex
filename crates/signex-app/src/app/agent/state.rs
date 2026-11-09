@@ -26,8 +26,12 @@ pub(crate) struct AgentState {
     /// True while an agent request runs, so the code under it can tell an
     /// agent's call from a click.
     pub(crate) serving: bool,
-    /// Serialises registry writes and removals, which run on worker threads.
-    pub(super) registry_lock: Arc<Mutex<()>>,
+    /// Whether the open projects are listed in the registry. Only a headless
+    /// app does not: it is the run that holds its project.
+    pub(crate) lists_projects: bool,
+    /// Serialises registry writes and removals, which run on worker threads,
+    /// and holds the lock of every open project (see `registry::Locks`).
+    pub(super) registry_lock: Arc<Mutex<super::registry::Locks>>,
     /// The boot ids whose files this app may have made, for the quit path.
     pub(super) touched: Vec<String>,
     /// The last registry write failed or left a project to another instance;
@@ -48,6 +52,7 @@ impl AgentState {
             endpoint: None,
             registered: None,
             serving: false,
+            lists_projects: true,
             registry_lock: Arc::default(),
             touched: Vec::new(),
             registry_retry: false,
@@ -79,13 +84,14 @@ impl AgentState {
         })
     }
 
-    /// This run as the registry entries name it, once the listener is up.
+    /// This run as the registry entries name it. Its endpoint is empty while no
+    /// listener is up: the entries then say the app has the project open and
+    /// does not listen.
     pub(super) fn owner(&self) -> Option<Owner> {
-        let endpoint = self.endpoint.clone()?;
         Some(Owner {
             pid: std::process::id(),
             boot_id: self.ids.as_ref()?.0.clone(),
-            endpoint,
+            endpoint: self.endpoint.clone().unwrap_or_default(),
         })
     }
 

@@ -161,7 +161,7 @@ impl Signex {
             self.agent
                 .listener_config(self.ui_state.agent_connections_enabled),
         );
-        let retry = if self.agent.endpoint.is_some() && self.agent.registry_retry {
+        let retry = if self.agent.registry_retry {
             iced::time::every(REGISTRY_RETRY).map(|_| Message::Agent(AgentMsg::RegistryRetryTick))
         } else {
             Subscription::none()
@@ -194,9 +194,15 @@ impl Signex {
     }
 
     /// Write the registry for the projects open now, if they changed since it
-    /// was last written and a listener is up. Called at the end of every
-    /// update; the write runs on a worker.
+    /// was last written, whether or not agent connections are on: an open
+    /// project is listed (with the endpoint once a listener is up, without one
+    /// before), so a headless run never works on a file open here. A headless
+    /// app lists nothing: it is the run. Called at the end of every update; the
+    /// write runs on a worker.
     pub(crate) fn sync_agent_registry(&mut self) -> Option<Task<Message>> {
+        if !self.agent.lists_projects {
+            return None;
+        }
         let owner = self.agent.owner()?;
         let dir = self.agent.runtime_dir().ok().cloned()?;
         let mut projects: Vec<_> = self
@@ -216,10 +222,10 @@ impl Signex {
         Some(Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    let _held = lock
+                    let mut held = lock
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    registry::sync(&dir, &owner, &projects)
+                    registry::sync(&dir, &owner, &projects, &mut held)
                 })
                 .await
                 .unwrap_or_else(|error| Err(format!("the registry write did not finish: {error}")))
@@ -237,12 +243,15 @@ impl Signex {
     /// so an exit that skips the subscription's own cleanup leaves none.
     ///
     /// It also cleans the boot ids a listener of this run reported, with the
-    /// setting off: an entry that outlived its listener goes too. A run that
-    /// never listened has nothing to clean and adds no task.
+    /// setting off, and removes this process's registry entries (the projects
+    /// are closing with it) and releases its locks. A headless app, which
+    /// listed nothing, adds no task.
     pub(crate) fn agent_cleanup_then(&mut self, next: Task<Message>) -> Task<Message> {
+        if !self.agent.lists_projects {
+            return next;
+        }
         let mut ids = std::mem::take(&mut self.agent.touched);
-        if self.ui_state.agent_connections_enabled
-            && let Some(current) = self.agent.boot_id()
+        if let Some(current) = self.agent.boot_id()
             && !ids.iter().any(|id| id == current)
         {
             ids.push(current.to_string());
@@ -254,12 +263,15 @@ impl Signex {
             return next;
         }
         self.agent.listener_closed();
+        // Nothing is listed again after the exit path: an update that runs
+        // before the process ends must not write the entries back.
+        self.agent.lists_projects = false;
         let lock = self.agent.registry_lock.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     for id in &ids {
-                        listener::cleanup(&dir, id, &lock);
+                        listener::cleanup(&dir, id, &lock, true);
                     }
                 })
                 .await

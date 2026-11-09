@@ -15,6 +15,11 @@ pub(super) const REGISTRY_DIR: &str = "registry";
 /// temporary directory (macOS: already per user), else the user's local
 /// application data (Windows). Only reads the environment.
 pub(super) fn runtime_dir() -> Result<PathBuf, String> {
+    // The app's own unit tests list their open projects here (a project open is
+    // listed whether or not agents may connect): never in the user's folder.
+    if cfg!(test) {
+        return Ok(std::env::temp_dir().join(format!("signex-agent-test-{}", std::process::id())));
+    }
     #[cfg(unix)]
     {
         let xdg = std::env::var_os("XDG_RUNTIME_DIR")

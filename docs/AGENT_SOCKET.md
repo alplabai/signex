@@ -14,11 +14,15 @@ which `signex-cli` uses through `signex_app::headless::agent_client`.
 ## Off by default
 
 Preferences > Editing > "Allow agent connections" (`agent_connections_enabled`
-in `prefs.json`, default `false`). While it is off no socket, token or registry
-file exists, and the app behaves as before. Turning it on at Save starts the
-listener; turning it off at Save ends it: the socket is closed, the connections
-are dropped and every file below is removed. A headless run never listens,
-whatever its config root says.
+in `prefs.json`, default `false`). While it is off no socket and no token
+exist and nothing listens or accepts a connection. The app still lists each
+open project in the registry (below) and holds its lock, so that a headless
+`signex-cli` run does not edit a file open in a window; those entries name no
+socket. Turning the setting on at Save starts the listener and the entries
+name its socket; turning it off at Save ends it: the socket is closed, the
+connections are dropped, the socket and token files are removed, and the
+entries lose their socket. A headless run never listens, whatever its config
+root says, and lists nothing.
 
 ## Transport
 
@@ -167,16 +171,18 @@ config-root override does not move this directory.
 
 ## Registry
 
-One entry per open project, written when the listener is up and a project is
-open, rewritten when the set of open projects changes, removed when its
-project closes, when the setting goes off and when the app exits. It is
-written for the canonical path of the project file; the file name is the first
-32 hex characters of the SHA-256 of that path, so two spellings of one path
-share an entry and the name holds no path text.
+One entry per open project, written whenever a project is open (listening or
+not), rewritten when the set of open projects or the listener changes, and
+removed when its project closes and when the app exits. The app holds the
+project's lock file (below) for as long as the project is open and releases
+it when it closes; the lock file itself is never deleted. It is written for
+the canonical path of the project file; the file name is the first 32 hex
+characters of the SHA-256 of that path, so two spellings of one path share an
+entry and the name holds no path text.
 
 ```json
 {
-  "format": 2,
+  "format": 3,
   "kind": "gui",
   "project": "/canonical/path/Demo.snxprj",
   "pid": 4242,
@@ -185,20 +191,26 @@ share an entry and the name holds no path text.
 }
 ```
 
-`kind` is `gui` (a running app that listens) or `headless` (a `signex-cli` run
-that holds the project and has no endpoint: `socket` is empty and `boot_id` is
-only its identity). Format 2 added `kind`; an entry without one is a format 1
-entry and reads as `gui`.
+`kind` is `gui` (a running app) or `headless` (a `signex-cli` run that holds
+the project and has no endpoint: `socket` is empty and `boot_id` is only its
+identity). A `gui` entry with an empty `socket` is an app that has the project
+open and does not listen (agent connections off): nothing to attach to, and
+the project is not to be edited behind it. Format 2 added `kind`; an entry
+without one is a format 1 entry and reads as `gui`. Format 3 added the
+`gui` entry without a socket, which a format 2 reader would misjudge as
+stale, so it reads a format 3 entry as one it does not know.
 
 A client finds its project's entry by the digest of the canonical path and
 reads the token from `<boot_id>.token` in the runtime directory. An entry is
-live when its boot id has the right form and its process runs and, for a `gui`
-entry, `socket` is the endpoint that boot id names and answers; a `headless`
-entry is live while a process holds the exclusive lock on the project's lock
-file, `registry/<digest>.lock`, beside the entry. The run takes that lock for
-its whole life and the kernel drops it with the process, so a run killed by a
-signal is found stale at once and a reused process id means nothing: a reader
-tries the lock without waiting, and if it gets it, the holder is gone. A client
+live when its boot id has the right form and, for a `gui` entry with a socket,
+its process runs and `socket` is the endpoint that boot id names and answers;
+a `headless` entry, and a `gui` entry without a socket, are live while a
+process holds the exclusive lock on the project's lock file,
+`registry/<digest>.lock`, beside the entry. The run, or the app while the
+project is open, takes that lock and the kernel drops it with the process, so
+a process killed by a signal is found stale at once and a reused process id
+means nothing: a reader tries the lock without waiting, and if it gets it, the
+holder is gone. A client
 never connects to anything an entry names: it derives the endpoint from the
 boot id. An entry that is not live is stale: the client removes it, after the
 same owner and link check the app makes.
@@ -308,9 +320,7 @@ entry file it names.
   and the removal can lose its entry, which the app's retry timer restores.
 - The lock is a file lock (`flock`, `LockFileEx`): on a runtime folder on a
   network file system whose locks are not honoured, a hold is not seen.
-- A Signex with agent connections off has no entry, so a headless run cannot
-  know a person has the project open there; and a sheet opened loose, without
-  its project, is not refused.
+- A sheet opened loose, without its project, is not listed and not refused.
 - On Windows the client has not been run against a real app here (it is
   compiled and linted for `x86_64-pc-windows-msvc`).
 - The Windows code (`transport/windows.rs`) is compiled and linted for
