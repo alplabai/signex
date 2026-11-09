@@ -17,48 +17,13 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use serde::{Deserialize, Serialize};
-
 use crate::expr::ExprError;
 use crate::expr::ast::ExprNode;
 use crate::expr::eval::{EvalContext, eval};
 use crate::expr::parse::parse;
 use crate::unit::{Quantity, UnitFamily};
 
-/// User-defined parameter table — `name → source-string`. Source
-/// strings carry an optional `=` prefix (Altium-style) and are
-/// otherwise the same expression-language input that the parser
-/// accepts.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ParameterTable(pub BTreeMap<String, String>);
-
-impl ParameterTable {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Insert / overwrite a parameter source string.
-    pub fn insert(&mut self, name: impl Into<String>, src: impl Into<String>) {
-        self.0.insert(name.into(), src.into());
-    }
-
-    pub fn get_raw(&self, name: &str) -> Option<&str> {
-        self.0.get(name).map(String::as_str)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.0.iter()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
+pub use signex_types::sketch::parameter::ParameterTable;
 
 /// Strip the optional Altium-style leading `=` and surrounding
 /// whitespace from a parameter source string.
