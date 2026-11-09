@@ -90,9 +90,16 @@ pub(super) fn line(app: &Signex, id: &str, args: Value) -> String {
 
 /// Run `input` as a request from process 4242 and read the reply.
 pub(super) fn ask_raw(app: &mut Signex, input: Input) -> Value {
+    ask_raw_as(app, 4242, input)
+}
+
+/// Run `input` as a request from process `pid`. A test that counts log lines
+/// uses a pid no other test sends, because the diagnostics ring is shared by
+/// every test thread (#2227).
+pub(super) fn ask_raw_as(app: &mut Signex, pid: u32, input: Input) -> Value {
     let (reply, mut answer) = AgentReply::channel();
     let call = AgentCall {
-        pid: Some(4242),
+        pid: Some(pid),
         input,
         reply,
     };
@@ -112,6 +119,12 @@ pub(super) fn ask(app: &mut Signex, text: String) -> Value {
 pub(super) fn call(app: &mut Signex, id: &str, args: Value) -> Value {
     let text = line(app, id, args);
     ask(app, text)
+}
+
+/// [`call`] from process `pid`.
+pub(super) fn call_as(app: &mut Signex, pid: u32, id: &str, args: Value) -> Value {
+    let text = line(app, id, args);
+    ask_raw_as(app, pid, Input::Line(text))
 }
 
 pub(super) fn revision(app: &Signex, file: &str) -> u64 {
