@@ -178,7 +178,7 @@ fn a_polygon_with_no_area_is_a_segment_or_point_for_both_polygon_tests() {
     assert!(polygons_meet(&sq, &dot) && polygons_meet(&dot, &sq));
     assert!(!polygons_meet(&sq, &far_dot) && !polygons_meet(&far_dot, &sq));
     assert!(!polygons_meet(&line, &far_line));
-    assert!(polygons_meet(&line, &vec![p(5, 0), p(5, 10)]));
+    assert!(polygons_meet(&line, &[p(5, 0), p(5, 10)]));
     assert!(!polygons_meet(&sq, &[]));
     // Against a shape: a pad 5 mm from a collinear ring is not met; one on it is.
     let pad = rect(0, 0, 1, 0.0);
