@@ -28,6 +28,7 @@ pub mod library_place;
 pub mod library_symbol_choice;
 pub mod menu;
 pub mod missing_fonts;
+mod mixed_versions;
 pub(crate) mod modal_sizing;
 pub mod native_menu;
 pub mod net_nav;

@@ -313,7 +313,7 @@ fn a_paste_array_of_a_foreign_fragment_brings_its_library_body() {
     let doc = app.document_state.active_engine().unwrap().document();
     assert_eq!(doc.symbols.len(), 3);
     assert_eq!(doc.lib_symbols.len(), 1);
-    assert!(doc.lib_symbols.contains_key("lib:r"));
+    assert!(doc.lib_symbols.values().any(|b| b.id == "lib:r"));
 }
 
 /// A new paste request must not strip the numbers a Next free stamp is

@@ -247,6 +247,9 @@ pub enum Command {
     UpdateSymbolLibId {
         symbol_id: Uuid,
         lib_id: String,
+        /// The embedded body the symbol draws with after the change
+        /// (`Symbol::body_ref`); the caller registers it in the same batch.
+        body_ref: String,
     },
     UpdateSymbolFields {
         symbol_id: Uuid,
@@ -301,16 +304,21 @@ pub enum Command {
     PlaceSymbol {
         symbol: Symbol,
     },
-    /// Add `lib_symbol` to the sheet's `lib_symbols`, keyed by its `id`.
-    /// A no-op when that key is already present — the first definition
-    /// wins, so re-placing a library symbol never duplicates or replaces
-    /// the entry. Run in the same batch as the `PlaceSymbol` that
-    /// references it so one undo removes both.
+    /// Embed `lib_symbol` in the sheet's `lib_symbols` as its own version,
+    /// keyed by `LibSymbol::body_ref` (`"<id>#<hash>"`). Another version of
+    /// the same library symbol stays beside it, so old instances keep their
+    /// drawing. A no-op when this exact version is already embedded; a
+    /// different body under the same ref is
+    /// [`EngineError::LibSymbolBodyCollision`]. Run in the same batch as the
+    /// `PlaceSymbol` that names the ref so one undo removes both.
     RegisterLibSymbol {
         lib_symbol: LibSymbol,
     },
-    /// Replace the sheet's embedded copy of `lib_symbol.id` with
-    /// `lib_symbol` ("Update from library", #912). Refused with
+    /// Move the placed instances of `lib_symbol.id` to the version
+    /// `lib_symbol` ("Update from library", #912, #2209): every instance on
+    /// the sheet, or only the parts of `only`'s symbols. All units of a part
+    /// move together. The versions they leave are dropped once nothing draws
+    /// with them. Refused with
     /// [`EngineError::LibSymbolPinsConnected`] when a pin that has a wire
     /// or no-connect on it would vanish or move off that connection;
     /// nothing is mutated then. One undo step.
@@ -321,6 +329,9 @@ pub enum Command {
         /// truth, #950) and the row values the part last agreed with, which
         /// move together (#2004).
         library_versions: Vec<(uuid::Uuid, signex_types::schematic::LinkStamp)>,
+        /// `Some`: move only the parts these symbols belong to; `None`: all
+        /// instances of the library symbol on the sheet.
+        only: Option<Vec<uuid::Uuid>>,
     },
     /// Swap the placed symbol `symbol_id` for another library part
     /// ("Change Component...", #1260): register the part's drawing, re-key

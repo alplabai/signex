@@ -40,6 +40,8 @@ pub struct PanelContext {
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).
     pub theme_id: signex_types::theme::ThemeId,
+    /// The UI language's message catalog, for labels a panel renders itself.
+    pub i18n: std::sync::Arc<signex_i18n::I18n>,
     // Live settings (synced from Signex on every update)
     pub unit: Unit,
     pub grid_visible: bool,

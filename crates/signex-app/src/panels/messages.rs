@@ -657,6 +657,9 @@ pub enum PanelMsg {
     /// Replace the sheet's embedded library symbol with the library's
     /// current one (Properties ▸ "Update from library", #912).
     UpdateSymbolFromLibrary(uuid::Uuid),
+    /// "Only this one": move just this part (all its units) to the library's
+    /// current version; other instances keep the version they draw with.
+    UpdateSymbolFromLibraryOnly(uuid::Uuid),
     /// Open Datasheet / Edit Symbol / Change Component on the selected
     /// placed part (#1301, #1262, #1260).
     PlacedPartAction(crate::library::PlacedPartAction),
@@ -684,8 +687,6 @@ pub enum PanelMsg {
     EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.
     EditSymbolValueFontSizePt(uuid::Uuid, u32),
-    /// Change the lib_id of a symbol (used by power-port Style dropdown).
-    EditSymbolLibId(uuid::Uuid, String),
     /// Swap a power-port's style: change lib_id and preserve visual direction
     /// by setting rotation accordingly.
     EditPowerPortStyle {

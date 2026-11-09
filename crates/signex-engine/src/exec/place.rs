@@ -405,12 +405,13 @@ impl Engine {
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::RegisterLibSymbol { lib_symbol } => {
-                if self.document.lib_symbols.contains_key(&lib_symbol.id) {
+                // The same version is a no-op; another body under this ref
+                // is a collision, never a silent merge.
+                let key = self.document.check_body(&lib_symbol)?;
+                if self.document.lib_symbols.contains_key(&key) {
                     return Ok(CommandResult::unchanged());
                 }
-                self.document
-                    .lib_symbols
-                    .insert(lib_symbol.id.clone(), lib_symbol);
+                self.document.lib_symbols.insert(key, lib_symbol);
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
@@ -424,7 +425,8 @@ impl Engine {
             Command::ReplaceLibSymbol {
                 lib_symbol,
                 library_versions,
-            } => self.replace_lib_symbol(before, lib_symbol, library_versions),
+                only,
+            } => self.replace_lib_symbol(before, lib_symbol, library_versions, only),
             Command::ChangeComponent {
                 symbol_id,
                 replacement,

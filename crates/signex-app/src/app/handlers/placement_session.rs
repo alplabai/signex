@@ -217,11 +217,21 @@ impl Signex {
                 return Task::none();
             }
         };
+        let placed_ids: std::collections::HashSet<uuid::Uuid> = commands
+            .iter()
+            .filter_map(|c| match c {
+                signex_engine::Command::PlaceSymbol { symbol } => Some(symbol.uuid),
+                _ => None,
+            })
+            .collect();
         // `false` covers an engine error (logged by the gateway) or an
         // unchanged result; either way nothing was placed.
         if !self.apply_engine_commands(commands, false, false) {
             self.report_place_failure("Nothing was placed; see the log for details.");
             return Task::none();
+        }
+        if let Some(path) = self.document_state.active_path.clone() {
+            self.warn_mixed_version_parts(&[(path, placed_ids)].into());
         }
         self.after_placement_commit(reference.as_deref());
         Task::none()

@@ -9,11 +9,11 @@ use uuid::Uuid;
 /// has one) and place the instance. Run them as one batch so the pair is a
 /// single undo step.
 #[must_use]
-pub fn place_power_port(symbol: Symbol) -> Vec<Command> {
+pub fn place_power_port(mut symbol: Symbol) -> Vec<Command> {
+    let lib_symbol = power_port_lib_symbol(&symbol.lib_id);
+    symbol.body_ref = lib_symbol.body_ref();
     vec![
-        Command::RegisterLibSymbol {
-            lib_symbol: power_port_lib_symbol(&symbol.lib_id),
-        },
+        Command::RegisterLibSymbol { lib_symbol },
         Command::PlaceSymbol { symbol },
     ]
 }
@@ -28,13 +28,14 @@ pub fn restyle_power_port(
     new_lib_id: &str,
     rotation_degrees: f64,
 ) -> Vec<Command> {
+    let lib_symbol = power_port_lib_symbol(new_lib_id);
+    let body_ref = lib_symbol.body_ref();
     vec![
-        Command::RegisterLibSymbol {
-            lib_symbol: power_port_lib_symbol(new_lib_id),
-        },
+        Command::RegisterLibSymbol { lib_symbol },
         Command::UpdateSymbolLibId {
             symbol_id,
             lib_id: new_lib_id.to_owned(),
+            body_ref,
         },
         Command::SetSymbolRotation {
             symbol_id,

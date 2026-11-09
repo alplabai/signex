@@ -1389,6 +1389,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             unknown: Default::default(),
             uuid: symbol_uuid,
             lib_id: "Device:R".to_string(),
+            body_ref: String::new(),
             reference: "R1".to_string(),
             value: "10k".to_string(),
             footprint: String::new(),
