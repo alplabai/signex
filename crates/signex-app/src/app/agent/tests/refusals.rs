@@ -68,6 +68,17 @@ fn refusals_logged(start: &str, fragment: &str) -> usize {
         .count()
 }
 
+/// [`refuse_line`] without counting Messages lines: two tests that give the
+/// same reason would count each other's line when they run in one process.
+fn refused_unlogged(app: &mut Signex, text: String, fragment: &str) {
+    let before = held(app);
+    let reply = ask(app, text);
+    assert_eq!(reply["status"], "refused", "{reply}");
+    let reason = reply["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains(fragment), "{reply}");
+    assert_eq!(held(app), before, "{fragment} changed something");
+}
+
 fn refuse_line(app: &mut Signex, text: String, named: &str, fragment: &str) -> Value {
     refused_with(app, Input::Line(text), named, fragment)
 }
@@ -328,38 +339,98 @@ fn a_file_a_project_names_outside_its_folder_is_not_read_for_an_agent_but_is_for
 }
 
 #[test]
-fn save_close_and_net_class_assignment_are_refused_on_every_document_and_change_nothing() {
+fn closing_the_persons_active_document_is_refused_and_changes_nothing() {
     let mut app = app_at_work();
-    for file in ["a.snxsch", "b.snxsch"] {
-        for (id, extra, fragment) in [
-            (
-                "save_document",
-                json!({}),
-                "saving the person's file is not available to agents yet",
-            ),
-            (
-                "close_active_document",
-                json!({}),
-                "changes the person's tab strip",
-            ),
-            (
-                "assign_net_class",
-                json!({"net_name": "GND"}),
-                "net classes are project-wide data",
-            ),
-        ] {
-            let mut args = json!({"document": doc(file)});
-            args.as_object_mut()
-                .unwrap()
-                .extend(extra.as_object().unwrap().clone());
-            let request = line(&app, id, args);
-            refuse_line(&mut app, request, &format!("`{id}`"), fragment);
-        }
-    }
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("b.snxsch")}),
+    );
+    refuse_line(
+        &mut app,
+        request,
+        "`close_active_document`",
+        "is the person's active document",
+    );
     assert!(
         app.document_state
             .tabs
             .iter()
             .any(|t| t.path == path("b.snxsch"))
+    );
+}
+
+#[test]
+fn closing_a_sheet_the_person_is_typing_the_title_block_of_is_refused_and_the_draft_stays() {
+    let mut app = app_at_work();
+    app.document_state.drafts.set_title_block(
+        &path("a.snxsch"),
+        crate::panels::TitleBlockField::DocumentNumber,
+        "TYPED",
+    );
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("a.snxsch")}),
+    );
+    refused_unlogged(&mut app, request, "the person is editing this sheet's");
+    assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| t.path == path("a.snxsch"))
+    );
+}
+
+#[test]
+fn closing_a_sheet_the_person_is_typing_a_paper_edge_of_is_refused_and_the_draft_stays() {
+    let mut app = app_at_work();
+    let a = path("a.snxsch");
+    app.document_state
+        .drafts
+        .set_paper_edge(&a, crate::panels::PaperEdge::Width, "4");
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("a.snxsch")}),
+    );
+    refused_unlogged(&mut app, request, "or page settings");
+    assert_eq!(
+        app.document_state
+            .drafts
+            .paper_edge_text(&a, crate::panels::PaperEdge::Width)
+            .as_deref(),
+        Some("4")
+    );
+    assert!(app.document_state.tabs.iter().any(|t| t.path == a));
+}
+
+#[test]
+fn closing_a_document_shown_in_a_window_of_its_own_is_refused_and_changes_nothing() {
+    let mut app = app_at_work();
+    app.ui_state.windows.insert(
+        iced::window::Id::unique(),
+        crate::app::state::WindowKind::UndockedTab {
+            path: path("a.snxsch"),
+            title: "a".to_string(),
+        },
+    );
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("a.snxsch")}),
+    );
+    refuse_line(
+        &mut app,
+        request,
+        "`close_active_document`",
+        "is open in a window of its own",
+    );
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| t.path == path("a.snxsch"))
     );
 }
