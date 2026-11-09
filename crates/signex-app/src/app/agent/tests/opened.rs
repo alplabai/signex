@@ -17,14 +17,14 @@ fn doc(dir: &Path, file: &str) -> String {
 }
 
 /// The person's snapshot without what a close or a save changes by design: the
-/// tab strip, the canvas epoch a closed tab bumps and the command palette's
-/// catalog (it lists Save by whether a document is dirty). Active path, focus,
-/// selection, tool and the rest stay.
+/// tab strip and its active index, and the command palette's catalog (it lists
+/// Save by whether a document is dirty). Active path, focus, selection, tool,
+/// the move epoch and the rest stay.
 fn person_without_tabs(app: &Signex) -> String {
     snapshot(app)
         .lines()
         .filter(|line| {
-            ["tabs=", "active_tab=", "move_epoch=", "palette="]
+            ["tabs=", "active_tab=", "palette="]
                 .iter()
                 .all(|skipped| !line.starts_with(skipped))
         })
@@ -46,6 +46,64 @@ fn junction(app: &mut Signex, file: &Path) {
     assert_eq!(applied["status"], "answered", "{applied}");
 }
 
+/// The person at work on `b`: a move armed (with its pick on the app and the
+/// canvas), an inline text edit open and a shape anchor placed. Each of
+/// them is dropped by a tab sync.
+fn mid_interaction() -> Signex {
+    let mut app = app_at_work();
+    arm(&mut app);
+    app
+}
+
+fn arm(app: &mut Signex) {
+    app.ui_state.move_pick = Some(crate::canvas::MovePick::Object);
+    app.interaction_state.active_canvas_mut().move_pick = Some(crate::canvas::MovePick::Object);
+    app.interaction_state.shape_anchor = Some(signex_types::schematic::Point::new(3.0, 4.0));
+    app.interaction_state.editing_text = Some(crate::app::TextEditState {
+        uuid: super::uid(super::WIRE_A),
+        kind: SelectedKind::Label,
+        text: "half typed".into(),
+        original_text: "x".into(),
+        world_x: 0.0,
+        world_y: 0.0,
+        sheet: None,
+        placement: None,
+    });
+}
+
+fn close_a(app: &mut Signex) -> serde_json::Value {
+    call(
+        app,
+        "close_active_document",
+        json!({"document": path("a.snxsch").display().to_string()}),
+    )
+}
+
+#[test]
+fn closing_a_background_tab_keeps_the_persons_move_pick_and_epoch() {
+    let mut app = mid_interaction();
+    let epoch = app.interaction_state.active_canvas().move_epoch;
+    assert_eq!(close_a(&mut app)["status"], "ran");
+    assert!(app.ui_state.move_pick.is_some(), "the app's move pick");
+    assert!(app.interaction_state.active_canvas().move_pick.is_some());
+    assert_eq!(app.interaction_state.active_canvas().move_epoch, epoch);
+}
+
+#[test]
+fn closing_a_background_tab_keeps_the_persons_open_text_edit() {
+    let mut app = mid_interaction();
+    assert_eq!(close_a(&mut app)["status"], "ran");
+    let edit = app.interaction_state.editing_text.as_ref();
+    assert_eq!(edit.map(|e| e.text.as_str()), Some("half typed"));
+}
+
+#[test]
+fn closing_a_background_tab_keeps_the_persons_shape_anchor() {
+    let mut app = mid_interaction();
+    assert_eq!(close_a(&mut app)["status"], "ran");
+    assert!(app.interaction_state.shape_anchor.is_some());
+}
+
 #[test]
 fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they_were() {
     let mut app = app_at_work();
@@ -54,6 +112,7 @@ fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they
     let edited = revision(&app, "a.snxsch");
     assert!(app.document_state.is_document_dirty(&a));
     let tabs = app.document_state.tabs.len();
+    arm(&mut app);
     let person = person_without_tabs(&app);
 
     let closed = call(

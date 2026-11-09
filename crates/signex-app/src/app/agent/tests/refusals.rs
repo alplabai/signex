@@ -350,6 +350,34 @@ fn closing_the_persons_active_document_is_refused_and_changes_nothing() {
 }
 
 #[test]
+fn closing_a_sheet_the_person_is_typing_the_title_block_of_is_refused_and_the_draft_stays() {
+    let mut app = app_at_work();
+    app.document_state.drafts.set_title_block(
+        &path("a.snxsch"),
+        crate::panels::TitleBlockField::DocumentNumber,
+        "TYPED",
+    );
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("a.snxsch")}),
+    );
+    refuse_line(
+        &mut app,
+        request,
+        "`close_active_document`",
+        "the person is editing this sheet's title block",
+    );
+    assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| t.path == path("a.snxsch"))
+    );
+}
+
+#[test]
 fn closing_a_document_shown_in_a_window_of_its_own_is_refused_and_changes_nothing() {
     let mut app = app_at_work();
     app.ui_state.windows.insert(

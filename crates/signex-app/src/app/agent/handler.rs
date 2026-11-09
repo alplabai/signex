@@ -425,6 +425,14 @@ impl Signex {
                     entry.name
                 ));
             }
+            if entry.path.as_ref().is_some_and(|path| {
+                self.document_state
+                    .drafts
+                    .title_block_sheets()
+                    .contains(path)
+            }) {
+                return Err("the person is editing this sheet's title block".to_string());
+            }
         }
         Ok(())
     }
