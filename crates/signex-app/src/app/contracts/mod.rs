@@ -190,6 +190,8 @@ mod tests {
     /// Is this variant line (one level of indent, first letter upper-case) a
     /// flat leaf? Only a single-field tuple variant whose type names a message
     /// sub-enum is namespaced; unit, struct and plain-value variants are leaves.
+    // shortcut: goes by name only (`*Msg`/`*Message`/`*Event`/`*Request` is trusted to be a
+    // sub-enum per house naming) and a variant wrapped across lines counts as a leaf (errs strict).
     fn is_flat_leaf(line: &str) -> bool {
         let rest = line.trim_start();
         let Some(open) = rest.find('(') else {
@@ -227,10 +229,10 @@ mod tests {
     fn root_message_stays_namespaced() {
         let variants = root_variant_lines();
         let leaves: Vec<_> = variants.iter().filter(|l| is_flat_leaf(l)).collect();
-        assert!(
-            leaves.len() <= MAX_FLAT_LEAVES,
-            "root Message has {} flat leaves (max {MAX_FLAT_LEAVES}): {leaves:?}",
-            leaves.len()
+        assert_eq!(
+            leaves.len(),
+            MAX_FLAT_LEAVES,
+            "root Message flat leaves are {leaves:?}: add none, and lower MAX_FLAT_LEAVES when a leaf is removed"
         );
         assert!(
             variants.len() <= MAX_VARIANTS,
@@ -246,6 +248,10 @@ mod tests {
         assert!(is_flat_leaf("    CanvasEventInWindow {"));
         assert!(is_flat_leaf("    Count(usize),"));
         assert!(is_flat_leaf("    Pair(UiMsg, u8),"));
+        assert!(is_flat_leaf("    Pair(u8, UiMsg),"));
+        assert!(is_flat_leaf("    Ref(&'static UiMsg),"));
+        assert!(is_flat_leaf("    Gen(Foo<Bar>::UiMsg),"));
+        assert!(is_flat_leaf("    Fun(fn(u8) -> UiMsg),"));
         assert!(!is_flat_leaf("    Menu(MenuMessage),"));
         assert!(!is_flat_leaf("    Ui(UiMsg),"));
         assert!(!is_flat_leaf("    CanvasEvent(CanvasEvent),"));
