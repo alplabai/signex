@@ -4,10 +4,11 @@
 
 use super::{PrefMsg, PrefNav, SP, TS};
 use crate::styles::{self, ti, tokens};
-use iced::widget::{container, pick_list, scrollable, text_input};
+use iced::widget::{container, pick_list, scrollable};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{raw, text_input};
 
 /// The page name on Graphite: the mock's wording for the pages it names.
 pub(super) fn graphite_label(item: PrefNav) -> &'static str {
@@ -22,10 +23,18 @@ pub(super) fn graphite_label(item: PrefNav) -> &'static str {
 /// Whether a nav row stays visible for the search `query` (case-insensitive,
 /// over the page name and its group). An empty query shows every row.
 pub(super) fn nav_matches(item: PrefNav, query: &str) -> bool {
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     let q = query.trim().to_lowercase();
     q.is_empty()
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         || graphite_label(item).to_lowercase().contains(&q)
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         || item.label().to_lowercase().contains(&q)
+        // identifier/data folding, never shown
+        // ast-grep-ignore: no-case-in-view
         || item.group().to_lowercase().contains(&q)
 }
 
@@ -34,7 +43,7 @@ pub(super) fn nav_matches(item: PrefNav, query: &str) -> bool {
 pub(super) fn nav_search<'a>(query: &'a str, t: &ThemeTokens) -> Element<'a, PrefMsg> {
     let r = tokens::resolve(t);
     let (ink4, ink) = (r.ink4, ti(t.text));
-    let input = text_input("Search preferences", query)
+    let input = text_input(raw("Search preferences"), query)
         .on_input(PrefMsg::NavSearchChanged)
         .padding(Padding::ZERO)
         .size(TS.label)

@@ -2,8 +2,9 @@
 //! selected one drawn as a raised chip. Stateless — the caller owns the
 //! selection and maps each pick to a message.
 
+use crate::{button, raw, text};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Row, button, container, text};
+use iced::widget::{Row, container};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget};
 
 /// Track height in px.
@@ -106,7 +107,7 @@ where
         } else {
             style.ink
         };
-        let label = text((*label).to_string())
+        let label = text(raw((*label).to_string()))
             .size(style.text_size)
             .color(ink)
             .height(Length::Fill)

@@ -126,7 +126,7 @@ impl Signex {
             let r = crate::styles::tokens::resolve(tokens);
             let card = container(
                 row![
-                    text(raw(name.clone()))
+                    text(signex_i18n::UserText::new(name.clone()))
                         .size(TS.dense)
                         .font(crate::fonts::iced_font_for_family(
                             crate::fonts::CHROME_MONO_FONT,
@@ -138,8 +138,8 @@ impl Signex {
                         signex_i18n::ids::DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE,
                         "age" => describe_age(offer.age_secs)
                     ))
-                        .size(TS.label)
-                        .color(r.ink3),
+                    .size(TS.label)
+                    .color(r.ink3),
                 ]
                 .align_y(iced::Alignment::Center),
             )

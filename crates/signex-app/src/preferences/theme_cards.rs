@@ -4,9 +4,10 @@
 
 use super::{PrefMsg, SP, TS};
 use crate::styles::{self, Radii, chrome_px, ti, tokens};
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
+use signex_widgets::{button, raw, text};
 
 /// A theme card: id, card title, tag on the right, description.
 const FEATURED: [(ThemeId, &str, &str, &str); 2] = [
@@ -29,20 +30,24 @@ const FEATURED: [(ThemeId, &str, &str, &str); 2] = [
 pub(super) fn theme_section<'a>(draft: ThemeId, active: &ThemeTokens) -> Element<'a, PrefMsg> {
     let r = tokens::resolve(active);
     let label = |s: &str| {
-        text(s.to_uppercase())
+        // user-visible: migrate to the #2063 casemap
+        // ast-grep-ignore: no-case-in-view
+        text(raw(s.to_uppercase()))
             .size(TS.section)
             .style(styles::section_label(active))
             .boxed()
     };
     let mut col = column![
-        text("Theme")
+        text(raw("Theme"))
             .size(TS.heading)
             .color(ti(active.text))
             .boxed(),
-        text("Colours, density and canvas text. Changes preview live; Apply keeps them.")
-            .size(TS.label)
-            .color(r.ink3)
-            .boxed(),
+        text(raw(
+            "Colours, density and canvas text. Changes preview live; Apply keeps them."
+        ))
+        .size(TS.label)
+        .color(r.ink3)
+        .boxed(),
         Space::new().height(SP.l).boxed(),
         label("Application theme"),
     ]
@@ -97,14 +102,23 @@ fn preview_card<'a>(
         mini_preview(&t),
         row![
             radio,
-            text(name.to_string()).size(TS.title).color(ink).boxed(),
+            text(raw(name.to_string()))
+                .size(TS.title)
+                .color(ink)
+                .boxed(),
             Space::new().width(Length::Fill).boxed(),
-            text(tag.to_string()).size(TS.caption).color(a.ink3).boxed(),
+            text(raw(tag.to_string()))
+                .size(TS.caption)
+                .color(a.ink3)
+                .boxed(),
         ]
         .spacing(SP.m)
         .align_y(Alignment::Center)
         .boxed(),
-        text(desc.to_string()).size(TS.body).color(a.ink3).boxed(),
+        text(raw(desc.to_string()))
+            .size(TS.body)
+            .color(a.ink3)
+            .boxed(),
     ]
     .spacing(SP.m);
     let raised = a.raised;

@@ -9,8 +9,9 @@ use super::*;
 use crate::styles::tokens::resolve;
 use crate::styles::{TypeScale, ti};
 use iced::Widget;
-use iced::widget::{button, checkbox, scrollable, text_input};
+use iced::widget::scrollable;
 use signex_types::theme::{ThemeId, theme_tokens};
+use signex_widgets::{button, checkbox, text_input};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
@@ -253,6 +254,8 @@ pub(in crate::panels) fn section_label<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let ink = resolve(tokens).ink4;
+    // user-visible: migrate to the #2063 casemap
+    // ast-grep-ignore: no-case-in-view
     container(text(raw(title.to_uppercase())).size(TS.section).color(ink))
         .padding(iced::Padding {
             top: 12.0,
@@ -275,6 +278,8 @@ fn graphite_section_header<'a>(
     let ink = resolve(tokens).ink4;
     let label = row![
         signex_widgets::chevron::chevron(!is_collapsed, TS.section, ink),
+        // user-visible: migrate to the #2063 casemap
+        // ast-grep-ignore: no-case-in-view
         text(raw(title.to_uppercase())).size(TS.section).color(ink),
     ]
     .spacing(6)

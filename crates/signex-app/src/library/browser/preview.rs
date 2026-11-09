@@ -38,6 +38,8 @@ fn field<'a>(
         ));
     }
     column![
+        // user-visible: migrate to the #2063 casemap
+        // ast-grep-ignore: no-case-in-view
         text(raw(label.to_uppercase()))
             .size(TS.section)
             .color(r.ink3)
@@ -55,10 +57,12 @@ pub(super) fn view_preview<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let title = text(raw(row.internal_pn.as_str().to_string()))
-        .size(TS.heading)
-        .font(mono)
-        .color(theme_ext::text_primary(tokens));
+    let title = text(signex_i18n::UserText::new(
+        row.internal_pn.as_str().to_string(),
+    ))
+    .size(TS.heading)
+    .font(mono)
+    .color(theme_ext::text_primary(tokens));
     let pill: Element<'a, LibraryMessage> = crate::library::editor::kit::toned_pill(
         look::lifecycle_label(row.state).to_string(),
         look::lifecycle_tone(row.state),
@@ -79,7 +83,7 @@ pub(super) fn view_preview<'a>(
     let mut body: Column<Element<'a, LibraryMessage>> = column![head.boxed()].spacing(SP.m);
     if !row.description.is_empty() {
         body = body.push(
-            text(raw(row.description.clone()))
+            text(signex_i18n::UserText::new(row.description.clone()))
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
                 .boxed(),

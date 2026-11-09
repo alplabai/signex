@@ -75,7 +75,10 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             .align_y(iced::Alignment::Center)
             .boxed()
         } else {
-            text(raw(elem_type.clone())).size(TS.body).color(ink).boxed()
+            text(raw(elem_type.clone()))
+                .size(TS.body)
+                .color(ink)
+                .boxed()
         };
     col = col.push(
         container(header_row)

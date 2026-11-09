@@ -465,7 +465,7 @@ impl SymbolDocument {
         self.pending_view = Some(SymbolViewRequest::CenterOrigin);
         // Fit against the placeholder too, so the first frame is not a
         // speck at 100% while the real size is still unknown.
-        crate::library::editor::symbol::updates::fit_to_viewport(
+        crate::library::editor::symbol::fit_to_viewport(
             self,
             Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH,
             Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT,

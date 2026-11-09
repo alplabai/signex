@@ -211,9 +211,11 @@ fn component_rows<'a>(
             let selected = state.panel_selected.as_ref() == Some(&key);
             list = list.push(
                 button(
-                    text(raw(r.internal_pn.as_str().to_owned()))
-                        .size(LIB_PANEL_TEXT_SIZE)
-                        .wrapping(iced::widget::text::Wrapping::None),
+                    text(signex_i18n::UserText::new(
+                        r.internal_pn.as_str().to_owned(),
+                    ))
+                    .size(LIB_PANEL_TEXT_SIZE)
+                    .wrapping(iced::widget::text::Wrapping::None),
                 )
                 .padding([SP.xs / 2.0, SP.xl * 2.0])
                 .width(Length::Fill)

@@ -368,12 +368,15 @@ fn view_pinned_input<'a>(
                 hash.clone()
             };
             row![
-                text(raw(filename.clone()))
+                text(signex_i18n::UserText::new(filename.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .boxed(),
                 Space::new().width(Length::Fill).boxed(),
-                text(raw(short_hash)).size(TS.caption).color(muted).boxed(),
+                text(signex_i18n::UserText::new(short_hash))
+                    .size(TS.caption)
+                    .color(muted)
+                    .boxed(),
             ]
             .align_y(iced::Alignment::Center)
             .boxed()

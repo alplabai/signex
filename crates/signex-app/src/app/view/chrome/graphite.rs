@@ -4,8 +4,9 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{Space, button, container, mouse_area, row, svg, text, text_input, tooltip};
+use iced::widget::{Space, container, mouse_area, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
+use signex_widgets::{button, raw, text, text_input, tooltip};
 
 use super::{SP, TS, buttons};
 use crate::app::view::{
@@ -165,7 +166,7 @@ impl Signex {
         } else {
             ""
         };
-        let input = text_input("Search commands, parts, nets", query)
+        let input = text_input(raw("Search commands, parts, nets"), query)
             .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
             .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
             .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
@@ -187,7 +188,7 @@ impl Signex {
             .shortcut_label_preferring("open_command_palette", "Ctrl+K");
         let mut content = row![icon, input].spacing(SP.l).align_y(Alignment::Center);
         if !hint.is_empty() {
-            let cap = container(text(hint).size(TS.caption).font(
+            let cap = container(text(raw(hint)).size(TS.caption).font(
                 crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT),
             ))
             .padding([0.0, SP.m])
@@ -231,7 +232,7 @@ fn signal_button(
             ..container::Style::default()
         });
     button(
-        row![dot, text("Signex AI").size(TS.dense)]
+        row![dot, text(raw("Signex AI")).size(TS.dense)]
             .spacing(SP.l)
             .align_y(Alignment::Center),
     )
@@ -299,7 +300,7 @@ fn theme_toggle(
         },
         ..button::Style::default()
     });
-    let hint = container(text(label).size(TS.caption).color(ink))
+    let hint = container(text(raw(label)).size(TS.caption).color(ink))
         .padding([3, 8])
         .style(signex_widgets::active_bar_dropdown::tooltip_style(
             hover, border,
@@ -338,7 +339,8 @@ mod tests {
     /// cluster, for every window-control layout.
     #[test]
     fn search_bar_stays_centred_and_clamped() {
-        let in_window = crate::menu_bar::approx_graphite_menu_bar_width(&signex_i18n::I18n::en_us());
+        let in_window =
+            crate::menu_bar::approx_graphite_menu_bar_width(&signex_i18n::I18n::en_us());
         // Windows-style: nothing leading, 138 px of controls trailing.
         search_bar_invariants(0.0, 138.0, in_window);
         // Native macOS lights: room leading, nothing trailing.

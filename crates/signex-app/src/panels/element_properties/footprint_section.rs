@@ -77,7 +77,7 @@ fn footprint_card<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Elem
     let mut text_col: Column<Element<'a, PanelMsg>> = Column::new().spacing(3).width(Length::Fill);
     if let Some(name) = lines.next() {
         text_col = text_col.push(
-            text(raw(name))
+            text(signex_i18n::UserText::new(name))
                 .size(TS.dense)
                 .font(iced::Font {
                     weight: iced::font::Weight::Medium,
@@ -116,7 +116,7 @@ fn thumbnail<'a>(
     card: &'a FootprintCardView,
     tokens: &ThemeTokens,
 ) -> Option<Element<'a, PanelMsg>> {
-    use crate::library::editor::footprint::canvas::graphite_look_for;
+    use crate::library::editor::footprint::graphite_look_for;
     // The ground the preview paints, so the box has no seam around it.
     let ground = graphite_look_for(tokens).bg;
     let inner: Element<'a, PanelMsg> = match &card.status {

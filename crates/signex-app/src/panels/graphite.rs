@@ -1,10 +1,11 @@
 //! Graphite looks of the panel contents: the project tree rows, the
 //! panel buttons and list rows.
 
-use iced::widget::{column, container, row, text};
+use iced::widget::{column, container, row};
 use iced::{Border, Color, Element, Length, Widget as _};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tree_view::{BadgeTone, TreeIcon, TreeNode, TreeStyle};
+use signex_widgets::{raw, text};
 
 use super::{ErcSeverityLite, PanelContext, PanelMsg};
 use crate::styles::tokens::{relative_luminance, resolve};
@@ -45,6 +46,8 @@ pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
 /// Short kind badge of a document row, with its tint: SCH info, PCB ok,
 /// LIB violet, BOM warn, OUT neutral.
 fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     let label = node.label.to_ascii_lowercase();
     let ext = |e: &str| label.contains(e);
     if ext(".snxbom") {
@@ -134,8 +137,8 @@ fn summary_cell<'a>(
 ) -> Element<'a, PanelMsg> {
     let r = resolve(tokens);
     column![
-        text(caption).size(TS.caption).color(r.ink4).boxed(),
-        text(value)
+        text(raw(caption)).size(TS.caption).color(r.ink4).boxed(),
+        text(raw(value))
             .size(TS.caption)
             .color(color)
             .font(iced::Font {

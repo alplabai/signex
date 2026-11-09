@@ -50,5 +50,11 @@ pub mod text_frame;
 pub mod unified_active_bar;
 pub(crate) mod updates;
 
+// The footprint preview the rest of the app draws (component details and
+// the Properties footprint card), named here so callers outside the slice do
+// not reach into `canvas`.
+pub use canvas::PreviewFootprint;
+pub(crate) use canvas::graphite_look_for;
+
 #[cfg(test)]
 mod tests;

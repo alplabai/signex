@@ -101,8 +101,12 @@ impl Signex {
                         move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(page.clone()))
                     }),
                     column![
-                        text(raw(name.clone())).size(TS.body).color(text_c),
-                        text(raw(path_str)).size(TS.caption).color(text_muted),
+                        text(signex_i18n::UserText::new(name.clone()))
+                            .size(TS.body)
+                            .color(text_c),
+                        text(signex_i18n::UserText::new(path_str))
+                            .size(TS.caption)
+                            .color(text_muted),
                     ]
                     .spacing(1),
                 ]

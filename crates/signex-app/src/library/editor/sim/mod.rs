@@ -271,11 +271,17 @@ fn view_pin_node_table<'a>(
             });
         let cells: Vec<(Element<'a, LibraryMessage>, Length)> = vec![
             (
-                text(raw(line.number)).size(TS.body).color(text_c).boxed(),
+                text(signex_i18n::UserText::new(line.number))
+                    .size(TS.body)
+                    .color(text_c)
+                    .boxed(),
                 PIN_COLUMNS[0].1,
             ),
             (
-                text(raw(line.name)).size(TS.body).color(muted).boxed(),
+                text(signex_i18n::UserText::new(line.name))
+                    .size(TS.body)
+                    .color(muted)
+                    .boxed(),
                 PIN_COLUMNS[1].1,
             ),
             (input.boxed(), PIN_COLUMNS[2].1),

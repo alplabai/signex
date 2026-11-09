@@ -187,9 +187,13 @@ fn build<'a>(
                     .and_then(|p| p.file_name())
                     .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 rows.push(
-                    container(text(raw(name)).size(TS.body).color(accent))
-                        .padding([6.0, SP.s])
-                        .boxed(),
+                    container(
+                        text(signex_i18n::UserText::new(name))
+                            .size(TS.body)
+                            .color(accent),
+                    )
+                    .padding([6.0, SP.s])
+                    .boxed(),
                 );
             }
             rows.push(result_row(idx, hit));

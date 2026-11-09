@@ -156,7 +156,7 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
     };
 
     let identity = column![
-        text(raw(description))
+        text(signex_i18n::UserText::new(description))
             .size(TS.body)
             .color(description_color)
             .boxed()
@@ -516,7 +516,7 @@ fn pin_map_subsection<'a>(
             .unwrap_or("");
         let cells = vec![
             (
-                text(raw(line.number.clone()))
+                text(signex_i18n::UserText::new(line.number.clone()))
                     .size(TS.body)
                     .font(mono)
                     .color(text_c)
@@ -524,7 +524,7 @@ fn pin_map_subsection<'a>(
                 widths[0],
             ),
             (
-                text(raw(line.name.clone()))
+                text(signex_i18n::UserText::new(line.name.clone()))
                     .size(TS.body)
                     .font(mono)
                     .color(text_c)
@@ -536,7 +536,7 @@ fn pin_map_subsection<'a>(
                 widths[1],
             ),
             (
-                text(raw(line.pad.clone()))
+                text(signex_i18n::UserText::new(line.pad.clone()))
                     .size(TS.body)
                     .font(mono)
                     .color(text_c)

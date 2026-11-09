@@ -1,8 +1,9 @@
 //! Toggle switch: a pill track with a sliding knob. Stateless — the caller
 //! owns the on/off value and passes the message a press should emit.
 
+use crate::button;
 use iced::alignment::Horizontal;
-use iced::widget::{Space, button, container};
+use iced::widget::{Space, container};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 /// Track width in px.

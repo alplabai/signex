@@ -2,9 +2,10 @@
 //! with the board's net and pad counts in the footer. A pure view over data
 //! the panel context copies from the board; nothing here edits the board.
 
-use iced::widget::{Column, Space, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Background, Element, Length, Theme, Widget as _};
 use signex_types::pcb::PcbBoard;
+use signex_widgets::{raw, text};
 
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
@@ -85,7 +86,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let Some(summary) = ctx.pcb_nets.as_ref() else {
         return container(
-            text("Open a `.snxpcb` to see its nets here.")
+            text(raw("Open a `.snxpcb` to see its nets here."))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -102,7 +103,8 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .clip(true)
             .boxed()
     };
-    let head = |s: &'static str, w: Length| cell(text(s).size(TS.section).color(muted).boxed(), w);
+    let head =
+        |s: &'static str, w: Length| cell(text(raw(s)).size(TS.section).color(muted).boxed(), w);
     let separator = move || -> Element<'a, PanelMsg> {
         container(Space::new())
             .width(Length::Fill)
@@ -125,9 +127,13 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     .width(Length::Fill);
     if summary.nets.is_empty() {
         table = table.push(
-            container(text("This board has no nets.").size(TS.body).color(muted))
-                .padding([SP.m, SP.l])
-                .boxed(),
+            container(
+                text(raw("This board has no nets."))
+                    .size(TS.body)
+                    .color(muted),
+            )
+            .padding([SP.m, SP.l])
+            .boxed(),
         );
     }
     for net in &summary.nets {
@@ -139,7 +145,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         table = table.push(
             row![
                 cell(
-                    text(net.name.as_str())
+                    text(signex_i18n::UserText::new(net.name.as_str()))
                         .size(TS.body)
                         .font(mono)
                         .color(ink)
@@ -147,7 +153,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     Length::Fill
                 ),
                 cell(
-                    text(net.nodes.to_string())
+                    text(raw(net.nodes.to_string()))
                         .size(TS.body)
                         .font(mono)
                         .color(ink)
@@ -155,7 +161,11 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     Length::Fixed(NUM_W)
                 ),
                 cell(
-                    text(length).size(TS.body).font(mono).color(ink).boxed(),
+                    text(raw(length))
+                        .size(TS.body)
+                        .font(mono)
+                        .color(ink)
+                        .boxed(),
                     Length::Fixed(NUM_W)
                 ),
             ]
@@ -165,13 +175,13 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         table = table.push(separator());
     }
     let footer = container(
-        text(format!(
+        text(raw(format!(
             "{} net{} \u{00B7} {} pad{}",
             summary.nets.len(),
             if summary.nets.len() == 1 { "" } else { "s" },
             summary.pads,
             if summary.pads == 1 { "" } else { "s" },
-        ))
+        )))
         .size(TS.caption)
         .color(muted),
     )

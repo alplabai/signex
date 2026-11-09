@@ -44,7 +44,7 @@ pub(super) fn view_libraries_tree<'a>(
         let is_current = lib.root == library_path;
         let rows: usize = lib.tables.values().map(Vec::len).sum();
         let mut label: Row<Element<'a, LibraryMessage>> = row![
-            text(raw(lib.display_name.clone()))
+            text(signex_i18n::UserText::new(lib.display_name.clone()))
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)

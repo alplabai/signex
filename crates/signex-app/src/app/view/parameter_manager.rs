@@ -131,15 +131,15 @@ impl Signex {
             .filter(|s| !s.is_power && row_matches_filter(&table.filter, s))
         {
             let mut r = row![
-                text(raw(sym.reference.clone()))
+                text(signex_i18n::UserText::new(sym.reference.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(100.0)),
-                text(raw(sym.value.clone()))
+                text(signex_i18n::UserText::new(sym.value.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(160.0)),
-                text(raw(sym.footprint.clone()))
+                text(signex_i18n::UserText::new(sym.footprint.clone()))
                     .size(TS.body)
                     .color(text_muted)
                     .width(iced::Length::Fixed(200.0)),

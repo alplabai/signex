@@ -317,7 +317,7 @@ pub(super) fn view_sections<'a>(
                 for (name, expr) in &fp.sketch_parameters {
                     let name_clone = name.clone();
                     let row = row![
-                        text(raw(name))
+                        text(signex_i18n::UserText::new(name))
                             .size(TS.caption)
                             .color(primary)
                             .width(Length::Fixed(110.0)),

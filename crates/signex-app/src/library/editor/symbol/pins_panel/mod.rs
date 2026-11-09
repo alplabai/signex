@@ -5,9 +5,10 @@
 //! (`SymEditorSelectPin`, `SymEditorSetPinName`, `SymEditorTogglePinHidden`),
 //! which already route to the `SymbolEditorMsg` pin edits.
 
-use iced::widget::{Column, Row, button, container, row, text, text_input};
+use iced::widget::{Column, Row, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text, text_input};
 
 use crate::panels::{PanelContext, PanelMsg, SymbolEditorSelection, SymbolPinSummary};
 use crate::styles::{Radii, Spacing, TypeScale, ti, tokens::resolve};
@@ -33,7 +34,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = ti(tokens.text_secondary);
     let Some(sym) = ctx.symbol_editor.as_ref() else {
         return container(
-            text("Open a `.snxsym` to see its pins here.")
+            text(raw("Open a `.snxsym` to see its pins here."))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -55,7 +56,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text(summary).size(TS.body).color(muted))
+        container(text(raw(summary)).size(TS.body).color(muted))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
             .boxed(),
@@ -74,7 +75,7 @@ fn header_row<'a>(tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
         Row::new().spacing(SP.m).align_y(iced::Alignment::Center);
     for (label, portion) in COLUMNS {
         cells = cells.push(cell(
-            text(label.to_uppercase())
+            text(raw(label.to_uppercase()))
                 .size(TS.section)
                 .color(ink)
                 .boxed(),
@@ -108,7 +109,7 @@ fn pin_row<'a>(
     };
 
     let number = button(
-        text(pin.number.as_str())
+        text(signex_i18n::UserText::new(pin.number.as_str()))
             .size(TS.dense)
             .font(mono)
             .color(ink),
@@ -124,7 +125,7 @@ fn pin_row<'a>(
         border: Border::default(),
         ..button::Style::default()
     });
-    let name = text_input("name", pin.name.as_str())
+    let name = text_input(raw("name"), pin.name.as_str())
         .padding([SP.xs, SP.s])
         .size(TS.dense)
         .font(mono)
@@ -135,7 +136,7 @@ fn pin_row<'a>(
         });
     let hidden = pin.details.hidden;
     let hidden_toggle = button(
-        text(if hidden { "Hidden" } else { "Shown" })
+        text(raw(if hidden { "Hidden" } else { "Shown" }))
             .size(TS.body)
             .color(if hidden { ink } else { muted }),
     )
@@ -162,14 +163,14 @@ fn pin_row<'a>(
         cell(number.boxed(), COLUMNS[0].1),
         cell(name.boxed(), COLUMNS[1].1),
         cell(
-            text(electrical_label(&pin.electrical))
+            text(raw(electrical_label(&pin.electrical)))
                 .size(TS.dense)
                 .color(ink)
                 .boxed(),
             COLUMNS[2].1,
         ),
         cell(
-            text(part_label(pin.details.part_number))
+            text(raw(part_label(pin.details.part_number)))
                 .size(TS.dense)
                 .font(mono)
                 .color(muted)
@@ -178,7 +179,7 @@ fn pin_row<'a>(
         ),
         cell(hidden_toggle.boxed(), COLUMNS[4].1),
         cell(
-            text(format!("{:.2}", pin.length))
+            text(raw(format!("{:.2}", pin.length)))
                 .size(TS.dense)
                 .font(mono)
                 .color(ink)
@@ -186,7 +187,7 @@ fn pin_row<'a>(
             COLUMNS[5].1,
         ),
         cell(
-            text(pin.orientation.as_str())
+            text(raw(pin.orientation.as_str()))
                 .size(TS.dense)
                 .color(ink)
                 .boxed(),

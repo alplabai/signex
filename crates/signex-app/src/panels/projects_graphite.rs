@@ -8,7 +8,8 @@
 
 use std::collections::BTreeSet;
 
-use iced::widget::{column, text_input};
+use iced::widget::column;
+use signex_widgets::text_input;
 use signex_widgets::tree_view::TreeKey;
 
 use super::*;
@@ -64,6 +65,8 @@ impl ProjectsView {
 
 /// The group a document row belongs to.
 fn group_of(node: &TreeNode) -> &'static str {
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     let label = node.label.to_ascii_lowercase();
     if label.contains(".snxbom") {
         BOM
@@ -125,10 +128,14 @@ fn filtered(nodes: &[TreeNode], needle: &str) -> Vec<TreeNode> {
     nodes
         .iter()
         .filter_map(|node| {
+            // identifier/data folding, never shown
+            // ast-grep-ignore: no-case-in-view
             if node.label.to_lowercase().contains(needle) && !node.children.is_empty() {
                 return Some(node.clone());
             }
             if node.children.is_empty() {
+                // identifier/data folding, never shown
+                // ast-grep-ignore: no-case-in-view
                 return (!node.is_folder && node.label.to_lowercase().contains(needle))
                     .then(|| node.clone());
             }
@@ -240,7 +247,7 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
             },
             ..container::Style::default()
         });
-    let name = text(raw(project.name.clone()))
+    let name = text(signex_i18n::UserText::new(project.name.clone()))
         .size(TS.title)
         .color(ink)
         .font(iced::Font {
@@ -281,7 +288,7 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
 fn filter_field<'a>(view: &'a ProjectsView, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
     let r = resolve(tokens);
     let (ink, ink4) = (ti(tokens.text), r.ink4);
-    let input = text_input("Filter files", &view.filter)
+    let input = text_input(raw("Filter files"), &view.filter)
         .on_input(|s| PanelMsg::Projects(ProjectsMsg::FilterChanged(s)))
         .padding(iced::Padding::ZERO)
         .size(TS.body)
@@ -333,6 +340,8 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             }
         });
 
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     let needle = ctx.projects_view.filter.trim().to_lowercase();
     let mut roots = regroup(&ctx.project_tree, &ctx.projects_view);
     if !needle.is_empty() {

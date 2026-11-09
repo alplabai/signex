@@ -2,9 +2,10 @@
 //! optional muted caption, on the card surface. Used by panels whose backend
 //! is not built yet (Signex AI, Selection Filter).
 
-use iced::widget::{column, container, text};
+use iced::widget::{column, container};
 use iced::{Element, Length, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::styles::{self, TypeScale, ti, tokens::resolve};
 
@@ -18,17 +19,17 @@ pub fn empty_state_card<'a, M: 'a>(
     caption: Option<&str>,
 ) -> Element<'a, M> {
     let mut lines = column![
-        text(title.to_string())
+        text(raw(title.to_string()))
             .size(TS.label)
             .color(ti(tokens.text)),
-        text(body.to_string())
+        text(raw(body.to_string()))
             .size(TS.dense)
             .color(ti(tokens.text_secondary)),
     ]
     .spacing(6);
     if let Some(caption) = caption {
         lines = lines.push(
-            text(caption.to_string())
+            text(raw(caption.to_string()))
                 .size(TS.caption)
                 .color(resolve(tokens).ink4)
                 .boxed(),

@@ -18,9 +18,10 @@ pub fn coming_soon<'a, M: 'a>(
 ) -> iced::Element<'a, M> {
     use crate::styles::{TypeScale, ti};
     use iced::Widget as _;
-    use iced::widget::{container, text, tooltip};
+    use iced::widget::container;
+    use signex_widgets::{raw, text, tooltip};
     let hint = container(
-        text(COMING_SOON)
+        text(raw(COMING_SOON))
             .size(TypeScale::DEFAULT.caption)
             .color(ti(tokens.text)),
     )

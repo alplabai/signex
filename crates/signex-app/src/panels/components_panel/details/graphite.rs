@@ -1,9 +1,10 @@
 //! Graphite look of the Components panel details: the header card with the
 //! lifecycle pill, the section labels and the parameter rows.
 
-use iced::widget::{Column, column, container, row, text};
+use iced::widget::{Column, column, container, row};
 use iced::{Alignment, Element, Font, Length, Padding, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use super::ComponentDetails;
 use crate::library::editor::kit::{lifecycle_label, lifecycle_tone, toned_pill};
@@ -30,7 +31,7 @@ pub(super) fn header_card<'a>(
     let r = resolve(tokens);
     let ink = ti(tokens.text);
     let title = row![
-        text(d.internal_pn.as_str())
+        text(signex_i18n::UserText::new(d.internal_pn.as_str()))
             .size(TS.body)
             .font(Font {
                 weight: iced::font::Weight::Semibold,
@@ -50,18 +51,18 @@ pub(super) fn header_card<'a>(
     let mut card: Column<Element<'a, LibraryMessage>> = column![title].spacing(4);
     if !d.class.is_empty() {
         card = card.push(
-            text(d.class.as_str())
+            text(signex_i18n::UserText::new(d.class.as_str()))
                 .size(TS.caption)
                 .color(r.ink3)
                 .boxed(),
         );
     }
     if !maker.is_empty() {
-        card = card.push(text(maker).size(TS.body).color(ink).boxed());
+        card = card.push(text(raw(maker)).size(TS.body).color(ink).boxed());
     }
     if !d.description.trim().is_empty() {
         card = card.push(
-            text(d.description.as_str())
+            text(signex_i18n::UserText::new(d.description.as_str()))
                 .size(TS.caption)
                 .color(r.ink3)
                 .boxed(),
@@ -80,7 +81,9 @@ pub(super) fn section_label<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     container(
-        text(label.to_uppercase())
+        // user-visible: migrate to the #2063 casemap
+        // ast-grep-ignore: no-case-in-view
+        text(raw(label.to_uppercase()))
             .size(TS.section)
             .color(resolve(tokens).ink4),
     )
@@ -99,13 +102,13 @@ pub(super) fn parameter_row<'a>(
 ) -> Element<'a, LibraryMessage> {
     container(
         row![
-            text(name)
+            text(signex_i18n::UserText::new(name))
                 .size(TS.caption)
                 .color(resolve(tokens).ink3)
                 .width(Length::FillPortion(2))
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
-            text(value)
+            text(raw(value))
                 .size(TS.caption)
                 .font(mono())
                 .color(ti(tokens.text))

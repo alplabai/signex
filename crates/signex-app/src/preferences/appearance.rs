@@ -378,7 +378,9 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         row![
             column![
                 text(raw("Mouse wheel")).size(TS.label).style(text_primary),
-                text(raw(WHEEL_MODE_HELP)).size(TS.caption).style(text_muted),
+                text(raw(WHEEL_MODE_HELP))
+                    .size(TS.caption)
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(320),

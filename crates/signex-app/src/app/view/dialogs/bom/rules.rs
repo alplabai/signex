@@ -67,7 +67,7 @@ impl Signex {
                 issues = issues.push(
                     column![
                         text(raw(issue.message.clone())).size(TS.body).color(text_c),
-                        text(raw(issue.references.join(", ")))
+                        text(signex_i18n::UserText::new(issue.references.join(", ")))
                             .size(TS.caption)
                             .color(text_muted),
                     ]

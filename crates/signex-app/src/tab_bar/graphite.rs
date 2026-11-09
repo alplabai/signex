@@ -2,10 +2,11 @@
 //! glyph, an accent dirty dot, an 18 px close button and the project name on
 //! the right. Legacy themes never reach these helpers.
 
-use iced::widget::{Widget, button, container, row, space, stack, svg, text};
+use iced::widget::{Widget, container, row, space, stack, svg};
 use iced::{Background, Border, Color, Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPillStyle};
+use signex_widgets::{button, raw, text};
 
 use super::TabMessage;
 use crate::app::TabKind;
@@ -153,12 +154,15 @@ pub fn tab_inner(face: TabFace<'_>, tokens: &ThemeTokens) -> Element<'static, Ta
         r.ink4
     };
     let mut content = row![
-        text(kind_glyph(face.kind))
+        text(raw(kind_glyph(face.kind)))
             .size(TS.caption)
             .color(glyph_ink)
             .font(mono())
             .boxed(),
-        text(face.title).size(TS.body).color(title_ink).boxed(),
+        text(signex_i18n::UserText::new(face.title))
+            .size(TS.body)
+            .color(title_ink)
+            .boxed(),
     ]
     .spacing(TAB_GAP)
     .align_y(iced::Alignment::Center);
@@ -167,7 +171,7 @@ pub fn tab_inner(face: TabFace<'_>, tokens: &ThemeTokens) -> Element<'static, Ta
     }
     if face.read_only {
         content = content.push(
-            text(super::READ_ONLY_LABEL)
+            text(raw(super::READ_ONLY_LABEL))
                 .size(TS.caption)
                 .color(r.ink3)
                 .boxed(),
@@ -207,7 +211,7 @@ pub fn strip<'a>(
     if let Some(name) = project_name {
         top = top.push(
             container(
-                text(name.to_owned())
+                text(signex_i18n::UserText::new(name.to_owned()))
                     .size(TS.body)
                     .color(resolve(tokens).ink3),
             )

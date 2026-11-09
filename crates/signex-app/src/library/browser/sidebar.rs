@@ -187,7 +187,7 @@ pub(super) fn view_table_sidebar<'a>(
         }
 
         let row_label = row![
-            text(raw((*name).clone()))
+            text(signex_i18n::UserText::new((*name).clone()))
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c)
                 .width(Length::Fill),

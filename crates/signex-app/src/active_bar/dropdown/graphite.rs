@@ -2,9 +2,10 @@
 //! Filter's toggle chips and All / None segmented control, and the
 //! net-colour swatches. Legacy themes never reach this module.
 
-use iced::widget::{button, container, row, text};
+use iced::widget::{container, row};
 use iced::{Background, Border, Color, Element, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::active_bar::ActiveBarMsg;
 use crate::styles::{self, Radii, tokens};
@@ -99,7 +100,7 @@ pub(super) fn chip(
     msg: ActiveBarMsg,
 ) -> Element<'static, ActiveBarMsg> {
     let ink = ChipPaint::of(t, on, false).ink;
-    button(text(label).size(TS.body).color(ink))
+    button(text(raw(label)).size(TS.body).color(ink))
         .padding([SP.s, 10.0])
         .on_press(msg)
         .style(chip_style(t, on))
@@ -141,7 +142,7 @@ pub(super) fn all_none(t: &ThemeTokens, scope: FilterScope) -> Element<'static, 
     let (ink, ink3) = (styles::ti(t.text), r.ink3);
     let cell = |label: &'static str, active: bool, msg: ActiveBarMsg| {
         button(
-            text(label)
+            text(raw(label))
                 .size(TS.body)
                 .color(if active { ink } else { ink3 }),
         )

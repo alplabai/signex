@@ -2,10 +2,11 @@
 //! colour swatch. Read-only; layer visibility is not wired yet, so the chips
 //! carry no press action.
 
-use iced::widget::{Row, Space, container, row, text};
+use iced::widget::{Row, Space, container, row};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::pcb::PcbBoard;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use super::*;
 use crate::library::editor::footprint::layers::FpLayer;
@@ -35,7 +36,7 @@ pub(super) fn layer_strip<'a>(
     let r = resolve(tokens);
     let (ink, muted, line) = (ti(tokens.text), r.ink3, r.line_soft);
     let mut chips: Row<Element<'a, Message>> = row![
-        text("Layers").size(TS.caption).color(muted).boxed(),
+        text(raw("Layers")).size(TS.caption).color(muted).boxed(),
         Space::new().width(SP.s).boxed(),
     ]
     .spacing(SP.m)
@@ -56,7 +57,7 @@ pub(super) fn layer_strip<'a>(
                         ..container::Style::default()
                     })
                     .boxed(),
-                text(label).size(TS.body).color(ink).boxed(),
+                text(raw(label)).size(TS.body).color(ink).boxed(),
             ]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center)

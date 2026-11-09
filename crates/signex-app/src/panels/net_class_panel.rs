@@ -238,11 +238,13 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             let mut list = Column::new().spacing(SP.xs);
             for (idx, class) in panel.classes.iter().enumerate() {
                 let is_selected = idx == selected;
-                let btn = signex_widgets::button(text(raw(class.name.clone())).size(TS.body))
-                    .padding([SP.xs, SP.m])
-                    .width(Length::Fill)
-                    .on_press(wrap(NetClassMsg::Select(idx)))
-                    .style(form_look::option_tile(is_selected));
+                let btn = signex_widgets::button(
+                    text(signex_i18n::UserText::new(class.name.clone())).size(TS.body),
+                )
+                .padding([SP.xs, SP.m])
+                .width(Length::Fill)
+                .on_press(wrap(NetClassMsg::Select(idx)))
+                .style(form_look::option_tile(is_selected));
                 list = list.push(btn.boxed());
             }
             c = c.push(container(list).padding([SP.xs, SP.m]).boxed());

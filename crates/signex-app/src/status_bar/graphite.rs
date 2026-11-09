@@ -1,10 +1,11 @@
 //! Graphite look of the status bar and its Panels popover. Legacy themes
 //! never reach these helpers.
 
-use iced::widget::{Text, Widget, button, container, row, space, text};
+use iced::widget::{Text, Widget, container, row, space};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use super::Readout;
 use crate::app::StatusBarRequest;
@@ -150,7 +151,7 @@ pub(super) fn coord_values(unit: Unit, x: f64, y: f64) -> (String, String) {
 }
 
 fn mono_text(s: String, color: Color) -> Text<'static> {
-    text(s).size(TS.body).color(color).font(mono_font())
+    text(raw(s)).size(TS.body).color(color).font(mono_font())
 }
 
 fn mono_button(
@@ -232,7 +233,7 @@ pub(super) fn view<'a>(r: &Readout<'_>, tokens: &ThemeTokens) -> Element<'a, Sta
         .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())
         .push(mono_button(format!("{unit}"), muted, StatusBarRequest::CycleUnit).boxed())
         .push(
-            button(text("Panels").size(TS.section).color(ink))
+            button(text(raw("Panels")).size(TS.section).color(ink))
                 .padding([1.5, 10.0])
                 .style(panels_button(tokens))
                 .on_press(StatusBarRequest::TogglePanelList)

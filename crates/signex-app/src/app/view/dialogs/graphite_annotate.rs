@@ -1,9 +1,10 @@
 //! Graphite controls of the Annotate dialog: the checkbox pip, the order
 //! and lock toggles, the field box and the order-preview cell.
 
-use iced::widget::{Column, Row, Space, button, canvas, container, text};
+use iced::widget::{Column, Row, Space, canvas, container};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::app::state::AnnotateOrder;
 use crate::styles::{Radii, Spacing, TypeScale, tokens};
@@ -24,7 +25,7 @@ pub(super) fn checkbox_pip<'a, M: 'a>(theme_tokens: &ThemeTokens, on: bool) -> E
         (r.field, r.line_strong)
     };
     container(
-        text(mark)
+        text(raw(mark))
             .size(TS.caption)
             .color(tokens::on_accent(theme_tokens)),
     )
@@ -257,7 +258,11 @@ pub(super) fn sheet_table<'a, M: 'a>(
             .align_y(iced::Alignment::Center)
     };
     let cell = |s: &'static str, color: iced::Color, width: Length| -> Element<'a, M> {
-        text(s).size(TS.caption).color(color).width(width).boxed()
+        text(raw(s))
+            .size(TS.caption)
+            .color(color)
+            .width(width)
+            .boxed()
     };
     let head = cols(
         Space::new().width(Length::Fixed(TS.body + 2.0)).boxed(),
@@ -289,7 +294,7 @@ pub(super) fn sheet_table<'a, M: 'a>(
     if rows.is_empty() {
         body = body.push(rule());
         body = body.push(
-            container(text(empty).size(TS.body).color(r.ink3))
+            container(text(raw(empty)).size(TS.body).color(r.ink3))
                 .padding([SP.m, SP.m])
                 .boxed(),
         );
@@ -298,19 +303,19 @@ pub(super) fn sheet_table<'a, M: 'a>(
         let name_ink = if sheet.on { ink } else { r.ink3 };
         let line = cols(
             checkbox_pip(theme_tokens, sheet.on),
-            text(sheet.name)
+            text(signex_i18n::UserText::new(sheet.name))
                 .size(TS.body)
                 .color(name_ink)
                 .font(mono())
                 .width(Length::Fill)
                 .boxed(),
-            text("1")
+            text(raw("1"))
                 .size(TS.body)
                 .color(r.ink3)
                 .font(mono())
                 .width(Length::Fixed(70.0))
                 .boxed(),
-            text("\u{2014}")
+            text(raw("\u{2014}"))
                 .size(TS.body)
                 .color(r.ink4)
                 .font(mono())

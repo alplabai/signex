@@ -80,7 +80,9 @@ pub(super) fn view_footprint_editor_properties<'a>(
     };
 
     let mut header_row = row![
-        text(raw(&fp.footprint_name)).size(TS.label).color(primary),
+        text(signex_i18n::UserText::new(&fp.footprint_name))
+            .size(TS.label)
+            .color(primary),
         text(raw("·")).size(TS.label).color(muted),
         text(raw(mode_label)).size(TS.body).color(muted),
     ]

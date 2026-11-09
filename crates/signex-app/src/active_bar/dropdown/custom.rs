@@ -2,10 +2,11 @@
 //! hatch: the NetColor swatches and the Selection Filter chip grid.
 //! Graphite themes paint both through `super::graphite`.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Color, Element, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, RowPaint};
+use signex_widgets::{button, raw, text};
 
 use crate::active_bar::{
     AbColors, ActiveBarAction, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
@@ -47,7 +48,7 @@ pub(super) fn net_color_entries(
             button(
                 row![
                     swatch_slot,
-                    text(label.to_string())
+                    text(raw(label.to_string()))
                         .size(TS.title)
                         .color(ac.text)
                         .wrapping(iced::widget::text::Wrapping::None),

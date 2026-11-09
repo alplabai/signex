@@ -7,9 +7,10 @@ use super::graphite_fields::{graphite_label, nav_matches, nav_search};
 use super::{PrefMsg, PrefNav, PrefsView, SP, TS, build_content, build_prefs_file_banner};
 use crate::app::view::dialogs::{PREFERENCES_HEADER_H, graphite_header};
 use crate::styles::{self, DialogButtonKind, PillTone, Radii, dialog_button, ti, tokens};
-use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 /// Navigation width (236 px at the default base).
 pub(super) const GRAPHITE_NAV_W: f32 = styles::chrome_px(236.0 * 11.0 / 12.0);
@@ -89,7 +90,9 @@ fn graphite_nav<'a>(active: PrefNav, query: &'a str, t: &ThemeTokens) -> Element
             last_group = group;
             col = col.push(
                 container(
-                    text(group.to_uppercase())
+                    // user-visible: migrate to the #2063 casemap
+                    // ast-grep-ignore: no-case-in-view
+                    text(raw(group.to_uppercase()))
                         .size(TS.section)
                         .style(styles::section_label(t)),
                 )
@@ -127,7 +130,7 @@ fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, Pref
         tokens::overlay(t, tokens::Overlay::Hover),
     );
     button(
-        container(text(graphite_label(item)).size(TS.label).color(ink))
+        container(text(raw(graphite_label(item))).size(TS.label).color(ink))
             .padding([SP.s, SP.m])
             .width(Length::Fill),
     )
@@ -158,12 +161,12 @@ fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, Pref
 fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
     let t = v.panel_tokens;
     let note: Element<'a, PrefMsg> = if v.dirty {
-        container(text("Unsaved changes").size(TS.caption))
+        container(text(raw("Unsaved changes")).size(TS.caption))
             .padding([2.0, SP.m])
             .style(styles::pill(t, PillTone::Warn))
             .boxed()
     } else if v.nav == PrefNav::Appearance {
-        text("Theme changes preview live")
+        text(raw("Theme changes preview live"))
             .size(TS.label)
             .color(tokens::resolve(t).ink3)
             .boxed()

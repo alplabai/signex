@@ -1,9 +1,10 @@
 //! Graphite parts shared by the dialog bodies: the subtitled header, the
 //! severity chips, the changed-row tint and the recovery icon tile.
 
-use iced::widget::{Row, container, text};
+use iced::widget::{Row, container};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use crate::styles::{self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, tokens};
 
@@ -69,13 +70,13 @@ fn severity_chip<'a, M: 'a>(
     };
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
     line = line.push(
-        text(count.to_string())
+        text(raw(count.to_string()))
             .size(TS.display)
             .color(ink)
             .font(mono())
             .boxed(),
     );
-    line = line.push(text(label).size(TS.label).color(r.ink3).boxed());
+    line = line.push(text(raw(label)).size(TS.label).color(r.ink3).boxed());
     container(line)
         .padding([SP.m, SP.l])
         .width(Length::Fill)
@@ -117,7 +118,7 @@ pub(super) fn recovery_icon_tile<'a, M: 'a>(theme_tokens: &ThemeTokens) -> Eleme
     let (fill, ink) = styles::pill_colors(theme_tokens, PillTone::Warn);
     let side = TS.glyph + 2.0 * SP.m;
     container(
-        text("\u{21BA}")
+        text(raw("\u{21BA}"))
             .size(TS.glyph)
             .color(ink)
             .width(Length::Fill)

@@ -5,9 +5,10 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, button, column, container, row, scrollable, text, text_input, tooltip};
+use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text, text_input, tooltip};
 
 use super::{Action, recent_label, recent_message, visible_recent};
 use crate::app::Message;
@@ -86,7 +87,7 @@ fn nav_row<'a>(
         resolve(tokens).sunken,
         ti(tokens.text),
     );
-    let mut b = button(text(label).size(TS.label))
+    let mut b = button(text(raw(label)).size(TS.label))
         .width(Length::Fill)
         .padding([6.0, 14.0])
         .style(move |_: &iced::Theme, status| button::Style {
@@ -119,14 +120,14 @@ fn nav<'a>(
     let cap_fill = resolve(tokens).sunken;
     let cap_ink = resolve(tokens).ink3;
     let open_label: Element<'a, Message> = {
-        let label = text("Open\u{2026}")
+        let label = text(raw("Open\u{2026}"))
             .size(TS.dense)
             .wrapping(iced::widget::text::Wrapping::None);
         let mut line = row![label.boxed()].spacing(8).align_y(Alignment::Center);
         if !open_shortcut.is_empty() {
             line = line.push(
                 container(
-                    text(open_shortcut.to_owned())
+                    text(raw(open_shortcut.to_owned()))
                         .size(TS.caption)
                         .font(mono())
                         .color(cap_ink)
@@ -153,7 +154,7 @@ fn nav<'a>(
     };
     let top = row![
         button(
-            text("New project")
+            text(raw("New project"))
                 .size(TS.dense)
                 .height(Length::Fill)
                 .align_y(iced::alignment::Vertical::Center)
@@ -225,10 +226,16 @@ fn nav_count_row<'a>(
     count: Option<usize>,
 ) -> Element<'a, Message> {
     let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
-    let mut line = row![text(label).size(TS.label).color(ink).boxed()].align_y(Alignment::Center);
+    let mut line =
+        row![text(raw(label)).size(TS.label).color(ink).boxed()].align_y(Alignment::Center);
     line = line.push(Space::new().width(Length::Fill).boxed());
     if let Some(n) = count {
-        line = line.push(text(n.to_string()).size(TS.caption).color(ink3).boxed());
+        line = line.push(
+            text(raw(n.to_string()))
+                .size(TS.caption)
+                .color(ink3)
+                .boxed(),
+        );
     }
     container(line)
         .padding([6.0, 14.0])
@@ -259,13 +266,13 @@ fn libraries_card<'a>(
         if components == 1 { "" } else { "s" }
     );
     let mut body = column![
-        text("Libraries").size(TS.label).color(ink).boxed(),
-        text(summary).size(TS.dense).color(ink2).boxed(),
+        text(raw("Libraries")).size(TS.label).color(ink).boxed(),
+        text(raw(summary)).size(TS.dense).color(ink2).boxed(),
     ]
     .spacing(2);
     if !names.is_empty() {
         body = body.push(
-            text(names)
+            text(signex_i18n::UserText::new(names))
                 .size(TS.caption)
                 .font(mono())
                 .color(ink3)
@@ -282,7 +289,7 @@ fn libraries_card<'a>(
 }
 
 fn section_header<'a>(tokens: &ThemeTokens, title: &str) -> Element<'a, Message> {
-    text(title.to_uppercase())
+    text(raw(title.to_uppercase()))
         .size(TS.section)
         .style(styles::section_label(tokens))
         .boxed()
@@ -293,7 +300,7 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let r = resolve(tokens);
     let (ink4, ink) = (r.ink4, ti(tokens.text));
     let input: iced::widget::TextInput<'a, Message> = text_input(
-        "Describe the board: what it does, its size, layers and budget.",
+        raw("Describe the board: what it does, its size, layers and budget."),
         "",
     )
     .padding(iced::Padding::ZERO)
@@ -308,7 +315,7 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     });
     let stub = |label: &'a str, kind: u8| -> Element<'a, Message> {
         let b = button(
-            text(label)
+            text(raw(label))
                 .size(TS.dense)
                 .height(Length::Fill)
                 .align_y(iced::alignment::Vertical::Center),
@@ -338,7 +345,7 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             resolve(tokens).ink3,
         );
         let pill = container(
-            text(label)
+            text(raw(label))
                 .size(TS.dense)
                 .color(if on { ink } else { ink3 }),
         )
@@ -367,7 +374,7 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let head = row![
         modes,
         Space::new().width(Length::Fill),
-        text("Signal uses your loaded libraries first")
+        text(raw("Signal uses your loaded libraries first"))
             .size(TS.dense)
             .color(resolve(tokens).ink3),
     ]
@@ -393,8 +400,8 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 fn sample_card<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let (ink, ink2) = (ti(tokens.text), ti(tokens.text_secondary));
     let body = column![
-        text("Sample project").size(TS.label).color(ink),
-        text("Open the bundled example project and look around.")
+        text(raw("Sample project")).size(TS.label).color(ink),
+        text(raw("Open the bundled example project and look around."))
             .size(TS.dense)
             .color(ink2),
     ]
@@ -460,8 +467,8 @@ fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, M
         let entry = row![
             tile,
             column![
-                text(recent_label(path)).size(TS.label).color(ink),
-                text(path.display().to_string())
+                text(raw(recent_label(path))).size(TS.label).color(ink),
+                text(signex_i18n::UserText::new(path.display().to_string()))
                     .size(TS.caption)
                     .font(mono())
                     .color(ink3),
@@ -539,10 +546,10 @@ fn view_sized<'a>(
     main_w: f32,
 ) -> Element<'a, Message> {
     let main = column![
-        text("What are you building?")
+        text(raw("What are you building?"))
             .size(TS.display * 1.4)
             .color(ti(tokens.text)),
-        text("Describe the board. Signal drafts the specification, architecture and parts, and you approve each stage before anything is drawn.")
+        text(raw("Describe the board. Signal drafts the specification, architecture and parts, and you approve each stage before anything is drawn."))
             .size(TS.title)
             .color(ti(tokens.text_secondary)),
         Space::new().height(8.0),

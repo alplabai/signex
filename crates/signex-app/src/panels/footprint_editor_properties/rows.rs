@@ -2,9 +2,10 @@
 //! rows give the label two parts of seven, which clips "Description" in this
 //! narrow dock; these give it four of nine so a long label wraps by word.
 
-use iced::widget::{container, row, text, text_input};
+use iced::widget::{container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{raw, text, text_input};
 
 use super::{PanelMsg, SP, TS};
 use crate::panels::{PROPERTY_ROW_PAD_X, form_look};
@@ -14,7 +15,7 @@ const VALUE_PORTION: u16 = 5;
 
 fn label<'a, M: 'a>(label: &str, color: Color) -> Element<'a, M> {
     container(
-        text(label.to_string())
+        text(raw(label.to_string()))
             .size(TS.body)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::Word),
@@ -34,7 +35,7 @@ pub(super) fn edit_row<'a>(
     container(
         row![
             label(key, label_c),
-            text_input("", value.to_owned())
+            text_input(raw(""), value.to_owned())
                 .on_input(on_input)
                 .size(TS.body)
                 .padding(SP.s)
@@ -62,7 +63,7 @@ pub(super) fn value_row<'a>(
             label(key, label_c),
             container(
                 container(
-                    text(value.to_string())
+                    text(raw(value.to_string()))
                         .size(TS.body)
                         .color(ink)
                         .wrapping(iced::widget::text::Wrapping::None),

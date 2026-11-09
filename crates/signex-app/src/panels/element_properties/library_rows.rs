@@ -211,14 +211,14 @@ fn out_of_date_row<'a>(id: uuid::Uuid, tokens: &ThemeTokens) -> Element<'a, Pane
     let update = signex_widgets::button(
         signex_widgets::text(signex_widgets::raw("Update from library")).size(TS.body),
     )
-        .padding([SP.xs, SP.m])
-        .on_press(PanelMsg::UpdateSymbolFromLibrary(id))
-        .style(super::super::form_look::ghost_button);
+    .padding([SP.xs, SP.m])
+    .on_press(PanelMsg::UpdateSymbolFromLibrary(id))
+    .style(super::super::form_look::ghost_button);
     let status: Element<'a, PanelMsg> =
         container(signex_widgets::text(signex_widgets::raw(OUT_OF_DATE)).size(TS.caption))
-        .padding([2.0, 8.0])
-        .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
-        .boxed();
+            .padding([2.0, 8.0])
+            .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
+            .boxed();
     iced::widget::row![
         status,
         signex_widgets::tooltip(

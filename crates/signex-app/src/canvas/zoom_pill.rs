@@ -1,9 +1,10 @@
 //! Graphite canvas zoom pill: `- 100% + Fit`. One widget for every canvas: the
 //! schematic overlay and the symbol editor give it their own messages.
 
-use iced::widget::{Row, Widget, button, container, text};
+use iced::widget::{Row, Widget, container};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::tokens::resolve;
 use crate::styles::{Radii, ti};
@@ -64,7 +65,7 @@ pub fn view<'a, M: Clone + 'a>(
 
     let mini = |label: &'static str, on_press: M| -> Element<'a, M> {
         button(
-            container(text(label).size(TS.title).color(ink))
+            container(text(raw(label)).size(TS.title).color(ink))
                 .center_x(Length::Fill)
                 .center_y(Length::Fill),
         )
@@ -76,7 +77,7 @@ pub fn view<'a, M: Clone + 'a>(
         .boxed()
     };
     let readout: Element<'a, M> = container(
-        text(format!("{zoom_percent:.0}%"))
+        text(raw(format!("{zoom_percent:.0}%")))
             .size(TS.caption)
             .font(mono)
             .color(ink),
@@ -87,7 +88,7 @@ pub fn view<'a, M: Clone + 'a>(
     .center_y(MINI)
     .boxed();
     let fit: Element<'a, M> = button(
-        container(text("Fit").size(TS.caption).color(ink))
+        container(text(raw("Fit")).size(TS.caption).color(ink))
             .center_x(Length::Fill)
             .center_y(Length::Fill),
     )

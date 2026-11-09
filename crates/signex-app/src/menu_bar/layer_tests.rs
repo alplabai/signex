@@ -3,9 +3,10 @@
 //! icons and canvas meshes draw after quads, so the dock's labels showed
 //! through the menu (see `vendor/README.md`).
 
-use iced::widget::{column, container, text};
+use iced::widget::{column, container};
 use iced::{Color, Element, Length, Point, Size, Theme, Widget as _, mouse, window};
 use signex_types::theme::{ThemeId, theme_tokens};
+use signex_widgets::{raw, text};
 
 use super::{MenuContext, MenuMessage};
 
@@ -16,7 +17,7 @@ const INK: Color = Color::from_rgb(1.0, 0.0, 0.0);
 fn scene(tokens: &signex_types::theme::ThemeTokens) -> Element<'static, MenuMessage> {
     let block = (0..8).fold(column![].spacing(0), |col, _| {
         col.push(
-            text("M".repeat(40))
+            text(raw("M".repeat(40)))
                 .size(crate::styles::TypeScale::DEFAULT.glyph)
                 .color(INK)
                 .boxed(),

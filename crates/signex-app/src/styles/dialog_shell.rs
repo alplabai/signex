@@ -5,9 +5,10 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{Row, column, container, svg, text};
+use iced::widget::{Row, column, container, svg};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use super::{PillTone, Radii, Spacing, TypeScale, chrome_px, pill_colors, ti, tokens};
 
@@ -141,7 +142,7 @@ pub fn dialog_intro<'a, M: 'a>(
     let secondary = secondary.filter(|s| !s.trim().is_empty());
     let r = tokens::resolve(tokens);
     let mut lines = column![
-        text(title)
+        text(raw(title))
             .size(TS.title)
             .font(title_font())
             .color(ti(tokens.text))
@@ -149,7 +150,7 @@ pub fn dialog_intro<'a, M: 'a>(
     ]
     .spacing(TITLE_GAP);
     if let Some(s) = secondary {
-        lines = lines.push(text(s).size(TS.body).color(r.ink3).boxed());
+        lines = lines.push(text(raw(s)).size(TS.body).color(r.ink3).boxed());
     }
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m + 2.0).align_y(Alignment::Start);
     line = line.push(dialog_icon_tile(icon, tokens));

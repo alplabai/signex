@@ -108,7 +108,7 @@ fn graphite_header<'a>(
     };
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let mut line: iced::widget::Row<Element<'a, LibraryMessage>> = row![
-        text(raw(pn))
+        text(signex_i18n::UserText::new(pn))
             .size(TS.heading)
             .font(mono)
             .color(theme_ext::text_primary(tokens))

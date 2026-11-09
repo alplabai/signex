@@ -1,9 +1,10 @@
 //! Graphite look of the Components panel: the filter field, source chips,
 //! the add menu, library and component rows, empty states and separators.
 
-use iced::widget::{button, container, row, svg, text, text_input};
+use iced::widget::{container, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text, text_input};
 
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsMountSource;
@@ -51,7 +52,7 @@ pub(super) fn filter_field<'a>(
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
     let (ink, ink4, accent) = (ti(tokens.text), r.ink4, ti(tokens.accent));
-    let input = text_input("Filter components…", value)
+    let input = text_input(raw("Filter components…"), value)
         .on_input(LibraryMessage::ComponentsPanelSetFilter)
         .padding(Padding::ZERO)
         .size(TS.body)
@@ -91,7 +92,7 @@ pub(super) fn header_row<'a>(
     let add = button(
         row![
             glyph(PLUS_GLYPH, 12.0, ink),
-            text("Add").size(TS.caption).color(ink)
+            text(raw("Add")).size(TS.caption).color(ink)
         ]
         .spacing(4)
         .align_y(Alignment::Center),
@@ -117,7 +118,7 @@ pub(super) fn add_menu<'a>(tokens: &ThemeTokens) -> Element<'a, LibraryMessage> 
     let mut items = iced::widget::Column::new().spacing(0);
     for source in ComponentsMountSource::ADDABLE {
         items = items.push(
-            button(text(source.label()).size(TS.body).color(ink))
+            button(text(raw(source.label())).size(TS.body).color(ink))
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
                 .on_press(LibraryMessage::ComponentsPanelAddLibrary(*source))
@@ -162,8 +163,8 @@ pub(super) fn source_chip<'a>(
     let hover = r.accent_soft;
     button(
         row![
-            text(label).size(TS.caption).color(ink),
-            text(count.to_string())
+            text(raw(label)).size(TS.caption).color(ink),
+            text(raw(count.to_string()))
                 .size(TS.caption)
                 .font(mono())
                 .color(r.ink4),
@@ -210,15 +211,19 @@ pub(super) fn empty_line<'a>(
     message: &'a str,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    container(text(message).size(TS.caption).color(resolve(tokens).ink4))
-        .padding(Padding {
-            top: 0.0,
-            right: EDGE,
-            bottom: 8.0,
-            left: LIBRARY_INSET,
-        })
-        .width(Length::Fill)
-        .boxed()
+    container(
+        text(raw(message))
+            .size(TS.caption)
+            .color(resolve(tokens).ink4),
+    )
+    .padding(Padding {
+        top: 0.0,
+        right: EDGE,
+        bottom: 8.0,
+        left: LIBRARY_INSET,
+    })
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// A library row: expand chevron, name, source badge and component count.
@@ -235,17 +240,19 @@ pub(super) fn library_header<'a>(
     let ink = ti(tokens.text);
     let content = row![
         signex_widgets::chevron::chevron(!collapsed, TS.body, r.ink3),
-        text(name)
+        text(signex_i18n::UserText::new(name))
             .size(TS.body)
             .color(ink)
             .width(Length::Fill)
             .wrapping(iced::widget::text::Wrapping::None),
         crate::library::editor::kit::toned_pill(
+            // user-visible: migrate to the #2063 casemap
+            // ast-grep-ignore: no-case-in-view
             source.label().to_uppercase(),
             PillTone::Neutral,
             tokens
         ),
-        text(rows.to_string())
+        text(raw(rows.to_string()))
             .size(TS.caption)
             .font(mono())
             .color(r.ink4),

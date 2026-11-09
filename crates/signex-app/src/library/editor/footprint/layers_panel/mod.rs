@@ -3,9 +3,10 @@
 //! shortcuts. A pure view over the panel context; every press is a
 //! `PanelMsg` that the dock handler forwards to the editor.
 
-use iced::widget::{Column, button, container, row, text};
+use iced::widget::{Column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use super::layers::{FpLayer, FpSide, LayerPalette};
 use crate::panels::{PanelContext, PanelMsg};
@@ -26,7 +27,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = ti(tokens.text_secondary);
     let Some(fp) = ctx.footprint_editor.as_ref() else {
         return container(
-            text("Open a `.snxfpt` to see its layers here.")
+            text(raw("Open a `.snxfpt` to see its layers here."))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -63,7 +64,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     for side in FpSide::ORDER {
         col = col.push(
             container(
-                text(side.label().to_uppercase())
+                text(raw(side.label().to_uppercase()))
                     .size(TS.section)
                     .color(muted),
             )
@@ -93,7 +94,7 @@ fn layer_row<'a>(
     let radius = Radii::GRAPHITE.control;
 
     let eye = button(
-        text(if visible { "\u{25C9}" } else { "\u{25CB}" })
+        text(raw(if visible { "\u{25C9}" } else { "\u{25CB}" }))
             .size(TS.label)
             .color(label_ink)
             .align_x(iced::alignment::Horizontal::Center),
@@ -116,7 +117,7 @@ fn layer_row<'a>(
         ..button::Style::default()
     });
 
-    let swatch = container(text("").size(TS.caption))
+    let swatch = container(text(raw("")).size(TS.caption))
         .width(Length::Fixed(SWATCH))
         .height(Length::Fixed(SWATCH))
         .style(move |_: &Theme| container::Style {
@@ -144,8 +145,11 @@ fn layer_row<'a>(
         row![
             eye.boxed(),
             swatch.boxed(),
-            text(layer.label()).size(TS.body).color(label_ink).boxed(),
-            text(layer.standard_name())
+            text(raw(layer.label()))
+                .size(TS.body)
+                .color(label_ink)
+                .boxed(),
+            text(raw(layer.standard_name()))
                 .size(TS.caption)
                 .font(crate::fonts::iced_font_for_family(
                     crate::fonts::CHROME_MONO_FONT,
@@ -168,7 +172,7 @@ fn action_button<'a>(
     ink: Color,
     radius: f32,
 ) -> Element<'a, PanelMsg> {
-    button(text(label).size(TS.body).color(ink))
+    button(text(raw(label)).size(TS.body).color(ink))
         .padding([SP.s, SP.l])
         .on_press(msg)
         .style(move |_: &Theme, status| button::Style {

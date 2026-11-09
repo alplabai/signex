@@ -479,7 +479,10 @@ impl Signex {
                     let toggle = toggle.clone();
                     move |_| toggle.clone()
                 });
-            let name = text(raw(label)).size(TS.body).color(text_c).width(Length::Fill);
+            let name = text(raw(label))
+                .size(TS.body)
+                .color(text_c)
+                .width(Length::Fill);
             iced::widget::mouse_area(
                 container(
                     row![check, Space::new().width(SP.m), name].align_y(iced::Alignment::Center),

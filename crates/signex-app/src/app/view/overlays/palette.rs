@@ -2,9 +2,10 @@
 //! the typed characters highlighted, key caps for the binding, and a hint
 //! footer. The legacy rows stay in `overlays/mod.rs`.
 
-use iced::widget::{Row, Space, button, column, container, rich_text, scrollable, span, text};
+use iced::widget::{Row, Space, column, container, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, rich_text, span, text};
 
 use crate::app::command_palette::{CommandAction, CommandEntry, CommandSource};
 use crate::keymap::metadata_for;
@@ -27,6 +28,8 @@ pub(super) fn path_subtitle(entry: &CommandEntry) -> Option<String> {
     };
     let mut chars = category.chars();
     let first = chars.next()?;
+    // user-visible: migrate to the #2063 casemap
+    // ast-grep-ignore: no-case-in-view
     Some(first.to_uppercase().chain(chars).collect())
 }
 
@@ -42,13 +45,13 @@ pub(super) fn group_header<'a, M: 'a>(
             .spacing(SP.m)
             .align_y(Alignment::Center)
             .push(
-                text(source.group_title())
+                text(raw(source.group_title()))
                     .size(TS.section)
                     .style(styles::section_label(theme_tokens))
                     .boxed(),
             )
             .push(
-                text(count.to_string())
+                text(raw(count.to_string()))
                     .size(TS.section)
                     .font(mono())
                     .color(r.ink4)
@@ -72,19 +75,19 @@ pub(super) fn search_row<'a, M: 'a>(
     let ink = ti(theme_tokens.text);
     let body: Element<'a, M> = match input {
         Some(input) => input,
-        None if query.is_empty() => text("Search commands, parts, nets")
+        None if query.is_empty() => text(raw("Search commands, parts, nets"))
             .size(TS.body)
             .color(r.ink4)
             .width(Length::Fill)
             .boxed(),
-        None => text(query.to_string())
+        None => text(raw(query.to_string()))
             .size(TS.body)
             .color(ink)
             .width(Length::Fill)
             .boxed(),
     };
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
-    line = line.push(text("\u{2315}").size(TS.body).color(r.ink4).boxed());
+    line = line.push(text(raw("\u{2315}")).size(TS.body).color(r.ink4).boxed());
     line = line.push(body);
     line = line.push(cap(theme_tokens, "Esc"));
     let rule = r.line_soft;
@@ -124,6 +127,8 @@ pub(super) fn scrollbar_style(
 /// case-insensitive occurrence (which includes a word prefix), else none. A
 /// scattered subsequence matches the row but is never highlighted.
 pub(super) fn match_mask(label: &str, query: &str) -> Vec<bool> {
+    // identifier/data folding, never shown
+    // ast-grep-ignore: no-case-in-view
     let low = |c: char| c.to_lowercase().next().unwrap_or(c);
     let chars: Vec<char> = label.chars().map(low).collect();
     let wanted: Vec<char> = query
@@ -192,7 +197,7 @@ fn ellipsize(text: &str, budget: usize) -> String {
 
 /// One key cap.
 pub(super) fn cap<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
-    container(text(label.to_string()).size(TS.caption).font(mono()))
+    container(text(raw(label.to_string())).size(TS.caption).font(mono()))
         .padding([1.0, SP.s + 1.0])
         .style(styles::key_cap(theme_tokens))
         .boxed()
@@ -212,7 +217,7 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
     let spans: Vec<_> = label_runs(&shown_label, query)
         .into_iter()
         .map(|(run, hit)| {
-            let s = span::<()>(run).color(if hit { accent } else { ink });
+            let s = span::<()>(raw(run)).color(if hit { accent } else { ink });
             if hit { s.font(bold()) } else { s }
         })
         .collect();
@@ -226,10 +231,15 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
     );
     let is_command = entry.source == CommandSource::Command;
     if let Some(path) = path_subtitle(entry) {
-        label_col = label_col.push(text(path).size(TS.caption).color(r.ink3).boxed());
+        label_col = label_col.push(
+            text(signex_i18n::UserText::new(path))
+                .size(TS.caption)
+                .color(r.ink3)
+                .boxed(),
+        );
     } else if !is_command && !entry.detail.is_empty() {
         label_col = label_col.push(
-            text(entry.detail.clone())
+            text(raw(entry.detail.clone()))
                 .size(TS.caption)
                 .font(mono())
                 .color(r.ink3)
@@ -282,7 +292,7 @@ pub(super) fn hint_footer<'a, M: 'a>(
     extra: Option<String>,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
-    let hint = |s: &'static str| text(s).size(TS.caption).color(r.ink3).boxed();
+    let hint = |s: &'static str| text(raw(s)).size(TS.caption).color(r.ink3).boxed();
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
     line = line.push(cap(theme_tokens, "\u{2191}"));
     line = line.push(cap(theme_tokens, "\u{2193}"));
@@ -294,7 +304,7 @@ pub(super) fn hint_footer<'a, M: 'a>(
     let _ = selected;
     if let Some(more) = extra {
         line = line.push(
-            text(more)
+            text(raw(more))
                 .size(TS.caption)
                 .color(r.ink3)
                 .wrapping(iced::widget::text::Wrapping::None)

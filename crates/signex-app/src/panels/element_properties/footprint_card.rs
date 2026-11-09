@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use signex_library::primitive::{Footprint, PrimitiveRef};
 
-use crate::library::editor::footprint::canvas::PreviewFootprint;
+use crate::library::editor::footprint::PreviewFootprint;
 
 /// Most footprints the cache keeps; a fuller cache drops its finished reads.
 const MAX_CACHED: usize = 32;

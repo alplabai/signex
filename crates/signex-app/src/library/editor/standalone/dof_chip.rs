@@ -1,11 +1,12 @@
 //! Graphite canvas chips of the footprint editor: the sketch's constraint
 //! state and the footprint name with its pad count. Both read the document.
 
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget};
 use signex_sketch::solver::dof::DofColor;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
+use signex_widgets::{raw, text};
 
 use crate::app::FootprintDocument;
 use crate::library::messages::LibraryMessage;
@@ -58,7 +59,7 @@ fn pill<'a>(
                 .boxed(),
         );
     }
-    content = content.push(text(label).size(TS.caption).color(ink).boxed());
+    content = content.push(text(raw(label)).size(TS.caption).color(ink).boxed());
     container(content)
         .padding([SP.xs, SP.l])
         .style(move |_: &iced::Theme| iced::widget::container::Style {

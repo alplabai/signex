@@ -2,9 +2,10 @@
 //! 44 px / 52 px header with a subtitle slot, and the neutral close button.
 //! Legacy themes keep the old strip and the red-hover X (`widgets.rs`).
 
-use iced::widget::{Space, button, container, row, text};
+use iced::widget::{Space, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
 use crate::styles::{self, Radii, Spacing, TypeScale, chrome_px, ti, tokens};
 
@@ -44,7 +45,7 @@ pub(crate) fn neutral_close_button<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let side = chrome_px(28.0 * 11.0 / 12.0);
     button(
-        text("\u{00D7}")
+        text(raw("\u{00D7}"))
             .size(TS.heading)
             .color(tokens::muted_text(theme_tokens))
             .width(Length::Fill)
@@ -93,7 +94,7 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
     let mut line = row![
-        text(title.into())
+        text(raw(title.into()))
             .size(TS.heading)
             .color(ti(theme_tokens.text))
             .boxed()
@@ -101,7 +102,7 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
     .spacing(SP.l)
     .align_y(Alignment::Center);
     if let Some(sub) = subtitle {
-        line = line.push(text(sub).size(TS.label).color(r.ink3).boxed());
+        line = line.push(text(raw(sub)).size(TS.label).color(r.ink3).boxed());
     }
     line = line.push(Space::new().width(Length::Fill).boxed());
     if let Some(extra) = trailing {

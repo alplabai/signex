@@ -22,13 +22,17 @@ pub fn parameter_table<'a>(tokens: &ThemeTokens, rows: &[(&str, &str)]) -> Eleme
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let mut table: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
     for (name, value) in rows {
-        let name_cell = container(text(raw(name.to_string())).size(TS.dense).color(ink3))
-            .padding([5.0, 8.0])
-            .width(NAME_COLUMN_WIDTH)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(sunken)),
-                ..container::Style::default()
-            });
+        let name_cell = container(
+            text(signex_i18n::UserText::new(name.to_string()))
+                .size(TS.dense)
+                .color(ink3),
+        )
+        .padding([5.0, 8.0])
+        .width(NAME_COLUMN_WIDTH)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(sunken)),
+            ..container::Style::default()
+        });
         let value_cell = container(
             text(raw(value.to_string()))
                 .size(TS.dense)

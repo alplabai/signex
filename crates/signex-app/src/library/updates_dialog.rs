@@ -392,8 +392,12 @@ fn render_entry_row<'a>(
                     .color(text_c)
             )
             .width(Length::Fixed(96.0)),
-            container(text(raw(&entry.library_name)).size(TS.body).color(muted))
-                .width(Length::Fixed(160.0)),
+            container(
+                text(signex_i18n::UserText::new(&entry.library_name))
+                    .size(TS.body)
+                    .color(muted)
+            )
+            .width(Length::Fixed(160.0)),
             container(
                 text(raw(format!(
                     "{} \u{2192} {}",

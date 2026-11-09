@@ -656,7 +656,7 @@ mod tests {
     /// footprint preview) stays on the dark board palette in both themes.
     #[test]
     fn the_title_bar_toggle_repaints_the_schematic_and_keeps_board_views_dark() {
-        use crate::library::editor::footprint::canvas::PreviewFootprint;
+        use crate::library::editor::footprint::PreviewFootprint;
         use crate::panels::components_panel::details::footprint_canvas::FootprintPreview;
         use signex_types::theme::{ThemeId, canvas_colors, theme_tokens};
         let (mut app, _t) = Signex::new();

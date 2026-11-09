@@ -261,7 +261,10 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(detail_c),
                             iced::widget::container(
-                                text(raw(v.sheet_path.display().to_string())).size(TS.caption),
+                                text(signex_i18n::UserText::new(
+                                    v.sheet_path.display().to_string()
+                                ))
+                                .size(TS.caption),
                             )
                             .padding([SP.xs, 6.0]),
                             iced::widget::tooltip::Position::Top,
@@ -459,12 +462,14 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             container(
                 row![
-                    text(raw("No runtime messages yet")).size(TS.body).color(ink3),
+                    text(raw("No runtime messages yet"))
+                        .size(TS.body)
+                        .color(ink3),
                     text(raw(
                         "Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output",
                     ))
-                        .size(TS.caption)
-                        .color(ink4),
+                    .size(TS.caption)
+                    .color(ink4),
                 ]
                 .spacing(SP.m)
                 .align_y(iced::Alignment::Center),
@@ -480,8 +485,9 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return container(col).width(Length::Fill).boxed();
     }
 
-    let dash =
-        move || -> Element<'a, PanelMsg> { text(raw("\u{2014}")).size(TS.body).color(ink4).boxed() };
+    let dash = move || -> Element<'a, PanelMsg> {
+        text(raw("\u{2014}")).size(TS.body).color(ink4).boxed()
+    };
     for entry in ctx.diagnostics.iter().rev() {
         col = col.push(
             container(

@@ -5,10 +5,11 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{Row, Space, button, container, svg, text};
+use iced::widget::{Row, Space, container, svg};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use iced_aw::style::menu_bar as menu_style;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
+use signex_widgets::{button, raw, text};
 
 use super::{MenuColors, MenuMessage, model};
 
@@ -52,7 +53,7 @@ pub(super) fn mark<'a, M: 'a>() -> Element<'a, M> {
 /// while its dropdown is open.
 pub(super) fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let (ink, hover_bg) = (mc.text, mc.hover);
-    let btn = button(text(label.to_owned()).size(ROOT_LABEL_SIZE).color(ink))
+    let btn = button(text(raw(label.to_owned())).size(ROOT_LABEL_SIZE).color(ink))
         .padding([ROOT_PAD_Y, ROOT_PAD_X])
         .on_press(MenuMessage::NoOp)
         .style(move |_: &Theme, status: button::Status| button::Style {
@@ -155,7 +156,7 @@ pub(super) fn item_btn(
     let mut cells = cells(label, ink, checked);
     if let Some(s) = shortcut {
         cells = cells.push(
-            text(s)
+            text(raw(s))
                 .size(M.shortcut_size)
                 .font(crate::fonts::iced_font_for_family(
                     crate::fonts::CHROME_MONO_FONT,
@@ -208,7 +209,7 @@ fn cells(
         .width(Length::Fill);
     if let Some(on) = checked {
         cells = cells.push(
-            text(if on { "\u{2713}" } else { "" })
+            text(raw(if on { "\u{2713}" } else { "" }))
                 .size(M.label_size)
                 .color(ink)
                 .width(Length::Fixed(MARK_WIDTH))
@@ -217,7 +218,7 @@ fn cells(
     }
     cells
         .push(
-            text(label.to_owned())
+            text(raw(label.to_owned()))
                 .size(M.label_size)
                 .color(ink)
                 .wrapping(text::Wrapping::None)
@@ -227,7 +228,7 @@ fn cells(
 }
 
 fn chevron_cell(glyph: &'static str, mc: MenuColors) -> Element<'static, MenuMessage> {
-    text(glyph)
+    text(raw(glyph))
         .size(M.chevron_size)
         .color(mc.text_muted)
         .width(Length::Fixed(M.chevron_width))

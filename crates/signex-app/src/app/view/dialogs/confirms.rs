@@ -220,10 +220,12 @@ impl Signex {
         // one is affected. Sheets and PCBs get no extra line.
         if is_library {
             prompt = prompt.push(
-                text(raw(st.target_path.display().to_string()))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
+                text(signex_i18n::UserText::new(
+                    st.target_path.display().to_string(),
+                ))
+                .size(TS.caption)
+                .color(text_muted)
+                .boxed(),
             );
             if let Some(line) = self.library_usage_line(st) {
                 prompt = prompt.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
@@ -440,9 +442,13 @@ impl Signex {
         path_labels
             .chain(row_labels)
             .map(|name| {
-                container(text(raw(name)).size(TS.body).color(text_c))
-                    .padding([SP.s, SP.m])
-                    .boxed()
+                container(
+                    text(signex_i18n::UserText::new(name))
+                        .size(TS.body)
+                        .color(text_c),
+                )
+                .padding([SP.s, SP.m])
+                .boxed()
             })
             .collect()
     }

@@ -274,7 +274,7 @@ fn param_row<'a>(
         .size(TS.body)
         .color(scope_color)
         .boxed();
-    let name_cell: Element<'a, LibraryMessage> = text(raw(name.to_string()))
+    let name_cell: Element<'a, LibraryMessage> = text(signex_i18n::UserText::new(name.to_string()))
         .size(TS.body)
         .color(text_c)
         .boxed();

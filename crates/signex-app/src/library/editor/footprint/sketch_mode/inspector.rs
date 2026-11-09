@@ -145,7 +145,7 @@ fn view_params<'a>(
                 let name_clone = name.clone();
                 let path = editor.path.clone();
                 let row = row![
-                    text(raw(name))
+                    text(signex_i18n::UserText::new(name))
                         .size(TS.caption)
                         .color(text_c)
                         .width(Length::Fixed(110.0)),

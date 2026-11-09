@@ -164,11 +164,11 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let wash = super::graphite::wash_fn(&ctx.tokens);
         let row_btn = signex_widgets::button(
             row![
-                text(raw(entry.name.clone()))
+                text(signex_i18n::UserText::new(entry.name.clone()))
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::FillPortion(3)),
-                text(raw(entry.description.clone()))
+                text(signex_i18n::UserText::new(entry.description.clone()))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(4)),
@@ -470,7 +470,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         };
         let row_btn = signex_widgets::button(
             row![
-                text(raw(footprint_row.name.clone()))
+                text(signex_i18n::UserText::new(footprint_row.name.clone()))
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::Fill),
@@ -654,7 +654,7 @@ pub fn view_library_row_properties<'a>(
         Space::new().height(14),
         text(raw("Footprint")).size(TS.body).color(muted),
         Space::new().height(4),
-        text(raw(d.footprint_summary.clone()))
+        text(signex_i18n::UserText::new(d.footprint_summary.clone()))
             .size(TS.body)
             .color(if d.footprint_unbound {
                 warning

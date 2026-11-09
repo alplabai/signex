@@ -113,7 +113,7 @@ pub fn view<'a>(
             };
             let row_widget = button(
                 row![
-                    text(raw(summary.internal_pn.as_str()))
+                    text(signex_i18n::UserText::new(summary.internal_pn.as_str()))
                         .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(2)),
@@ -121,11 +121,11 @@ pub fn view<'a>(
                         .size(TS.body)
                         .color(muted)
                         .width(Length::Fixed(96.0)),
-                    text(raw(summary.mpn.as_str()))
+                    text(signex_i18n::UserText::new(summary.mpn.as_str()))
                         .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
-                    text(raw(summary.description.as_str()))
+                    text(signex_i18n::UserText::new(summary.description.as_str()))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(4)),

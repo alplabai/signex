@@ -5,9 +5,10 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{Row, Space, container, mouse_area, svg, text};
+use iced::widget::{Row, Space, container, mouse_area, svg};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::{raw, text};
 
 use super::*;
 use crate::styles::{Spacing, TypeScale, ti, tokens};
@@ -38,13 +39,13 @@ pub(crate) fn dialog_title_bar<'a>(
     let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
     line = line.push(svg(MARK.clone()).width(MARK_SIZE).height(MARK_SIZE).boxed());
     line = line.push(
-        text(title)
+        text(raw(title))
             .size(TS.heading)
             .color(ti(theme_tokens.text))
             .boxed(),
     );
     if let Some(sub) = subtitle.filter(|s| !s.trim().is_empty()) {
-        line = line.push(text(sub).size(TS.label).color(r.ink3).boxed());
+        line = line.push(text(raw(sub)).size(TS.label).color(r.ink3).boxed());
     }
     line = line.push(Space::new().width(Length::Fill).boxed());
     line = line.push(super::header::neutral_close_button(

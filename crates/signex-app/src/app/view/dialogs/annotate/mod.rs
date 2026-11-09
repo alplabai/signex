@@ -204,7 +204,9 @@ impl Signex {
                     row![
                         check_pip(false, tokens),
                         Space::new().width(6),
-                        text(raw(name.clone())).size(TS.body).color(text_c),
+                        text(signex_i18n::UserText::new(name.clone()))
+                            .size(TS.body)
+                            .color(text_c),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(5)),
@@ -398,7 +400,7 @@ impl Signex {
                         .padding([0.0, 6.0]),
                     cur_text,
                     new_text,
-                    text(raw(entry.sheet.clone()))
+                    text(signex_i18n::UserText::new(entry.sheet.clone()))
                         .size(TS.body)
                         .color(text_muted)
                         .width(Length::FillPortion(3)),

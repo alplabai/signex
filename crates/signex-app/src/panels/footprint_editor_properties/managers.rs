@@ -102,7 +102,7 @@ pub(super) fn render_grid_manager<'a>(
                             .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fixed(40.0)),
-                        text(raw(g.name.as_str()))
+                        text(signex_i18n::UserText::new(g.name.as_str()))
                             .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fill),

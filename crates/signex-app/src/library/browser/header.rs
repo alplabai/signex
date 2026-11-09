@@ -71,8 +71,8 @@ fn graphite_header<'a>(
         "{total} components · {} tables",
         lib.tables.len()
     )))
-        .size(TS.caption)
-        .color(r.ink3);
+    .size(TS.caption)
+    .color(r.ink3);
     let title = column![title.boxed(), caption.boxed()].spacing(SP.xs);
 
     let top: iced::widget::Row<Element<'a, LibraryMessage>> =

@@ -1,9 +1,10 @@
 //! Signex AI panel layout on Graphite themes: Assistant / Generator switch, an
 //! empty-state card and a disabled ask field. No sample chat or results.
 
-use iced::widget::{button, column, container, row, text, text_input, tooltip};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
 use signex_widgets::segmented::{SegmentedStyle, segmented};
+use signex_widgets::{button, raw, text, text_input, tooltip};
 
 use super::{COMING_SOON, SignalMode, SignalMsg, coming_soon};
 use crate::panels::{PanelContext, PanelMsg};
@@ -75,7 +76,7 @@ fn ask_footer<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
     let (ink4, ink) = (r.ink4, ti(tokens.text));
     // No `on_input`: the field is inert.
     let input: iced::widget::TextInput<'a, PanelMsg> =
-        text_input("Ask about this sheet, or describe a change", "")
+        text_input(raw("Ask about this sheet, or describe a change"), "")
             .padding(iced::Padding::ZERO)
             .size(TS.dense)
             .width(Length::Fill)
@@ -87,7 +88,7 @@ fn ask_footer<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
                 selection: Color { a: 0.4, ..ink },
             });
     let send: Element<'a, PanelMsg> = button(
-        text("\u{2192}")
+        text(raw("\u{2192}"))
             .size(TS.dense)
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),

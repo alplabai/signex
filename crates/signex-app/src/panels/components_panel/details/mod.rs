@@ -277,7 +277,7 @@ pub(crate) fn view<'a>(
         );
     } else if let Some(fp) = &d.footprint {
         col = col.push(
-            text(raw(fp.name.as_str()))
+            text(signex_i18n::UserText::new(fp.name.as_str()))
                 .size(ROW_TEXT_SIZE)
                 .color(muted)
                 .boxed(),

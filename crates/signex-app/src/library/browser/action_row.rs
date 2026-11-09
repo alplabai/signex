@@ -46,35 +46,43 @@ pub(super) fn view_action_row<'a>(
     // action row is the entry point.
     let edit_btn: Element<'a, LibraryMessage> =
         if let Some(open_edit) = edit_details_message(library_path, table, selected, read_only) {
-            button(text(raw("Edit Details")).size(BROWSER_HEADER_SIZE).color(text_c))
-                .padding([SP.xs, SP.m])
-                .on_press(open_edit)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(control_bg)),
-                    text_color: text_c,
-                    border: Border {
-                        width: 1.0,
-                        radius: radius.into(),
-                        color: border,
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                })
-                .boxed()
+            button(
+                text(raw("Edit Details"))
+                    .size(BROWSER_HEADER_SIZE)
+                    .color(text_c),
+            )
+            .padding([SP.xs, SP.m])
+            .on_press(open_edit)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(control_bg)),
+                text_color: text_c,
+                border: Border {
+                    width: 1.0,
+                    radius: radius.into(),
+                    color: border,
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .boxed()
         } else {
-            container(text(raw("Edit Details")).size(BROWSER_HEADER_SIZE).color(muted))
-                .padding([SP.xs, SP.m])
-                .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(inert_bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: radius.into(),
-                        color: border,
-                        ..Border::default()
-                    },
-                    ..Default::default()
-                })
-                .boxed()
+            container(
+                text(raw("Edit Details"))
+                    .size(BROWSER_HEADER_SIZE)
+                    .color(muted),
+            )
+            .padding([SP.xs, SP.m])
+            .style(move |_: &Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(inert_bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: radius.into(),
+                    color: border,
+                    ..Border::default()
+                },
+                ..Default::default()
+            })
+            .boxed()
         };
 
     let delete_btn: Element<'a, LibraryMessage> = if let Some(row_id) = selected
