@@ -277,6 +277,7 @@ fn the_rules_come_from_the_setup_the_default_and_the_net_classes() {
     let mut b = parallel(0.45, "TopCopper");
     let default = DrcRules::for_board(&b, &[]).unwrap();
     assert_eq!(default.clearance, 200_000);
+    assert!(default.from_default);
     assert_eq!(DEFAULT_CLEARANCE_MM, 0.2);
 
     b.setup = Some(PcbSetup {
@@ -304,6 +305,7 @@ fn the_rules_come_from_the_setup_the_default_and_the_net_classes() {
     hv.clearance = 0.5;
     let rules = DrcRules::for_board(&b, &[hv]).unwrap();
     assert_eq!(rules.clearance, 300_000);
+    assert!(!rules.from_default);
     assert_eq!(rules.net_clearance.get(&2), Some(&500_000));
     assert_eq!(rules.net_clearance.get(&1), None);
 

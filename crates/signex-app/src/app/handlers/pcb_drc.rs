@@ -97,6 +97,10 @@ impl Signex {
         let report = &done.report;
         panel.ran = true;
         panel.stale = done.revision != revision;
+        if report.rules.from_default {
+            panel.default_clearance_mm =
+                Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));
+        }
         panel.clearance = report.count(ViolationKind::Clearance);
         panel.short = report.count(ViolationKind::Short);
         panel.unconnected = report.count(ViolationKind::Unconnected);
@@ -179,6 +183,12 @@ fn log_report(report: &pcb_geom::DrcReport, names: &std::collections::BTreeMap<u
             format!("; {} item(s) could not be checked", report.skipped.len())
         },
     );
+    if report.rules.from_default {
+        crate::diagnostics::log_info(format!(
+            "DRC: No clearance rule set on this board; checked with {} mm. Set it in Board Setup.",
+            pcb_geom::nm_to_mm(report.rules.clearance)
+        ));
+    }
     if report.violations.is_empty() && report.skipped.is_empty() {
         crate::diagnostics::log_info(summary);
         return;

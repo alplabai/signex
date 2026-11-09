@@ -43,9 +43,13 @@ fn board() -> PcbBoard {
 }
 
 fn open_board() -> (Signex, tempfile::TempDir, std::path::PathBuf) {
+    open(board())
+}
+
+fn open(board: PcbBoard) -> (Signex, tempfile::TempDir, std::path::PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
-    std::fs::write(&path, SnxPcb::new(board()).write_string().unwrap()).unwrap();
+    std::fs::write(&path, SnxPcb::new(board).write_string().unwrap()).unwrap();
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     let task = app.update(Message::File(FileMsg::Opened(Some(path.clone()))));
@@ -118,4 +122,39 @@ fn run_drc_with_no_board_open_runs_nothing() {
     app.ui_state.first_run_tour_open = false;
     run_drc(&mut app);
     assert!(app.document_state.panel_ctx.pcb_drc.is_none());
+}
+
+#[test]
+fn the_default_clearance_is_said_and_a_set_rule_is_not() {
+    let (mut app, _tmp, _path) = open_board();
+    run_drc(&mut app);
+    let panel = app
+        .document_state
+        .panel_ctx
+        .pcb_drc
+        .as_ref()
+        .expect("panel");
+    assert_eq!(panel.default_clearance_mm.as_deref(), Some("0.2"));
+
+    let mut set = board();
+    set.setup = Some(signex_types::pcb::PcbSetup {
+        grid_size: 0.0,
+        trace_width: 0.0,
+        via_diameter: 0.0,
+        via_drill: 0.0,
+        clearance: 0.2,
+        track_min_width: 0.0,
+        via_min_diameter: 0.0,
+        via_min_drill: 0.0,
+    });
+    let (mut app, _tmp, _path) = open(set);
+    run_drc(&mut app);
+    let panel = app
+        .document_state
+        .panel_ctx
+        .pcb_drc
+        .as_ref()
+        .expect("panel");
+    assert!(panel.ran);
+    assert_eq!(panel.default_clearance_mm, None);
 }

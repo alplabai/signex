@@ -41,6 +41,9 @@ pub struct DrcPanel {
     pub ran: bool,
     /// The board changed after that report.
     pub stale: bool,
+    /// The minimum clearance in mm, when the board set none and the default
+    /// was used.
+    pub default_clearance_mm: Option<String>,
     pub clearance: usize,
     pub short: usize,
     pub unconnected: usize,
@@ -119,6 +122,12 @@ pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>
             col = col.push(note(
                 t!(i18n, ids::DRC_STALE),
                 theme_ext::warning_color(&ctx.tokens),
+            ));
+        }
+        if let Some(mm) = &drc.default_clearance_mm {
+            col = col.push(note(
+                t!(i18n, ids::DRC_DEFAULT_CLEARANCE, "clearance" => mm.clone()),
+                muted,
             ));
         }
         if drc.rows.is_empty() && drc.skipped == 0 {

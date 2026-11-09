@@ -2,6 +2,7 @@
 
 drc-run = Run DRC
 drc-heading = Design rule check
+drc-default-clearance = No clearance rule set on this board; checked with { $clearance } mm. Set it in Board Setup.
 drc-idle = Run DRC to check the board against its rules.
 drc-running = Checking the board...
 drc-clean = No violations.

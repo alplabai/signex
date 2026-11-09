@@ -19,6 +19,9 @@ pub struct DrcRules {
     /// Per net number, from its net class. A pair of nets needs the largest
     /// of its two nets' values and [`Self::clearance`].
     pub net_clearance: BTreeMap<u32, i64>,
+    /// [`Self::clearance`] is [`DEFAULT_CLEARANCE_MM`] because the board set
+    /// none; a report says so rather than apply it silently.
+    pub from_default: bool,
 }
 
 impl DrcRules {
@@ -26,6 +29,7 @@ impl DrcRules {
         DrcRules {
             clearance,
             net_clearance: BTreeMap::new(),
+            from_default: false,
         }
     }
 
@@ -35,9 +39,11 @@ impl DrcRules {
     /// contains a net wins, as everywhere else.
     pub fn for_board(board: &PcbBoard, classes: &[NetClass]) -> Result<Self, GeomError> {
         let set = board.setup.as_ref().map_or(0.0, |s| s.clearance);
-        let clearance = positive_mm(set, "setup.clearance")?
-            .map_or_else(|| mm_to_nm(DEFAULT_CLEARANCE_MM, "default clearance"), Ok)?;
+        let board_nm = positive_mm(set, "setup.clearance")?;
+        let clearance =
+            board_nm.map_or_else(|| mm_to_nm(DEFAULT_CLEARANCE_MM, "default clearance"), Ok)?;
         let mut rules = DrcRules::new(clearance);
+        rules.from_default = board_nm.is_none();
         for net in &board.nets {
             let Some(class) = first_matching_class(classes, &net.name) else {
                 continue;

@@ -27,6 +27,9 @@ of a perpendicular on a diagonal track, under 1 nm (see `shape.rs`).
 - the board-wide minimum is `PcbSetup.clearance` (mm, in the `.snxpcb`
   setup); **0 or absent means unset and the default 0.2 mm
   (`DEFAULT_CLEARANCE_MM`) applies**. No file format changed.
+- when the default is used, the report says so (`DrcRules::from_default`): the
+  Messages panel shows an info line at the top of the results and the log
+  summary repeats it. Rules are to be asked for at board creation (#2232).
 - a net class (`NetClass.clearance`, the project's net-class table) raises the
   rule for its nets: a pair of nets needs the largest of the board value and
   the two nets' class values. The class of a net is the first matching one,

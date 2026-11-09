@@ -45,6 +45,7 @@ macro_rules! define_ids {
 define_ids! {
     DRC_RUN = "drc-run";
     DRC_HEADING = "drc-heading";
+    DRC_DEFAULT_CLEARANCE = "drc-default-clearance";
     DRC_IDLE = "drc-idle";
     DRC_RUNNING = "drc-running";
     DRC_CLEAN = "drc-clean";
