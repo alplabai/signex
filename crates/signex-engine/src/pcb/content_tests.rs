@@ -2,7 +2,9 @@
 //! and the batch dry run.
 
 use signex_net::board::{BoardNetEdit, PadNetChange, ZoneNetName};
+use signex_types::part::FootprintSourceRef;
 use signex_types::pcb::{Footprint, NetDef, PadNet, PcbBoard, Point, Segment, SymbolLink};
+use signex_types::property::PcbProperty;
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
@@ -1039,4 +1041,113 @@ fn new_items_share_one_id_space_with_the_board_and_its_pads() {
         assert_eq!(command.clone().apply(&mut b), Err(expected), "{command:?}");
         assert_eq!(snapshot(&b), before);
     }
+}
+
+fn property(key: &str, value: &str) -> PcbProperty {
+    PcbProperty {
+        key: key.into(),
+        value: value.into(),
+        ..PcbProperty::default()
+    }
+}
+
+/// Replace FP_A, whose properties are `old`, by `with`; the new FP_A.
+fn replace_a(old: Vec<PcbProperty>, with: Footprint) -> Footprint {
+    let mut b = board();
+    b.footprints[0].properties = old;
+    BoardCommand::ReplaceFootprint {
+        footprint: id(FP_A),
+        with: Box::new(with),
+    }
+    .apply(&mut b)
+    .unwrap();
+    b.footprints[0].clone()
+}
+
+fn find_property<'a>(fp: &'a Footprint, key: &str) -> &'a PcbProperty {
+    fp.properties.iter().find(|p| p.key == key).expect(key)
+}
+
+#[test]
+fn replace_keeps_a_moved_designator_where_the_user_put_it() {
+    let moved = PcbProperty {
+        position: Some(Point { x: 3.3, y: -4.4 }),
+        rotation: 90.0,
+        layer: Some("TopFab".into()),
+        font_size: Some(1.25),
+        ..property("Reference", "U1")
+    };
+    let new = replace_a(vec![moved.clone()], template(NEW_FP));
+    let reference = find_property(&new, "Reference");
+    assert_eq!(reference, &moved, "placement kept, value synced to U1");
+}
+
+#[test]
+fn replace_keeps_a_hidden_value_hidden() {
+    let hidden = PcbProperty {
+        hidden: true,
+        ..property("Value", "")
+    };
+    let new = replace_a(vec![hidden], template(NEW_FP));
+    let value = find_property(&new, "Value");
+    assert!(value.hidden, "the hidden flag survives");
+    assert_eq!(value.value, "", "the value is the board footprint's");
+}
+
+#[test]
+fn replace_keeps_a_user_added_property_the_template_lacks() {
+    let mpn = PcbProperty {
+        position: Some(Point { x: 1.0, y: 5.0 }),
+        layer: Some("TopFab".into()),
+        ..property("MPN", "BC847B")
+    };
+    let new = replace_a(
+        vec![property("Reference", "U1"), mpn.clone()],
+        template(NEW_FP),
+    );
+    assert_eq!(find_property(&new, "MPN"), &mpn);
+    let keys: Vec<_> = new.properties.iter().map(|p| p.key.as_str()).collect();
+    assert_eq!(keys, ["Reference", "Value", "MPN"]);
+}
+
+#[test]
+fn replace_adds_a_property_only_the_template_has() {
+    let mut with = template(NEW_FP);
+    let datasheet = PcbProperty {
+        position: Some(Point { x: 0.0, y: 4.0 }),
+        layer: Some("TopFab".into()),
+        hidden: true,
+        ..property("Datasheet", "https://example.com/sot23.pdf")
+    };
+    with.properties.push(datasheet.clone());
+    let new = replace_a(vec![property("Reference", "U1")], with);
+    assert_eq!(find_property(&new, "Datasheet"), &datasheet);
+}
+
+#[test]
+fn replace_takes_the_template_library_ref_and_else_keeps_the_board_one() {
+    let source = |version: &str| FootprintSourceRef {
+        library: Uuid::from_u128(0x11b),
+        footprint: Uuid::from_u128(0xf00),
+        version: version.into(),
+    };
+    let replaced = |with_ref: Option<FootprintSourceRef>| {
+        let mut b = board();
+        b.footprints[0].library_ref = Some(source("1"));
+        let mut with = template(NEW_FP);
+        with.library_ref = with_ref;
+        BoardCommand::ReplaceFootprint {
+            footprint: id(FP_A),
+            with: Box::new(with),
+        }
+        .apply(&mut b)
+        .unwrap();
+        b.footprints[0].library_ref.clone()
+    };
+    assert_eq!(replaced(None), Some(source("1")), "the board link is kept");
+    assert_eq!(
+        replaced(Some(source("2"))),
+        Some(source("2")),
+        "the template's link wins"
+    );
 }

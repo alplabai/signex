@@ -41,11 +41,12 @@ pub enum BoardCommand {
     /// not a number, or when a pad uuid is already on the board. The inverse is a
     /// [`BoardCommand::DeleteItems`].
     AddItems { items: Vec<BoardItem> },
-    /// Swap the footprint's pads, graphics, properties and name for those of
-    /// `with`, a library footprint in its top-side form. The board footprint
-    /// keeps its uuid, position, rotation, side (a bottom one flips the
-    /// template), lock, schematic link, designator and value; the n-th new
-    /// pad of a number takes the net and lock of the n-th old pad of it.
+    /// Swap the footprint's pads, graphics and name for those of `with`, a
+    /// library footprint in its top-side form. The board footprint keeps its
+    /// uuid, position, rotation, side (a bottom one flips the template), lock,
+    /// schematic link, designator and value, its library link when `with` has
+    /// none, and its property placement and properties `with` lacks; the n-th
+    /// new pad of a number takes the net and lock of the n-th old pad of it.
     /// Refused for a template not on a readable top-side layer, with a pad
     /// off the number line or a taken uuid, or a different count of a shared
     /// pad number. The
