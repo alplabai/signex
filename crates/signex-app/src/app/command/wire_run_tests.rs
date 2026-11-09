@@ -14,7 +14,7 @@ use crate::app::{DrawMode, Signex, Tool};
 use crate::keymap::AppCommandId;
 
 /// A resistor with a 2.54 x 1.016 body and pins 1 and 2 at x = -3.81 and +3.81.
-fn resistor() -> LibSymbol {
+pub(super) fn resistor() -> LibSymbol {
     let mut lib: LibSymbol = serde_json::from_value(json!({ "id": "R" })).unwrap();
     lib.graphics = vec![LibGraphic {
         unit: 0,
@@ -46,7 +46,7 @@ fn resistor() -> LibSymbol {
     lib
 }
 
-fn part(reference: &str, at: Point) -> Symbol {
+pub(super) fn part(reference: &str, at: Point) -> Symbol {
     Symbol {
         uuid: Uuid::now_v7(),
         lib_id: "R".into(),

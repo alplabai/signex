@@ -296,10 +296,7 @@ impl Signex {
             Some(OperandValue::PinRef { designator, pin }) => (
                 self.pin_ref(designator, pin)
                     .ok()
-                    .map(|resolved| signex_net::EndSpec {
-                        at,
-                        pin: Some((resolved.symbol, resolved.pin)),
-                    }),
+                    .map(|resolved| resolved.end_spec(at)),
                 format!("{what} on {designator}.{pin}"),
             ),
             _ => (None, what.to_string()),
@@ -308,15 +305,14 @@ impl Signex {
         if !intent.extra.is_empty() {
             return Err(super::wire_runs::extra_refusal(&subject, &intent.extra));
         }
-        // Names on other sheets: unknown names refuse with no escape.
-        let project = self.project_name_changes(&after, at)?;
         if matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
             return Ok(());
         }
         if let Some(change) = intent.changes.first() {
             return Err(name_change_refusal(what, at, change));
         }
-        match project.first() {
+        // Names that reach the net from other sheets.
+        match self.project_name_changes(&after, &[at], false)?.first() {
             Some(names) => Err(super::project_names::project_change_refusal(
                 what, at, names,
             )),

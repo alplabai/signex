@@ -28,6 +28,7 @@ fn pin_ref(sheet: &SchematicSheet, reference: &str) -> EndSpec {
     EndSpec {
         at: sym.position,
         pin: Some((sym.uuid, "1".into())),
+        ..EndSpec::at(sym.position)
     }
 }
 
@@ -221,6 +222,32 @@ fn a_placement_on_a_referenced_pin_names_what_it_pulls_onto_the_pins_net() {
             .extra
             .is_empty()
     );
+}
+
+#[test]
+fn a_sheet_entry_reference_names_only_that_sheet_pin() {
+    use crate::build::wire_intent;
+    // R1.1 and the sheet pin SDA share a tip with no wire on it.
+    let mut before = parts(&[("R1", (0.0, 0.0))]);
+    with_sheet_pin(&mut before, (0.0, 0.0));
+    let mut after = before.clone();
+    after.wires.push(wire(pt(0.0, 0.0), pt(20.0, 0.0)));
+    let entry = EndSpec {
+        sheet_pin: Some(before.child_sheets[0].pins[0].uuid),
+        ..EndSpec::at(pt(0.0, 0.0))
+    };
+    let tail = EndSpec::at(pt(20.0, 0.0));
+    let got = wire_intent(&before, &after, entry, tail.clone());
+    let items: Vec<_> = got
+        .extra
+        .iter()
+        .map(|i| (i.kind, i.identity.as_str()))
+        .collect();
+    // The named pin is intended; the part pin on its tip is not.
+    assert_eq!(items, [(ExtraKind::Pin, "R1.1")], "{got:?}");
+    // A coordinate there names both.
+    let got = wire_intent(&before, &after, EndSpec::at(pt(0.0, 0.0)), tail);
+    assert!(got.extra.is_empty(), "{got:?}");
 }
 
 #[test]

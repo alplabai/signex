@@ -40,6 +40,8 @@ mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]
+mod sheet_entry_ref_tests;
+#[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 #[cfg(test)]

@@ -55,6 +55,7 @@ fn pin_ref(sheet: &SchematicSheet, reference: &str) -> EndSpec {
     EndSpec {
         at: sym.position,
         pin: Some((sym.uuid, "1".into())),
+        ..EndSpec::at(sym.position)
     }
 }
 

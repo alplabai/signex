@@ -2,6 +2,15 @@
 
 use super::*;
 
+/// A label with its own uuid: nets are told apart by the elements that name
+/// them, so two labels of one sheet must not share one.
+fn label(text: &str, pos: Point, ty: LabelType) -> Label {
+    Label {
+        uuid: Uuid::now_v7(),
+        ..super::label(text, pos, ty)
+    }
+}
+
 /// The project of `root` (key `root`) and `children` (keyed by filename).
 fn graph_of(
     root: &SchematicSheet,
@@ -117,4 +126,65 @@ fn a_wire_that_joins_two_named_nets_across_the_project_is_seen() {
     after.wires.push(wire(pt(5.0, 0.0), pt(5.0, 20.0)));
     let got = changes(&root, &after, &children);
     assert_eq!(got, [["OTHER", "SIG", "VCC"]]);
+}
+
+/// A child with the hierarchical labels `names`, each on a wire of its own
+/// at y = 20 * index.
+fn child_of(names: &[&str]) -> SchematicSheet {
+    let mut child = empty_sheet();
+    for (i, name) in names.iter().enumerate() {
+        let y = 20.0 * i as f64;
+        child.wires.push(wire(pt(0.0, y), pt(10.0, y)));
+        child
+            .labels
+            .push(label(name, pt(0.0, y), LabelType::Hierarchical));
+    }
+    child
+}
+
+#[test]
+fn a_short_is_seen_even_when_another_net_already_carries_the_same_names() {
+    let mut root = empty_sheet();
+    let pins = vec![sheet_pin("A", pt(0.0, 0.0)), sheet_pin("B", pt(0.0, 20.0))];
+    root.child_sheets.push(child_sheet("U", "c.sch", pins));
+    root.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    // Elsewhere one net already carries the globals A and B, on purpose.
+    root.wires.push(wire(pt(0.0, 40.0), pt(10.0, 40.0)));
+    root.labels
+        .push(label("A", pt(0.0, 40.0), LabelType::Global));
+    root.labels
+        .push(label("B", pt(10.0, 40.0), LabelType::Global));
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["A", "B"]))]);
+    let mut after = root.clone();
+    after.wires.push(wire(pt(5.0, 0.0), pt(5.0, 20.0)));
+    assert_eq!(changes(&root, &after, &children), [["A", "B"]]);
+}
+
+#[test]
+fn two_placements_of_one_child_are_two_nets_a_wire_between_them_shorts() {
+    let mut root = empty_sheet();
+    for (name, y) in [("U1", 0.0), ("U2", 20.0)] {
+        let pins = vec![sheet_pin("SIG", pt(0.0, y))];
+        let mut placed = child_sheet(name, "c.sch", pins);
+        placed.uuid = Uuid::now_v7();
+        root.child_sheets.push(placed);
+        root.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+    }
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["SIG"]))]);
+    let mut after = root.clone();
+    after.wires.push(wire(pt(5.0, 0.0), pt(5.0, 20.0)));
+    assert_eq!(changes(&root, &after, &children), [["SIG"]]);
+}
+
+#[test]
+fn an_unnamed_net_may_gain_a_name_or_join_a_named_one() {
+    let (mut root, children) = project();
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    let named = with_label(&root, "GND", (5.0, 20.0));
+    assert!(changes(&root, &named, &children).is_empty());
+    // The free wire joins the SIG net: the only named net it meets.
+    let mut joined = root.clone();
+    joined.wires.push(wire(pt(5.0, 0.0), pt(5.0, 20.0)));
+    assert!(changes(&root, &joined, &children).is_empty());
 }

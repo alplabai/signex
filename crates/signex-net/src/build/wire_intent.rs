@@ -92,12 +92,24 @@ pub struct EndSpec {
     /// The placed symbol and pin id (`Terminal::symbol`, `Terminal::pin`) a
     /// pin reference named. Only that pin is intended at the point.
     pub pin: Option<(Uuid, String)>,
+    /// The sheet pin (`SheetPin::uuid`) a sheet-entry reference named: like a
+    /// named part pin, it is the one thing intended at the point.
+    pub sheet_pin: Option<Uuid>,
 }
 
 impl EndSpec {
     /// An end given as a coordinate.
     pub fn at(at: Point) -> Self {
-        Self { at, pin: None }
+        Self {
+            at,
+            pin: None,
+            sheet_pin: None,
+        }
+    }
+
+    /// Whether the end was given as a reference, not a coordinate.
+    fn is_reference(&self) -> bool {
+        self.pin.is_some() || self.sheet_pin.is_some()
     }
 }
 
@@ -134,10 +146,16 @@ pub fn wire_intent(
                 .map(move |sp| (sp.position, format!("{} of {}", sp.name, cs.name)))
         })
         .collect();
+    let named_sheet_pins: HashSet<Uuid> = ends.iter().filter_map(|e| e.sheet_pin).collect();
+    let sheet_pin_ids: Vec<Uuid> = before
+        .child_sheets
+        .iter()
+        .flat_map(|cs| cs.pins.iter().map(|sp| sp.uuid))
+        .collect();
     let tip_keys = pin_tip_keys(before);
     let tapped_ends = ends
         .iter()
-        .filter(|e| e.pin.is_none() && !tip_keys.contains(&pt_key(&e.at)))
+        .filter(|e| !e.is_reference() && !tip_keys.contains(&pt_key(&e.at)))
         .map(|e| &e.at);
     for p in tapped_ends.chain(sheet_pins.iter().map(|(p, _)| p)) {
         b.root_of_anchored_in(p, &before_index);
@@ -181,7 +199,7 @@ pub fn wire_intent(
     let named: HashSet<(Uuid, String)> = ends.iter().filter_map(|e| e.pin.clone()).collect();
     let coord_keys: HashSet<Key> = ends
         .iter()
-        .filter(|e| e.pin.is_none())
+        .filter(|e| !e.is_reference())
         .map(|e| pt_key(&e.at))
         .collect();
     for (found_root, found) in collect_terminals_at(after, &root, &mut a.parent) {
@@ -235,12 +253,20 @@ pub fn wire_intent(
             });
         }
     }
-    for ((p, name), r) in sheet_pins.iter().zip(&before_sheet_pin_roots) {
+    for (((p, name), r), id) in sheet_pins
+        .iter()
+        .zip(&before_sheet_pin_roots)
+        .zip(&sheet_pin_ids)
+    {
+        // The sheet pin a reference named is what the caller wants.
+        if named_sheet_pins.contains(id) {
+            continue;
+        }
         // A sheet pin on a referenced pin's tip is on the pin's net only if
         // something real (a wire end, junction or label) connects them there.
         let butted = ends
             .iter()
-            .any(|e| e.pin.is_some() && pt_key(&e.at) == pt_key(p))
+            .any(|e| e.is_reference() && pt_key(&e.at) == pt_key(p))
             && !has_connection_anchor(before, *p);
         if (!wanted.contains(r) || butted) && on_new(&mut a, p) {
             extra.push(ExtraItem {

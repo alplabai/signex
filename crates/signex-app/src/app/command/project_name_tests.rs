@@ -166,21 +166,238 @@ fn an_unreadable_project_refuses_what_reaches_other_sheets_and_allows_the_rest()
     let dir = tempfile::tempdir().unwrap();
     let mut app = project_app(&dir);
     std::fs::remove_file(dir.path().join("child.snxsch")).unwrap();
-    let reason = refusal(run(
-        &mut app,
-        "place_global_label",
-        &["at=5.08,0", "text=GND", "allow_merge=true"],
-    ));
+    let label = ["at=5.08,0", "text=GND"];
+    let reason = refusal(run(&mut app, "place_global_label", &label));
     assert!(reason.contains("cannot be read completely"), "{reason}");
     assert!(reason.contains("child.snxsch is missing"), "{reason}");
-    // A global label reaches other sheets by its own name: refused too. A
-    // net label on a net nothing links outward is allowed.
+    // The maintainer's decision: allow_merge places it anyway.
+    let outcome = run(
+        &mut app,
+        "place_global_label",
+        &[label[0], label[1], "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    // A power port reaches other sheets by its name: refused, then allowed.
+    let port = ["at=5.08,40.64", "net_name=GND", "lib_id=power:GND"];
+    let reason = refusal(run(&mut app, "place_power_symbol", &port));
+    assert!(reason.contains("cannot be read completely"), "{reason}");
+    let outcome = run(
+        &mut app,
+        "place_power_symbol",
+        &[port[0], port[1], port[2], "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    // A net label on a net nothing links outward is allowed.
+    let outcome = run(&mut app, "place_net_label", &["at=5.08,20.32", "text=FREE"]);
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn an_unreadable_listed_page_and_a_refused_child_reference_count_as_incomplete() {
+    for (file, text) in [("child.snxsch", "not a sheet"), ("child.snxsch", "")] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = project_app(&dir);
+        std::fs::write(dir.path().join(file), text).unwrap();
+        let reason = refusal(run(
+            &mut app,
+            "place_global_label",
+            &["at=5.08,0", "text=GND"],
+        ));
+        assert!(reason.contains("child.snxsch is unreadable"), "{reason}");
+    }
+    // A child reference that leaves the project folder.
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = parent();
+    top.child_sheets
+        .push(sheet_symbol("Away", "../outside_2199.snxsch", &[]));
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("child.snxsch"), child());
+    let mut app = open_project(&dir);
     let reason = refusal(run(
         &mut app,
         "place_global_label",
-        &["at=5.08,40.64", "text=FREE"],
+        &["at=5.08,0", "text=GND"],
     ));
-    assert!(reason.contains("cannot be read completely"), "{reason}");
-    let outcome = run(&mut app, "place_net_label", &["at=5.08,40.64", "text=FREE"]);
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(reason.contains("leaves its folder"), "{reason}");
+}
+
+/// A sheet symbol named `name` on `file`, its entries `(name, at)`.
+fn sheet_symbol(name: &str, file: &str, entries: &[(&str, (f64, f64))]) -> ChildSheet {
+    ChildSheet {
+        uuid: Uuid::now_v7(),
+        name: name.into(),
+        filename: file.into(),
+        position: Point::new(0.0, 80.0),
+        size: (10.0, 10.0),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: entries
+            .iter()
+            .map(|(pin, at)| SheetPin {
+                uuid: Uuid::now_v7(),
+                name: (*pin).into(),
+                direction: "input".into(),
+                position: Point::new(at.0, at.1),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            })
+            .collect(),
+        instances: Vec::new(),
+    }
+}
+
+/// The app with the project of `dir` open and its `top.snxsch` the target.
+fn open_project(dir: &tempfile::TempDir) -> Signex {
+    let _ = crate::diagnostics::init_logging();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
+    app.ui_state.snap_enabled = false;
+    app.open_or_focus_sheet_path(dir.path().join("top.snxsch"));
+    app.refresh_panel_ctx();
+    app
+}
+
+fn hier(text: &str, at: (f64, f64)) -> Label {
+    Label::new(text, Point::new(at.0, at.1), LabelType::Hierarchical)
+}
+
+/// A child with each of `names` as a hierarchical label on a wire of its own
+/// at y = 20.32 * index.
+fn child_with(names: &[&str]) -> SchematicSheet {
+    let mut sheet = SchematicSheet::default();
+    for (i, name) in names.iter().enumerate() {
+        let y = 20.32 * i as f64;
+        sheet.wires.push(wire((0.0, y), (10.16, y)));
+        sheet.labels.push(hier(name, (0.0, y)));
+    }
+    sheet
+}
+
+#[test]
+fn a_short_is_refused_even_when_another_net_carries_the_same_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = SchematicSheet::default();
+    let entries = [("A", (0.0, 0.0)), ("B", (0.0, 20.32))];
+    top.child_sheets
+        .push(sheet_symbol("U", "c.snxsch", &entries));
+    top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+    top.wires.push(wire((0.0, 20.32), (5.08, 20.32)));
+    // Elsewhere one net carries the globals A and B, on purpose.
+    top.wires.push(wire((0.0, 60.96), (10.16, 60.96)));
+    top.labels.push(global("A", (0.0, 60.96)));
+    top.labels.push(global("B", (10.16, 60.96)));
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("c.snxsch"), child_with(&["A", "B"]));
+    let mut app = open_project(&dir);
+    let ends = ["start=5.08,0", "end=5.08,20.32"];
+    let reason = refusal(run(&mut app, "place_wire", &ends));
+    assert!(reason.contains("{A, B}"), "{reason}");
+    let outcome = run(
+        &mut app,
+        "place_wire",
+        &[ends[0], ends[1], "allow_merge=true"],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn two_placements_of_one_child_are_two_nets_and_a_wire_between_them_is_a_short() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = SchematicSheet::default();
+    for (name, y) in [("U1", 0.0), ("U2", 20.32)] {
+        top.child_sheets
+            .push(sheet_symbol(name, "c.snxsch", &[("SIG", (0.0, y))]));
+        top.wires.push(wire((0.0, y), (5.08, y)));
+    }
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("c.snxsch"), child_with(&["SIG"]));
+    let mut app = open_project(&dir);
+    let ends = ["start=5.08,0", "end=5.08,20.32"];
+    let reason = refusal(run(&mut app, "place_wire", &ends));
+    assert!(reason.contains("{SIG}"), "{reason}");
+    let outcome = run(
+        &mut app,
+        "place_wire",
+        &[ends[0], ends[1], "allow_merge=true"],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn an_edit_list_judges_each_edit_on_the_project_it_reads_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let path = dir.path().join("top.snxsch");
+    let revision = |app: &Signex| app.document_state.engines[&path].revision();
+    let apply = |app: &mut Signex, short: serde_json::Value| {
+        let edits = serde_json::json!([
+            {"id": "place_global_label", "args": {"at": [5.08, 40.64], "text": "FREE"}},
+            {"id": "place_wire", "args": short},
+        ]);
+        run(
+            app,
+            "apply_edits",
+            &[
+                &format!("document={}", path.display()),
+                &format!("expect_revision={}", revision(app)),
+                &format!("edits={edits}"),
+            ],
+        )
+    };
+    let before = revision(&app);
+    let reason = refusal(apply(
+        &mut app,
+        serde_json::json!({"start": [5.08, 0], "end": [10.16, 0]}),
+    ));
+    assert!(reason.contains("edit 2"), "{reason}");
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+    assert_eq!(revision(&app), before, "a refused list changes nothing");
+    let allowed = serde_json::json!({"start": [5.08, 0], "end": [10.16, 0], "allow_merge": true});
+    assert!(matches!(
+        apply(&mut app, allowed),
+        CommandOutcome::Answered(_)
+    ));
+}
+
+#[test]
+fn a_dry_run_in_a_project_writes_nothing_to_messages() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = parent();
+    // A reference the read refuses, once per read; named so the test finds it.
+    top.child_sheets
+        .push(sheet_symbol("Away", "../zz_unique_2199_away.snxsch", &[]));
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("child.snxsch"), child());
+    let mut app = open_project(&dir);
+    let mark = crate::diagnostics::newest_entry_id();
+    let outcome = run(
+        &mut app,
+        "place_wire",
+        &[
+            "start=5.08,0",
+            "end=10.16,0",
+            "dry_run=true",
+            "allow_merge=true",
+        ],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    let said: Vec<String> = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|entry| entry.message)
+        .filter(|m| m.contains("zz_unique_2199_away") || m.contains("child-sheet reference"))
+        .collect();
+    assert!(said.is_empty(), "{said:?}");
 }

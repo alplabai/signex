@@ -149,15 +149,84 @@ pub(in crate::app::command) fn pin_tip_of(
         tip: first.tip,
         symbol: first.symbol,
         pin: first.id.clone(),
+        sheet_pin: false,
     })
 }
 
 /// What a pin reference resolved to: the tip, and the pin as the netlist names
-/// a terminal (the placed symbol and the pin id).
+/// a terminal (the placed symbol and the pin id). For a sheet entry
+/// (`sheet_pin`), `symbol` is the sheet pin's uuid and `pin` its name.
 pub(in crate::app::command) struct PinRefTip {
     pub tip: Point,
     pub symbol: uuid::Uuid,
     pub pin: String,
+    pub sheet_pin: bool,
+}
+
+impl PinRefTip {
+    /// The end the caller named, for the intent checks.
+    pub(in crate::app::command) fn end_spec(&self, at: Point) -> signex_net::EndSpec {
+        if self.sheet_pin {
+            signex_net::EndSpec {
+                sheet_pin: Some(self.symbol),
+                ..signex_net::EndSpec::at(at)
+            }
+        } else {
+            signex_net::EndSpec {
+                pin: Some((self.symbol, self.pin.clone())),
+                ..signex_net::EndSpec::at(at)
+            }
+        }
+    }
+}
+
+/// The tip of `<name>.<entry>`: a part's pin, or when `name` is a sheet symbol
+/// on `sheet` (and no part), that sheet's entry. A name that is both, or two
+/// sheet symbols with one name, is refused. See "Pin references" in
+/// `docs/CLI.md`.
+pub(in crate::app::command) fn ref_tip_of(
+    sheet: &SchematicSheet,
+    name: &str,
+    entry: &str,
+    paths: &[InstancePath],
+) -> Result<PinRefTip, String> {
+    let sheets: Vec<_> = sheet
+        .child_sheets
+        .iter()
+        .filter(|c| c.name == name)
+        .collect();
+    let [only, ..] = sheets.as_slice() else {
+        return pin_tip_of(sheet, name, entry, paths);
+    };
+    let names_a_part = sheet
+        .symbols
+        .iter()
+        .any(|s| !s.is_power && paths.iter().any(|p| s.designator_in(p) == name));
+    if names_a_part {
+        return Err(format!(
+            "`{name}` names both a part and a sheet on this sheet, so `{name}.{entry}` is ambiguous; name a point instead"
+        ));
+    }
+    if sheets.len() > 1 {
+        return Err(format!(
+            "{} sheet symbols on this sheet are named `{name}`, so `{name}.{entry}` is ambiguous; name a point instead",
+            sheets.len()
+        ));
+    }
+    let entries: Vec<_> = only.pins.iter().filter(|p| p.name == entry).collect();
+    match entries.as_slice() {
+        [pin] => Ok(PinRefTip {
+            tip: pin.position,
+            symbol: pin.uuid,
+            pin: pin.name.clone(),
+            sheet_pin: true,
+        }),
+        [] => Err(format!("sheet `{name}` has no entry `{entry}`")),
+        _ => Err(format!(
+            "sheet `{name}` has {} entries named `{entry}`; name a point instead",
+            entries.len()
+        )),
+    }
 }
 
 /// The pins whose name is `pin`, when they are one pin (a shared pin shows at
@@ -275,7 +344,7 @@ impl Signex {
             return Err(HIERARCHY_BEING_READ.to_string());
         }
         let paths = self.pin_instance_paths(&entry)?;
-        pin_tip_of(engine.document(), designator, pin, &paths)
+        ref_tip_of(engine.document(), designator, pin, &paths)
     }
 
     /// `query_pins document=<doc> designator=<ref>`.

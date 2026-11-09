@@ -53,7 +53,8 @@ Two commands, both with capability `edit` in `signex-cli`:
   wire edit sees the edits before it, and is judged against the sheet as it
   stands, so a route sent as chained `place_wire` edits (A to B, then B to C)
   needs `allow_open=true` on every edit but the last; names are judged across
-  the project, not only the sheet. `changed: false`
+  the project, not only the sheet (the project is read once per list; a net
+  that reaches no other sheet costs no read). `changed: false`
   comes only from an empty list or a list of dry runs: it records no step and keeps the person's
   redo. An edit that changes nothing (a junction already there, a net already
   that colour) is refused by its handler like any other, so it refuses the

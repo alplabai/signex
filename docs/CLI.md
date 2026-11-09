@@ -119,6 +119,19 @@ Coordinates keep working: a value with a comma is a coordinate. `color_net`
 takes a coordinate only, and a bus no pin reference ("a bus does not connect to
 pins").
 
+The same position also takes `<sheet name>.<entry name>`: `Charger.SDA` is the
+connection point of the entry (sheet pin) `SDA` of the sheet symbol `Charger`
+placed on the target sheet, accepted off the grid like a pin tip. The sheet name
+is the symbol's name as `read_document` reports it (`name` of the `sheet_entry`
+element), the entry the sheet pin's `name`, both exact and without whitespace or
+a `.`. An end given so names exactly that sheet pin: another item on its point
+(a part pin, another entry) is extra, and the project name check applies as for
+any end. `ends` in an answer carries the reference as given. It is refused for a
+sheet or entry that is not on the sheet, two sheet symbols with that name, two
+entries with that name, and a name that a part designator and a sheet symbol
+both carry (ambiguous); a bus takes none. Placing sheet symbols and entries
+from operands is not part of this.
+
 A reference is refused, with the reason, for a designator that is not on the
 sheet, not annotated (`R?`), ambiguous or a power port; a pin that does not
 exist, whose name matches several pins, that is hidden, or whose unit is not
@@ -160,14 +173,25 @@ sheet first and judge the result with the netlist derivation
    whatever the flags (it cannot happen for a connected run, so it signals a
    bug rather than a choice).
 
-Names are judged across the project: when the sheet belongs to a project, rule 4
-(and a placement's name change) compares the project's stitched nets before and
-after, so a name that reaches a net from another sheet counts; when the project
-cannot be read completely, a net that reaches a sheet pin, hierarchical or
-global label or power port is refused with the reason (`allow_merge` does not
-lift that). A route sent as chained `place_wire` edits (A to B, then B to C) is
-judged per edit against the sheet as it stands, so every edit but the last needs
-`allow_open=true`.
+Names are judged across the project, by net identity, not by name text. When
+the sheet belongs to a project, rule 4 (and a placement's name change) compares
+the project's stitched nets (`signex_net::project_name_changes`; net scope is
+`docs/NET_NAMING.md`: net labels local, global labels and power ports joined
+project-wide by name, hierarchical labels through the matching sheet pin, each
+placement of a child sheet with its own nets) before and after. It is a change
+when a net after the edit absorbed two or more nets that carry names (two
+placements of one child sheet are two nets, and so are two nets that carry the
+same name set), or one named net and gained a name it did not carry (a local
+label naming a sheet-pin net differently gives a signal a second name). A net
+with no name, here or on another sheet, may gain one or join a named net
+freely; a name that reaches a net from another sheet makes it named. The extra
+rule stays per sheet. A net that reaches no sheet pin, hierarchical or global
+label or power port is judged on its sheet only and costs no project read. When
+the project cannot be read completely (a sheet missing or unreadable, a child
+reference leaving its folder) and the net reaches one of those, the edit is
+refused with the reason, and `allow_merge=true` places it anyway. A route sent
+as chained `place_wire` edits (A to B, then B to C) is judged per edit against
+the sheet as it stands, so every edit but the last needs `allow_open=true`.
 
 `dry_run=true` (`--dry-run`) answers the report and changes nothing: no undo
 step, no dirty flag, no Messages line. A run that lands answers

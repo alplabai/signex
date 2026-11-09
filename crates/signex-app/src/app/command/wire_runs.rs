@@ -170,14 +170,12 @@ impl Signex {
 
     /// What the operand `name` named at `at`: the pin, for a pin reference.
     fn end_spec(&self, args: &CommandArgs, name: &str, at: Point) -> EndSpec {
-        let pin = match args.operand(name) {
+        match args.operand(name) {
             Some(OperandValue::PinRef { designator, pin }) => self
                 .pin_ref(designator, pin)
-                .ok()
-                .map(|resolved| (resolved.symbol, resolved.pin)),
-            _ => None,
-        };
-        EndSpec { at, pin }
+                .map_or_else(|_| EndSpec::at(at), |resolved| resolved.end_spec(at)),
+            _ => EndSpec::at(at),
+        }
     }
 
     /// Check the wire run and build its commands and report.
@@ -232,7 +230,8 @@ impl Signex {
             ));
         }
         // Names on other sheets: a name that reaches the net from there counts.
-        let project = self.project_name_changes(&after, start)?;
+        let project =
+            self.project_name_changes(&after, &[start, end], flag(args, "allow_merge"))?;
         if let Some(names) = project.first()
             && !flag(args, "allow_merge")
         {

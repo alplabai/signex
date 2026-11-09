@@ -171,6 +171,7 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
     }
     app.document_state.agent_edits.target = Some(path.to_path_buf());
     app.document_state.agent_edits.owed = RenderInvalidation::NONE;
+    app.document_state.agent_edits.listing = true;
     let mut tasks = Vec::new();
     // What each edit answered, by index; `null` for one that only ran.
     let mut results = Vec::new();
@@ -205,6 +206,8 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
     }
     let owed = std::mem::take(&mut app.document_state.agent_edits.owed);
     app.document_state.agent_edits.target = None;
+    app.document_state.agent_edits.listing = false;
+    app.document_state.agent_edits.project_set.take();
     let Some(engine) = app.document_state.engines.get_mut(path) else {
         return refused(format!("{} is not loaded", path.display()));
     };
