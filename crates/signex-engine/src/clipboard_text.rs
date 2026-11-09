@@ -13,9 +13,13 @@ use crate::{CopiedSelection, EngineError};
 /// before the parser sees it.
 pub const MAX_CLIPBOARD_TEXT_BYTES: usize = 16 * 1024 * 1024;
 
-/// First line of every clipboard fragment; the trailing `/2` is the fragment
-/// version.
+/// First line of every clipboard fragment we write; the trailing `/2` is the
+/// fragment version.
 pub const CLIPBOARD_MARKER: &str = "signex-clipboard-fragment/2";
+
+/// The marker of the fragments older builds wrote (bodies keyed by plain
+/// `lib_id`). Still read: parsing upgrades them to versioned bodies (#2209).
+const CLIPBOARD_MARKER_V1: &str = "signex-clipboard-fragment/1";
 
 impl CopiedSelection {
     /// The copy as clipboard text: the marker line, then the fragment at its
@@ -32,14 +36,14 @@ impl CopiedSelection {
     /// fragment at all; `Err` when it claims to be one but cannot be read.
     /// `grid_mm` snaps the anchor as in [`crate::Engine::copy_selection`].
     pub fn from_clipboard_text(text: &str, grid_mm: f64) -> Result<Option<Self>, EngineError> {
-        if !text.starts_with(CLIPBOARD_MARKER) {
+        if !text.starts_with("signex-clipboard-fragment/") {
             return Ok(None);
         }
         if text.len() > MAX_CLIPBOARD_TEXT_BYTES {
             return Err(EngineError::ClipboardFragment("too large".to_owned()));
         }
         let (first, body) = text.split_once('\n').unwrap_or((text, ""));
-        if first.trim_end() != CLIPBOARD_MARKER {
+        if !matches!(first.trim_end(), CLIPBOARD_MARKER | CLIPBOARD_MARKER_V1) {
             return Ok(None);
         }
         let parsed =
@@ -116,6 +120,39 @@ mod tests {
         assert_eq!(a.symbols[0].body_ref, b.symbols[0].body_ref);
         assert_eq!(a.symbols[0].position, b.symbols[0].position);
         assert_eq!(original.origin, back.origin);
+    }
+
+    #[test]
+    fn a_version_1_copy_pastes_with_resolvable_bodies() {
+        let lib: LibSymbol = serde_json::from_str(r#"{"id":"lib:r"}"#).unwrap();
+        let mut sheet = test_sheet();
+        sheet.lib_symbols.insert("lib:r".to_owned(), lib);
+        let part = Symbol {
+            uuid: Uuid::now_v7(),
+            lib_id: "lib:r".to_owned(),
+            reference: "R7".to_owned(),
+            position: Point::new(25.4, 25.4),
+            unit: 1,
+            ..Default::default()
+        };
+        let items = vec![SelectedItem::new(part.uuid, SelectedKind::Symbol)];
+        sheet.symbols.push(part);
+        let engine = Engine::new(sheet).unwrap();
+        let fragment = engine.copy_selection(&items, 1.27).unwrap().unwrap();
+        let body = SnxSchematic::new(fragment.payload.fragment().clone())
+            .write_string()
+            .unwrap();
+        let text = format!(
+            "signex-clipboard-fragment/1
+{body}"
+        );
+
+        let back = CopiedSelection::from_clipboard_text(&text, 1.27)
+            .unwrap()
+            .expect("a /1 copy is ours");
+        let sheet = back.payload.fragment();
+        assert_eq!(sheet.symbols.len(), 1);
+        assert!(sheet.body_of(&sheet.symbols[0]).is_some());
     }
 
     #[test]
