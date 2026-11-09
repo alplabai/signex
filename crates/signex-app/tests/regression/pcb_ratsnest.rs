@@ -21,6 +21,7 @@ fn pad(n: u128, x: f64) -> Pad {
             name: "N1".into(),
         }),
         roundrect_ratio: 0.0,
+        rotation: 0.0,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),

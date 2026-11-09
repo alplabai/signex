@@ -1,8 +1,6 @@
 //! PCB scene emitters + snapshot geometry helpers.
 
 use super::*;
-use signex_types::pad_outline::PadOutline;
-use signex_types::rotation2d::{Pose2d, Vec2d};
 
 pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
     TraceInput {
@@ -26,23 +24,31 @@ pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
     }
 }
 
-/// A pad as drawn. Centre and rotation come from `pcb-geom` (a bottom-side
+/// A pad as drawn. The outline is `pcb-geom`'s own pad shape (shape,
+/// parameters, footprint turn and the pad's own turn composed; a bottom-side
 /// footprint is mirrored there, ADR-0005 §7), so a hit-test and a ratsnest end
 /// land on what is drawn. A pad `pcb-geom` refuses (non-finite or beyond
 /// 1 km) is not drawn; `BoardIndex::rejected` reports it.
 pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> Option<PadInput> {
-    let placement = pcb_geom::Placement::of_footprint(footprint).ok()?;
     let center = pcb_geom::pad_world_center(footprint, pad).ok()?.to_mm();
 
     // Size floor is a renderer rule, not geometry (ADR-0005, "Drawn size").
+    let size_mm = [
+        mm_with_floor(pad.size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
+        mm_with_floor(pad.size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
+    ];
+    let mut drawn = pad.clone();
+    drawn.size = signex_types::pcb::Point::new(f64::from(size_mm[0]), f64::from(size_mm[1]));
+    let outline = pcb_geom::pad_shape(footprint, &drawn)
+        .ok()?
+        .ring(PAD_ARC_STEPS);
     Some(PadInput {
         center: point_to_xy(center),
-        size_mm: [
-            mm_with_floor(pad.size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
-            mm_with_floor(pad.size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
-        ],
-        rotation_deg: placement.rotation_deg as f32,
-        shape: pad.shape,
+        size_mm,
+        outline: outline
+            .into_iter()
+            .map(|p| point_to_xy(p.to_mm()))
+            .collect(),
         pad_type: pad.pad_type,
     })
 }
@@ -154,23 +160,6 @@ pub(super) fn ellipse_vertices(
     vertices
 }
 
-pub(super) fn pad_vertices(pad: &PadInput) -> Vec<[f32; 2]> {
-    let outline = PadOutline::new(
-        pad.shape,
-        Vec2d::new(f64::from(pad.size_mm[0]), f64::from(pad.size_mm[1])),
-        Pose2d::new(
-            Vec2d::new(f64::from(pad.center[0]), f64::from(pad.center[1])),
-            f64::from(pad.rotation_deg).to_radians(),
-        ),
-    );
-
-    outline
-        .vertices(PAD_ELLIPSE_SEGMENTS)
-        .into_iter()
-        .map(|v| [v.x as f32, v.y as f32])
-        .collect()
-}
-
 pub(super) fn pad_alpha_mul(pad_type: PadType) -> f32 {
     match pad_type {
         PadType::Connect => 0.8,
@@ -253,7 +242,7 @@ pub(super) fn emit_static_polygons(
 
         scene.top_polygons.push(GpuPolygon {
             holes: Vec::new(),
-            vertices: pad_vertices(pad),
+            vertices: pad.outline.clone(),
             fill_color,
             stroke_color: Some(stroke_color),
             stroke_width,

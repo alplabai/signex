@@ -20,7 +20,7 @@ use super::super::registry::{self, FORMAT};
 use super::super::state::MAX_TOUCHED;
 use super::super::wire::MAX_REQUEST_BYTES;
 use super::{app_at_work, line, path, revision, snapshot};
-use crate::app::{FileMsg, Message, Signex};
+use crate::app::{Message, Signex};
 
 fn runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_multi_thread()
@@ -107,7 +107,7 @@ async fn start(
         .next()
         .await
         .expect("the listener says how it started");
-    let Message::File(FileMsg::Agent(AgentMsg::ListenerStarted { endpoint, .. })) = &first else {
+    let Message::Agent(AgentMsg::ListenerStarted { endpoint, .. }) = &first else {
         panic!("the listener did not start: {first:?}");
     };
     let socket = PathBuf::from(endpoint);
@@ -339,10 +339,10 @@ fn the_listener_does_not_start_in_a_folder_that_is_too_open_or_over_a_link() {
         std::fs::DirBuilder::new().mode(0o755).create(&dir).unwrap();
         let (sender, mut messages) = mpsc::channel(4);
         tokio::spawn(serve(config.clone(), sender));
-        let Some(Message::File(FileMsg::Agent(AgentMsg::ListenerFailed {
+        let Some(Message::Agent(AgentMsg::ListenerFailed {
             boot_id,
             reason: why,
-        }))) = messages.next().await
+        })) = messages.next().await
         else {
             panic!("the listener started in an open folder");
         };
@@ -359,7 +359,7 @@ fn the_listener_does_not_start_in_a_folder_that_is_too_open_or_over_a_link() {
         symlink(&precious, &stale).unwrap();
         let (sender, mut messages) = mpsc::channel(4);
         tokio::spawn(serve(config.clone(), sender));
-        let Some(Message::File(FileMsg::Agent(AgentMsg::ListenerFailed { reason: why, .. }))) =
+        let Some(Message::Agent(AgentMsg::ListenerFailed { reason: why, .. })) =
             messages.next().await
         else {
             panic!("the listener started over a link");
@@ -391,12 +391,10 @@ fn the_registry_is_written_for_open_projects_and_removed_on_close_and_on_exit() 
 
     // The listener reports it is up: the open project gets its entry.
     let boot_id = app.agent.boot_id().unwrap().to_string();
-    let task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id,
-            endpoint: "/run/test.sock".into(),
-        },
-    )));
+    let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
+        endpoint: "/run/test.sock".into(),
+    }));
     driver
         .settle(&mut app, task)
         .expect("the registry write ran");
@@ -444,12 +442,10 @@ fn quitting_with_the_setting_off_removes_an_entry_of_this_run_that_outlived_its_
     super::super::files::prepare_dir(&dir).unwrap();
     let mut driver = crate::task_driver::TaskDriver::new();
     let boot_id = app.agent.boot_id().unwrap().to_string();
-    let task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id,
-            endpoint: "/run/test.sock".into(),
-        },
-    )));
+    let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
+        endpoint: "/run/test.sock".into(),
+    }));
     driver.settle(&mut app, task).unwrap();
     assert!(entry.exists());
 
@@ -491,12 +487,10 @@ fn a_late_report_from_a_replaced_listener_changes_nothing() {
     let (mut app, _config, _dir) = app_and_config(root.path());
     let current = app.agent.boot_id().unwrap().to_string();
 
-    let task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id: "0000000000000000".into(),
-            endpoint: "/removed.sock".into(),
-        },
-    )));
+    let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: "0000000000000000".into(),
+        endpoint: "/removed.sock".into(),
+    }));
     assert_eq!(task.units(), 0, "no registry write for a stale listener");
     assert!(
         app.agent.endpoint.is_none(),
@@ -504,28 +498,22 @@ fn a_late_report_from_a_replaced_listener_changes_nothing() {
     );
 
     // A stale failure does not switch the live listener off.
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id: current,
-            endpoint: "/live.sock".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: current,
+        endpoint: "/live.sock".into(),
+    }));
     assert_eq!(app.agent.endpoint.as_deref(), Some("/live.sock"));
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerFailed {
-            boot_id: "0000000000000000".into(),
-            reason: "old".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: "0000000000000000".into(),
+        reason: "old".into(),
+    }));
     assert_eq!(app.agent.endpoint.as_deref(), Some("/live.sock"));
 
     let current = app.agent.boot_id().unwrap().to_string();
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerFailed {
-            boot_id: current,
-            reason: "gave up".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: current,
+        reason: "gave up".into(),
+    }));
     assert!(app.agent.endpoint.is_none(), "its own failure does");
 }
 
@@ -545,8 +533,7 @@ fn a_client_that_never_reads_its_reply_is_dropped_after_the_write_timeout() {
             Duration::from_millis(200),
         ));
         client.write_all(b"{}\n").await.unwrap();
-        let Some(Message::File(FileMsg::Agent(AgentMsg::Request(call)))) = messages.next().await
-        else {
+        let Some(Message::Agent(AgentMsg::Request(call))) = messages.next().await else {
             panic!("no request reached the app");
         };
         assert!(matches!(call.input, Input::Line(_)));
@@ -589,12 +576,10 @@ fn a_project_another_instance_held_is_registered_once_it_quits() {
 
     let mut driver = crate::task_driver::TaskDriver::new();
     let boot_id = app.agent.boot_id().unwrap().to_string();
-    let task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id,
-            endpoint: "/run/ours.sock".into(),
-        },
-    )));
+    let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
+        endpoint: "/run/ours.sock".into(),
+    }));
     driver.settle(&mut app, task).unwrap();
     assert_eq!(pid_in(&entry), 1, "the other instance keeps its entry");
     assert!(app.agent.registry_retry, "the app knows it must try again");
@@ -614,9 +599,7 @@ fn a_project_another_instance_held_is_registered_once_it_quits() {
     assert!(!entry.exists(), "no rewrite at every update");
 
     // The timer ticks: the project is ours.
-    let task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::RegistryRetryTick,
-    )));
+    let task = app.update(Message::Agent(AgentMsg::RegistryRetryTick));
     driver.settle(&mut app, task).unwrap();
     assert_eq!(pid_in(&entry), std::process::id());
     assert!(!app.agent.registry_retry);
@@ -638,26 +621,22 @@ fn a_failed_listener_is_restarted_with_new_ids_a_few_times_and_then_stays_off() 
     let mut seen = vec![app.agent.boot_id().unwrap().to_string()];
     for attempt in 0..MAX_RESTARTS {
         let failed = seen.last().unwrap().clone();
-        let task = app.update(Message::File(crate::app::FileMsg::Agent(
-            AgentMsg::ListenerFailed {
-                boot_id: failed.clone(),
-                reason: "no socket".into(),
-            },
-        )));
+        let task = app.update(Message::Agent(AgentMsg::ListenerFailed {
+            boot_id: failed.clone(),
+            reason: "no socket".into(),
+        }));
         assert_eq!(task.units(), 1, "attempt {attempt}: a restart is scheduled");
         assert!(app.agent.endpoint.is_none());
         // A late timer for an older listener restarts nothing.
-        let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-            AgentMsg::RestartListener {
-                boot_id: "0000000000000000".into(),
-            },
-        )));
+        let _t = app.update(Message::Agent(AgentMsg::RestartListener {
+            boot_id: "0000000000000000".into(),
+        }));
         assert_eq!(app.agent.boot_id(), Some(failed.as_str()));
         // The timer of this one gives the app new ids: a new subscription.
         let before = app.agent.token().unwrap().as_str().to_string();
-        let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-            AgentMsg::RestartListener { boot_id: failed },
-        )));
+        let _t = app.update(Message::Agent(AgentMsg::RestartListener {
+            boot_id: failed,
+        }));
         assert_ne!(app.agent.token().unwrap().as_str(), before);
         seen.push(app.agent.boot_id().unwrap().to_string());
     }
@@ -673,37 +652,29 @@ fn a_failed_listener_is_restarted_with_new_ids_a_few_times_and_then_stays_off() 
     // The next failure is the last: it says how to try again.
     let said = "it failed 5 times, so it stays off";
     let logged = crate::diagnostics::logged_count(said);
-    let task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerFailed {
-            boot_id: seen.last().unwrap().clone(),
-            reason: "no socket".into(),
-        },
-    )));
+    let task = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: seen.last().unwrap().clone(),
+        reason: "no socket".into(),
+    }));
     assert_eq!(task.units(), 0, "no more restarts");
     assert_eq!(crate::diagnostics::logged_count(said), logged + 1);
 
     // A start alone does not reset the count; a connection served does.
     app.agent.restarts = 3;
     let boot_id = app.agent.boot_id().unwrap().to_string();
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id: boot_id.clone(),
-            endpoint: "/live.sock".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: boot_id.clone(),
+        endpoint: "/live.sock".into(),
+    }));
     assert_eq!(app.agent.restarts, 3);
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerHealthy {
-            boot_id: "0000000000000000".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerHealthy {
+        boot_id: "0000000000000000".into(),
+    }));
     assert_eq!(
         app.agent.restarts, 3,
         "a stale listener's health is not ours"
     );
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerHealthy { boot_id },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerHealthy { boot_id }));
     assert_eq!(app.agent.restarts, 0);
 }
 
@@ -717,24 +688,18 @@ fn a_listener_that_starts_and_fails_every_time_is_restarted_at_most_five_times()
     let mut scheduled = 0;
     for _round in 0..12 {
         let boot_id = app.agent.boot_id().unwrap().to_string();
-        let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-            AgentMsg::ListenerStarted {
-                boot_id: boot_id.clone(),
-                endpoint: "/live.sock".into(),
-            },
-        )));
-        let task = app.update(Message::File(crate::app::FileMsg::Agent(
-            AgentMsg::ListenerFailed {
-                boot_id: boot_id.clone(),
-                reason: "accept failed".into(),
-            },
-        )));
+        let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+            boot_id: boot_id.clone(),
+            endpoint: "/live.sock".into(),
+        }));
+        let task = app.update(Message::Agent(AgentMsg::ListenerFailed {
+            boot_id: boot_id.clone(),
+            reason: "accept failed".into(),
+        }));
         if task.units() > 0 {
             scheduled += 1;
         }
-        let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-            AgentMsg::RestartListener { boot_id },
-        )));
+        let _t = app.update(Message::Agent(AgentMsg::RestartListener { boot_id }));
     }
     assert_eq!(scheduled, MAX_RESTARTS, "no endless restart loop");
     // The ids of the listeners that ended stay for the quit path, bounded.
@@ -748,12 +713,10 @@ fn the_quit_path_remembers_the_last_boot_ids_and_forgets_the_oldest() {
     let mut ids = Vec::new();
     for _ in 0..(MAX_TOUCHED + 8) {
         let boot_id = app.agent.boot_id().unwrap().to_string();
-        let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-            AgentMsg::ListenerStarted {
-                boot_id: boot_id.clone(),
-                endpoint: "/live.sock".into(),
-            },
-        )));
+        let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+            boot_id: boot_id.clone(),
+            endpoint: "/live.sock".into(),
+        }));
         ids.push(boot_id);
         app.agent.rotate_ids();
     }
@@ -778,19 +741,15 @@ fn a_late_registry_write_of_an_ended_listener_is_removed_on_quit() {
         ));
     super::super::files::prepare_dir(&dir).unwrap();
     let old = app.agent.boot_id().unwrap().to_string();
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id: old.clone(),
-            endpoint: "/run/old.sock".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: old.clone(),
+        endpoint: "/run/old.sock".into(),
+    }));
     // The listener fails and is replaced; its slow write lands afterwards.
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerFailed {
-            boot_id: old.clone(),
-            reason: "gone".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: old.clone(),
+        reason: "gone".into(),
+    }));
     app.agent.rotate_ids();
     let late = registry::Owner {
         pid: std::process::id(),
@@ -817,8 +776,7 @@ fn the_listener_reports_healthy_once_after_its_first_connection() {
         let next = tokio::time::timeout(Duration::from_secs(5), messages.next())
             .await
             .expect("a message after the connection");
-        let Some(Message::File(FileMsg::Agent(AgentMsg::ListenerHealthy { boot_id }))) = next
-        else {
+        let Some(Message::Agent(AgentMsg::ListenerHealthy { boot_id })) = next else {
             panic!("the first connection did not report the listener healthy");
         };
         assert_eq!(boot_id, config.boot_id);
@@ -835,47 +793,37 @@ fn the_listener_reports_healthy_once_after_its_first_connection() {
 fn a_late_registry_failure_of_a_gone_listener_does_not_hide_the_next_ones() {
     let mut app = app_at_work();
     let current = app.agent.boot_id().unwrap().to_string();
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerFailed {
-            boot_id: current.clone(),
-            reason: "closed".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: current.clone(),
+        reason: "closed".into(),
+    }));
     // A failure from the listener that is gone arrives late.
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::RegistrySynced {
-            boot_id: "0000000000000000".into(),
-            result: Err("late failure of the old one".into()),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::RegistrySynced {
+        boot_id: "0000000000000000".into(),
+        result: Err("late failure of the old one".into()),
+    }));
     assert!(!app.agent.registry_retry, "a stale result is ignored");
 
     let boot_id = app.agent.boot_id().unwrap().to_string();
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id: boot_id.clone(),
-            endpoint: "/live.sock".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: boot_id.clone(),
+        endpoint: "/live.sock".into(),
+    }));
     let said = "first failure of the new one";
     let logged = crate::diagnostics::logged_count(said);
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::RegistrySynced {
-            boot_id,
-            result: Err(said.into()),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::RegistrySynced {
+        boot_id,
+        result: Err(said.into()),
+    }));
     assert_eq!(crate::diagnostics::logged_count(said), logged + 1);
 
     // A start also clears what the last listener left.
     app.agent.registry_retry = true;
     let boot_id = app.agent.boot_id().unwrap().to_string();
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id,
-            endpoint: "/live.sock".into(),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
+        endpoint: "/live.sock".into(),
+    }));
     assert!(!app.agent.registry_retry);
 }
 
@@ -884,29 +832,21 @@ fn a_retry_tick_waits_for_a_registry_write_still_running() {
     let mut app = app_at_work();
     let boot_id = app.agent.boot_id().unwrap().to_string();
     // The write is started and has not finished.
-    let started = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::ListenerStarted {
-            boot_id: boot_id.clone(),
-            endpoint: "/live.sock".into(),
-        },
-    )));
+    let started = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: boot_id.clone(),
+        endpoint: "/live.sock".into(),
+    }));
     assert!(started.units() > 0);
     assert!(app.agent.registry_in_flight);
-    let tick = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::RegistryRetryTick,
-    )));
+    let tick = app.update(Message::Agent(AgentMsg::RegistryRetryTick));
     assert_eq!(tick.units(), 0, "no second write while one is running");
 
     // Once it has finished, the tick works again.
-    let _t = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::RegistrySynced {
-            boot_id,
-            result: Err("a project is held".into()),
-        },
-    )));
+    let _t = app.update(Message::Agent(AgentMsg::RegistrySynced {
+        boot_id,
+        result: Err("a project is held".into()),
+    }));
     assert!(!app.agent.registry_in_flight);
-    let tick = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::RegistryRetryTick,
-    )));
+    let tick = app.update(Message::Agent(AgentMsg::RegistryRetryTick));
     assert!(tick.units() > 0);
 }

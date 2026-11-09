@@ -222,6 +222,7 @@ fn two_pad_part(
                 name: net_name(net),
             }),
             roundrect_ratio: 0.0,
+            rotation: 0.0,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
