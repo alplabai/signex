@@ -65,6 +65,16 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
             }
         };
         let name = entry_file_name(&canonical);
+        // The other instance of this project that is alive keeps its entry.
+        let existing = read_entry(&registry.join(&name));
+        if !may_take_over(existing.as_ref(), owner, pid_alive) {
+            let held = existing.map_or(0, |entry| entry.pid);
+            problems.push(format!(
+                "{} is also open in process {held}, which keeps its entry",
+                canonical.display()
+            ));
+            continue;
+        }
         let entry = Entry {
             format: FORMAT,
             project: canonical.to_string_lossy().into_owned(),
@@ -85,6 +95,51 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
         Ok(())
     } else {
         Err(problems.join("; "))
+    }
+}
+
+/// Whether this run may write over `existing`, the entry already at its
+/// file: there is none, it is ours (this process, or this boot id), or its
+/// process is gone. Another live process keeps its entry.
+fn may_take_over(existing: Option<&Entry>, owner: &Owner, alive: impl Fn(u32) -> bool) -> bool {
+    existing.is_none_or(|entry| {
+        entry.pid == owner.pid || entry.boot_id == owner.boot_id || !alive(entry.pid)
+    })
+}
+
+/// Is a process with this id running? A process of another user counts: it
+/// exists, though it cannot be signalled.
+#[cfg(unix)]
+fn pid_alive(pid: u32) -> bool {
+    let Ok(pid) = libc::pid_t::try_from(pid) else {
+        return false;
+    };
+    if pid == 0 {
+        return false;
+    }
+    // SAFETY: signal 0 sends nothing; it only reports whether the process exists.
+    let found = unsafe { libc::kill(pid, 0) } == 0;
+    found || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(windows)]
+fn pid_alive(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_ACCESS_DENIED, GetLastError, STILL_ACTIVE,
+    };
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    // SAFETY: plain calls; the handle is closed before returning.
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            return GetLastError() == ERROR_ACCESS_DENIED;
+        }
+        let mut code = 0_u32;
+        let read = GetExitCodeProcess(process, &mut code);
+        CloseHandle(process);
+        read != 0 && code == STILL_ACTIVE as u32
     }
 }
 
@@ -226,16 +281,14 @@ mod tests {
     }
 
     #[test]
-    fn a_closed_project_loses_its_entry_and_other_runs_keep_theirs() {
+    fn a_closed_project_loses_its_entry() {
         let dir = scratch();
         let (a, b) = (
             project(dir.path(), "a.snxprj"),
             project(dir.path(), "b.snxprj"),
         );
-        let (ours, theirs) = (owner(41, "bb"), owner(42, "cc"));
-        sync(dir.path(), &theirs, std::slice::from_ref(&a)).unwrap();
+        let ours = owner(41, "bb");
         sync(dir.path(), &ours, &[a.clone(), b.clone()]).unwrap();
-        // One file name per project: the later write is the entry of `a`.
         assert_eq!(entries(dir.path()).len(), 2);
 
         sync(dir.path(), &ours, std::slice::from_ref(&a)).unwrap();
@@ -243,6 +296,78 @@ mod tests {
 
         sync(dir.path(), &ours, &[]).unwrap();
         assert!(entries(dir.path()).is_empty(), "no project, no entry");
+    }
+
+    fn entry_pid(dir: &Path, project: &Path) -> u32 {
+        let name = entry_file_name(&std::fs::canonicalize(project).unwrap());
+        read_entry(&dir.join(REGISTRY_DIR).join(name))
+            .expect("an entry")
+            .pid
+    }
+
+    /// Process 1 (init, launchd) is always running and is not this process.
+    #[cfg(unix)]
+    #[test]
+    fn a_live_other_instance_keeps_its_entry_and_our_close_does_not_remove_it() {
+        let dir = scratch();
+        let a = project(dir.path(), "a.snxprj");
+        let (ours, theirs) = (owner(41, "bb"), owner(1, "cc"));
+        sync(dir.path(), &theirs, std::slice::from_ref(&a)).unwrap();
+
+        let why = sync(dir.path(), &ours, std::slice::from_ref(&a)).unwrap_err();
+        assert!(why.contains("also open in process 1"), "{why}");
+        assert_eq!(entry_pid(dir.path(), &a), 1, "theirs is kept");
+
+        // Our project closes, and the exit: theirs is still there.
+        sync(dir.path(), &ours, &[]).unwrap();
+        remove_all(dir.path(), &ours).unwrap();
+        assert_eq!(entry_pid(dir.path(), &a), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_entry_of_a_process_that_is_gone_is_taken_over() {
+        let dir = scratch();
+        let a = project(dir.path(), "a.snxprj");
+        // Above every system's process id limit, so no process has it.
+        let dead = 2_000_000_000;
+        assert!(!pid_alive(dead));
+        assert!(pid_alive(std::process::id()));
+        sync(dir.path(), &owner(dead, "dd"), std::slice::from_ref(&a)).unwrap();
+
+        sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).expect("taken over");
+        assert_eq!(entry_pid(dir.path(), &a), 41);
+    }
+
+    #[test]
+    fn only_a_live_process_that_is_not_us_keeps_an_entry() {
+        let ours = owner(41, "bb");
+        let entry = |pid: u32, boot: &str| Entry {
+            format: FORMAT,
+            project: "p".into(),
+            pid,
+            socket: "s".into(),
+            boot_id: boot.into(),
+        };
+        let live = |_: u32| true;
+        let gone = |_: u32| false;
+        assert!(may_take_over(None, &ours, live), "no entry");
+        assert!(
+            may_take_over(Some(&entry(41, "zz")), &ours, live),
+            "our process"
+        );
+        assert!(
+            may_take_over(Some(&entry(7, "bb")), &ours, live),
+            "our boot id"
+        );
+        assert!(
+            may_take_over(Some(&entry(7, "cc")), &ours, gone),
+            "a dead process"
+        );
+        assert!(
+            !may_take_over(Some(&entry(7, "cc")), &ours, live),
+            "a live one"
+        );
     }
 
     #[test]

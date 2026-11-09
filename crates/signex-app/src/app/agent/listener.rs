@@ -6,8 +6,9 @@
 //! `Message::Agent` that `Signex::update` answers, so nothing here touches the
 //! app's state. See `docs/AGENT_SOCKET.md`.
 
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use iced::Subscription;
@@ -37,16 +38,31 @@ pub(super) const IDLE_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_DRAINED_BYTES: u64 = 64 * 1024 * 1024;
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// How long writing one reply may take; a client that does not read its
+/// replies is dropped after it.
+pub(super) const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Failed accepts in a row before the listener gives up.
 const MAX_ACCEPT_FAILURES: u32 = 20;
 
-/// What one run of the listener is made from. It is the subscription's
-/// identity: a new boot, folder or token is a new listener.
-#[derive(Clone, Hash)]
+/// What one run of the listener is made from. Its identity (the subscription's)
+/// is the folder, the boot id and the token: a new boot or token is a new
+/// listener.
+#[derive(Clone)]
 pub(super) struct ListenerConfig {
     pub(super) dir: PathBuf,
     pub(super) boot_id: String,
     pub(super) token: Token,
+    /// Held while the registry is written or removed.
+    pub(super) registry_lock: Arc<Mutex<()>>,
+}
+
+impl Hash for ListenerConfig {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.dir.hash(state);
+        self.boot_id.hash(state);
+        self.token.hash(state);
+    }
 }
 
 /// The subscription that runs the listener, or none while `config` is `None`.
@@ -67,22 +83,25 @@ fn run(config: ListenerConfig) -> impl Stream<Item = Message> {
 struct Guard {
     dir: PathBuf,
     boot_id: String,
+    registry_lock: Arc<Mutex<()>>,
 }
 
 impl Drop for Guard {
     fn drop(&mut self) {
-        cleanup(&self.dir, &self.boot_id);
+        cleanup(&self.dir, &self.boot_id, &self.registry_lock);
     }
 }
 
-/// Remove the token, the socket and the registry entries of `boot_id`. Safe to
+/// Remove the token, the socket and the registry entries of `boot_id`, under
+/// the registry lock so a write in flight cannot bring an entry back. Safe to
 /// repeat; what cannot be removed is said in Messages.
-pub(super) fn cleanup(dir: &std::path::Path, boot_id: &str) {
+pub(super) fn cleanup(dir: &std::path::Path, boot_id: &str, registry_lock: &Mutex<()>) {
     let owner = Owner {
         pid: std::process::id(),
         boot_id: boot_id.to_string(),
         endpoint: endpoint_name(dir, boot_id),
     };
+    let _held = registry_lock.lock().unwrap_or_else(PoisonError::into_inner);
     let results = [
         files::remove_if_ours(&token_path(dir, boot_id)),
         Listener::remove(dir, boot_id),
@@ -107,6 +126,7 @@ async fn start(config: &ListenerConfig) -> Result<(Listener, Guard), String> {
         let guard = Guard {
             dir: config.dir.clone(),
             boot_id: config.boot_id.clone(),
+            registry_lock: config.registry_lock.clone(),
         };
         files::write_private(
             &token_path(&config.dir, &config.boot_id),
@@ -125,13 +145,15 @@ async fn start(config: &ListenerConfig) -> Result<(Listener, Guard), String> {
 pub(super) async fn serve(config: ListenerConfig, mut out: mpsc::Sender<Message>) {
     let (mut listener, _guard) = match start(&config).await {
         Ok(started) => started,
-        Err(why) => {
-            say(&mut out, AgentMsg::ListenerFailed(why)).await;
+        Err(reason) => {
+            let boot_id = config.boot_id.clone();
+            say(&mut out, AgentMsg::ListenerFailed { boot_id, reason }).await;
             return;
         }
     };
     let endpoint = endpoint_name(&config.dir, &config.boot_id);
-    if !say(&mut out, AgentMsg::ListenerStarted { endpoint }).await {
+    let boot_id = config.boot_id.clone();
+    if !say(&mut out, AgentMsg::ListenerStarted { boot_id, endpoint }).await {
         return;
     }
     let mut connections = FuturesUnordered::new();
@@ -142,7 +164,9 @@ pub(super) async fn serve(config: ListenerConfig, mut out: mpsc::Sender<Message>
                 Err(error) => {
                     failures += 1;
                     if failures > MAX_ACCEPT_FAILURES {
-                        say(&mut out, AgentMsg::ListenerFailed(format!("accept failed: {error}"))).await;
+                        let boot_id = config.boot_id.clone();
+                        let reason = format!("accept failed: {error}");
+                        say(&mut out, AgentMsg::ListenerFailed { boot_id, reason }).await;
                         return;
                     }
                     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -179,8 +203,21 @@ async fn say(out: &mut mpsc::Sender<Message>, msg: AgentMsg) -> bool {
 /// One connection: each line is a request, answered by one line, in order.
 /// The connection ends when the client closes it, sits idle too long, sends a
 /// line over the limit or the app stops answering.
-pub(super) async fn serve_connection<S>(stream: S, pid: Option<u32>, mut out: mpsc::Sender<Message>)
+pub(super) async fn serve_connection<S>(stream: S, pid: Option<u32>, out: mpsc::Sender<Message>)
 where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    serve_connection_within(stream, pid, out, WRITE_TIMEOUT).await;
+}
+
+/// [`serve_connection`] closing the connection when a reply takes longer than
+/// `write_timeout` to write.
+pub(super) async fn serve_connection_within<S>(
+    stream: S,
+    pid: Option<u32>,
+    mut out: mpsc::Sender<Message>,
+    write_timeout: Duration,
+) where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     let (read, mut write) = tokio::io::split(stream);
@@ -203,7 +240,11 @@ where
             write.write_all(b"\n").await?;
             write.flush().await
         };
-        if written.await.is_err() {
+        // A client that does not read must not hold its slot for ever.
+        if !matches!(
+            tokio::time::timeout(write_timeout, written).await,
+            Ok(Ok(()))
+        ) {
             return;
         }
         if last {

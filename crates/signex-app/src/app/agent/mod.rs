@@ -42,10 +42,11 @@ pub enum AgentMsg {
     Request(AgentCall),
     /// A client was turned away at connect, before a byte was read.
     PeerRefused { pid: Option<u32>, reason: String },
-    /// The listener is up at `endpoint` (a socket path or a pipe name).
-    ListenerStarted { endpoint: String },
-    /// The listener could not start or gave up.
-    ListenerFailed(String),
+    /// The listener of `boot_id` is up at `endpoint` (a socket path or a pipe
+    /// name). A report of a boot id that is no longer the app's is ignored.
+    ListenerStarted { boot_id: String, endpoint: String },
+    /// The listener of `boot_id` could not start or gave up.
+    ListenerFailed { boot_id: String, reason: String },
     /// A registry write finished.
     RegistrySynced(Result<(), String>),
 }

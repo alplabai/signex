@@ -22,8 +22,10 @@ pub(crate) struct AgentState {
     /// True while an agent request runs, so the code under it can tell an
     /// agent's call from a click.
     pub(crate) serving: bool,
-    /// Serialises registry writes, which run on worker threads.
+    /// Serialises registry writes and removals, which run on worker threads.
     pub(super) registry_lock: Arc<Mutex<()>>,
+    /// The boot ids whose files this app may have made, for the quit path.
+    pub(super) touched: Vec<String>,
 }
 
 impl AgentState {
@@ -36,6 +38,7 @@ impl AgentState {
             registered: None,
             serving: false,
             registry_lock: Arc::default(),
+            touched: Vec::new(),
         }
     }
 
@@ -58,6 +61,7 @@ impl AgentState {
             dir: self.runtime_dir.as_ref().ok()?.clone(),
             boot_id: boot_id.clone(),
             token: token.clone(),
+            registry_lock: self.registry_lock.clone(),
         })
     }
 
@@ -84,8 +88,7 @@ impl AgentState {
         self.ids = boot_id().zip(Token::generate());
     }
 
-    /// This boot's id, for the tests that look for its files.
-    #[cfg(test)]
+    /// The id of the listener the app wants now.
     pub(super) fn boot_id(&self) -> Option<&str> {
         self.ids.as_ref().map(|(id, _)| id.as_str())
     }

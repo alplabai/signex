@@ -235,6 +235,46 @@ fn a_document_that_is_not_in_an_open_project_is_refused() {
 }
 
 #[test]
+fn document_less_queries_never_show_a_loose_sheet_to_an_agent() {
+    let mut app = app_at_work();
+    let loose_id = uuid::Uuid::from_u128(SHEET_A + 50);
+    fixture::add_sheet_with(&mut app, &path("loose.snxsch"), sheet(SHEET_A + 50));
+    fixture::activate(&mut app, &path("b.snxsch"));
+    app.refresh_panel_ctx();
+    // A person's own view still has it.
+    let loose = path("loose.snxsch");
+    assert!(
+        app.document_entries()
+            .iter()
+            .any(|e| e.path.as_deref() == Some(loose.as_path()))
+    );
+    let before = held(&app);
+
+    for (id, args) in [
+        ("list_documents", json!({})),
+        ("find_items", json!({"kind": "wire"})),
+        ("resolve", json!({"id": loose_id.to_string()})),
+    ] {
+        let reply = super::call(&mut app, id, args);
+        let text = reply.to_string();
+        assert!(!text.contains("loose.snxsch"), "{id}: {text}");
+        if id == "resolve" {
+            // The id is echoed back; what it names is not found.
+            assert_eq!(reply["data"]["found"], false, "{text}");
+        } else {
+            assert!(!text.contains(&loose_id.to_string()), "{id}: {text}");
+        }
+        assert!(reply["status"] == "answered" || reply["status"] == "refused");
+    }
+    let listed = super::call(&mut app, "list_documents", json!({}));
+    assert!(
+        listed.to_string().contains("a.snxsch"),
+        "project sheets stay"
+    );
+    assert_eq!(held(&app), before);
+}
+
+#[test]
 fn a_file_a_project_names_outside_its_folder_is_not_read_for_an_agent_but_is_for_a_person() {
     let mut app = app_at_work();
     let outside = std::env::temp_dir().join("snx-1924-outside.snxsch");

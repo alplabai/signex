@@ -50,6 +50,12 @@ impl Listener {
     /// Bind the socket for `boot_id` in `dir` and make it 0600. A stale file
     /// at the path is removed only if it is our own plain file or socket; a
     /// link or another user's file stops the start.
+    ///
+    /// The socket is made with the process's umask and `chmod`ed right after.
+    /// A `umask` call would be process-wide and race every other thread that
+    /// creates a file, so it is not used: until the `chmod` the socket is
+    /// still unreachable to others, because `dir` is ours and mode 0700
+    /// (checked by `files::prepare_dir` before this runs).
     pub(in crate::app::agent) fn bind(dir: &Path, boot_id: &str) -> io::Result<Self> {
         let path = socket_path(dir, boot_id);
         files::remove_if_ours(&path).map_err(io::Error::other)?;
@@ -108,6 +114,26 @@ mod tests {
         assert!(!peer_allowed(502, 501));
         assert!(!peer_allowed(501, 0));
         assert!(!peer_allowed(u32::MAX, 501));
+    }
+
+    #[test]
+    fn a_bound_socket_is_0600_and_sits_in_a_0700_folder_whatever_the_umask() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let root = tempfile::Builder::new()
+            .prefix("snx-1924-bind")
+            .tempdir()
+            .unwrap();
+        let dir = root.path().join("run");
+        files::prepare_dir(&dir).unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _guard = rt.enter();
+        let _listener = Listener::bind(&dir, "bound").expect("bound");
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o700);
+        assert_eq!(mode(&socket_path(&dir, "bound")), 0o600);
     }
 
     #[test]

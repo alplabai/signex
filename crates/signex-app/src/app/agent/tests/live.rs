@@ -106,7 +106,7 @@ async fn start(
         .next()
         .await
         .expect("the listener says how it started");
-    let Message::Agent(AgentMsg::ListenerStarted { endpoint }) = &first else {
+    let Message::Agent(AgentMsg::ListenerStarted { endpoint, .. }) = &first else {
         panic!("the listener did not start: {first:?}");
     };
     let socket = PathBuf::from(endpoint);
@@ -338,9 +338,14 @@ fn the_listener_does_not_start_in_a_folder_that_is_too_open_or_over_a_link() {
         std::fs::DirBuilder::new().mode(0o755).create(&dir).unwrap();
         let (sender, mut messages) = mpsc::channel(4);
         tokio::spawn(serve(config.clone(), sender));
-        let Some(Message::Agent(AgentMsg::ListenerFailed(why))) = messages.next().await else {
+        let Some(Message::Agent(AgentMsg::ListenerFailed {
+            boot_id,
+            reason: why,
+        })) = messages.next().await
+        else {
             panic!("the listener started in an open folder");
         };
+        assert_eq!(boot_id, config.boot_id, "a failure names its listener");
         assert!(why.contains("wider than 700"), "{why}");
         assert!(!dir.join(format!("{}.sock", config.boot_id)).exists());
         assert!(!token_path(&dir, &config.boot_id).exists());
@@ -353,7 +358,9 @@ fn the_listener_does_not_start_in_a_folder_that_is_too_open_or_over_a_link() {
         symlink(&precious, &stale).unwrap();
         let (sender, mut messages) = mpsc::channel(4);
         tokio::spawn(serve(config.clone(), sender));
-        let Some(Message::Agent(AgentMsg::ListenerFailed(why))) = messages.next().await else {
+        let Some(Message::Agent(AgentMsg::ListenerFailed { reason: why, .. })) =
+            messages.next().await
+        else {
             panic!("the listener started over a link");
         };
         assert!(why.contains("is a link"), "{why}");
@@ -382,7 +389,9 @@ fn the_registry_is_written_for_open_projects_and_removed_on_close_and_on_exit() 
     super::super::files::prepare_dir(&dir).expect("the runtime folder");
 
     // The listener reports it is up: the open project gets its entry.
+    let boot_id = app.agent.boot_id().unwrap().to_string();
     let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
         endpoint: "/run/test.sock".into(),
     }));
     driver
@@ -415,4 +424,121 @@ fn the_registry_is_written_for_open_projects_and_removed_on_close_and_on_exit() 
     let quit = app.flush_quit_writes_then(iced::Task::none());
     driver.settle(&mut app, quit).expect("the exit path ran");
     assert!(!entry.exists(), "the exit removed the entry");
+}
+
+#[test]
+fn quitting_with_the_setting_off_removes_an_entry_of_this_run_that_outlived_its_listener() {
+    let root = scratch();
+    let (mut app, _config, dir) = app_and_config(root.path());
+    let project = app.document_state.projects[0].path.clone();
+    std::fs::create_dir_all(project.parent().unwrap()).unwrap();
+    std::fs::write(&project, "{}").unwrap();
+    let entry = dir
+        .join(super::super::files::REGISTRY_DIR)
+        .join(registry::entry_file_name(
+            &std::fs::canonicalize(&project).unwrap(),
+        ));
+    super::super::files::prepare_dir(&dir).unwrap();
+    let mut driver = crate::task_driver::TaskDriver::new();
+    let boot_id = app.agent.boot_id().unwrap().to_string();
+    let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
+        endpoint: "/run/test.sock".into(),
+    }));
+    driver.settle(&mut app, task).unwrap();
+    assert!(entry.exists());
+
+    // The setting is off, and the listener's own cleanup never ran.
+    app.ui_state.agent_connections_enabled = false;
+    let quit = app.flush_quit_writes_then(iced::Task::none());
+    driver.settle(&mut app, quit).unwrap();
+    assert!(!entry.exists(), "the quit path removed it");
+}
+
+#[test]
+fn cleanup_waits_for_a_registry_write_in_flight() {
+    use std::sync::{Arc, Mutex, mpsc};
+    let dir = scratch();
+    let lock = Arc::new(Mutex::new(()));
+    let held = lock.lock().unwrap();
+    let (done, finished) = mpsc::channel();
+    let worker = {
+        let (dir, lock) = (dir.path().to_path_buf(), lock.clone());
+        std::thread::spawn(move || {
+            super::super::listener::cleanup(&dir, "0123456789abcdef", &lock);
+            done.send(()).unwrap();
+        })
+    };
+    assert!(
+        finished.recv_timeout(Duration::from_millis(300)).is_err(),
+        "cleanup ran while a registry write held the lock"
+    );
+    drop(held);
+    finished
+        .recv_timeout(Duration::from_secs(10))
+        .expect("cleanup runs once the lock is free");
+    worker.join().unwrap();
+}
+
+#[test]
+fn a_late_report_from_a_replaced_listener_changes_nothing() {
+    let root = scratch();
+    let (mut app, _config, _dir) = app_and_config(root.path());
+    let current = app.agent.boot_id().unwrap().to_string();
+
+    let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: "0000000000000000".into(),
+        endpoint: "/removed.sock".into(),
+    }));
+    assert_eq!(task.units(), 0, "no registry write for a stale listener");
+    assert!(
+        app.agent.endpoint.is_none(),
+        "not pointed at a removed socket"
+    );
+
+    // A stale failure does not switch the live listener off.
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: current,
+        endpoint: "/live.sock".into(),
+    }));
+    assert_eq!(app.agent.endpoint.as_deref(), Some("/live.sock"));
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: "0000000000000000".into(),
+        reason: "old".into(),
+    }));
+    assert_eq!(app.agent.endpoint.as_deref(), Some("/live.sock"));
+
+    let current = app.agent.boot_id().unwrap().to_string();
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: current,
+        reason: "gave up".into(),
+    }));
+    assert!(app.agent.endpoint.is_none(), "its own failure does");
+}
+
+#[test]
+fn a_client_that_never_reads_its_reply_is_dropped_after_the_write_timeout() {
+    use super::super::listener::serve_connection_within;
+    use super::super::{AgentMsg, Input};
+    let rt = runtime();
+    rt.block_on(async {
+        // A pipe that holds 16 bytes, and a client that never reads from it.
+        let (server_end, mut client) = tokio::io::duplex(16);
+        let (sender, mut messages) = mpsc::channel(4);
+        let connection = tokio::spawn(serve_connection_within(
+            server_end,
+            Some(7),
+            sender,
+            Duration::from_millis(200),
+        ));
+        client.write_all(b"{}\n").await.unwrap();
+        let Some(Message::Agent(AgentMsg::Request(call))) = messages.next().await else {
+            panic!("no request reached the app");
+        };
+        assert!(matches!(call.input, Input::Line(_)));
+        call.reply.send("x".repeat(64 * 1024));
+
+        let ended = tokio::time::timeout(Duration::from_secs(10), connection).await;
+        assert!(ended.is_ok(), "the slot is still held");
+    });
 }

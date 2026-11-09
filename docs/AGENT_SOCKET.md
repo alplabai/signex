@@ -33,7 +33,12 @@ when `update` has run the request. No window is created and nothing in
 - macOS and Linux: a Unix socket `<runtime dir>/<boot id>.sock`, mode 0600.
 - Windows: the named pipe `\\.\pipe\signex-agent-<boot id>`.
 - No TCP port, no network.
-- At most 8 connections at once; one that sits idle for 120 s is closed.
+- At most 8 connections at once; one that sits idle for 120 s is closed, and
+  so is one that does not read a reply within 30 s.
+- The listener's reports (`ListenerStarted`, `ListenerFailed`) carry its boot
+  id; a report of a listener the app has since replaced is ignored.
+- On Windows a client that connects and closes at once breaks the waiting pipe
+  instance; it is replaced with a fresh one and is not counted as a failure.
 
 ## Wire format
 
@@ -85,7 +90,10 @@ step with `revert`), a command with a file path operand (`save_document_as`,
 
 `open_document` and `new_document` are refused on this channel: they take a
 path, and opening a tab changes what the person sees. A document that is not
-part of a project open in this app (a loose sheet) is refused too.
+part of a project open in this app (a loose sheet) is refused too, and while
+an agent's request runs `document_entries` lists only project-owned documents,
+so `list_documents`, `find_items` and `resolve` never show a loose sheet
+either. A person's own view and the headless run are not filtered.
 
 ## Security
 
@@ -97,7 +105,13 @@ part of a project open in this app (a loose sheet) is refused too.
    user running the app: `transport::unix::peer_allowed`, one decision, tested
    alone. On Windows the client's process is read from the pipe and its token's
    user must equal ours (`EqualSid`); a process that cannot be opened is
-   refused. A refused peer is logged (`PeerRefused`) and nothing is read.
+   refused. That fails closed: an elevated client of the same user connecting to
+   a Signex that is not elevated cannot be opened, so it is refused; run both
+   at the same level. A refused peer is logged (`PeerRefused`) and nothing is
+   read. The socket itself is made with the process's umask and `chmod`ed 0600
+   straight after; a `umask` call would be process-wide and race other threads'
+   file creation, and until the `chmod` the socket is unreachable to others
+   because its folder is ours and 0700.
 3. **Session token.** 256 random bits from the OS, made at boot and again each
    time the setting goes off (so an old token never works again and a listener
    being dropped never removes the files of the next one), written to
@@ -168,8 +182,15 @@ A client finds its project's entry by the digest of the canonical path, opens
 `socket` and reads the token from `<boot_id>.token` in the same folder as the
 socket (the pipe's token is in the runtime directory). An entry whose `pid` is
 dead or whose socket refuses is stale: the client removes it, after the same
-owner and link check the app makes. An app removes only entries that carry its
-own `pid` and `boot_id`; a later run that rewrites an entry takes it over.
+owner and link check the app makes.
+
+Two instances with the same project: an app removes only entries that carry
+its own `pid` and `boot_id`, and writes over an entry only if there is none,
+it is its own (same `pid` or same `boot_id`) or the entry's process is gone.
+The entry of another live process is kept and Messages says the project is
+also open there; closing the project in one instance never unregisters the
+other. The registry is written and removed under one lock, so a write in
+flight cannot bring back an entry the exit removed.
 
 ## Known limits
 

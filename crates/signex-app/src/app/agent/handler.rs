@@ -47,19 +47,28 @@ impl Signex {
                 ));
                 Task::none()
             }
-            AgentMsg::ListenerStarted { endpoint } => {
-                // A start that lands after the setting went off is ignored;
-                // the subscription is already being dropped.
-                if !self.ui_state.agent_connections_enabled {
+            AgentMsg::ListenerStarted { boot_id, endpoint } => {
+                // A start that lands after the setting went off, or from a
+                // listener the app has since replaced, is ignored; that
+                // subscription is already being dropped.
+                if !self.ui_state.agent_connections_enabled
+                    || self.agent.boot_id() != Some(boot_id.as_str())
+                {
                     return Task::none();
                 }
                 crate::diagnostics::log_info(format!("Agent connections: listening on {endpoint}"));
                 self.agent.endpoint = Some(endpoint);
                 self.agent.registered = None;
+                if !self.agent.touched.contains(&boot_id) {
+                    self.agent.touched.push(boot_id);
+                }
                 self.sync_agent_registry().unwrap_or_else(Task::none)
             }
-            AgentMsg::ListenerFailed(why) => {
-                crate::diagnostics::log_warning(format!("Agent connections: stopped: {why}"));
+            AgentMsg::ListenerFailed { boot_id, reason } => {
+                if self.agent.boot_id() != Some(boot_id.as_str()) {
+                    return Task::none();
+                }
+                crate::diagnostics::log_warning(format!("Agent connections: stopped: {reason}"));
                 self.agent.listener_closed();
                 Task::none()
             }
@@ -139,18 +148,32 @@ impl Signex {
 
     /// The quit path: close the listener and remove its files before `next`,
     /// so an exit that skips the subscription's own cleanup leaves none.
+    ///
+    /// It also cleans the boot ids a listener of this run reported, with the
+    /// setting off: an entry that outlived its listener goes too. A run that
+    /// never listened has nothing to clean and adds no task.
     pub(crate) fn agent_cleanup_then(&mut self, next: Task<Message>) -> Task<Message> {
-        let Some(config) = self
-            .agent
-            .listener_config(self.ui_state.agent_connections_enabled)
-        else {
+        let mut ids = std::mem::take(&mut self.agent.touched);
+        if self.ui_state.agent_connections_enabled
+            && let Some(current) = self.agent.boot_id()
+            && !ids.iter().any(|id| id == current)
+        {
+            ids.push(current.to_string());
+        }
+        let Ok(dir) = self.agent.runtime_dir().cloned() else {
             return next;
         };
+        if ids.is_empty() {
+            return next;
+        }
         self.agent.listener_closed();
+        let lock = self.agent.registry_lock.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    listener::cleanup(&config.dir, &config.boot_id);
+                    for id in &ids {
+                        listener::cleanup(&dir, id, &lock);
+                    }
                 })
                 .await
                 .ok();

@@ -192,7 +192,18 @@ impl Listener {
     }
 
     pub(in crate::app::agent) async fn accept(&mut self) -> io::Result<Accepted> {
-        self.next.connect().await?;
+        // A client that connects and closes at once breaks the waiting
+        // instance. It is replaced with a fresh one (same descriptor, local
+        // clients only, not the first instance), and that is not a failure
+        // of the listener: only a run of them, or a failed replacement, is.
+        let mut broken = 0_u32;
+        while let Err(error) = self.next.connect().await {
+            broken += 1;
+            if !super::replace_broken_instance(broken) {
+                return Err(error);
+            }
+            self.next = create_instance(&self.name, &self.descriptor, false)?;
+        }
         let fresh = create_instance(&self.name, &self.descriptor, false)?;
         let conn = std::mem::replace(&mut self.next, fresh);
         let mut pid = 0_u32;
