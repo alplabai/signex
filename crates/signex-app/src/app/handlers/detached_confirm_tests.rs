@@ -142,7 +142,7 @@ fn cancel_leaves_everything_open_and_discard_all_exits() {
 #[test]
 fn a_vanished_quit_prompt_window_declines_the_system_quit_request() {
     let _ = crate::diagnostics::init_logging();
-    let needle = "Quit: cancelled, Signex stays open";
+    let needle = "Quit: not quitting, Signex stays open";
     let logged_before = crate::diagnostics::logged_count(needle);
     let (mut app, main) = quit_app();
     let confirm = raise_quit_confirm(&mut app, main);

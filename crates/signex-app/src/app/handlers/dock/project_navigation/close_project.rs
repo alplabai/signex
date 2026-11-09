@@ -784,7 +784,7 @@ impl Signex {
     /// cancel, and say so in the Messages panel (it does nothing when no
     /// request is pending).
     pub(crate) fn decline_quit() -> Task<Message> {
-        crate::diagnostics::log_info("Quit: cancelled, Signex stays open");
+        crate::diagnostics::log_info("Quit: not quitting, Signex stays open");
         iced::system::cancel_quit()
     }
 

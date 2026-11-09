@@ -317,6 +317,11 @@ pub(crate) fn assert_quit_declined(task: Task<Message>) {
     assert_eq!(driver.cancelled_quits(), 1, "the quit was not cancelled");
     assert!(!driver.has_exited(), "the app exited over a declined quit");
     assert!(outputs.is_empty(), "a declined quit did more: {outputs:?}");
+    assert_eq!(
+        driver.dropped_window_actions(),
+        0,
+        "a declined quit also ran a window action"
+    );
 }
 
 #[cfg(test)]
