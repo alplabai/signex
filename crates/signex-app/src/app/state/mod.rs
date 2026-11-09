@@ -346,6 +346,9 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
+    /// Document ids a document cannot say itself: project files not loaded,
+    /// and the order documents were first seen in (#2172).
+    pub document_ids: crate::app::document_ids::DocumentIds,
     /// Counts the changes that can alter an ERC finding: an edit to a sheet
     /// (through the engine, or Annotate, Replace, library update and the like),
     /// a project-file change, and a sheet written behind the engines. Each calls
@@ -1076,6 +1079,8 @@ impl DocumentState {
     /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
     pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
         self.note_documents_changed();
+        // The head read before it was open may be older than what it saved.
+        self.document_ids.forget_header(path);
         self.engines.remove(path)
     }
 

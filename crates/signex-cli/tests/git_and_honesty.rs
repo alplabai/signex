@@ -19,7 +19,7 @@ fn open_edit_save() -> String {
     jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
         json!({"id": "place_junction", "args": {"at": [5.08, 0]}}),
-        json!({"id": "save_document"}),
+        json!({"id": "save_document", "args": {"document": "main.snxsch"}}),
     ])
 }
 
@@ -150,8 +150,8 @@ fn closing_a_document_with_unsaved_changes_parks_it_and_the_run_still_reports_it
     let project = fx.project.to_str().unwrap();
     let dirty = jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
-        json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}}),
-        json!({"id": "close_active_document"}),
+        json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": "main.snxsch"}}),
+        json!({"id": "close_active_document", "args": {"document": "main.snxsch"}}),
     ]);
     let before = snapshot(&root);
     let out = run_cli(&["run", project, "--keep-going"], dirty);
@@ -167,7 +167,7 @@ fn closing_a_document_with_unsaved_changes_parks_it_and_the_run_still_reports_it
 
     let clean = jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
-        json!({"id": "close_active_document"}),
+        json!({"id": "close_active_document", "args": {"document": "main.snxsch"}}),
     ]);
     let out = run_cli(&["run", project, "--keep-going"], clean);
     assert_eq!(

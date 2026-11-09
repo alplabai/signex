@@ -16,8 +16,9 @@ use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::PcbLayer;
 
+use crate::layer_label::layer_id;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -84,7 +85,7 @@ fn bake_layered<O, F>(
     solve: &FullSolveOutput,
     out: &mut Vec<O>,
     warnings: &mut Vec<String>,
-    attr_extract: impl Fn(&signex_sketch::entity::Entity) -> Option<SignexLayer>,
+    attr_extract: impl Fn(&signex_sketch::entity::Entity) -> Option<PcbLayer>,
     make: F,
     attr_name: &'static str,
 ) -> Result<(), SketchError>
@@ -117,7 +118,7 @@ where
 
         match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(vertices) => {
-                let layer_id = LayerId::new(layer.altium_label());
+                let layer_id = layer_id(layer);
                 out.push(make(Polygon::new(vertices), layer_id));
             }
             Err(TraceError::OpenChain) => warnings.push(format!(
@@ -146,6 +147,7 @@ mod tests {
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_sketch::solver::Solver;
     use signex_sketch::solver::residual::ResolvedParams;
+    use signex_types::pcb_layer::TechnicalLayer;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -204,7 +206,7 @@ mod tests {
         let l1 = rectangle(plane, &mut data);
         let l1_entity = data.entities.iter_mut().find(|e| e.id == l1).unwrap();
         l1_entity.mask_opening = Some(MaskOpeningAttr {
-            layer: SignexLayer::TopSolderMask,
+            layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
         });
 
         let solved = solve(&data);
@@ -228,7 +230,7 @@ mod tests {
         let l1 = rectangle(plane, &mut data);
         let l1_entity = data.entities.iter_mut().find(|e| e.id == l1).unwrap();
         l1_entity.mask_exclude = Some(MaskExcludeAttr {
-            layer: SignexLayer::BottomSolderMask,
+            layer: PcbLayer::Technical(TechnicalLayer::SolderMaskBottom),
         });
 
         let solved = solve(&data);
@@ -251,7 +253,7 @@ mod tests {
         let l1 = rectangle(plane, &mut data);
         let l1_entity = data.entities.iter_mut().find(|e| e.id == l1).unwrap();
         l1_entity.paste_aperture = Some(PasteApertureAttr {
-            layer: SignexLayer::TopPaste,
+            layer: PcbLayer::Technical(TechnicalLayer::PasteTop),
         });
 
         let solved = solve(&data);
@@ -279,13 +281,13 @@ mod tests {
             .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
         {
             e.mask_opening = Some(MaskOpeningAttr {
-                layer: SignexLayer::TopSolderMask,
+                layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
             });
             e.mask_exclude = Some(MaskExcludeAttr {
-                layer: SignexLayer::TopSolderMask,
+                layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
             });
             e.paste_aperture = Some(PasteApertureAttr {
-                layer: SignexLayer::TopPaste,
+                layer: PcbLayer::Technical(TechnicalLayer::PasteTop),
             });
         }
         let solved = solve(&data);
@@ -315,10 +317,10 @@ mod tests {
             .map(|(i, _)| i)
             .collect();
         data.entities[lines[0]].mask_opening = Some(MaskOpeningAttr {
-            layer: SignexLayer::TopSolderMask,
+            layer: PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
         });
         data.entities[lines[2]].mask_opening = Some(MaskOpeningAttr {
-            layer: SignexLayer::BottomSolderMask,
+            layer: PcbLayer::Technical(TechnicalLayer::SolderMaskBottom),
         });
         let solved = solve(&data);
         let mut out = Vec::new();

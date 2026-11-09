@@ -4,9 +4,7 @@
 mod support;
 
 use serde_json::{Value, json};
-#[cfg(unix)]
-use support::Live;
-use support::{fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
+use support::{Live, fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
 
 fn refusal(out: &support::Output, index: usize) -> &str {
     assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
@@ -25,7 +23,7 @@ fn a_command_outside_the_default_capabilities_names_the_one_it_needs() {
     let before = snapshot(&root);
 
     let save_as = one(
-        json!({"id": "save_document_as", "args": {"path": root.join("proj").join("copy.snxsch")}}),
+        json!({"id": "save_document_as", "args": {"document": "main.snxsch", "path": root.join("proj").join("copy.snxsch")}}),
     );
     let out = run_cli(&["run", project], &save_as);
     assert_eq!(
@@ -72,7 +70,7 @@ fn a_path_outside_the_project_is_refused_and_allow_path_opens_that_folder_only()
         &open,
     );
     assert_eq!(
-        allowed.lines[0]["status"], "ran",
+        allowed.lines[0]["status"], "answered",
         "{}\n{}",
         allowed.stdout, allowed.stderr
     );
@@ -154,7 +152,7 @@ fn malformed_input_is_a_refused_line_never_a_panic() {
         assert!(out.lines[index]["id"].is_null());
     }
     assert_eq!(
-        out.lines[5]["status"], "ran",
+        out.lines[5]["status"], "answered",
         "a good line after bad ones still runs"
     );
     assert!(!out.stderr.contains("panicked"), "{}", out.stderr);
@@ -187,7 +185,7 @@ fn a_line_over_the_limit_and_a_run_over_the_command_limit_are_refused() {
         out.stdout
     );
     assert_eq!(
-        out.lines[1]["status"], "ran",
+        out.lines[1]["status"], "answered",
         "the next line is read after a long one"
     );
 
@@ -237,9 +235,9 @@ fn allow_and_save_grant_exactly_the_capability_they_name() {
 
     let save_as = jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
-        json!({"id": "save_document_as", "args": {"path": "copy.snxsch"}}),
-        json!({"id": "save_document_as", "args": {"path": "copy.snxsch"}}),
-        json!({"id": "save_document_as", "args": {"path": "copy.snxsch", "overwrite": true}}),
+        json!({"id": "save_document_as", "args": {"document": "main.snxsch", "path": "copy.snxsch"}}),
+        json!({"id": "save_document_as", "args": {"document": "copy.snxsch", "path": "copy.snxsch"}}),
+        json!({"id": "save_document_as", "args": {"document": "copy.snxsch", "path": "copy.snxsch", "overwrite": true}}),
     ]);
     let before = snapshot(&root);
     let out = run_cli(&["run", project, "--save", "--keep-going"], &save_as);
@@ -250,16 +248,8 @@ fn allow_and_save_grant_exactly_the_capability_they_name() {
     );
     assert!(fx.dir.join("copy.snxsch").is_file(), "the copy was written");
     assert!(
-        refusal(&out, 2).contains("a file dialog was refused"),
+        refusal(&out, 2).contains("exists; pass overwrite=true"),
         "an existing file is not replaced without overwrite=true: {}",
-        out.stdout
-    );
-    // The details are in the Messages log, not parsed from it.
-    assert!(
-        out.lines[2]["messages"]
-            .to_string()
-            .contains("exists; give"),
-        "{}",
         out.stdout
     );
     assert_eq!(
@@ -361,20 +351,17 @@ fn a_save_refuses_a_document_that_became_a_link_to_outside_the_project() {
         "--save",
         "--keep-going",
     ]);
-    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
-    let paint = json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}});
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let paint = json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": "main.snxsch"}});
     assert_eq!(live.send(&paint)["status"], "ran");
 
     let outside = replace_with_link_to_outside(&fx.sheet, &other);
     let before = std::fs::read(&outside).unwrap();
-    let saved = live.send(&json!({"id": "save_document"}));
+    let saved = live.send(&json!({"id": "save_document", "args": {"document": "main.snxsch"}}));
 
     assert_eq!(saved["status"], "refused", "{saved}");
     let reason = saved["reason"].as_str().unwrap();
-    assert!(
-        reason.contains("it would write") && reason.contains("symbolic link"),
-        "{reason}"
-    );
+    assert!(reason.contains("symbolic link"), "{reason}");
     assert_eq!(
         std::fs::read(&outside).unwrap(),
         before,
@@ -395,11 +382,11 @@ fn a_save_refuses_a_project_file_that_became_a_link() {
         "--save",
         "--keep-going",
     ]);
-    assert_eq!(live.send(&open(&fx.sheet))["status"], "ran");
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
 
     let outside = replace_with_link_to_outside(&fx.project, &other);
     let before = std::fs::read(&outside).unwrap();
-    let saved = live.send(&json!({"id": "save_document"}));
+    let saved = live.send(&json!({"id": "save_document", "args": {"document": "demo.snxprj"}}));
 
     assert_eq!(saved["status"], "refused", "{saved}");
     assert!(
@@ -442,4 +429,390 @@ fn a_new_project_into_a_folder_that_is_a_link_to_outside_is_refused() {
         0,
         "nothing was created through the link"
     );
+}
+
+fn sheet_id(path: &std::path::Path) -> String {
+    signex_types::format::document_id_in_header("snxsch", &std::fs::read(path).expect("sheet"))
+        .expect("the sheet carries an id")
+        .to_string()
+}
+
+/// #2172: a document named by id is confined as the file it names, not as a
+/// string: a sheet that became a link to outside is refused for a read and a
+/// write alike, and nothing is written through the link.
+#[cfg(unix)]
+#[test]
+fn a_document_id_whose_file_leads_outside_is_refused_for_read_and_write() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let outside = replace_with_link_to_outside(&fx.sheet, &other);
+    let before = std::fs::read(&outside).unwrap();
+
+    let read = live.send(&json!({"id": "read_document", "args": {"document": id}}));
+    assert_eq!(read["status"], "refused", "{read}");
+    assert!(
+        read["reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("operand `document`:"),
+        "{read}"
+    );
+    let write = live.send(&json!({"id": "save_document", "args": {"document": id}}));
+    assert_eq!(write["status"], "refused", "{write}");
+    assert!(
+        write["reason"].as_str().unwrap().contains("symbolic link"),
+        "{write}"
+    );
+    let paint = live.send(&json!({"id": "color_net",
+        "args": {"at": [5, 0], "color": "#336699", "document": id}}));
+    assert_eq!(paint["status"], "refused", "{paint}");
+    assert_eq!(
+        std::fs::read(&outside).unwrap(),
+        before,
+        "nothing was written through the link"
+    );
+    live.finish();
+}
+
+/// The same id of a document inside the roots still works, read and write.
+#[test]
+fn a_document_id_inside_the_project_reads_and_saves() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let id = sheet_id(&fx.sheet);
+    let out = run_cli(
+        &["run", fx.project.to_str().unwrap(), "--save"],
+        jsonl(&[
+            json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
+            json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": id}}),
+            json!({"id": "read_document", "args": {"document": id}}),
+            json!({"id": "save_document", "args": {"document": id}}),
+        ]),
+    );
+    assert_eq!(
+        out.lines
+            .iter()
+            .map(|l| l["status"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["answered", "ran", "answered", "ran"],
+        "{}\n{}",
+        out.stdout,
+        out.stderr
+    );
+}
+
+/// A project that names a sheet outside its folder: a headless run does not
+/// read it for a query, and no id of it can be used to reach it.
+#[test]
+fn a_project_sheet_reference_outside_the_folder_is_not_read_by_a_query() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let outside = other.join("outside.snxsch");
+    // Its own id, as a copy of a real sheet carries one.
+    let mut engine = signex_engine::Engine::open(&fx.sheet).expect("sheet");
+    engine.reassign_document_id(uuid::Uuid::now_v7());
+    std::fs::write(&outside, engine.serialize().expect("encode")).unwrap();
+    let outside_id = sheet_id(&outside);
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Outside".into(),
+        filename: outside.display().to_string(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+
+    let out = run_cli(
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
+        jsonl(&[
+            json!({"id": "list_documents"}),
+            json!({"id": "find_items", "args": {"designator": "R1"}}),
+            json!({"id": "read_document", "args": {"document": outside_id}}),
+            json!({"id": "read_document", "args": {"document": outside}}),
+        ]),
+    );
+
+    let listed = out.lines[0]["data"]["documents"].as_array().unwrap();
+    let entry = listed
+        .iter()
+        .find(|d| d["path"] == outside.display().to_string())
+        .expect("the reference is listed");
+    assert!(entry["id"].is_null(), "its head was not read: {entry}");
+    let found = out.lines[1]["data"]["elements"].as_array().unwrap();
+    assert!(
+        found
+            .iter()
+            .all(|e| e["document"]["path"] != outside.display().to_string()),
+        "the outside sheet was not searched: {}",
+        out.stdout
+    );
+    for index in [2, 3] {
+        assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
+    }
+    assert!(
+        out.lines[1]["messages"]
+            .to_string()
+            .contains("outside the project folder"),
+        "the refusal is in Messages: {}",
+        out.stdout
+    );
+}
+
+/// A save names its document and writes that document only: another file in
+/// the project that happens to be a link out is not a write target of it.
+#[cfg(unix)]
+#[test]
+fn a_save_by_id_checks_the_named_document_not_the_active_or_unrelated_files() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let outside = replace_with_link_to_outside(&fx.project, &other);
+    let before = std::fs::read(&outside).unwrap();
+
+    let saved = live.send(&json!({"id": "save_document", "args": {"document": id}}));
+
+    assert_eq!(saved["status"], "ran", "{saved}");
+    assert_eq!(
+        std::fs::read(&outside).unwrap(),
+        before,
+        "the project was not written"
+    );
+    live.finish();
+}
+
+/// A Save As by document also re-points the project file that lists the
+/// sheet: that file is checked with the named one, so a project file that is
+/// a link out refuses the run before anything is written.
+#[cfg(unix)]
+#[test]
+fn a_save_as_by_id_also_checks_the_project_file_it_re_points() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let outside = replace_with_link_to_outside(&fx.project, &other);
+    let before = std::fs::read(&outside).unwrap();
+    let copy = fx.sheet.with_file_name("copy.snxsch");
+
+    let saved = live.send(&json!({
+        "id": "save_document_as",
+        "args": {"document": id, "path": copy}
+    }));
+
+    assert_eq!(saved["status"], "refused", "{saved}");
+    assert!(
+        saved["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("also writes the project file")
+                && r.contains("demo.snxprj is a symbolic link")),
+        "{saved}"
+    );
+    assert!(!copy.exists(), "nothing was written");
+    assert_eq!(std::fs::read(&outside).unwrap(), before);
+    live.finish();
+}
+
+/// Lists a project that also names `extra` (a file in its folder), and says
+/// what a query made of it.
+fn list_with_reference(
+    root: &std::path::Path,
+    extra: &str,
+    prepare: impl Fn(&std::path::Path),
+) -> support::Output {
+    let fx = fixture(root);
+    prepare(&fx.sheet.with_file_name(extra));
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Extra".into(),
+        filename: extra.into(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+    run_cli(
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
+        jsonl(&[
+            json!({"id": "list_documents"}),
+            json!({"id": "find_items", "args": {"designator": "R1"}}),
+        ]),
+    )
+}
+
+/// A project-referenced sheet over the size cap is not read by a query.
+#[test]
+fn a_referenced_sheet_over_the_size_cap_is_not_read_by_a_query() {
+    let (_guard, root) = temp_root();
+    let out = list_with_reference(&root, "big.snxsch", |path| {
+        let file = std::fs::File::create(path).unwrap();
+        file.set_len(signex_app::headless::MAX_FILE_BYTES + 1)
+            .unwrap();
+    });
+    for line in &out.lines {
+        assert_eq!(line["status"], "answered", "{}", out.stdout);
+    }
+    assert!(
+        out.lines[1]["messages"]
+            .to_string()
+            .contains("is larger than"),
+        "the refusal is in Messages: {}",
+        out.stdout
+    );
+}
+
+/// A FIFO named like a sheet does not hang a query.
+#[cfg(unix)]
+#[test]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "`mkfifo` makes the pipe; the standard library has no call for it"
+)]
+fn a_referenced_fifo_does_not_hang_a_query() {
+    let (_guard, root) = temp_root();
+    let out = list_with_reference(&root, "pipe.snxsch", |path| {
+        let made = std::process::Command::new("mkfifo")
+            .arg(path)
+            .status()
+            .unwrap();
+        assert!(made.success());
+    });
+    for line in &out.lines {
+        assert_eq!(line["status"], "answered", "{}", out.stdout);
+    }
+    assert!(
+        out.lines[1]["messages"]
+            .to_string()
+            .contains("not a regular file"),
+        "{}",
+        out.stdout
+    );
+}
+
+fn write_sheet_with_id(template: &std::path::Path, path: &std::path::Path, id: uuid::Uuid) {
+    let mut engine = signex_engine::Engine::open(template).expect("sheet");
+    engine.reassign_document_id(id);
+    std::fs::write(path, engine.serialize().expect("encode")).unwrap();
+}
+
+/// The head of a sheet the app has not opened is read again when the file
+/// changes on disk (a `git checkout` during a long run), not served stale.
+#[test]
+fn a_changed_head_is_read_again_by_the_next_listing() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let extra = fx.sheet.with_file_name("Extra.snxsch");
+    let (first, second) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+    write_sheet_with_id(&fx.sheet, &extra, first);
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Extra".into(),
+        filename: "Extra.snxsch".into(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+    let mut live = Live::start(&["run", fx.project.to_str().unwrap(), "--keep-going"]);
+    let id_of = |listing: &Value| {
+        listing["data"]["documents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            // By file name: a listed path may carry a verbatim prefix on Windows.
+            .find(|d| {
+                d["path"]
+                    .as_str()
+                    .is_some_and(|p| p.ends_with("Extra.snxsch"))
+            })
+            .map(|d| d["id"].clone())
+            .expect("listed")
+    };
+
+    let before = live.send(&json!({"id": "list_documents"}));
+    assert_eq!(id_of(&before), json!(first.to_string()));
+    // A file system with a coarse clock must see a different time.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_sheet_with_id(&fx.sheet, &extra, second);
+    let after = live.send(&json!({"id": "list_documents"}));
+
+    assert_eq!(id_of(&after), json!(second.to_string()), "{after}");
+    live.finish();
+}
+
+/// A Save As may rewrite the project's other sheets that reference the one
+/// saved, so a project sheet that is a link out refuses it, and is named.
+#[cfg(unix)]
+#[test]
+fn a_save_as_by_id_names_a_project_sheet_that_is_a_link_out() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let extra = fx.sheet.with_file_name("Extra.snxsch");
+    std::fs::copy(&fx.sheet, &extra).unwrap();
+    let outside = replace_with_link_to_outside(&extra, &other);
+    let before = std::fs::read(&outside).unwrap();
+    let mut data = signex_types::project::parse_project(&fx.project).expect("project");
+    data.sheets.push(signex_types::project::SheetEntry {
+        name: "Extra".into(),
+        filename: "Extra.snxsch".into(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    signex_types::project::write_project(&fx.project, &data).expect("project");
+    let id = sheet_id(&fx.sheet);
+    let mut live = Live::start(&[
+        "run",
+        fx.project.to_str().unwrap(),
+        "--save",
+        "--keep-going",
+    ]);
+    assert_eq!(live.send(&open(&fx.sheet))["status"], "answered");
+    let copy = fx.sheet.with_file_name("copy.snxsch");
+
+    let saved = live.send(&json!({
+        "id": "save_document_as",
+        "args": {"document": id, "path": copy}
+    }));
+
+    assert_eq!(saved["status"], "refused", "{saved}");
+    assert!(
+        saved["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("also writes the project sheet")),
+        "{saved}"
+    );
+    assert!(!copy.exists());
+    assert_eq!(std::fs::read(&outside).unwrap(), before);
+    live.finish();
 }

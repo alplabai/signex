@@ -24,6 +24,7 @@ pub fn fixture() -> Fixture {
     let dir = tmp.path();
     let prj = dir.join("Oscar.snxprj");
     let data = ProjectData {
+        document_id: None,
         name: "Oscar".to_string(),
         description: None,
         dir: dir.to_string_lossy().into_owned(),

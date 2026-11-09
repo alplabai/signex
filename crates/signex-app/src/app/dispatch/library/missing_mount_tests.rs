@@ -17,6 +17,7 @@ fn add_project(app: &mut Signex, libs: &[&std::path::Path]) -> crate::app::Proje
             id,
             path: std::path::PathBuf::from("/nowhere/P.snxprj"),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: "P".to_string(),
                 dir: "/nowhere".to_string(),

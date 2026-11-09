@@ -49,6 +49,7 @@ fn fixture(dirty: bool) -> Fixture {
         id: project,
         path: dir.join("Proj.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "Proj".to_string(),
             dir: dir.to_string_lossy().into_owned(),

@@ -8,7 +8,7 @@ use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::ConstraintId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 fn line(from: [f64; 2], to: [f64; 2], stroke_width: f64) -> FpGraphic {
     FpGraphic::drawn(FpGraphicKind::Line { from, to }, stroke_width, false)
@@ -43,7 +43,7 @@ fn silk_line_footprint() -> (Footprint, SketchEntityId, SketchEntityId) {
         EntityKind::Line { start: p1, end: p2 },
     );
     silk.silk = Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     });
     let mut fp = Footprint::empty("legacy");
     fp.sketch = Some(SketchData {
@@ -207,7 +207,7 @@ fn a_layer_with_a_marked_entry_needs_no_recovery() {
 fn one_silk_entity(
     points: &[(f64, f64)],
     kind: impl FnOnce(&[SketchEntityId]) -> EntityKind,
-    layer: SignexLayer,
+    layer: PcbLayer,
 ) -> Footprint {
     let plane = PlaneId::new();
     let ids: Vec<SketchEntityId> = points.iter().map(|_| SketchEntityId::new()).collect();
@@ -254,7 +254,7 @@ fn legacy_recovery_marks_a_baked_arc() {
             end: p[2],
             sweep_ccw: true,
         },
-        SignexLayer::TopSilk,
+        PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     );
     // The same quarter arc, and the opposite three-quarter one.
     fp.silk_f = vec![arc(90.0, 0.0), arc(0.0, 90.0)];
@@ -287,7 +287,7 @@ fn legacy_recovery_marks_bottom_silk_and_leaves_top_hand_silk_alone() {
             center: p[0],
             radius: 0.5,
         },
-        SignexLayer::BottomSilk,
+        PcbLayer::Technical(TechnicalLayer::SilkscreenBottom),
     );
     let circle = FpGraphic::drawn(
         FpGraphicKind::Circle {
@@ -331,7 +331,7 @@ fn construction_only_silk_tag_needs_no_recovery() {
     let sketch = fp.sketch.as_mut().unwrap();
     sketch.entities.retain(|e| e.silk.is_none());
     sketch.entities[0].silk = Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     });
     fp.silk_f.push(text("REF"));
     assert!(!needs_legacy_silk_recovery(&fp));

@@ -33,6 +33,7 @@ fn sheet_entry(filename: &str) -> SheetEntry {
 
 fn project_data(dir: &Path) -> ProjectData {
     ProjectData {
+        document_id: None,
         description: None,
         name: "Proj".to_string(),
         dir: dir.to_string_lossy().into_owned(),

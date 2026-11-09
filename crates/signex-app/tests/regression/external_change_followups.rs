@@ -117,6 +117,7 @@ fn add_git_project(app: &mut Signex, dir: &Path) {
             id,
             path: dir.join("P.snxprj"),
             data: signex_types::project::ProjectData {
+                document_id: None,
                 description: None,
                 name: "P".into(),
                 dir: dir.to_string_lossy().into_owned(),

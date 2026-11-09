@@ -113,6 +113,7 @@ fn run_erc(root: SchematicSheet, child: SchematicSheet, active: Active) -> Vec<V
     write_sheet(&child_path, child.clone());
     write_sheet(&root_path, root.clone());
     let data = signex_types::project::ProjectData {
+        document_id: None,
         description: None,
         name: "Proj".to_string(),
         dir: dir.to_string_lossy().into_owned(),

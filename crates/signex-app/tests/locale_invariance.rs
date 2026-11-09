@@ -98,6 +98,29 @@ fn mask_schematic_id(bytes: Vec<u8>) -> Vec<u8> {
         .into_bytes()
 }
 
+/// A project opened without an id is given a fresh random one, as a new
+/// sheet is (#2172); masked so the rest of the file is compared.
+fn mask_document_id(bytes: Vec<u8>) -> Vec<u8> {
+    let text = String::from_utf8_lossy(&bytes);
+    text.split_inclusive('\n')
+        .map(
+            |line| match line.trim_start().starts_with("\"document_id\":") {
+                true => {
+                    let ending = &line[line.trim_end_matches(['\r', '\n']).len()..];
+                    let comma = if line.trim_end().ends_with(',') {
+                        ","
+                    } else {
+                        ""
+                    };
+                    format!("  \"document_id\": \"<random>\"{comma}{ending}")
+                }
+                false => line.to_owned(),
+            },
+        )
+        .collect::<String>()
+        .into_bytes()
+}
+
 fn run_flow(tag: &str, work: &Path) -> Outputs {
     let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
     settle(&mut app, boot);
@@ -180,7 +203,10 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
     send(&mut app, Message::Menu(MenuMessage::SaveAll));
 
     let mut out = Outputs::new();
-    out.insert("project.snxprj (save + waiver)", pin_date(read(&project)));
+    out.insert(
+        "project.snxprj (save + waiver)",
+        mask_document_id(pin_date(read(&project))),
+    );
     out.insert("sheet.snxsch", read(&sheet));
     out.insert("Extra.snxsch (new sheet)", mask_schematic_id(read(&extra)));
 

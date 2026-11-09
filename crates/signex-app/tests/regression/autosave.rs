@@ -239,6 +239,7 @@ fn project_close_discard_all_removes_the_sidecar() {
         id,
         path: prj,
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".to_string(),
             dir: f.doc.parent().unwrap().to_string_lossy().into_owned(),
@@ -487,7 +488,8 @@ fn age(path: &Path, secs_ago: u64) {
 fn open_from_disk(app: &mut Signex, doc: &Path) {
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
-        paper_size: "A4".to_string(),
+        // Not the paper of the autosaved sheet, so a restore shows.
+        paper_size: "A3".to_string(),
         ..Default::default()
     };
     let task = app.update(Message::File(FileMsg::SchematicOpenFinished {
@@ -515,6 +517,8 @@ fn opening_a_document_with_a_newer_copy_offers_it() {
 #[test]
 fn restore_loads_the_copy_as_unsaved_edits_and_never_writes_the_file() {
     let (f, mut next, autosaved) = next_run_opens_with_a_newer_copy();
+    let open_id = next.document_state.engines[&f.doc].document().uuid;
+    assert_ne!(open_id, autosaved.uuid, "the copy carries another id");
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
 
     assert!(next.document_state.autosave.current_offer().is_none());
@@ -522,10 +526,14 @@ fn restore_loads_the_copy_as_unsaved_edits_and_never_writes_the_file() {
         next.document_state.is_document_dirty(&f.doc),
         "restored content is unsaved"
     );
+    let restored = next.document_state.engines[&f.doc].document();
     assert_eq!(
-        next.document_state.engines[&f.doc].document().uuid,
-        autosaved.uuid,
+        restored.paper_size, autosaved.paper_size,
         "the engine now holds the recovery copy"
+    );
+    assert_eq!(
+        restored.uuid, open_id,
+        "and keeps the id of the open document"
     );
     assert_eq!(std::fs::read_to_string(&f.doc).unwrap(), ORIGINAL);
     assert!(sidecar_of(&f).exists(), "the copy stays until a save");

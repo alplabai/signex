@@ -7,6 +7,7 @@ use std::path::Path;
 
 use signex_types::format::mm_as_stored_nm;
 
+use crate::app::document_ids::DocumentTarget;
 use crate::keymap::{AppCommandId, Operand, OperandKind, metadata_for};
 
 use super::CommandArgs;
@@ -25,6 +26,8 @@ pub enum OperandValue {
     Bool(bool),
     /// An opaque colour: red, green, blue.
     Color(u8, u8, u8),
+    /// The document a command names: its id or its path (#2172).
+    Document(DocumentTarget),
 }
 
 /// Why operands were refused; every variant names the operand.
@@ -180,6 +183,9 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             _ => Err(invalid("true or false")),
         },
         OperandKind::Color => parse_color(text).ok_or_else(|| invalid("#rrggbb")),
+        OperandKind::Document => DocumentTarget::parse(text)
+            .map(OperandValue::Document)
+            .map_err(invalid),
     }
 }
 
@@ -301,7 +307,18 @@ mod tests {
     #[test]
     fn a_save_dialog_answer_parses() {
         let save = path_arg("a.snxsch");
-        let args = parse("save_document_as", &[&save, "overwrite=true"]).unwrap();
+        let args = parse(
+            "save_document_as",
+            &[
+                &save,
+                "overwrite=true",
+                &format!(
+                    "document={}",
+                    std::env::temp_dir().join("a.snxsch").display()
+                ),
+            ],
+        )
+        .unwrap();
         assert_eq!(args.operand("overwrite"), Some(&OperandValue::Bool(true)));
         let open = path_arg("a.snxprj");
         assert_eq!(

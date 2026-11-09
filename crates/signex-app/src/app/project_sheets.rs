@@ -237,6 +237,10 @@ fn load_sheet_with(
     if let Some(sheet) = open(path) {
         return Ok(Some(sheet));
     }
+    // A FIFO or device named like a sheet would block the read for good.
+    if std::fs::metadata(path).is_ok_and(|meta| !meta.is_file()) {
+        return Err("could not be read (not a regular file)".into());
+    }
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1451,6 +1455,7 @@ mod tests {
             id,
             path: PathBuf::from(dir).join("p.snxprj"),
             data: signex_types::project::ProjectData {
+                document_id: None,
                 description: None,
                 name: dir.to_owned(),
                 dir: dir.to_owned(),

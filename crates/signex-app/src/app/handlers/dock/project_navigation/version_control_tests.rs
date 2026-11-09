@@ -113,6 +113,7 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
             id,
             path: tmp.path().join("demo.snxprj"),
             data: signex_types::project::ProjectData {
+                document_id: None,
                 description: None,
                 name: "demo".to_string(),
                 dir: tmp.path().to_string_lossy().into_owned(),

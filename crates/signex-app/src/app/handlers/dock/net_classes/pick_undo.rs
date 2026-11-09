@@ -75,16 +75,26 @@ impl crate::app::Signex {
     /// project history moved on, or the project closed). `true` when a pick
     /// was applied; `false` when an edit of the sheet, or nothing, is next.
     pub(crate) fn step_net_class_pick(&mut self, undoing: bool) -> bool {
+        let Some(path) = self.document_state.active_path.clone() else {
+            return false;
+        };
+        self.step_net_class_pick_on(&path, undoing)
+    }
+
+    /// [`Self::step_net_class_pick`] for the sheet at `path`, whether or not
+    /// a window shows it (#2172).
+    pub(crate) fn step_net_class_pick_on(&mut self, path: &std::path::Path, undoing: bool) -> bool {
         while let Some(marker) = self
             .document_state
-            .active_engine()
+            .engines
+            .get(path)
             .and_then(|engine| engine.next_class_pick(undoing))
         {
             let applied = self.net_class_pick_is_live(marker, undoing);
             if applied {
                 self.apply_pick(marker, undoing);
             }
-            if let Some(engine) = self.document_state.active_engine_mut() {
+            if let Some(engine) = self.document_state.engines.get_mut(path) {
                 // A marker not applied is dead for good (see the engine).
                 if applied {
                     engine.pass_class_pick(undoing);
@@ -93,9 +103,7 @@ impl crate::app::Signex {
                 }
             }
             // A pass can push the saved step off a full stack.
-            if let Some(path) = self.document_state.active_path.clone() {
-                self.document_state.sync_history_dirty(&path);
-            }
+            self.document_state.sync_history_dirty(path);
             if applied {
                 self.refresh_panel_ctx();
                 return true;
