@@ -11,7 +11,7 @@ use iced_core::widget::{
 };
 use iced_core::{Element, Font, Length, Padding, Pixels, Rectangle};
 use iced_core::{Event, Shell, Size, widget};
-use iced_widget::text_input::{self, TextInput};
+use iced_widget::text_input;
 
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
