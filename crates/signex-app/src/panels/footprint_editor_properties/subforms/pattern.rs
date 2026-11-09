@@ -92,8 +92,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dX",
@@ -105,8 +103,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dY",
@@ -118,8 +114,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
         }
         ArrayKindSummary::Grid {
@@ -142,8 +136,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "ny",
@@ -155,8 +147,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dX",
@@ -168,8 +158,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dY",
@@ -181,8 +169,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "Mask",
@@ -194,8 +180,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             // v0.23 — Per-instance checkbox grid. Renders only when
             // both nx and ny resolve to a concrete integer; parameter-
@@ -255,8 +239,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "Sweep",
@@ -268,8 +250,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             // Centre point picker — show coordinates if known; the
             // "Re-pick" button arms ToolPending so the next sketch
@@ -325,8 +305,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             // v0.23 — Per-instance checkbox row for Polar arrays.
             // Renders only when count resolves to a concrete integer.
@@ -406,8 +384,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             bga.start_row.to_string(),
             move |v| PanelMsg::FpEditorSetBgaStartRow { array_id, value: v },
             muted,
-            primary,
-            border_c,
         ));
         col = col.push(pad_input_row(
             "Start col",
@@ -415,8 +391,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             bga.start_col.to_string(),
             move |v| PanelMsg::FpEditorSetBgaStartCol { array_id, value: v },
             muted,
-            primary,
-            border_c,
         ));
     }
 

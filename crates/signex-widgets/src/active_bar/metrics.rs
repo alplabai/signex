@@ -5,8 +5,6 @@
 //! Legacy themes keep the original 26 / 1 / 2 / 2 numbers; Graphite uses
 //! 30 px buttons with 3 px padding and a 1 px gap.
 
-use signex_types::theme::ThemeTokens;
-
 /// Layout numbers of one Active Bar variant.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Metrics {
@@ -48,15 +46,6 @@ impl Metrics {
         chevron: 10.0,
         sep_h: 18.0,
     };
-
-    /// Metrics for `tokens`: Graphite when the theme sets extended tokens.
-    pub fn of(tokens: &ThemeTokens) -> Self {
-        if tokens.extended.is_empty() {
-            Self::LEGACY
-        } else {
-            Self::GRAPHITE
-        }
-    }
 
     /// Height of the whole bar: one button row plus the padding.
     pub fn bar_height(&self) -> f32 {

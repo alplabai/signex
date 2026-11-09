@@ -290,7 +290,6 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── General | Parameters tab bar ──
     let tab = ctx.properties_tab;
-    let tab_hover = crate::styles::ti(ctx.tokens.hover);
     let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     col = col.push(
         container(
@@ -300,18 +299,14 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     tab == 0,
                     PanelMsg::PropertiesTab(0),
                     primary,
-                    text_inactive,
-                    tab_hover,
-                    border_c
+                    text_inactive
                 ),
                 props_tab_btn(
                     "Parameters",
                     tab == 1,
                     PanelMsg::PropertiesTab(1),
                     primary,
-                    text_inactive,
-                    tab_hover,
-                    border_c
+                    text_inactive
                 ),
             ]
             .spacing(SP.xs),
@@ -419,9 +414,7 @@ fn view_pre_placement<'a>(
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    "(X/Y)", &pos_str, muted, input_bg, input_bdr,
-                ));
+                c = c.push(form_input_row("(X/Y)", &pos_str, muted, input_bg));
                 let rotation_opts: Vec<String> = vec![
                     "0 Degrees".into(),
                     "90 Degrees".into(),
@@ -517,7 +510,7 @@ fn view_pre_placement<'a>(
                             muted,
                         ));
                         c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                        c = c.push(form_label("Justification", muted));
+                        c = c.push(form_label("Justification"));
                         c = c.push(
                             container(preplacement_justification_grid(
                                 justify_h,

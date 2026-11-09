@@ -66,7 +66,7 @@ pub(in crate::app::view) fn menu_card<'a>(
     tokens: &'a signex_types::theme::ThemeTokens,
     ui_family: &str,
 ) -> MenuCard<'a> {
-    let metrics = MenuMetrics::of(tokens);
+    let metrics = MenuMetrics::GRAPHITE;
     let width = metrics.fitted_width(&entries, f32::MAX, ui_family);
     // The flyout's first row lines up with the launcher: its top is one
     // card padding above the launcher's top.

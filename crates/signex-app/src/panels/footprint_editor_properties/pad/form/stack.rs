@@ -68,7 +68,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     col = col.push(pad_stack_preview(values));
 
     // ── Tab strip (Simple / Top-Middle-Bottom / Full Stack) ──
-    col = col.push(pad_stack_tab_strip(values, primary, muted, border_c));
+    col = col.push(pad_stack_tab_strip(values, primary, muted));
 
     // ── Altium-parity table layout ── COPPER / HOLE / PASTE / SOLDER
     // each render as a header row + N data rows where every cell sits
@@ -125,8 +125,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             corner_buf,
             move |v| pad_corner_radius_msg(target, v),
             muted,
-            primary,
-            border_c,
         ));
     }
 
@@ -152,8 +150,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
         }
     }
@@ -200,23 +196,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         col = col.push(pad_table_row(
             "Pad Hole",
             vec![
-                pad_table_input_cell(
-                    drill_buf,
-                    "0",
-                    move |v| pad_drill_diameter_msg(target, v),
-                    muted,
-                    primary,
-                    border_c,
-                ),
+                pad_table_input_cell(drill_buf, "0", move |v| pad_drill_diameter_msg(target, v)),
                 if slot_enabled {
-                    pad_table_input_cell(
-                        slot_buf,
-                        "0",
-                        move |v| pad_drill_slot_length_msg(target, v),
-                        muted,
-                        primary,
-                        border_c,
-                    )
+                    pad_table_input_cell(slot_buf, "0", move |v| {
+                        pad_drill_slot_length_msg(target, v)
+                    })
                 } else {
                     pad_table_disabled_cell("0mm", muted, border_c)
                 },
@@ -260,8 +244,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             tol_p_buf,
             move |v| pad_hole_tolerance_plus_msg(target, v),
             muted,
-            primary,
-            border_c,
         ));
         let tol_m_buf = values
             .hole_tolerance_minus_mm
@@ -274,8 +256,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             tol_m_buf,
             move |v| pad_hole_tolerance_minus_msg(target, v),
             muted,
-            primary,
-            border_c,
         ));
         let rot_buf = values
             .hole_rotation_deg
@@ -288,8 +268,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             rot_buf,
             move |v| pad_hole_rotation_msg(target, v),
             muted,
-            primary,
-            border_c,
         ));
         let cox_buf = values
             .copper_offset_x_mm
@@ -302,8 +280,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             cox_buf,
             move |v| pad_copper_offset_x_msg(target, v),
             muted,
-            primary,
-            border_c,
         ));
         let coy_buf = values
             .copper_offset_y_mm
@@ -316,8 +292,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             coy_buf,
             move |v| pad_copper_offset_y_msg(target, v),
             muted,
-            primary,
-            border_c,
         ));
     }
 
@@ -344,14 +318,9 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         col = col.push(pad_table_row(
             "Top Paste",
             vec![
-                pad_table_input_cell(
-                    paste_top_buf,
-                    "(rule)",
-                    move |v| pad_paste_top_msg(target, v),
-                    muted,
-                    primary,
-                    border_c,
-                ),
+                pad_table_input_cell(paste_top_buf, "(rule)", move |v| {
+                    pad_paste_top_msg(target, v)
+                }),
                 pad_table_disabled_cell("0%", muted, border_c),
                 pad_table_picklist_cell(
                     ExpansionMode::ALL,
@@ -384,14 +353,9 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         col = col.push(pad_table_row(
             "Bottom Paste",
             vec![
-                pad_table_input_cell(
-                    paste_bot_buf,
-                    "(rule)",
-                    move |v| pad_paste_bottom_msg(target, v),
-                    muted,
-                    primary,
-                    border_c,
-                ),
+                pad_table_input_cell(paste_bot_buf, "(rule)", move |v| {
+                    pad_paste_bottom_msg(target, v)
+                }),
                 pad_table_disabled_cell("0%", muted, border_c),
                 pad_table_picklist_cell(
                     ExpansionMode::ALL,
@@ -434,14 +398,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         col = col.push(pad_table_row(
             "Top Solder Mask",
             vec![
-                pad_table_input_cell(
-                    mask_top_buf,
-                    "(rule)",
-                    move |v| pad_mask_top_msg(target, v),
-                    muted,
-                    primary,
-                    border_c,
-                ),
+                pad_table_input_cell(mask_top_buf, "(rule)", move |v| pad_mask_top_msg(target, v)),
                 pad_table_picklist_cell(
                     ExpansionMode::ALL,
                     mask_top_mode,
@@ -473,14 +430,9 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         col = col.push(pad_table_row(
             "Bottom Solder Mask",
             vec![
-                pad_table_input_cell(
-                    mask_bot_buf,
-                    "(rule)",
-                    move |v| pad_mask_bottom_msg(target, v),
-                    muted,
-                    primary,
-                    border_c,
-                ),
+                pad_table_input_cell(mask_bot_buf, "(rule)", move |v| {
+                    pad_mask_bottom_msg(target, v)
+                }),
                 pad_table_picklist_cell(
                     ExpansionMode::ALL,
                     mask_bot_mode,

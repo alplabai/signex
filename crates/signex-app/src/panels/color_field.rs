@@ -136,10 +136,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
             text(label_text)
                 .size(TS.caption)
                 .style(|theme: &Theme| iced::widget::text::Style {
-                    color: Some(match super::form_look::FormLook::of(theme) {
-                        Some(look) => look.ink,
-                        None => Color::from_rgb(0.90, 0.90, 0.92),
-                    }),
+                    color: Some(super::form_look::FormLook::of(theme).ink),
                     ..Default::default()
                 }),
         ]
@@ -148,10 +145,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     )
     .padding([SP.xs, 6.0])
     .on_press(on_toggle)
-    .style(|theme: &Theme, status| {
-        super::form_look::ghost_button(theme, status)
-            .unwrap_or_else(|| button::secondary(theme, status))
-    });
+    .style(super::form_look::ghost_button);
 
     // ── Advanced (HSV / RGB) overlay ──
     if show_advanced {

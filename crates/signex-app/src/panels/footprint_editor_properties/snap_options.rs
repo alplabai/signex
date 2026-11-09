@@ -2,7 +2,7 @@
 //! (All Layers / Current Layer / Off).
 
 use iced::widget::{Column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use iced::{Color, Element, Length, Theme, Widget};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -28,9 +28,6 @@ pub(super) fn render_snapping_mode_row<'a>(
     // v0.13 — Match the Grids/Guides/Axes pill chrome above. Mutex
     // semantics (clicking one selects only that mode), but the same
     // border / fill / padding so the row reads visually identical.
-    let chip_border = Color::from_rgba8(0xE7, 0x8B, 0x2A, 1.0);
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
     let mk_pill =
         move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
             iced::widget::button(
@@ -43,30 +40,7 @@ pub(super) fn render_snapping_mode_row<'a>(
             .on_press(PanelMsg::FpEditorSetSnappingMode(target))
             .style(move |theme: &Theme, status: iced::widget::button::Status| {
                 let hovered = matches!(status, iced::widget::button::Status::Hovered);
-                if let Some(style) = crate::panels::form_look::segment_cell(theme, active, hovered)
-                {
-                    return style;
-                }
-                let bg = match status {
-                    iced::widget::button::Status::Hovered => {
-                        Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
-                    }
-                    _ => Some(Background::Color(if active {
-                        active_bg
-                    } else {
-                        inactive_bg
-                    })),
-                };
-                iced::widget::button::Style {
-                    background: bg,
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: chip_border,
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                }
+                crate::panels::form_look::segment_cell(theme, active, hovered)
             })
             .boxed()
         };

@@ -30,10 +30,6 @@ fn drawn_items(tool: Tool, tokens: &ThemeTokens, tid: ThemeId) -> Vec<ActiveBarI
     )
 }
 
-fn metrics(tid: ThemeId) -> Metrics {
-    Metrics::of(&signex_types::theme::theme_tokens(tid))
-}
-
 /// The view's item list and the slot table must describe the same bar.
 #[test]
 fn bar_items_follow_the_slot_table() {
@@ -58,7 +54,7 @@ fn bar_items_follow_the_slot_table() {
 #[test]
 fn hit_rects_equal_drawn_rects() {
     for (tokens, tid) in themes() {
-        let m = Metrics::of(&tokens);
+        let m = Metrics::GRAPHITE;
         for tool in [Tool::Select, Tool::Wire, Tool::Bus] {
             let items = drawn_items(tool, &tokens, tid);
             let (drawn, total) = slot_offsets_with(&items, &m);
@@ -89,9 +85,8 @@ fn hit_rects_equal_drawn_rects() {
 /// Graphite metrics are the mock's 30 px buttons, 3 px padding, 1 px gap.
 #[test]
 fn graphite_metrics_are_thirty_three_one() {
-    let m = metrics(ThemeId::GraphiteLight);
+    let m = Metrics::GRAPHITE;
     assert_eq!((m.btn, m.padding, m.spacing), (30.0, 3.0, 1.0));
-    assert_eq!(metrics(ThemeId::GraphiteDark), m);
 }
 
 /// #1509: with the pill shown the dropdown anchor (window-space left
@@ -99,7 +94,7 @@ fn graphite_metrics_are_thirty_three_one() {
 #[test]
 fn dropdown_anchor_matches_drawn_button_with_pill() {
     for (tokens, tid) in themes() {
-        let m = Metrics::of(&tokens);
+        let m = Metrics::GRAPHITE;
         for window_width in [1400.0_f32, 1117.0] {
             for (menu, centre) in drawn_trigger_centres_with(Tool::Wire, window_width, &tokens, tid)
             {
@@ -130,6 +125,5 @@ fn graphite_active_bar_zone_height_is_unchanged() {
 /// Graphite floats the bar 10 px down.
 #[test]
 fn graphite_bar_top_margin_is_ten() {
-    let graphite = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
-    assert_eq!(layout::bar_top_margin(&graphite), 10.0);
+    assert_eq!(layout::bar_top_margin(), 10.0);
 }

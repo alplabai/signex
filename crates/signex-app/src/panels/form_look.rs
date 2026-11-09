@@ -2,8 +2,7 @@
 //!
 //! The form-row builders only receive resolved colours, so the controls
 //! find the look in their style closures: `&Theme` names the Graphite
-//! themes ([`FormLook::of`]). Every style falls back to the stock iced
-//! style on any other theme, so legacy output is unchanged.
+//! theme ([`FormLook::of`]).
 
 use super::graphite::PROPERTY_FIELD_RADIUS;
 use super::*;
@@ -45,19 +44,17 @@ pub(in crate::panels) struct FormLook {
 }
 
 impl FormLook {
-    /// The look of `theme`, or `None` when it is not a Graphite theme.
-    pub fn of(theme: &Theme) -> Option<Self> {
-        let name = theme.to_string();
-        let id = if name.starts_with("Graphite Light") {
+    /// The look of `theme`: Light for the Graphite Light theme, Dark for
+    /// every other.
+    pub fn of(theme: &Theme) -> Self {
+        let id = if theme.to_string().starts_with("Graphite Light") {
             ThemeId::GraphiteLight
-        } else if name.starts_with("Graphite Dark") {
-            ThemeId::GraphiteDark
         } else {
-            return None;
+            ThemeId::GraphiteDark
         };
         let tokens = theme_tokens(id);
         let r = resolve(&tokens);
-        Some(Self {
+        Self {
             field: r.field,
             raised: r.raised,
             sunken: r.sunken,
@@ -70,37 +67,20 @@ impl FormLook {
             accent_soft: r.accent_soft,
             primary: r.primary,
             primary_ink: r.primary_ink,
-        })
+        }
     }
 }
 
 /// Fill, border colour and radius of a read-only value box: Graphite's
-/// field token and hairline, else the caller's legacy colours.
-pub(in crate::panels) fn value_box(
-    theme: &Theme,
-    legacy_bg: Color,
-    legacy_border: Color,
-    legacy_radius: f32,
-) -> (Color, Color, f32) {
-    match FormLook::of(theme) {
-        Some(l) => (l.field, l.line, PROPERTY_FIELD_RADIUS),
-        None => (legacy_bg, legacy_border, legacy_radius),
-    }
+/// field token and hairline.
+pub(in crate::panels) fn value_box(theme: &Theme) -> (Color, Color, f32) {
+    let l = FormLook::of(theme);
+    (l.field, l.line, PROPERTY_FIELD_RADIUS)
 }
 
-/// Graphite text field; `legacy` on any other theme.
-pub(in crate::panels) fn text_input_or(
-    theme: &Theme,
-    status: text_input::Status,
-    legacy: text_input::Style,
-) -> text_input::Style {
-    let Some(l) = FormLook::of(theme) else {
-        return legacy;
-    };
-    graphite_text_input(l, status)
-}
-
-fn graphite_text_input(l: FormLook, status: text_input::Status) -> text_input::Style {
+/// `text_input` style for a form field.
+pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let l = FormLook::of(theme);
     let border = match status {
         text_input::Status::Focused { .. } => l.accent,
         text_input::Status::Hovered => l.line_strong,
@@ -120,20 +100,10 @@ fn graphite_text_input(l: FormLook, status: text_input::Status) -> text_input::S
     }
 }
 
-/// `text_input` style for a form field: Graphite, else the stock style.
-pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
-    match FormLook::of(theme) {
-        Some(l) => graphite_text_input(l, status),
-        None => text_input::default(theme, status),
-    }
-}
-
-/// `checkbox` style for a form toggle: Graphite, else the stock style.
+/// `checkbox` style for a form toggle.
 pub(crate) fn checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
     let base = checkbox::primary(theme, status);
-    let Some(l) = FormLook::of(theme) else {
-        return base;
-    };
+    let l = FormLook::of(theme);
     let checked = match status {
         checkbox::Status::Active { is_checked }
         | checkbox::Status::Hovered { is_checked }
@@ -152,16 +122,13 @@ pub(crate) fn checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbo
     }
 }
 
-/// `scrollable` style of a dock panel: a thin neutral scroller on Graphite,
-/// else the stock style.
+/// `scrollable` style of a dock panel: a thin neutral scroller.
 pub(in crate::panels) fn scrollbar_style(
     theme: &Theme,
     status: scrollable::Status,
 ) -> scrollable::Style {
     let mut style = scrollable::default(theme, status);
-    let Some(l) = FormLook::of(theme) else {
-        return style;
-    };
+    let l = FormLook::of(theme);
     let idle = matches!(status, scrollable::Status::Active { .. });
     let scroller = || scrollable::Scroller {
         background: Background::Color(if idle { l.line_strong } else { l.ink4 }),
@@ -179,29 +146,21 @@ pub(in crate::panels) fn scrollbar_style(
 }
 
 /// Frame of a segmented control: sunken fill, radius 8, 2 px inset.
-/// Transparent (the stock look) on other themes.
 pub(in crate::panels) fn segmented_frame(theme: &Theme) -> container::Style {
-    match FormLook::of(theme) {
-        Some(l) => container::Style {
-            background: Some(Background::Color(l.sunken)),
-            border: Border {
-                radius: SEGMENT_FRAME_RADIUS.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
+    container::Style {
+        background: Some(Background::Color(FormLook::of(theme).sunken)),
+        border: Border {
+            radius: SEGMENT_FRAME_RADIUS.into(),
+            ..Border::default()
         },
-        None => container::Style::default(),
+        ..container::Style::default()
     }
 }
 
 /// One cell of a Graphite segmented control: raised and bold-ink when on,
-/// flat when off. `None` on other themes.
-pub(in crate::panels) fn segment_cell(
-    theme: &Theme,
-    active: bool,
-    hovered: bool,
-) -> Option<button::Style> {
-    let l = FormLook::of(theme)?;
+/// flat when off.
+pub(in crate::panels) fn segment_cell(theme: &Theme, active: bool, hovered: bool) -> button::Style {
+    let l = FormLook::of(theme);
     let fill = if active {
         Some(Background::Color(l.raised))
     } else if hovered {
@@ -212,7 +171,7 @@ pub(in crate::panels) fn segment_cell(
     } else {
         None
     };
-    Some(button::Style {
+    button::Style {
         background: fill,
         text_color: if active { l.ink } else { l.ink3 },
         border: Border {
@@ -220,14 +179,14 @@ pub(in crate::panels) fn segment_cell(
             ..Border::default()
         },
         ..button::Style::default()
-    })
+    }
 }
 
-/// Ghost button: transparent, hairline, radius 7. `None` on other themes.
-pub(crate) fn ghost_button(theme: &Theme, status: button::Status) -> Option<button::Style> {
-    let l = FormLook::of(theme)?;
+/// Ghost button: transparent, hairline, radius 7.
+pub(crate) fn ghost_button(theme: &Theme, status: button::Status) -> button::Style {
+    let l = FormLook::of(theme);
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-    Some(button::Style {
+    button::Style {
         background: hovered.then_some(Background::Color(l.accent_soft)),
         text_color: l.ink,
         border: Border {
@@ -237,20 +196,18 @@ pub(crate) fn ghost_button(theme: &Theme, status: button::Status) -> Option<butt
             ..Border::default()
         },
         ..button::Style::default()
-    })
+    }
 }
 
 /// Option tile of a Properties row (fill, placement, a class list): a ghost
-/// button, the chosen one in accent-soft with an accent hairline. The stock
-/// secondary style on any other theme.
+/// button, the chosen one in accent-soft with an accent hairline.
 pub(crate) fn option_tile(
     active: bool,
 ) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
     move |theme, status| {
-        let Some(mut style) = ghost_button(theme, status) else {
-            return button::secondary(theme, status);
-        };
-        if let (true, Some(l)) = (active, FormLook::of(theme)) {
+        let mut style = ghost_button(theme, status);
+        if active {
+            let l = FormLook::of(theme);
             style.background = Some(Background::Color(l.accent_soft));
             style.border.color = l.accent;
         }
@@ -261,9 +218,7 @@ pub(crate) fn option_tile(
 /// A value shown as a field that opens something when pressed (the canvas
 /// font): field fill, hairline, ink text; the hairline strengthens on hover.
 pub(crate) fn value_field_button(theme: &Theme, status: button::Status) -> button::Style {
-    let Some(l) = FormLook::of(theme) else {
-        return button::text(theme, status);
-    };
+    let l = FormLook::of(theme);
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
     button::Style {
         background: Some(Background::Color(l.field)),
@@ -279,14 +234,9 @@ pub(crate) fn value_field_button(theme: &Theme, status: button::Status) -> butto
 }
 
 /// Active tab chip of the Properties tab strip: accent-soft fill, radius 7.
-/// `None` on other themes.
-pub(in crate::panels) fn tab_chip(
-    theme: &Theme,
-    active: bool,
-    hovered: bool,
-) -> Option<button::Style> {
-    let l = FormLook::of(theme)?;
-    Some(button::Style {
+pub(in crate::panels) fn tab_chip(theme: &Theme, active: bool, hovered: bool) -> button::Style {
+    let l = FormLook::of(theme);
+    button::Style {
         background: (active || hovered).then_some(Background::Color(l.accent_soft)),
         text_color: if active { l.ink } else { l.ink3 },
         border: Border {
@@ -294,7 +244,7 @@ pub(in crate::panels) fn tab_chip(
             ..Border::default()
         },
         ..button::Style::default()
-    })
+    }
 }
 
 /// Section label of a Graphite form: uppercase, muted, 12 px side padding.

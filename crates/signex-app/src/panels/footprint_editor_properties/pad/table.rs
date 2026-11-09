@@ -98,16 +98,11 @@ pub(super) fn pad_table_input_cell<'a>(
     value: String,
     placeholder: &'a str,
     on_input: impl Fn(String) -> PanelMsg + 'a,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     text_input(placeholder, value)
         .size(TS.caption)
         .padding(SP.xs)
-        .style(crate::panels::footprint_editor_properties::fp_field_style(
-            muted, primary, border_c,
-        ))
+        .style(crate::panels::form_look::text_input_style)
         .on_input(on_input)
         .boxed()
 }
@@ -222,22 +217,8 @@ pub(super) fn pad_copper_row<'a>(
     let y_buf = buf_or_empty(values.size_y_mm);
     let cells = if is_authoritative {
         vec![
-            pad_table_input_cell(
-                x_buf,
-                "",
-                move |v| pad_size_x_msg(target, v),
-                muted,
-                primary,
-                border_c,
-            ),
-            pad_table_input_cell(
-                y_buf,
-                "",
-                move |v| pad_size_y_msg(target, v),
-                muted,
-                primary,
-                border_c,
-            ),
+            pad_table_input_cell(x_buf, "", move |v| pad_size_x_msg(target, v)),
+            pad_table_input_cell(y_buf, "", move |v| pad_size_y_msg(target, v)),
             pad_table_picklist_cell(PadShapeChoice::ALL, current_shape, move |c| {
                 pad_shape_msg(target, c.to_lib())
             }),

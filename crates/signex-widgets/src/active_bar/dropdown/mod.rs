@@ -65,7 +65,7 @@ impl RowPaint {
     pub fn of(tokens: &ThemeTokens) -> Self {
         Self {
             hover: Look::of(tokens).hover,
-            radius: MenuMetrics::of(tokens).row_radius,
+            radius: MenuMetrics::GRAPHITE.row_radius,
         }
     }
 }
@@ -236,28 +236,11 @@ pub fn tooltip_style(
     }
 }
 
-/// SVG style for a row icon. On the legacy look an enabled row keeps the
-/// SVG's own colours (`color: None`) and a disabled one is tinted muted;
-/// `Some(c)` recolours the whole SVG. The Graphite look draws every icon
-/// monochrome, in `ink` (or `muted` when disabled).
-fn icon_style(disabled: bool, muted: Color, ink: Option<Color>) -> svg::Style {
+/// SVG style for a row icon: monochrome, in `ink` (or `muted` when disabled).
+fn icon_style(disabled: bool, muted: Color, ink: Color) -> svg::Style {
     svg::Style {
-        color: if disabled { Some(muted) } else { ink },
+        color: Some(if disabled { muted } else { ink }),
     }
-}
-
-/// Width a menu of `entries` needs in `tokens`' look, at most `max_w`; see
-/// [`MenuMetrics::fitted_width`].
-pub fn fitted_width<M>(
-    entries: &[DropdownEntry<M>],
-    tokens: &ThemeTokens,
-    max_w: f32,
-    ui_family: &str,
-) -> f32
-where
-    M: Clone,
-{
-    MenuMetrics::of(tokens).fitted_width(entries, max_w, ui_family)
 }
 
 /// Colours of one menu card, resolved once per view.
@@ -268,8 +251,8 @@ struct Look {
     accent: Color,
     hover: Color,
     active: Color,
-    /// Tint of an enabled icon; `None` keeps the SVG's own colours.
-    icon_ink: Option<Color>,
+    /// Tint of a row icon.
+    icon_ink: Color,
     panel_bg: Color,
     border: Color,
 }
@@ -277,14 +260,13 @@ struct Look {
 impl Look {
     fn of(tokens: &ThemeTokens) -> Self {
         let skin = super::skin::Skin::of(tokens);
-        let hover = skin.map_or(theme_ext::to_color(&tokens.hover), |s| s.hover);
         Self {
             primary: theme_ext::text_primary(tokens),
             muted: theme_ext::text_secondary(tokens),
             accent: theme_ext::to_color(&tokens.accent),
-            hover,
-            active: skin.map_or(theme_ext::to_color(&tokens.selection), |s| s.hover),
-            icon_ink: skin.map(|s| s.icon_ink),
+            hover: skin.hover,
+            active: skin.hover,
+            icon_ink: skin.icon_ink,
             panel_bg: theme_ext::to_color(&tokens.panel_bg),
             border: theme_ext::border_color(tokens),
         }
@@ -305,12 +287,12 @@ pub fn view<'a, M>(
 where
     M: 'static + Clone,
 {
-    let metrics = MenuMetrics::of(tokens);
+    let metrics = MenuMetrics::GRAPHITE;
     let look = Look::of(tokens);
-    // Graphite: the card matches the bar (raised fill, 10 px radius, themed
-    // shadow, soft separators). Legacy themes keep the 4 px panel.
+    // The card matches the bar (raised fill, 10 px radius, themed shadow,
+    // soft separators).
     let skin = super::skin::Skin::of(tokens);
-    let line = skin.map_or(look.border, |s| s.line_soft);
+    let line = skin.line_soft;
 
     // Fill children inside a Shrink column lay out at zero width in the
     // fork, so a fixed-width panel gets a Fill column (buttons stay clickable)
@@ -362,23 +344,16 @@ where
     }
     panel
         .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(skin.map_or(look.panel_bg, |s| s.fill))),
+            background: Some(Background::Color(skin.fill)),
             border: Border {
                 width: 1.0,
-                radius: skin.map_or(4.0, |s| s.radius).into(),
+                radius: skin.radius.into(),
                 color: look.border,
                 ..Border::default()
             },
             // Drop shadow lifts the popup off the canvas — shared by every
             // editor's active-bar dropdown so the chrome reads identically.
-            shadow: skin.map_or(
-                iced::Shadow {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                    offset: iced::Vector::new(0.0, 4.0),
-                    blur_radius: 12.0,
-                },
-                |s| s.shadow,
-            ),
+            shadow: skin.shadow,
             ..container::Style::default()
         })
         .boxed()

@@ -264,9 +264,7 @@ impl Signex {
         .boxed();
         Some(
             column![
-                iced::widget::Space::new().height(
-                    y_offset + crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
-                ),
+                iced::widget::Space::new().height(y_offset + crate::active_bar::bar_top_margin()),
                 container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -290,7 +288,7 @@ impl Signex {
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
-        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens);
+        let bar_margin = crate::active_bar::bar_top_margin();
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -457,7 +455,7 @@ impl Signex {
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
         // Below the editor's own toolbar strip so the bar never covers it.
-        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
+        let bar_margin = crate::active_bar::bar_top_margin()
             + crate::active_bar::symbol_editor_bar_drop(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
