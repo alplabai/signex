@@ -8,6 +8,9 @@
 
 use serde_json::{Map, Value, json};
 
+/// Whether a listed object may be shown, given what is inside.
+type Judge = fn(&Map<String, Value>, &dyn Fn(&str) -> bool) -> bool;
+
 /// `data` without what names a document or file `inside` does not accept, or
 /// `None` when the answer itself is such a document or element. Only the keys
 /// the queries use for documents are judged: the answer's `document`,
@@ -33,7 +36,7 @@ pub(crate) fn scrub_data(data: Value, inside: &dyn Fn(&str) -> bool) -> Option<V
     }
     // Fail closed: a listed document or element is kept only if it says whose
     // it is, and what it says is then proven.
-    let lists: [(&str, fn(&Map<String, Value>, &dyn Fn(&str) -> bool) -> bool); 3] = [
+    let lists: [(&str, Judge); 3] = [
         ("documents", document_ok),
         ("sheets", document_ok),
         ("elements", element_ok),
