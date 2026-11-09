@@ -347,6 +347,7 @@ fn app_in_a_project(sheet: SchematicSheet) -> Signex {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

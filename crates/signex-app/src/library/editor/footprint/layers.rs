@@ -53,6 +53,20 @@ impl FpLayer {
         }
     }
 
+    /// The catalog message of [`Self::label`].
+    pub fn message(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            FpLayer::FCu => ids::EDITORS_LAYER_TOP,
+            FpLayer::BCu => ids::EDITORS_LAYER_BOTTOM,
+            FpLayer::FSilks => ids::EDITORS_LAYER_TOP_OVERLAY,
+            FpLayer::BSilks => ids::EDITORS_LAYER_BOTTOM_OVERLAY,
+            FpLayer::FFab => ids::EDITORS_LAYER_TOP_ASSEMBLY,
+            FpLayer::BFab => ids::EDITORS_LAYER_BOTTOM_ASSEMBLY,
+            FpLayer::EdgeCuts => ids::EDITORS_LAYER_KEEP_OUT,
+        }
+    }
+
     /// Standard layer-name string used in `.standard_mod` / footprint S-expressions.
     pub fn standard_name(self) -> &'static str {
         match self {
@@ -178,11 +192,13 @@ impl FpSide {
     /// Display order of the groups in the layers panel.
     pub const ORDER: &'static [FpSide] = &[FpSide::Top, FpSide::Bottom, FpSide::Board];
 
-    pub fn label(self) -> &'static str {
+    /// The group heading of the layers panel, written in capitals.
+    pub fn heading(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
         match self {
-            FpSide::Top => "Top side",
-            FpSide::Bottom => "Bottom side",
-            FpSide::Board => "Board",
+            FpSide::Top => ids::EDITORS_LAYERS_SIDE_TOP,
+            FpSide::Bottom => ids::EDITORS_LAYERS_SIDE_BOTTOM,
+            FpSide::Board => ids::EDITORS_LAYERS_SIDE_BOARD,
         }
     }
 }

@@ -9,6 +9,7 @@
 
 use iced::widget::{Column, Space, Widget, column, container, row, scrollable};
 use iced::{Element, Length};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
@@ -35,12 +36,14 @@ pub(crate) fn view<'a>(
     grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: EditorAddress,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
     let panes = render_panes(
         state,
         library_state,
         tokens,
+        i18n,
         canvas_colors,
         (grid, device_px_per_logical_px),
         &address,
@@ -66,6 +69,7 @@ pub(crate) fn view<'a>(
 pub(crate) fn pin_map_tab<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
@@ -73,7 +77,7 @@ pub(crate) fn pin_map_tab<'a>(
     scrollable(super::inert::unless_read_only_veiled(
         read_only,
         veil,
-        pin_map_subsection(state, tokens, address),
+        pin_map_subsection(state, tokens, i18n, address),
     ))
     .width(Length::Fill)
     .height(Length::Fill)
@@ -220,6 +224,7 @@ fn render_panes<'a>(
     state: &'a ComponentPreviewState,
     library_state: &LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     canvas_colors: &CanvasColors,
     (grid, device_px_per_logical_px): (SheetGrid, f32),
     address: &EditorAddress,
@@ -290,7 +295,7 @@ fn render_panes<'a>(
             .boxed()
         });
     let symbol_pane = render_pane(
-        "Symbol",
+        t!(i18n, ids::EDITORS_COMPONENT_SYMBOL_HEADING),
         symbol_drawing,
         pane_message(PaneKind::Symbol, symbol_unbound),
         symbol_msg,
@@ -313,7 +318,7 @@ fn render_panes<'a>(
                 .boxed()
         });
     let footprint_pane = render_pane(
-        "Footprint",
+        t!(i18n, ids::EDITORS_COMPONENT_FOOTPRINT_HEADING),
         footprint_drawing,
         pane_message(PaneKind::Footprint, footprint_unbound),
         footprint_msg,
@@ -331,7 +336,7 @@ fn render_panes<'a>(
 }
 
 fn render_pane<'a>(
-    label: &'a str,
+    label: Localized,
     drawing: Option<Element<'a, LibraryMessage>>,
     empty_message: &'static str,
     open_msg: Option<LibraryMessage>,
@@ -412,13 +417,16 @@ fn match_pill<'a>(
     state: &ComponentPreviewState,
     line: &PinLine,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     use crate::styles::PillTone;
     if line.is_override {
         return kit::toned_pill("Override".to_string(), PillTone::Info, tokens);
     }
     let Some(footprint) = state.footprint.as_ref() else {
-        return text(raw("\u{2014}")).size(TS.body).boxed();
+        return text(t!(i18n, ids::EDITORS_COMPONENT_NO_MATCH))
+            .size(TS.body)
+            .boxed();
     };
     if footprint.pads.iter().any(|p| p.number == line.pad) {
         kit::toned_pill("By number".to_string(), PillTone::Ok, tokens)
@@ -430,6 +438,7 @@ fn match_pill<'a>(
 fn pin_map_subsection<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let summary = pin_map_counts(state).map(|(mapped, total)| {
@@ -443,7 +452,11 @@ fn pin_map_subsection<'a>(
             tokens,
         )
     });
-    let header = kit::section_header("Pin to pad", summary, tokens);
+    let header = kit::section_header(
+        t!(i18n, ids::EDITORS_COMPONENT_PIN_TO_PAD_HEADING),
+        summary,
+        tokens,
+    );
 
     let Some(sym) = state.symbol.as_ref() else {
         return column![
@@ -474,13 +487,14 @@ fn pin_map_subsection<'a>(
     ];
     let table_header = kit::table_header(
         &[
-            ("Pin", widths[0]),
-            ("Name", widths[1]),
-            ("Type", widths[1]),
-            ("Pad", widths[0]),
-            ("Match", widths[2]),
-            ("", widths[3]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_PIN), widths[0]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_NAME), widths[1]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_TYPE), widths[1]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_PAD), widths[0]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_MATCH), widths[2]),
+            (None, widths[3]),
         ],
+        i18n,
         tokens,
     );
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
@@ -508,12 +522,19 @@ fn pin_map_subsection<'a>(
             )),
             tokens,
         );
-        let direction = sym
+        let direction: Element<'a, LibraryMessage> = sym
             .pins
             .iter()
             .find(|p| p.number == line.number)
-            .map(|p| p.electrical.label())
-            .unwrap_or("");
+            .map_or_else(
+                || Space::new().boxed(),
+                |p| {
+                    text(t!(i18n, super::pin_labels::direction_message(p.electrical)))
+                        .size(TS.body)
+                        .color(muted)
+                        .boxed()
+                },
+            );
         let cells = vec![
             (
                 text(signex_i18n::UserText::new(line.number.clone()))
@@ -531,10 +552,7 @@ fn pin_map_subsection<'a>(
                     .boxed(),
                 widths[1],
             ),
-            (
-                text(raw(direction)).size(TS.body).color(muted).boxed(),
-                widths[1],
-            ),
+            (direction, widths[1]),
             (
                 text(signex_i18n::UserText::new(line.pad.clone()))
                     .size(TS.body)
@@ -543,7 +561,7 @@ fn pin_map_subsection<'a>(
                     .boxed(),
                 widths[0],
             ),
-            (match_pill(state, &line, tokens), widths[2]),
+            (match_pill(state, &line, tokens, i18n), widths[2]),
             (action, widths[3]),
         ];
         table = table.push(kit::table_row(cells, index, None, tokens));

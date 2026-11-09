@@ -31,6 +31,7 @@ pub fn view_footprint<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     _theme_id: signex_types::theme::ThemeId,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -84,7 +85,7 @@ pub fn view_footprint<'a>(
         EditorMode::Sketch | EditorMode::Normal => {
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
-                .push(super::dof_chip::overlay(editor, tokens))
+                .push(super::dof_chip::overlay(editor, tokens, i18n))
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)

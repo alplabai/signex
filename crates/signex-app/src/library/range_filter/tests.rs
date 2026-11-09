@@ -395,10 +395,12 @@ fn the_bar_draws_in_the_browser_and_the_picker_with_a_between_filter() {
         &state,
         &state.library_browsers[&root],
         &tokens,
+        &signex_i18n::I18n::en_us(),
     ));
     drop(crate::library::picker::view(
         state.picker.as_ref().unwrap(),
         &tokens,
+        &signex_i18n::I18n::en_us(),
         false,
     ));
 }

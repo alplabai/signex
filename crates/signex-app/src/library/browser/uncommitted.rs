@@ -12,18 +12,27 @@ pub(super) fn view_uncommitted_banner<'a>(
     library_path: &'a std::path::Path,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let Some(pending) = library_state.uncommitted_in(library_path) else {
         return Space::new().boxed();
     };
     let committing = library_state.is_committing(library_path);
-    let count = pending.paths.len();
-    let summary = format!(
-        "Uncommitted changes: {count} saved file{} not in version control. {}",
-        if count == 1 { "" } else { "s" },
-        pending.reason
+    let summary = t!(
+        i18n,
+        ids::LIBRARY_BROWSER_UNCOMMITTED,
+        "count" => pending.paths.len(),
+        "reason" => pending.reason.as_str()
     );
-    sidebar_footer(library_path, committing, summary, tokens)
+    let label = t!(
+        i18n,
+        if committing {
+            ids::LIBRARY_BROWSER_COMMITTING
+        } else {
+            ids::LIBRARY_BROWSER_COMMIT_NOW
+        }
+    );
+    sidebar_footer(library_path, committing, summary, label, tokens)
 }
 
 /// Graphite: the banner sits in the sidebar footer, in the `warn` ink over
@@ -31,18 +40,14 @@ pub(super) fn view_uncommitted_banner<'a>(
 fn sidebar_footer<'a>(
     library_path: &'a std::path::Path,
     committing: bool,
-    summary: String,
+    summary: signex_i18n::Localized,
+    label: signex_i18n::Localized,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let (fill, warn) = crate::styles::pill_colors(tokens, crate::styles::PillTone::Warn);
     let line = theme_ext::border_color(tokens);
-    let label = if committing {
-        "Committing…"
-    } else {
-        "Commit now"
-    };
     let commit_now = button(
-        text(raw(label))
+        text(label)
             .size(BROWSER_TEXT_SIZE)
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
@@ -55,7 +60,7 @@ fn sidebar_footer<'a>(
     .style(crate::styles::outline_button(tokens));
     container(
         column![
-            text(raw(summary)).size(BROWSER_HEADER_SIZE).color(warn),
+            text(summary).size(BROWSER_HEADER_SIZE).color(warn),
             commit_now,
         ]
         .spacing(SP.s),

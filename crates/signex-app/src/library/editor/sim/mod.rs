@@ -16,6 +16,7 @@ pub mod state;
 
 use iced::widget::{Widget, column, container, pick_list, row, scrollable, text_editor};
 use iced::{Element, Length};
+use signex_i18n::{I18n, ids, t};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -43,10 +44,19 @@ const NO_PINS: &str = "The symbol has no pins yet.";
 const UNNAMED_PIN: &str = "\u{2014}";
 
 /// Table columns: pin number, symbol pin name, SPICE node.
-const PIN_COLUMNS: [(&str, Length); 3] = [
-    ("Pin", Length::FillPortion(1)),
-    ("Symbol", Length::FillPortion(2)),
-    ("SPICE Node", Length::FillPortion(3)),
+const PIN_COLUMNS: [kit::TableColumn; 3] = [
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_PIN),
+        Length::FillPortion(1),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_SYMBOL),
+        Length::FillPortion(2),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_SPICE_NODE),
+        Length::FillPortion(3),
+    ),
 ];
 
 /// Height of the deck editor, in lines of body text.
@@ -135,8 +145,10 @@ fn labelled<'a>(
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    let model_heading = || t!(i18n, ids::EDITORS_COMPONENT_MODEL_HEADING);
     let Some(sim) = state.sim.as_ref() else {
         // No model bound: a header and an empty state with the one action.
         let add = kit::primary_button(
@@ -145,7 +157,7 @@ pub fn view<'a>(
             tokens,
         );
         let body = column![
-            kit::section_header("Model", None, tokens),
+            kit::section_header(model_heading(), None, tokens),
             kit::card(kit::empty_state(EMPTY_MESSAGE, Some(add), tokens), tokens),
         ]
         .spacing(SP.m)
@@ -220,15 +232,19 @@ pub fn view<'a>(
     );
 
     let table: Element<'a, LibraryMessage> = match state.symbol.as_ref() {
-        Some(symbol) => view_pin_node_table(sim, &symbol.pins, tokens, &address),
+        Some(symbol) => view_pin_node_table(sim, &symbol.pins, tokens, i18n, &address),
         None => kit::empty_state(SYMBOL_PENDING, None, tokens).boxed(),
     };
 
     scrollable(
         column![
-            kit::section_header("Model", Some(remove), tokens),
+            kit::section_header(model_heading(), Some(remove), tokens),
             model_card,
-            kit::section_header("Pin / Node Map", None, tokens),
+            kit::section_header(
+                t!(i18n, ids::EDITORS_COMPONENT_PIN_NODE_HEADING),
+                None,
+                tokens
+            ),
             table,
         ]
         .spacing(SP.m)
@@ -244,6 +260,7 @@ fn view_pin_node_table<'a>(
     sim: &'a signex_library::SimModel,
     pins: &'a [signex_library::SymbolPin],
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     if pins.is_empty() {
@@ -253,7 +270,7 @@ fn view_pin_node_table<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
     let mut col: iced::widget::Column<Element<'a, LibraryMessage>> =
-        column![kit::table_header(&PIN_COLUMNS, tokens)];
+        column![kit::table_header(&PIN_COLUMNS, i18n, tokens)];
     for (index, line) in pin_node_lines(sim, pins).into_iter().enumerate() {
         let pin_number = line.number.clone();
         let node_address = address.clone();
@@ -373,8 +390,12 @@ mod tests {
 
     #[test]
     fn pin_columns_are_pin_symbol_node() {
-        let titles: Vec<&str> = PIN_COLUMNS.iter().map(|(t, _)| *t).collect();
-        assert_eq!(titles, ["Pin", "Symbol", "SPICE Node"]);
+        let en = I18n::en_us();
+        let titles: Vec<String> = PIN_COLUMNS
+            .iter()
+            .map(|(id, _)| id.map_or_else(String::new, |id| t!(en, id).into_string()))
+            .collect();
+        assert_eq!(titles, ["PIN", "SYMBOL", "SPICE NODE"]);
     }
 
     /// Enable → disable round-trip clears every Sim-side field.

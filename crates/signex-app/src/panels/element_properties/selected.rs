@@ -20,6 +20,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
+    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
         input_bg,
@@ -701,7 +702,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             // B/I/U/T row — cosmetic for now.
                             c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
                             // 3x3 Justification grid — Altium's 9-point anchor picker.
-                            c = c.push(form_label("Justification"));
+                            c = c.push(form_label(signex_i18n::t!(
+                                i18n,
+                                signex_i18n::ids::PANELS_PROPERTIES_JUSTIFICATION
+                            )));
                             c = c.push(
                                 container(justification_grid(
                                     id,

@@ -5,8 +5,9 @@
 
 use iced::widget::{Column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use super::layers::{FpLayer, FpSide, LayerPalette};
 use crate::panels::{PanelContext, PanelMsg};
@@ -23,11 +24,12 @@ const EYE_WIDTH: f32 = TS.title * 1.6;
 /// Render the panel for the active footprint editor.
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
+    let i18n = &*ctx.i18n;
     let ink = ti(tokens.text);
     let muted = ti(tokens.text_secondary);
     let Some(fp) = ctx.footprint_editor.as_ref() else {
         return container(
-            text(raw("Open a `.snxfpt` to see its layers here."))
+            text(t!(i18n, ids::EDITORS_LAYERS_NO_FOOTPRINT))
                 .size(TS.caption)
                 .color(muted),
         )
@@ -40,13 +42,13 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     let actions = row![
         action_button(
-            "Show all",
+            t!(i18n, ids::EDITORS_LAYERS_SHOW_ALL),
             PanelMsg::FpEditorLayersShowAllClicked,
             ink,
             radius,
         ),
         action_button(
-            "Top side only",
+            t!(i18n, ids::EDITORS_LAYERS_TOP_SIDE_ONLY),
             PanelMsg::FpEditorLayersTopSideOnlyClicked,
             ink,
             radius,
@@ -63,18 +65,14 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     );
     for side in FpSide::ORDER {
         col = col.push(
-            container(
-                text(raw(side.label().to_uppercase()))
-                    .size(TS.section)
-                    .color(muted),
-            )
-            .padding([SP.s, SP.m])
-            .width(Length::Fill)
-            .boxed(),
+            container(text(t!(i18n, side.heading())).size(TS.section).color(muted))
+                .padding([SP.s, SP.m])
+                .width(Length::Fill)
+                .boxed(),
         );
         for layer in FpLayer::ORDER.iter().filter(|l| l.side() == *side) {
             let visible = fp.layer_visibility.get(*layer);
-            col = col.push(layer_row(*layer, visible, palette, tokens));
+            col = col.push(layer_row(*layer, visible, palette, tokens, i18n));
         }
     }
     col.boxed()
@@ -86,6 +84,7 @@ fn layer_row<'a>(
     visible: bool,
     palette: LayerPalette,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let ink = ti(tokens.text);
     let muted = resolve(tokens).ink3;
@@ -94,10 +93,17 @@ fn layer_row<'a>(
     let radius = Radii::GRAPHITE.control;
 
     let eye = button(
-        text(raw(if visible { "\u{25C9}" } else { "\u{25CB}" }))
-            .size(TS.label)
-            .color(label_ink)
-            .align_x(iced::alignment::Horizontal::Center),
+        text(t!(
+            i18n,
+            if visible {
+                ids::EDITORS_LAYERS_EYE_SHOWN
+            } else {
+                ids::EDITORS_LAYERS_EYE_HIDDEN
+            }
+        ))
+        .size(TS.label)
+        .color(label_ink)
+        .align_x(iced::alignment::Horizontal::Center),
     )
     .width(Length::Fixed(EYE_WIDTH))
     .padding([SP.xs, 0.0])
@@ -117,7 +123,7 @@ fn layer_row<'a>(
         ..button::Style::default()
     });
 
-    let swatch = container(text(raw("")).size(TS.caption))
+    let swatch = container(iced::widget::Space::new())
         .width(Length::Fixed(SWATCH))
         .height(Length::Fixed(SWATCH))
         .style(move |_: &Theme| container::Style {
@@ -145,11 +151,11 @@ fn layer_row<'a>(
         row![
             eye.boxed(),
             swatch.boxed(),
-            text(raw(layer.label()))
+            text(t!(i18n, layer.message()))
                 .size(TS.body)
                 .color(label_ink)
                 .boxed(),
-            text(raw(layer.standard_name()))
+            text(UserText::new(layer.standard_name()))
                 .size(TS.caption)
                 .font(crate::fonts::iced_font_for_family(
                     crate::fonts::CHROME_MONO_FONT,
@@ -167,12 +173,12 @@ fn layer_row<'a>(
 
 /// A bordered text button of the panel's action row.
 fn action_button<'a>(
-    label: &'static str,
+    label: Localized,
     msg: PanelMsg,
     ink: Color,
     radius: f32,
 ) -> Element<'a, PanelMsg> {
-    button(text(raw(label)).size(TS.body).color(ink))
+    button(text(label).size(TS.body).color(ink))
         .padding([SP.s, SP.l])
         .on_press(msg)
         .style(move |_: &Theme, status| button::Style {

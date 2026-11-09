@@ -672,6 +672,7 @@ fn net_class_assign() {
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

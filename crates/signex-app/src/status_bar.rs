@@ -93,6 +93,7 @@ pub fn view<'a>(
     pending_git_commits: usize,
     altium_import: Option<&str>,
     activity: Option<&str>,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
     graphite::view(
         &Readout {
@@ -110,5 +111,6 @@ pub fn view<'a>(
             activity,
         },
         tokens,
+        i18n,
     )
 }

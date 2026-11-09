@@ -15,6 +15,7 @@ pub(super) fn view_libraries_tree<'a>(
     library_path: &'a std::path::Path,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let r = crate::styles::tokens::resolve(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -25,7 +26,7 @@ pub(super) fn view_libraries_tree<'a>(
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![
         container(
-            text(raw("LIBRARIES"))
+            text(t!(i18n, ids::LIBRARY_BROWSER_LIBRARIES))
                 .size(TS.section)
                 .style(crate::styles::section_label(tokens))
         )
@@ -55,23 +56,27 @@ pub(super) fn view_libraries_tree<'a>(
         .align_y(iced::Alignment::Center);
         if library_state.is_read_only(&lib.root) {
             label = label.push(
-                container(text(raw("read-only")).size(TS.caption).color(muted))
-                    .padding([0.0, SP.s])
-                    .style(move |_: &Theme| iced::widget::container::Style {
-                        background: Some(iced::Background::Color(pill_fill)),
-                        border: Border {
-                            width: 1.0,
-                            color: line,
-                            radius: crate::styles::Radii::GRAPHITE.pill.into(),
-                            ..Border::default()
-                        },
-                        ..iced::widget::container::Style::default()
-                    })
-                    .boxed(),
+                container(
+                    text(t!(i18n, ids::LIBRARY_BROWSER_READ_ONLY))
+                        .size(TS.caption)
+                        .color(muted),
+                )
+                .padding([0.0, SP.s])
+                .style(move |_: &Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(pill_fill)),
+                    border: Border {
+                        width: 1.0,
+                        color: line,
+                        radius: crate::styles::Radii::GRAPHITE.pill.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::container::Style::default()
+                })
+                .boxed(),
             );
         }
         label = label.push(
-            text(raw(rows.to_string()))
+            text(t!(i18n, ids::LIBRARY_BROWSER_ROW_COUNT, "count" => rows))
                 .size(BROWSER_TEXT_SIZE)
                 .color(muted)
                 .boxed(),

@@ -115,6 +115,17 @@ impl LifecycleFilter {
         }
     }
 
+    /// The catalog message of the filter pill.
+    pub fn message(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            Self::ActiveAndPreferred => ids::LIBRARY_BROWSER_FILTER_ACTIVE,
+            Self::PreferredOnly => ids::LIBRARY_BROWSER_FILTER_PREFERRED,
+            Self::IncludeDeprecated => ids::LIBRARY_BROWSER_FILTER_DEPRECATED,
+            Self::All => ids::LIBRARY_BROWSER_FILTER_ALL,
+        }
+    }
+
     /// Every option in stable display order — drives the
     /// `pick_list`'s value list.
     pub const ALL: &'static [LifecycleFilter] = &[
@@ -768,6 +779,28 @@ impl ComponentsMountSource {
             Self::Installed => "Installed",
             Self::Global => "Global",
             Self::Stock => "Stock",
+        }
+    }
+
+    /// The catalog message of [`Self::label`] (source chips, the Add menu).
+    pub fn message(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            Self::Project => ids::PANELS_COMPONENTS_SOURCE_PROJECT,
+            Self::Installed => ids::PANELS_COMPONENTS_SOURCE_INSTALLED,
+            Self::Global => ids::PANELS_COMPONENTS_SOURCE_GLOBAL,
+            Self::Stock => ids::PANELS_COMPONENTS_SOURCE_STOCK,
+        }
+    }
+
+    /// The source badge of a library row, written in capitals.
+    pub fn badge(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            Self::Project => ids::PANELS_COMPONENTS_BADGE_PROJECT,
+            Self::Installed => ids::PANELS_COMPONENTS_BADGE_INSTALLED,
+            Self::Global => ids::PANELS_COMPONENTS_BADGE_GLOBAL,
+            Self::Stock => ids::PANELS_COMPONENTS_BADGE_STOCK,
         }
     }
 

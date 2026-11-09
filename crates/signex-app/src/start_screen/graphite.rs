@@ -7,8 +7,9 @@ use std::path::PathBuf;
 
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text, text_input, tooltip};
+use signex_widgets::{button, text, text_input, tooltip};
 
 use super::{Action, recent_label, recent_message, visible_recent};
 use crate::app::Message;
@@ -77,7 +78,7 @@ fn outline_button(
 /// A navigation row; `active` marks the current page (not pressable).
 fn nav_row<'a>(
     tokens: &ThemeTokens,
-    label: String,
+    label: Localized,
     action: Option<Message>,
     active: bool,
 ) -> Element<'a, Message> {
@@ -87,7 +88,7 @@ fn nav_row<'a>(
         resolve(tokens).sunken,
         ti(tokens.text),
     );
-    let mut b = button(text(raw(label)).size(TS.label))
+    let mut b = button(text(label).size(TS.label))
         .width(Length::Fill)
         .padding([6.0, 14.0])
         .style(move |_: &iced::Theme, status| button::Style {
@@ -113,6 +114,7 @@ fn nav_row<'a>(
 
 fn nav<'a>(
     tokens: &ThemeTokens,
+    i18n: &I18n,
     open_shortcut: &str,
     recent_count: usize,
     libraries: &[super::LoadedLibrary],
@@ -120,14 +122,14 @@ fn nav<'a>(
     let cap_fill = resolve(tokens).sunken;
     let cap_ink = resolve(tokens).ink3;
     let open_label: Element<'a, Message> = {
-        let label = text(raw("Open\u{2026}"))
+        let label = text(t!(i18n, ids::START_OPEN))
             .size(TS.dense)
             .wrapping(iced::widget::text::Wrapping::None);
         let mut line = row![label.boxed()].spacing(8).align_y(Alignment::Center);
         if !open_shortcut.is_empty() {
             line = line.push(
                 container(
-                    text(raw(open_shortcut.to_owned()))
+                    text(UserText::new(open_shortcut))
                         .size(TS.caption)
                         .font(mono())
                         .color(cap_ink)
@@ -154,7 +156,7 @@ fn nav<'a>(
     };
     let top = row![
         button(
-            text(raw("New project"))
+            text(t!(i18n, ids::START_NEW_PROJECT))
                 .size(TS.dense)
                 .height(Length::Fill)
                 .align_y(iced::alignment::Vertical::Center)
@@ -174,29 +176,30 @@ fn nav<'a>(
     ]
     .spacing(8);
     let items = column![
-        nav_row(tokens, "Home".into(), None, true),
-        nav_count_row(tokens, "Projects", Some(recent_count)),
-        nav_count_row(tokens, "Libraries", Some(libraries.len())),
+        nav_row(tokens, t!(i18n, ids::START_HOME), None, true),
+        nav_count_row(tokens, i18n, ids::START_PROJECTS, Some(recent_count)),
+        nav_count_row(tokens, i18n, ids::START_LIBRARIES, Some(libraries.len())),
         coming_soon(
-            nav_count_row(tokens, "Parts search", None),
+            nav_count_row(tokens, i18n, ids::START_PARTS_SEARCH, None),
             tokens,
+            i18n,
             tooltip::Position::Right,
         ),
         nav_row(
             tokens,
-            "Open Sample Project".into(),
+            t!(i18n, ids::START_OPEN_SAMPLE),
             Some(Action::OpenSampleProject.message()),
             false
         ),
         nav_row(
             tokens,
-            "Keyboard Shortcuts (F1)".into(),
+            t!(i18n, ids::START_KEYBOARD_SHORTCUTS),
             Some(Action::KeyboardShortcuts.message()),
             false
         ),
     ]
     .spacing(2);
-    let loaded = libraries_card(tokens, libraries);
+    let loaded = libraries_card(tokens, i18n, libraries);
     container(column![
         top,
         Space::new().height(10.0),
@@ -222,16 +225,17 @@ fn nav<'a>(
 /// Rows that open nothing yet are wrapped by the caller in the stub tooltip.
 fn nav_count_row<'a>(
     tokens: &ThemeTokens,
-    label: &'static str,
+    i18n: &I18n,
+    label: MessageId,
     count: Option<usize>,
 ) -> Element<'a, Message> {
     let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
     let mut line =
-        row![text(raw(label)).size(TS.label).color(ink).boxed()].align_y(Alignment::Center);
+        row![text(t!(i18n, label)).size(TS.label).color(ink).boxed()].align_y(Alignment::Center);
     line = line.push(Space::new().width(Length::Fill).boxed());
     if let Some(n) = count {
         line = line.push(
-            text(raw(n.to_string()))
+            text(t!(i18n, ids::START_COUNT, "count" => n))
                 .size(TS.caption)
                 .color(ink3)
                 .boxed(),
@@ -246,6 +250,7 @@ fn nav_count_row<'a>(
 /// The loaded libraries and their component count, from the library state.
 fn libraries_card<'a>(
     tokens: &ThemeTokens,
+    i18n: &I18n,
     libraries: &[super::LoadedLibrary],
 ) -> Element<'a, Message> {
     let (ink, ink2, ink3) = (
@@ -259,15 +264,18 @@ fn libraries_card<'a>(
         .map(|(name, _)| name.as_str())
         .collect::<Vec<_>>()
         .join(" \u{00B7} ");
-    let summary = format!(
-        "{} loaded \u{00B7} {} component{}",
-        libraries.len(),
-        components,
-        if components == 1 { "" } else { "s" }
+    let summary = t!(
+        i18n,
+        ids::START_LIBRARIES_SUMMARY,
+        "libraries" => libraries.len(),
+        "components" => components
     );
     let mut body = column![
-        text(raw("Libraries")).size(TS.label).color(ink).boxed(),
-        text(raw(summary)).size(TS.dense).color(ink2).boxed(),
+        text(t!(i18n, ids::START_LIBRARIES))
+            .size(TS.label)
+            .color(ink)
+            .boxed(),
+        text(summary).size(TS.dense).color(ink2).boxed(),
     ]
     .spacing(2);
     if !names.is_empty() {
@@ -288,34 +296,33 @@ fn libraries_card<'a>(
         .boxed()
 }
 
-fn section_header<'a>(tokens: &ThemeTokens, title: &str) -> Element<'a, Message> {
-    text(raw(title.to_uppercase()))
+/// A section heading; the catalog writes it in capitals.
+fn section_header<'a>(tokens: &ThemeTokens, title: Localized) -> Element<'a, Message> {
+    text(title)
         .size(TS.section)
         .style(styles::section_label(tokens))
         .boxed()
 }
 
 /// The specification box: a disabled shell, no sample text.
-fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+fn spec_box<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
     let r = resolve(tokens);
     let (ink4, ink) = (r.ink4, ti(tokens.text));
-    let input: iced::widget::TextInput<'a, Message> = text_input(
-        raw("Describe the board: what it does, its size, layers and budget."),
-        "",
-    )
-    .padding(iced::Padding::ZERO)
-    .size(TS.label)
-    .width(Length::Fill)
-    .style(move |_: &iced::Theme, _| text_input::Style {
-        background: Background::Color(Color::TRANSPARENT),
-        border: Border::default(),
-        placeholder: ink4,
-        value: ink,
-        selection: Color { a: 0.4, ..ink },
-    });
-    let stub = |label: &'a str, kind: u8| -> Element<'a, Message> {
+    let input: iced::widget::TextInput<'a, Message> =
+        text_input(t!(i18n, ids::START_SPEC_PLACEHOLDER), "")
+            .padding(iced::Padding::ZERO)
+            .size(TS.label)
+            .width(Length::Fill)
+            .style(move |_: &iced::Theme, _| text_input::Style {
+                background: Background::Color(Color::TRANSPARENT),
+                border: Border::default(),
+                placeholder: ink4,
+                value: ink,
+                selection: Color { a: 0.4, ..ink },
+            });
+    let stub = |label: MessageId, kind: u8| -> Element<'a, Message> {
         let b = button(
-            text(raw(label))
+            text(t!(i18n, label))
                 .size(TS.dense)
                 .height(Length::Fill)
                 .align_y(iced::alignment::Vertical::Center),
@@ -327,54 +334,61 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         } else {
             b.style(outline_button(tokens)).boxed()
         };
-        coming_soon(b, tokens, tooltip::Position::Top)
+        coming_soon(b, tokens, i18n, tooltip::Position::Top)
     };
     let actions = row![
-        stub("Attach", 1),
-        stub("Import", 1),
-        stub("Constraints", 1),
+        stub(ids::START_SPEC_ATTACH, 1),
+        stub(ids::START_SPEC_IMPORT, 1),
+        stub(ids::START_SPEC_CONSTRAINTS, 1),
         Space::new().width(Length::Fill).boxed(),
-        stub("Generate design", 0),
+        stub(ids::START_SPEC_GENERATE, 0),
     ]
     .spacing(6)
     .align_y(Alignment::Center);
-    let mode = |label: &'a str, on: bool| -> Element<'a, Message> {
+    let mode = |label: MessageId, on: bool| -> Element<'a, Message> {
         let (raised, ink, ink3) = (
             resolve(tokens).raised,
             ti(tokens.text),
             resolve(tokens).ink3,
         );
-        let pill = container(
-            text(raw(label))
-                .size(TS.dense)
-                .color(if on { ink } else { ink3 }),
-        )
-        .padding([4.0, 14.0])
-        .style(move |_: &iced::Theme| container::Style {
-            background: on.then_some(Background::Color(raised)),
-            border: Border {
-                radius: Radii::GRAPHITE.control.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
-        coming_soon(pill.boxed(), tokens, tooltip::Position::Top)
+        let pill =
+            container(
+                text(t!(i18n, label))
+                    .size(TS.dense)
+                    .color(if on { ink } else { ink3 }),
+            )
+            .padding([4.0, 14.0])
+            .style(move |_: &iced::Theme| container::Style {
+                background: on.then_some(Background::Color(raised)),
+                border: Border {
+                    radius: Radii::GRAPHITE.control.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            });
+        coming_soon(pill.boxed(), tokens, i18n, tooltip::Position::Top)
     };
     let sunken = resolve(tokens).sunken;
-    let modes = container(row![mode("Generator", true), mode("Assistant", false)].spacing(2))
-        .padding(2)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(Background::Color(sunken)),
-            border: Border {
-                radius: Radii::GRAPHITE.control.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
+    let modes = container(
+        row![
+            mode(ids::START_SPEC_GENERATOR, true),
+            mode(ids::START_SPEC_ASSISTANT, false)
+        ]
+        .spacing(2),
+    )
+    .padding(2)
+    .style(move |_: &iced::Theme| container::Style {
+        background: Some(Background::Color(sunken)),
+        border: Border {
+            radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
     let head = row![
         modes,
         Space::new().width(Length::Fill),
-        text(raw("Signal uses your loaded libraries first"))
+        text(t!(i18n, ids::START_SPEC_LIBRARIES_FIRST))
             .size(TS.dense)
             .color(resolve(tokens).ink3),
     ]
@@ -397,11 +411,13 @@ fn spec_box<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
 /// The bundled sample project as a real card: it opens through File ▸ Open
 /// Sample Project.
-fn sample_card<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+fn sample_card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
     let (ink, ink2) = (ti(tokens.text), ti(tokens.text_secondary));
     let body = column![
-        text(raw("Sample project")).size(TS.label).color(ink),
-        text(raw("Open the bundled example project and look around."))
+        text(t!(i18n, ids::START_SAMPLE_TITLE))
+            .size(TS.label)
+            .color(ink),
+        text(t!(i18n, ids::START_SAMPLE_BODY))
             .size(TS.dense)
             .color(ink2),
     ]
@@ -435,13 +451,17 @@ fn sample_card<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         .boxed()
 }
 
-fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, Message> {
+fn recent_list<'a>(
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+    recent: &'a [PathBuf],
+) -> Element<'a, Message> {
     let shown = visible_recent(recent);
     if shown.is_empty() {
         return crate::panels::empty_state_card(
             tokens,
-            "No recent projects",
-            "Projects you open appear here.",
+            t!(i18n, ids::START_NO_RECENT_TITLE),
+            t!(i18n, ids::START_NO_RECENT_BODY),
             None,
         );
     }
@@ -467,7 +487,9 @@ fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, M
         let entry = row![
             tile,
             column![
-                text(raw(recent_label(path))).size(TS.label).color(ink),
+                text(UserText::new(recent_label(path)))
+                    .size(TS.label)
+                    .color(ink),
                 text(signex_i18n::UserText::new(path.display().to_string()))
                     .size(TS.caption)
                     .font(mono())
@@ -517,6 +539,7 @@ fn recent_list<'a>(tokens: &ThemeTokens, recent: &'a [PathBuf]) -> Element<'a, M
 /// The Graphite start screen.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
+    i18n: &'a I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
     libraries: &[super::LoadedLibrary],
@@ -529,6 +552,7 @@ pub fn view<'a>(
         let room = (size.width - NAV_W - 2.0 * MAIN_PAD_X).max(0.0);
         view_sized(
             tokens,
+            i18n,
             &open_shortcut,
             recent,
             &libraries,
@@ -540,26 +564,27 @@ pub fn view<'a>(
 
 fn view_sized<'a>(
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
     libraries: &[super::LoadedLibrary],
     main_w: f32,
 ) -> Element<'a, Message> {
     let main = column![
-        text(raw("What are you building?"))
+        text(t!(i18n, ids::START_HERO_TITLE))
             .size(TS.display * 1.4)
             .color(ti(tokens.text)),
-        text(raw("Describe the board. Signal drafts the specification, architecture and parts, and you approve each stage before anything is drawn."))
+        text(t!(i18n, ids::START_HERO_BODY))
             .size(TS.title)
             .color(ti(tokens.text_secondary)),
         Space::new().height(8.0),
-        spec_box(tokens),
+        spec_box(tokens, i18n),
         Space::new().height(8.0),
-        section_header(tokens, "Start from a reference design"),
-        sample_card(tokens),
+        section_header(tokens, t!(i18n, ids::START_REFERENCE_DESIGN)),
+        sample_card(tokens, i18n),
         Space::new().height(8.0),
-        section_header(tokens, "Recent projects"),
-        recent_list(tokens, recent),
+        section_header(tokens, t!(i18n, ids::START_RECENT_PROJECTS)),
+        recent_list(tokens, i18n, recent),
     ]
     .spacing(10)
     .width(Length::Fixed(main_w));
@@ -571,6 +596,7 @@ fn view_sized<'a>(
     row![
         nav(
             tokens,
+            i18n,
             open_shortcut,
             visible_recent(recent).len(),
             libraries,

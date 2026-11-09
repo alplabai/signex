@@ -26,6 +26,7 @@ pub mod inert;
 pub(crate) mod kit;
 mod measurement_cell;
 pub mod params;
+pub(crate) mod pin_labels;
 pub mod preview;
 pub mod sim;
 pub mod standalone;
@@ -35,6 +36,7 @@ pub mod text_extent;
 
 use iced::widget::{Space, Widget, column, container, row};
 use iced::{Color, Element, Length};
+use signex_i18n::{I18n, ids, t};
 use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
@@ -60,10 +62,11 @@ pub(crate) fn view<'a>(
     grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: EditorAddress,
+    i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
-    let header = view_header(state, tokens, address.clone(), read_only);
-    let tabs = view_tabs(state, library_state, tokens, address.clone());
+    let header = view_header(state, tokens, i18n, address.clone(), read_only);
+    let tabs = view_tabs(state, library_state, tokens, i18n, address.clone());
     let body = view_active_tab(
         state,
         library_state,
@@ -72,6 +75,7 @@ pub(crate) fn view<'a>(
         grid,
         device_px_per_logical_px,
         address.clone(),
+        i18n,
     );
     let footer = view_footer(state, tokens, address, read_only);
 
@@ -85,10 +89,11 @@ pub(crate) fn view<'a>(
 fn view_header<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
-    graphite_header(state, tokens, address, read_only)
+    graphite_header(state, tokens, i18n, address, read_only)
 }
 
 /// Graphite document header: the internal PN in mono, then the lifecycle
@@ -97,6 +102,7 @@ fn view_header<'a>(
 fn graphite_header<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
@@ -140,7 +146,7 @@ fn graphite_header<'a>(
     line = line.push(Space::new().width(Length::Fill).boxed());
     if state.dirty {
         line = line.push(
-            text(raw("\u{2022} Unsaved changes"))
+            text(t!(i18n, ids::EDITORS_COMPONENT_UNSAVED))
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
                 .boxed(),
@@ -249,6 +255,7 @@ fn view_tabs<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     // The shared `TabPill`, so these tabs read like the document and dock
@@ -270,7 +277,7 @@ fn view_tabs<'a>(
             (resting_fill, theme_ext::text_secondary(tokens))
         };
         let mut content: iced::widget::Row<Element<'_, LibraryMessage>> = row![
-            text(raw(tab.graphite_label()))
+            text(t!(i18n, tab.graphite_label()))
                 .size(TS.label)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)
@@ -331,6 +338,7 @@ fn view_active_tab<'a>(
     grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: EditorAddress,
+    i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
     // A read-only library (the stock library) shows every editing tab
     // dimmed and inert; the Preview tab guards its own editing parts
@@ -346,26 +354,31 @@ fn view_active_tab<'a>(
             grid,
             device_px_per_logical_px,
             address,
+            i18n,
         ),
         PreviewTab::Parameters => inert::unless_read_only_veiled(
             read_only,
             veil,
-            params::view(state, library_state, tokens, address),
+            params::view(state, library_state, tokens, i18n, address),
         ),
-        PreviewTab::Supply => {
-            inert::unless_read_only_veiled(read_only, veil, supply::view(state, tokens, address))
-        }
+        PreviewTab::Supply => inert::unless_read_only_veiled(
+            read_only,
+            veil,
+            supply::view(state, tokens, i18n, address),
+        ),
         // Open stays live on a read-only library, so the tab veils its
         // own editing controls instead of being wrapped whole.
-        PreviewTab::Datasheet => datasheet_picker::view(state, tokens, address, read_only, veil),
-        PreviewTab::Simulation => {
-            inert::unless_read_only_veiled(read_only, veil, sim::view(state, tokens, address))
+        PreviewTab::Datasheet => {
+            datasheet_picker::view(state, tokens, i18n, address, read_only, veil)
         }
-        PreviewTab::PinMap => preview::pin_map_tab(state, tokens, &address, read_only),
+        PreviewTab::Simulation => {
+            inert::unless_read_only_veiled(read_only, veil, sim::view(state, tokens, i18n, address))
+        }
+        PreviewTab::PinMap => preview::pin_map_tab(state, tokens, i18n, &address, read_only),
         PreviewTab::Alternates => inert::unless_read_only_veiled(
             read_only,
             veil,
-            iced::widget::scrollable(alternate_symbols::view(state, tokens, &address))
+            iced::widget::scrollable(alternate_symbols::view(state, tokens, i18n, &address))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .boxed(),

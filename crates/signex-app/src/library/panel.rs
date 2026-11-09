@@ -39,7 +39,11 @@ const LIB_PANEL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 const LIB_PANEL_ROW_PADDING: u16 = 4;
 
 /// Render the Library left-dock panel.
-pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
+pub fn view<'a>(
+    state: &'a LibraryState,
+    tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -80,7 +84,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
             }
             let expanded = state.panel_expanded.contains(&lib.root);
             col = col.push(
-                container(library_row(lib, expanded, tokens))
+                container(library_row(lib, expanded, tokens, i18n))
                     .padding([SP.xs, SP.s])
                     .boxed(),
             );
@@ -131,6 +135,7 @@ fn library_row<'a>(
     lib: &'a super::state::OpenLibrary,
     expanded: bool,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let chevron = signex_widgets::chevron::chevron(
@@ -146,9 +151,12 @@ fn library_row<'a>(
     let toggle = button(
         row![
             chevron,
-            text(raw(format!("{}.snxlib", lib.display_name)))
-                .size(LIB_PANEL_TEXT_SIZE)
-                .color(text_c),
+            text(signex_i18n::UserText::new(format!(
+                "{}.snxlib",
+                lib.display_name
+            )))
+            .size(LIB_PANEL_TEXT_SIZE)
+            .color(text_c),
             rows_pill,
         ]
         .spacing(SP.s)
@@ -160,10 +168,14 @@ fn library_row<'a>(
         lib.root.clone(),
     )))
     .style(crate::styles::subtle_button(tokens));
-    let open = button(text(raw("Open")).size(LIB_PANEL_TEXT_SIZE).color(text_c))
-        .padding([SP.xs, SP.m])
-        .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
-        .style(crate::panels::form_look::ghost_button);
+    let open = button(
+        text(signex_i18n::t!(i18n, signex_i18n::ids::LIBRARY_PANEL_OPEN))
+            .size(LIB_PANEL_TEXT_SIZE)
+            .color(text_c),
+    )
+    .padding([SP.xs, SP.m])
+    .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
+    .style(crate::panels::form_look::ghost_button);
     row![toggle, open]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)

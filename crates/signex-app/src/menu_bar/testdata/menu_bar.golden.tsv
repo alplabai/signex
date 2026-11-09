@@ -75,7 +75,7 @@ Place/Junction	item	Junction	place_junction	J	PlaceJunction	01000000	cmd:place_j
 Place/---	separator	-	-	-	-	-	-
 Place/Text	item	Text	-	-	PlaceText	01000000	sch
 Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01000000	sch
-Place/Sheet Entry	stub	Sheet Entry	-	-	-	00000000	never
+Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01000000	cmd:place_sheet_entry
 Design	menu	Design	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Tools	menu	Tools	-	-	-	-	-
@@ -91,7 +91,7 @@ Tools/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	
 Tools/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
-Tools/Library Editor	stub	Library Editor	-	-	-	00000000	never
+Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
 Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
@@ -114,7 +114,7 @@ Window	menu	Window	-	-	-	-	-
 Window/Tile Horizontally	stub	Tile Horizontally	-	-	-	00000000	never
 Window/Tile Vertically	stub	Tile Vertically	-	-	-	00000000	never
 Window/---	separator	-	-	-	-	-	-
-Window/Close All Documents	stub	Close All Documents	-	-	-	00000000	never
+Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Help	menu	Help	-	-	-	-	-
 Help/About Signex	item	About Signex	-	-	OpenAbout	11111111	always
 Help/Documentation	item	Documentation	-	-	OpenDocumentation	11111111	always

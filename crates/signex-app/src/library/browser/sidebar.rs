@@ -27,6 +27,7 @@ pub(super) fn view_table_sidebar<'a>(
     lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -48,7 +49,7 @@ pub(super) fn view_table_sidebar<'a>(
 
     col = col.push(
         container(
-            text(raw("TABLES"))
+            text(t!(i18n, ids::LIBRARY_BROWSER_TABLES))
                 .size(TS.section)
                 .style(crate::styles::section_label(tokens)),
         )
@@ -145,12 +146,13 @@ pub(super) fn view_table_sidebar<'a>(
                 })
                 .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text(raw("✓")).size(BROWSER_TEXT_SIZE))
-                .padding([SP.s, SP.m])
-                .on_press(LibraryMessage::BrowserConfirmRenameTable {
-                    library_path: library_for_confirm,
-                })
-                .style(look::confirm_style(tokens));
+            let confirm =
+                button(text(t!(i18n, ids::LIBRARY_BROWSER_RENAME_CONFIRM)).size(BROWSER_TEXT_SIZE))
+                    .padding([SP.s, SP.m])
+                    .on_press(LibraryMessage::BrowserConfirmRenameTable {
+                        library_path: library_for_confirm,
+                    })
+                    .style(look::confirm_style(tokens));
             let cancel = button(text(raw("×")).size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserCancelRenameTable {
@@ -191,7 +193,7 @@ pub(super) fn view_table_sidebar<'a>(
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c)
                 .width(Length::Fill),
-            text(raw(format!("{count}")))
+            text(t!(i18n, ids::LIBRARY_BROWSER_ROW_COUNT, "count" => count))
                 .size(BROWSER_TEXT_SIZE)
                 .color(muted),
         ]
@@ -324,28 +326,33 @@ pub(super) fn view_table_sidebar<'a>(
                 })
                 .padding(SP.s)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text(raw("Create")).size(BROWSER_TEXT_SIZE))
-                .padding([SP.s, 10.0])
-                .on_press(LibraryMessage::BrowserConfirmAddTable {
-                    library_path: library_for_confirm,
-                })
-                .style(look::confirm_style(tokens));
-            let cancel = button(text(raw("Cancel")).size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([SP.s, 10.0])
-                .on_press(LibraryMessage::BrowserCancelAddTable {
-                    library_path: library_for_cancel,
-                })
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(control_bg)),
-                    text_color: wash_ink,
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+            let confirm =
+                button(text(t!(i18n, ids::LIBRARY_BROWSER_CREATE_TABLE)).size(BROWSER_TEXT_SIZE))
+                    .padding([SP.s, 10.0])
+                    .on_press(LibraryMessage::BrowserConfirmAddTable {
+                        library_path: library_for_confirm,
+                    })
+                    .style(look::confirm_style(tokens));
+            let cancel = button(
+                text(t!(i18n, ids::LIBRARY_BROWSER_CANCEL))
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(text_c),
+            )
+            .padding([SP.s, 10.0])
+            .on_press(LibraryMessage::BrowserCancelAddTable {
+                library_path: library_for_cancel,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(control_bg)),
+                text_color: wash_ink,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
             let mut form: Column<Element<'a, LibraryMessage>> = column![
                 name_input,
                 row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),

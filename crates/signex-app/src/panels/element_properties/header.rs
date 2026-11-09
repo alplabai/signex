@@ -37,12 +37,18 @@ pub(super) fn selection_header<'a>(
     primary: Color,
 ) -> Element<'a, PanelMsg> {
     let (title, line) = header_text(elem_type, is_placed_part, description);
+    // The engine's type name has no catalog message yet (#2060).
+    let title: signex_widgets::Label<'a> = if is_placed_part {
+        signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_PROPERTIES_COMPONENT).into()
+    } else {
+        raw(title.to_owned())
+    };
     let ink3 = resolve(&ctx.tokens).ink3;
     let mut header = iced::widget::Row::<Element<'a, PanelMsg>>::new()
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .push(
-            text(raw(title.to_owned()))
+            text(title)
                 .size(TS.body)
                 .color(primary)
                 .font(iced::Font {
@@ -54,7 +60,7 @@ pub(super) fn selection_header<'a>(
         );
     if let Some(line) = line {
         header = header.push(
-            text(raw(line.to_owned()))
+            text(signex_i18n::UserText::new(line))
                 .size(TS.dense)
                 .color(ink3)
                 .wrapping(iced::widget::text::Wrapping::None)
