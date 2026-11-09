@@ -29,8 +29,14 @@ pub struct InteractionState {
     /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.
     pub pcb_canvases: std::collections::HashMap<iced::window::Id, PcbCanvas>,
     /// Hover, selection and the cached spatial index of the board in view
-    /// (#2191).
+    /// (#2191). Like `pcb_canvas`, an undocked window's own state is
+    /// swapped in from `pcb_selections` while it handles an event.
     pub pcb_selection: crate::pcb_canvas::PcbSelectionState,
+    /// The selection of each undocked PCB window (#2240).
+    pub pcb_selections:
+        std::collections::HashMap<iced::window::Id, crate::pcb_canvas::PcbSelectionState>,
+    /// Footprints being dragged or moved, with their preview (#2240).
+    pub pcb_carry: Option<crate::pcb_canvas::PcbCarry>,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).

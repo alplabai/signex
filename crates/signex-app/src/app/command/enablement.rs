@@ -18,6 +18,7 @@
 //! and `place_local_net_label`, …), so an alias cannot bypass the gate; a
 //! test checks every such pair in the catalog.
 
+pub(crate) use crate::app::handlers::pcb_placement::PcbTargets;
 use crate::keymap::AppCommandId;
 
 use super::super::*;
@@ -91,6 +92,12 @@ pub(crate) struct CommandContext {
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
     pub can_remove_part: bool,
+    /// The board the window shows and what its selection lets the
+    /// placement commands do (#2240).
+    pub pcb: PcbTargets,
+    /// Rotate and mirror have something on a sheet besides the selection:
+    /// a part on the cursor, or the Bus Entry tool's next entry.
+    pub turn_in_hand: bool,
 }
 
 /// Whether `command` can act in `ctx`. Unlisted commands are enabled.
@@ -133,6 +140,13 @@ pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
             | "annotate_schematic_quietly"
             | "force_annotate_all_schematics"
     ) || is_planned_command(command)
+}
+
+/// A board placement command greyed because a selected footprint is locked
+/// (#2240): the menu greys it, but its keystroke still reaches the handler,
+/// which says which footprint is locked instead of doing nothing silently.
+pub(crate) fn explains_refusal_in(command: &AppCommandId, ctx: &CommandContext) -> bool {
+    ctx.pcb.shown && ctx.pcb.any && super::needs::is_placement_command(command)
 }
 
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is
@@ -222,6 +236,9 @@ impl Signex {
             has_active_path: document.active_path.is_some(),
             has_library_editor: self.active_editor_library_root().is_some(),
             can_remove_part: self.active_symbol_part_is_removable(),
+            pcb: self.pcb_targets(window),
+            turn_in_hand: self.interaction_state.placement.is_some()
+                || self.interaction_state.current_tool == Tool::BusEntry,
         }
     }
 

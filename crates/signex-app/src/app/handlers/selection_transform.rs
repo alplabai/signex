@@ -1,9 +1,11 @@
 //! Rotate / mirror the selection (Space / Shift+Space, R / Shift+R, X / Y,
-//! Active Bar). A lone symbol (with or without its own ref/value fields)
+//! Active Bar). On a PCB tab the board path in `pcb_placement` takes the
+//! request instead. A lone symbol (with or without its own ref/value fields)
 //! turns in place about its own origin; any other
 //! selection turns about its centre, snapped to the grid, as one engine
 //! command (`Command::TransformSelection`).
 
+use signex_engine::pcb::placement::PlacementTransform;
 use signex_engine::{Command, MirrorAxis, SelectionTransform};
 
 use signex_types::schematic::BusEntry;
@@ -17,6 +19,12 @@ impl Signex {
     /// With the Bus Entry tool armed the turn applies to the entry about to
     /// be placed instead, and a part on the cursor turns before either.
     pub(crate) fn handle_selection_rotate_requested(&mut self, clockwise: bool) {
+        // On a board the selected footprints turn (#2240). The board's y
+        // axis points down the screen, so a model turn of +90° is clockwise.
+        let quarter_turns = if clockwise { 1 } else { -1 };
+        if self.transform_pcb_selection(PlacementTransform::Rotate { quarter_turns }) {
+            return;
+        }
         // A part on the cursor turns instead of the selection.
         if self.rotate_placement(clockwise) {
             return;
@@ -50,7 +58,11 @@ impl Signex {
         self.transform_selection_about_centre(selected, transform);
     }
 
+    /// Mirror top to bottom. On a board that is a flip and a half turn.
     pub(crate) fn handle_selection_mirror_x_requested(&mut self) {
+        if self.transform_pcb_selection(PlacementTransform::FlipTopBottom) {
+            return;
+        }
         if self.mirror_placement(MirrorAxis::Vertical) {
             return;
         }
@@ -61,7 +73,11 @@ impl Signex {
         self.mirror_selection(MirrorAxis::Vertical);
     }
 
+    /// Mirror left to right. On a board that is the flip to the other side.
     pub(crate) fn handle_selection_mirror_y_requested(&mut self) {
+        if self.transform_pcb_selection(PlacementTransform::FlipLeftRight) {
+            return;
+        }
         if self.mirror_placement(MirrorAxis::Horizontal) {
             return;
         }

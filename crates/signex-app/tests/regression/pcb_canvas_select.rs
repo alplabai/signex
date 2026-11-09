@@ -19,6 +19,8 @@ const PAD: ItemRef = ItemRef::Pad {
 };
 const TRACK: ItemRef = ItemRef::Track(Uuid::from_u128(3));
 const VIA: ItemRef = ItemRef::Via(Uuid::from_u128(4));
+/// U1's body (#2240): it has no courtyard, so its one pad's outline.
+const FOOTPRINT: ItemRef = ItemRef::Footprint(Uuid::from_u128(1));
 const REACH: f64 = 0.1;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -185,12 +187,13 @@ fn ctrl_toggles_an_item_in_and_out() {
 #[test]
 fn a_window_takes_what_lies_inside_a_crossing_what_it_touches() {
     let mut f = open_board();
-    // Left to right: the pad is inside, the track is cut by the box.
+    // Left to right: the pad and U1's body are inside, the track is cut by
+    // the box.
     drag(&mut f.app, (-1.0, -1.0), (15.0, 14.0));
-    assert_eq!(selected(&f.app), vec![PAD]);
+    assert_eq!(selected(&f.app), vec![PAD, FOOTPRINT]);
     // Right to left over the same box: it touches the track too.
     drag(&mut f.app, (15.0, 14.0), (-1.0, -1.0));
-    assert_eq!(selected(&f.app), vec![PAD, TRACK]);
+    assert_eq!(selected(&f.app), vec![PAD, TRACK, FOOTPRINT]);
     // A box over nothing replaces the selection with nothing.
     drag(&mut f.app, (40.0, 40.0), (45.0, 45.0));
     assert!(selected(&f.app).is_empty());
@@ -206,7 +209,7 @@ fn a_box_with_shift_adds_to_the_selection() {
         mode: ClickMode::Add,
     };
     send(&mut f.app, msg);
-    assert_eq!(selected(&f.app), vec![PAD, VIA]);
+    assert_eq!(selected(&f.app), vec![PAD, VIA, FOOTPRINT]);
 }
 
 #[test]
@@ -228,7 +231,7 @@ fn hover_follows_the_pointer_and_leaves_the_selection_alone() {
 fn escape_clears_the_selection() {
     let mut f = open_board();
     drag(&mut f.app, (35.0, 14.0), (-1.0, -1.0));
-    assert_eq!(selected(&f.app).len(), 3);
+    assert_eq!(selected(&f.app), vec![PAD, TRACK, VIA, FOOTPRINT]);
     escape(&mut f.app);
     assert!(selected(&f.app).is_empty());
 }

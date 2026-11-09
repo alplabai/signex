@@ -44,6 +44,13 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         with(CommandContext {
             has_pcb: true,
             has_document: true,
+            // An unlocked footprint selected, so the board's rows are live.
+            pcb: crate::app::command::enablement::PcbTargets {
+                shown: true,
+                any: true,
+                placeable: true,
+                deletable: true,
+            },
             ..base
         }),
         with(CommandContext {
@@ -189,6 +196,13 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("smart_paste", "SmartPaste"),
     ("duplicate", "Duplicate"),
     ("delete_selection", "Delete"),
+    ("move_object", "MoveObject"),
+    ("move_selection", "MoveSelection"),
+    ("rotate_counterclockwise", "Rotate"),
+    ("rotate_clockwise", "RotateClockwise"),
+    ("mirror_x", "MirrorX"),
+    ("mirror_y", "MirrorY"),
+    ("flip_selection", "FlipSelection"),
     ("select_all", "SelectAll"),
     ("find", "Find"),
     ("find_and_replace", "Replace"),
@@ -340,7 +354,8 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert_eq!(checked, 30, "the Altium profile labels 30 menu rows");
+    // Edit ▸ Move adds Move, Rotate, Rotate Clockwise, Mirror X and Mirror Y (#2240).
+    assert_eq!(checked, 35, "the Altium profile labels 35 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

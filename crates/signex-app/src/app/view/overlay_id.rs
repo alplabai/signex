@@ -336,6 +336,19 @@ pub(crate) fn scope_canvas_message(window_id: iced::window::Id, message: Message
     }
 }
 
+/// Remap what an undocked window's PCB canvas emits: canvas events and the
+/// board's selection and drag messages carry the window, and a right-click
+/// opens the menu for that window's board (#2240).
+pub(crate) fn scope_pcb_canvas_message(window_id: iced::window::Id, message: Message) -> Message {
+    match message {
+        Message::PcbCanvas(msg) => Message::Pcb(crate::app::PcbMsg::CanvasInWindow {
+            window: window_id,
+            msg,
+        }),
+        other => scope_canvas_message(window_id, other),
+    }
+}
+
 pub(crate) fn visible(has_blocking_modal: bool) -> &'static [OverlayId] {
     if has_blocking_modal {
         &PAINT_ORDER[..PRE_BLOCKING]

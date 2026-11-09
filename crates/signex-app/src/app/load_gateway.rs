@@ -414,8 +414,6 @@ impl Signex {
         canvas.set_theme_colors(main.theme_bg, main.theme_grid);
         canvas.canvas_colors = main.canvas_colors;
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
-        // Selection is routed for the main window's board only.
-        canvas.selectable = false;
         let snapshot = self.interaction_state.pcb_ratsnest.snapshot_of(path, board);
         canvas.set_renderer_snapshot(Some(snapshot));
         canvas.fit_to_board();

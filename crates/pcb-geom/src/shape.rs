@@ -64,6 +64,45 @@ impl Shape {
         }
     }
 
+    /// The same shape moved by `by`, for a preview of a move.
+    pub fn translated(self, by: PointNm) -> Shape {
+        match self {
+            Shape::Disc { center, radius } => Shape::Disc {
+                center: center.plus(by),
+                radius,
+            },
+            Shape::Capsule { a, b, radius } => Shape::Capsule {
+                a: a.plus(by),
+                b: b.plus(by),
+                radius,
+            },
+            Shape::Rect {
+                center,
+                half_w,
+                half_h,
+                rotation_deg,
+            } => Shape::Rect {
+                center: center.plus(by),
+                half_w,
+                half_h,
+                rotation_deg,
+            },
+            Shape::RoundRect {
+                center,
+                half_w,
+                half_h,
+                radius,
+                rotation_deg,
+            } => Shape::RoundRect {
+                center: center.plus(by),
+                half_w,
+                half_h,
+                radius,
+                rotation_deg,
+            },
+        }
+    }
+
     /// The smallest axis-aligned rectangle holding the shape (rounded out).
     pub fn aabb(&self) -> RectNm {
         match *self {

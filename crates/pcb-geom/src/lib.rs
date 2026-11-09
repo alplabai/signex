@@ -10,6 +10,7 @@
 //!
 //! Hit-testing reads the model, never the render output (#662).
 
+mod body;
 mod copper;
 mod drc;
 mod flip;
@@ -26,6 +27,7 @@ mod transform;
 mod union_find;
 mod units;
 
+pub use body::footprint_body;
 pub use copper::copper_layers;
 pub use drc::run as run_drc;
 pub use drc::{DEFAULT_CLEARANCE_MM, DrcReport, DrcRules, Violation, ViolationKind};

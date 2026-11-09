@@ -257,12 +257,17 @@ impl Signex {
             }
             // Move / Move Selection → arm the interactive click-click
             // gestures (#271); the drop commits through MoveSelected.
+            // On a board, Move carries footprints from click to click (#2240).
             ActiveBarAction::Move => {
-                self.arm_move_pick(crate::canvas::MovePick::Object);
+                if !self.arm_pcb_move(true) {
+                    self.arm_move_pick(crate::canvas::MovePick::Object);
+                }
                 Task::none()
             }
             ActiveBarAction::MoveSelection => {
-                self.arm_move_pick(crate::canvas::MovePick::Selection);
+                if !self.arm_pcb_move(false) {
+                    self.arm_move_pick(crate::canvas::MovePick::Selection);
+                }
                 Task::none()
             }
             // Move Selection by X, Y... → open the dialog (numeric ΔX / ΔY

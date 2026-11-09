@@ -95,6 +95,28 @@ Both are also enabled for a standalone symbol or footprint editor tab
 (`.snxsym` / `.snxfpt`), which `save_active_document` already handles, so the
 gate is the command's enablement, not "a schematic is open".
 
+## Edit ▸ Move {#edit-move}
+
+Edit ▸ Move (#2240) groups the commands that move, turn and mirror the
+selection: Move (`move_object`), Move Selection (`move_selection`), Rotate
+(`rotate_counterclockwise`), Rotate Clockwise (`rotate_clockwise`), Mirror X
+and Mirror Y (`mirror_x` / `mirror_y`) and Flip Selection (`flip_selection`).
+They run the same ids as the keys, the palette and the canvas menus, on a sheet
+and on a board alike.
+
+On a sheet a row is live when there is something to act on: a selection, or
+for Rotate and Mirror a part on the cursor or the Bus Entry tool. Move needs an
+open sheet or board. On a PCB tab the rows act on the selected footprints (a
+selected pad stands for its footprint). They are greyed with nothing selected
+and when a selected footprint is locked; the key for a greyed row on a locked
+footprint still reaches the handler, which names the locked footprint in the
+Messages panel and changes nothing. Mirror X (the `X` key) flips a footprint
+to the other board side, like Flip Selection; Mirror Y flips it and turns it
+half a turn, so it mirrors top to bottom. Only the footprint moves: tracks
+and vias that end on a moved, rotated, flipped or deleted footprint stay
+where they are. Flip Selection has no default key and
+is greyed outside a board.
+
 ## Native macOS menu {#native-macos-menu}
 
 On macOS the main menu lives in the system menu bar (NSMenu), built with the

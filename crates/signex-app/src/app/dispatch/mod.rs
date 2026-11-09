@@ -334,6 +334,7 @@ impl Signex {
                         WindowKind::UndockedTab { .. } => {
                             self.interaction_state.canvases.remove(&id);
                             self.interaction_state.pcb_canvases.remove(&id);
+                            self.interaction_state.pcb_selections.remove(&id);
                         }
                         // Closing a detached panel reattaches it to the
                         // dock so the user doesn't lose access to the
@@ -482,6 +483,7 @@ impl Signex {
                 self.ui_state.windows.remove(&id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
+                self.interaction_state.pcb_selections.remove(&id);
                 iced::window::close(id)
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),

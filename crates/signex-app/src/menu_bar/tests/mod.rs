@@ -268,6 +268,9 @@ pub(super) struct Probe {
     pub pcb_fit_queued: bool,
     pub error_notice: bool,
     pub refs: Vec<String>,
+    /// Edit ▸ Move arms a pick on a sheet or a board (#2240).
+    pub move_pick: bool,
+    pub pcb_carry: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -337,6 +340,8 @@ pub(super) fn probe(app: &Signex) -> Probe {
                     .collect()
             })
             .unwrap_or_default(),
+        move_pick: app.ui_state.move_pick.is_some(),
+        pcb_carry: app.interaction_state.pcb_carry.is_some(),
     }
 }
 

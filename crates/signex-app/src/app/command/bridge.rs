@@ -188,6 +188,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // the KEY, and the arm names the AXIS it flips — hence the cross.
         "mirror_x" => Message::Edit(EditMsg::MirrorSelectedY),
         "mirror_y" => Message::Edit(EditMsg::MirrorSelectedX),
+        "flip_selection" => Message::Edit(EditMsg::FlipSelection),
         // No part in hand: choose one in the picker (#1767).
         "open_components_panel" | "place_symbol" => {
             Message::Library(crate::library::LibraryMessage::OpenPicker)

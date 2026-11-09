@@ -30,6 +30,16 @@ pub(crate) enum Needs {
     FitTarget,
     FootprintEditor,
     Pcb,
+    /// Rotate and mirror: on a board, an unlocked footprint selected
+    /// (#2240); on a sheet, a selection or something in hand.
+    Turn,
+    /// Move Selection: an unlocked footprint selected on a board, or a
+    /// selection on a sheet.
+    MoveSelection,
+    /// Move: a sheet or a board to pick from.
+    MoveObject,
+    /// Flip Selection: a board with an unlocked footprint selected.
+    PcbPlacement,
 }
 
 impl Needs {
@@ -61,7 +71,9 @@ impl Needs {
             // one; a top-level page has none (#1772).
             Self::ParentSheet => ctx.has_parent_sheet,
             // The footprint editor deletes its own selection, which is not
-            // the schematic canvas's; with none it is a no-op.
+            // the schematic canvas's; with none it is a no-op. A board
+            // deletes its own selection, never a locked footprint.
+            Self::DeleteTarget if ctx.pcb.shown => ctx.pcb.deletable,
             Self::DeleteTarget => ctx.has_selection || ctx.has_footprint_editor,
             Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
@@ -76,6 +88,14 @@ impl Needs {
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
             Self::Pcb => ctx.has_pcb,
+            // On a sheet, rotate also turns a part on the cursor with
+            // nothing selected.
+            Self::Turn if ctx.pcb.shown => ctx.pcb.placeable,
+            Self::Turn => ctx.has_schematic && (ctx.has_selection || ctx.turn_in_hand),
+            Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
+            Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
+            Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
+            Self::PcbPlacement => ctx.pcb.shown && ctx.pcb.placeable,
         }
     }
 
@@ -96,7 +116,9 @@ impl Needs {
             Self::SelectedObject => "No object is selected",
             Self::Schematic => "No schematic is open",
             Self::ParentSheet => "The active sheet has no parent sheet",
-            Self::DeleteTarget => "Nothing is selected to delete",
+            Self::DeleteTarget => {
+                "Nothing is selected to delete, or a selected footprint is locked"
+            }
             Self::VertexTarget => "Nothing is selected and no wire is being drawn",
             Self::Sheets => "No schematic or project is open",
             Self::ActiveSheet => "No sheet is open",
@@ -104,8 +126,22 @@ impl Needs {
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
+            Self::Turn => {
+                "Nothing is selected or in hand to turn, or a selected footprint is locked"
+            }
+            Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
+            Self::MoveObject => "No schematic or PCB is open",
+            Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
         }
     }
+}
+
+/// The commands that move, turn, flip or delete a board selection (#2240).
+pub(crate) fn is_placement_command(command: &AppCommandId) -> bool {
+    matches!(
+        needs(command),
+        Some(Needs::Turn | Needs::MoveSelection | Needs::PcbPlacement | Needs::DeleteTarget)
+    )
 }
 
 /// What `command` needs; `None` for a command with no gate, which is always
@@ -132,6 +168,17 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "report_manager_bom" => Needs::Schematic,
         "leave_sheet" | "navigate_up_hierarchy" => Needs::ParentSheet,
         "delete_selection" => Needs::DeleteTarget,
+        "rotate_clockwise"
+        | "rotate_counterclockwise"
+        | "rotate_selection"
+        | "rotate_selection_cw"
+        | "mirror_x"
+        | "mirror_y"
+        | "flip_selected_x"
+        | "flip_selected_y" => Needs::Turn,
+        "move_selection" => Needs::MoveSelection,
+        "move_object" => Needs::MoveObject,
+        "flip_selection" => Needs::PcbPlacement,
         "remove_last_vertex" => Needs::VertexTarget,
         "paste"
         | "smart_paste"

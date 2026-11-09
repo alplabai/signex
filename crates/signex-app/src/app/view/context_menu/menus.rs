@@ -33,6 +33,9 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "paste",
     "smart_paste",
     "rotate_counterclockwise",
+    "rotate_clockwise",
+    "move_selection",
+    "flip_selection",
     "mirror_x",
     "mirror_y",
     "delete_selection",
@@ -208,12 +211,21 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
-        let (selection, project_key) = self.canvas_menu_inputs(window_id);
-        let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
         let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
         let tokens = &self.document_state.panel_ctx.tokens;
+        let board = self.pcb_targets(Some(window_id));
+        if board.shown {
+            let entries = pcb_canvas_menu_entries(tid, board, &sc);
+            return signex_widgets::active_bar_dropdown::view(
+                entries,
+                tokens,
+                Some(Self::CONTEXT_MENU_WIDTH),
+            );
+        }
+        let (selection, project_key) = self.canvas_menu_inputs(window_id);
+        let active_submenu = self.interaction_state.context_submenu;
         let entries = canvas_menu_entries(tid, tokens, selection, active_submenu, project_key, &sc);
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }
@@ -484,6 +496,37 @@ pub(super) fn canvas_menu_entries(
     }
 
     v
+}
+
+/// The board canvas menu (#2240): the placement commands, greyed unless
+/// the selection names an unlocked footprint (Delete: anything deletable).
+/// Each row runs its catalog command like the keys and the Edit menu do.
+pub(super) fn pcb_canvas_menu_entries(
+    tid: ThemeId,
+    board: crate::app::handlers::pcb_placement::PcbTargets,
+    sc: &CanvasShortcuts,
+) -> Vec<DropdownEntry<Message>> {
+    let row = |icon, command_id: &'static str, enabled: bool| {
+        if enabled {
+            dd_command(Some(icon), command_id, sc.of(command_id), None)
+        } else {
+            dd_cmd_disabled(Some(icon), command_id, sc.of(command_id))
+        }
+    };
+    let placeable = board.placeable;
+    vec![
+        row(ic::icon_dd_move_sel(tid), "move_selection", placeable),
+        DropdownEntry::Separator,
+        row(
+            ic::icon_dd_rotate(tid),
+            "rotate_counterclockwise",
+            placeable,
+        ),
+        row(ic::icon_dd_rotate_cw(tid), "rotate_clockwise", placeable),
+        row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
+        DropdownEntry::Separator,
+        row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
+    ]
 }
 
 /// Pure tab-menu data builder. The per-tab "Close [title]" row carries the

@@ -33,7 +33,10 @@ impl Signex {
                         },
                     ))
                 } else {
-                    self.handle_selection_delete_requested();
+                    // A board deletes its own selection (#2240).
+                    if !self.delete_pcb_selection() {
+                        self.handle_selection_delete_requested();
+                    }
                     Task::none()
                 };
                 Task::batch([task, self.finish_update()])
@@ -62,6 +65,13 @@ impl Signex {
             }
             EditMsg::MirrorSelectedY => {
                 self.handle_selection_mirror_y_requested();
+                self.finish_update()
+            }
+            EditMsg::FlipSelection => {
+                let flip = signex_engine::pcb::placement::PlacementTransform::FlipLeftRight;
+                if !self.transform_pcb_selection(flip) {
+                    crate::diagnostics::log_info("Flip Selection works on a PCB");
+                }
                 self.finish_update()
             }
             EditMsg::Cut => self.handle_selection_cut_requested(),
