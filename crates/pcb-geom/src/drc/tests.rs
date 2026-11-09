@@ -427,7 +427,10 @@ fn a_round_rect_pad_is_checked_with_its_rounded_corner() {
     let sharp = run(&with(PadShape::Rect, 0.0), &rules);
     assert_eq!(kinds(&sharp), [ViolationKind::Clearance], "{sharp:?}");
     // A ratio of 0 is a plain rectangle.
-    assert_eq!(run(&with(PadShape::RoundRect, 0.0), &rules).violations, sharp.violations);
+    assert_eq!(
+        run(&with(PadShape::RoundRect, 0.0), &rules).violations,
+        sharp.violations
+    );
     let round = run(&with(PadShape::RoundRect, 0.5), &rules);
     let gap = |r: &DrcReport| r.violations.first().map_or(i64::MAX, |v| v.measured_nm);
     assert!(gap(&round) > gap(&sharp), "{round:?} vs {sharp:?}");
