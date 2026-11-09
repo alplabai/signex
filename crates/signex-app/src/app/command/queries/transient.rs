@@ -47,7 +47,8 @@ impl Signex {
     }
 
     /// The unloaded schematic documents `command` reads: the one a
-    /// `read_document` names, every one for `resolve` and `find_items`.
+    /// `read_document` or `query_pins` names, every one for `resolve` and
+    /// `find_items`.
     fn unloaded_sheets_wanted(
         &self,
         command: &AppCommandId,

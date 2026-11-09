@@ -79,8 +79,8 @@ pub fn instance_pins<'a>(lib: &'a LibSymbol, sym: &'a Symbol) -> impl Iterator<I
         .filter(move |lp| item_shown(lp.unit, lp.body_style, sym.unit, body))
 }
 
-/// The pins of [`instance_pins`] paired with their tip in world mm: the one
-/// place a placed symbol's pin position is transformed.
+/// The pins of [`instance_pins`] paired with their tip in world mm. Symbol
+/// lowering, ERC and the full netlist build read their tips through it.
 pub fn pin_tips<'a>(
     lib: &'a LibSymbol,
     sym: &'a Symbol,

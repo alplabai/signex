@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 use signex_types::pcb::PcbBoard;
+use signex_types::schematic::InstancePath;
 
 use super::sheet_view::{Element, sheet_elements};
 use crate::app::Signex;
@@ -71,6 +72,14 @@ impl Signex {
     /// The placements of a sheet document within its project, as instance
     /// paths from the top-level page; empty for anything else.
     pub(super) fn placements_of(&self, entry: &DocumentEntry) -> Vec<String> {
+        self.instance_paths_of(entry)
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    /// [`Self::placements_of`] as instance paths.
+    pub(super) fn instance_paths_of(&self, entry: &DocumentEntry) -> Vec<InstancePath> {
         let docs = &self.document_state;
         entry
             .path
@@ -79,13 +88,7 @@ impl Signex {
             .and_then(|(path, project)| {
                 let project = docs.projects.iter().find(|p| p.path == project.path)?;
                 let hierarchy = docs.project_fs.facts.hierarchy_of(project.id)?;
-                Some(
-                    hierarchy
-                        .placements_of(path)
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect(),
-                )
+                Some(hierarchy.placements_of(path))
             })
             .unwrap_or_default()
     }

@@ -3,7 +3,8 @@
 
 use serde_json::Value;
 use signex_types::schematic::{
-    LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, Symbol,
+    BodyStyle, InstancePath, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
+    SchematicSheet, Symbol, SymbolInstance, snap_to_hotspot,
 };
 use uuid::Uuid;
 
@@ -32,10 +33,24 @@ fn lib_pin(number: &str, unit: u32, x: f64, visible: bool) -> LibPin {
     }
 }
 
+fn in_body(mut pin: LibPin, body_style: u32) -> LibPin {
+    pin.body_style = body_style;
+    pin
+}
+
 fn lib(id: &str, pins: Vec<LibPin>) -> LibSymbol {
     let mut lib: LibSymbol = serde_json::from_value(serde_json::json!({ "id": id })).unwrap();
     lib.pins = pins;
     lib
+}
+
+fn instance(path: &InstancePath, reference: &str) -> SymbolInstance {
+    SymbolInstance {
+        project: "p".into(),
+        path: path.to_string(),
+        reference: reference.into(),
+        unit: 1,
+    }
 }
 
 fn part(reference: &str, lib_id: &str, unit: u32, at: (f64, f64)) -> Symbol {
@@ -51,10 +66,23 @@ fn part(reference: &str, lib_id: &str, unit: u32, at: (f64, f64)) -> Symbol {
 
 /// R1 turned 90 degrees, R2 mirrored in Y, a three-unit U1 with units 1 and 3
 /// placed (pin 8 is hidden and shared by every unit), a second part also
-/// called U2 and an unannotated R?.
+/// called U2, an unannotated R?, U4 with a shared pin and a pin per body, a
+/// lower-case u1 beside U1, R5 renamed R7 at the root by an instance entry,
+/// and Q1 whose pin has a name and no number.
 pub(in crate::app) fn pin_sheet() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
+    let mut unnumbered = lib_pin("", 0, 0.0, true);
+    unnumbered.pin.name = "CLK".into();
     for (id, pins) in [
+        ("Q", vec![unnumbered]),
+        (
+            "DM",
+            vec![
+                in_body(lib_pin("A", 0, 1.0, true), 0),
+                in_body(lib_pin("N", 0, 2.0, true), 1),
+                in_body(lib_pin("D", 0, 3.0, true), 2),
+            ],
+        ),
         (
             "R",
             vec![lib_pin("1", 0, -2.54, true), lib_pin("2", 0, 2.54, true)],
@@ -75,9 +103,18 @@ pub(in crate::app) fn pin_sheet() -> SchematicSheet {
     r1.rotation = 90.0;
     let mut r2 = part("R2", "R", 1, (10.0, 10.0));
     r2.mirror_y = true;
+    let mut r5 = part("R5", "R", 1, (60.0, 60.0));
+    r5.instances = vec![instance(&InstancePath::root(), "R7")];
+    let mut u4_alternate = part("U4", "DM", 2, (210.0, 0.0));
+    u4_alternate.body_style = BodyStyle::Alternate;
     sheet.symbols = vec![
         r1,
         r2,
+        r5,
+        part("u1", "R", 1, (300.0, 0.0)),
+        part("U4", "DM", 1, (200.0, 0.0)),
+        u4_alternate,
+        part("Q1", "Q", 1, (400.0, 0.0)),
         part("U1", "OPAMP", 1, (100.0, 100.0)),
         part("U1", "OPAMP", 3, (120.0, 100.0)),
         part("U2", "R", 1, (0.0, 0.0)),
@@ -117,6 +154,16 @@ fn tip(pin: &Value) -> (f64, f64) {
     (at[0].as_f64().unwrap(), at[1].as_f64().unwrap())
 }
 
+/// Every answered tip is where a wire snaps on the open sheet.
+fn assert_snaps(app: &Signex, pins: &[Value]) {
+    let sheet = app.document_state.engines[&path("pins.snxsch")].document();
+    for pin in pins {
+        let (x, y) = tip(pin);
+        let snapped = snap_to_hotspot(sheet, Point::new(x, y), 0.1);
+        assert_eq!(snapped, Some(Point::new(x, y)), "{pin}");
+    }
+}
+
 fn assert_tip(pin: &Value, x: f64, y: f64) {
     let (got_x, got_y) = tip(pin);
     assert!(
@@ -135,36 +182,129 @@ fn a_rotated_resistor_lists_its_tips_where_the_canvas_hit_test_finds_them() {
     assert_eq!(pins[0]["electrical_type"], "passive");
     assert_eq!(pins[0]["hidden"], false);
     assert_eq!(pins[0]["unit"], 1);
+    assert_eq!(pins[0]["shared"], true);
     assert_tip(&pins[0], 50.0, 52.54);
     assert_tip(&pins[1], 50.0, 47.46);
+    assert_snaps(&app, &pins);
 }
 
 #[test]
 fn a_mirrored_resistor_lists_mirrored_tips() {
     let mut app = app();
-    let pins = pins_of(&mut app, "r2");
+    let pins = pins_of(&mut app, "R2");
     assert_tip(&pins[0], 12.54, 10.0);
     assert_tip(&pins[1], 7.46, 10.0);
+    assert_snaps(&app, &pins);
 }
 
-#[test]
-fn a_multi_unit_part_lists_the_placed_units_only_with_the_shared_pin_once() {
-    let mut app = app();
-    let pins = pins_of(&mut app, "U1");
-    let listed: Vec<(String, u64)> = pins
-        .iter()
+/// (number, unit, shared) of each answered pin.
+fn listed(pins: &[Value]) -> Vec<(String, u64, bool)> {
+    pins.iter()
         .map(|p| {
             (
                 p["number"].as_str().unwrap().to_string(),
                 p["unit"].as_u64().unwrap(),
+                p["shared"].as_bool().unwrap(),
             )
         })
-        .collect();
-    // Unit 2 is not placed: its pin is not listed.
-    assert_eq!(listed, [("1".into(), 1), ("8".into(), 1), ("3".into(), 3)]);
-    let hidden = pins.iter().find(|p| p["number"] == "8").unwrap();
-    assert_eq!(hidden["hidden"], true);
+        .collect()
+}
+
+fn entry(number: &str, unit: u64, shared: bool) -> (String, u64, bool) {
+    (number.into(), unit, shared)
+}
+
+#[test]
+fn a_multi_unit_part_lists_each_placed_unit_with_its_shared_pin_at_every_one() {
+    let mut app = app();
+    let pins = pins_of(&mut app, "U1");
+    // Unit 2 is not placed: its pin is not listed. Pin 8 is at both tips.
+    assert_eq!(
+        listed(&pins),
+        [
+            entry("1", 1, false),
+            entry("8", 1, true),
+            entry("3", 3, false),
+            entry("8", 3, true),
+        ]
+    );
+    assert_eq!(pins[1]["hidden"], true);
+    assert_tip(&pins[1], 100.0, 100.0);
+    assert_tip(&pins[3], 120.0, 100.0);
     assert_tip(&pins[2], 123.0, 100.0);
+    assert_snaps(&app, &pins);
+}
+
+#[test]
+fn a_shared_pin_is_listed_for_a_unit_on_the_other_body() {
+    let mut app = app();
+    let pins = pins_of(&mut app, "U4");
+    // Unit 1 shows the normal body, unit 2 the alternate one; the pin common
+    // to both bodies is at each tip.
+    assert_eq!(
+        listed(&pins),
+        [
+            entry("A", 1, true),
+            entry("N", 1, true),
+            entry("A", 2, true),
+            entry("D", 2, true),
+        ]
+    );
+    assert_snaps(&app, &pins);
+}
+
+#[test]
+fn a_pin_with_no_number_is_given_by_its_name_as_the_netlist_does() {
+    let mut app = app();
+    let pins = pins_of(&mut app, "Q1");
+    assert_eq!(pins[0]["number"], "CLK");
+    assert_eq!(pins[0]["name"], "CLK");
+}
+
+#[test]
+fn designators_match_exactly_so_u1_and_lower_case_u1_are_two_parts() {
+    let mut app = app();
+    assert_eq!(pins_of(&mut app, "U1").len(), 4);
+    let lower = pins_of(&mut app, "u1");
+    assert_eq!(lower.len(), 2, "{lower:?}");
+    assert_tip(&lower[0], 297.46, 0.0);
+    assert_eq!(listed(&lower)[0].1, 1);
+}
+
+#[test]
+fn the_designator_is_the_one_an_instance_entry_gives_at_the_root() {
+    let mut app = app();
+    let pins = pins_of(&mut app, "R7");
+    assert_eq!(pins.len(), 2);
+    assert_tip(&pins[0], 57.46, 60.0);
+    let reason = refusal(
+        &mut app,
+        &[
+            &format!("document={}", path("pins.snxsch").display()),
+            "designator=R5",
+        ],
+    );
+    assert!(reason.contains("no part `R5`"), "{reason}");
+}
+
+#[test]
+fn a_reused_sheet_answers_each_placements_designator_with_the_same_tips() {
+    let (first, second) = (
+        InstancePath::from_chain(vec![Uuid::from_u128(1)]),
+        InstancePath::from_chain(vec![Uuid::from_u128(2)]),
+    );
+    let mut sheet = pin_sheet();
+    sheet.symbols = vec![Symbol {
+        instances: vec![instance(&first, "R101"), instance(&second, "R201")],
+        ..part("R1", "R", 1, (5.0, 5.0))
+    }];
+    let paths = [first, second];
+    let one = super::pins::pins_of(&sheet, "R101", &paths).unwrap();
+    let two = super::pins::pins_of(&sheet, "R201", &paths).unwrap();
+    assert_eq!(one.len(), 2);
+    assert_eq!(one, two);
+    let bare = super::pins::pins_of(&sheet, "R1", &paths).unwrap_err();
+    assert!(bare.contains("no part `R1`"), "{bare}");
 }
 
 #[test]

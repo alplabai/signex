@@ -52,8 +52,9 @@ the active document. `list_documents`, `document_info`, `resolve`,
 `find_items`, `read_document` and `query_pins` are queries: their result line is
 `answered` with the answer in `data`. `query_pins document=<doc> designator=U1`
 answers with `pins`, one entry per pin of every placed unit of that part
-(`number`, `name`, `electrical_type`, `hidden`, `unit`, `position` as `[x, y]`
-in mm); an unknown or ambiguous designator, or a document that is not a loaded
+(`number`, `name`, `electrical_type`, `hidden`, `unit`, `shared`, `position` as
+`[x, y]` in mm; a pin shared by all units has an entry at each placed unit's
+tip). The designator is the one the netlist prints, matched exactly. An unknown or ambiguous designator, or a document that is not a loaded
 schematic, is refused with the reason. `open_document` and `new_document` answer with the
 new document's `{id, path, kind}`.
 
