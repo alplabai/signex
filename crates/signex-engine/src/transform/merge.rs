@@ -240,6 +240,8 @@ impl Engine {
             || wire.locked
             || other.locked
             || (wire.stroke_width - other.stroke_width).abs() > 1e-9
+            // An own colour is kept per wire; folding two drops one.
+            || wire.color != other.color
             // Foreign columns belong to one wire; folding would drop one set.
             || wire.unknown_columns != other.unknown_columns
             // A net colour is kept per wire; folding two colours drops one.
