@@ -745,6 +745,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
         id,
         path: tmp.path().join("P.snxprj"),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".to_string(),
             dir: tmp.path().to_string_lossy().into_owned(),

@@ -32,6 +32,7 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
         id,
         path: dir.join(file),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: "P".to_string(),
             dir: dir.to_string_lossy().into_owned(),

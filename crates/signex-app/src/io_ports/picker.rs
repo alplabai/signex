@@ -51,6 +51,11 @@ impl HeadlessAnswers {
         *self.lock() = answers.into_iter().collect();
     }
 
+    /// The answer named `name` of the command about to run, left in place.
+    pub(crate) fn peek(&self, name: &str) -> Option<String> {
+        self.lock().get(name).cloned()
+    }
+
     /// Add one answer to the current command's set.
     #[cfg(test)]
     pub(crate) fn set(&self, name: &str, value: impl Into<String>) {

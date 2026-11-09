@@ -409,6 +409,7 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
         id,
         path: std::path::PathBuf::from(format!("/w/{file}")),
         data: ProjectData {
+            document_id: None,
             description: None,
             name: file.to_string(),
             dir: "/w".to_string(),

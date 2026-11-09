@@ -22,7 +22,6 @@ use iced_core::{
     widget::tree::{self, Tree},
     window,
 };
-use std::iter::once;
 
 use super::menu_bar::*;
 use crate::style::menu_bar::*;

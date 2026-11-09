@@ -26,6 +26,7 @@ fn git_project() -> (Signex, TempDir, std::path::PathBuf) {
     let (mut app, _task) = Signex::new();
     let id = app.document_state.mint_project_id();
     let data = ProjectData {
+        document_id: None,
         description: None,
         name: "p".into(),
         dir: dir.to_string_lossy().into_owned(),

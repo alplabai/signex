@@ -47,6 +47,11 @@ fn sheet() -> SchematicSheet {
     }
 }
 
+/// `document=<the open sheet>`: the operand every document command names.
+fn doc() -> String {
+    format!("document={}", path().display())
+}
+
 fn path() -> PathBuf {
     std::env::temp_dir().join("operands.snxsch")
 }
@@ -96,8 +101,10 @@ fn color_net_by_operands_is_the_pen_click() {
 
     let mut by_command = app();
     let command = id("color_net");
-    let (outcome, _) =
-        by_command.run_operands(&command, &parse("color_net", &["at=5,0", "color=#336699"]));
+    let (outcome, _) = by_command.run_operands(
+        &command,
+        &parse("color_net", &["at=5,0", "color=#336699", &doc()]),
+    );
 
     assert_eq!(outcome, CommandOutcome::Ran);
     let painted = colours_of(&by_command);
@@ -121,8 +128,14 @@ fn the_colour_operand_changes_the_result() {
     let mut red = app();
     let mut blue = app();
     let command = id("color_net");
-    let (_, _task) = red.run_operands(&command, &parse("color_net", &["at=5,0", "color=ff0000"]));
-    let (_, _task) = blue.run_operands(&command, &parse("color_net", &["at=5,0", "color=#336699"]));
+    let (_, _task) = red.run_operands(
+        &command,
+        &parse("color_net", &["at=5,0", "color=ff0000", &doc()]),
+    );
+    let (_, _task) = blue.run_operands(
+        &command,
+        &parse("color_net", &["at=5,0", "color=#336699", &doc()]),
+    );
     assert_ne!(colours_of(&red), colours_of(&blue));
     assert_eq!(
         colours_of(&red).get(&Uuid::from_u128(WIRE_A)),
@@ -134,7 +147,10 @@ fn the_colour_operand_changes_the_result() {
 fn the_point_operand_picks_the_net() {
     let mut app = app();
     let command = id("color_net");
-    let (_, _task) = app.run_operands(&command, &parse("color_net", &["at=35,0", "color=#336699"]));
+    let (_, _task) = app.run_operands(
+        &command,
+        &parse("color_net", &["at=35,0", "color=#336699", &doc()]),
+    );
     let painted = colours_of(&app);
     assert_eq!(painted.len(), 1);
     assert!(painted.contains_key(&Uuid::from_u128(WIRE_FAR)));
@@ -144,7 +160,10 @@ fn the_point_operand_picks_the_net() {
 fn color_net_is_one_undo_step_that_reads_clean_when_undone() {
     let mut app = app();
     let command = id("color_net");
-    let (_, _task) = app.run_operands(&command, &parse("color_net", &["at=5,0", "color=#336699"]));
+    let (_, _task) = app.run_operands(
+        &command,
+        &parse("color_net", &["at=5,0", "color=#336699", &doc()]),
+    );
     assert!(app.document_state.is_document_dirty(&path()));
 
     app.handle_undo_requested();
@@ -171,17 +190,20 @@ fn color_net_refuses_what_it_cannot_do_and_says_why() {
     };
 
     let mut app = app();
-    let reason = refuse(&mut app, &["at=20,20", "color=#336699"]);
+    let reason = refuse(&mut app, &["at=20,20", "color=#336699", &doc()]);
     assert!(reason.contains("no wire"), "{reason}");
 
     let elsewhere = std::env::temp_dir().join("elsewhere.snxsch");
-    let given = format!("path={}", elsewhere.display());
+    let given = format!("document={}", elsewhere.display());
     let reason = refuse(&mut app, &["at=5,0", "color=#336699", &given]);
-    assert!(reason.contains("not the active document"), "{reason}");
+    assert!(reason.contains("not an open or referenced"), "{reason}");
     assert!(colours_of(&app).is_empty(), "a refusal changes nothing");
 
-    let (_, _task) = app.run_operands(&command, &parse("color_net", &["at=5,0", "color=#336699"]));
-    let reason = refuse(&mut app, &["at=5,0", "color=#336699"]);
+    let (_, _task) = app.run_operands(
+        &command,
+        &parse("color_net", &["at=5,0", "color=#336699", &doc()]),
+    );
+    let reason = refuse(&mut app, &["at=5,0", "color=#336699", &doc()]);
     assert!(reason.contains("already"), "{reason}");
     assert_eq!(depth(&app), 1, "the repeat recorded no second step");
 }
@@ -197,7 +219,7 @@ fn color_net_on_a_read_only_sheet_is_refused() {
 
     let (outcome, _) = app.run_operands(
         &id("color_net"),
-        &parse("color_net", &["at=5,0", "color=#336699"]),
+        &parse("color_net", &["at=5,0", "color=#336699", &doc()]),
     );
 
     assert!(
@@ -228,7 +250,7 @@ fn painted_app() -> Signex {
     let mut app = app();
     let (_, _task) = app.run_operands(
         &id("color_net"),
-        &parse("color_net", &["at=5,0", "color=#336699"]),
+        &parse("color_net", &["at=5,0", "color=#336699", &doc()]),
     );
     app.document_state.mark_document_clean(&path());
     app
@@ -242,7 +264,7 @@ fn clear_all_net_colors_by_operands_is_the_button() {
     assert_eq!(outcome, CommandOutcome::Ran);
 
     let mut by_command = painted_app();
-    let given = format!("path={}", path().display());
+    let given = format!("document={}", path().display());
     let (outcome, _) = by_command.run_operands(
         &id("clear_all_net_colors"),
         &parse("clear_all_net_colors", &[&given]),
@@ -273,7 +295,7 @@ fn the_path_operand_picks_the_sheet_a_clear_all_acts_on() {
     let other = std::env::temp_dir().join("other.snxsch");
     colours::add_sheet_with(&mut app, &other, sheet());
     colours::paint_on(&mut app, &other, &[Uuid::from_u128(WIRE_A)], BLUE);
-    let given = format!("path={}", other.display());
+    let given = format!("document={}", other.display());
 
     let (outcome, _) = app.run_operands(
         &id("clear_all_net_colors"),
@@ -298,7 +320,7 @@ fn the_path_operand_picks_the_sheet_a_clear_all_acts_on() {
         &id("clear_all_net_colors"),
         &parse(
             "clear_all_net_colors",
-            &[&format!("path={}", missing.display())],
+            &[&format!("document={}", missing.display())],
         ),
     );
     assert!(matches!(outcome, CommandOutcome::Disabled { .. }));
@@ -307,7 +329,7 @@ fn the_path_operand_picks_the_sheet_a_clear_all_acts_on() {
 #[test]
 fn clear_all_net_colors_with_nothing_painted_says_so() {
     let mut app = app();
-    let given = format!("path={}", path().display());
+    let given = format!("document={}", path().display());
     let (outcome, _) = app.run_operands(
         &id("clear_all_net_colors"),
         &parse("clear_all_net_colors", &[&given]),
@@ -331,6 +353,9 @@ fn sample_operands(id: &str) -> Vec<String> {
                 OperandKind::Path => std::env::temp_dir().join("x.snxsch").display().to_string(),
                 OperandKind::Bool => "true".to_string(),
                 OperandKind::Color => "#336699".to_string(),
+                OperandKind::Document => {
+                    std::env::temp_dir().join("x.snxsch").display().to_string()
+                }
             };
             format!("{}={value}", op.name)
         })
@@ -346,6 +371,10 @@ fn every_operand_command_has_a_handler_or_is_refused() {
     for name in all_command_ids() {
         let declares = !metadata_for_str(name).expect("row").operands.is_empty();
         let command = id(name);
+        if super::queries::query_command_ids().any(|query| query == name) {
+            assert!(operand_handler(&command).is_none(), "{name} is a query");
+            continue;
+        }
         if !declares {
             assert!(
                 operand_handler(&command).is_none(),

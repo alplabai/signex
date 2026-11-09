@@ -22,7 +22,8 @@ impl Signex {
     /// (`instance_id`), so a drag of many events does not flood Messages; a
     /// reopen makes a new engine and re-arms it.
     pub(crate) fn refuse_if_active_read_only(&mut self) -> Option<String> {
-        let path = self.document_state.active_path.clone()?;
+        // The sheet an agent's edit list runs on (#2178), else the active one.
+        let path = self.document_state.edit_path()?.to_path_buf();
         self.refuse_if_read_only_at(&path)
     }
 

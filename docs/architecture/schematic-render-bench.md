@@ -72,7 +72,10 @@ Text turned 90 degrees (vertical pin names, net labels) cannot use the glyph
 atlas. On the canvas it costs about **0.14 ms per text per frame, even when the
 geometry is cached**; the GPU mount draws it on a CPU canvas layer
 (`SchematicStaticTextLayer`) that rebuilds on every camera change at the same
-cost.
+cost. (Measured before #2128. Since then the canvas draws atlas text before
+rotated text, so a cached frame no longer pays per rotated text, and the GPU
+mount's text layer is retained across whole-pixel pans; the numbers are in
+#2128.)
 
 | `full`, 960 rotated texts, total ms median / p95 | idle | pan | zoom |
 |---|---|---|---|

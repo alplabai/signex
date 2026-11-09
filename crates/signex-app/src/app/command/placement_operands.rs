@@ -37,7 +37,7 @@ enum Placement {
 type Ran = (CommandOutcome, Task<Message>);
 
 fn run(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
-    let outcome = if app.document_state.active_engine().is_none() {
+    let outcome = if app.document_state.edit_engine().is_none() {
         CommandOutcome::disabled("no schematic is open")
     } else if let Some(reason) = app.refuse_if_active_read_only() {
         // The gateway would refuse too; say why rather than "nothing placed".

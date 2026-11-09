@@ -460,6 +460,7 @@ impl Signex {
                 search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
                 parked_save_all_settles: Default::default(),
+                document_ids: Default::default(),
                 autosave: crate::autosave::AutosaveState::new(
                     crate::autosave::default_recovery_dir(),
                 ),
@@ -499,6 +500,7 @@ impl Signex {
                 pcb_revisions: std::collections::HashMap::new(),
                 parked_pcb_boards: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
+                agent_edits: Default::default(),
                 window_panel_ctx: std::collections::HashMap::new(),
                 window_panel_ctx_keys: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {

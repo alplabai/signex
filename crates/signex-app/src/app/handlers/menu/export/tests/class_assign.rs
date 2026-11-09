@@ -16,7 +16,18 @@ fn dir(name: &str) -> String {
 
 fn run(app: &mut Signex, operands: &[&str]) -> CommandOutcome {
     let command = AppCommandId::new("assign_net_class").expect("catalog id");
-    let args = CommandArgs::parse_operands(&command, operands).expect("operands parse");
+    // A caller names its document; these tests name the active sheet unless
+    // they name another.
+    let active = app
+        .document_state
+        .active_path
+        .as_ref()
+        .map(|path| format!("document={}", path.display()));
+    let mut named: Vec<&str> = operands.to_vec();
+    if !operands.iter().any(|o| o.starts_with("document=")) {
+        named.extend(active.as_deref());
+    }
+    let args = CommandArgs::parse_operands(&command, &named).expect("operands parse");
     app.run_operands(&command, &args).0
 }
 
@@ -88,13 +99,16 @@ fn the_command_refuses_what_it_cannot_do_and_changes_nothing() {
     let unknown_class = reason(run(&mut app, &["net_name=/LOCAL", "class=Nope"]));
     assert!(unknown_class.contains("no net class"), "{unknown_class}");
     let missing = format!(
-        "path={}",
+        "document={}",
         std::path::Path::new(&dir("assign-elsewhere"))
             .join("x.snxsch")
             .display()
     );
     let elsewhere = reason(run(&mut app, &["net_name=/LOCAL", "class=Power", &missing]));
-    assert!(elsewhere.contains("not an open sheet"), "{elsewhere}");
+    assert!(
+        elsewhere.contains("not an open or referenced"),
+        "{elsewhere}"
+    );
 
     assert_eq!(classes(&app), before);
     assert_eq!(child_position(&app), position, "a refusal records no step");
@@ -118,7 +132,30 @@ fn top_sheet(app: &Signex) -> std::path::PathBuf {
         .with_file_name("top.snxsch")
 }
 
-/// `path=` names any open sheet: the pick lands on that sheet's timeline,
+/// The same by the sheet's id (#2172): found through the document list, the
+/// active sheet, tab and the interaction state are untouched.
+#[test]
+fn a_document_id_assigns_on_another_open_sheet_without_activating_it() {
+    let (mut app, ..) = child_label_selected(&dir("assign-by-id"));
+    let top = top_sheet(&app);
+    let id = app.document_state.engines[&top].document().uuid;
+    let (active, tab) = (
+        app.document_state.active_path.clone(),
+        app.document_state.active_tab,
+    );
+    let top_at = app.document_state.engines[&top].undo_position();
+
+    let given = format!("document={id}");
+    let outcome = run(&mut app, &["net_name=VCC", "class=Power", &given]);
+
+    assert_eq!(outcome, CommandOutcome::Ran, "{outcome:?}");
+    assert_eq!(classes(&app)[0].nets, ["VCC"]);
+    assert_eq!(app.document_state.engines[&top].undo_position(), top_at + 1);
+    assert_eq!(app.document_state.active_path, active);
+    assert_eq!(app.document_state.active_tab, tab);
+}
+
+/// `document=` names any open sheet: the pick lands on that sheet's timeline,
 /// the active sheet and tab are untouched, and undoing it there reverts it.
 #[test]
 fn a_path_operand_assigns_on_another_open_sheet_without_activating_it() {
@@ -130,7 +167,7 @@ fn a_path_operand_assigns_on_another_open_sheet_without_activating_it() {
     let (tab, child_at) = (app.document_state.active_tab, child_position(&app));
     let top_at = app.document_state.engines[&top].undo_position();
 
-    let given = format!("path={}", top.display());
+    let given = format!("document={}", top.display());
     let outcome = run(&mut app, &["net_name=VCC", "class=Power", &given]);
 
     assert_eq!(outcome, CommandOutcome::Ran, "{outcome:?}");
@@ -222,4 +259,43 @@ fn only_the_operand_refusal_is_logged_by_a_key_or_palette_dispatch() {
         before,
         "nothing new for other commands"
     );
+}
+
+/// a pick on a background sheet, undone and redone by
+/// document; the active sheet untouched.
+#[test]
+fn by_document_undo_and_redo_step_the_pick_on_a_background_sheet() {
+    let (mut app, ..) = child_label_selected(&dir("assign-probe-undo"));
+    let top = top_sheet(&app);
+    let child = app.document_state.active_path.clone().unwrap();
+    let (tab, child_at) = (app.document_state.active_tab, child_position(&app));
+    let table = app.document_state.projects[0].path.clone();
+    let doc = format!("document={}", top.display());
+    let top_at = app.document_state.engines[&top].undo_position();
+    let undo = AppCommandId::new("undo").unwrap();
+    let redo = AppCommandId::new("redo").unwrap();
+    let uargs = CommandArgs::parse_operands(&undo, &[&doc]).unwrap();
+    let rargs = CommandArgs::parse_operands(&redo, &[&doc]).unwrap();
+
+    assert_eq!(
+        run(&mut app, &["net_name=VCC", "class=Power", &doc]),
+        CommandOutcome::Ran
+    );
+    assert_eq!(classes(&app)[0].nets, ["VCC"]);
+    assert!(app.document_state.is_document_dirty(&table));
+
+    assert_eq!(app.run_operands(&undo, &uargs).0, CommandOutcome::Ran);
+    assert!(classes(&app)[0].nets.is_empty(), "pick undone");
+    assert!(
+        !app.document_state.is_document_dirty(&table),
+        "table clean again"
+    );
+    assert_eq!(app.document_state.engines[&top].undo_position(), top_at);
+    assert_eq!(app.run_operands(&redo, &rargs).0, CommandOutcome::Ran);
+    assert_eq!(classes(&app)[0].nets, ["VCC"], "pick redone");
+    assert_eq!(app.run_operands(&undo, &uargs).0, CommandOutcome::Ran);
+    assert!(classes(&app)[0].nets.is_empty());
+    assert_eq!(child_position(&app), child_at, "active sheet untouched");
+    assert_eq!(app.document_state.active_path.as_ref(), Some(&child));
+    assert_eq!(app.document_state.active_tab, tab);
 }

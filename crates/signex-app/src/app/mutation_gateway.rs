@@ -103,14 +103,15 @@ impl Signex {
         (kept, skipped)
     }
 
-    /// The active engine, ready for an edit: refused when the sheet is
+    /// The engine an edit acts on, ready for it: the active one, or the sheet
+    /// an agent's edit list targets (#2178). Refused when the sheet is
     /// read-only or there is none.
     fn prepare_active_engine(&mut self) -> Result<&mut signex_engine::Engine, String> {
         if let Some(reason) = self.refuse_if_active_read_only() {
             return Err(reason);
         }
         self.document_state
-            .active_engine_mut()
+            .edit_engine_mut()
             .ok_or_else(|| "There is no active schematic.".to_string())
     }
 
@@ -377,7 +378,17 @@ impl Signex {
             .active_engine()
             .and_then(|engine| direction.top(engine))
         {
-            return self.apply_grouped_step(group, direction, update_selection_info);
+            let stepped = self.apply_grouped_step(group, direction, update_selection_info);
+            // An agent's step says what it was (docs/AGENT_EDITS.md, "Undo").
+            if stepped && let Some(label) = self.document_state.agent_edits.labels.get(&group) {
+                let verb = if direction == StepDirection::Undo {
+                    "Undone"
+                } else {
+                    "Redone"
+                };
+                crate::diagnostics::log_info(format!("{verb}: {label}"));
+            }
+            return stepped;
         }
         let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
             let (stepped, failure) = match direction {
@@ -404,7 +415,7 @@ impl Signex {
 
     /// Drop selected wires the edit removed (a merge folds one wire into its
     /// neighbour), so the selection never names a wire that is gone.
-    fn prune_selected_wires(&mut self) {
+    pub(crate) fn prune_selected_wires(&mut self) {
         let Some(engine) = self.document_state.active_engine() else {
             return;
         };
@@ -427,6 +438,12 @@ impl Signex {
     ) -> bool {
         if invalidation == crate::schematic_runtime::RenderInvalidation::NONE {
             return false;
+        }
+        // An agent's edit list refreshes the sheet once, when it ends, and
+        // never through the person's canvas (docs/AGENT_EDITS.md).
+        if self.document_state.agent_edit_running() {
+            self.document_state.agent_edits.owed |= invalidation;
+            return true;
         }
 
         // A colour changes how the sheet is shown, never what ERC finds.

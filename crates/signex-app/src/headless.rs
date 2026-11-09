@@ -20,10 +20,18 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_types::project::RuleProfile;
 
-pub use crate::app::command::{CommandArgs, CommandOutcome, OperandError, OperandValue};
+pub use crate::app::command::{
+    CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
+    edit_refusal, operand_text, parse_edit_list,
+};
+pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, Picker};
 use crate::keymap::AppCommandId;
+
+/// The largest file a headless run reads for a query without being named it:
+/// the runner's default file size cap.
+pub const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Why [`Signex::boot_headless`] refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +121,47 @@ impl Signex {
         ))
     }
 
+    /// The file the document `text` names (an id or an absolute path) is
+    /// held as, for a runner that checks the file before it lets a command
+    /// act on it (#2172). Never the active document: an id or path that names
+    /// none, or a document with no file, is an `Err` with the reason.
+    pub fn document_path(&mut self, text: &str) -> Result<PathBuf, String> {
+        let target = DocumentTarget::parse(text)
+            .map_err(|expected| format!("`{text}` must be {expected}"))?;
+        self.reconcile_document_ids();
+        let entry = self.resolve_document_target(&target)?;
+        entry
+            .path
+            .ok_or_else(|| format!("{} has no file", entry.name))
+    }
+
+    /// The files, besides `path` itself, that saving the document at `path`
+    /// can write (#2172), for a runner that checks them before it lets the
+    /// command run. A project file also creates its pending libraries; a
+    /// sheet saved `as_copy` re-points its project file and rewrites the
+    /// project's sheets that may reference it. A plain sheet save writes
+    /// nothing else.
+    pub fn save_side_writes(&self, path: &std::path::Path, as_copy: bool) -> Vec<PathBuf> {
+        let docs = &self.document_state;
+        if let Some(project) = docs.projects.iter().find(|p| p.path == path) {
+            return project
+                .pending_libraries
+                .values()
+                .map(|spec| spec.lib_path.clone())
+                .collect();
+        }
+        let Some(project) = docs.document_project(path).filter(|_| as_copy) else {
+            return Vec::new();
+        };
+        let Some(idx) = docs.projects.iter().position(|p| p.id == project.id) else {
+            return Vec::new();
+        };
+        let plan = self.plan_reference_rewrites(idx, path, "");
+        let mut writes = self.disk_parent_candidates(Some(project.id), &plan, path);
+        writes.push(project.path.clone());
+        writes
+    }
+
     /// The dialog answers of an app from [`Self::boot_headless`]; `None`
     /// for an app with native dialogs.
     pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {
@@ -138,29 +187,26 @@ impl Signex {
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
+        // A command whose whole effect is window UI is refused, never `Ran`
+        // (#2170). The GUI dispatch never reads this.
+        if let Some(reason) =
+            crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
+        {
+            return (CommandOutcome::Disabled { reason }, Task::none());
+        }
         // Operands run only through the command's own operand handler; one
         // without a handler is refused, never run as if it had none (#2155).
         let missing = (!args.has_operands())
             .then(|| crate::app::command::missing_headless_operand(command))
             .flatten();
-        let result = if let Some(name) = missing {
+        let opening = crate::app::command::answers_with_the_new_document(command)
+            .then(|| self.open_snapshot());
+        let result = if let Some(answered) = self.run_query_headless(command, &args) {
+            answered
+        } else if let Some(name) = missing {
             (
                 CommandOutcome::Disabled {
                     reason: format!("`{}` needs the operand `{name}`", command.as_str()),
-                },
-                Task::none(),
-            )
-        } else if crate::app::command::headless_needs_path(command)
-            && args.operand("path").is_none()
-        {
-            // A headless caller names its document; the active one is a GUI
-            // notion and never the fallback.
-            (
-                CommandOutcome::Disabled {
-                    reason: format!(
-                        "`{}` needs the operand `path` when run headless",
-                        command.as_str()
-                    ),
                 },
                 Task::none(),
             )
@@ -168,6 +214,13 @@ impl Signex {
             self.run_operands(command, &args)
         } else {
             self.dispatch_command_reporting(command, args, None)
+        };
+        // Open and New answer with the document they made, once it exists.
+        let result = match (opening, result) {
+            (Some(snapshot), (CommandOutcome::Ran, task)) => {
+                self.settle_and_answer_new_document(command, snapshot, task)
+            }
+            (_, result) => result,
         };
         // No `update` runs here, so a history the command created gets its
         // depth now.

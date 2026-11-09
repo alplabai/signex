@@ -8,7 +8,7 @@ use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::sketch_dispatch::apply_sketch_edit;
 use super::sketch_mode::SketchEdit;
@@ -58,7 +58,7 @@ pub(super) fn rebuild(state: &mut FootprintEditorState, fp: &mut Footprint) {
 
 fn pour_attr() -> PourAttr {
     PourAttr {
-        layer: SignexLayer::TopCopper,
+        layer: PcbLayer::Copper(CopperLayer::Top),
         net: None,
         fill_type: Default::default(),
         thermal_relief: Default::default(),
@@ -124,7 +124,7 @@ fn breaking_or_removing_a_cutout_clears_it() {
 fn a_silk_tag_that_stops_baking_clears_the_baked_silk() {
     let (mut fp, edges, _) = square();
     entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     });
     let mut state = FootprintEditorState::from_footprint(&fp);
     rebuild(&mut state, &mut fp);
@@ -132,7 +132,7 @@ fn a_silk_tag_that_stops_baking_clears_the_baked_silk() {
 
     // Retarget the tag to a non-silk layer: the bake skips it.
     entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
-        layer: SignexLayer::TopCopper,
+        layer: PcbLayer::Copper(CopperLayer::Top),
     });
     rebuild(&mut state, &mut fp);
     assert!(fp.silk_f.is_empty(), "stale silk survived");
@@ -174,7 +174,7 @@ pub(super) fn hand_text() -> FpGraphic {
 fn bottom_silk_entity_leaves_hand_placed_top_text_alone() {
     let (mut fp, edges, _) = square();
     entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
-        layer: SignexLayer::BottomSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenBottom),
     });
     fp.silk_f.push(hand_text());
     let mut state = FootprintEditorState::from_footprint(&fp);
@@ -187,7 +187,7 @@ fn bottom_silk_entity_leaves_hand_placed_top_text_alone() {
 fn hand_authored_pours_survive_a_sketch_without_pour_entities() {
     let (mut fp, edges, _) = square();
     entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     });
     fp.pours.push(FpPour {
         boundary: Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]),
@@ -209,7 +209,7 @@ fn hand_authored_pours_survive_a_sketch_without_pour_entities() {
 fn deleting_the_last_silk_entity_clears_the_baked_outline() {
     let (mut fp, edges, _) = square();
     entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     });
     let mut state = FootprintEditorState::from_footprint(&fp);
     rebuild(&mut state, &mut fp);
@@ -274,7 +274,7 @@ fn deleting_every_entity_clears_what_the_sketch_baked_and_drops_the_record() {
 fn hand_text_survives_after_the_sketch_was_emptied() {
     let (mut fp, edges, plane) = square();
     entity_mut(&mut fp, edges[0]).silk = Some(SilkAttr {
-        layer: SignexLayer::TopSilk,
+        layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     });
     let mut state = FootprintEditorState::from_footprint(&fp);
     rebuild(&mut state, &mut fp);

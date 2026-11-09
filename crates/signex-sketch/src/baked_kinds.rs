@@ -7,7 +7,7 @@
 //! [`SketchData::baked_kinds`]. Only an owned kind is cleared by an empty
 //! bake. See `docs/FOOTPRINT_SKETCH.md`, "Bake ownership".
 
-use signex_types::layer::SignexLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 use crate::sketch::SketchData;
 
@@ -72,8 +72,10 @@ impl SketchData {
     pub fn tags_kind(&self, kind: BakedKind) -> bool {
         self.entities.iter().any(|e| match kind {
             BakedKind::Pads => e.pad.is_some(),
-            BakedKind::SilkF => e.bakes_silk_on(SignexLayer::TopSilk),
-            BakedKind::SilkB => e.bakes_silk_on(SignexLayer::BottomSilk),
+            BakedKind::SilkF => e.bakes_silk_on(PcbLayer::Technical(TechnicalLayer::SilkscreenTop)),
+            BakedKind::SilkB => {
+                e.bakes_silk_on(PcbLayer::Technical(TechnicalLayer::SilkscreenBottom))
+            }
             BakedKind::Courtyard => e.courtyard.is_some(),
             BakedKind::MaskOpenings => e.mask_opening.is_some(),
             BakedKind::MaskExcludes => e.mask_exclude.is_some(),

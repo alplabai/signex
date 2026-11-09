@@ -97,9 +97,14 @@ pub enum Enablement {
 /// GUI/undo/visibility flags for a command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CommandFlags {
-    /// Only meaningful/available when driven from the GUI: the command has
-    /// no operand form, so no headless or scripted equivalent (#1934).
+    /// Window UI only: a modal, a panel, the view, an armed tool or a pointer
+    /// gesture. It has no operand form and a headless caller is refused it
+    /// (#1934, #2170).
     pub gui_only: bool,
+    /// Acts without a window although it neither mutates the document nor
+    /// takes operands (a selection step, a copy, a check). Only a headless
+    /// caller reads this: see [`CommandMetadata::headless_use`] (#2170).
+    pub runs_headless: bool,
     /// Mutates the open document.
     pub mutates_doc: bool,
     /// Its mutation is recorded on the undo stack.
@@ -114,6 +119,7 @@ impl CommandFlags {
     /// "deliberately none" stay distinguishable.
     pub const NONE: Self = Self {
         gui_only: false,
+        runs_headless: false,
         mutates_doc: false,
         undoable: false,
         hidden: false,
@@ -123,6 +129,12 @@ impl CommandFlags {
     /// operation, a modal, or a panel toggle. No headless equivalent.
     pub const GUI_ONLY: Self = Self {
         gui_only: true,
+        ..Self::NONE
+    };
+
+    /// Acts without a window and does not mutate the document (#2170).
+    pub const RUNS_HEADLESS: Self = Self {
+        runs_headless: true,
         ..Self::NONE
     };
 
@@ -148,6 +160,16 @@ impl CommandFlags {
         mutates_doc: true,
         ..Self::NONE
     };
+}
+
+/// What a headless run (no window) does with a catalog command (#2170).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeadlessUse {
+    /// Its whole effect is window UI (a modal, a panel, the view, an armed
+    /// tool): refused with a reason, never reported as run.
+    WindowOnly,
+    /// It has a document, file or engine effect, so it runs.
+    Runs,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,12 +219,37 @@ impl CommandMetadata {
         enable: Enablement::Always,
         flags: CommandFlags {
             gui_only: false,
+            runs_headless: false,
             mutates_doc: false,
             undoable: false,
             hidden: false,
         },
         operands: &[],
     };
+
+    /// How a headless caller may use this command, or `None` while nobody
+    /// decided (#2170): window only, or runs (a document mutation, an operand
+    /// form, or [`CommandFlags::runs_headless`]). A row both `gui_only` and
+    /// `runs_headless` is `None` too. Read on the headless path only.
+    pub fn headless_use(&self) -> Option<HeadlessUse> {
+        let f = self.flags;
+        match (f.gui_only, f.runs_headless) {
+            (true, true) => None,
+            (true, false) => Some(HeadlessUse::WindowOnly),
+            (false, true) => Some(HeadlessUse::Runs),
+            (false, false) => {
+                (f.mutates_doc || !self.operands.is_empty()).then_some(HeadlessUse::Runs)
+            }
+        }
+    }
+
+    /// Why a headless caller is refused this command: `Some` for a command
+    /// that only works in a window, with the one wording every headless
+    /// surface reports (#2170).
+    pub fn headless_refusal(&self) -> Option<String> {
+        (self.headless_use() == Some(HeadlessUse::WindowOnly))
+            .then(|| format!("`{}` only works in a window", self.id))
+    }
 
     /// The label a menu surface should display: the terse `menu_label`
     /// override when present, else the descriptive `label`.
@@ -466,6 +513,67 @@ mod tests {
         assert_eq!(group_of("mirror_x"), CommandGroup::General);
         assert_eq!(group_of("zoom_to_fit"), CommandGroup::General);
         assert_eq!(group_of("open_preferences"), CommandGroup::General);
+    }
+
+    /// #2170: a new row with no headless decision fails here. Decide it: set
+    /// `GUI_ONLY` (window UI only), or give it an effect (a mutating flag,
+    /// operands, or `RUNS_HEADLESS`).
+    #[test]
+    fn every_command_is_classified_for_headless_use() {
+        let mut window_only = 0;
+        for metadata in all_metadata() {
+            let flags = metadata.flags;
+            assert!(
+                !(flags.gui_only && flags.runs_headless),
+                "`{}` is both gui_only and runs_headless",
+                metadata.id
+            );
+            match metadata.headless_use() {
+                Some(HeadlessUse::WindowOnly) => window_only += 1,
+                Some(HeadlessUse::Runs) => {}
+                None => panic!("`{}` has no headless classification", metadata.id),
+            }
+            assert_eq!(
+                metadata.headless_refusal().is_some(),
+                flags.gui_only,
+                "`{}`: the refusal follows gui_only",
+                metadata.id
+            );
+        }
+        assert!(window_only > 100, "window-only rows: {window_only}");
+    }
+
+    #[test]
+    fn the_headless_refusal_names_the_command_and_the_window() {
+        let id = |name: &str| metadata_for_str(name).expect("catalog row");
+        assert_eq!(
+            id("open_erc_dialog").headless_refusal().as_deref(),
+            Some("`open_erc_dialog` only works in a window")
+        );
+        assert_eq!(id("run_erc").headless_use(), Some(HeadlessUse::Runs));
+        assert!(id("run_erc").headless_refusal().is_none());
+        assert!(id("rotate_selection").headless_refusal().is_none());
+    }
+
+    /// A row with no flag and no operands is undecided, never silently runnable.
+    #[test]
+    fn an_undecided_row_has_no_headless_use() {
+        let undecided = CommandMetadata {
+            id: "undecided",
+            flags: CommandFlags::NONE,
+            ..CommandMetadata::DEFAULT
+        };
+        assert_eq!(undecided.headless_use(), None);
+        assert_eq!(undecided.headless_refusal(), None);
+        let both = CommandMetadata {
+            flags: CommandFlags {
+                gui_only: true,
+                runs_headless: true,
+                ..CommandFlags::NONE
+            },
+            ..undecided
+        };
+        assert_eq!(both.headless_use(), None);
     }
 
     #[test]

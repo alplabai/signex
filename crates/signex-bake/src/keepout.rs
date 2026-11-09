@@ -20,13 +20,14 @@
 //! - No bits set → `KeepoutForbid::All` (defensive default — an
 //!   untyped keepout zone forbids everything).
 
-use signex_library::primitive::footprint::{FpKeepout, KeepoutForbid, LayerId, Polygon};
+use signex_library::primitive::footprint::{FpKeepout, KeepoutForbid, Polygon};
 use signex_sketch::SketchError;
 use signex_sketch::attr::KeepoutKinds;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
+use crate::layer_label::layer_id;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -63,7 +64,7 @@ pub fn bake_keepouts(
         match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(vertices) => out.push(FpKeepout {
                 boundary: Polygon::new(vertices),
-                layer: LayerId::new(attr.layer.altium_label()),
+                layer: layer_id(attr.layer),
                 forbids: map_kinds(attr.kinds),
             }),
             Err(TraceError::OpenChain) => warnings.push(format!(
@@ -120,7 +121,7 @@ mod tests {
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_sketch::solver::Solver;
     use signex_sketch::solver::residual::ResolvedParams;
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -179,7 +180,7 @@ mod tests {
             ..KeepoutKinds::default()
         };
         let attr = KeepoutAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             kinds,
         };
         let data = rectangle_with_keepout(attr);
@@ -201,7 +202,7 @@ mod tests {
             ..KeepoutKinds::default()
         };
         let attr = KeepoutAttr {
-            layer: SignexLayer::BottomCopper,
+            layer: PcbLayer::Copper(CopperLayer::Bottom),
             kinds,
         };
         let data = rectangle_with_keepout(attr);
@@ -215,7 +216,7 @@ mod tests {
     #[test]
     fn bake_keepout_no_kinds_set_is_all() {
         let attr = KeepoutAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             kinds: KeepoutKinds::default(),
         };
         let data = rectangle_with_keepout(attr);
@@ -233,7 +234,7 @@ mod tests {
             ..KeepoutKinds::default()
         };
         let attr = KeepoutAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             kinds,
         };
         let data = rectangle_with_keepout(attr);
@@ -247,7 +248,7 @@ mod tests {
     #[test]
     fn tagging_every_edge_bakes_the_loop_once() {
         let attr = KeepoutAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             kinds: KeepoutKinds::default(),
         };
         let mut data = rectangle_with_keepout(attr.clone());
@@ -269,11 +270,11 @@ mod tests {
     #[test]
     fn one_loop_tagged_with_two_layers_bakes_once_per_layer() {
         let top = KeepoutAttr {
-            layer: SignexLayer::TopCopper,
+            layer: PcbLayer::Copper(CopperLayer::Top),
             kinds: KeepoutKinds::default(),
         };
         let bottom = KeepoutAttr {
-            layer: SignexLayer::BottomCopper,
+            layer: PcbLayer::Copper(CopperLayer::Bottom),
             kinds: KeepoutKinds::default(),
         };
         let mut data = rectangle_with_keepout(top);

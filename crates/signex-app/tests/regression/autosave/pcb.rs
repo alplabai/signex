@@ -266,6 +266,35 @@ fn a_tick_during_an_in_flight_save_that_then_fails_keeps_the_sidecar() {
     assert!(sidecar_of(&f).exists(), "the recovery copy survives");
 }
 
+/// #2172: a restore brings back the copy's content, not its identity.
+#[test]
+fn restore_keeps_the_id_of_the_open_board() {
+    let (f, mut next, _) = next_run();
+    let live = uuid::Uuid::now_v7();
+    let tab = next
+        .document_state
+        .tabs
+        .iter_mut()
+        .find(|tab| tab.path == f.doc)
+        .unwrap();
+    let Some(TabDocument::Pcb(board)) = tab.cached_document.as_mut() else {
+        panic!("an open PCB tab")
+    };
+    board.uuid = live;
+    answer(&mut next, RecoveryChoice::Restore);
+    assert_eq!(thickness_in_tab(&next, &f.doc), EDITED_THICKNESS);
+    let tab = next
+        .document_state
+        .tabs
+        .iter()
+        .find(|tab| tab.path == f.doc)
+        .unwrap();
+    assert_eq!(
+        tab.cached_document.as_ref().unwrap().as_pcb().unwrap().uuid,
+        live
+    );
+}
+
 /// Close the first tab the way the user does (its close button).
 fn close_first_tab(app: &mut Signex) {
     let close = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(

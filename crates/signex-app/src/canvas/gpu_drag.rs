@@ -281,37 +281,32 @@ impl SchematicCanvas<'_> {
     /// idle, the static layer during a drag. Drawn between the content shader
     /// and the drag shader, so a moving item passes over them like over the
     /// rest of the static layer.
-    fn draw_static_canvas_texts(&self, renderer: &Renderer, bounds: Rectangle) -> canvas::Geometry {
+    pub(in crate::canvas) fn static_text_layer(
+        &self,
+        renderer: &Renderer,
+        bounds: Rectangle,
+    ) -> super::draw::RetainedLayer {
         let local = crate::schematic_runtime::frame_local_bounds(bounds);
         match self.live_drag() {
-            Some(drag) => self.draw_drag_static_texts(renderer, local, &drag),
-            None => self.draw_idle_texts(renderer, local),
-        }
-    }
-
-    /// Idle: the content scene's rotated and oversize texts, retained like the CPU content
-    /// layer until the camera moves.
-    fn draw_idle_texts(&self, renderer: &Renderer, local: Rectangle) -> canvas::Geometry {
-        if !self.content_cache_fits_camera() {
-            self.content_cache.clear();
-        }
-        let transform = self.screen_transform();
-        let focus_set = self.auto_focus_set();
-        self.content_cache.draw(renderer, local.size(), |frame| {
-            let cam = self.camera();
-            self.content_cache_camera
-                .set((cam.offset.x, cam.offset.y, cam.scale));
-            if let Some(snapshot) = self.active_snapshot() {
-                self.render_content_scene(
-                    frame,
-                    iced::Point::ORIGIN,
-                    snapshot,
-                    &transform,
+            Some(drag) => super::draw::RetainedLayer {
+                geometry: self.draw_drag_static_texts(renderer, local, &drag),
+                shift: iced::Vector::ZERO,
+            },
+            // Idle: the content scene's rotated and oversize texts, retained
+            // across pans like the CPU content layer (#2128).
+            None => {
+                let transform = self.screen_transform();
+                let focus_set = self.auto_focus_set();
+                self.retained_content(
+                    renderer,
                     local,
+                    self.active_snapshot(),
                     focus_set.as_ref(),
-                );
+                    &transform,
+                    true,
+                )
             }
-        })
+        }
     }
 
     /// During a drag: the static layer's rotated and oversize texts, retained with it.
@@ -349,31 +344,6 @@ impl SchematicCanvas<'_> {
                 );
             }
         })
-    }
-}
-
-/// The rotated and oversize texts of the static layer, on a canvas of their own between the
-/// content shader and the drag shader. No `update`.
-pub(crate) struct SchematicStaticTextLayer<'a>(SchematicCanvas<'a>);
-
-impl<'a> SchematicStaticTextLayer<'a> {
-    pub(crate) fn new(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Self {
-        Self(SchematicCanvas::new(slot, prefs).gpu_overlay())
-    }
-}
-
-impl canvas::Program<Message> for SchematicStaticTextLayer<'_> {
-    type State = ();
-
-    fn draw(
-        &self,
-        _state: &(),
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<canvas::Geometry> {
-        vec![self.0.draw_static_canvas_texts(renderer, bounds)]
     }
 }
 

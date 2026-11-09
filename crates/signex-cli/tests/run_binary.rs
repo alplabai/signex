@@ -18,12 +18,13 @@ fn statuses(lines: &[Value]) -> Vec<&str> {
 fn edit_session() -> Vec<Value> {
     vec![
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
-        json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}}),
-        json!({"id": "assign_net_class", "args": {"net_name": "GND", "class": "Power", "path": "main.snxsch"}}),
+        json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": "main.snxsch"}}),
+        json!({"id": "assign_net_class", "args": {"net_name": "GND", "class": "Power", "document": "main.snxsch"}}),
         json!({"id": "place_junction", "args": {"at": [5.08, 0]}}),
-        json!({"id": "undo"}),
-        json!({"id": "redo"}),
-        json!({"id": "save_document"}),
+        json!({"id": "undo", "args": {"document": "main.snxsch"}}),
+        json!({"id": "redo", "args": {"document": "main.snxsch"}}),
+        json!({"id": "save_document", "args": {"document": "main.snxsch"}}),
+        json!({"id": "save_document", "args": {"document": "demo.snxprj"}}),
     ]
 }
 
@@ -38,7 +39,9 @@ fn a_run_without_save_reports_what_would_change_and_writes_nothing() {
 
     assert_eq!(
         statuses(&out.lines),
-        ["ran", "ran", "ran", "ran", "ran", "ran", "refused"],
+        [
+            "answered", "ran", "ran", "ran", "ran", "ran", "refused", "refused"
+        ],
         "{}\n{}",
         out.stdout,
         out.stderr
@@ -76,7 +79,7 @@ fn a_run_with_save_writes_the_saved_sheet_and_every_line_carries_the_run_id() {
 
     assert_eq!(
         statuses(&out.lines),
-        ["ran"; 7],
+        ["answered", "ran", "ran", "ran", "ran", "ran", "ran", "ran"],
         "{}\n{}",
         out.stdout,
         out.stderr
@@ -90,13 +93,17 @@ fn a_run_with_save_writes_the_saved_sheet_and_every_line_carries_the_run_id() {
     assert_eq!(saved.net_colors.len(), 1, "the colour reached the file");
     assert_eq!(saved.junctions.len(), 1, "the junction reached the file");
     assert_ne!(before[&fx.project], after[&fx.project], "the net class too");
+    // A save names its document: the sheet's clears the sheet's flag, the
+    // project's the project's.
     assert_eq!(
         out.lines[6]["changed"],
-        json!([
-            fx.project.display().to_string(),
-            fx.sheet.display().to_string()
-        ]),
-        "the save clears both unsaved flags"
+        json!([fx.sheet.display().to_string()]),
+        "the sheet's save clears the sheet's flag"
+    );
+    assert_eq!(
+        out.lines[7]["changed"],
+        json!([fx.project.display().to_string()]),
+        "the project's save clears the project's flag"
     );
 
     let run = out.lines[0]["run"].as_str().unwrap();
@@ -125,7 +132,7 @@ fn one_command_runs_from_arguments_and_a_failed_open_is_failed_not_ran() {
         &["run", project, "open_document", "--arg", "path=main.snxsch"],
         "",
     );
-    assert_eq!(statuses(&ok.lines), ["ran"], "{}", ok.stderr);
+    assert_eq!(statuses(&ok.lines), ["answered"], "{}", ok.stderr);
     assert_eq!(ok.code, Some(0));
 
     // Inside the project, but not a file: the app reports an error notice.
@@ -223,4 +230,95 @@ fn usage_errors_exit_two_with_a_message_and_help_and_version_answer() {
     let missing = run_cli(&["run", "/no/such/project.snxprj"], "");
     assert_eq!(missing.code, Some(2), "{}", missing.stderr);
     assert!(missing.lines.is_empty());
+}
+
+/// #2172: the queries answer with data (`status: answered`), and a document
+/// is named by its id or by a path the run confines like any other path.
+#[test]
+fn queries_answer_with_data_and_a_document_is_named_by_id_or_by_path() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let project = fx.project.to_str().unwrap();
+    let id = signex_types::format::document_id_in_header(
+        "snxsch",
+        &std::fs::read(&fx.sheet).expect("sheet"),
+    )
+    .expect("the sheet carries an id")
+    .to_string();
+    let before = snapshot(&root);
+
+    let out = run_cli(
+        &["run", project],
+        jsonl(&[
+            json!({"id": "list_documents"}),
+            json!({"id": "read_document", "args": {"document": id}}),
+            json!({"id": "read_document", "args": {"document": "main.snxsch", "kinds": "wire"}}),
+            json!({"id": "document_info", "args": {"document": fx.sheet}}),
+            json!({"id": "find_items", "args": {"designator": "R1"}}),
+            json!({"id": "resolve", "args": {"id": id}}),
+        ]),
+    );
+
+    assert_eq!(
+        statuses(&out.lines),
+        ["answered"; 6],
+        "{}\n{}",
+        out.stdout,
+        out.stderr
+    );
+    assert_eq!(out.code, Some(0));
+    let listed = out.lines[0]["data"]["documents"].as_array().unwrap();
+    assert!(
+        listed
+            .iter()
+            .any(|d| d["id"] == id.as_str() && d["kind"] == "schematic")
+    );
+    assert_eq!(out.lines[1]["data"]["document"]["id"], id.as_str());
+    assert!(out.lines[1]["data"]["total"].as_u64().unwrap() > 0);
+    assert_eq!(
+        out.lines[2]["data"]["total"], 1,
+        "by a relative path, one wire"
+    );
+    assert_eq!(out.lines[3]["data"]["id"], id.as_str());
+    assert_eq!(
+        out.lines[4]["data"]["count"], 1,
+        "R1 is found by its designator"
+    );
+    assert_eq!(out.lines[5]["data"]["what"], "document");
+    assert_eq!(snapshot(&root), before, "a query writes nothing");
+}
+
+/// A `Document` operand given as a path is a path: refused outside the
+/// project like a `path` operand. An id is not a path and is never confined.
+#[test]
+fn a_document_given_as_a_path_is_confined_but_an_id_is_not() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    std::fs::copy(&fx.sheet, other.join("outside.snxsch")).expect("copy");
+    let outside = other.join("outside.snxsch");
+    let project = fx.project.to_str().unwrap();
+
+    let out = run_cli(
+        &["run", project, "--keep-going"],
+        jsonl(&[
+            json!({"id": "read_document", "args": {"document": outside}}),
+            json!({"id": "document_info", "args": {"document": "../../etc/hosts"}}),
+            json!({"id": "document_info", "args": {"document": "00000000-0000-7000-8000-00000000dead"}}),
+        ]),
+    );
+
+    assert_eq!(
+        statuses(&out.lines)[..2],
+        ["refused", "refused"],
+        "{}",
+        out.stdout
+    );
+    for index in 0..2 {
+        let reason = out.lines[index]["reason"].as_str().unwrap();
+        assert!(reason.starts_with("operand `document`:"), "{reason}");
+    }
+    // An id reaches the app untouched: it names no open document, and says so.
+    let unknown = out.lines[2]["reason"].as_str().unwrap();
+    assert!(unknown.contains("no document has the id"), "{unknown}");
 }

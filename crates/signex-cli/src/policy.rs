@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use signex_app::keymap::{AppCommandId, CommandMetadata, OperandKind, metadata_for};
 
 use crate::capability::{Capability, capability_of};
-use crate::catalog::GUI_ONLY_REASON;
+
 use crate::confine::confine;
 use crate::input::Limits;
 use crate::protocol::Request;
@@ -43,8 +43,8 @@ impl Policy {
         let command = AppCommandId::new(request.id.as_str())?;
         let meta = metadata_for(&command)
             .ok_or_else(|| format!("unknown command `{}`", command.as_str()))?;
-        if meta.flags.gui_only {
-            return Err(format!("`{}` is {GUI_ONLY_REASON}", command.as_str()));
+        if let Some(reason) = meta.headless_refusal() {
+            return Err(reason);
         }
         let needed = capability_of(meta);
         if !self.capabilities.contains(&needed) {
@@ -56,7 +56,7 @@ impl Policy {
             .operands
             .iter()
             .map(|(name, text)| {
-                if !is_path_operand(meta, name) {
+                if !is_path_operand(meta, name, text) {
                     return Ok((name.clone(), text.clone()));
                 }
                 let checked = self
@@ -81,7 +81,7 @@ impl Policy {
         let allowed = self.allowed(roots);
         let writes = capability_of(approved.meta).writes_files();
         for (name, text) in &approved.operands {
-            if !is_path_operand(approved.meta, name) {
+            if !is_path_operand(approved.meta, name, text) {
                 continue;
             }
             if writes {
@@ -116,6 +116,24 @@ impl Policy {
                 .map_err(|why| format!("it would write {}: {why}", target.display()))?;
         }
         Ok(())
+    }
+
+    /// The file a `document` operand resolved to (an id names its file only
+    /// through the app): inside the allowed folders, a plain file when the
+    /// command writes, and within the size cap. The check a path operand gets,
+    /// applied to the path the document is held at, whatever way it was named.
+    pub fn check_resolved(
+        &self,
+        path: &Path,
+        roots: &[PathBuf],
+        writes: bool,
+    ) -> Result<(), String> {
+        let allowed = self.allowed(roots);
+        let text = path
+            .to_str()
+            .ok_or_else(|| format!("{} is not valid UTF-8", path.display()))?;
+        self.check_path(Path::new(""), text, &allowed, writes)
+            .map(|_| ())
     }
 
     fn allowed(&self, roots: &[PathBuf]) -> Vec<PathBuf> {
@@ -172,10 +190,20 @@ fn check_derived_folder(target: &Path, allowed: &[PathBuf]) -> Result<(), String
         .map_err(|why| format!("the folder it creates beside it: {why}"))
 }
 
-fn is_path_operand(meta: &CommandMetadata, name: &str) -> bool {
+/// Whether the operand `name` with value `text` names a file: a path operand,
+/// or a `Document` operand given as a path. A document id is not a path, so
+/// it is never confined or joined to the project folder.
+fn is_path_operand(meta: &CommandMetadata, name: &str, text: &str) -> bool {
     meta.operands
         .iter()
-        .any(|operand| operand.name == name && operand.kind == OperandKind::Path)
+        .find(|operand| operand.name == name)
+        .is_some_and(|operand| match operand.kind {
+            OperandKind::Path => true,
+            OperandKind::Document => text
+                .parse::<signex_types::document_id::DocumentId>()
+                .is_err(),
+            _ => false,
+        })
 }
 
 /// A write goes to a real file: through a link it could land anywhere the
@@ -249,12 +277,10 @@ mod tests {
             err,
             "`save_document` needs the `save` capability; pass --save"
         );
+        // Window only comes before the capability (#2170).
         let err =
             authorize(&policy(&DEFAULT), &fx, &request("report_manager_bom", &[])).unwrap_err();
-        assert_eq!(
-            err,
-            "`report_manager_bom` needs the `export` capability; pass --allow export"
-        );
+        assert_eq!(err, "`report_manager_bom` only works in a window");
         let held = policy(&[Capability::Read, Capability::Edit, Capability::Save]);
         assert!(authorize(&held, &fx, &request("save_document", &[])).is_ok());
     }
@@ -277,7 +303,10 @@ mod tests {
         let bad = authorize(&all, &fx, &request("Not An Id", &[])).unwrap_err();
         assert!(bad.contains("snake_case"), "{bad}");
         let gui = authorize(&all, &fx, &request("toggle_properties_panel", &[])).unwrap_err();
-        assert!(gui.contains(GUI_ONLY_REASON), "{gui}");
+        assert_eq!(gui, "`toggle_properties_panel` only works in a window");
+        // A modal the catalog classified as window only in #2170.
+        let erc = authorize(&all, &fx, &request("open_erc_dialog", &[])).unwrap_err();
+        assert_eq!(erc, "`open_erc_dialog` only works in a window");
     }
 
     #[test]

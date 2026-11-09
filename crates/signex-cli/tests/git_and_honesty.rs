@@ -19,7 +19,7 @@ fn open_edit_save() -> String {
     jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
         json!({"id": "place_junction", "args": {"at": [5.08, 0]}}),
-        json!({"id": "save_document"}),
+        json!({"id": "save_document", "args": {"document": "main.snxsch"}}),
     ])
 }
 
@@ -124,21 +124,15 @@ fn a_command_whose_only_effect_was_a_dropped_window_is_refused() {
         json!({"id": "annotate_schematic"}),
     ]);
     let out = run_cli(
-        &[
-            "run",
-            fx.project.to_str().unwrap(),
-            "--keep-going",
-            "--allow",
-            "export",
-        ],
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
         commands,
     );
-    for index in [1, 2] {
-        let reason = refusal(&out, index);
-        assert!(
-            reason.contains("needs a window"),
-            "{reason}\n{}",
-            out.stdout
+    // The catalog says both open only a dialog (#2170), so the run refuses
+    // them before the app sees them.
+    for (index, id) in [(1, "report_manager_bom"), (2, "annotate_schematic")] {
+        assert_eq!(
+            refusal(&out, index),
+            format!("`{id}` only works in a window")
         );
     }
 }
@@ -150,8 +144,8 @@ fn closing_a_document_with_unsaved_changes_parks_it_and_the_run_still_reports_it
     let project = fx.project.to_str().unwrap();
     let dirty = jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
-        json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}}),
-        json!({"id": "close_active_document"}),
+        json!({"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": "main.snxsch"}}),
+        json!({"id": "close_active_document", "args": {"document": "main.snxsch"}}),
     ]);
     let before = snapshot(&root);
     let out = run_cli(&["run", project, "--keep-going"], dirty);
@@ -167,7 +161,7 @@ fn closing_a_document_with_unsaved_changes_parks_it_and_the_run_still_reports_it
 
     let clean = jsonl(&[
         json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
-        json!({"id": "close_active_document"}),
+        json!({"id": "close_active_document", "args": {"document": "main.snxsch"}}),
     ]);
     let out = run_cli(&["run", project, "--keep-going"], clean);
     assert_eq!(

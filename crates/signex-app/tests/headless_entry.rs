@@ -99,9 +99,13 @@ fn net_colors() {
         .expect("headless answers")
         .replace_all([("path".to_string(), path.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "open answers with the document: {outcome:?}"
+    );
     driver.settle(&mut app, task).expect("open settled");
 
+    let doc = format!("document={}", path.display());
     let painted = |app: &Signex| {
         app.document_state.engines[&path]
             .document()
@@ -118,7 +122,7 @@ fn net_colors() {
     };
     assert!(!app.document_state.is_document_dirty(&path));
 
-    let ran = run(&mut app, "color_net", &["at=5,0", "color=#336699"]);
+    let ran = run(&mut app, "color_net", &["at=5,0", "color=#336699", &doc]);
     assert_eq!(ran, CommandOutcome::Ran);
     assert_eq!(
         painted(&app),
@@ -127,17 +131,17 @@ fn net_colors() {
     );
     assert!(app.document_state.is_document_dirty(&path), "an edit");
 
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
     assert_eq!(painted(&app), None);
     assert!(
         !app.document_state.is_document_dirty(&path),
         "undo back to the saved colours is clean"
     );
-    assert_eq!(run(&mut app, "redo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "redo", &[&doc]), CommandOutcome::Ran);
     assert!(painted(&app).is_some());
     assert!(app.document_state.is_document_dirty(&path));
 
-    assert_eq!(run(&mut app, "save_document", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "save_document", &[&doc]), CommandOutcome::Ran);
     assert!(!app.document_state.is_document_dirty(&path), "saved");
     let text = std::fs::read_to_string(&path).expect("saved file");
     let saved = signex_types::format::SnxSchematic::parse(&text)
@@ -148,11 +152,11 @@ fn net_colors() {
         "the file holds the colour"
     );
 
-    let cleared = run(&mut app, "clear_all_net_colors", &[]);
+    let cleared = run(&mut app, "clear_all_net_colors", &[&doc]);
     assert_eq!(cleared, CommandOutcome::Ran);
     assert_eq!(painted(&app), None);
     assert!(app.document_state.is_document_dirty(&path));
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
     assert!(painted(&app).is_some());
     assert!(
         !app.document_state.is_document_dirty(&path),
@@ -188,7 +192,7 @@ fn net_colors() {
         before + 1,
         "the operands placed a junction"
     );
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&doc]), CommandOutcome::Ran);
     assert_eq!(junctions(&app), before);
 
     // A command that declares operands and has no handler is still refused.
@@ -279,11 +283,20 @@ fn run() {
     app.ui_state.io.git = signex_app::io_ports::GitCommits::Skip;
 
     let grid_before = app.ui_state.grid_visible;
-    let (outcome, task) =
+    // A command that only works in a window is refused and changes nothing
+    // (#2170).
+    let (outcome, _task) =
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    assert_eq!(
+        outcome,
+        CommandOutcome::Disabled {
+            reason: "`toggle_visible_grid` only works in a window".into()
+        }
+    );
+    assert_eq!(app.ui_state.grid_visible, grid_before, "nothing ran");
+    let (outcome, task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::Ran);
     driver.settle(&mut app, task).expect("command settled");
-    assert_eq!(app.ui_state.grid_visible, !grid_before, "the command ran");
 
     // One answered dialog: Open takes the `path` answer, so the open of a
     // file that is not there reports that file.
@@ -292,7 +305,10 @@ fn run() {
         .expect("headless answers")
         .replace_all([("path".to_string(), missing.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        "{outcome:?}"
+    );
     driver.settle(&mut app, task).expect("open settled");
     let notice = app
         .document_state
@@ -328,7 +344,7 @@ fn run() {
     driver.settle(&mut app, end).expect("session ended");
     assert!(driver.has_exited());
     let written = std::fs::read_to_string(isolated.path().join("prefs.json")).expect("prefs");
-    assert!(written.contains("grid_visible"), "{written}");
+    assert!(written.contains("first_run_tour_dismissed"), "{written}");
     assert_eq!(snapshot(&real), before, "the real config root changed");
 }
 
@@ -394,7 +410,10 @@ fn undo_round_trip() {
         .expect("headless answers")
         .replace_all([("path".to_string(), path.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
-    assert_eq!(outcome, CommandOutcome::Ran);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "open answers with the document: {outcome:?}"
+    );
     driver.settle(&mut app, task).expect("open settled");
     assert_eq!(
         app.document_state.active_path.as_deref(),
@@ -402,8 +421,16 @@ fn undo_round_trip() {
     );
 
     let wires = |app: &Signex| app.document_state.engines[&path].document().wires.len();
+    let doc = format!("document={}", path.display());
     let mut run = |app: &mut Signex, name: &str| {
-        let (outcome, task) = app.dispatch_command_headless(&id(name), CommandArgs::none());
+        // Undo and Redo name their document; the editing commands act on
+        // the active one, as a click does.
+        let command = id(name);
+        let args = match name {
+            "undo" | "redo" => CommandArgs::parse_operands(&command, &[&doc]).expect("operands"),
+            _ => CommandArgs::none(),
+        };
+        let (outcome, task) = app.dispatch_command_headless(&command, args);
         assert_eq!(outcome, CommandOutcome::Ran, "{name}");
         driver.settle(app, task).expect("command settled");
     };
@@ -507,8 +534,7 @@ fn undo_depth_dispatch() {
         .expect("engine");
     assert_eq!(engine.undo_depth(), 100);
     app.document_state.engines.insert(path.clone(), engine);
-    let (outcome, _task) =
-        app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
+    let (outcome, _task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
     assert_eq!(outcome, CommandOutcome::Ran);
     assert_eq!(app.document_state.engines[&path].undo_depth(), 3);
 }
@@ -598,6 +624,7 @@ fn net_class_assign() {
         signex_engine::Engine::new_with_path(sheet, Some(sheet_path.clone())).expect("engine");
     seed.save().expect("seed sheet");
     let data = ProjectData {
+        document_id: None,
         description: None,
         name: "demo".into(),
         dir: dir.to_string_lossy().into_owned(),
@@ -639,7 +666,10 @@ fn net_class_assign() {
         app.headless_answers()
             .expect("headless answers")
             .replace_all([("path".to_string(), opened.display().to_string())]);
-        assert_eq!(run(&mut app, "open_document", &[]), CommandOutcome::Ran);
+        assert!(matches!(
+            run(&mut app, "open_document", &[]),
+            CommandOutcome::Answered(_)
+        ));
     }
     let classes = |app: &Signex| {
         app.document_state.projects[0].data.net_classes[0]
@@ -651,20 +681,20 @@ fn net_class_assign() {
 
     // Headless names its document: no operands, or no `path`, is refused and
     // never falls back to the active sheet; nothing changes.
-    for (operands, wanted) in [
-        (&[][..], "needs the operand `net_name`"),
-        (
-            &["net_name=GND", "class=Power"][..],
-            "needs the operand `path`",
-        ),
-    ] {
-        match run(&mut app, "assign_net_class", operands) {
-            CommandOutcome::Disabled { reason } => assert!(reason.contains(wanted), "{reason}"),
-            other => panic!("expected a refusal, got {other:?}"),
+    match run(&mut app, "assign_net_class", &[]) {
+        CommandOutcome::Disabled { reason } => {
+            assert!(reason.contains("needs the operand `document`"), "{reason}")
         }
-        assert!(classes(&app).is_empty() && !app.document_state.is_document_dirty(&prj));
+        other => panic!("expected a refusal, got {other:?}"),
     }
-    let given = format!("path={}", sheet_path.display());
+    let without =
+        CommandArgs::parse_operands(&id("assign_net_class"), &["net_name=GND", "class=Power"]);
+    assert!(
+        matches!(&without, Err(signex_app::headless::OperandError::Missing { operand, .. }) if operand == "document"),
+        "{without:?}"
+    );
+    assert!(classes(&app).is_empty() && !app.document_state.is_document_dirty(&prj));
+    let given = format!("document={}", sheet_path.display());
     let ran = run(
         &mut app,
         "assign_net_class",
@@ -681,13 +711,13 @@ fn net_class_assign() {
         "the sheet did not"
     );
 
-    assert_eq!(run(&mut app, "undo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "undo", &[&given]), CommandOutcome::Ran);
     assert!(classes(&app).is_empty());
     assert!(
         !app.document_state.is_document_dirty(&prj),
         "back at the saved bytes"
     );
-    assert_eq!(run(&mut app, "redo", &[]), CommandOutcome::Ran);
+    assert_eq!(run(&mut app, "redo", &[&given]), CommandOutcome::Ran);
     assert_eq!(classes(&app), ["GND"]);
     assert!(app.document_state.is_document_dirty(&prj));
 }

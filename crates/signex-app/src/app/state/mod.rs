@@ -6,6 +6,7 @@ use crate::dock::DockArea;
 
 use super::TabInfo;
 
+mod agent_edits;
 mod case_fold;
 pub(crate) mod dir_case;
 mod dirty;
@@ -48,6 +49,7 @@ mod window_scales;
 mod window_sizes;
 mod window_tab;
 
+pub use agent_edits::AgentEdits;
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
 pub use interaction::{ClickedPin, InteractionState};
@@ -348,6 +350,9 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
+    /// Document ids a document cannot say itself: project files not loaded,
+    /// and the order documents were first seen in (#2172).
+    pub document_ids: crate::app::document_ids::DocumentIds,
     /// Counts the changes that can alter an ERC finding: an edit to a sheet
     /// (through the engine, or Annotate, Replace, library update and the like),
     /// a project-file change, and a sheet written behind the engines. Each calls
@@ -495,6 +500,8 @@ pub struct DocumentState {
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
+    /// An agent's edit list in progress, and the labels of its undo steps (#2178).
+    pub agent_edits: AgentEdits,
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,
@@ -968,10 +975,10 @@ impl DocumentState {
             })
     }
 
-    /// [`Self::schematic_defaults_for`] the active document.
+    /// [`Self::schematic_defaults_for`] the active document, or the sheet an
+    /// agent's edit list runs on.
     pub fn active_schematic_defaults(&self) -> signex_types::schematic::SchematicDefaults {
-        self.active_path
-            .as_deref()
+        self.edit_path()
             .map(|path| self.schematic_defaults_for(path))
             .unwrap_or_default()
     }
@@ -1004,8 +1011,7 @@ impl DocumentState {
     /// The font a label or note placed on the active document stores: the
     /// project's default font when it names one, else `None` (#2026).
     pub fn placed_font_family(&self) -> Option<String> {
-        self.active_path
-            .as_deref()
+        self.edit_path()
             .and_then(|path| self.document_project(path))
             .and_then(|p| p.data.schematic_defaults.placed_font_family())
     }
@@ -1078,6 +1084,8 @@ impl DocumentState {
     /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
     pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
         self.note_documents_changed();
+        // The head read before it was open may be older than what it saved.
+        self.document_ids.forget_header(path);
         self.engines.remove(path)
     }
 

@@ -137,3 +137,13 @@ version = "1.1.0"
 
 ["advanced"]
 
+# vendor/iced_aw is excluded from the workspace, so `cargo clippy --workspace
+# -- -D warnings` never reaches it and `-- -D warnings` applies to workspace
+# members only. These tables give it the workspace's bar (every rustc and
+# clippy warning is an error) without RUSTFLAGS, which would split CI's build
+# cache. As a path dependency it is linted in normal builds too (#2206).
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }

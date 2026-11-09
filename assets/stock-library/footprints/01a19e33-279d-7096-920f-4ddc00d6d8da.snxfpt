@@ -195,7 +195,7 @@ start = "63e72586-fd60-4ba0-9893-bbc19d016826"
 end = "a4f822f2-00bb-4b5d-945b-2ec82cd9b517"
 
 [footprints.sketch.entities.silk]
-layer = "top_silk"
+layer = "TopSilkscreen"
 
 [footprints.sketch.parameters]
 body_h = "0.5mm"

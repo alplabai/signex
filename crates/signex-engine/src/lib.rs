@@ -35,6 +35,8 @@ pub(crate) mod test_support;
 mod annotation_placements_tests;
 #[cfg(test)]
 mod annotation_tests;
+#[cfg(test)]
+mod document_id_tests;
 
 #[cfg(test)]
 mod field_follow_tests;
@@ -158,6 +160,9 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// The open transaction, if any (`exec/transaction.rs`, #2178): history
+    /// stays suppressed while it is open.
+    transaction: Option<exec::transaction::Transaction>,
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
@@ -298,6 +303,7 @@ impl Engine {
             path,
             history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -330,6 +336,7 @@ impl Engine {
             path: Some(path.to_path_buf()),
             history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
+            transaction: None,
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -347,11 +354,19 @@ impl Engine {
 
     /// The pins the last commands could not keep connected (drained).
     pub fn take_unkept_pins(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.unkept_pins)
     }
 
-    /// Drain the notices raised since the last call.
+    /// Drain the notices raised since the last call. While a transaction is
+    /// open they are held: they are shown after its commit, and dropped by its
+    /// rollback.
     pub fn take_warnings(&mut self) -> Vec<String> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
         std::mem::take(&mut self.warnings)
     }
 
@@ -465,6 +480,20 @@ impl Engine {
         measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
     ) -> Result<String, EngineError> {
         let mut sheet = self.document.clone();
+        sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
+        Self::encode(sheet)
+    }
+
+    /// [`Self::serialize_with_extents`] for a Save As (#2172): the copy being
+    /// encoded carries `id` as its own document id, a new document's, while
+    /// this document keeps the id it has until the copy is written.
+    pub fn serialize_as_copy_with_extents(
+        &self,
+        id: uuid::Uuid,
+        measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
+    ) -> Result<String, EngineError> {
+        let mut sheet = self.document.clone();
+        sheet.uuid = id;
         sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
         Self::encode(sheet)
     }
@@ -615,6 +644,14 @@ impl Engine {
 
     pub fn set_path(&mut self, path: Option<PathBuf>) {
         self.path = path;
+    }
+
+    /// Give the sheet a new id of its own (#2172): the repair of a missing or
+    /// repeated one, and Save As, which makes a new document. Not an edit: no
+    /// history entry and no revision, so it is never dirty by itself and the
+    /// next save writes it.
+    pub fn reassign_document_id(&mut self, id: uuid::Uuid) {
+        self.document.uuid = id;
     }
 
     /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.

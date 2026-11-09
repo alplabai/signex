@@ -91,6 +91,11 @@ impl UndoGroupId {
     pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
+
+    /// The raw value, as an agent names the group in `revert`.
+    pub const fn get(self) -> u64 {
+        self.0
+    }
 }
 
 /// The parameter cell a run of keystrokes is editing, and where the history
@@ -289,6 +294,16 @@ impl Engine {
         }
     }
 
+    /// Install a history snapshot as the document and return the one it
+    /// replaced. The document id is the live one, not the snapshot's: a Save
+    /// As re-keyed it, and an undo past that must not bring the old id back
+    /// (#2172).
+    fn swap_in_snapshot(&mut self, snapshot: SheetSnapshot) -> SchematicSheet {
+        let mut restored = snapshot.into_sheet();
+        restored.uuid = self.document.uuid;
+        std::mem::replace(&mut self.document, restored)
+    }
+
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
         // An empty stack, or a marker the app has yet to step, changes
@@ -304,7 +319,7 @@ impl Engine {
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);
         let group = entry.group;
-        let redo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
+        let redo_snapshot = self.swap_in_snapshot(entry.snapshot);
         let redo_snapshot =
             SheetSnapshot::capture(redo_snapshot, last_snapshot(self.history.redo_steps()));
         self.history.finish_step(
@@ -348,7 +363,7 @@ impl Engine {
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);
         let group = entry.group;
-        let undo_snapshot = std::mem::replace(&mut self.document, entry.snapshot.into_sheet());
+        let undo_snapshot = self.swap_in_snapshot(entry.snapshot);
         let undo_snapshot =
             SheetSnapshot::capture(undo_snapshot, last_snapshot(self.history.undo_steps()));
         self.history.finish_step(
@@ -380,6 +395,7 @@ impl Engine {
         // `exec/batch.rs` for why this is suppressed up front rather than
         // truncated away afterwards.
         if self.history_suppressed {
+            self.absorb_into_transaction(patch_pair);
             return;
         }
 

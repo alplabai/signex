@@ -16,6 +16,7 @@ const EDITED: &str = "typed, never saved";
 
 fn project() -> ProjectData {
     ProjectData {
+        document_id: None,
         description: Some(ORIGINAL.to_string()),
         name: "P".to_string(),
         dir: String::new(),
@@ -189,4 +190,15 @@ fn autosave_off_writes_no_project_sidecar() {
     edit(&mut f.app, &prj);
     tick(&mut f.app);
     assert!(!sidecar_of(&f).exists());
+}
+
+/// #2172: a restore brings back the copy's content, not its identity.
+#[test]
+fn restore_keeps_the_id_of_the_open_project() {
+    let (_f, mut next, _) = next_run();
+    let live = signex_types::document_id::DocumentId::new();
+    next.document_state.projects[0].data.document_id = Some(live);
+    answer(&mut next, RecoveryChoice::Restore);
+    assert_eq!(description(&next).as_deref(), Some(EDITED));
+    assert_eq!(next.document_state.projects[0].data.document_id, Some(live));
 }

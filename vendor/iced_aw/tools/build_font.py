@@ -107,7 +107,7 @@ def build(out):
     fb.setupHorizontalHeader(ascent=ASCENT, descent=DESCENT)
     fb.setupNameTable(
         {
-            "copyright": "Copyright 2026 Alp Lab AI",
+            "copyright": "Copyright 2026 Alp Lab AB",
             "familyName": "iced_aw",
             "styleName": "Regular",
             "uniqueFontIdentifier": "iced_aw-signex",

@@ -41,6 +41,12 @@ impl Signex {
         for line in finish.repaired {
             crate::diagnostics::log_warning(line);
         }
+        // A closed sheet changed outside Signex (a `git pull`, a copy): the
+        // id read from its head before no longer describes it (#2172).
+        let probe = &self.document_state.project_fs.facts;
+        self.document_state
+            .document_ids
+            .forget_changed_headers(|path| probe.modified(path));
         if finish.changed {
             self.refresh_panel_ctx();
         }
@@ -64,6 +70,7 @@ mod tests {
             id,
             path: dir.join("P.snxprj"),
             data: ProjectData {
+                document_id: None,
                 description: None,
                 name: "P".to_string(),
                 dir: dir.to_string_lossy().into_owned(),
@@ -167,6 +174,42 @@ mod tests {
         assert!(
             app.document_state.project_fs.probe_running(),
             "the update started a probe"
+        );
+    }
+
+    /// #2172: a closed sheet rewritten outside Signex (a `git pull`) has a new
+    /// modification time; the id read from its head before is forgotten.
+    #[test]
+    fn a_probe_that_sees_a_changed_file_forgets_its_cached_head() {
+        let tmp = tempfile::Builder::new()
+            .prefix("snx-2172")
+            .tempdir()
+            .unwrap();
+        let sheet = tmp.path().join("S.snxsch");
+        std::fs::write(&sheet, "format = \"snxsch/1\"\n").unwrap();
+        let mut app = app_with_sheet(tmp.path());
+        let id = signex_types::document_id::DocumentId::new();
+        let long_ago = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1000);
+        app.document_state
+            .document_ids
+            .set_header(sheet.clone(), Some(id), Some(long_ago));
+        let unchanged = std::fs::metadata(&sheet).unwrap().modified().unwrap();
+        let other = tmp.path().join("O.snxsch");
+        app.document_state
+            .document_ids
+            .set_header(other.clone(), Some(id), Some(unchanged));
+
+        app.refresh_panel_ctx();
+        run_probe(&mut app, false);
+
+        assert_eq!(
+            app.document_state.document_ids.header(&sheet),
+            None,
+            "the sheet's time moved since its head was read"
+        );
+        assert!(
+            app.document_state.document_ids.header(&other).is_some(),
+            "a file the probe has no time for is left alone"
         );
     }
 

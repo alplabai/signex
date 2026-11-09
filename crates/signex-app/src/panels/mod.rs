@@ -264,7 +264,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Filter => view_stub("Selection Filter", "All object types enabled", ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
-        PanelKind::Signal => view_stub("Signal AI", "Pro feature — AI design review", ctx),
+        PanelKind::Signal => view_stub("Signex AI", "Pro feature — AI design review", ctx),
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),

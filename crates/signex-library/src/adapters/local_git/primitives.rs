@@ -23,7 +23,7 @@ impl LocalGitAdapter {
         self.root_dir.join(primitive_subdir(kind))
     }
 
-    fn primitive_path(&self, kind: PrimitiveKind, uuid: Uuid) -> PathBuf {
+    pub(super) fn primitive_path(&self, kind: PrimitiveKind, uuid: Uuid) -> PathBuf {
         self.primitive_dir(kind)
             .join(format!("{uuid}.{}", primitive_ext(kind)))
     }
@@ -51,8 +51,9 @@ impl LocalGitAdapter {
     /// just to hand the caller the value it already had (#534).
     pub(super) fn read_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
         let bytes = self.read_primitive_bytes(PrimitiveKind::Footprint, uuid)?;
+        let path = self.primitive_path(PrimitiveKind::Footprint, uuid);
         crate::primitive::FootprintFile::from_bytes(&bytes)
-            .map_err(|e| LibraryError::Backend(format!("read .snxfpt: {e}")))?
+            .map_err(|e| LibraryError::Backend(format!("read {}: {e}", path.display())))?
             .footprints
             .into_iter()
             .next()
@@ -84,8 +85,11 @@ impl LocalGitAdapter {
         // `write_lock`). The cascade that follows takes the lock itself.
         let _write_lock = self.lock_for_write()?;
         let mut file = match fs::read(&abs_path) {
-            Ok(existing) => crate::primitive::FootprintFile::from_bytes(&existing)
-                .map_err(|e| LibraryError::Backend(format!("re-read .snxfpt: {e}")))?,
+            Ok(existing) => {
+                crate::primitive::FootprintFile::from_bytes(&existing).map_err(|e| {
+                    LibraryError::Backend(format!("re-read {}: {e}", abs_path.display()))
+                })?
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 crate::primitive::FootprintFile::from_footprint(fp.clone())
             }

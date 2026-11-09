@@ -10,6 +10,7 @@ mod delete_cascade;
 mod dof;
 mod expr_eval;
 mod expr_parser;
+mod layer_tokens;
 mod linalg;
 mod lm_basic;
 mod minted_pads_scale;

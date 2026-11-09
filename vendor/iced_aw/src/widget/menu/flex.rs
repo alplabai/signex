@@ -29,9 +29,6 @@ use iced_core::{
 /// The main axis of a flex layout.
 #[derive(Debug)]
 pub enum Axis {
-    /// The horizontal axis
-    Horizontal,
-
     /// The vertical axis
     Vertical,
 }
@@ -39,21 +36,18 @@ pub enum Axis {
 impl Axis {
     fn main(&self, size: Size) -> f32 {
         match self {
-            Axis::Horizontal => size.width,
             Axis::Vertical => size.height,
         }
     }
 
     fn cross(&self, size: Size) -> f32 {
         match self {
-            Axis::Horizontal => size.height,
             Axis::Vertical => size.width,
         }
     }
 
     fn pack<T>(&self, main: T, cross: T) -> (T, T) {
         match self {
-            Axis::Horizontal => (main, cross),
             Axis::Vertical => (cross, main),
         }
     }
@@ -88,10 +82,6 @@ where
 
     let mut fill_main_sum = 0;
     let mut cross = match axis {
-        Axis::Horizontal => match height {
-            Length::Shrink => 0.0,
-            _ => max_cross,
-        },
         Axis::Vertical => match width {
             Length::Shrink => 0.0,
             _ => max_cross,
@@ -100,7 +90,7 @@ where
 
     let mut available = axis.main(limits.max) - total_spacing.0;
 
-    for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
+    for (child, tree) in items.iter_mut().zip(trees.iter_mut()) {
         let (fill_main_factor, fill_cross_factor) = {
             let size = child.borrow().size();
 
@@ -126,7 +116,7 @@ where
         }
     }
 
-    for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
+    for (child, tree) in items.iter_mut().zip(trees.iter_mut()) {
         let (fill_main_factor, fill_cross_factor) = {
             let size = child.borrow().size();
 
@@ -149,17 +139,13 @@ where
     }
 
     let remaining = match axis {
-        Axis::Horizontal => match width {
-            Length::Shrink => 0.0,
-            _ => available.max(0.0),
-        },
         Axis::Vertical => match height {
             Length::Shrink => 0.0,
             _ => available.max(0.0),
         },
     };
 
-    for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
+    for (child, tree) in items.iter_mut().zip(trees.iter_mut()) {
         let (fill_main_factor, fill_cross_factor) = {
             let size = child.borrow().size();
 
@@ -209,10 +195,6 @@ where
         let (x, y) = axis.pack(main, pad.1);
 
         let alignment = match axis {
-            Axis::Horizontal => {
-                tree.size
-                    .align(Size::new(0.0, cross), Alignment::Start, align_items)
-            }
             Axis::Vertical => tree
                 .size
                 .align(Size::new(cross, 0.0), align_items, Alignment::Start),

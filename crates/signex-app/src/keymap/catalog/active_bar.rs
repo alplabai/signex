@@ -153,7 +153,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Bring To Front Of"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -163,7 +163,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Send To Back Of"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::MUTATES,
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -548,7 +548,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Clear Net Color"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
