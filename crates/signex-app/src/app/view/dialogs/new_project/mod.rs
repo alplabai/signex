@@ -127,21 +127,27 @@ fn fields<'a>(
     i18n: &I18n,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {
-    let name = text_input(UserText::new(""), &state.name)
-        .id(crate::app::new_project::NAME_INPUT_ID.clone())
-        .style(crate::panels::form_look::text_input_style)
-        .on_input(|v| np(NewProjectMsg::NameEdited(v)))
-        .on_submit(np(NewProjectMsg::SubmitRequested))
-        .size(TS.label)
-        .padding(SP.m)
-        .width(Length::Fill);
-    let location = text_input(UserText::new(""), &state.location)
-        .style(crate::panels::form_look::text_input_style)
-        .on_input(|v| np(NewProjectMsg::LocationEdited(v)))
-        .on_submit(np(NewProjectMsg::SubmitRequested))
-        .size(TS.label)
-        .padding(SP.m)
-        .width(Length::Fill);
+    let name = text_input(
+        t!(i18n, ids::DIALOG_NEW_PROJECT_NAME_PLACEHOLDER),
+        &state.name,
+    )
+    .id(crate::app::new_project::NAME_INPUT_ID.clone())
+    .style(crate::panels::form_look::text_input_style)
+    .on_input(|v| np(NewProjectMsg::NameEdited(v)))
+    .on_submit(np(NewProjectMsg::SubmitRequested))
+    .size(TS.label)
+    .padding(SP.m)
+    .width(Length::Fill);
+    let location = text_input(
+        t!(i18n, ids::DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER),
+        &state.location,
+    )
+    .style(crate::panels::form_look::text_input_style)
+    .on_input(|v| np(NewProjectMsg::LocationEdited(v)))
+    .on_submit(np(NewProjectMsg::SubmitRequested))
+    .size(TS.label)
+    .padding(SP.m)
+    .width(Length::Fill);
     let browse =
         signex_widgets::button(text(t!(i18n, ids::DIALOG_NEW_PROJECT_BROWSE)).size(TS.label))
             .padding([SP.m, SP.l])

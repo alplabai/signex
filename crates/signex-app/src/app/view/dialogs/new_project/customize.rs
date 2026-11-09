@@ -144,7 +144,7 @@ fn rule_error_text(error: &crate::app::new_project::RuleReadError, i18n: &I18n) 
             i18n,
             ids::DIALOG_NEW_PROJECT_ERR_RULES_VALUE,
             "key" => field.key(),
-            "why" => value_error_text(why, *field, i18n).into_string()
+            "why" => value_error_text(why, i18n).into_string()
         ),
         RuleReadError::File(F::TooLarge(max)) => t!(
             i18n,
@@ -155,7 +155,7 @@ fn rule_error_text(error: &crate::app::new_project::RuleReadError, i18n: &I18n) 
 }
 
 /// The inline reason a rule value is refused.
-fn value_error_text(problem: &PcbValueError, field: PcbField, i18n: &I18n) -> Localized {
+fn value_error_text(problem: &PcbValueError, i18n: &I18n) -> Localized {
     match problem {
         PcbValueError::NotANumber => t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_NOT_NUMBER),
         PcbValueError::OutOfRange { min, max } => t!(
@@ -164,10 +164,7 @@ fn value_error_text(problem: &PcbValueError, field: PcbField, i18n: &I18n) -> Lo
             "min" => format!("{min}"),
             "max" => format!("{max}")
         ),
-        PcbValueError::DrillNotSmallerThanVia => {
-            let _ = field;
-            t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_DRILL)
-        }
+        PcbValueError::DrillNotSmallerThanVia => t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_DRILL),
     }
 }
 
@@ -206,15 +203,18 @@ fn rule_row<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, NewProjectMsg> {
-    let input = text_input(UserText::new(""), state.drafts.text(field).to_string())
-        .style(crate::panels::form_look::text_input_style)
-        .on_input(move |v| NewProjectMsg::RuleEdited(field, v))
-        .on_submit(NewProjectMsg::SubmitRequested)
-        .size(TS.dense)
-        .font(super::super::graphite::mono())
-        .align_x(iced::alignment::Horizontal::Right)
-        .padding(SP.s + 1.0)
-        .width(Length::Fixed(VALUE_W + SP.xl));
+    let input = text_input(
+        t!(i18n, ids::DIALOG_NEW_PROJECT_UNIT_MM),
+        state.drafts.text(field).to_string(),
+    )
+    .style(crate::panels::form_look::text_input_style)
+    .on_input(move |v| NewProjectMsg::RuleEdited(field, v))
+    .on_submit(NewProjectMsg::SubmitRequested)
+    .size(TS.dense)
+    .font(super::super::graphite::mono())
+    .align_x(iced::alignment::Horizontal::Right)
+    .padding(SP.s + 1.0)
+    .width(Length::Fixed(VALUE_W + SP.xl));
     let control = row![
         input,
         text(t!(i18n, ids::DIALOG_NEW_PROJECT_UNIT_MM))
@@ -232,7 +232,7 @@ fn rule_row<'a>(
     .spacing(SP.xs);
     if let Some(problem) = state.drafts.problem(field) {
         col = col.push(
-            text(value_error_text(&problem, field, i18n))
+            text(value_error_text(&problem, i18n))
                 .size(TS.caption)
                 .color(tokens::danger(tokens))
                 .boxed(),

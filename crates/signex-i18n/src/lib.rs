@@ -127,6 +127,8 @@ define_ids! {
     DIALOG_NEW_PROJECT_CREATING = "dialog-new-project-creating";
     DIALOG_NEW_PROJECT_ERR_CREATE_PENDING = "dialog-new-project-err-create-pending";
     DIALOG_NEW_PROJECT_SETUP_UNREADABLE = "dialog-new-project-setup-unreadable";
+    DIALOG_NEW_PROJECT_NAME_PLACEHOLDER = "dialog-new-project-name-placeholder";
+    DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER = "dialog-new-project-location-placeholder";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
     OVERLAY_PLACEMENT_PAUSED_ESC_HINT = "overlay-placement-paused-esc-hint";
