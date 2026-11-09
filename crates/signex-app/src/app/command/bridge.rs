@@ -64,6 +64,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     // group's last tool, as the Active Bar button does.
     let active_bar = |action| Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(action));
     let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
+    let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -260,6 +261,14 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::Menu(MenuMessage::OpenKeyboardShortcuts)
         }
         "toggle_visible_grid" => Message::Ui(UiMsg::GridToggle),
+        "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
+        "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
+        "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
+        "toggle_layer_visibility" => pcb_view(PcbViewMsg::ActiveLayerVisibilityToggled),
+        "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
+        "toggle_layers_panel" => {
+            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::Layers))
+        }
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
         "undo" => Message::Edit(EditMsg::Undo),

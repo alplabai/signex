@@ -125,3 +125,27 @@ fn config_text_is_identical_on_every_os_while_the_label_is_per_os() {
         );
     }
 }
+
+/// #2223: the plus key, alone and after modifiers, and its round trip.
+#[test]
+fn parses_the_plus_key() {
+    let plus = KeyToken::Character("+".to_owned());
+    for (source, ctrl, shift) in [
+        ("+", false, false),
+        ("Shift++", false, true),
+        ("Ctrl++", true, false),
+        ("Ctrl+Shift++", true, true),
+    ] {
+        let stroke = KeyStroke::from_str(source).unwrap();
+        assert_eq!(stroke.key, plus, "{source}");
+        assert_eq!(stroke.modifiers.ctrl, ctrl, "{source}");
+        assert_eq!(stroke.modifiers.shift, shift, "{source}");
+        assert_eq!(stroke.to_config_string(), source, "{source} round trip");
+        assert_eq!(
+            KeyStroke::from_str(&stroke.to_config_string()).unwrap(),
+            stroke
+        );
+    }
+    // A plus between modifiers still joins them.
+    assert!(KeyStroke::from_str("Ctrl+Shift+P").unwrap().modifiers.shift);
+}

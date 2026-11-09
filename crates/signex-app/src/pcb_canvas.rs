@@ -4,6 +4,7 @@ mod carry;
 mod cull;
 mod gesture;
 mod highlight;
+pub mod layer_style;
 mod msg;
 mod select;
 

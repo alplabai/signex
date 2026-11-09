@@ -267,6 +267,7 @@ impl Signex {
             document.inflight_git_commits.len(),
             altium_import_name.as_deref(),
             self.status_activity(window_id).as_deref(),
+            self.status_active_layer(window_id),
         )
         .map(|req| Message::Ui(UiMsg::StatusBar(req)))
         .boxed();

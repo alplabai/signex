@@ -44,6 +44,7 @@ impl Signex {
             MenuMessage::OpenSignexAiPanel => {
                 Some(self.show_panel(crate::panels::PanelKind::SignexAi))
             }
+            MenuMessage::OpenLayersPanel => Some(self.show_panel(crate::panels::PanelKind::Layers)),
             MenuMessage::AscendToParentSheet => Some(self.ascend_to_parent_sheet()),
             MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
             MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),

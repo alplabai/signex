@@ -172,7 +172,7 @@ mod state;
 pub use dialogs::*;
 pub use messages::*;
 pub use net_nav::NetNavMsg;
-pub use pcb::{DrcRunResult, PcbMsg};
+pub use pcb::{DrcRunResult, PcbMsg, PcbViewMsg};
 pub use state::*;
 
 #[cfg(test)]

@@ -210,6 +210,12 @@ assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Sch
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
+toggle_ratsnest	view	Show or hide the ratsnest	Toggle Ratsnest	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+next_layer	view	Make the next copper layer active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+prev_layer	view	Make the previous copper layer active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+toggle_layer_visibility	view	Show or hide the active layer	Toggle Layer Visibility	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+show_all_layers	view	Show every layer	Show All Layers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+toggle_layers_panel	view	Show or hide the Layers panel	Layers	PCB	-	-	Always	gui_only	-
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

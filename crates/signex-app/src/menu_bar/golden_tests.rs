@@ -211,6 +211,11 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("zoom_to_fit", "ZoomFit"),
     ("toggle_visible_grid", "ToggleGrid"),
     ("toggle_auto_focus", "ToggleAutoFocus"),
+    ("toggle_ratsnest", "ToggleRatsnest"),
+    ("next_layer", "NextLayer"),
+    ("prev_layer", "PreviousLayer"),
+    ("toggle_layer_visibility", "ToggleLayerVisibility"),
+    ("show_all_layers", "ShowAllLayers"),
     ("place_wire", "PlaceWire"),
     ("place_bus", "PlaceBus"),
     ("place_net_label", "PlaceLabel"),
@@ -355,7 +360,8 @@ fn model_shortcuts_follow_the_active_keymap() {
         check_shortcuts(menu, &ctx, &mut checked);
     }
     // Edit ▸ Move adds Move, Rotate, Rotate Clockwise, Mirror X and Mirror Y (#2240).
-    assert_eq!(checked, 35, "the Altium profile labels 35 menu rows");
+    // View ▸ Next Layer and Previous Layer add two more (#2223).
+    assert_eq!(checked, 37, "the Altium profile labels 37 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

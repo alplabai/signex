@@ -211,6 +211,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
+        "toggle_ratsnest"
+        | "next_layer"
+        | "prev_layer"
+        | "toggle_layer_visibility"
+        | "show_all_layers" => Needs::Pcb,
         _ => return None,
     })
 }

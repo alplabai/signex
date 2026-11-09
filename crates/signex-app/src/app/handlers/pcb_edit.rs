@@ -73,11 +73,11 @@ impl Signex {
 
     /// Give each undocked window that shows the board at `path` its new
     /// geometry.
-    fn repaint_undocked_boards(&mut self, path: &Path) {
+    pub(crate) fn repaint_undocked_boards(&mut self, path: &Path) {
         let Some(board) = self.document_state.pcb_board(path) else {
             return;
         };
-        let snapshot = self.interaction_state.pcb_ratsnest.snapshot_of(path, board);
+        let snapshot = self.undocked_pcb_snapshot(path, board);
         for (id, canvas) in &mut self.interaction_state.pcb_canvases {
             let shows = matches!(
                 self.ui_state.windows.get(id),
