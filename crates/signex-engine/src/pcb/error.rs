@@ -24,7 +24,7 @@ pub enum BoardCommandError {
     TemplateNotTopSide(Uuid),
     #[error(
         "footprint {footprint} has {old} pads numbered {number:?} and the new footprint {new}; \
-         their nets cannot be carried over one to one"
+         a net or lock on a pad past the new count would be lost"
     )]
     PadCountMismatch {
         footprint: Uuid,

@@ -51,25 +51,27 @@ pub struct PinPadMap {
 
 impl PinPadMap {
     /// A map from `(pin, pad)` pairs; a later pair for the same pin wins.
+    /// Pins are stored trimmed, the way a lookup cleans them.
     pub fn from_pairs<P: Into<String>, Q: Into<String>>(
         pairs: impl IntoIterator<Item = (P, Q)>,
     ) -> Self {
         Self {
             pads: pairs
                 .into_iter()
-                .map(|(pin, pad)| (pin.into(), pad.into()))
+                .map(|(pin, pad)| (pin.into().trim().to_string(), pad.into()))
                 .collect(),
         }
     }
 
-    /// The pad `pin` lands on.
+    /// The pad `pin` lands on. `pin` is matched trimmed.
     pub fn pad_for<'a>(&'a self, pin: &'a str) -> &'a str {
-        self.pads.get(pin).map_or(pin, String::as_str)
+        self.pads.get(pin.trim()).map_or(pin, String::as_str)
     }
 
-    /// Map `pin` to `pad`, replacing what it mapped to before.
+    /// Map `pin` (stored trimmed) to `pad`, replacing what it mapped to
+    /// before.
     pub fn set(&mut self, pin: impl Into<String>, pad: impl Into<String>) {
-        self.pads.insert(pin.into(), pad.into());
+        self.pads.insert(pin.into().trim().to_string(), pad.into());
     }
 
     pub fn is_empty(&self) -> bool {
@@ -107,4 +109,25 @@ pub enum FootprintResolveError {
     VersionMismatch { wanted: String, found: String },
     #[error("{what} {value:?} has no board equivalent")]
     Unconvertible { what: &'static str, value: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PinPadMap;
+
+    /// A pin written with surrounding blanks still finds its pad, however
+    /// either side spells it (#1312 review).
+    #[test]
+    fn pin_keys_are_trimmed_on_insert_and_on_lookup() {
+        let mut map = PinPadMap::from_pairs([(" 1", "A1")]);
+        map.set("2 ", "B2");
+        assert_eq!(map.pad_for("1"), "A1");
+        assert_eq!(map.pad_for(" 1 "), "A1");
+        assert_eq!(map.pad_for("2"), "B2");
+        assert_eq!(
+            map.pad_for("3"),
+            "3",
+            "an unmapped pin keeps its own number"
+        );
+    }
 }

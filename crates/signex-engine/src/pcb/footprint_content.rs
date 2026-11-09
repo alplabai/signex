@@ -157,27 +157,16 @@ pub(super) fn set_link(
 /// Give the n-th pad of `new` with a number the net and lock of the n-th pad
 /// of `old` with that number, so a lock on any of several `EP` pads stays on
 /// its pad. A number `old` lacks gets no net. Refused, before anything is
-/// written, when both have a number but not the same count of it.
+/// written, when `new` has fewer pads of a number than `old` and one of the
+/// old pads left over holds a net or a lock ([`carry_would_lose`]); a count
+/// difference that loses nothing is carried as far as it goes.
 fn carry_pad_nets(old: &Footprint, new: &mut Footprint) -> Result<(), BoardCommandError> {
+    if let Some(lost) = carry_would_lose(old, new) {
+        return Err(lost);
+    }
     let mut old_by_number: HashMap<&str, Vec<&Pad>> = HashMap::new();
     for pad in &old.pads {
         old_by_number.entry(&pad.number).or_default().push(pad);
-    }
-    let mut new_counts: HashMap<&str, usize> = HashMap::new();
-    for pad in &new.pads {
-        *new_counts.entry(&pad.number).or_default() += 1;
-    }
-    for (number, count) in &new_counts {
-        if let Some(olds) = old_by_number.get(number)
-            && olds.len() != *count
-        {
-            return Err(BoardCommandError::PadCountMismatch {
-                footprint: old.uuid,
-                number: (*number).to_string(),
-                old: olds.len(),
-                new: *count,
-            });
-        }
     }
     let carried: Vec<(Option<PadNet>, bool)> = {
         let mut seen: HashMap<&str, usize> = HashMap::new();
@@ -187,7 +176,7 @@ fn carry_pad_nets(old: &Footprint, new: &mut Footprint) -> Result<(), BoardComma
                 let nth = seen.entry(&pad.number).or_default();
                 let from = old_by_number
                     .get(pad.number.as_str())
-                    .map(|olds| olds[*nth]);
+                    .and_then(|olds| olds.get(*nth).copied());
                 *nth += 1;
                 (
                     from.and_then(|p| p.net.clone()),
@@ -201,6 +190,40 @@ fn carry_pad_nets(old: &Footprint, new: &mut Footprint) -> Result<(), BoardComma
         pad.net_locked = locked;
     }
     Ok(())
+}
+
+/// The refusal a replace of `old` by `new` would meet, if any: `new` has
+/// fewer pads of a number `old` also has, and an old pad past the new count
+/// holds a net or a lock that would be dropped with it. A number `new` lacks
+/// entirely is not a refusal: its pads go, locks included, which the change
+/// list reports. Shared with the ECO diff so a change row is blocked before
+/// it is run.
+pub(crate) fn carry_would_lose(old: &Footprint, new: &Footprint) -> Option<BoardCommandError> {
+    let mut old_by_number: HashMap<&str, Vec<&Pad>> = HashMap::new();
+    for pad in &old.pads {
+        old_by_number.entry(&pad.number).or_default().push(pad);
+    }
+    let mut new_counts: HashMap<&str, usize> = HashMap::new();
+    for pad in &new.pads {
+        *new_counts.entry(&pad.number).or_default() += 1;
+    }
+    let mut numbers: Vec<(&str, usize)> = new_counts.into_iter().collect();
+    numbers.sort_unstable();
+    for (number, count) in numbers {
+        let Some(olds) = old_by_number.get(number) else {
+            continue;
+        };
+        let dropped = olds.iter().skip(count);
+        if olds.len() > count && dropped.clone().any(|p| p.net.is_some() || p.net_locked) {
+            return Some(BoardCommandError::PadCountMismatch {
+                footprint: old.uuid,
+                number: number.to_string(),
+                old: olds.len(),
+                new: count,
+            });
+        }
+    }
+    None
 }
 
 fn sync_text_properties(fp: &mut Footprint) {

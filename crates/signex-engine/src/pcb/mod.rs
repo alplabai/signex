@@ -11,6 +11,7 @@
 
 mod batch;
 mod command;
+pub mod eco;
 mod engine;
 mod error;
 mod footprint;

@@ -12,7 +12,7 @@ pub mod adapters;
 pub mod ai_stub;
 pub mod alternate_symbol;
 pub mod alternate_symbol_edit;
-pub mod board_footprint;
+pub(crate) mod board_footprint;
 pub mod cascade;
 pub mod component;
 pub mod dangling;

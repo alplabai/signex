@@ -763,28 +763,119 @@ fn a_lock_on_a_later_pad_of_a_shared_number_is_carried_to_its_pad() {
     assert_eq!(pads[1].net.as_ref().map(|n| n.name.as_str()), Some("GND"));
     assert!(pads[1].net_locked, "the lock stays on the second EP pad");
 
-    // Three EP pads for two: the nets cannot be carried one to one.
+    // Three EP pads for two, and the third holds a net: it would be lost
+    // with its pad, so the replace is refused and nothing changes.
     let mut b = board();
+    let third = {
+        let mut pad = b.footprints[0].pads[1].clone();
+        pad.uuid = Uuid::from_u128(0xc3);
+        pad
+    };
+    b.footprints[0].pads.push(third);
     for pad in &mut b.footprints[0].pads {
         pad.number = "EP".into();
     }
+    b.footprints[0].pads[2].net = Some(PadNet {
+        number: 1,
+        name: "GND".into(),
+    });
     let before = snapshot(&b);
-    lib.pads.push(lib.pads[1].clone());
-    lib.pads[2].uuid = Uuid::from_u128(0xd3);
     assert_eq!(
         BoardCommand::ReplaceFootprint {
             footprint: id(FP_A),
-            with: Box::new(lib),
+            with: Box::new(lib.clone()),
         }
         .apply(&mut b),
         Err(BoardCommandError::PadCountMismatch {
             footprint: id(FP_A),
             number: "EP".into(),
-            old: 2,
-            new: 3,
+            old: 3,
+            new: 2,
         })
     );
     assert_eq!(snapshot(&b), before);
+
+    // A lock alone on the dropped pad refuses too.
+    b.footprints[0].pads[2].net = None;
+    b.footprints[0].pads[2].net_locked = true;
+    assert!(matches!(
+        BoardCommand::ReplaceFootprint {
+            footprint: id(FP_A),
+            with: Box::new(lib),
+        }
+        .apply(&mut b),
+        Err(BoardCommandError::PadCountMismatch { .. })
+    ));
+}
+
+/// A different count of a pad number is carried as far as it goes when no
+/// net or lock would be lost (#1312 review): more new pads, or fewer when the
+/// old pads left over hold nothing.
+#[test]
+fn a_pad_count_change_that_loses_nothing_is_carried() {
+    // Two EP pads, the second on GND and locked, become three.
+    let mut b = board();
+    for pad in &mut b.footprints[0].pads {
+        pad.number = "EP".into();
+    }
+    b.footprints[0].pads[1].net = Some(PadNet {
+        number: 1,
+        name: "GND".into(),
+    });
+    b.footprints[0].pads[1].net_locked = true;
+    let mut lib = template_with_pads(NEW_FP, 0xd0);
+    for pad in &mut lib.pads {
+        pad.number = "EP".into();
+    }
+    lib.pads.push(lib.pads[1].clone());
+    lib.pads[2].uuid = Uuid::from_u128(0xd3);
+    let applied = BoardCommand::ReplaceFootprint {
+        footprint: id(FP_A),
+        with: Box::new(lib),
+    }
+    .apply(&mut b)
+    .unwrap();
+    let pads = &b.footprints[0].pads;
+    assert_eq!(pads.len(), 3);
+    assert_eq!(pads[1].net.as_ref().map(|n| n.name.as_str()), Some("GND"));
+    assert!(pads[1].net_locked);
+    assert_eq!((pads[2].net.is_none(), pads[2].net_locked), (true, false));
+    // Undo is still exact.
+    let mut undone = b.clone();
+    applied.inverse.apply(&mut undone).unwrap();
+    let mut original = board();
+    for pad in &mut original.footprints[0].pads {
+        pad.number = "EP".into();
+    }
+    original.footprints[0].pads[1].net = Some(PadNet {
+        number: 1,
+        name: "GND".into(),
+    });
+    original.footprints[0].pads[1].net_locked = true;
+    assert_eq!(snapshot(&undone), snapshot(&original));
+
+    // Three bare EP pads become two: the dropped one held nothing.
+    let mut b = board();
+    let third = {
+        let mut pad = b.footprints[0].pads[1].clone();
+        pad.uuid = Uuid::from_u128(0xc3);
+        pad
+    };
+    b.footprints[0].pads.push(third);
+    for pad in &mut b.footprints[0].pads {
+        pad.number = "EP".into();
+    }
+    let mut lib = template_with_pads(NEW_FP, 0xd0);
+    for pad in &mut lib.pads {
+        pad.number = "EP".into();
+    }
+    BoardCommand::ReplaceFootprint {
+        footprint: id(FP_A),
+        with: Box::new(lib),
+    }
+    .apply(&mut b)
+    .unwrap();
+    assert_eq!(b.footprints[0].pads.len(), 2);
 }
 
 #[test]

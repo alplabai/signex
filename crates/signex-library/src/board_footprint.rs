@@ -29,8 +29,12 @@ use crate::primitive::footprint::{
 /// The board form of `footprint`: top side, origin at (0, 0), rotation 0,
 /// no link and no library identity (the resolver sets that). The footprint
 /// and its pads get fresh uuids, since one library footprint is placed many
-/// times. Reference and Value texts are created empty.
-pub fn board_footprint(footprint: &Footprint) -> Result<pcb::Footprint, FootprintResolveError> {
+/// times. Reference and Value texts are created empty. Crate-private: a
+/// caller goes through `resolve_part_footprint`, which sets the library
+/// identity, so no placed footprint loses its library link (#1312 review).
+pub(crate) fn board_footprint(
+    footprint: &Footprint,
+) -> Result<pcb::Footprint, FootprintResolveError> {
     refuse_unheld_features(footprint)?;
     let pads = footprint
         .pads
