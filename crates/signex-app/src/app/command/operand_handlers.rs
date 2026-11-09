@@ -13,6 +13,7 @@ use iced::Task;
 
 use super::agent_edits as agent;
 use super::document_operands as doc;
+use super::file_operands as file;
 use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::{Message, Signex};
@@ -36,6 +37,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("save_document", doc::save),
     ("save_document_as", doc::save_as),
     ("close_active_document", doc::close),
+    ("open_document", file::open),
+    ("new_document", file::new_project),
     ("assign_net_class", doc::assign_net_class),
     ("apply_edits", agent::apply_edits),
     ("revert", agent::revert),

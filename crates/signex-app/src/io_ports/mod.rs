@@ -9,6 +9,7 @@
 mod native;
 mod picker;
 
+pub(crate) use picker::replace_refusal;
 pub use picker::{FileDialog, HeadlessAnswers, Picker};
 
 use std::path::Path;
