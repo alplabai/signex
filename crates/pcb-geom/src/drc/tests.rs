@@ -202,6 +202,28 @@ fn copper_of_two_nets_that_overlaps_or_touches_is_a_short_not_a_clearance() {
 }
 
 #[test]
+fn shorts_sort_before_clearances_so_a_row_cap_keeps_them() {
+    let rules = DrcRules::new(RULE);
+    // Many clearance pairs, then one crossing short added last.
+    let mut segments: Vec<Segment> = (0..20)
+        .map(|i| {
+            track(
+                10 + i,
+                (0.0, i as f64 * 0.3),
+                (10.0, i as f64 * 0.3),
+                1 + (i as u32 % 2),
+                "TopCopper",
+            )
+        })
+        .collect();
+    segments.push(track(100, (20.0, 0.0), (30.0, 0.0), 7, "TopCopper"));
+    segments.push(track(101, (25.0, -5.0), (25.0, 5.0), 8, "TopCopper"));
+    let report = run(&board(vec![], segments, vec![]), &rules);
+    assert!(report.count(ViolationKind::Clearance) > 1, "{report:?}");
+    assert_eq!(report.violations[0].kind, ViolationKind::Short);
+}
+
+#[test]
 fn a_net_class_raises_the_rule_for_its_pairs_only() {
     let mut rules = DrcRules::new(RULE);
     // Pitch 0.55 mm: gap 300_000 nm, over the board rule.
