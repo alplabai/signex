@@ -6,7 +6,7 @@ use signex_types::pcb::{Footprint, NetDef, PadNet, PcbBoard, Point, Segment, Sym
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
-use super::tests::{FP_A, FP_B, SEG_1, ZONE_1, board, id, snapshot};
+use super::tests::{FP_A, FP_B, SEG_1, TEXT_1, VIA_1, ZONE_1, board, id, snapshot};
 use super::*;
 
 const NEW_FP: &str = "00000000-0000-0000-0000-00000000000c";
@@ -731,5 +731,142 @@ fn a_new_item_off_the_number_line_and_a_bottom_template_are_refused() {
         let before = snapshot(&b);
         assert_eq!(command.clone().apply(&mut b), Err(expected), "{command:?}");
         assert_eq!(snapshot(&b), before);
+    }
+}
+
+/// Two pads share the number `EP`; only the second carries a locked net.
+/// The n-th `EP` pad of the template takes the n-th `EP` pad's net and lock.
+#[test]
+fn a_lock_on_a_later_pad_of_a_shared_number_is_carried_to_its_pad() {
+    let mut b = board();
+    let fp = &mut b.footprints[0];
+    for pad in &mut fp.pads {
+        pad.number = "EP".into();
+    }
+    fp.pads[1].net = Some(PadNet {
+        number: 4,
+        name: "GND".into(),
+    });
+    fp.pads[1].net_locked = true;
+    let mut lib = template_with_pads(NEW_FP, 0xd0);
+    for pad in &mut lib.pads {
+        pad.number = "EP".into();
+    }
+    BoardCommand::ReplaceFootprint {
+        footprint: id(FP_A),
+        with: Box::new(lib.clone()),
+    }
+    .apply(&mut b)
+    .unwrap();
+    let pads = &b.footprints[0].pads;
+    assert_eq!((pads[0].net.is_none(), pads[0].net_locked), (true, false));
+    assert_eq!(pads[1].net.as_ref().map(|n| n.name.as_str()), Some("GND"));
+    assert!(pads[1].net_locked, "the lock stays on the second EP pad");
+
+    // Three EP pads for two: the nets cannot be carried one to one.
+    let mut b = board();
+    for pad in &mut b.footprints[0].pads {
+        pad.number = "EP".into();
+    }
+    let before = snapshot(&b);
+    lib.pads.push(lib.pads[1].clone());
+    lib.pads[2].uuid = Uuid::from_u128(0xd3);
+    assert_eq!(
+        BoardCommand::ReplaceFootprint {
+            footprint: id(FP_A),
+            with: Box::new(lib),
+        }
+        .apply(&mut b),
+        Err(BoardCommandError::PadCountMismatch {
+            footprint: id(FP_A),
+            number: "EP".into(),
+            old: 2,
+            new: 3,
+        })
+    );
+    assert_eq!(snapshot(&b), before);
+}
+
+#[test]
+fn a_template_on_a_layer_this_build_cannot_read_is_refused() {
+    for layer in ["", "Weird.Layer", "topcopper"] {
+        let mut lib = template_with_pads(NEW_FP, 0xd0);
+        lib.layer = layer.into();
+        let mut b = board();
+        assert_eq!(
+            BoardCommand::ReplaceFootprint {
+                footprint: id(FP_A),
+                with: Box::new(lib),
+            }
+            .apply(&mut b),
+            Err(BoardCommandError::TemplateNotTopSide(id(NEW_FP))),
+            "{layer:?}"
+        );
+    }
+}
+
+/// Pads share one id space with footprints, tracks, vias, zones and texts.
+#[test]
+fn a_new_pad_uuid_used_by_any_board_item_is_refused() {
+    for taken in [FP_B, SEG_1, VIA_1, ZONE_1, TEXT_1] {
+        let mut lib = template_with_pads(NEW_FP, 0xd0);
+        lib.pads[0].uuid = id(taken);
+        let replace = BoardCommand::ReplaceFootprint {
+            footprint: id(FP_A),
+            with: Box::new(lib.clone()),
+        };
+        let mut added = lib.clone();
+        added.uuid = Uuid::from_u128(0xbeef);
+        let add = BoardCommand::AddItems {
+            items: vec![BoardItem::Footprint(added)],
+        };
+        for command in [replace, add] {
+            let mut b = board();
+            assert_eq!(
+                command.clone().apply(&mut b),
+                Err(BoardCommandError::PadAlreadyPresent(id(taken))),
+                "{taken} {command:?}"
+            );
+        }
+    }
+    // A new pad may not take the uuid of an item added beside it.
+    let mut lib = template_with_pads(NEW_FP, 0xd0);
+    lib.pads[0].uuid = id(NEW_SEG);
+    let mut b = board();
+    assert_eq!(
+        BoardCommand::AddItems {
+            items: vec![BoardItem::Segment(new_segment()), BoardItem::Footprint(lib),],
+        }
+        .apply(&mut b),
+        Err(BoardCommandError::PadAlreadyPresent(id(NEW_SEG)))
+    );
+}
+
+#[test]
+fn a_pad_off_the_number_line_is_refused_on_add_and_replace() {
+    use BoardCommandError as E;
+    let mut at_nan = template_with_pads(NEW_FP, 0xd0);
+    at_nan.pads[1].position.x = f64::NAN;
+    let mut turned = template_with_pads(NEW_FP, 0xd0);
+    turned.pads[0].rotation = f64::INFINITY;
+    for (lib, field) in [(at_nan, "pad position"), (turned, "pad rotation")] {
+        for command in [
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Footprint(lib.clone())],
+            },
+            BoardCommand::ReplaceFootprint {
+                footprint: id(FP_A),
+                with: Box::new(lib.clone()),
+            },
+        ] {
+            let mut b = board();
+            let before = snapshot(&b);
+            assert_eq!(
+                command.clone().apply(&mut b),
+                Err(E::NonFinite { field }),
+                "{command:?}"
+            );
+            assert_eq!(snapshot(&b), before);
+        }
     }
 }

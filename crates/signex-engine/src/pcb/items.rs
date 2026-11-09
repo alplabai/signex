@@ -166,7 +166,8 @@ pub(super) fn add(
         BoardItem::Footprint(fp) => fp.pads.as_slice(),
         _ => &[],
     });
-    check_pad_uuids(board, new_pads, None)?;
+    let new_ids: Vec<Uuid> = ids.iter().map(|id| id.split().1).collect();
+    check_pad_uuids(board, new_pads, None, &new_ids)?;
     for item in items {
         let end = list_len(board, item.id().split().0);
         put(board, end, item);
@@ -180,19 +181,28 @@ pub(super) fn add(
     })
 }
 
-/// A pad uuid names one pad board-wide (selection, the pick index and net
-/// edits key on it): refuse `pads` if one repeats or is already on a board
-/// footprint other than `except`.
+/// Footprints, pads, tracks, vias, zones and texts share one id space (the
+/// load repair treats it so; selection, the pick index and net edits key on
+/// it): refuse `pads` if one repeats, is used by any board item or pad, or is
+/// one of `new_items`. Only the pads of `except`, the footprint a replace
+/// removes, may be reused.
 pub(super) fn check_pad_uuids<'a>(
     board: &PcbBoard,
     pads: impl Iterator<Item = &'a Pad>,
     except: Option<Uuid>,
+    new_items: &[Uuid],
 ) -> Result<(), BoardCommandError> {
     let mut taken: HashSet<Uuid> = board
         .footprints
         .iter()
         .filter(|fp| Some(fp.uuid) != except)
         .flat_map(|fp| fp.pads.iter().map(|p| p.uuid))
+        .chain(board.footprints.iter().map(|fp| fp.uuid))
+        .chain(board.segments.iter().map(|s| s.uuid))
+        .chain(board.vias.iter().map(|v| v.uuid))
+        .chain(board.zones.iter().map(|z| z.uuid))
+        .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(new_items.iter().copied())
         .collect();
     for pad in pads {
         if !taken.insert(pad.uuid) {
@@ -206,7 +216,10 @@ pub(super) fn check_pad_uuids<'a>(
 fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
     let finite = |p: Point| p.x.is_finite() && p.y.is_finite();
     let (position_ok, rotation_ok) = match item {
-        BoardItem::Footprint(fp) => (finite(fp.position), fp.rotation.is_finite()),
+        BoardItem::Footprint(fp) => {
+            check_pads_finite(&fp.pads)?;
+            (finite(fp.position), fp.rotation.is_finite())
+        }
         BoardItem::Segment(s) => (finite(s.start) && finite(s.end), true),
         BoardItem::Via(v) => (finite(v.position), true),
         BoardItem::Zone(z) => (z.outline.iter().all(|p| finite(*p)), true),
@@ -217,6 +230,23 @@ fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
     }
     if !rotation_ok {
         return Err(BoardCommandError::NonFinite { field: "rotation" });
+    }
+    Ok(())
+}
+
+/// A footprint's pads must sit at a number and turn by one.
+pub(super) fn check_pads_finite(pads: &[Pad]) -> Result<(), BoardCommandError> {
+    for pad in pads {
+        if !pad.position.x.is_finite() || !pad.position.y.is_finite() {
+            return Err(BoardCommandError::NonFinite {
+                field: "pad position",
+            });
+        }
+        if !pad.rotation.is_finite() {
+            return Err(BoardCommandError::NonFinite {
+                field: "pad rotation",
+            });
+        }
     }
     Ok(())
 }

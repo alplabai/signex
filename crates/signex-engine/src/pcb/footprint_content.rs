@@ -2,7 +2,11 @@
 //! footprint, set its designator and value, set its schematic link. These are
 //! the forward-annotation edits of Update PCB from schematic (#1312).
 
-use signex_types::pcb::{Footprint, PcbBoard, SymbolLink};
+use std::collections::HashMap;
+
+use signex_types::format::parse_pcb_layer;
+use signex_types::pcb::{Footprint, Pad, PadNet, PcbBoard, SymbolLink};
+use signex_types::pcb_layer::BoardSide;
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -32,23 +36,27 @@ fn patch(kind: BoardPatchKind, id: Uuid) -> BoardPatch {
 /// lock, schematic link, designator, value and preserved unknown data; the
 /// template brings the footprint name, pads, graphics and properties. A
 /// bottom-side footprint flips the template with `pcb_geom::flip_footprint`.
-/// Each new pad takes the net and net lock of the old pad with its number, so
-/// a locked net survives; a number the old footprint lacks gets no net.
-/// Refused for a template that is not top-side or whose pad uuids another
-/// footprint already uses.
+/// The n-th new pad of a number takes the net and net lock of the n-th old pad
+/// of that number, so a locked net survives; a number the old footprint lacks
+/// gets no net. Refused for a template not on a readable top-side layer, with
+/// a pad off the number line, with a pad uuid already used on the board, or
+/// with a different count of a pad number the old footprint also has.
 pub(super) fn replace(
     board: &mut PcbBoard,
     id: Uuid,
     template: Footprint,
 ) -> Result<Applied, BoardCommandError> {
-    if pcb_geom::Side::of_layer(&template.layer) != pcb_geom::Side::Top {
+    // A layer this build cannot read is not taken for the top.
+    let side = parse_pcb_layer(&template.layer).and_then(|layer| layer.side());
+    if side != Some(BoardSide::Top) {
         return Err(BoardCommandError::TemplateNotTopSide(template.uuid));
     }
+    items::check_pads_finite(&template.pads)?;
     find(board, id)?;
-    items::check_pad_uuids(board, template.pads.iter(), Some(id))?;
+    items::check_pad_uuids(board, template.pads.iter(), Some(id), &[])?;
     let old = find(board, id)?;
     let mut new = template;
-    carry_pad_nets(old, &mut new);
+    carry_pad_nets(old, &mut new)?;
     if pcb_geom::Side::of_layer(&old.layer) == pcb_geom::Side::Bottom {
         pcb_geom::flip_footprint(&mut new);
     }
@@ -146,14 +154,53 @@ pub(super) fn set_link(
     })
 }
 
-/// Give each pad of `new` the net and lock of the first pad of `old` with its
-/// number; a pad whose number `old` lacks has none.
-fn carry_pad_nets(old: &Footprint, new: &mut Footprint) {
-    for pad in &mut new.pads {
-        let from = old.pads.iter().find(|p| p.number == pad.number);
-        pad.net = from.and_then(|p| p.net.clone());
-        pad.net_locked = from.is_some_and(|p| p.net_locked);
+/// Give the n-th pad of `new` with a number the net and lock of the n-th pad
+/// of `old` with that number, so a lock on any of several `EP` pads stays on
+/// its pad. A number `old` lacks gets no net. Refused, before anything is
+/// written, when both have a number but not the same count of it.
+fn carry_pad_nets(old: &Footprint, new: &mut Footprint) -> Result<(), BoardCommandError> {
+    let mut old_by_number: HashMap<&str, Vec<&Pad>> = HashMap::new();
+    for pad in &old.pads {
+        old_by_number.entry(&pad.number).or_default().push(pad);
     }
+    let mut new_counts: HashMap<&str, usize> = HashMap::new();
+    for pad in &new.pads {
+        *new_counts.entry(&pad.number).or_default() += 1;
+    }
+    for (number, count) in &new_counts {
+        if let Some(olds) = old_by_number.get(number)
+            && olds.len() != *count
+        {
+            return Err(BoardCommandError::PadCountMismatch {
+                footprint: old.uuid,
+                number: (*number).to_string(),
+                old: olds.len(),
+                new: *count,
+            });
+        }
+    }
+    let carried: Vec<(Option<PadNet>, bool)> = {
+        let mut seen: HashMap<&str, usize> = HashMap::new();
+        new.pads
+            .iter()
+            .map(|pad| {
+                let nth = seen.entry(&pad.number).or_default();
+                let from = old_by_number
+                    .get(pad.number.as_str())
+                    .map(|olds| olds[*nth]);
+                *nth += 1;
+                (
+                    from.and_then(|p| p.net.clone()),
+                    from.is_some_and(|p| p.net_locked),
+                )
+            })
+            .collect()
+    };
+    for (pad, (net, locked)) in new.pads.iter_mut().zip(carried) {
+        pad.net = net;
+        pad.net_locked = locked;
+    }
+    Ok(())
 }
 
 fn sync_text_properties(fp: &mut Footprint) {

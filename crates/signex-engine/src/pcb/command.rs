@@ -44,9 +44,11 @@ pub enum BoardCommand {
     /// Swap the footprint's pads, graphics, properties and name for those of
     /// `with`, a library footprint in its top-side form. The board footprint
     /// keeps its uuid, position, rotation, side (a bottom one flips the
-    /// template), lock, schematic link, designator and value; each new pad
-    /// takes the net and lock of the old pad with its number. Refused for a
-    /// template that is not top-side or whose pad uuids are taken. The
+    /// template), lock, schematic link, designator and value; the n-th new
+    /// pad of a number takes the net and lock of the n-th old pad of it.
+    /// Refused for a template not on a readable top-side layer, with a pad
+    /// off the number line or a taken uuid, or a different count of a shared
+    /// pad number. The
     /// inverse is a [`BoardCommand::RestoreFootprint`].
     ReplaceFootprint {
         footprint: Uuid,

@@ -18,10 +18,20 @@ pub enum BoardCommandError {
     PadNotFound { footprint: Uuid, pad: Uuid },
     #[error("pad {pad} of footprint {footprint} is named more than once")]
     DuplicatePadChange { footprint: Uuid, pad: Uuid },
-    #[error("a pad with uuid {0} is already on the board")]
+    #[error("uuid {0} of a new pad is already used on the board")]
     PadAlreadyPresent(Uuid),
-    #[error("footprint template {0} is not top-side")]
+    #[error("footprint template {0} is not on a top-side layer this build reads")]
     TemplateNotTopSide(Uuid),
+    #[error(
+        "footprint {footprint} has {old} pads numbered {number:?} and the new footprint {new}; \
+         their nets cannot be carried over one to one"
+    )]
+    PadCountMismatch {
+        footprint: Uuid,
+        number: String,
+        old: usize,
+        new: usize,
+    },
     #[error("{id:?} cannot be restored at index {index}: the list holds {len} items")]
     RestoreIndexOutOfRange {
         id: BoardItemId,

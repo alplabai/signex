@@ -71,19 +71,23 @@ refused when the board moved since the list was built. The commands it uses,
 each with an exact inverse:
 
 - `AddItems` appends items to the end of their lists; refused with
-  `ItemAlreadyPresent`, `DuplicateItem`, `NonFinite` (a position or angle
-  that is not a number) or `PadAlreadyPresent` (a pad uuid already on the
-  board: pad uuids are unique board-wide). Inverse: `DeleteItems`.
+  `ItemAlreadyPresent`, `DuplicateItem`, `NonFinite` (a position or angle,
+  a footprint's pads' included, that is not a number) or `PadAlreadyPresent`
+  (a new pad uuid already used by a footprint, pad, track, via, zone or text,
+  or by another new item: they share one id space, as in the load repair).
+  Inverse: `DeleteItems`.
 - `ReplaceFootprint { footprint, with }` swaps in a library footprint given
   in its top-side form. The board footprint keeps its uuid, position,
   rotation, side, lock, schematic link, designator, value and preserved
   unknown data; it takes the template's name, pads, graphics and
-  properties. Each new pad takes the net and net lock of the old pad with
-  its number (a number the old footprint lacks gets no net), so a locked
-  net survives. On the bottom side the template is flipped with
-  `pcb_geom::flip_footprint` first. Refused for a template that is not
-  top-side (`TemplateNotTopSide`) or whose pad uuids another footprint
-  uses. Inverse: `RestoreFootprint`, the whole old footprint.
+  properties. The n-th new pad of a number takes the net and net lock of
+  the n-th old pad of that number (a number the old footprint lacks gets no
+  net), so a lock on one of several `EP` pads survives; a different count of
+  a shared number is refused (`PadCountMismatch`). On the bottom side the
+  template is flipped with `pcb_geom::flip_footprint` first. Refused also for
+  a template not on a top-side layer this build reads (`TemplateNotTopSide`,
+  an empty or unknown layer included), with a pad that is not a number
+  (`NonFinite`), or with a pad uuid used on the board (`PadAlreadyPresent`). Inverse: `RestoreFootprint`, the whole old footprint.
 - `SetFootprintText` sets the designator and value and the Reference and
   Value property texts. Inverse: `RestoreFootprintText`, which puts back
   every property text as it was.
