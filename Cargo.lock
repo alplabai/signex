@@ -1378,7 +1378,7 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 [[package]]
 name = "dpi"
 version = "0.1.1"
-source = "git+https://github.com/iced-rs/winit.git?rev=48116469f15d3bc52b5e56bb516694be8882870d#48116469f15d3bc52b5e56bb516694be8882870d"
+source = "git+https://github.com/alplabai/winit.git?rev=d18f63827e52bb23ebdce17ea94b8d31307a6f3b#d18f63827e52bb23ebdce17ea94b8d31307a6f3b"
 
 [[package]]
 name = "dpi"
@@ -2434,7 +2434,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -2463,7 +2463,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "bitflags 2.11.1",
  "bytes",
@@ -2482,7 +2482,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -2513,7 +2513,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "futures",
  "iced_core",
@@ -2527,7 +2527,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -2547,7 +2547,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -2556,7 +2556,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -2568,7 +2568,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "bytes",
  "iced_core",
@@ -2579,7 +2579,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -2596,7 +2596,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -2616,7 +2616,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
@@ -2630,14 +2630,19 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/alplabai/iced?rev=a94392b0b335b56cbf4608614c0f5677fc985a85#a94392b0b335b56cbf4608614c0f5677fc985a85"
+source = "git+https://github.com/alplabai/iced?rev=f884f84337624326a088ca5332eb7ab42ab51464#f884f84337624326a088ca5332eb7ab42ab51464"
 dependencies = [
  "arboard",
+ "block2",
  "iced_debug",
  "iced_program",
  "iced_runtime",
  "log",
+ "muda",
  "mundy",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "rustc-hash 2.1.2",
  "thiserror 2.0.18",
  "tracing",
@@ -8427,7 +8432,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/iced-rs/winit.git?rev=48116469f15d3bc52b5e56bb516694be8882870d#48116469f15d3bc52b5e56bb516694be8882870d"
+source = "git+https://github.com/alplabai/winit.git?rev=d18f63827e52bb23ebdce17ea94b8d31307a6f3b#d18f63827e52bb23ebdce17ea94b8d31307a6f3b"
 dependencies = [
  "ahash",
  "android-activity",
