@@ -608,7 +608,7 @@ fn graphite_previews_paint_crisp_gold_pads_and_a_neutral_courtyard() {
 /// `with_theme_tokens` picks the preview palette on Graphite and leaves a
 /// legacy theme on the black board.
 #[test]
-fn theme_tokens_pick_the_preview_palette_only_on_graphite() {
+fn theme_tokens_pick_the_preview_palette() {
     use crate::library::editor::footprint::layers::LayerPalette;
     use signex_types::theme::{ThemeId, theme_tokens};
     let model = preview_of(&fixture());
@@ -626,12 +626,5 @@ fn theme_tokens_pick_the_preview_palette_only_on_graphite() {
     assert_eq!(
         palette(ThemeId::GraphiteDark),
         Some(LayerPalette::PreviewDark)
-    );
-    assert_eq!(
-        FootprintPreview::new(&model)
-            .with_theme_tokens(&crate::styles::legacy_tokens_fixture())
-            .graphite
-            .map(|(_, p)| p),
-        None
     );
 }

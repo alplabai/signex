@@ -10,7 +10,7 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 
 use crate::panels::{PanelContext, PanelMsg, SymbolEditorSelection, SymbolPinSummary};
-use crate::styles::{Radii, Spacing, TypeScale, is_graphite, ti, tokens::resolve};
+use crate::styles::{Radii, Spacing, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -102,11 +102,7 @@ fn pin_row<'a>(
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let idx = pin.idx;
     let fill = if is_selected {
-        Some(Background::Color(if is_graphite(tokens) {
-            resolve(tokens).accent_soft
-        } else {
-            ti(tokens.selection)
-        }))
+        Some(Background::Color(resolve(tokens).accent_soft))
     } else {
         None
     };

@@ -96,7 +96,7 @@ fn accent_fill_keeps_a_passing_accent_and_the_hue_of_a_darkened_one() {
     // Signex accent) keeps the darkening branch covered.
     let failing = ThemeTokens {
         accent: signex_types::theme::Color::from_hex("#E8912D"),
-        ..crate::styles::legacy_tokens_fixture()
+        ..signex_types::theme::theme_tokens(ThemeId::GraphiteDark)
     };
     assert!(contrast_ratio(Color::WHITE, accent(&failing)) < 4.5);
     let mut cases = builtin_tokens();

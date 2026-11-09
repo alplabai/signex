@@ -22,6 +22,7 @@ use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
 mod drawings;
+pub mod hit_index;
 pub mod hit_test;
 pub mod label;
 pub mod lock_indicator;

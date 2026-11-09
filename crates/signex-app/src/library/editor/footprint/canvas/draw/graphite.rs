@@ -35,9 +35,9 @@ pub(crate) fn board_look() -> GraphiteLook {
     }
 }
 
-/// The board look for `tokens`; `None` on a theme that is not Graphite.
-pub(crate) fn look_for(tokens: &ThemeTokens) -> Option<GraphiteLook> {
-    crate::styles::is_graphite(tokens).then(board_look)
+/// The board look for `tokens`: every theme draws the same board.
+pub(crate) fn look_for(_tokens: &ThemeTokens) -> GraphiteLook {
+    board_look()
 }
 
 /// The look whose ground is exactly `bg`, if any.

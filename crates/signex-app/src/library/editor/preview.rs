@@ -36,7 +36,6 @@ pub(crate) fn view<'a>(
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
-    let veil = super::read_only_veil(tokens);
     let panes = render_panes(
         state,
         library_state,
@@ -46,30 +45,12 @@ pub(crate) fn view<'a>(
         &address,
         read_only,
     );
-    // Graphite moves the pin map and the alternates to their own tabs.
-    let body = if crate::styles::is_graphite(tokens) {
-        column![
-            header_row(&state.row, tokens),
-            panes,
-            where_used_footer(state, library_state, tokens),
-        ]
-    } else {
-        column![
-            header_row(&state.row, tokens),
-            panes,
-            super::inert::unless_read_only_veiled(
-                read_only,
-                veil,
-                pin_map_subsection(state, tokens, &address),
-            ),
-            super::inert::unless_read_only_veiled(
-                read_only,
-                veil,
-                super::alternate_symbols::view(state, tokens, &address),
-            ),
-            where_used_footer(state, library_state, tokens),
-        ]
-    }
+    // The pin map and the alternates sit on their own tabs.
+    let body = column![
+        header_row(&state.row, tokens),
+        panes,
+        where_used_footer(state, library_state, tokens),
+    ]
     .spacing(SP.l)
     .width(Length::Fill)
     .boxed();
@@ -450,29 +431,18 @@ fn pin_map_subsection<'a>(
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let summary = crate::styles::is_graphite(tokens)
-        .then(|| pin_map_counts(state))
-        .flatten()
-        .map(|(mapped, total)| {
-            kit::toned_pill(
-                format!("{mapped} of {total} mapped"),
-                if mapped == total {
-                    crate::styles::PillTone::Ok
-                } else {
-                    crate::styles::PillTone::Warn
-                },
-                tokens,
-            )
-        });
-    let header = kit::section_header(
-        if crate::styles::is_graphite(tokens) {
-            "Pin to pad"
-        } else {
-            "Pin Map"
-        },
-        summary,
-        tokens,
-    );
+    let summary = pin_map_counts(state).map(|(mapped, total)| {
+        kit::toned_pill(
+            format!("{mapped} of {total} mapped"),
+            if mapped == total {
+                crate::styles::PillTone::Ok
+            } else {
+                crate::styles::PillTone::Warn
+            },
+            tokens,
+        )
+    });
+    let header = kit::section_header("Pin to pad", summary, tokens);
 
     let Some(sym) = state.symbol.as_ref() else {
         return column![
@@ -495,36 +465,23 @@ fn pin_map_subsection<'a>(
 
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
-    let graphite = crate::styles::is_graphite(tokens);
     let widths = [
         Length::FillPortion(1),
         Length::FillPortion(2),
         Length::FillPortion(2),
         Length::FillPortion(2),
     ];
-    let table_header = if graphite {
-        kit::table_header(
-            &[
-                ("Pin", widths[0]),
-                ("Name", widths[1]),
-                ("Type", widths[1]),
-                ("Pad", widths[0]),
-                ("Match", widths[2]),
-                ("", widths[3]),
-            ],
-            tokens,
-        )
-    } else {
-        kit::table_header(
-            &[
-                ("Symbol pin", widths[0]),
-                ("Symbol name", widths[1]),
-                ("Pad", widths[2]),
-                ("", widths[3]),
-            ],
-            tokens,
-        )
-    };
+    let table_header = kit::table_header(
+        &[
+            ("Pin", widths[0]),
+            ("Name", widths[1]),
+            ("Type", widths[1]),
+            ("Pad", widths[0]),
+            ("Match", widths[2]),
+            ("", widths[3]),
+        ],
+        tokens,
+    );
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let mut table: Column<Element<'a, LibraryMessage>> = column![table_header].width(Length::Fill);
 
@@ -537,17 +494,6 @@ fn pin_map_subsection<'a>(
     .into_iter()
     .enumerate()
     {
-        let pad_cell: Element<'a, LibraryMessage> = if line.is_override {
-            row![
-                text(line.pad.clone()).size(TS.body).color(text_c).boxed(),
-                text("override").size(TS.caption).color(muted).boxed(),
-            ]
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center)
-            .boxed()
-        } else {
-            text(line.pad.clone()).size(TS.body).color(text_c).boxed()
-        };
         let label = if line.is_override {
             "Edit override"
         } else {
@@ -561,62 +507,44 @@ fn pin_map_subsection<'a>(
             )),
             tokens,
         );
-        let cells = if graphite {
-            let direction = sym
-                .pins
-                .iter()
-                .find(|p| p.number == line.number)
-                .map(|p| p.electrical.label())
-                .unwrap_or("");
-            vec![
-                (
-                    text(line.number.clone())
-                        .size(TS.body)
-                        .font(mono)
-                        .color(text_c)
-                        .boxed(),
-                    widths[0],
-                ),
-                (
-                    text(line.name.clone())
-                        .size(TS.body)
-                        .font(mono)
-                        .color(text_c)
-                        .boxed(),
-                    widths[1],
-                ),
-                (
-                    text(direction).size(TS.body).color(muted).boxed(),
-                    widths[1],
-                ),
-                (
-                    text(line.pad.clone())
-                        .size(TS.body)
-                        .font(mono)
-                        .color(text_c)
-                        .boxed(),
-                    widths[0],
-                ),
-                (match_pill(state, &line, tokens), widths[2]),
-                (action, widths[3]),
-            ]
-        } else {
-            vec![
-                (
-                    text(line.number.clone())
-                        .size(TS.body)
-                        .color(text_c)
-                        .boxed(),
-                    widths[0],
-                ),
-                (
-                    text(line.name.clone()).size(TS.body).color(text_c).boxed(),
-                    widths[1],
-                ),
-                (pad_cell, widths[2]),
-                (action, widths[3]),
-            ]
-        };
+        let direction = sym
+            .pins
+            .iter()
+            .find(|p| p.number == line.number)
+            .map(|p| p.electrical.label())
+            .unwrap_or("");
+        let cells = vec![
+            (
+                text(line.number.clone())
+                    .size(TS.body)
+                    .font(mono)
+                    .color(text_c)
+                    .boxed(),
+                widths[0],
+            ),
+            (
+                text(line.name.clone())
+                    .size(TS.body)
+                    .font(mono)
+                    .color(text_c)
+                    .boxed(),
+                widths[1],
+            ),
+            (
+                text(direction).size(TS.body).color(muted).boxed(),
+                widths[1],
+            ),
+            (
+                text(line.pad.clone())
+                    .size(TS.body)
+                    .font(mono)
+                    .color(text_c)
+                    .boxed(),
+                widths[0],
+            ),
+            (match_pill(state, &line, tokens), widths[2]),
+            (action, widths[3]),
+        ];
         table = table.push(kit::table_row(cells, index, None, tokens));
 
         // Inline override editor for the expanded row.

@@ -88,25 +88,6 @@ pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> butt
     }
 }
 
-/// Confirm / commit button (Save) — theme success fill with its
-/// guaranteed-contrast text colour.
-pub(super) fn success_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.palette();
-    let bg = match status {
-        button::Status::Hovered | button::Status::Pressed => palette.success.strong.color,
-        _ => palette.success.base.color,
-    };
-    button::Style {
-        background: Some(Background::Color(bg)),
-        text_color: palette.success.base.text,
-        border: Border {
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    }
-}
-
 pub(super) fn section_title<'a>(title: &str) -> Element<'a, PrefMsg> {
     column![
         text(title.to_owned()).size(TS.title).style(text_primary),

@@ -2,7 +2,7 @@
 //! never reach these helpers.
 
 use iced::widget::{Text, Widget, button, container, row, space, text};
-use iced::{Background, Border, Color, Element, Length, Padding, Shadow, Theme};
+use iced::{Background, Border, Color, Element, Length, Padding, Theme};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 
@@ -100,7 +100,7 @@ pub fn panels_button(
 /// The popover surface: raised fill, hairline, card radius, floating shadow.
 pub fn popup(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let (raised, line, ink) = (resolve(tokens).raised, ti(tokens.border), ti(tokens.text));
-    let shadow = crate::styles::floating_shadow(tokens, Shadow::default());
+    let shadow = crate::styles::floating_shadow(tokens);
     move |_| container::Style {
         background: Some(Background::Color(raised)),
         text_color: Some(ink),

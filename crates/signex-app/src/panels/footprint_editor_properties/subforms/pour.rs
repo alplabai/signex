@@ -19,7 +19,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
     id: signex_sketch::id::SketchEntityId,
     muted: Color,
     primary: Color,
-    border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(pour) = fp.selected_pour.as_ref() else {
         return col;
@@ -43,9 +42,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                 text_input("(none)", net_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(crate::panels::footprint_editor_properties::fp_field_style(
-                        muted, primary, border_c
-                    ))
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(move |v| PanelMsg::FpEditorSetPourNet { id, value: v }),
             ]
             .spacing(6)
@@ -93,9 +90,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                 text_input("0", pour.priority.to_string())
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(crate::panels::footprint_editor_properties::fp_field_style(
-                        muted, primary, border_c
-                    ))
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(move |v| PanelMsg::FpEditorSetPourPriority { id, value: v }),
             ]
             .spacing(6)

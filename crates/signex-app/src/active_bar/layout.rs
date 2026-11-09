@@ -141,11 +141,11 @@ pub(crate) const BAR_TOP_MARGIN_PX: f32 = 4.0;
 /// Gap between the top of the canvas overlay layer and a Graphite bar.
 const GRAPHITE_BAR_TOP_MARGIN_PX: f32 = 10.0;
 
-/// Top margin of the bar under `tokens`: Graphite floats it 10 px below the
-/// tab strip, every other theme keeps [`BAR_TOP_MARGIN_PX`]. The bar view
-/// and the dropdown anchor both read this, so they cannot disagree.
-pub(crate) fn bar_top_margin(tokens: &signex_types::theme::ThemeTokens) -> f32 {
-    top_margin_for(&Metrics::of(tokens))
+/// Top margin of the bar: Graphite floats it 10 px below the tab strip.
+/// The bar view and the dropdown anchor both read this, so they cannot
+/// disagree.
+pub(crate) fn bar_top_margin() -> f32 {
+    top_margin_for(&Metrics::GRAPHITE)
 }
 
 /// [`bar_top_margin`] from the metrics alone (the canvas hit-test).
@@ -159,12 +159,8 @@ pub(crate) fn top_margin_for(m: &Metrics) -> f32 {
 
 /// Extra drop of the symbol editor's floating bar so it sits below the
 /// editor's own toolbar strip (one text line, button padding, strip padding
-/// and the column gap) instead of covering its centre controls. Graphite
-/// only; legacy themes keep the bar where it was.
-pub(crate) fn symbol_editor_bar_drop(tokens: &signex_types::theme::ThemeTokens) -> f32 {
-    if !crate::styles::is_graphite(tokens) {
-        return 0.0;
-    }
+/// and the column gap) instead of covering its centre controls.
+pub(crate) fn symbol_editor_bar_drop(_tokens: &signex_types::theme::ThemeTokens) -> f32 {
     let ts = crate::styles::TypeScale::DEFAULT;
     let sp = crate::styles::Spacing::DEFAULT;
     ts.body * crate::styles::LINE_HEIGHT + 2.0 * sp.s + 2.0 * sp.m + sp.s

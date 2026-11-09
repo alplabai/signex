@@ -236,16 +236,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // properties; Sketch-mode entity selected → sketch entity
     // properties; nothing selected → footprint summary + solve stats.
     if let Some(fp) = ctx.footprint_editor.as_ref() {
-        return view_footprint_editor_properties(
-            fp,
-            palette,
-            // The Graphite footprint sheet starts at the footprint itself (no
-            // presets block); they stay reachable from the Active Bar's Filter menu.
-            (!crate::styles::is_graphite(&ctx.tokens)).then(|| ctx.custom_filter_presets.clone()),
-            ctx.active_custom_filter_tab,
-            &ctx.collapsed_sections,
-            ctx.unit,
-        );
+        return view_footprint_editor_properties(fp, palette, &ctx.collapsed_sections, ctx.unit);
     }
 
     if !ctx.has_schematic {
@@ -290,21 +281,15 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── Nothing selected: show Document Options (Altium default) ──
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    let graphite = crate::styles::is_graphite(&ctx.tokens);
     col = col.push(
-        container(
-            text("Document Options")
-                .size(if graphite { TS.title } else { TS.body })
-                .color(primary),
-        )
-        .padding(if graphite { [10.0, 12.0] } else { [6.0, SP.m] })
-        .width(Length::Fill)
-        .boxed(),
+        container(text("Document Options").size(TS.title).color(primary))
+            .padding([10.0, 12.0])
+            .width(Length::Fill)
+            .boxed(),
     );
 
     // ── General | Parameters tab bar ──
     let tab = ctx.properties_tab;
-    let tab_hover = crate::styles::ti(ctx.tokens.hover);
     let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     col = col.push(
         container(
@@ -314,29 +299,21 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     tab == 0,
                     PanelMsg::PropertiesTab(0),
                     primary,
-                    text_inactive,
-                    tab_hover,
-                    border_c
+                    text_inactive
                 ),
                 props_tab_btn(
                     "Parameters",
                     tab == 1,
                     PanelMsg::PropertiesTab(1),
                     primary,
-                    text_inactive,
-                    tab_hover,
-                    border_c
+                    text_inactive
                 ),
             ]
             .spacing(SP.xs),
         )
-        .padding([SP.s, if graphite { 12.0 } else { SP.m }])
+        .padding([SP.s, 12.0])
         .boxed(),
     );
-    if !graphite {
-        col = col.push(thin_sep(border_c));
-    }
-
     // ── Tab content ──
     if tab == 0 {
         col = col.push(view_properties_general(ctx, primary).boxed());
@@ -354,12 +331,9 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── Status: Nothing selected ──
     col = col.push(Space::new().height(8.0).boxed());
-    if !graphite {
-        col = col.push(thin_sep(border_c));
-    }
     col = col.push(
         container(text("Nothing selected").size(TS.caption).color(muted))
-            .padding([6.0, if graphite { 12.0 } else { SP.m }])
+            .padding([6.0, 12.0])
             .width(Length::Fill)
             .boxed(),
     );
@@ -440,9 +414,7 @@ fn view_pre_placement<'a>(
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    "(X/Y)", &pos_str, muted, input_bg, input_bdr,
-                ));
+                c = c.push(form_input_row("(X/Y)", &pos_str, muted, input_bg));
                 let rotation_opts: Vec<String> = vec![
                     "0 Degrees".into(),
                     "90 Degrees".into(),
@@ -538,7 +510,7 @@ fn view_pre_placement<'a>(
                             muted,
                         ));
                         c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                        c = c.push(form_label("Justification", muted));
+                        c = c.push(form_label("Justification"));
                         c = c.push(
                             container(preplacement_justification_grid(
                                 justify_h,

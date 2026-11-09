@@ -88,12 +88,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
-            // The dock title already says "ERC" on Graphite.
-            if crate::styles::is_graphite(&ctx.tokens) {
-                Space::new().boxed()
-            } else {
-                section_title("ERC", &ctx.tokens).boxed()
-            },
+            // The dock title already says "ERC".
+            Space::new().boxed(),
             Space::new().width(Length::Fill).height(Length::Shrink),
             iced::widget::button(
                 text("Run ERC (F8)")
@@ -232,7 +228,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         };
         let is_focused = ctx.erc_focus_index == Some(v.global_index);
         let (label_c, detail_c) = erc_row_text(&ctx.tokens, is_focused);
-        let sev_color = erc_severity_text(&ctx.tokens, is_focused, sev_color);
+        let _sev_color = erc_severity_text(&ctx.tokens, is_focused, sev_color);
         let row_bg = if is_focused {
             Some(Background::Color(theme_ext::selection_color(&ctx.tokens)))
         } else {
@@ -253,11 +249,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             row![
                 iced::widget::button(
                     row![
-                        if crate::styles::is_graphite(&ctx.tokens) {
-                            erc_severity_pill(&ctx.tokens, v.severity, sev_label)
-                        } else {
-                            text(sev_label).size(TS.body).color(sev_color).boxed()
-                        },
+                        erc_severity_pill(&ctx.tokens, v.severity, sev_label),
                         Space::new().width(4).height(Length::Shrink),
                         text(v.rule_label.clone()).size(TS.body).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
@@ -524,196 +516,9 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 }
 
 pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    if crate::styles::is_graphite(&ctx.tokens) {
-        return view_messages_graphite(ctx);
-    }
-    let mut col: Column<Element<'a, PanelMsg>> =
-        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    if !crate::styles::is_graphite(&ctx.tokens) {
-        col = col.push(
-            row![
-                section_title("Messages", &ctx.tokens),
-                Space::new().width(Length::Fill).height(Length::Shrink),
-                text(format!("level {}", ctx.diagnostics_level))
-                    .size(TS.caption)
-                    .color(theme_ext::text_secondary(&ctx.tokens)),
-            ]
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-        );
-        col = col.push(separator(&ctx.tokens).boxed());
-    }
-
-    if ctx.diagnostics.is_empty() {
-        col = col.push(
-            text("No runtime messages yet")
-                .size(TS.caption)
-                .color(theme_ext::success_color(&ctx.tokens))
-                .boxed(),
-        );
-        col = col.push(
-            text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
-                .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens))
-                .boxed(),
-        );
-    } else {
-        // Table header — mirrors Altium's Messages panel with fixed
-        // columns for id, level, source tag, and the message body.
-        let muted = theme_ext::text_secondary(&ctx.tokens);
-        let primary = theme_ext::text_primary(&ctx.tokens);
-        let border = theme_ext::border_color(&ctx.tokens);
-        let graphite = crate::styles::is_graphite(&ctx.tokens);
-        let header_bg = if graphite {
-            crate::styles::tokens::resolve(&ctx.tokens).sunken
-        } else {
-            theme_ext::to_color(&ctx.tokens.hover)
-        };
-        let border = if graphite {
-            crate::styles::tokens::resolve(&ctx.tokens).line_soft
-        } else {
-            border
-        };
-        let row_bg = theme_ext::to_color(&ctx.tokens.panel_bg);
-        // Alt-row tint: pull a darker variant from the panel background
-        // by shifting alpha. iced::Color lets us blend cheaply.
-        let alt_bg = Color {
-            a: row_bg.a,
-            r: (row_bg.r - 0.02).max(0.0),
-            g: (row_bg.g - 0.02).max(0.0),
-            b: (row_bg.b - 0.02).max(0.0),
-        };
-
-        let th = |label: &str| -> Element<'a, PanelMsg> {
-            // Graphite: the mock's CLASS / SOURCE / MESSAGE header caps.
-            let label = if graphite {
-                match label {
-                    "Level" => "CLASS".to_string(),
-                    other => other.to_uppercase(),
-                }
-            } else {
-                label.to_string()
-            };
-            let size = if graphite { TS.caption } else { TS.body };
-            container(text(label).size(size).color(muted))
-                .padding([SP.s, SP.m])
-                .boxed()
-        };
-        // Header row — background fill, no border (separator line
-        // below sits in its own element so the table reads as a grid
-        // of horizontal rules instead of individually framed boxes).
-        col = col.push(
-            container(
-                row![
-                    container(th("#")).width(Length::Fixed(48.0)),
-                    container(th("Level")).width(Length::Fixed(64.0)),
-                    container(th("Source")).width(Length::Fixed(180.0)),
-                    container(th("Message")).width(Length::Fill),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .height(if graphite {
-                Length::Fixed(super::graphite::TABLE_ROW_HEIGHT)
-            } else {
-                Length::Shrink
-            })
-            .style(move |_theme: &Theme| iced::widget::container::Style {
-                background: Some(Background::Color(header_bg)),
-                ..iced::widget::container::Style::default()
-            })
-            .boxed(),
-        );
-        let separator = |bg: Color| -> Element<'a, PanelMsg> {
-            container(Space::new())
-                .height(Length::Fixed(1.0))
-                .width(Length::Fill)
-                .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(bg)),
-                    ..iced::widget::container::Style::default()
-                })
-                .boxed()
-        };
-        col = col.push(separator(border));
-        for (i, entry) in ctx.diagnostics.iter().rev().enumerate() {
-            let level_color = match entry.level {
-                crate::diagnostics::DiagnosticLevel::Error => theme_ext::error_color(&ctx.tokens),
-                crate::diagnostics::DiagnosticLevel::Warning => {
-                    theme_ext::warning_color(&ctx.tokens)
-                }
-                crate::diagnostics::DiagnosticLevel::Info => theme_ext::accent(&ctx.tokens),
-                crate::diagnostics::DiagnosticLevel::Debug
-                | crate::diagnostics::DiagnosticLevel::Trace => {
-                    theme_ext::text_secondary(&ctx.tokens)
-                }
-            };
-            let bg = if graphite {
-                Color::TRANSPARENT
-            } else if i % 2 == 0 {
-                row_bg
-            } else {
-                alt_bg
-            };
-            let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
-                container(text(label).size(size).color(color))
-                    .padding([SP.s, SP.m])
-                    .boxed()
-            };
-            col = col.push(
-                container(
-                    row![
-                        container(cell(format!("#{}", entry.id), muted, TS.body))
-                            .width(Length::Fixed(48.0)),
-                        container(if graphite {
-                            level_pill(&ctx.tokens, entry.level)
-                        } else {
-                            cell(entry.level.label().to_string(), level_color, TS.body)
-                        })
-                        .width(Length::Fixed(64.0)),
-                        container(if graphite {
-                            container(
-                                text(entry.code.as_str().to_string())
-                                    .size(TS.body)
-                                    .font(crate::fonts::iced_font_for_family(
-                                        crate::fonts::CHROME_MONO_FONT,
-                                    ))
-                                    .color(muted),
-                            )
-                            .padding([SP.s, SP.m])
-                            .boxed()
-                        } else {
-                            cell(entry.code.as_str().to_string(), muted, TS.body)
-                        })
-                        .width(Length::Fixed(180.0)),
-                        container(cell(entry.message.as_str().to_string(), primary, TS.body))
-                            .width(Length::Fill),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .height(if graphite {
-                    Length::Fixed(super::graphite::TABLE_ROW_HEIGHT)
-                } else {
-                    Length::Shrink
-                })
-                // No border on the row — the explicit separator line
-                // drawn below is the grid. Boxes around each entry
-                // (the previous look) were too heavy for a log table.
-                .style(move |_theme: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(bg)),
-                    ..iced::widget::container::Style::default()
-                })
-                .boxed(),
-            );
-            // One-pixel horizontal rule between rows — no right / left
-            // borders so the table reads as a stack of records with
-            // shared separators, matching Altium's Messages panel.
-            col = col.push(separator(border));
-        }
-    }
-
-    container(col).width(Length::Fill).boxed()
+    view_messages_graphite(ctx)
 }
 
-/// Severity pill of an ERC row (Graphite).
 fn erc_severity_pill<'a>(
     tokens: &ThemeTokens,
     severity: ErcSeverityLite,

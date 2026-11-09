@@ -12,7 +12,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::styles::tokens::{self, Overlay, resolve};
-use crate::styles::{self, HAIRLINE, RADIUS, Radii, Spacing, TypeScale, is_graphite};
+use crate::styles::{self, HAIRLINE, RADIUS, Radii, Spacing, TypeScale};
 
 /// Type scale shared by every Component Preview tab.
 pub(crate) const TS: TypeScale = TypeScale::DEFAULT;
@@ -23,18 +23,9 @@ pub(crate) const SP: Spacing = Spacing::DEFAULT;
 
 /// Card surface: faint overlay over the panel, 1 px token border.
 pub(crate) fn card_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
-    // Graphite: raised fill, card radius (the `styles::card` look).
-    let graphite = is_graphite(tokens);
-    let fill = if graphite {
-        resolve(tokens).raised
-    } else {
-        tokens::overlay(tokens, Overlay::Faint)
-    };
-    let radius = if graphite {
-        Radii::GRAPHITE.card
-    } else {
-        RADIUS
-    };
+    // Raised fill, card radius (the `styles::card` look).
+    let fill = resolve(tokens).raised;
+    let radius = Radii::GRAPHITE.card;
     let border = theme_ext::border_color(tokens);
     move |_| container::Style {
         background: Some(Background::Color(fill)),
@@ -57,7 +48,7 @@ pub(crate) fn rule_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::
     }
 }
 
-/// 1 px soft rule between body rows (Graphite); legacy themes use zebra.
+/// 1 px soft rule between body rows.
 pub(crate) fn row_separator_style(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
@@ -68,42 +59,33 @@ pub(crate) fn row_separator_style(
     }
 }
 
-/// Table header band: Graphite sunken fill, legacy none.
+/// Table header band: the sunken fill.
 pub(crate) fn header_band_style(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
-    let fill = is_graphite(tokens).then(|| resolve(tokens).sunken);
+    let fill = resolve(tokens).sunken;
     move |_| container::Style {
-        background: fill.map(Background::Color),
+        background: Some(Background::Color(fill)),
         ..container::Style::default()
     }
 }
 
-/// Body-row fill: odd rows take the faint overlay (zebra); a hovered or
-/// pressed row takes the hover / pressed overlay on any stripe. Graphite
-/// themes have no zebra: rows are flat and split by [`row_separator_style`].
-pub(crate) fn row_background(
-    tokens: &ThemeTokens,
-    index: usize,
-    status: button::Status,
-) -> Option<Background> {
+/// Body-row fill: a hovered or pressed row takes the hover / pressed
+/// overlay. Rows are flat and split by [`row_separator_style`].
+pub(crate) fn row_background(tokens: &ThemeTokens, status: button::Status) -> Option<Background> {
     let color = match status {
         button::Status::Hovered => tokens::overlay(tokens, Overlay::Hover),
         button::Status::Pressed => tokens::overlay(tokens, Overlay::Pressed),
-        _ if index % 2 == 1 && !is_graphite(tokens) => tokens::overlay(tokens, Overlay::Faint),
         _ => return None,
     };
     Some(Background::Color(color))
 }
 
-fn row_style(
-    tokens: &ThemeTokens,
-    index: usize,
-) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+fn row_style(tokens: &ThemeTokens) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
     let tokens = *tokens;
     let text_c = theme_ext::text_primary(&tokens);
     move |_: &Theme, status| button::Style {
-        background: row_background(&tokens, index, status),
+        background: row_background(&tokens, status),
         text_color: text_c,
         border: Border::default(),
         ..button::Style::default()
@@ -118,11 +100,7 @@ pub(crate) fn danger_button_style(
     let disabled = tokens::disabled_text(tokens);
     let hover = tokens::overlay(tokens, Overlay::Hover);
     let pressed = tokens::overlay(tokens, Overlay::Pressed);
-    let button_radius = if is_graphite(tokens) {
-        Radii::GRAPHITE.button
-    } else {
-        RADIUS
-    };
+    let button_radius = Radii::GRAPHITE.button;
     move |_: &Theme, status| {
         let ink = if status == button::Status::Disabled {
             disabled
@@ -164,18 +142,11 @@ pub(crate) fn section_header<'a, M: 'a>(
     trailing: Option<Element<'a, M>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let heading = if is_graphite(tokens) {
-        // Uppercase muted section label (Graphite).
-        text(title.to_uppercase())
-            .size(TS.section)
-            .style(styles::section_label(tokens))
-            .boxed()
-    } else {
-        text(title)
-            .size(TS.title)
-            .color(theme_ext::text_primary(tokens))
-            .boxed()
-    };
+    // Uppercase muted section label.
+    let heading = text(title.to_uppercase())
+        .size(TS.section)
+        .style(styles::section_label(tokens))
+        .boxed();
     let mut line: iced::widget::Row<Element<'a, M>> =
         row![heading, Space::new().width(Length::Fill).boxed()].align_y(iced::Alignment::Center);
     if let Some(t) = trailing {
@@ -201,22 +172,17 @@ pub(crate) fn table_header<'a, M: 'a>(
     columns: &[(&'a str, Length)],
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let graphite = is_graphite(tokens);
-    let muted = if graphite {
-        resolve(tokens).ink3
-    } else {
-        theme_ext::text_secondary(tokens)
-    };
+    let muted = resolve(tokens).ink3;
     let mut line: iced::widget::Row<Element<'a, M>> =
         row![].spacing(SP.m).align_y(iced::Alignment::Center);
     for (title, width) in columns {
-        let label = if graphite {
-            title.to_uppercase()
-        } else {
-            (*title).to_string()
-        };
-        let size = if graphite { TS.section } else { TS.caption };
-        line = line.push(text(label).size(size).color(muted).width(*width).boxed());
+        line = line.push(
+            text(title.to_uppercase())
+                .size(TS.section)
+                .color(muted)
+                .width(*width)
+                .boxed(),
+        );
     }
     column![
         container(line)
@@ -230,11 +196,12 @@ pub(crate) fn table_header<'a, M: 'a>(
     .boxed()
 }
 
-/// Table body row. `index` drives zebra striping; with `on_press` the row
-/// also shows hover / pressed fills (a row without a handler is inert).
+/// Table body row; with `on_press` the row also shows hover / pressed fills
+/// (a row without a handler is inert). `_index` is the row's position; rows
+/// are flat, so it no longer changes the look.
 pub(crate) fn table_row<'a, M: Clone + 'a>(
     cells: Vec<(Element<'a, M>, Length)>,
-    index: usize,
+    _index: usize,
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
@@ -247,7 +214,7 @@ pub(crate) fn table_row<'a, M: Clone + 'a>(
         .padding([SP.s, SP.m])
         .width(Length::Fill);
     let item: Element<'a, M> = if on_press.is_none() {
-        let fill = row_background(tokens, index, button::Status::Active);
+        let fill = row_background(tokens, button::Status::Active);
         body.style(move |_: &Theme| container::Style {
             background: fill,
             ..container::Style::default()
@@ -258,12 +225,9 @@ pub(crate) fn table_row<'a, M: Clone + 'a>(
             .padding(0)
             .width(Length::Fill)
             .on_press_maybe(on_press)
-            .style(row_style(tokens, index))
+            .style(row_style(tokens))
             .boxed()
     };
-    if !is_graphite(tokens) {
-        return item;
-    }
     column![
         item,
         container(Space::new())
@@ -296,10 +260,7 @@ pub(crate) fn primary_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    if is_graphite(tokens) {
-        return labelled(label, on_press, styles::primary_button(tokens));
-    }
-    labelled(label, on_press, styles::accent_button(tokens))
+    labelled(label, on_press, styles::primary_button(tokens))
 }
 
 /// Secondary action (outline). `None` disables it.
@@ -308,10 +269,7 @@ pub(crate) fn secondary_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    if is_graphite(tokens) {
-        return labelled(label, on_press, graphite_outline(tokens));
-    }
-    labelled(label, on_press, styles::outline_button(tokens))
+    labelled(label, on_press, graphite_outline(tokens))
 }
 
 /// Graphite secondary button: the outline look at the button radius.
@@ -341,20 +299,14 @@ pub(crate) fn pill<'a, M: 'a>(label: String, fill: Color, ink: Color) -> Element
     pill_with_radius(label, fill, ink, RADIUS)
 }
 
-/// Status chip in a [`styles::PillTone`]: fully rounded on Graphite, the
-/// legacy badge radius elsewhere.
+/// Status chip in a [`styles::PillTone`], fully rounded.
 pub(crate) fn toned_pill<'a, M: 'a>(
     label: String,
     tone: styles::PillTone,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let (fill, ink) = styles::pill_colors(tokens, tone);
-    let radius = if is_graphite(tokens) {
-        Radii::GRAPHITE.pill
-    } else {
-        RADIUS
-    };
-    pill_with_radius(label, fill, ink, radius)
+    pill_with_radius(label, fill, ink, Radii::GRAPHITE.pill)
 }
 
 fn pill_with_radius<'a, M: 'a>(
@@ -457,33 +409,24 @@ mod tests {
     }
 
     #[test]
-    fn zebra_rows_differ_on_every_legacy_builtin() {
-        // Graphite themes have no zebra (flat rows with a soft separator).
+    fn rows_are_flat_on_every_builtin() {
+        // No zebra: rows are flat with a soft separator.
         for &id in ThemeId::BUILTINS {
             let t = theme_tokens(id);
-            if is_graphite(&t) {
-                let flat = row_background(&t, 1, button::Status::Active);
-                assert!(flat.is_none(), "{id:?}");
-                continue;
-            }
-            let even = bg(row_background(&t, 0, button::Status::Active));
-            let odd = bg(row_background(&t, 1, button::Status::Active));
-            assert_ne!(even, odd, "{id:?}");
-            assert_eq!(odd, bg(row_background(&t, 3, button::Status::Active)));
+            let flat = row_background(&t, button::Status::Active);
+            assert!(flat.is_none(), "{id:?}");
         }
     }
 
     #[test]
-    fn hover_differs_from_active_on_both_stripes() {
+    fn hover_differs_from_active_and_from_pressed() {
         for &id in ThemeId::BUILTINS {
             let t = theme_tokens(id);
-            for index in [0, 1] {
-                let active = bg(row_background(&t, index, button::Status::Active));
-                let hover = bg(row_background(&t, index, button::Status::Hovered));
-                let pressed = bg(row_background(&t, index, button::Status::Pressed));
-                assert!(hover.is_some() && hover != active, "{id:?} {index}");
-                assert_ne!(hover, pressed, "{id:?} {index}");
-            }
+            let active = bg(row_background(&t, button::Status::Active));
+            let hover = bg(row_background(&t, button::Status::Hovered));
+            let pressed = bg(row_background(&t, button::Status::Pressed));
+            assert!(hover.is_some() && hover != active, "{id:?}");
+            assert_ne!(hover, pressed, "{id:?}");
         }
     }
 

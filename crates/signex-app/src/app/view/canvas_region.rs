@@ -127,12 +127,11 @@ mod tests {
             let tokens = signex_types::theme::theme_tokens(id);
             status_bar_reservation_matches(&format!("{id:?}"), tokens);
         }
-        status_bar_reservation_matches("legacy", legacy());
     }
 
-    /// The legacy chrome sizes these layout pins were written against.
-    fn legacy() -> ThemeTokens {
-        crate::styles::legacy_tokens_fixture()
+    /// The chrome sizes these layout pins are written against.
+    fn graphite() -> ThemeTokens {
+        signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark)
     }
 
     fn status_bar_reservation_matches(id: &str, tokens: ThemeTokens) {
@@ -177,7 +176,7 @@ mod tests {
     };
 
     fn bounds() -> Rectangle {
-        canvas_bounds((1400.0, 900.0), dock(240.0), dock(220.0), NONE, &legacy())
+        canvas_bounds((1400.0, 900.0), dock(240.0), dock(220.0), NONE, &graphite())
     }
 
     #[test]
@@ -185,9 +184,6 @@ mod tests {
         let b = bounds();
         assert_eq!(b.x, 245.0);
         assert_eq!(b.width, 1400.0 - 245.0 - 225.0);
-        let top = crate::menu_bar::MENU_BAR_HEIGHT + 1.0 + crate::tab_bar::TAB_STRIP_HEIGHT;
-        assert_eq!(b.y, top);
-        assert_eq!(b.height, 900.0 - top - crate::status_bar::STATUS_BAR_HEIGHT);
     }
 
     /// A Graphite theme reserves the taller 34 px strip and 26 px footer.
@@ -226,7 +222,7 @@ mod tests {
 
     #[test]
     fn a_card_wider_than_the_canvas_is_clamped_to_its_left_edge() {
-        let b = canvas_bounds((500.0, 400.0), dock(240.0), dock(220.0), NONE, &legacy());
+        let b = canvas_bounds((500.0, 400.0), dock(240.0), dock(220.0), NONE, &graphite());
         let (x, _) = place_card((b.x + 10.0, 200.0), (260.0, 50.0), b);
         assert_eq!(x, b.x);
     }
@@ -254,7 +250,9 @@ mod tests {
     fn a_label_maps_to_its_window_point_under_the_default_dock_layout() {
         // Default docks: 240 px left + 5 px handle, so the canvas starts at
         // x = 245; menu bar + separator 1 + the tab strip put it at y below.
-        let top = crate::menu_bar::MENU_BAR_HEIGHT + 1.0 + crate::tab_bar::TAB_STRIP_HEIGHT;
+        let top = crate::styles::ChromeMetrics::DEFAULT.menu
+            + 1.0
+            + crate::tab_bar::tab_strip_height(&graphite());
         let at = world_to_window((10.0, 20.0), (5.0, 7.0, 3.0), bounds());
         assert_eq!(at, (245.0 + 35.0, top + 67.0));
     }

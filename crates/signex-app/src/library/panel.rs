@@ -160,10 +160,7 @@ fn library_row<'a>(
     let open = button(text("Open").size(LIB_PANEL_TEXT_SIZE).color(text_c))
         .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
-        .style(|theme: &Theme, status| {
-            crate::panels::form_look::ghost_button(theme, status)
-                .unwrap_or_else(|| button::secondary(theme, status))
-        });
+        .style(crate::panels::form_look::ghost_button);
     row![toggle, open]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)

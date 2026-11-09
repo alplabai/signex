@@ -12,7 +12,6 @@ use iced::{Element, Length};
 use super::widgets::modal_title_header;
 use crate::styles::{
     DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer, dialog_intro,
-    dialog_message,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -159,14 +158,10 @@ impl Signex {
         );
 
         let scope = st.scope;
-        let intro: Element<'_, Message> = dialog_message(st.intro_text.as_str(), tokens);
         let summary_label = match scope {
             crate::app::VersionControlScope::Project => "Project",
             crate::app::VersionControlScope::Library => "Library",
         };
-        let summary = text(format!("{summary_label}: {}", st.project_name))
-            .size(TS.label)
-            .color(text_c);
 
         // Per-row track toggles. Surfaced as a column (no scrollable
         // — typical project / library layouts have <20 entries) so
@@ -225,20 +220,14 @@ impl Signex {
         ]
         .align_y(iced::Alignment::Start);
 
-        // Graphite opens with the shell's intro: what gets a repository, then
-        // why; other themes keep the summary line above the message.
-        let mut body_col: iced::widget::Column<Element<'_, Message>> =
-            if crate::styles::is_graphite(tokens) {
-                column![dialog_intro(
-                    DialogIcon::File,
-                    format!("{summary_label}: {}", st.project_name),
-                    Some(st.intro_text.clone()),
-                    tokens,
-                )]
-                .spacing(10)
-            } else {
-                column![summary, intro].spacing(10)
-            };
+        // The shell's intro opens the body: what gets a repository, then why.
+        let mut body_col: iced::widget::Column<Element<'_, Message>> = column![dialog_intro(
+            DialogIcon::File,
+            format!("{summary_label}: {}", st.project_name),
+            Some(st.intro_text.clone()),
+            tokens,
+        )]
+        .spacing(10);
         if !st.items.is_empty() {
             body_col = body_col.push(Space::new().height(2).boxed());
             body_col = body_col.push(items_col.boxed());
@@ -549,8 +538,7 @@ impl Signex {
     }
 }
 
-/// `body` under the shell's title-only intro on Graphite; unchanged on
-/// other themes, whose header already names the dialog.
+/// `body` under the shell's title-only intro.
 fn with_graphite_intro<'a>(
     icon: DialogIcon,
     title: &'static str,
@@ -558,9 +546,6 @@ fn with_graphite_intro<'a>(
     gap: f32,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {
-    if !crate::styles::is_graphite(tokens) {
-        return body.boxed();
-    }
     column![dialog_intro(icon, title, None, tokens), body]
         .spacing(gap)
         .boxed()
@@ -576,12 +561,11 @@ fn grid_segment<'a>(
     border_c: iced::Color,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {
-    // Graphite: the soft accent on the field fill, as the form segments.
-    let bg = match (crate::styles::is_graphite(tokens), active) {
-        (true, true) => crate::styles::tokens::resolve(tokens).accent_soft,
-        (true, false) => crate::styles::tokens::resolve(tokens).field,
-        (false, true) => iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20),
-        (false, false) => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+    // The soft accent on the field fill, as the form segments.
+    let bg = if active {
+        crate::styles::tokens::resolve(tokens).accent_soft
+    } else {
+        crate::styles::tokens::resolve(tokens).field
     };
     iced::widget::button(text(label).size(TS.caption).color(text_c))
         .padding([3, 10])

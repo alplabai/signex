@@ -2,7 +2,7 @@
 //! on the light built-in theme, and the dark themes must not change.
 
 use super::palette::PanelPalette;
-use super::properties_parameters::{add_filter_button_style, check_state_color, seg_text};
+use super::properties_parameters::{check_state_color, seg_text};
 use super::status::{erc_row_text, erc_severity_text};
 use crate::app::Signex;
 use crate::styles::ti;
@@ -10,7 +10,6 @@ use crate::styles::tokens::{
     MIN_TEXT_CONTRAST, UNREADABLE_CONTRAST, contrast_ratio, relative_luminance,
 };
 use iced::Color;
-use iced::widget::button;
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 
 /// A theme is light when its panel is light, whatever its name.
@@ -27,13 +26,6 @@ fn dark_themes() -> impl Iterator<Item = ThemeId> {
         .iter()
         .copied()
         .filter(|id| !is_light(*id))
-}
-
-fn solid(fill: Option<iced::Background>) -> Color {
-    match fill {
-        Some(iced::Background::Color(c)) => c,
-        other => panic!("expected a solid fill, got {other:?}"),
-    }
 }
 
 fn assert_readable(what: &str, text: Color, fill: Color) {
@@ -76,26 +68,6 @@ fn collision_tokens() -> ThemeTokens {
         warning: c("#CB4B16"),
         success: c("#859900"),
         extended: signex_types::theme::ExtendedTokens::NONE,
-    }
-}
-
-#[test]
-fn add_filter_label_is_readable_on_the_accent_selection_collision() {
-    let tokens = collision_tokens();
-    assert_eq!(tokens.accent, tokens.selection, "fixture precondition");
-    let p = PanelPalette::from_tokens(&tokens);
-    let theme = iced::Theme::Light;
-    for status in [
-        button::Status::Active,
-        button::Status::Hovered,
-        button::Status::Pressed,
-    ] {
-        let style = add_filter_button_style(&theme, status, p.primary);
-        assert_readable(
-            &format!("+ Add Filter {status:?}"),
-            style.text_color,
-            solid(style.background),
-        );
     }
 }
 
@@ -186,13 +158,6 @@ fn dark_themes_keep_every_label_that_was_visible() {
             check_state_color(false, p.muted, surface),
             surface,
         );
-        let style = add_filter_button_style(&theme, button::Status::Active, p.primary);
-        assert_unchanged_unless_lost(
-            &format!("{id:?} + Add Filter"),
-            p.primary,
-            style.text_color,
-            solid(style.background),
-        );
         let fill = ti(tokens.selection);
         let (label, detail) = erc_row_text(&tokens, true);
         assert_unchanged_unless_lost(&format!("{id:?} ERC label"), ti(tokens.text), label, fill);
@@ -221,19 +186,6 @@ fn focused_erc_severity_letter_is_readable_on_the_accent_selection_collision() {
             fill,
         );
         assert_eq!(erc_severity_text(&tokens, false, colour), colour);
-    }
-}
-
-#[test]
-fn add_filter_label_never_flips_between_states_on_any_builtin() {
-    for &id in ThemeId::BUILTINS {
-        let p = PanelPalette::from_tokens(&theme_tokens(id));
-        let theme = Signex::id_to_iced_theme(id);
-        let resting = add_filter_button_style(&theme, button::Status::Active, p.primary);
-        for status in [button::Status::Hovered, button::Status::Pressed] {
-            let style = add_filter_button_style(&theme, status, p.primary);
-            assert_eq!(style.text_color, resting.text_color, "{id:?} {status:?}");
-        }
     }
 }
 
@@ -273,26 +225,5 @@ fn white_on_accent_segments_are_unchanged_on_every_builtin() {
             muted,
             "{id:?}"
         );
-    }
-}
-
-#[test]
-fn dark_add_filter_label_is_unchanged_in_every_button_state() {
-    for id in dark_themes() {
-        let p = PanelPalette::from_tokens(&theme_tokens(id));
-        let theme = Signex::id_to_iced_theme(id);
-        let resting = add_filter_button_style(&theme, button::Status::Active, p.primary);
-        let fill = solid(resting.background);
-        if contrast_ratio(p.primary, fill) < UNREADABLE_CONTRAST {
-            continue; // the corrected case, covered above
-        }
-        for status in [
-            button::Status::Active,
-            button::Status::Hovered,
-            button::Status::Pressed,
-        ] {
-            let style = add_filter_button_style(&theme, status, p.primary);
-            assert_eq!(style.text_color, p.primary, "{id:?} {status:?}");
-        }
     }
 }

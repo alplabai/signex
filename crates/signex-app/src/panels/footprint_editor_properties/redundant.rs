@@ -18,13 +18,11 @@ pub(super) fn push_redundant_rows<'a>(
     s: &'a FootprintSolveSummary,
     muted: Color,
     input_bg: Color,
-    input_bdr: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     col = props_kv_row(
         col,
         muted,
         input_bg,
-        input_bdr,
         "Redundant",
         s.redundant_constraints.len().to_string(),
     );

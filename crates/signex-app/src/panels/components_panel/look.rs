@@ -98,10 +98,7 @@ pub(super) fn header_row<'a>(
     )
     .padding([3.0, 8.0])
     .on_press(LibraryMessage::ComponentsPanelAddMenuToggled)
-    .style(|theme: &Theme, status| {
-        crate::panels::form_look::ghost_button(theme, status)
-            .unwrap_or_else(|| button::secondary(theme, status))
-    });
+    .style(crate::panels::form_look::ghost_button);
     row![
         container(filter).width(Length::Fill),
         container(add).padding(Padding {

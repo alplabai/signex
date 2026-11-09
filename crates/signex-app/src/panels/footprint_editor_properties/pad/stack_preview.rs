@@ -448,13 +448,9 @@ pub(super) fn pad_stack_tab_strip<'a>(
     values: &PadFormValues,
     primary: Color,
     muted: Color,
-    border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     use crate::library::editor::footprint::state::PadStackTab;
     let current = values.pad_stack_tab;
-    let chip_border = border_c;
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
     let mk = move |label: &'static str, target: PadStackTab| -> iced::Element<'a, PanelMsg> {
         let active = current == target;
         iced::widget::button(
@@ -468,29 +464,7 @@ pub(super) fn pad_stack_tab_strip<'a>(
         .on_press(PanelMsg::FpEditorSetPadStackTab(target))
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            if let Some(style) = crate::panels::form_look::segment_cell(theme, active, hovered) {
-                return style;
-            }
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-                )),
-                _ => Some(iced::Background::Color(if active {
-                    active_bg
-                } else {
-                    inactive_bg
-                })),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: chip_border,
-                    ..iced::Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            }
+            crate::panels::form_look::segment_cell(theme, active, hovered)
         })
         .boxed()
     };

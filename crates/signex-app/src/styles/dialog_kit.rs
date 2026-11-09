@@ -8,8 +8,8 @@ use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
 use super::{
-    ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button, accent_button_rounded, danger_button,
-    ghost_button, is_graphite, outline_button, primary_button, ti, tokens,
+    ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button_rounded, danger_button, ghost_button,
+    outline_button, primary_button, ti, tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -17,8 +17,6 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// Button height: the body size times this, so it follows the type scale.
 const BUTTON_HEIGHT_EM: f32 = 2.2;
-/// Narrowest button, in body-size units, so short labels align.
-const BUTTON_MIN_WIDTH_EM: f32 = 7.5;
 /// Average glyph advance, in body-size units, for sizing a button to its label.
 const GLYPH_ADVANCE_EM: f32 = 0.62;
 
@@ -36,18 +34,16 @@ pub enum DialogButtonKind {
     Accent,
     /// A quiet action with no fill or border ("Decide later").
     Ghost,
-    /// The dismissing action of a footer (Cancel, Close, Later): Ghost on
-    /// Graphite, where it sits first in the right-aligned row, Secondary on
-    /// every other theme.
+    /// The dismissing action of a footer (Cancel, Close, Later): drawn as
+    /// Ghost, it sits first in the right-aligned row.
     Cancel,
 }
 
 impl DialogButtonKind {
-    /// The role `self` is drawn with on `tokens`' theme.
-    pub fn resolved(self, tokens: &ThemeTokens) -> Self {
+    /// The role `self` is drawn with.
+    pub fn resolved(self) -> Self {
         match self {
-            Self::Cancel if is_graphite(tokens) => Self::Ghost,
-            Self::Cancel => Self::Secondary,
+            Self::Cancel => Self::Ghost,
             other => other,
         }
     }
@@ -124,11 +120,10 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let kind = kind.resolved(tokens);
+    let kind = kind.resolved();
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
-    let graphite = is_graphite(tokens);
-    let (height, size, width) = button_metrics(label, kind, graphite);
+    let (height, size, width) = button_metrics(label, kind);
     let face = text(label.to_string())
         .size(size)
         .color(color)
@@ -145,10 +140,8 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     match kind {
         _ if disabled && kind == DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
         _ if disabled => btn.style(disabled_button(tokens)),
-        DialogButtonKind::Primary if graphite => btn.style(primary_button(tokens)),
-        DialogButtonKind::Primary => btn.style(accent_button(tokens)),
-        DialogButtonKind::Accent if graphite => btn.style(accent_button_rounded(tokens)),
-        DialogButtonKind::Accent => btn.style(accent_button(tokens)),
+        DialogButtonKind::Primary => btn.style(primary_button(tokens)),
+        DialogButtonKind::Accent => btn.style(accent_button_rounded(tokens)),
         DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
         DialogButtonKind::Secondary => btn.style(outline_button(tokens)),
         DialogButtonKind::Danger => btn.style(danger_button(tokens)),
@@ -158,36 +151,30 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     .boxed()
 }
 
-/// Horizontal label padding of a dense Graphite button (14 px; Ghost 10 px).
+/// Horizontal label padding of a dense button (14 px; Ghost 10 px).
 const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
 const DENSE_GHOST_PAD: f32 = 10.0 * 12.0 / 11.0;
 
-/// `(height, label size, width)` of a dialog button. Graphite buttons are
-/// dense: one height for every role, the width hugging the label. Other
-/// themes keep the body-size button with a minimum width so labels align.
-fn button_metrics(label: &str, kind: DialogButtonKind, graphite: bool) -> (f32, f32, f32) {
+/// `(height, label size, width)` of a dialog button. The buttons are dense:
+/// one height for every role, the width hugging the label.
+fn button_metrics(label: &str, kind: DialogButtonKind) -> (f32, f32, f32) {
     let chars = label.chars().count() as f32;
-    if graphite {
-        let size = TS.label;
-        let pad = if kind == DialogButtonKind::Ghost {
-            DENSE_GHOST_PAD
-        } else {
-            DENSE_PAD
-        };
-        let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * pad).ceil();
-        return (ChromeMetrics::DEFAULT.button, size, width);
-    }
-    let size = TS.body;
-    let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * SP.l).max(size * BUTTON_MIN_WIDTH_EM);
-    (TS.body * BUTTON_HEIGHT_EM, size, width)
+    let size = TS.label;
+    let pad = if kind == DialogButtonKind::Ghost {
+        DENSE_GHOST_PAD
+    } else {
+        DENSE_PAD
+    };
+    let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * pad).ceil();
+    (ChromeMetrics::DEFAULT.button, size, width)
 }
 
 /// Label colour of a dialog button: muted when it has no action, whatever its role.
 fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> iced::Color {
-    match kind.resolved(tokens) {
+    match kind.resolved() {
         _ if disabled => ti(tokens.text_secondary),
-        DialogButtonKind::Primary if is_graphite(tokens) => tokens::resolve(tokens).primary_ink,
-        DialogButtonKind::Primary | DialogButtonKind::Accent => tokens::on_accent(tokens),
+        DialogButtonKind::Primary => tokens::resolve(tokens).primary_ink,
+        DialogButtonKind::Accent => tokens::on_accent(tokens),
         DialogButtonKind::Secondary | DialogButtonKind::Ghost | DialogButtonKind::Cancel => {
             ti(tokens.text)
         }
@@ -237,16 +224,16 @@ pub fn dialog_footer_split<'a, M: 'a>(
         .boxed()
 }
 
-/// Height of a footer built by [`dialog_footer`]: the button plus padding.
+/// Height of the footer the base dialog sizes were measured against: a
+/// body-size button plus padding.
 pub const fn dialog_footer_height() -> f32 {
     TS.body * BUTTON_HEIGHT_EM + 2.0 * SP.l
 }
 
-/// [`dialog_footer_height`] on `tokens`' theme: Graphite buttons are the
-/// taller dense ones.
-pub fn dialog_footer_height_for(tokens: &ThemeTokens) -> f32 {
-    let (height, _, _) = button_metrics("", DialogButtonKind::Primary, is_graphite(tokens));
-    height + 2.0 * SP.l
+/// Height of a footer built by [`dialog_footer`]: the dense button plus
+/// padding.
+pub const fn dense_footer_height() -> f32 {
+    ChromeMetrics::DEFAULT.button + 2.0 * SP.l
 }
 
 #[cfg(test)]
@@ -279,47 +266,32 @@ mod tests {
         assert!(dialog_footer_height() > TS.body * BUTTON_HEIGHT_EM);
     }
 
-    /// The themed footer height is the legacy one off Graphite and the dense
-    /// button plus padding on it.
+    /// The footer height is the dense button plus padding.
     #[test]
-    fn the_footer_height_follows_the_theme_buttons() {
-        for id in ThemeId::BUILTINS {
-            let tokens = signex_types::theme::theme_tokens(*id);
-            let want = if is_graphite(&tokens) {
-                ChromeMetrics::DEFAULT.button + 2.0 * SP.l
-            } else {
-                dialog_footer_height()
-            };
-            assert_eq!(dialog_footer_height_for(&tokens), want, "{id:?}");
+    fn the_footer_height_follows_the_buttons() {
+        assert_eq!(
+            dense_footer_height(),
+            ChromeMetrics::DEFAULT.button + 2.0 * SP.l
+        );
+    }
+
+    /// Cancel is the quiet Ghost; no other role changes.
+    #[test]
+    fn cancel_is_ghost() {
+        assert_eq!(DialogButtonKind::Cancel.resolved(), DialogButtonKind::Ghost);
+        for kind in [
+            DialogButtonKind::Primary,
+            DialogButtonKind::Secondary,
+            DialogButtonKind::Danger,
+            DialogButtonKind::Accent,
+            DialogButtonKind::Ghost,
+        ] {
+            assert_eq!(kind.resolved(), kind);
         }
     }
 
-    /// Cancel is the quiet Ghost on Graphite and the outlined Secondary on
-    /// every other theme; no other role changes.
-    #[test]
-    fn cancel_is_ghost_on_graphite_and_secondary_elsewhere() {
-        for id in ThemeId::BUILTINS {
-            let tokens = signex_types::theme::theme_tokens(*id);
-            let want = if is_graphite(&tokens) {
-                DialogButtonKind::Ghost
-            } else {
-                DialogButtonKind::Secondary
-            };
-            assert_eq!(DialogButtonKind::Cancel.resolved(&tokens), want, "{id:?}");
-            for kind in [
-                DialogButtonKind::Primary,
-                DialogButtonKind::Secondary,
-                DialogButtonKind::Danger,
-                DialogButtonKind::Accent,
-                DialogButtonKind::Ghost,
-            ] {
-                assert_eq!(kind.resolved(&tokens), kind, "{id:?}");
-            }
-        }
-    }
-
-    /// Graphite footer buttons are dense: every role has the same height and
-    /// the width hugs the label. Other themes keep the minimum width.
+    /// Footer buttons are dense: every role has the same height and the
+    /// width hugs the label.
     #[test]
     fn graphite_buttons_share_one_height_and_hug_their_label() {
         for kind in [
@@ -330,17 +302,15 @@ mod tests {
             DialogButtonKind::Secondary,
         ] {
             assert_eq!(
-                button_metrics("Cancel", kind, true).0,
+                button_metrics("Cancel", kind).0,
                 ChromeMetrics::DEFAULT.button,
                 "{kind:?}"
             );
         }
-        let ok = button_metrics("OK", DialogButtonKind::Primary, true).2;
-        let long = button_metrics("New Library\u{2026}", DialogButtonKind::Primary, true).2;
+        let ok = button_metrics("OK", DialogButtonKind::Primary).2;
+        let long = button_metrics("New Library\u{2026}", DialogButtonKind::Primary).2;
         assert!(ok < long, "{ok} < {long}");
-        assert!(ok < TS.label * BUTTON_MIN_WIDTH_EM, "{ok}");
-        let legacy = button_metrics("OK", DialogButtonKind::Primary, false).2;
-        assert_eq!(legacy, TS.body * BUTTON_MIN_WIDTH_EM);
+        assert!(ok < TS.label * 7.5, "{ok}");
     }
 
     /// A button without an action never looks clickable: no fill, no hover

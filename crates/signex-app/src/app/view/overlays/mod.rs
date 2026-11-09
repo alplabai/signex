@@ -195,17 +195,13 @@ impl Signex {
     /// below the chrome strip; scoring + ranking happens in the
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
-        use crate::app::command_palette::{CommandSource, MAX_RESULTS};
-        use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
-        use iced::{Alignment, Background, Border, Color};
+        use crate::app::command_palette::MAX_RESULTS;
+        use iced::widget::{Space, column, container, scrollable, text, text_input};
+        use iced::{Background, Border, Color};
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let border_c = crate::styles::ti(tokens.border);
-        let accent_c = crate::styles::ti(tokens.accent);
-        let hover_c = crate::styles::ti(tokens.hover);
 
         // Ranked in `update` (`refresh_command_palette_results`), read here.
         let results = &self.ui_state.command_palette.results;
@@ -216,86 +212,22 @@ impl Signex {
             .selected_index
             .min(total.saturating_sub(1));
 
-        let graphite = crate::styles::is_graphite(tokens);
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
         for (display_idx, entry) in results.iter().enumerate() {
             let is_active = display_idx == selected;
-            if graphite {
-                // `results` is already grouped (see `group_for_display`), so
-                // a header goes wherever the source changes.
-                if display_idx == 0 || results[display_idx - 1].source != entry.source {
-                    let count = results.iter().filter(|e| e.source == entry.source).count();
-                    rows.push(palette::group_header(tokens, entry.source, count));
-                }
-                rows.push(palette::result_row(
-                    tokens,
-                    entry,
-                    &self.ui_state.command_palette.query,
-                    is_active,
-                    Message::CommandPalette(CommandPaletteMsg::Select(display_idx)),
-                ));
-                continue;
+            // `results` is already grouped (see `group_for_display`), so a
+            // header goes wherever the source changes.
+            if display_idx == 0 || results[display_idx - 1].source != entry.source {
+                let count = results.iter().filter(|e| e.source == entry.source).count();
+                rows.push(palette::group_header(tokens, entry.source, count));
             }
-            let row_bg = if is_active {
-                Some(Background::Color(hover_c))
-            } else {
-                None
-            };
-            let source_label = match entry.source {
-                CommandSource::Command => "Command",
-                CommandSource::Symbol => "Symbol",
-                CommandSource::Net => "Net",
-                CommandSource::Sheet => "Sheet",
-                CommandSource::File => "File",
-            };
-            let label_col = column![
-                text(entry.label.clone()).size(TS.label).color(text_c),
-                text(if entry.detail.is_empty() {
-                    String::new()
-                } else {
-                    entry.detail.clone()
-                })
-                .size(TS.caption)
-                .color(muted_c),
-            ]
-            .spacing(SP.xs)
-            .width(Length::Fill);
-            let row_inner = row![
-                label_col,
-                text(source_label).size(TS.caption).color(muted_c),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center);
-            let btn = button(row_inner)
-                .width(Length::Fill)
-                .padding([6.0, SP.l])
-                .on_press(Message::CommandPalette(CommandPaletteMsg::Select(
-                    display_idx,
-                )))
-                .style(move |_: &iced::Theme, status: button::Status| {
-                    let bg = match status {
-                        button::Status::Hovered | button::Status::Pressed => {
-                            Some(Background::Color(hover_c))
-                        }
-                        _ => row_bg,
-                    };
-                    button::Style {
-                        background: bg,
-                        border: Border {
-                            width: if is_active { 1.0 } else { 0.0 },
-                            radius: 3.0.into(),
-                            color: if is_active {
-                                accent_c
-                            } else {
-                                Color::TRANSPARENT
-                            },
-                            ..Border::default()
-                        },
-                        text_color: text_c,
-                        ..button::Style::default()
-                    }
-                });
-            rows.push(btn.boxed());
+            rows.push(palette::result_row(
+                tokens,
+                entry,
+                &self.ui_state.command_palette.query,
+                is_active,
+                Message::CommandPalette(CommandPaletteMsg::Select(display_idx)),
+            ));
         }
 
         let body: Element<'_, Message> = if total == 0 {
@@ -305,38 +237,21 @@ impl Signex {
                 .boxed()
         } else {
             let list = column(rows).spacing(SP.xs).padding(SP.s);
-            // Graphite bounds the list so the 360 px card keeps room for the
-            // search row above and the hint footer below.
+            // Bound the list so the 360 px card keeps room for the search
+            // row above and the hint footer below.
             let list_cap = 360.0 - 2.0 * (TS.body * 1.6 + 2.0 * SP.l);
-            let list = scrollable(list).height(if graphite {
-                Length::Fit.max(list_cap)
-            } else {
-                Length::Shrink
-            });
-            if graphite {
-                list.style(palette::scrollbar_style(tokens)).boxed()
-            } else {
-                list.boxed()
-            }
+            scrollable(list)
+                .height(Length::Fit.max(list_cap))
+                .style(palette::scrollbar_style(tokens))
+                .boxed()
         };
 
-        // Footer when there are more matches than we render.
-        let footer: Element<'_, Message> = if graphite && total > 0 {
+        // Footer with the hint line, and a note when there are more matches
+        // than we render.
+        let footer: Element<'_, Message> = if total > 0 {
             let more = (total > MAX_RESULTS)
                 .then(|| format!("{} more results — refine query", total - MAX_RESULTS));
             palette::hint_footer(tokens, results.get(selected), more)
-        } else if total > MAX_RESULTS {
-            container(
-                text(format!(
-                    "{} more results — refine query",
-                    total - MAX_RESULTS
-                ))
-                .size(TS.caption)
-                .color(muted_c),
-            )
-            .padding([SP.s, 14.0])
-            .width(Length::Fill)
-            .boxed()
         } else {
             Space::new().height(0).boxed()
         };
@@ -350,18 +265,16 @@ impl Signex {
         // text input at the top of the card.
         let (card_x, card_w) = if in_window {
             (16.0, WINDOW_PALETTE_WIDTH)
-        } else if graphite {
+        } else {
             let (x, _) = self.chrome_search_bar_geometry();
             let window_w = self.ui_state.window_size.0;
             let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
             (x.min((window_w - w - 16.0).max(16.0)), w)
-        } else {
-            self.chrome_search_bar_geometry()
         };
         let ink4 = crate::styles::tokens::resolve(tokens).ink4;
         let window_input: Option<Element<'_, Message>> =
             self.ui_state.command_palette.window.map(|window| {
-                let field = text_input(
+                text_input(
                     "Search files, symbols, commands…",
                     &self.ui_state.command_palette.query,
                 )
@@ -371,47 +284,23 @@ impl Signex {
                 })
                 .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
                 .size(TS.body)
-                .width(Length::Fill);
-                if graphite {
-                    field
-                        .padding(0)
-                        .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
-                            background: Background::Color(Color::TRANSPARENT),
-                            border: Border::default(),
-                            placeholder: ink4,
-                            value: text_c,
-                            selection: Color { a: 0.4, ..text_c },
-                        })
-                        .boxed()
-                } else {
-                    field.padding(SP.l).boxed()
-                }
+                .width(Length::Fill)
+                .padding(0)
+                .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
+                    background: Background::Color(Color::TRANSPARENT),
+                    border: Border::default(),
+                    placeholder: ink4,
+                    value: text_c,
+                    selection: Color { a: 0.4, ..text_c },
+                })
+                .boxed()
             });
-        let input: Element<'_, Message> = if graphite {
-            palette::search_row(tokens, &self.ui_state.command_palette.query, window_input)
-        } else {
-            window_input.unwrap_or_else(|| Space::new().height(0).boxed())
-        };
-        let graphite_card = crate::styles::modal_card(tokens);
+        let input = palette::search_row(tokens, &self.ui_state.command_palette.query, window_input);
         let card = container(column![input, body, footer])
             .width(card_w)
             .height(Length::Fit.max(360.0))
             .padding(0)
-            .style(move |theme: &iced::Theme| {
-                if graphite {
-                    return graphite_card(theme);
-                }
-                container::Style {
-                    background: Some(Background::Color(panel_bg)),
-                    border: Border {
-                        color: border_c,
-                        width: 1.0,
-                        radius: 6.0.into(),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }
-            });
+            .style(crate::styles::modal_card(tokens));
 
         let y = if in_window {
             16.0
@@ -484,12 +373,12 @@ impl Signex {
         )
         .map(Message::ActiveBar)
         .boxed();
-        let metrics = signex_widgets::active_bar::Metrics::of(&document.panel_ctx.tokens);
+        let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu, &metrics);
         // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
         // plus a small gap so the dropdown visually touches.
         let ab_y: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens)
-            + crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
+            + crate::active_bar::bar_top_margin()
             + crate::active_bar::bar_height_for(&metrics)
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.size_of_window(window_id);

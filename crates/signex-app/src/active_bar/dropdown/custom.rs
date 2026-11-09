@@ -3,7 +3,7 @@
 //! Graphite themes paint both through `super::graphite`.
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Theme, Widget};
+use iced::{Color, Element, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, RowPaint};
 
@@ -11,7 +11,6 @@ use crate::active_bar::{
     AbColors, ActiveBarAction, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
 };
 use crate::icons as ic;
-use crate::styles;
 
 use super::{dd_btn_style_f, dd_item, graphite};
 
@@ -29,36 +28,17 @@ pub(super) fn net_color_entries(
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let ac = AbColors::from_tokens(tokens);
-    let swatch_border = ac.sep;
-    let is_graphite = styles::is_graphite(tokens);
-    // The row hovers like the widget's own item rows (Graphite: ink wash,
-    // rounded; legacy: the theme hover on a square row).
+    // The row hovers like the widget's own item rows (ink wash, rounded).
     let row_paint = RowPaint::of(tokens);
     let color_item =
         |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
             // The swatch sits inside a 20×20 slot so the label column
             // lines up with the SVG-icon rows below (the shared dropdown
             // widget uses a 20-px icon column).
-            let swatch = if is_graphite {
-                container(Space::new())
-                    .width(graphite::SWATCH_SIZE)
-                    .height(graphite::SWATCH_SIZE)
-                    .style(graphite::swatch_style(tokens, color))
-            } else {
-                container(Space::new())
-                    .width(14)
-                    .height(14)
-                    .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(color)),
-                        border: Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: swatch_border,
-                            ..Border::default()
-                        },
-                        ..container::Style::default()
-                    })
-            };
+            let swatch = container(Space::new())
+                .width(graphite::SWATCH_SIZE)
+                .height(graphite::SWATCH_SIZE)
+                .style(graphite::swatch_style(tokens, color));
             let swatch_slot = container(swatch)
                 .width(20)
                 .height(20)
@@ -152,11 +132,7 @@ pub(super) fn filter_entry(
     filters: &std::collections::HashSet<SelectionFilter>,
     custom_presets: &[CustomFilterPreset],
 ) -> DropdownEntry<ActiveBarMsg> {
-    if styles::is_graphite(tokens) {
-        graphite_filter_entry(tokens, filters, custom_presets)
-    } else {
-        legacy_filter_entry(tokens, filters, custom_presets)
-    }
+    graphite_filter_entry(tokens, filters, custom_presets)
 }
 
 /// The preset's button label: its name, or "Filter N" when unnamed.
@@ -209,193 +185,4 @@ fn graphite_filter_entry(
         .spacing(SP.xs)
         .boxed(),
     )
-}
-
-/// The legacy-theme Selection Filter: square accent-edged chips and the
-/// "All - On / Off" toggle.
-fn legacy_filter_entry(
-    tokens: &ThemeTokens,
-    filters: &std::collections::HashSet<SelectionFilter>,
-    custom_presets: &[CustomFilterPreset],
-) -> DropdownEntry<ActiveBarMsg> {
-    let ac = AbColors::from_tokens(tokens);
-    // Snapshot the slice into an owned Vec, since each preset button's
-    // closure must own its label/index for the returned `Element<'static>`.
-    let custom_presets_owned: Vec<CustomFilterPreset> = custom_presets.to_vec();
-    // Altium-style tag buttons for selection filter.
-    let text_primary = ac.text;
-    let hover_c = ac.hover;
-    // Border colour matches the Properties-panel unit boxes (`seg_btn`
-    // uses `tokens.accent`); near-square corners give the chips a more
-    // "input-like" look than the old pill.
-    let chip_border = styles::ti(tokens.accent);
-    let chip_radius = 2.0_f32;
-    let all_on = filters.len() == SelectionFilter::ALL.len();
-    // Chip fills and off-state text come from the theme, so the chips
-    // read on light themes as well as dark.
-    let chip_on_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
-    let chip_off_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Faint);
-    let chip_off_text = styles::tokens::muted_text(tokens);
-    let tag = |filter: SelectionFilter, enabled: bool| -> Element<'static, ActiveBarMsg> {
-        let label = filter.label();
-        let active_bg = chip_on_bg;
-        let inactive_bg = chip_off_bg;
-        let text_on = text_primary;
-        let text_off = chip_off_text;
-        button(text(label.to_string()).size(TS.body).color(if enabled {
-            text_on
-        } else {
-            text_off
-        }))
-        .padding([SP.s, 10.0])
-        .on_press(ActiveBarMsg::ToggleFilter(filter))
-        .style(move |_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => Background::Color(hover_c),
-                _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
-            };
-            button::Style {
-                background: Some(bg),
-                border: Border {
-                    width: 1.0,
-                    radius: chip_radius.into(),
-                    color: chip_border,
-                    ..Border::default()
-                },
-                text_color: if enabled { text_on } else { text_off },
-                ..button::Style::default()
-            }
-        })
-        .boxed()
-    };
-    let all_label = if all_on { "All - On" } else { "All - Off" };
-    // All-On/Off as a real toggle button (matches chip styling).
-    let all_active_bg = chip_on_bg;
-    let all_inactive_bg = chip_off_bg;
-    let all_text_off = chip_off_text;
-    let all_toggle = button(text(all_label.to_string()).size(TS.body).color(if all_on {
-        text_primary
-    } else {
-        all_text_off
-    }))
-    .padding([SP.s, SP.l])
-    .on_press(ActiveBarMsg::ToggleAllFilters)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered => Background::Color(hover_c),
-            _ => Background::Color(if all_on {
-                all_active_bg
-            } else {
-                all_inactive_bg
-            }),
-        };
-        button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: chip_radius.into(),
-                color: chip_border,
-                ..Border::default()
-            },
-            text_color: if all_on { text_primary } else { all_text_off },
-            ..button::Style::default()
-        }
-    });
-    // Row 1 = All toggle followed by user-defined preset shortcuts
-    // (clicking one replaces the active filter set).
-    let mut top_row = iced::widget::Row::<Element<'static, ActiveBarMsg>>::new()
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center)
-        .push(all_toggle.boxed());
-    for (idx, preset) in custom_presets_owned.iter().enumerate() {
-        let label = preset_label(idx, preset);
-        let preset_btn = button(text(label).size(TS.body).color(text_primary))
-            .padding([SP.s, 10.0])
-            .on_press(ActiveBarMsg::ApplyCustomFilter(idx))
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered => Background::Color(hover_c),
-                    _ => Background::Color(chip_off_bg),
-                };
-                button::Style {
-                    background: Some(bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: chip_radius.into(),
-                        color: chip_border,
-                        ..Border::default()
-                    },
-                    text_color: text_primary,
-                    ..button::Style::default()
-                }
-            });
-        top_row = top_row.push(preset_btn.boxed());
-    }
-    // 3-row layout: row 1 = All toggle + presets. Rows 2 & 3 = 6+6 chips.
-    let filter_content: Element<'static, ActiveBarMsg> = column![
-        container(top_row).padding([SP.s, SP.m]),
-        container(
-            column![
-                row![
-                    tag(
-                        SelectionFilter::Components,
-                        filters.contains(&SelectionFilter::Components)
-                    ),
-                    tag(
-                        SelectionFilter::Wires,
-                        filters.contains(&SelectionFilter::Wires)
-                    ),
-                    tag(
-                        SelectionFilter::Buses,
-                        filters.contains(&SelectionFilter::Buses)
-                    ),
-                    tag(
-                        SelectionFilter::SheetSymbols,
-                        filters.contains(&SelectionFilter::SheetSymbols)
-                    ),
-                    tag(
-                        SelectionFilter::SheetEntries,
-                        filters.contains(&SelectionFilter::SheetEntries)
-                    ),
-                    tag(
-                        SelectionFilter::NetLabels,
-                        filters.contains(&SelectionFilter::NetLabels)
-                    ),
-                ]
-                .spacing(SP.s),
-                row![
-                    tag(
-                        SelectionFilter::Parameters,
-                        filters.contains(&SelectionFilter::Parameters)
-                    ),
-                    tag(
-                        SelectionFilter::Ports,
-                        filters.contains(&SelectionFilter::Ports)
-                    ),
-                    tag(
-                        SelectionFilter::PowerPorts,
-                        filters.contains(&SelectionFilter::PowerPorts)
-                    ),
-                    tag(
-                        SelectionFilter::Texts,
-                        filters.contains(&SelectionFilter::Texts)
-                    ),
-                    tag(
-                        SelectionFilter::DrawingObjects,
-                        filters.contains(&SelectionFilter::DrawingObjects)
-                    ),
-                    tag(
-                        SelectionFilter::Other,
-                        filters.contains(&SelectionFilter::Other)
-                    ),
-                ]
-                .spacing(SP.s),
-            ]
-            .spacing(SP.s),
-        )
-        .padding([SP.s, SP.m]),
-    ]
-    .spacing(SP.xs)
-    .boxed();
-    DropdownEntry::Custom(filter_content)
 }

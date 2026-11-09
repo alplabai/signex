@@ -305,23 +305,15 @@ impl Signex {
         // Header strip locked to `table_width` so it scrolls in
         // lockstep with the body rows when the user pans
         // horizontally.
-        let graphite = crate::styles::is_graphite(tokens);
         let sunken = crate::styles::tokens::resolve(tokens).sunken;
-        let table_header_el: Element<'_, Message> = if graphite {
-            // Graphite: the sunken header band.
-            container(header_row)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(sunken)),
-                    ..container::Style::default()
-                })
-                .width(Length::Fixed(table_width.max(100.0)))
-                .boxed()
-        } else {
-            container(header_row)
-                .style(crate::styles::toolbar_strip(tokens))
-                .width(Length::Fixed(table_width.max(100.0)))
-                .boxed()
-        };
+        // The sunken header band.
+        let table_header_el: Element<'_, Message> = container(header_row)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(sunken)),
+                ..container::Style::default()
+            })
+            .width(Length::Fixed(table_width.max(100.0)))
+            .boxed();
 
         // Display order is computed in `update` (`BomPreviewState::row_order`),
         // never here.
@@ -407,7 +399,7 @@ impl Signex {
                 let w = column_width(col_idx, c);
                 let (cell_width, truncate_at) = (Length::Fixed(w), w);
                 // Graphite sets the designator columns in the mono face.
-                let mono = graphite && matches!(c, BomColumn::Designator | BomColumn::Reference);
+                let mono = matches!(c, BomColumn::Designator | BomColumn::Reference);
                 row_inner = row_inner.push(cell(column_value(c, r), cell_width, truncate_at, mono));
                 if col_idx + 1 < preview.options.columns.len() {
                     row_inner = row_inner.push(body_divider());

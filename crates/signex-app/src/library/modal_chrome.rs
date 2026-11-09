@@ -7,13 +7,13 @@
 //! one definition built on [`crate::styles`] tokens, so a theme change
 //! reaches all of them.
 
-use iced::widget::{Space, button, container, row, text};
-use iced::{Element, Length, Widget};
+use iced::widget::{Space, container, text};
+use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split};
+use crate::styles::{DialogButtonKind, TypeScale, dialog_button, dialog_footer_split};
 
 /// Fixed widths of the Library modals that size themselves (the others
 /// take the picker / dialog default). One home so a resize is one edit.
@@ -22,22 +22,6 @@ pub(crate) const CREATE_OPTIONS_W: f32 = 480.0;
 pub(crate) const DOCUMENT_OPTIONS_W: f32 = 460.0;
 pub(crate) const EDIT_ROW_W: f32 = 720.0;
 pub(crate) const EDIT_ROW_H: f32 = 640.0;
-
-/// Header close ("x") button emitting `message` when pressed.
-pub(crate) fn close_x<'a>(
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let text_c = theme_ext::text_secondary(tokens);
-    button(
-        container(text("\u{00D7}".to_string()).size(ts.heading).color(text_c)).padding([0.0, sp.s]),
-    )
-    .on_press(message)
-    .style(crate::styles::outline_button(tokens))
-    .boxed()
-}
 
 /// What sits at the right end of a dialog header.
 enum HeaderEnd {
@@ -69,44 +53,19 @@ fn header_strip<'a>(
             HeaderEnd::Nothing | HeaderEnd::Close(_) => Space::new().height(0).boxed(),
         };
     }
-    if crate::styles::is_graphite(tokens) {
-        let (subtitle, close) = match end {
-            HeaderEnd::Nothing => (None, None),
-            HeaderEnd::Close(message) => (None, Some(message)),
-            HeaderEnd::Note(note) => (Some(note), None),
-        };
-        return crate::app::view::dialogs::graphite_header_closing(
-            title.to_string(),
-            subtitle,
-            None,
-            close,
-            crate::app::view::dialogs::DIALOG_HEADER_H,
-            tokens,
-        );
-    }
-    let mut line = row![
-        text(title.to_string())
-            .size(ts.heading)
-            .color(theme_ext::text_primary(tokens)),
-        Space::new().width(Length::Fill),
-    ]
-    .align_y(iced::Alignment::Center);
-    match end {
-        HeaderEnd::Nothing => {}
-        HeaderEnd::Close(message) => line = line.push(close_x(message, tokens)),
-        HeaderEnd::Note(note) => {
-            line = line.push(
-                text(note)
-                    .size(ts.body)
-                    .color(theme_ext::text_secondary(tokens))
-                    .boxed(),
-            );
-        }
-    }
-    container(line)
-        .padding([10, 14])
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed()
+    let (subtitle, close) = match end {
+        HeaderEnd::Nothing => (None, None),
+        HeaderEnd::Close(message) => (None, Some(message)),
+        HeaderEnd::Note(note) => (Some(note), None),
+    };
+    crate::app::view::dialogs::graphite_header_closing(
+        title.to_string(),
+        subtitle,
+        None,
+        close,
+        crate::app::view::dialogs::DIALOG_HEADER_H,
+        tokens,
+    )
 }
 
 /// Header of a Library dialog: title and a close button, or the empty slot
@@ -216,7 +175,6 @@ mod tests {
     fn chrome_builds_for_every_theme() {
         for id in ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(*id);
-            let _ = close_x(LibraryMessage::ClosePicker, &tokens);
             for windowed in [false, true] {
                 let _ = header("Title", LibraryMessage::ClosePicker, windowed, &tokens);
                 let _ = header_with_note("Title", "note".into(), windowed, &tokens);

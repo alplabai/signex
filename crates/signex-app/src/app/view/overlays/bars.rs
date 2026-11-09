@@ -264,9 +264,7 @@ impl Signex {
         .boxed();
         Some(
             column![
-                iced::widget::Space::new().height(
-                    y_offset + crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
-                ),
+                iced::widget::Space::new().height(y_offset + crate::active_bar::bar_top_margin()),
                 container(super::scroll_guard(bar))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
@@ -290,7 +288,7 @@ impl Signex {
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
-        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens);
+        let bar_margin = crate::active_bar::bar_top_margin();
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -457,7 +455,7 @@ impl Signex {
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
         // Below the editor's own toolbar strip so the bar never covers it.
-        let bar_margin = crate::active_bar::bar_top_margin(&document.panel_ctx.tokens)
+        let bar_margin = crate::active_bar::bar_top_margin()
             + crate::active_bar::symbol_editor_bar_drop(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
@@ -606,9 +604,7 @@ impl Signex {
             return Vec::new();
         }
         let tokens = &document.panel_ctx.tokens;
-        let graphite = crate::styles::is_graphite(tokens);
         let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
         let has_sch = document.panel_ctx.has_schematic;
         let has_pcb = document.panel_ctx.has_pcb;
         // A panel counts as "open" if it lives in any dock region,
@@ -623,11 +619,7 @@ impl Signex {
                 // already somewhere on screen. Clicking an open panel
                 // still fires OpenPanel — the dock brings it forward.
                 let check = if is_open(kind) { "\u{2713}" } else { "" };
-                let check_c = if graphite {
-                    crate::status_bar::check_ink(tokens)
-                } else {
-                    text_muted
-                };
+                let check_c = crate::status_bar::check_ink(tokens);
                 let row_btn = iced::widget::button(
                     iced::widget::row![
                         iced::widget::container(
@@ -644,18 +636,11 @@ impl Signex {
                 )
                 .width(Length::Fill)
                 .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)));
-                if graphite {
-                    row_btn
-                        .padding([0.0, SP.m])
-                        .height(crate::status_bar::popup_row_height())
-                        .style(crate::status_bar::popup_row(tokens))
-                        .boxed()
-                } else {
-                    row_btn
-                        .padding([SP.s, SP.l])
-                        .style(crate::styles::menu_item(tokens))
-                        .boxed()
-                }
+                row_btn
+                    .padding([0.0, SP.m])
+                    .height(crate::status_bar::popup_row_height())
+                    .style(crate::status_bar::popup_row(tokens))
+                    .boxed()
             })
             .collect();
 
@@ -669,34 +654,18 @@ impl Signex {
             .count();
         // Anchor the popup directly above the "Panels" button in the
         // bottom-right of the status bar, its bottom edge just above the bar.
-        let (popup, left, top) = if graphite {
-            let popup =
-                container(column(panel_items).spacing(0).width(
-                    crate::status_bar::POPUP_WIDTH - 2.0 * crate::status_bar::POPUP_PADDING,
-                ))
-                .padding(crate::status_bar::POPUP_PADDING)
-                .style(crate::status_bar::popup(tokens));
-            let popup_w = crate::status_bar::POPUP_WIDTH;
-            let popup_h = crate::status_bar::popup_height(visible_rows);
-            let status_h = crate::status_bar::status_bar_height(tokens);
-            (
-                popup,
-                (ww - popup_w - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0),
-                (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0),
-            )
-        } else {
-            let popup = container(column(panel_items).spacing(0).width(210))
-                .padding([6, 0])
-                .style(crate::styles::context_menu(tokens));
-            // 210 px wide; 22 px per row plus 12 px of padding; 26 px
-            // clears the status bar.
-            let popup_h = visible_rows as f32 * 22.0 + 12.0;
-            (
-                popup,
-                (ww - 210.0 - 10.0).max(0.0),
-                (wh - popup_h - 26.0).max(0.0),
-            )
-        };
+        let popup = container(
+            column(panel_items)
+                .spacing(0)
+                .width(crate::status_bar::POPUP_WIDTH - 2.0 * crate::status_bar::POPUP_PADDING),
+        )
+        .padding(crate::status_bar::POPUP_PADDING)
+        .style(crate::status_bar::popup(tokens));
+        let popup_w = crate::status_bar::POPUP_WIDTH;
+        let popup_h = crate::status_bar::popup_height(visible_rows);
+        let status_h = crate::status_bar::status_bar_height(tokens);
+        let left = (ww - popup_w - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
+        let top = (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0);
         vec![
             Self::dismiss_layer(Message::Overlay(OverlayMsg::TogglePanelList)),
             super::super::translate::Translate::new(popup.boxed(), (left, top)).boxed(),

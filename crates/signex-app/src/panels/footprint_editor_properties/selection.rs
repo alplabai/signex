@@ -28,8 +28,6 @@ pub(super) fn view_selection<'a>(
     fp: &'a FootprintEditorPanelContext,
     mode_label: &str,
     palette: PanelPalette,
-    custom_filter_presets: Option<Vec<crate::active_bar::CustomFilterPreset>>,
-    active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
@@ -37,7 +35,6 @@ pub(super) fn view_selection<'a>(
         primary,
         border: border_c,
         input_bg,
-        input_bdr,
         panel_bg,
         ..
     } = palette;
@@ -68,7 +65,6 @@ pub(super) fn view_selection<'a>(
                 col,
                 muted,
                 input_bg,
-                input_bdr,
                 "Position",
                 format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
             );
@@ -94,20 +90,12 @@ pub(super) fn view_selection<'a>(
                 .boxed(),
             );
             if !is_section_collapsed("fp_sketch_entity", collapsed_sections) {
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                    "Kind",
-                    ent.kind_label.into(),
-                );
+                col = props_kv_row(col, muted, input_bg, "Kind", ent.kind_label.into());
                 if let Some([x, y]) = ent.position_mm {
                     col = props_kv_row(
                         col,
                         muted,
                         input_bg,
-                        input_bdr,
                         "Position",
                         format!("({x:.3}, {y:.3}) mm"),
                     );
@@ -116,7 +104,6 @@ pub(super) fn view_selection<'a>(
                     col,
                     muted,
                     input_bg,
-                    input_bdr,
                     "Construction",
                     if ent.construction {
                         "yes".into()
@@ -128,7 +115,6 @@ pub(super) fn view_selection<'a>(
                     col,
                     muted,
                     input_bg,
-                    input_bdr,
                     "Attached constraints",
                     ent.attached_constraint_count.to_string(),
                 );
@@ -145,8 +131,9 @@ pub(super) fn view_selection<'a>(
                         DofColor::Over => ("Over-constrained", palette.dof.over),
                     };
                     let c = look.ink;
-                    let chip: Element<'a, PanelMsg> = match look.fill {
-                        Some(fill) => container(text(label).size(TS.caption).color(c))
+                    let fill = look.fill;
+                    let chip: Element<'a, PanelMsg> =
+                        container(text(label).size(TS.caption).color(c))
                             .padding([2.0, SP.m])
                             .style(move |_: &iced::Theme| iced::widget::container::Style {
                                 background: Some(iced::Background::Color(fill)),
@@ -156,9 +143,7 @@ pub(super) fn view_selection<'a>(
                                 },
                                 ..iced::widget::container::Style::default()
                             })
-                            .boxed(),
-                        None => text(label).size(TS.caption).color(c).boxed(),
-                    };
+                            .boxed();
                     col = col.push(
                         container(
                             row![
@@ -246,9 +231,9 @@ pub(super) fn view_selection<'a>(
 
                 // v0.16.4 — role sub-forms. Render when the
                 // matching `*Attr` is set on the selected entity.
-                col = render_pour_subform(col, fp, id, muted, primary, border_c);
+                col = render_pour_subform(col, fp, id, muted, primary);
                 col = render_keepout_subform(col, fp, id, muted, primary, border_c, panel_bg);
-                col = render_cutout_subform(col, fp, id, muted, primary, border_c, panel_bg);
+                col = render_cutout_subform(col, fp, id, muted, primary, panel_bg);
                 col = render_sketch_pad_subform(
                     col,
                     fp,
@@ -280,22 +265,8 @@ pub(super) fn view_selection<'a>(
                     .boxed(),
                 );
                 if !is_section_collapsed("fp_silk_graphic", collapsed_sections) {
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Kind",
-                        silk.kind_label.into(),
-                    );
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Index",
-                        silk.idx.to_string(),
-                    );
+                    col = props_kv_row(col, muted, input_bg, "Kind", silk.kind_label.into());
+                    col = props_kv_row(col, muted, input_bg, "Index", silk.idx.to_string());
 
                     if silk.from_sketch {
                         // #1718: a baked entry is the sketch's; Pads mode
@@ -311,7 +282,7 @@ pub(super) fn view_selection<'a>(
                             .boxed(),
                         );
                     } else {
-                        col = silk_geometry_rows(col, &silk.kind, muted, primary, border_c);
+                        col = silk_geometry_rows(col, &silk.kind, muted);
 
                         // Stroke width (all kinds).
                         col = col.push(pad_input_row_w(
@@ -321,8 +292,6 @@ pub(super) fn view_selection<'a>(
                             format!("{:.3}", silk.stroke_width_mm),
                             PanelMsg::FpEditorSetSilkStrokeWidth,
                             muted,
-                            primary,
-                            border_c,
                         ));
                         // Filled flag (only meaningful for closed shapes;
                         // surfacing for all so the user can flip it without
@@ -359,21 +328,9 @@ pub(super) fn view_selection<'a>(
                 // a "Custom..." modal launcher for advanced presets.
                 // Pill styling matches the schematic Properties panel's
                 // `preset_chip` / `tag_btn` chrome.
-                // v0.13 — flat Selection Filter pill grid removed
-                // (redundant with Custom Selection Filters below + the
-                // active bar's Filter dropdown). The Custom presets
-                // section is the single Properties-panel surface.
-                if let Some(custom_filter_presets) = custom_filter_presets {
-                    col = col.push(
-                        super::super::view_custom_selection_filters_section(
-                            custom_filter_presets,
-                            active_custom_filter_tab,
-                            collapsed_sections,
-                            palette,
-                        )
-                        .boxed(),
-                    );
-                }
+                // The footprint sheet starts at the footprint itself (no
+                // presets block); they stay reachable from the Active Bar's
+                // Filter menu.
                 col = col.push(
                     collapsible_section_header(
                         "fp_footprint",
@@ -434,29 +391,14 @@ pub(super) fn view_selection<'a>(
                         muted,
                         PanelMsg::FpEditorSetFootprintHeight,
                     ));
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Version",
-                        fp.version.clone(),
-                    );
-                    col = props_kv_row(col, muted, input_bg, input_bdr, "Mode", mode_label.into());
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Pads",
-                        fp.pad_count.to_string(),
-                    );
+                    col = props_kv_row(col, muted, input_bg, "Version", fp.version.clone());
+                    col = props_kv_row(col, muted, input_bg, "Mode", mode_label.into());
+                    col = props_kv_row(col, muted, input_bg, "Pads", fp.pad_count.to_string());
                     if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
                         col = props_kv_row(
                             col,
                             muted,
                             input_bg,
-                            input_bdr,
                             "Sketch entities",
                             fp.sketch_entity_count.to_string(),
                         );
@@ -464,7 +406,6 @@ pub(super) fn view_selection<'a>(
                             col,
                             muted,
                             input_bg,
-                            input_bdr,
                             "Constraints",
                             fp.sketch_constraint_count.to_string(),
                         );

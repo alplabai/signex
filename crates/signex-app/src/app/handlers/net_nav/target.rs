@@ -160,14 +160,11 @@ impl Signex {
 
     /// The object under `(x, y)` on the focused sheet.
     pub(crate) fn item_hit_at(&self, x: f64, y: f64) -> Option<SelectedItem> {
-        let canvas = self.interaction_state.active_canvas();
-        let snapshot = canvas.active_snapshot()?;
-        crate::schematic_runtime::hit_test::hit_test_styled(
-            snapshot,
-            &canvas.designators,
+        self.interaction_state.active_canvas().hit_item_at(
             x,
             y,
             self.active_wire_widths(),
+            self.active_class_revision(),
         )
     }
 

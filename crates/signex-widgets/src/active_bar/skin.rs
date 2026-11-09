@@ -1,8 +1,6 @@
 //! Graphite look of the Active Bar and its dropdown panel.
 //!
-//! A theme that sets any extended token is a Graphite theme (the same
-//! test as `signex-app`'s `is_graphite`); every other theme gets `None`
-//! and keeps the legacy paint. Paint only: the slot widths, padding and
+//! Paint only: the slot widths, padding and
 //! spacing come from [`super::Metrics`], which the app's hit-test reads too.
 
 use iced::{Color, Shadow, Vector};
@@ -42,14 +40,11 @@ pub(crate) struct Skin {
 }
 
 impl Skin {
-    /// The Graphite skin for `tokens`, or `None` for a legacy theme.
-    pub fn of(tokens: &ThemeTokens) -> Option<Self> {
+    /// The Graphite skin for `tokens`.
+    pub fn of(tokens: &ThemeTokens) -> Self {
         let e = &tokens.extended;
-        if e.is_empty() {
-            return None;
-        }
         let ink = text_primary(tokens);
-        Some(Self {
+        Self {
             fill: e
                 .raised
                 .as_ref()
@@ -83,6 +78,6 @@ impl Skin {
                 .ink3
                 .as_ref()
                 .map_or_else(|| text_secondary(tokens), to_color),
-        })
+        }
     }
 }

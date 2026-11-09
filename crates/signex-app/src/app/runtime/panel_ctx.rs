@@ -34,9 +34,6 @@ impl Signex {
 
     /// The active Component editor tab's row, for the Graphite Properties dock.
     fn compute_component_sheet(&self) -> Option<crate::panels::ComponentSheet> {
-        if !crate::styles::is_graphite(&self.document_state.panel_ctx.tokens) {
-            return None;
-        }
         let tab = self
             .document_state
             .tabs

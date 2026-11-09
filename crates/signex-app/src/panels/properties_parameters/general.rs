@@ -17,29 +17,6 @@ use signex_types::schematic::{SheetOrientation, SheetSize};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Custom Selection Filters collapsible section — tabbed editor for up to
-/// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
-/// `view_properties_general` so the schematic Properties panel and the
-/// Footprint editor's Properties panel render the EXACT same widget.
-pub fn view_custom_selection_filters_section<'a>(
-    presets: Vec<crate::active_bar::CustomFilterPreset>,
-    active_custom_filter_tab: usize,
-    collapsed_sections: &'a CollapsedSections,
-    palette: PanelPalette,
-) -> Column<Element<'a, PanelMsg>> {
-    Column::new().spacing(0).width(Length::Fill).push(
-        collapsible_section(
-            "prop_sel_filter",
-            "Custom Selection Filters",
-            collapsed_sections,
-            palette.primary,
-            palette.border,
-            move || selection_filters_body(presets, active_custom_filter_tab, palette),
-        )
-        .boxed(),
-    )
-}
-
 /// The section on the Graphite section chrome.
 fn selection_filters_section_for<'a>(
     ctx: &'a PanelContext,
@@ -85,10 +62,7 @@ fn selection_filters_body<'a>(
                 iced::widget::button(text("+ Add Filter").size(TS.body))
                     .padding([SP.s, 10.0])
                     .on_press(PanelMsg::AddCustomFilterPreset)
-                    .style(move |theme: &Theme, status| {
-                        form_look::ghost_button(theme, status)
-                            .unwrap_or_else(|| add_filter_button_style(theme, status, primary_c))
-                    }),
+                    .style(form_look::ghost_button),
             )
             .padding([SP.s, SP.m])
             .boxed(),
@@ -111,10 +85,7 @@ fn selection_filters_body<'a>(
             iced::widget::button(text("+").size(TS.label).color(primary_c))
                 .padding([3, 10])
                 .on_press(PanelMsg::AddCustomFilterPreset)
-                .style(move |theme: &Theme, status| {
-                    form_look::ghost_button(theme, status)
-                        .unwrap_or_else(|| iced::widget::button::primary(theme, status))
-                })
+                .style(form_look::ghost_button)
                 .boxed(),
         );
     }
@@ -133,10 +104,7 @@ fn selection_filters_body<'a>(
         iced::widget::button(text("Delete").size(TS.body).color(primary_c))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
-            .style(move |theme: &Theme, status| {
-                form_look::ghost_button(theme, status)
-                    .unwrap_or_else(|| iced::widget::button::primary(theme, status))
-            })
+            .style(form_look::ghost_button)
             .boxed(),
     ]
     .spacing(SP.s)
@@ -202,7 +170,7 @@ pub fn view_properties_general<'a>(
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
                         Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_label("Units", muted));
+                    c = c.push(form_label("Units"));
                     c = c.push(
                         container(
                             row![
@@ -316,7 +284,7 @@ pub fn view_properties_general<'a>(
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
                         Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_label("Formatting and Size", muted));
+                    c = c.push(form_label("Formatting and Size"));
                     c = c.push(
                         container(
                             row![
@@ -429,7 +397,7 @@ pub fn view_properties_general<'a>(
                             .padding([3.0, SP.m])
                             .boxed(),
                     );
-                    c = c.push(form_label("Border and Zones", muted));
+                    c = c.push(form_label("Border and Zones"));
                     c = c.push(form_check_row(
                         "Show Border",
                         sheet_frame.show_border,
@@ -472,7 +440,7 @@ pub fn view_properties_general<'a>(
                         PanelMsg::SetPageOrigin,
                         label,
                     ));
-                    c = c.push(form_label("Text", muted));
+                    c = c.push(form_label("Text"));
                     c = c.push(crate::panels::element_properties::font_family_row(
                         "Default Font",
                         document_font.as_deref(),
@@ -579,8 +547,6 @@ pub fn props_tab_btn(
     msg: PanelMsg,
     text_active: Color,
     text_inactive: Color,
-    hover_bg: Color,
-    border_c: Color,
 ) -> Element<'static, PanelMsg> {
     let text_c = if active { text_active } else { text_inactive };
     iced::widget::button(text(label.to_string()).size(TS.body).color(text_c))
@@ -588,35 +554,15 @@ pub fn props_tab_btn(
         .on_press(msg)
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
             let hover = matches!(status, iced::widget::button::Status::Hovered);
-            if let Some(style) = form_look::tab_chip(theme, active, hover) {
-                return style;
-            }
-            iced::widget::button::Style {
-                background: if active || hover {
-                    Some(Background::Color(hover_bg))
-                } else {
-                    None
-                },
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border_c,
-                    ..Default::default()
-                },
-                ..iced::widget::button::Style::default()
-            }
+            form_look::tab_chip(theme, active, hover)
         })
         .boxed()
 }
 
 /// Graphite filter chip: accent-soft fill when on, hairline outline when
-/// off, radius 7. `None` on other themes.
-fn graphite_filter_chip(
-    theme: &Theme,
-    on: bool,
-    hovered: bool,
-) -> Option<iced::widget::button::Style> {
-    let l = form_look::FormLook::of(theme)?;
+/// off, radius 7.
+fn graphite_filter_chip(theme: &Theme, on: bool, hovered: bool) -> iced::widget::button::Style {
+    let l = form_look::FormLook::of(theme);
     let fill = if on {
         Some(Background::Color(l.accent_soft))
     } else if hovered {
@@ -624,7 +570,7 @@ fn graphite_filter_chip(
     } else {
         None
     };
-    Some(iced::widget::button::Style {
+    iced::widget::button::Style {
         background: fill,
         text_color: if on { l.ink } else { l.ink3 },
         border: Border {
@@ -634,7 +580,7 @@ fn graphite_filter_chip(
             ..Border::default()
         },
         ..iced::widget::button::Style::default()
-    })
+    }
 }
 
 /// Label of a filter tab or chip: the Graphite ink pair resolved from the theme.
@@ -642,7 +588,10 @@ fn chip_label<'a>(label: String, on: bool) -> iced::widget::Text<'a> {
     text(label)
         .size(TS.body)
         .style(move |theme: &Theme| iced::widget::text::Style {
-            color: form_look::FormLook::of(theme).map(|l| if on { l.ink } else { l.ink3 }),
+            color: {
+                let l = form_look::FormLook::of(theme);
+                Some(if on { l.ink } else { l.ink3 })
+            },
             ..Default::default()
         })
 }
@@ -661,7 +610,6 @@ pub fn custom_filter_tab(label: String, active: bool, idx: usize) -> Element<'st
                 active,
                 matches!(status, iced::widget::button::Status::Hovered),
             )
-            .unwrap_or_default()
         })
         .boxed()
 }
@@ -686,47 +634,8 @@ pub fn preset_chip(
             enabled,
             matches!(status, iced::widget::button::Status::Hovered),
         )
-        .unwrap_or_default()
     })
     .boxed()
-}
-
-/// Primary-fill button whose label keeps `preferred` text where it is
-/// readable on the fill the theme paints behind it.
-pub(crate) fn add_filter_button_style(
-    theme: &Theme,
-    status: iced::widget::button::Status,
-    preferred: Color,
-) -> iced::widget::button::Style {
-    use crate::styles::tokens::{UNREADABLE_CONTRAST, contrast_ratio};
-    use iced::widget::button::Status;
-    let mut style = iced::widget::button::primary(theme, status);
-    // One label for every state, so it cannot flip on hover: `preferred`
-    // when it is visible on all three fills, else white or black, whichever
-    // reads better on the weakest fill.
-    let fills: Vec<Color> = [Status::Active, Status::Hovered, Status::Pressed]
-        .into_iter()
-        .filter_map(
-            |s| match iced::widget::button::primary(theme, s).background {
-                Some(Background::Color(fill)) => Some(fill),
-                _ => None,
-            },
-        )
-        .collect();
-    let worst = |label: Color| {
-        fills
-            .iter()
-            .map(|fill| contrast_ratio(label, *fill))
-            .fold(f32::INFINITY, f32::min)
-    };
-    style.text_color = if worst(preferred) >= UNREADABLE_CONTRAST {
-        preferred
-    } else if worst(Color::WHITE) >= worst(Color::BLACK) {
-        Color::WHITE
-    } else {
-        Color::BLACK
-    };
-    style
 }
 
 /// Label colour of a segmented-button cell: the active cell sits on
@@ -765,7 +674,7 @@ pub fn seg_btn<'a>(
     .on_press(msg)
     .style(move |theme: &Theme, status: iced::widget::button::Status| {
         let hovered = matches!(status, iced::widget::button::Status::Hovered);
-        form_look::segment_cell(theme, active, hovered && !active).unwrap_or_default()
+        form_look::segment_cell(theme, active, hovered && !active)
     })
     .boxed()
 }

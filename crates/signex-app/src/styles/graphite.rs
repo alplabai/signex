@@ -1,6 +1,5 @@
 //! Graphite surface styles: shadow, pill, key cap, section label, card,
-//! field and the 1 px splitter. Legacy themes keep their old look; the
-//! shared helpers branch on [`is_graphite`], the rest are opt-in.
+//! field and the 1 px splitter.
 
 use iced::widget::{container, text};
 use iced::{Background, Border, Color, Shadow, Theme, Vector};
@@ -10,30 +9,9 @@ use super::radii::Radii;
 use super::ti;
 use super::tokens::resolve;
 
-/// Whether `tokens` belong to a Graphite theme (it sets extended tokens).
-/// Every theme is Graphite now; the `false` branches stay until the
-/// cleanup in `docs/DECISIONS.md` ("Graphite-only themes").
-pub fn is_graphite(tokens: &ThemeTokens) -> bool {
-    !tokens.extended.is_empty()
-}
-
-/// Tokens with no extended set: no theme produces them any more, but they
-/// still drive the non-Graphite branches, so tests pin those branches with
-/// this fixture until the branches are removed.
-#[cfg(test)]
-pub(crate) fn legacy_tokens_fixture() -> ThemeTokens {
-    ThemeTokens {
-        extended: signex_types::theme::ExtendedTokens::NONE,
-        ..signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark)
-    }
-}
-
-/// Shadow of a floating surface. Graphite: offset (0, 6), blur 20, the
-/// theme's shadow token. Any other theme: `legacy`, unchanged.
-pub fn floating_shadow(tokens: &ThemeTokens, legacy: Shadow) -> Shadow {
-    if !is_graphite(tokens) {
-        return legacy;
-    }
+/// Shadow of a floating surface: offset (0, 6), blur 20, the theme's
+/// shadow token.
+pub fn floating_shadow(tokens: &ThemeTokens) -> Shadow {
     Shadow {
         color: resolve(tokens).shadow,
         offset: Vector::new(0.0, 6.0),
@@ -148,22 +126,15 @@ pub fn field(tokens: &ThemeTokens, focused: bool) -> impl Fn(&Theme) -> containe
 
 /// Dock splitter hit area. Graphite: transparent with a 1 px line (the
 /// `border` colour) on the leading edge, left for a vertical bar and top for
-/// a horizontal one. Any other theme: the old filled border colour.
+/// a horizontal one.
 /// `horizontal` is the flag of `view_resize_handle`: a vertical bar that
 /// resizes horizontally.
 pub fn resize_handle_edge(
     tokens: &ThemeTokens,
     horizontal: bool,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
-    let graphite = is_graphite(tokens);
     let line = ti(tokens.border);
     move |_| {
-        if !graphite {
-            return container::Style {
-                background: Some(Background::Color(line)),
-                ..container::Style::default()
-            };
-        }
         let edge = iced::border::Side::default().width(1.0);
         let mut border = Border {
             color: line,

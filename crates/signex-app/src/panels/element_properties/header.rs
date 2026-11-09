@@ -1,28 +1,25 @@
 //! The header row of the single-selection Properties: the kind of the
-//! selected object. On Graphite a placed part reads "Component" with its
-//! description beside it; every other object, and every legacy theme, shows
-//! the engine's type name.
+//! selected object. A placed part reads "Component" with its description
+//! beside it; every other object shows the engine's type name.
 
 use super::super::*;
 use crate::styles::tokens::resolve;
-use crate::styles::{Spacing, TypeScale, is_graphite};
+use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// The title a placed part's header shows on Graphite.
+/// The title a placed part's header shows.
 pub(super) const COMPONENT_TITLE: &str = "Component";
 
-/// Title and the muted line beside it. A placed part on Graphite is a
-/// "Component" with its description; anything else keeps `elem_type`
-/// alone.
+/// Title and the muted line beside it. A placed part is a "Component" with
+/// its description; anything else keeps `elem_type` alone.
 pub(super) fn header_text<'s>(
     elem_type: &'s str,
     is_placed_part: bool,
     description: &'s str,
-    graphite: bool,
 ) -> (&'s str, Option<&'s str>) {
-    if graphite && is_placed_part {
+    if is_placed_part {
         let line = description.trim();
         (COMPONENT_TITLE, (!line.is_empty()).then_some(line))
     } else {
@@ -39,14 +36,7 @@ pub(super) fn selection_header<'a>(
     description: &str,
     primary: Color,
 ) -> Element<'a, PanelMsg> {
-    let graphite = is_graphite(&ctx.tokens);
-    let (title, line) = header_text(elem_type, is_placed_part, description, graphite);
-    if !graphite {
-        return container(text(title.to_owned()).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed();
-    }
+    let (title, line) = header_text(elem_type, is_placed_part, description);
     let ink3 = resolve(&ctx.tokens).ink3;
     let mut header = iced::widget::Row::<Element<'a, PanelMsg>>::new()
         .spacing(SP.m)
@@ -84,21 +74,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_placed_part_on_graphite_is_a_component_with_its_description() {
+    fn a_placed_part_is_a_component_with_its_description() {
         assert_eq!(
-            header_text("Symbol", true, "Resistor (IEC rectangle). ", true),
+            header_text("Symbol", true, "Resistor (IEC rectangle). "),
             ("Component", Some("Resistor (IEC rectangle)."))
         );
     }
 
     #[test]
     fn a_part_without_a_description_shows_only_the_title() {
-        assert_eq!(header_text("Symbol", true, "  ", true), ("Component", None));
+        assert_eq!(header_text("Symbol", true, "  "), ("Component", None));
     }
 
     #[test]
-    fn other_objects_and_legacy_themes_keep_the_type_name() {
-        assert_eq!(header_text("Wire", false, "", true), ("Wire", None));
-        assert_eq!(header_text("Symbol", true, "R", false), ("Symbol", None));
+    fn other_objects_keep_the_type_name() {
+        assert_eq!(header_text("Wire", false, ""), ("Wire", None));
     }
 }

@@ -120,7 +120,7 @@ fn a_pinch_as_ctrl_wheel_zooms_the_canvas() {
 fn bar_middle_y(app: &Signex) -> f32 {
     let m = crate::active_bar::metrics_for(true);
     app.canvas_bounds().y
-        + crate::active_bar::bar_top_margin(&app.document_state.panel_ctx.tokens)
+        + crate::active_bar::bar_top_margin()
         + crate::active_bar::bar_height_for(&m) / 2.0
 }
 

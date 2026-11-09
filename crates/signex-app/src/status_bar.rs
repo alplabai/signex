@@ -1,24 +1,12 @@
 //! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
 
-use iced::widget::{Widget, button, container, row, space, text};
-use iced::{Element, Length};
+use iced::Element;
 use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::{StatusBarRequest, Tool};
-use crate::styles::{self, Spacing, TypeScale};
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
-
-pub const STATUS_BAR_HORIZONTAL_PADDING: f32 = SP.m;
-
-/// Height of the bar: the tallest row item is a button holding one `body`
-/// line (iced's default relative line height, `LINE_HEIGHT`) plus 1 px padding above
-/// and below, inside the container's vertical `SP.xs` padding. A layout
-/// probe in `canvas_region` ties it to the laid-out bar.
-pub const STATUS_BAR_HEIGHT: f32 = TS.body * crate::styles::LINE_HEIGHT + 2.0 + 2.0 * SP.xs;
+use crate::styles;
 
 mod graphite;
 pub use graphite::{
@@ -26,14 +14,10 @@ pub use graphite::{
     popup_height, popup_row, popup_row_height,
 };
 
-/// Height of the status bar under `tokens`: Graphite is a fixed band from
-/// [`styles::ChromeMetrics`], any other theme fits its content.
-pub fn status_bar_height(tokens: &ThemeTokens) -> f32 {
-    if styles::is_graphite(tokens) {
-        styles::ChromeMetrics::DEFAULT.status
-    } else {
-        STATUS_BAR_HEIGHT
-    }
+/// Height of the status bar: a fixed band from [`styles::ChromeMetrics`].
+/// A layout probe in `canvas_region` ties it to the laid-out bar.
+pub fn status_bar_height(_tokens: &ThemeTokens) -> f32 {
+    styles::ChromeMetrics::DEFAULT.status
 }
 
 /// Everything the status bar shows, for the Graphite layout.
@@ -110,139 +94,21 @@ pub fn view<'a>(
     altium_import: Option<&str>,
     activity: Option<&str>,
 ) -> Element<'a, StatusBarRequest> {
-    if styles::is_graphite(tokens) {
-        return graphite::view(
-            &Readout {
-                x,
-                y,
-                grid_visible,
-                snap_enabled,
-                zoom,
-                unit,
-                tool: format!("{tool}"),
-                grid_size_mm,
-                selection: selection_summary(selected),
-                pending_git_commits,
-                altium_import,
-                activity,
-            },
-            tokens,
-        );
-    }
-    let coord_text = match unit {
-        Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
-        Unit::Mil => format!("X:{:.1} Y:{:.1}", x / 0.0254, y / 0.0254),
-        Unit::Inch => format!("X:{:.4} Y:{:.4}", x / 25.4, y / 25.4),
-        Unit::Micrometer => format!("X:{:.0} Y:{:.0}", x * 1000.0, y * 1000.0),
-    };
-
-    let grid_text = if grid_visible {
-        format!("{grid_size_mm:.3}mm")
-    } else {
-        "OFF".to_string()
-    };
-
-    let snap_label = if snap_enabled { "Snap" } else { "Free" };
-    let border_c = styles::ti(tokens.border);
-    let text_c = styles::ti(tokens.text);
-    let muted_c = styles::ti(tokens.text_secondary);
-
-    let sep = move || text("|").size(TS.caption).color(border_c);
-    let lbl = move |s: String| text(s).size(TS.body).color(text_c);
-    let dim = move |s: &'static str| text(s).size(TS.body).color(muted_c);
-
-    let mut bar = row![
-        lbl(coord_text),
-        sep(),
-        dim("Grid:"),
-        button(text(grid_text).size(TS.body).color(text_c))
-            .padding([1.0, SP.s])
-            .style(button::text)
-            .on_press(StatusBarRequest::ToggleGrid),
-        sep(),
-        button(text(snap_label).size(TS.body).color(text_c))
-            .padding([1.0, SP.s])
-            .style(button::text)
-            .on_press(StatusBarRequest::ToggleSnap),
-        sep(),
-        dim("E-Snap"),
-        sep(),
-        lbl(format!("{tool}")),
-    ];
-    // What the active tool wants said: the Measure prompt or result (#1256),
-    // the drag behaviour (#1266).
-    if let Some(activity) = activity {
-        bar = bar.push(sep().boxed());
-        bar = bar.push(
-            text(activity.to_owned())
-                .size(TS.body)
-                .color(muted_c)
-                .boxed(),
-        );
-    }
-    if let Some(summary) = selection_summary(selected) {
-        bar = bar.push(sep().boxed());
-        bar = bar.push(
-            button(text(summary).size(TS.body).color(text_c))
-                .padding([1.0, SP.s])
-                .style(button::text)
-                .on_press(StatusBarRequest::OpenPropertiesForSelection)
-                .boxed(),
-        );
-    }
-    // v0.23 — async git commit "Saving…" pill. Renders only when at
-    // least one commit is in flight so it doesn't shout for users
-    // with enable_git off.
-    if pending_git_commits > 0 {
-        let label = if pending_git_commits == 1 {
-            "Saving…".to_string()
-        } else {
-            format!("Saving {pending_git_commits}…")
-        };
-        bar = bar.push(sep().boxed());
-        bar = bar.push(text(label).size(TS.body).color(muted_c).boxed());
-    }
-    // A running Altium import is shown until it finishes; clicking it
-    // cancels (#1123).
-    if let Some(name) = altium_import {
-        bar = bar.push(sep().boxed());
-        bar = bar.push(
-            button(
-                text(format!("Importing {name}… ✕"))
-                    .size(TS.body)
-                    .color(text_c),
-            )
-            .padding([1.0, SP.s])
-            .style(button::text)
-            .on_press(StatusBarRequest::CancelAltiumImport)
-            .boxed(),
-        );
-    }
-    let bar = bar
-        .push(space::horizontal().boxed())
-        .push(lbl(format!("{zoom:.0}%")).boxed())
-        .push(sep().boxed())
-        .push(
-            button(text(format!("{unit}")).size(TS.body).color(text_c))
-                .padding([1.0, SP.s])
-                .style(button::text)
-                .on_press(StatusBarRequest::CycleUnit)
-                .boxed(),
-        )
-        .push(sep().boxed())
-        .push(
-            button(text("Panels").size(TS.body).color(text_c))
-                .padding([1, 6])
-                .style(button::text)
-                .on_press(StatusBarRequest::TogglePanelList)
-                .boxed(),
-        )
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center);
-
-    container(bar)
-        .width(Length::Fill)
-        .padding([SP.xs, STATUS_BAR_HORIZONTAL_PADDING])
-        .style(styles::status_bar(tokens))
-        .boxed()
+    graphite::view(
+        &Readout {
+            x,
+            y,
+            grid_visible,
+            snap_enabled,
+            zoom,
+            unit,
+            tool: format!("{tool}"),
+            grid_size_mm,
+            selection: selection_summary(selected),
+            pending_git_commits,
+            altium_import,
+            activity,
+        },
+        tokens,
+    )
 }
